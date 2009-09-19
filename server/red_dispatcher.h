@@ -1,0 +1,33 @@
+/*
+   Copyright (C) 2009 Red Hat, Inc.
+
+   This program is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public License as
+   published by the Free Software Foundation; either version 2 of
+   the License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef _H_RED_DISPATCHER
+#define _H_RED_DISPATCHER
+
+
+struct RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface);
+
+void red_dispatcher_set_mm_time(uint32_t);
+void red_dispatcher_on_ic_change();
+void red_dispatcher_on_sv_change();
+void red_dispatcher_set_mouse_mode(uint32_t mode);
+int red_dispatcher_count();
+int red_dispatcher_add_renderer(const char *name);
+uint32_t red_dispatcher_qxl_ram_size();
+int red_dispatcher_qxl_count();
+#endif
+
