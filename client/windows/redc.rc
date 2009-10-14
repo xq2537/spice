@@ -61,8 +61,8 @@ INFO_IMAGE_RES_ID       BITMAP                  "static_title.bmp"
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,3,99,0
- PRODUCTVERSION 0,3,99,0
+ FILEVERSION 0,5,0,0
+ PRODUCTVERSION 0,5,0,0
  FILEFLAGSMASK 0x17L
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -79,12 +79,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Red Hat Technologies INC"
             VALUE "FileDescription", "Spice client"
-            VALUE "FileVersion", "0, 3, 99, 0"
+            VALUE "FileVersion", "0, 5, 0, 0"
             VALUE "InternalName", "spicec"
             VALUE "LegalCopyright", "Copyright (c) 2009  Red Hat, Inc. and/or its affiliates.INC. All rights reserved."
             VALUE "OriginalFilename", "spicec.exe"
             VALUE "ProductName", "Red Hat Spice"
-            VALUE "ProductVersion", "0, 3, 99, 0"
+            VALUE "ProductVersion", "0, 5, 0, 0"
         END
     END
     BLOCK "VarFileInfo"
