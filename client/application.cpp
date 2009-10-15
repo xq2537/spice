@@ -40,6 +40,7 @@
 #include "quic.h"
 #include "mutex.h"
 #include "cmd_line_parser.h"
+#include "tunnel_channel.h"
 
 #include <log4cpp/BasicConfigurator.hh>
 #include <log4cpp/FileAppender.hh>
@@ -236,7 +237,7 @@ enum AppCommands {
 
 Application::Application()
     : _client (*this)
-    , _enabled_channels(RED_CHANNEL_END, true)
+    , _enabled_channels (RED_CHANNEL_END, true)
     , _main_screen (NULL)
     , _quitting (false)
     , _active (false)
@@ -1323,6 +1324,7 @@ bool Application::set_channels_security(CmdLineParser& parser, bool on, char *va
     channels_names["cursor"] = RED_CHANNEL_CURSOR;
     channels_names["playback"] = RED_CHANNEL_PLAYBACK;
     channels_names["record"] = RED_CHANNEL_RECORD;
+    channels_names["tunnel"] = RED_CHANNEL_TUNNEL;
 
     if (!strcmp(val, "all")) {
         if ((val = parser.next_argument())) {
@@ -1382,6 +1384,7 @@ bool Application::set_enable_channels(CmdLineParser& parser, bool enable, char *
     channels_names["cursor"] = RED_CHANNEL_CURSOR;
     channels_names["playback"] = RED_CHANNEL_PLAYBACK;
     channels_names["record"] = RED_CHANNEL_RECORD;
+    channels_names["tunnel"] = RED_CHANNEL_TUNNEL;
 
     if (!strcmp(val, "all")) {
         if ((val = parser.next_argument())) {
@@ -1460,6 +1463,7 @@ bool Application::process_cmd_line(int argc, char** argv)
     _peer_con_opt[RED_CHANNEL_CURSOR] = RedPeer::ConnectionOptions::CON_OP_INVALID;
     _peer_con_opt[RED_CHANNEL_PLAYBACK] = RedPeer::ConnectionOptions::CON_OP_INVALID;
     _peer_con_opt[RED_CHANNEL_RECORD] = RedPeer::ConnectionOptions::CON_OP_INVALID;
+    _peer_con_opt[RED_CHANNEL_TUNNEL] = RedPeer::ConnectionOptions::CON_OP_INVALID;
 
     parser.begin(argc, argv);
 
@@ -1593,6 +1597,10 @@ bool Application::process_cmd_line(int argc, char** argv)
 
     if (_enabled_channels[RED_CHANNEL_RECORD]) {
         _client.register_channel_factory(RecordChannel::Factory());
+    }
+
+    if (_enabled_channels[RED_CHANNEL_TUNNEL]) {
+        _client.register_channel_factory(TunnelChannel::Factory());
     }
 
     _client.init(host.c_str(), port, sport, password.c_str(), auto_display_res);

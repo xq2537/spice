@@ -47,6 +47,7 @@
 #include "red_common.h"
 #include "red_dispatcher.h"
 #include "snd_worker.h"
+#include "red_tunnel_worker.h"
 #include "reds_stat.h"
 #include "stat.h"
 #include "ring.h"
@@ -83,6 +84,7 @@ static pthread_mutex_t *lock_cs;
 static long *lock_count;
 uint32_t streaming_video = TRUE;
 image_compression_t image_compression = IMAGE_COMPRESS_AUTO_GLZ;
+void *red_tunnel = NULL;
 int agent_mouse = TRUE;
 
 static void openssl_init();
@@ -3921,7 +3923,7 @@ int __attribute__ ((visibility ("default"))) spice_parse_args(const char *in_arg
 
     // All SSL parameters should be either on or off.
     if (ssl_port != ssl_key || ssl_key != ssl_certs || ssl_certs != ssl_cafile ||
-        ssl_cafile != ssl_dhfile || ssl_dhfile != ssl_ciphersuite) {
+            ssl_cafile != ssl_dhfile || ssl_dhfile != ssl_ciphersuite) {
 
         goto error;
     }
@@ -4775,6 +4777,19 @@ static void interface_change_notifier(void *opaque, VDInterface *interface,
                 return;
             }
             attach_to_red_agent((VDIPortInterface *)interface);
+        } else if (strcmp(interface->type, VD_INTERFACE_NET_WIRE) == 0) {
+            NetWireInterface * net_wire = (NetWireInterface *)interface;
+            red_printf("VD_INTERFACE_NET_WIRE");
+            if (red_tunnel) {
+                red_printf("net wire already attached");
+                return;
+            }
+            if (interface->major_version != VD_INTERFACE_NET_WIRE_MAJOR ||
+                interface->minor_version < VD_INTERFACE_NET_WIRE_MINOR) {
+                red_printf("unsuported net wire interface");
+                return;
+            }
+            red_tunnel = red_tunnel_attach(core, net_wire);
         }
         break;
     case VD_INTERFACE_REMOVING:

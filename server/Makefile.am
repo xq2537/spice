@@ -9,6 +9,7 @@ INCLUDES = \
 	$(LOG4CPP_CFLAGS)			\
 	$(SSL_CFLAGS)				\
 	$(CELT051_CFLAGS)			\
+	$(SLIRP_CFLAGS)				\
 	-DCAIRO_CANVAS_IMAGE_CACHE		\
 	-DRED_STATISTICS			\
 	$(WARN_CFLAGS)                          \
@@ -40,6 +41,7 @@ libspice_la_LIBADD = 				\
 	$(QCAIRO_LIBS)				\
 	$(SSL_LIBS)				\
 	$(CELT051_LIBS)				\
+	$(SLIRP_LIBS)				\
 	$(LIBRT)				\
 	$(NULL)
 
@@ -64,6 +66,10 @@ libspice_la_SOURCES =				\
 	red_yuv.h				\
 	snd_worker.c				\
 	snd_worker.h				\
+	red_channel.h				\
+	red_channel.c				\
+	red_tunnel_worker.c			\
+	red_tunnel_worker.h			\
 	spice.h					\
 	vd_interface.h				\
 	$(COMMON_SRCS)				\

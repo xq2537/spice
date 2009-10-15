@@ -90,7 +90,7 @@ HBITMAP get_alpha_bitmap_res(int id)
 
     AutoDC auto_dc(create_compatible_dc());
     BITMAPINFO dest_info;
-    uint8_t *dest;
+    uint8_t* dest;
     dest_info.bmiHeader.biSize = sizeof(dest_info.bmiHeader);
     dest_info.bmiHeader.biWidth = src_info.bmWidth;
     dest_info.bmiHeader.biHeight = -src_info.bmHeight;
@@ -102,7 +102,7 @@ HBITMAP get_alpha_bitmap_res(int id)
     dest_info.bmiHeader.biClrUsed = 0;
     dest_info.bmiHeader.biClrImportant = 0;
 
-    HBITMAP ret = CreateDIBSection(auto_dc.get(), &dest_info, 0, (VOID **)&dest, NULL, 0);
+    HBITMAP ret = CreateDIBSection(auto_dc.get(), &dest_info, 0, (VOID**)&dest, NULL, 0);
     if (!ret) {
         THROW("create bitmap failed, %u", GetLastError());
     }
@@ -139,7 +139,7 @@ const char* sys_err_to_str(int error)
             msg = new char[BUF_SIZE];
             _snprintf(msg, BUF_SIZE, "errno %d", error);
         } else {
-            char *new_line;
+            char* new_line;
             if ((new_line = strrchr(msg, '\r'))) {
                 *new_line = 0;
             }
@@ -147,5 +147,16 @@ const char* sys_err_to_str(int error)
         errors_map[error] = msg;
     }
     return errors_map[error];
+}
+
+int inet_aton(const char* ip, struct in_addr* in_addr)
+{
+    unsigned long addr = inet_addr(ip);
+
+    if (addr == INADDR_NONE) {
+        return 0;
+    }
+    in_addr->S_un.S_addr = addr;
+    return 1;
 }
 

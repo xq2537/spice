@@ -45,8 +45,8 @@
 #endif
 
 #define RED_MAGIC (*(uint32_t*)"REDQ")
-#define RED_VERSION_MAJOR 1
-#define RED_VERSION_MINOR 0
+#define RED_VERSION_MAJOR (~(uint32_t)0 - 1)
+#define RED_VERSION_MINOR 1
 
 // Encryption & Ticketing Parameters
 #define RED_MAX_PASSWORD_LENGTH 60
@@ -60,6 +60,7 @@ enum {
     RED_CHANNEL_CURSOR,
     RED_CHANNEL_PLAYBACK,
     RED_CHANNEL_RECORD,
+    RED_CHANNEL_TUNNEL,
 
     RED_CHANNEL_END
 };
@@ -674,6 +675,143 @@ typedef struct ATTR_PACKED RedRecordStart {
 typedef struct ATTR_PACKED RedcRecordStartMark {
     uint32_t time;
 } RedcRecordStartMark;
+
+enum {
+    RED_TUNNEL_SERVICE_TYPE_INVALID,
+    RED_TUNNEL_SERVICE_TYPE_GENERIC,
+    RED_TUNNEL_SERVICE_TYPE_IPP,
+};
+
+enum {
+    RED_TUNNEL_INIT = RED_FIRST_AVAIL_MESSAGE,
+    RED_TUNNEL_SERVICE_IP_MAP,
+    RED_TUNNEL_SOCKET_OPEN,
+    RED_TUNNEL_SOCKET_FIN,
+    RED_TUNNEL_SOCKET_CLOSE,
+    RED_TUNNEL_SOCKET_DATA,
+    RED_TUNNEL_SOCKET_CLOSED_ACK,
+    RED_TUNNEL_SOCKET_TOKEN,
+
+    RED_TUNNEL_MESSAGES_END,
+};
+
+typedef struct ATTR_PACKED RedTunnelInit {
+    uint16_t max_num_of_sockets;
+    uint32_t max_socket_data_size;
+} RedTunnelInit;
+
+enum {
+    RED_TUNNEL_IP_TYPE_INVALID,
+    RED_TUNNEL_IP_TYPE_IPv4,
+};
+
+typedef struct ATTR_PACKED RedTunnelIpInfo {
+    uint16_t type;
+    uint8_t data[0];
+} RedTunnelIpInfo;
+
+typedef uint8_t RedTunnelIPv4[4];
+
+typedef struct ATTR_PACKED RedTunnelServiceIpMap {
+    uint32_t service_id;
+    RedTunnelIpInfo virtual_ip;
+} RedTunnelServiceIpMap;
+
+typedef struct ATTR_PACKED RedTunnelSocketOpen {
+    uint16_t connection_id;
+    uint32_t service_id;
+    uint32_t tokens;
+} RedTunnelSocketOpen;
+
+/* connection id must be the first field in msgs directed to a specific connection */
+
+typedef struct ATTR_PACKED RedTunnelSocketFin {
+    uint16_t connection_id;
+} RedTunnelSocketFin;
+
+typedef struct ATTR_PACKED RedTunnelSocketClose {
+    uint16_t connection_id;
+} RedTunnelSocketClose;
+
+typedef struct ATTR_PACKED RedTunnelSocketData {
+    uint16_t connection_id;
+    uint8_t data[0];
+} RedTunnelSocketData;
+
+typedef struct ATTR_PACKED RedTunnelSocketTokens {
+    uint16_t connection_id;
+    uint32_t num_tokens;
+} RedTunnelSocketTokens;
+
+typedef struct ATTR_PACKED RedTunnelSocketClosedAck {
+    uint16_t connection_id;
+} RedTunnelSocketClosedAck;
+
+enum {
+    REDC_TUNNEL_SERVICE_ADD = REDC_FIRST_AVAIL_MESSAGE,
+    REDC_TUNNEL_SERVICE_REMOVE,
+    REDC_TUNNEL_SOCKET_OPEN_ACK,
+    REDC_TUNNEL_SOCKET_OPEN_NACK,
+    REDC_TUNNEL_SOCKET_FIN,
+    REDC_TUNNEL_SOCKET_CLOSED,
+    REDC_TUNNEL_SOCKET_CLOSED_ACK,
+    REDC_TUNNEL_SOCKET_DATA,
+
+    REDC_TUNNEL_SOCKET_TOKEN,
+
+    REDC_TUNNEL_MESSGES_END,
+};
+
+typedef struct ATTR_PACKED RedcTunnelAddGenericService {
+    uint32_t type;
+    uint32_t id;
+    uint32_t group;
+    uint32_t port;
+    uint32_t name;
+    uint32_t description;
+} RedcTunnelAddGenericService;
+
+typedef struct ATTR_PACKED RedcTunnelAddPrintService {
+    RedcTunnelAddGenericService base;
+    RedTunnelIpInfo ip;
+} RedcTunnelAddPrintService;
+
+typedef struct ATTR_PACKED RedcTunnelRemoveService {
+    uint32_t id;
+} RedcTunnelRemoveService;
+
+/* connection id must be the first field in msgs directed to a specific connection */
+
+typedef struct ATTR_PACKED RedcTunnelSocketOpenAck {
+    uint16_t connection_id;
+    uint32_t tokens;
+} RedcTunnelSocketOpenAck;
+
+typedef struct ATTR_PACKED RedcTunnelSocketOpenNack {
+    uint16_t connection_id;
+} RedcTunnelSocketOpenNack;
+
+typedef struct ATTR_PACKED RedcTunnelSocketData {
+    uint16_t connection_id;
+    uint8_t data[0];
+} RedcTunnelSocketData;
+
+typedef struct ATTR_PACKED RedcTunnelSocketFin {
+    uint16_t connection_id;
+} RedcTunnelSocketFin;
+
+typedef struct ATTR_PACKED RedcTunnelSocketClosed {
+    uint16_t connection_id;
+} RedcTunnelSocketClosed;
+
+typedef struct ATTR_PACKED RedcTunnelSocketClosedAck {
+    uint16_t connection_id;
+} RedcTunnelSocketClosedAck;
+
+typedef struct ATTR_PACKED RedcTunnelSocketTokens {
+    uint16_t connection_id;
+    uint32_t num_tokens;
+} RedcTunnelSocketTokens;
 
 #undef ATTR_PACKED
 

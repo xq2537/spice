@@ -27,6 +27,9 @@ typedef struct RedsStreamContext {
 
     int socket;
 
+    /* set it to TRUE if you shutdown the socket. shutdown read doesn't work as accepted -
+       receive may return data afterwards. check the flag before calling receive*/
+    int shutdown;
     SSL *ssl;
 
     int (*cb_write)(void *, void *, int);

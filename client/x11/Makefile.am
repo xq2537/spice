@@ -39,6 +39,8 @@ RED_COMMON_SRCS = 					\
 	$(top_srcdir)/client/red_cairo_canvas.h		\
 	$(top_srcdir)/client/cmd_line_parser.cpp	\
 	$(top_srcdir)/client/cmd_line_parser.h		\
+	$(top_srcdir)/client/client_net_socket.cpp	\
+	$(top_srcdir)/client/client_net_socket.h	\
 	$(top_srcdir)/client/common.h			\
 	$(top_srcdir)/client/cursor_channel.cpp		\
 	$(top_srcdir)/client/cursor_channel.h		\
@@ -94,9 +96,11 @@ RED_COMMON_SRCS = 					\
 	$(top_srcdir)/client/hot_keys.cpp		\
 	$(top_srcdir)/client/hot_keys.h			\
 	$(top_srcdir)/client/threads.cpp		\
+	$(top_srcdir)/client/tunnel_channel.cpp		\
+	$(top_srcdir)/client/tunnel_channel.h		\
 	$(top_srcdir)/client/utils.cpp			\
 	$(top_srcdir)/client/utils.h			\
-    $(top_srcdir)/client/icon.h                        \
+        $(top_srcdir)/client/icon.h                     \
 	$(NULL)
 
 bin_PROGRAMS = spicec

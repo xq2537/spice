@@ -18,11 +18,28 @@
 #ifndef _H_PLATFORM_UTILS
 #define _H_PLATFORM_UTILS
 
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netinet/tcp.h>
+#include <netdb.h>
+
 #ifdef __i386__
-#define mb() __asm__ __volatile__ ("lock; addl $0,0(%%esp)": : : "memory")
+#define mb() __asm__ __volatile__ ("lock; addl $0,0(%%esp)" : : : "memory")
 #else
-#define mb() __asm__ __volatile__ ("lock; addl $0,0(%%rsp)": : : "memory")
+#define mb() __asm__ __volatile__ ("lock; addl $0,0(%%rsp)" : : : "memory")
 #endif
+
+typedef int SOCKET;
+
+#define INVALID_SOCKET -1
+#define SOCKET_ERROR -1
+#define closesocket(sock) ::close(sock)
+#define SHUTDOWN_ERR EPIPE
+#define INTERRUPTED_ERR EINTR
+#define WOULDBLOCK_ERR EAGAIN
+#define sock_error() errno
+#define sock_err_message(err) strerror(err)
 
 #endif
 

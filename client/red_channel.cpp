@@ -133,7 +133,7 @@ void RedChannelBase::link(uint32_t connection_id, const std::string& password)
         */
         if (RSA_public_encrypt(password.length() + 1, (unsigned char *)password.c_str(),
                                (uint8_t *)bufEncrypted.get(),
-                               rsa, RSA_PKCS1_OAEP_PADDING) > 0 ) {
+                               rsa, RSA_PKCS1_OAEP_PADDING) > 0) {
             send((uint8_t*)bufEncrypted.get(), nRSASize);
         } else {
             THROW("could not encrypt password");
@@ -425,8 +425,10 @@ void RedChannel::run()
                 _outgoing_message = NULL;
             }
             _incomming_header_pos = 0;
-            delete _incomming_message;
-            _incomming_message = NULL;
+            if (_incomming_message) {
+                _incomming_message->unref();
+                _incomming_message = NULL;
+            }
         case DISCONNECT_ACTION:
             close();
             on_disconnect();
@@ -525,19 +527,19 @@ void RedChannel::recive_messages()
             _incomming_header_pos = n;
             return;
         }
-        std::auto_ptr<CompundInMessage> message(new CompundInMessage(_incomming_header.serial,
-                                                                     _incomming_header.type,
-                                                                     _incomming_header.size,
-                                                                     _incomming_header.sub_list));
-        n = RedPeer::recive(message->data(), message->compund_size());
-        if (n != message->compund_size()) {
+        AutoRef<CompundInMessage> message(new CompundInMessage(_incomming_header.serial,
+                                                               _incomming_header.type,
+                                                               _incomming_header.size,
+                                                               _incomming_header.sub_list));
+        n = RedPeer::recive((*message)->data(), (*message)->compund_size());
+        if (n != (*message)->compund_size()) {
             _incomming_message = message.release();
             _incomming_message_pos = n;
             return;
         }
         on_message_recived();
-        _message_handler->handle_message(*message.get());
-        on_message_complition(message->serial());
+        _message_handler->handle_message(*(*message));
+        on_message_complition((*message)->serial());
     }
 }
 
@@ -577,11 +579,11 @@ void RedChannel::on_event()
         if (_incomming_message_pos != _incomming_message->compund_size()) {
             return;
         }
-        std::auto_ptr<CompundInMessage> message(_incomming_message);
+        AutoRef<CompundInMessage> message(_incomming_message);
         _incomming_message = NULL;
         on_message_recived();
-        _message_handler->handle_message(*message.get());
-        on_message_complition(message->serial());
+        _message_handler->handle_message(*(*message));
+        on_message_complition((*message)->serial());
     }
     recive_messages();
 }
@@ -616,18 +618,18 @@ void RedChannel::handle_migrate(RedPeer::InMessage* message)
     if (migrate->flags & RED_MIGRATE_NEED_FLUSH) {
         send_migrate_flush_mark();
     }
-    std::auto_ptr<RedPeer::CompundInMessage> data_message;
+    AutoRef<CompundInMessage> data_message;
     if (migrate->flags & RED_MIGRATE_NEED_DATA_TRANSFER) {
         data_message.reset(recive());
     }
     _client.migrate_channel(*this);
     if (migrate->flags & RED_MIGRATE_NEED_DATA_TRANSFER) {
-        if (data_message->type() != RED_MIGRATE_DATA) {
+        if ((*data_message)->type() != RED_MIGRATE_DATA) {
             THROW("expect RED_MIGRATE_DATA");
         }
         std::auto_ptr<RedPeer::OutMessage> message(new RedPeer::OutMessage(REDC_MIGRATE_DATA,
-                                                                           data_message->size()));
-        memcpy(message->data(), data_message->data(), data_message->size());
+                                                                          (*data_message)->size()));
+        memcpy(message->data(), (*data_message)->data(), (*data_message)->size());
         send(*message);
     }
     _loop.add_socket(*this);

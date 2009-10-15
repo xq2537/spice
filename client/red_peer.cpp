@@ -16,53 +16,11 @@
 */
 
 #include "common.h"
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-
-#define SHUT_RDWR SD_BOTH
-#else
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netinet/tcp.h>
-#include <netdb.h>
-
-#define INVALID_SOCKET -1
-#define SOCKET_ERROR -1
-#define closesocket(sock) ::close(sock)
-#endif
 #include "red.h"
 #include "red_peer.h"
 #include "utils.h"
 #include "debug.h"
 #include "platform_utils.h"
-
-#ifdef _WIN32
-
-int inet_aton(const char *ip, struct in_addr *in_addr)
-{
-    unsigned long addr = inet_addr(ip);
-
-    if (addr == INADDR_NONE) {
-        return 0;
-    }
-    in_addr->S_un.S_addr = addr;
-    return 1;
-}
-
-#define SHUTDOWN_ERR WSAESHUTDOWN
-#define INTERRUPTED_ERR WSAEINTR
-#define WOULDBLOCK_ERR WSAEWOULDBLOCK
-#define sock_error() WSAGetLastError()
-#define sock_err_message(err) sys_err_to_str(err)
-#else
-#define SHUTDOWN_ERR EPIPE
-#define INTERRUPTED_ERR EINTR
-#define WOULDBLOCK_ERR EAGAIN
-#define sock_error() errno
-#define sock_err_message(err) strerror(err)
-#endif
 
 static void ssl_error()
 {
@@ -326,11 +284,11 @@ uint32_t RedPeer::recive(uint8_t *buf, uint32_t size)
 RedPeer::CompundInMessage* RedPeer::recive()
 {
     RedDataHeader header;
-    std::auto_ptr<CompundInMessage> message;
+    AutoRef<CompundInMessage> message;
 
     recive((uint8_t*)&header, sizeof(RedDataHeader));
     message.reset(new CompundInMessage(header.serial, header.type, header.size, header.sub_list));
-    recive(message->data(), message->compund_size());
+    recive((*message)->data(), (*message)->compund_size());
     return message.release();
 }
 

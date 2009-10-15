@@ -18,13 +18,17 @@
 #ifndef _H_PLATFORM_UTILS
 #define _H_PLATFORM_UTILS
 
+#include <winsock.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
 #define mb() __asm {lock add [esp], 0}
 
 template<class T, class FreeRes = FreeObject<T>, T invalid = NULL >
 class AutoRes {
 public:
-    AutoRes() : res (invalid) {}
-    AutoRes(T inRes) : res (inRes) {}
+    AutoRes() : res(invalid) {}
+    AutoRes(T inRes) : res(inRes) {}
     ~AutoRes() { set(invalid); }
 
     void set(T inRes) {if (res != invalid) free_res(res); res = inRes; }
@@ -67,7 +71,7 @@ HBITMAP get_alpha_bitmap_res(int id);
 
 class WindowDC {
 public:
-    WindowDC(HWND window) : _window (window), _dc (GetDC(window)) {}
+    WindowDC(HWND window): _window (window), _dc (GetDC(window)) {}
     ~WindowDC() { ReleaseDC(_window, _dc);}
     HDC operator * () { return _dc;}
 
@@ -79,6 +83,18 @@ private:
 typedef AutoRes<HDC, Delete_DC> AutoReleaseDC;
 
 const char* sys_err_to_str(int error);
+
+#define SHUT_WR SD_SEND
+#define SHUT_RD SD_RECEIVE
+#define SHUT_RDWR SD_BOTH
+#define MSG_NOSIGNAL 0
+
+#define SHUTDOWN_ERR WSAESHUTDOWN
+#define INTERRUPTED_ERR WSAEINTR
+#define WOULDBLOCK_ERR WSAEWOULDBLOCK
+#define sock_error() WSAGetLastError()
+#define sock_err_message(err) sys_err_to_str(err)
+int inet_aton(const char* ip, struct in_addr* in_addr);
 
 #endif
 

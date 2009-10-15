@@ -15,6 +15,8 @@ RED_COMMON_SRCS =	 		\
 	canvas_utils.cpp		\
 	red_cairo_canvas.cpp		\
 	red_cairo_canvas.h		\
+	client_net_socket.cpp		\
+	client_net_socket.h		\
 	cmd_line_parser.cpp		\
 	cmd_line_parser.h		\
 	common.h			\
@@ -71,6 +73,8 @@ RED_COMMON_SRCS =	 		\
 	screen_layer.cpp		\
 	screen_layer.h			\
 	shared_cache.hpp		\
+	tunnel_channel.cpp		\
+	tunnel_channel.h		\
 	hot_keys.cpp			\
 	hot_keys.h			\
         threads.cpp			\

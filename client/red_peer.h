@@ -18,12 +18,6 @@
 #ifndef _H_REDPEER
 #define _H_REDPEER
 
-#ifdef _WIN32
-#include <winsock.h>
-#else
-typedef int SOCKET;
-#endif
-
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
@@ -31,6 +25,7 @@ typedef int SOCKET;
 #include "red.h"
 #include "events_loop.h"
 #include "threads.h"
+#include "platform_utils.h"
 
 class RedPeer: protected EventsLoop::Socket {
 public:
@@ -116,7 +111,7 @@ private:
 
 class RedPeer::InMessage {
 public:
-    InMessage(uint16_t type, uint32_t size, uint8_t* data)
+    InMessage(uint16_t type, uint32_t size, uint8_t * data)
         : _type (type)
         , _size (size)
         , _data (data)
@@ -139,12 +134,14 @@ class RedPeer::CompundInMessage: public RedPeer::InMessage {
 public:
     CompundInMessage(uint64_t _serial, uint16_t type, uint32_t size, uint32_t sub_list)
         : InMessage(type, size, new uint8_t[size])
+        , _refs (1)
         , _serial (_serial)
         , _sub_list (sub_list)
     {
     }
 
-    virtual ~CompundInMessage() { delete[] _data;}
+    RedPeer::InMessage* ref() { _refs++; return this;}
+    void unref() {if (!--_refs) delete this;}
 
     uint64_t serial() { return _serial;}
     uint32_t sub_list() { return _sub_list;}
@@ -152,7 +149,11 @@ public:
     virtual uint32_t size() { return _sub_list ? _sub_list : _size;}
     uint32_t compund_size() {return _size;}
 
+protected:
+    virtual ~CompundInMessage() { delete[] _data;}
+
 private:
+    int _refs;
     uint64_t _serial;
     uint32_t _sub_list;
 };

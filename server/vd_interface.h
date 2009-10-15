@@ -330,5 +330,23 @@ struct VDIPortInterface {
     int (*read)(VDIPortInterface *port, VDObjectRef plug, uint8_t *buf, int len);
 };
 
+#define VD_INTERFACE_NET_WIRE "net_wire"
+#define VD_INTERFACE_NET_WIRE_MAJOR 1
+#define VD_INTERFACE_NET_WIRE_MINOR 1
+
+typedef struct NetWireInterface NetWireInterface;
+typedef void (*net_wire_packet_route_proc_t)(void *opaque, const uint8_t *pkt, int pkt_len);
+
+struct NetWireInterface {
+    VDInterface base;
+
+    struct in_addr (*get_ip)(NetWireInterface *vlan);
+    int (*can_send_packet)(NetWireInterface *vlan);
+    void (*send_packet)(NetWireInterface *vlan, const uint8_t *buf, int size);
+    VDObjectRef (*register_route_packet)(NetWireInterface *vlan, net_wire_packet_route_proc_t proc,
+                                         void *opaque);
+    void (*unregister_route_packet)(NetWireInterface *vlan, VDObjectRef proc);
+};
+
 #endif
 

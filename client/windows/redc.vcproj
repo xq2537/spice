@@ -205,6 +205,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\client_net_socket.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\cmd_line_parser.cpp"
 				>
 			</File>
@@ -379,6 +383,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\tunnel_channel.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\utils.cpp"
 				>
 			</File>
@@ -402,6 +410,10 @@
 			</File>
 			<File
 				RelativePath="..\canvas.h"
+				>
+			</File>
+			<File
+				RelativePath="..\client_net_socket.h"
 				>
 			</File>
 			<File
@@ -554,6 +566,10 @@
 			</File>
 			<File
 				RelativePath="..\threads.h"
+				>
+			</File>
+			<File
+				RelativePath="..\tunnel_channel.h"
 				>
 			</File>
 			<File
