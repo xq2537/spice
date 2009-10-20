@@ -43,7 +43,7 @@ public:
 
 typedef Cache<CursorData, CursorCacheTreat, 1024> CursorCache;
 
-class CursorModeTrigger: public EventsLoop::Trigger {
+class CursorModeTrigger: public EventSources::Trigger {
 public:
     CursorModeTrigger(CursorChannel& channel);
     virtual void on_event();

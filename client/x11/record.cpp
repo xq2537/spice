@@ -20,7 +20,7 @@
 #include "debug.h"
 
 
-class WaveRecorder::EventTrigger: public EventsLoop::File {
+class WaveRecorder::EventTrigger: public EventSources::File {
 public:
     EventTrigger(WaveRecorder& recorder, int fd);
     virtual void on_event();
@@ -71,7 +71,7 @@ WaveRecorder::~WaveRecorder()
 void WaveRecorder::cleanup()
 {
     if (_event_trigger) {
-        _client.remove_evnet_sorce(*_event_trigger);
+        _client.remove_event_source(*_event_trigger);
         delete _event_trigger;
     }
 
@@ -194,7 +194,7 @@ bool WaveRecorder::init(uint32_t sampels_per_sec,
         return false;
     }
     _event_trigger = new WaveRecorder::EventTrigger(*this, pfd.fd);
-    _client.add_evnet_sorce(*_event_trigger);
+    _client.add_event_source(*_event_trigger);
     return true;
 }
 

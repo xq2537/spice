@@ -21,7 +21,7 @@
 #include "audio_devices.h"
 #include "platform.h"
 
-class WaveRecorder: public WaveRecordAbstract, public EventsLoop::Trigger {
+class WaveRecorder: public WaveRecordAbstract, public EventSources::Trigger {
 public:
     WaveRecorder(Platform::RecordClinet& client, uint32_t sampels_per_sec,
                  uint32_t bits_per_sample, uint32_t channels);

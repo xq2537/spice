@@ -25,7 +25,7 @@
 
 #include "red_window.h"
 #include "platform.h"
-#include "events_loop.h"
+#include "process_loop.h"
 #include "threads.h"
 
 class Application;
@@ -78,7 +78,7 @@ public:
     void untouch_context();
     bool need_recreate_context_gl();
 #endif
-    void set_update_interrupt_trigger(EventsLoop::Trigger *trigger);
+    void set_update_interrupt_trigger(EventSources::Trigger *trigger);
     bool update_by_interrupt();
     void interrupt_update();
     void set_type_gl();
@@ -174,7 +174,7 @@ private:
     };
     PointerLocation _pointer_location;
     int _pixel_format_index;
-    EventsLoop::Trigger *_update_interrupt_trigger;
+    EventSources::Trigger *_update_interrupt_trigger;
 };
 
 #endif

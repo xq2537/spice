@@ -21,7 +21,7 @@
 #include "cursor.h"
 #include "process_loop.h"
 #include "event_sources.h"
-#include "events_loop.h"
+#include "process_loop.h"
 
 class WaveRecordAbstract;
 class WavePlaybackAbstract;
@@ -118,10 +118,10 @@ public:
 class Platform::RecordClinet {
 public:
     virtual ~RecordClinet() {}
-    virtual void add_evnet_sorce(EventsLoop::File& evnet_sorce) = 0;
-    virtual void remove_evnet_sorce(EventsLoop::File& evnet_sorce) = 0;
-    virtual void add_evnet_sorce(EventsLoop::Trigger& evnet_sorce) = 0;
-    virtual void remove_evnet_sorce(EventsLoop::Trigger& evnet_sorce) = 0;
+    virtual void add_event_source(EventSources::File& evnet_source) = 0;
+    virtual void remove_event_source(EventSources::File& evnet_source) = 0;
+    virtual void add_event_source(EventSources::Trigger& evnet_source) = 0;
+    virtual void remove_event_source(EventSources::Trigger& evnet_source) = 0;
     virtual void push_frame(uint8_t *frame) = 0;
 };
 

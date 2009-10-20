@@ -61,7 +61,7 @@ WaveRecorder::WaveRecorder(Platform::RecordClinet& client, uint32_t sampels_per_
         _frame_pos = _frame;
         _frame_end = _frame + frame_bytes;
         init_ring(sampels_per_sec, frame_bytes, frame_align);
-        _client.add_evnet_sorce(*this);
+        _client.add_event_source(*this);
     } catch (...) {
         delete[] _ring;
         delete[] _frame;
@@ -74,7 +74,7 @@ WaveRecorder::~WaveRecorder()
 {
     waveInReset(_wave_in);
     reclaim();
-    _client.remove_evnet_sorce(*this);
+    _client.remove_event_source(*this);
     waveInClose(_wave_in);
     delete[] _ring;
     delete[] _frame;

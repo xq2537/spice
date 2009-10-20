@@ -29,10 +29,10 @@ typedef int SOCKET;
 
 #include "common.h"
 #include "red.h"
-#include "events_loop.h"
+#include "process_loop.h"
 #include "threads.h"
 
-class RedPeer: protected EventsLoop::Socket {
+class RedPeer: protected EventSources::Socket {
 public:
     RedPeer();
     virtual ~RedPeer();

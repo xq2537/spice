@@ -524,7 +524,7 @@ CursorChannel::CursorChannel(RedClient& client, uint32_t id)
                          sizeof(RedInvalOne));
     handler->set_handler(RED_CURSOR_INVAL_ALL, &CursorChannel::handle_inval_all, 0);
 
-    get_events_loop().add_trigger(_cursor_trigger);
+    get_process_loop().add_trigger(_cursor_trigger);
 }
 
 CursorChannel::~CursorChannel()

@@ -225,10 +225,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\events_loop_p.cpp"
-				>
-			</File>
-			<File
 				RelativePath="..\gdi_canvas.cpp"
 				>
 			</File>
@@ -438,14 +434,6 @@
 			</File>
 			<File
 				RelativePath=".\event_sources_p.h"
-				>
-			</File>
-			<File
-				RelativePath="..\events_loop.h"
-				>
-			</File>
-			<File
-				RelativePath=".\events_loop_p.h"
 				>
 			</File>
 			<File
