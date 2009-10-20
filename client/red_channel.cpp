@@ -254,6 +254,7 @@ RedChannel::RedChannel(RedClient& client, uint8_t type, uint8_t id,
     , _incomming_message (NULL)
     , _message_ack_count (0)
     , _message_ack_window (0)
+    , _loop (this)
     , _send_trigger (*this)
     , _disconnect_stamp (0)
     , _disconnect_reason (RED_ERR_OK)

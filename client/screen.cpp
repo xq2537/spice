@@ -751,7 +751,7 @@ bool RedScreen::need_recreate_context_gl()
 
 #endif
 
-void RedScreen::set_update_interrupt_trigger(EventsLoop::Trigger *trigger)
+void RedScreen::set_update_interrupt_trigger(EventSources::Trigger *trigger)
 {
     _update_interrupt_trigger = trigger;
 }

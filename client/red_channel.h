@@ -23,7 +23,7 @@
 #include "threads.h"
 #include "red_peer.h"
 #include "platform.h"
-#include "events_loop.h"
+#include "process_loop.h"
 
 enum {
     PASSIVE_STATE,
@@ -85,7 +85,7 @@ private:
     ChannelCaps _remote_caps;
 };
 
-class SendTrigger: public EventsLoop::Trigger {
+class SendTrigger: public EventSources::Trigger {
 public:
     SendTrigger(RedChannel& channel);
 
@@ -95,7 +95,7 @@ private:
     RedChannel& _channel;
 };
 
-class AbortTrigger: public EventsLoop::Trigger {
+class AbortTrigger: public EventSources::Trigger {
 public:
     virtual void on_event();
 };
@@ -129,7 +129,7 @@ public:
 
 protected:
     RedClient& get_client() { return _client;}
-    EventsLoop& get_events_loop() { return _loop;}
+    ProcessLoop& get_process_loop() { return _loop;}
     MessageHandler* get_message_handler() { return _message_handler.get();}
     virtual void on_connecting() {}
     virtual void on_connect() {}
@@ -188,7 +188,7 @@ private:
     uint32_t _message_ack_count;
     uint32_t _message_ack_window;
 
-    EventsLoop _loop;
+    ProcessLoop _loop;
     SendTrigger _send_trigger;
     AbortTrigger _abort_trigger;
 

@@ -209,24 +209,24 @@ void RecordChannel::release_message(RecordSamplesMessage *message)
     _messages.push_front(message);
 }
 
-void RecordChannel::add_evnet_sorce(EventsLoop::File& evnet_sorce)
+void RecordChannel::add_event_source(EventSources::File& event_source)
 {
-    get_events_loop().add_file(evnet_sorce);
+    get_process_loop().add_file(event_source);
 }
 
-void RecordChannel::remove_evnet_sorce(EventsLoop::File& evnet_sorce)
+void RecordChannel::remove_event_source(EventSources::File& event_source)
 {
-    get_events_loop().remove_file(evnet_sorce);
+    get_process_loop().remove_file(event_source);
 }
 
-void RecordChannel::add_evnet_sorce(EventsLoop::Trigger& evnet_sorce)
+void RecordChannel::add_event_source(EventSources::Trigger& event_source)
 {
-    get_events_loop().add_trigger(evnet_sorce);
+    get_process_loop().add_trigger(event_source);
 }
 
-void RecordChannel::remove_evnet_sorce(EventsLoop::Trigger& evnet_sorce)
+void RecordChannel::remove_event_source(EventSources::Trigger& event_source)
 {
-    get_events_loop().remove_trigger(evnet_sorce);
+    get_process_loop().remove_trigger(event_source);
 }
 
 #define FRAME_SIZE 256

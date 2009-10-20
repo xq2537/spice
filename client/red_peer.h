@@ -23,11 +23,11 @@
 
 #include "common.h"
 #include "red.h"
-#include "events_loop.h"
+#include "process_loop.h"
 #include "threads.h"
 #include "platform_utils.h"
 
-class RedPeer: protected EventsLoop::Socket {
+class RedPeer: protected EventSources::Socket {
 public:
     RedPeer();
     virtual ~RedPeer();

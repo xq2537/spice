@@ -50,7 +50,6 @@ RED_COMMON_SRCS = 					\
 	$(top_srcdir)/client/debug.h			\
 	$(top_srcdir)/client/display_channel.cpp	\
 	$(top_srcdir)/client/display_channel.h		\
-	$(top_srcdir)/client/events_loop.h		\
 	$(top_srcdir)/client/red_gl_canvas.cpp		\
 	$(top_srcdir)/client/red_gl_canvas.h		\
 	$(top_srcdir)/client/gl_canvas.cpp		\
@@ -109,8 +108,6 @@ bin_PROGRAMS = spicec
 
 spicec_SOURCES =			\
 	atomic_count.h			\
-	events_loop_p.cpp		\
-	events_loop_p.h			\
 	event_sources_p.cpp		\
 	main.cpp			\
 	named_pipe.h                    \

@@ -571,7 +571,7 @@ GLInterruptRecreate::GLInterruptRecreate(DisplayChannel& channel)
 void GLInterruptRecreate::trigger()
 {
     Lock lock(_lock);
-    EventsLoop::Trigger::trigger();
+    EventSources::Trigger::trigger();
     _cond.wait(lock);
 }
 
@@ -654,11 +654,11 @@ DisplayChannel::DisplayChannel(RedClient& client, uint32_t id,
     handler->set_handler(RED_DISPLAY_STREAM_DESTROY_ALL,
                          &DisplayChannel::handle_stream_destroy_all, 0);
 
-    get_events_loop().add_trigger(_streams_trigger);
+    get_process_loop().add_trigger(_streams_trigger);
 #ifdef USE_OGL
-    get_events_loop().add_trigger(_gl_interrupt_recreate);
+    get_process_loop().add_trigger(_gl_interrupt_recreate);
 #endif
-    get_events_loop().add_trigger(_interrupt_update);
+    get_process_loop().add_trigger(_interrupt_update);
 }
 
 DisplayChannel::~DisplayChannel()

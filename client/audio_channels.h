@@ -73,10 +73,10 @@ private:
 
     virtual void on_connect();
 
-    virtual void add_evnet_sorce(EventsLoop::File& evnet_sorce);
-    virtual void remove_evnet_sorce(EventsLoop::File& evnet_sorce);
-    virtual void add_evnet_sorce(EventsLoop::Trigger& evnet_sorce);
-    virtual void remove_evnet_sorce(EventsLoop::Trigger& evnet_sorce);
+    virtual void add_event_source(EventSources::File& event_source);
+    virtual void remove_event_source(EventSources::File& event_source);
+    virtual void add_event_source(EventSources::Trigger& event_source);
+    virtual void remove_event_source(EventSources::Trigger& event_source);
     virtual void push_frame(uint8_t *frame);
 
     void send_start_mark();

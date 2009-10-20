@@ -26,12 +26,12 @@
 #include "utils.h"
 
 ClientNetSocket::ClientNetSocket(uint16_t id, const struct in_addr& dst_addr, uint16_t dst_port,
-                                 EventsLoop& events_loop, EventHandler& event_handler)
+                                 ProcessLoop& process_loop, EventHandler& event_handler)
     : _id (id)
     , _local_addr (dst_addr)
     , _local_port (dst_port)
     , _peer (INVALID_SOCKET)
-    , _events_loop (events_loop)
+    , _process_loop (process_loop)
     , _event_handler (event_handler)
     , _num_recv_tokens (0)
     , _send_message (NULL)
@@ -82,7 +82,7 @@ bool ClientNetSocket::connect(uint32_t recv_tokens)
         return false;
     }
 
-    _events_loop.add_socket(*this);
+    _process_loop.add_socket(*this);
     _status = SOCKET_STATUS_OPEN;
     _num_recv_tokens = recv_tokens;
     return true;
@@ -374,7 +374,7 @@ void ClientNetSocket::close_and_tell()
 void ClientNetSocket::apply_disconnect()
 {
     if (_peer != INVALID_SOCKET) {
-        _events_loop.remove_socket(*this);
+        _process_loop.remove_socket(*this);
         closesocket(_peer);
         _peer = INVALID_SOCKET;
         LOG_INFO("closing connection_id=%d", _id);

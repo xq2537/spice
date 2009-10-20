@@ -185,7 +185,7 @@ struct TunnelService {
 
 class TunnelChannel::TunnelSocket: public ClientNetSocket {
 public:
-    TunnelSocket(uint16_t id, TunnelService & dst_service, EventsLoop & events_loop,
+    TunnelSocket(uint16_t id, TunnelService& dst_service, ProcessLoop& process_loop,
                  EventHandler & event_handler);
     virtual ~TunnelSocket() {}
 
@@ -208,10 +208,10 @@ private:
 };
 
 TunnelChannel::TunnelSocket::TunnelSocket(uint16_t id, TunnelService& dst_service,
-                                          EventsLoop& events_loop,
+                                          ProcessLoop& process_loop,
                                           ClientNetSocket::EventHandler& event_handler)
     : ClientNetSocket(id, dst_service.ip, htons((uint16_t)dst_service.port),
-                      events_loop, event_handler)
+                      process_loop, event_handler)
     , _num_tokens (0)
     , _server_num_tokens (0)
     , _service_id (dst_service.id)
@@ -356,7 +356,7 @@ void TunnelChannel::handle_socket_open(RedPeer::InMessage* message)
               open_msg->service_id);
     }
 
-    sckt = new TunnelSocket(open_msg->connection_id, *service, get_events_loop(), *this);
+    sckt = new TunnelSocket(open_msg->connection_id, *service, get_process_loop(), *this);
 
     if (sckt->connect(open_msg->tokens)) {
         _sockets[open_msg->connection_id] = sckt;

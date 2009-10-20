@@ -23,7 +23,7 @@
 
 #include "platform_utils.h"
 #include "common.h"
-#include "events_loop.h"
+#include "process_loop.h"
 
 /* intterface for connenctions inside client LAN */
 
@@ -34,7 +34,7 @@ typedef enum {
     SOCKET_STATUS_CLOSED,
 } SocketStatus;
 
-class ClientNetSocket: public EventsLoop::Socket {
+class ClientNetSocket: public EventSources::Socket {
 public:
     class ReceiveBuffer;
     class SendBuffer;
@@ -46,7 +46,7 @@ public:
     class ShutdownExcpetion {};
 
     ClientNetSocket(uint16_t id, const struct in_addr& dst_addr, uint16_t dst_port,
-                    EventsLoop& events_loop, ClientNetSocket::EventHandler& event_handler);
+                    ProcessLoop& process_loop, ClientNetSocket::EventHandler& event_handler);
     virtual ~ClientNetSocket();
 
     bool connect(uint32_t recv_tokens);
@@ -61,7 +61,7 @@ public:
     inline const struct in_addr& local_addr() {return _local_addr;}
     inline uint16_t local_port() {return _local_port;}
 
-    /* EventsLoop::Socket interface */
+    /* EventSources::Socket interface */
     void on_event();
     int get_socket() {return _peer;}
 
@@ -98,7 +98,7 @@ private:
 
     SOCKET _peer;
 
-    EventsLoop& _events_loop;
+    ProcessLoop& _process_loop;
 
     EventHandler& _event_handler;
 

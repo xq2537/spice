@@ -25,7 +25,7 @@
 #include "cairo.h"
 #include "cache.hpp"
 #include "screen_layer.h"
-#include "events_loop.h"
+#include "process_loop.h"
 #ifdef USE_OGL
 #include "red_pixmap_gl.h"
 #endif
@@ -36,7 +36,7 @@ class ChannelFactory;
 class VideoStream;
 class DisplayChannel;
 
-class StreamsTrigger: public EventsLoop::Trigger {
+class StreamsTrigger: public EventSources::Trigger {
 public:
     StreamsTrigger(DisplayChannel& channel);
 
@@ -47,7 +47,7 @@ private:
 };
 
 #ifdef USE_OGL
-class GLInterruptRecreate: public EventsLoop::Trigger {
+class GLInterruptRecreate: public EventSources::Trigger {
 public:
     GLInterruptRecreate(DisplayChannel& channel);
     virtual void trigger();
@@ -60,7 +60,7 @@ private:
 };
 #endif
 
-class InterruptUpdate: public EventsLoop::Trigger {
+class InterruptUpdate: public EventSources::Trigger {
 public:
     InterruptUpdate(DisplayChannel& channel);
 
