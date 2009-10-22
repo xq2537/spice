@@ -90,13 +90,6 @@ RedPixmapCairo::RedPixmapCairo(int width, int height, RedPixmap::Format format,
                 THROW("XShmAttach failed");
             }
 
-            /*
-             * Workaround for weird problem that is seen in Fedora 10/11,
-             * spice get bad access error, but I am not sure if the bug is in spice or in X
-             * for now just use this workaround.
-             */
-            XSync(XPlatform::get_display(), False);
-
             ((PixelsSource_p*)get_opaque())->x_shm_drawable.x_image = image;
             ((PixelsSource_p*)get_opaque())->x_shm_drawable.shminfo = shminfo;
             _data = (uint8_t *)shminfo->shmaddr;
@@ -190,6 +183,7 @@ RedPixmapCairo::~RedPixmapCairo()
         XShmSegmentInfo *shminfo = ((PixelsSource_p*)get_opaque())->x_shm_drawable.shminfo;
         XShmDetach(XPlatform::get_display(), shminfo);
         XDestroyImage(((PixelsSource_p*)get_opaque())->x_shm_drawable.x_image);
+        XSync(XPlatform::get_display(), False);
         shmdt(shminfo->shmaddr);
         delete shminfo;
     }
