@@ -59,7 +59,9 @@ public:
 
     virtual void do_responce(Application& application)
     {
+        _channel.destroy_canvas();
         _channel.screen()->set_mode(_width, _height, _depth);
+        _channel.create_canvas(application.get_canvas_types(), _width, _height, _depth);
     }
 
 private:
@@ -1061,7 +1063,6 @@ void DisplayChannel::handle_mode(RedPeer::InMessage* message)
         }
     }
 #endif
-    destroy_canvas();
     AutoRef<SetModeEvent> event(new SetModeEvent(*this, mode->x_res,
                                                  mode->y_res, mode->bits));
     get_client().push_event(*event);
@@ -1074,8 +1075,6 @@ void DisplayChannel::handle_mode(RedPeer::InMessage* message)
     _y_res = mode->y_res;
     _depth = mode->bits;
 
-    create_canvas(get_client().get_application().get_canvas_types(), _x_res,
-                  _y_res, _depth);
 #ifdef USE_OGL
     if (_canvas->get_pixmap_type() == CANVAS_TYPE_GL) {
         screen()->set_update_interrupt_trigger(&_interrupt_update);
