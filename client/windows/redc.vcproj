@@ -41,7 +41,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories=".;..;&quot;..\..\common\win\my_getopt-1.5&quot;;..\..\common;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\qcairo&quot;;&quot;$(SPICE_LIBS)\include\ffmpeg&quot;"
+				AdditionalIncludeDirectories=".;..;..\..\common;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\qcairo&quot;;&quot;$(SPICE_LIBS)\include\ffmpeg&quot;"
 				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;CAIRO_CANVAS_ACCESS_TEST;CAIRO_CANVAS_CACHE;CAIRO_CANVAS_CACH_IS_SHARED;RED_DEBUG;CAIRO_CANVAS_NO_CHUNKS;_WIN32_WINNT=0x0500;LOG4CPLUS_STATIC;USE_GLZ;PTW32_STATIC_LIB"
 				MinimalRebuild="false"
 				BasicRuntimeChecks="3"
@@ -124,7 +124,7 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalIncludeDirectories=".;..;&quot;..\..\common\win\my_getopt-1.5&quot;;..\..\common;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\qcairo&quot;;&quot;$(SPICE_LIBS)\include\ffmpeg&quot;"
+				AdditionalIncludeDirectories=".;..;..\..\common;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\qcairo&quot;;&quot;$(SPICE_LIBS)\include\ffmpeg&quot;"
 				PreprocessorDefinitions="WIN32;_WINDOWS;CAIRO_CANVAS_ACCESS_TEST;CAIRO_CANVAS_CACHE;CAIRO_CANVAS_NO_CHUNKS;CAIRO_CANVAS_CACH_IS_SHARED;_WIN32_WINNT=0x0500;LOG4CPLUS_STATIC;USE_GLZ;PTW32_STATIC_LIB"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
