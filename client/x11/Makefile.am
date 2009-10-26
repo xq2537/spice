@@ -12,6 +12,7 @@ INCLUDES = \
 	-I. 						\
 	-I..						\
 	-I$(top_srcdir)/common				\
+	-I$(top_srcdir)/common/linux		\
 	-I$(top_srcdir)/client				\
 	$(GL_CFLAGS)					\
 	$(ALSA_CFLAGS)					\

@@ -39,7 +39,7 @@
 #include "cairo_canvas.h"
 #include "gl_canvas.h"
 #include "ogl_ctx.h"
-#include "libavcodec/avcodec.h"
+#include "ffmpeg_inc.h"
 #include "quic.h"
 #include "lz.h"
 #include "glz_encoder_dictionary.h"

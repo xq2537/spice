@@ -125,6 +125,12 @@ FFMPEG_LIBDIR=`pkg-config --variable=libdir libavutil`
 AC_SUBST(FFMPEG_LIBDIR)
 SPICE_REQUIRES+=" libavcodec libavutil"
 
+saved_CPPFLAGS="$CPPFLAGS"
+CPPFLAGS="$CPPFLAGS $FFMPEG_CFLAGS"
+AC_CHECK_HEADER(avcodec.h, AVCODEC_PREFIX="", AVCODEC_PREFIX="libavcodec/")
+CPPFLAGS="$saved_CPPFLAGS"
+AC_SUBST([AVCODEC_PREFIX])
+
 PKG_CHECK_MODULES(ALSA, alsa)
 AC_SUBST(ALSA_CFLAGS)
 AC_SUBST(ALSA_LIBS)
@@ -297,6 +303,7 @@ AC_OUTPUT([
 Makefile
 spice.pc
 common/Makefile
+common/linux/ffmpeg_inc.h
 server/Makefile
 client/Makefile
 client/x11/Makefile

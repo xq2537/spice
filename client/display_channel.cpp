@@ -40,10 +40,7 @@
 #include "red_gdi_canvas.h"
 #endif
 #include "platform_utils.h"
-
-extern "C" {
-#include "libavcodec/avcodec.h"
-}
+#include "ffmpeg_inc.h"
 
 static Mutex avcodec_mutex;
 

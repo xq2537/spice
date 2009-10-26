@@ -3,6 +3,7 @@ NULL =
 INCLUDES = \
 	-I. 					\
 	-I$(top_srcdir)/common			\
+	-I$(top_srcdir)/common/linux	\
 	$(FFMPEG_CFLAGS)			\
 	$(QCAIRO_CFLAGS)			\
 	$(GL_CFLAGS)				\

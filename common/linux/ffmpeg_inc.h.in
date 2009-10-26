@@ -1,0 +1,12 @@
+
+#ifdef __GNUG__
+extern "C" {
+#endif
+
+#include  "@AVCODEC_PREFIX@avcodec.h"
+
+#ifdef __GNUG__
+}
+#endif
+
+

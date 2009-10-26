@@ -27,7 +27,6 @@
 #include <time.h>
 #include <pthread.h>
 #include <sys/mman.h>
-#include <sys/user.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <ctype.h>
@@ -354,7 +353,10 @@ typedef struct PingItem {
     int size;
 } PingItem;
 
-static uint8_t zero_page[PAGE_SIZE] = {0};
+
+#define ZERO_BUF_SIZE 4096
+
+static uint8_t zero_page[ZERO_BUF_SIZE] = {0};
 
 static void reds_main_write(void *data);
 static void reds_push();
@@ -1083,7 +1085,7 @@ static void reds_prepare_ping_item(RedsOutItem *in_item, struct iovec* vec, int 
     int pos = 2;
     while (size) {
         ASSERT(pos < REDS_MAX_SEND_IOVEC);
-        int now = MIN(PAGE_SIZE, size);
+        int now = MIN(ZERO_BUF_SIZE, size);
         size -= now;
         vec[pos].iov_base = zero_page;
         vec[pos].iov_len = now;
