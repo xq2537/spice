@@ -1741,33 +1741,33 @@ void XMonitor::update_position()
     }
 
     if (crtc_info->noutput > 1) {
+        //todo: set valid subpixel order in case all outputs share the same type
         _subpixel_order = RED_SUBPIXEL_ORDER_UNKNOWN;
-        return;
-    }
+    } else {
+        AutoOutputInfo output_info(XRRGetOutputInfo(display, res.get(), crtc_info->outputs[0]));
 
-    AutoOutputInfo output_info(XRRGetOutputInfo(display, res.get(), crtc_info->outputs[0]));
-
-    switch (output_info->subpixel_order) {
-    case SubPixelUnknown:
-        _subpixel_order = RED_SUBPIXEL_ORDER_UNKNOWN;
+        switch (output_info->subpixel_order) {
+        case SubPixelUnknown:
+            _subpixel_order = RED_SUBPIXEL_ORDER_UNKNOWN;
         break;
-    case SubPixelHorizontalRGB:
-        _subpixel_order = RED_SUBPIXEL_ORDER_H_RGB;
-        break;
-    case SubPixelHorizontalBGR:
-        _subpixel_order = RED_SUBPIXEL_ORDER_H_BGR;
-        break;
-    case SubPixelVerticalRGB:
-        _subpixel_order = RED_SUBPIXEL_ORDER_V_RGB;
-        break;
-    case SubPixelVerticalBGR:
-        _subpixel_order = RED_SUBPIXEL_ORDER_V_BGR;
-        break;
-    case SubPixelNone:
-        _subpixel_order = RED_SUBPIXEL_ORDER_NONE;
-        break;
-    default:
-        THROW("invalid subpixel order");
+        case SubPixelHorizontalRGB:
+            _subpixel_order = RED_SUBPIXEL_ORDER_H_RGB;
+            break;
+        case SubPixelHorizontalBGR:
+            _subpixel_order = RED_SUBPIXEL_ORDER_H_BGR;
+            break;
+        case SubPixelVerticalRGB:
+            _subpixel_order = RED_SUBPIXEL_ORDER_V_RGB;
+            break;
+        case SubPixelVerticalBGR:
+            _subpixel_order = RED_SUBPIXEL_ORDER_V_BGR;
+            break;
+        case SubPixelNone:
+            _subpixel_order = RED_SUBPIXEL_ORDER_NONE;
+            break;
+        default:
+            THROW("invalid subpixel order");
+        }
     }
 
     _mode = crtc_info->mode;
