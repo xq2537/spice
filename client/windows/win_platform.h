@@ -20,22 +20,6 @@
 
 #include "icon.h"
 
-class EventOwner {
-public:
-    EventOwner() : _event_handle (0) {}
-    HANDLE const get_event_handle() { return _event_handle;}
-    virtual void on_event() = 0;
-
-protected:
-    HANDLE _event_handle;
-};
-
-class WinPlatform {
-public:
-    static void add_event(EventOwner& event_owner);
-    static void remove_event(EventOwner& event_owner);
-};
-
 class WinIcon: public Icon {
 public:
     WinIcon(HICON icon) : _icon (icon) {}

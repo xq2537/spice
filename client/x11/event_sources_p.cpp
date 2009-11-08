@@ -18,7 +18,7 @@
 #include <sys/epoll.h>
 #include <sys/fcntl.h>
 
-#include "events_loop.h"
+#include "event_sources.h"
 #include "debug.h"
 #include "utils.h"
 
@@ -38,7 +38,7 @@
 
 class EventWrapper {
 public:
-    EventWrapper(EventsLoop& owner, EventSourceOld& event)
+    EventWrapper(EventSources& owner, EventSource& event)
         : _owner (owner)
         , _event (&event)
         , _refs (1)
@@ -59,7 +59,7 @@ public:
         }
     }
 
-    EventSourceOld* get_event()
+    EventSource* get_event()
     {
         return _event;
     }
@@ -70,12 +70,12 @@ public:
     }
 
 private:
-    EventsLoop& _owner;
-    EventSourceOld* _event;
+    EventSources& _owner;
+    EventSource* _event;
     int _refs;
 };
 
-EventsLoop::EventsLoop()
+EventSources::EventSources()
 {
     _epoll = epoll_create(NUM_EPOLL_EVENTS);
     if (_epoll == -1) {
@@ -83,7 +83,7 @@ EventsLoop::EventsLoop()
     }
 }
 
-EventsLoop::~EventsLoop()
+EventSources::~EventSources()
 {
     Events::iterator iter = _events.begin();
     for (; iter != _events.end(); iter++) {
@@ -92,21 +92,14 @@ EventsLoop::~EventsLoop()
     close(_epoll);
 }
 
-void EventsLoop::run()
-{
-    for (;;) {
-        run_once();
-    }
-}
-
-void EventsLoop::run_once(int timeout_milli)
+bool EventSources::wait_events(int timeout_ms)
 {
     struct epoll_event events[NUM_EPOLL_EVENTS];
+    int num_events = epoll_wait(_epoll, events, NUM_EPOLL_EVENTS, timeout_ms);
 
-    int num_events = epoll_wait(_epoll, events, NUM_EPOLL_EVENTS, timeout_milli);
     if (num_events == -1) {
         if (errno == EINTR) {
-            return;
+            return false;
         }
         THROW("wait error eventfd failed");
     }
@@ -114,9 +107,10 @@ void EventsLoop::run_once(int timeout_milli)
     for (int i = 0; i < num_events; i++) {
         ((EventWrapper*)events[i].data.ptr)->ref();
     }
+
     for (int i = 0; i < num_events; i++) {
         EventWrapper* wrapper;
-        EventSourceOld* event;
+        EventSource* event;
 
         wrapper = (EventWrapper *)events[i].data.ptr;
         if ((event = wrapper->get_event())) {
@@ -124,9 +118,10 @@ void EventsLoop::run_once(int timeout_milli)
         }
         wrapper->unref();
     }
+    return false;
 }
 
-void EventsLoop::add_trigger(Trigger& trigger)
+void EventSources::add_trigger(Trigger& trigger)
 {
     int fd = trigger.get_fd();
     EventWrapper* wrapper = new EventWrapper(*this, trigger);
@@ -139,7 +134,7 @@ void EventsLoop::add_trigger(Trigger& trigger)
     _events.push_back(wrapper);
 }
 
-void EventsLoop_p::remove_wrapper(EventWrapper* wrapper)
+void EventSources_p::remove_wrapper(EventWrapper* wrapper)
 {
     Events::iterator iter = _events.begin();
     for (;; iter++) {
@@ -153,7 +148,7 @@ void EventsLoop_p::remove_wrapper(EventWrapper* wrapper)
     }
 }
 
-void EventsLoop::remove_trigger(Trigger& trigger)
+void EventSources::remove_trigger(Trigger& trigger)
 {
     Events::iterator iter = _events.begin();
     for (;; iter++) {
@@ -172,7 +167,7 @@ void EventsLoop::remove_trigger(Trigger& trigger)
     }
 }
 
-EventsLoop::Trigger::Trigger()
+EventSources::Trigger::Trigger()
 {
 #ifdef USING_EVENT_FD
     _event_fd = eventfd(0, 0);
@@ -197,7 +192,7 @@ EventsLoop::Trigger::Trigger()
     }
 }
 
-EventsLoop::Trigger::~Trigger()
+EventSources::Trigger::~Trigger()
 {
     close(_event_fd);
 #ifndef USING_EVENT_FD
@@ -205,7 +200,7 @@ EventsLoop::Trigger::~Trigger()
 #endif
 }
 
-void EventsLoop::Trigger::trigger()
+void EventSources::Trigger::trigger()
 {
     Lock lock(_lock);
     if (_pending_int) {
@@ -218,7 +213,7 @@ void EventsLoop::Trigger::trigger()
     }
 }
 
-bool EventsLoop_p::Trigger_p::reset_event()
+bool Trigger_p::reset_event()
 {
     Lock lock(_lock);
     if (!_pending_int) {
@@ -232,12 +227,12 @@ bool EventsLoop_p::Trigger_p::reset_event()
     return true;
 }
 
-void EventsLoop::Trigger::reset()
+void EventSources::Trigger::reset()
 {
     reset_event();
 }
 
-void EventsLoop::Trigger::action()
+void EventSources::Trigger::action()
 {
     if (reset_event()) {
         on_event();
@@ -278,7 +273,7 @@ static void add_to_poll(int fd, int epoll, EventWrapper* wrapper)
     }
 }
 
-void EventsLoop::add_socket(Socket& socket)
+void EventSources::add_socket(Socket& socket)
 {
     int fd = socket.get_socket();
     set_non_blocking(fd);
@@ -287,9 +282,9 @@ void EventsLoop::add_socket(Socket& socket)
     _events.push_back(wrapper);
 }
 
-static bool remove_event(EventsLoop_p::Events& events, EventSourceOld& event)
+static bool remove_event(EventSources_p::Events& events, EventSource& event)
 {
-    EventsLoop_p::Events::iterator iter = events.begin();
+    EventSources_p::Events::iterator iter = events.begin();
     for (;; iter++) {
         if (iter == events.end()) {
             return false;
@@ -302,7 +297,7 @@ static bool remove_event(EventsLoop_p::Events& events, EventSourceOld& event)
     }
 }
 
-void EventsLoop::remove_socket(Socket& socket)
+void EventSources::remove_socket(Socket& socket)
 {
     if (!remove_event(_events, socket)) {
         THROW("socket not found");
@@ -314,7 +309,7 @@ void EventsLoop::remove_socket(Socket& socket)
     set_blocking(fd);
 }
 
-void EventsLoop::add_file(File& file)
+void EventSources::add_file(File& file)
 {
     int fd = file.get_fd();
     set_non_blocking(fd);
@@ -323,7 +318,7 @@ void EventsLoop::add_file(File& file)
     _events.push_back(wrapper);
 }
 
-void EventsLoop::remove_file(File& file)
+void EventSources::remove_file(File& file)
 {
     if (!remove_event(_events, file)) {
         THROW("file not found");
@@ -335,3 +330,10 @@ void EventsLoop::remove_file(File& file)
     set_blocking(fd);
 }
 
+void EventSources::add_handle(Handle& file)
+{
+}
+
+void EventSources::remove_handle(Handle& file)
+{
+}

@@ -48,6 +48,7 @@ RED_COMMON_SRCS =	 		\
 	pixels_source.h			\
 	platform.h			\
 	playback_channel.cpp		\
+	process_loop.cpp		\
 	quic.cpp			\
 	read_write_mutex.h		\
 	record_channel.cpp		\

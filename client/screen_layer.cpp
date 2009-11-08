@@ -24,18 +24,23 @@
 
 class AttacheLayerEvent: public SyncEvent {
 public:
-    AttacheLayerEvent(ScreenLayer& layer, int screen_id) : _layer (layer), _screen_id (screen_id) {}
+    AttacheLayerEvent(ScreenLayer& layer, int screen_id)
+        : _layer (layer)
+        , _screen_id (screen_id)
+    {
+    }
 
-    virtual void do_responce(Application& application);
+    virtual void do_response(AbstractProcessLoop& events_loop);
 
 private:
     ScreenLayer& _layer;
     int _screen_id;
 };
 
-void AttacheLayerEvent::do_responce(Application& application)
+void AttacheLayerEvent::do_response(AbstractProcessLoop& events_loop)
 {
-    AutoRef<RedScreen> screen(application.get_screen(_screen_id));
+    Application* app = (Application*)(events_loop.get_owner());
+    AutoRef<RedScreen> screen(app->get_screen(_screen_id));
     (*screen)->attach_layer(_layer);
 }
 
@@ -43,13 +48,13 @@ class DetacheLayerEvent: public SyncEvent {
 public:
     DetacheLayerEvent(ScreenLayer& _layer) : _layer (_layer) {}
 
-    virtual void do_responce(Application& application);
+    virtual void do_response(AbstractProcessLoop& events_loop);
 
 private:
     ScreenLayer& _layer;
 };
 
-void DetacheLayerEvent::do_responce(Application& application)
+void DetacheLayerEvent::do_response(AbstractProcessLoop& events_loop)
 {
     _layer.screen()->detach_layer(_layer);
 }

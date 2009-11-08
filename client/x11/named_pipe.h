@@ -20,11 +20,11 @@
 
 #include "platform.h"
 #include "x_platform.h"
-#include "events_loop.h"
+#include "process_loop.h"
 
-class Session: public EventsLoop::Socket {
+class Session: public EventSources::Socket {
 public:
-    Session(int fd, EventsLoop& events_loop);
+    Session(int fd, ProcessLoop& events_loop);
     virtual ~Session();
     void bind(NamedPipe::ConnectionInterface* conn_interface);
 
@@ -37,13 +37,13 @@ public:
 private:
     NamedPipe::ConnectionInterface *_conn_interface;
     int _fd_client;
-    EventsLoop &_events_loop;
+    ProcessLoop &_events_loop;
 };
 
-class LinuxListener: public EventsLoop::Socket {
+class LinuxListener: public EventSources::Socket {
 public:
     LinuxListener(const char *name, NamedPipe::ListenerInterface &listener_interface,
-                  EventsLoop &events_loop);
+                  ProcessLoop& events_loop);
     virtual ~LinuxListener();
     void on_event();
     virtual int get_socket() {return _listen_socket;}
@@ -55,7 +55,7 @@ private:
     NamedPipe::ListenerInterface &_listener_interface;
     int _listen_socket;
     std::string _name;
-    EventsLoop &_events_loop;
+    ProcessLoop &_events_loop;
 };
 
 #endif

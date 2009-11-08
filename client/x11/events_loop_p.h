@@ -31,6 +31,7 @@ class EventWrapper;
 
 class EventsLoop_p {
 public:
+    class Trigger_p;
     void remove_wrapper(EventWrapper*);
 
 public:
@@ -41,7 +42,7 @@ public:
     friend class EventWrapper;
 };
 
-class Trigger_p {
+class EventsLoop_p::Trigger_p {
 public:
     Trigger_p() : _pending_int (false) {}
     int get_fd() { return _event_fd;}

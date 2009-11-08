@@ -50,7 +50,7 @@
 #include "resource.h"
 #include "res.h"
 #include "cursor.h"
-#include "events_loop.h"
+#include "process_loop.h"
 
 #define DWORD uint32_t
 #define BOOL bool
@@ -66,10 +66,8 @@ static Display* x_display = NULL;
 static XVisualInfo **vinfo = NULL;
 static GLXFBConfig **fb_config;
 
-static EventsLoop events_loop;
 static XContext win_proc_context;
-static bool quit_request = false;
-static pthread_t main_thread;
+static ProcessLoop* main_loop = NULL;
 static int focus_count = 0;
 
 static bool using_xrandr_1_0 = false;
@@ -108,16 +106,19 @@ static Platform::DisplayModeListner* display_mode_listener = &default_display_mo
 
 NamedPipe::ListenerRef NamedPipe::create(const char *name, ListenerInterface& listener_interface)
 {
-    return (ListenerRef)(new LinuxListener(name, listener_interface, events_loop));
+    ASSERT(main_loop && main_loop->is_same_thread(pthread_self()));
+    return (ListenerRef)(new LinuxListener(name, listener_interface, *main_loop));
 }
 
 void NamedPipe::destroy(ListenerRef listener_ref)
 {
+    ASSERT(main_loop && main_loop->is_same_thread(pthread_self()));
     delete (LinuxListener *)listener_ref;
 }
 
 void NamedPipe::destroy_connection(ConnectionRef conn_ref)
 {
+    ASSERT(main_loop && main_loop->is_same_thread(pthread_self()));
     delete (Session *)conn_ref;
 }
 
@@ -137,81 +138,45 @@ int32_t NamedPipe::write(ConnectionRef conn_ref, const uint8_t* buf, int32_t siz
     return -1;
 }
 
-class XEventHandler: public EventsLoop::File {
+class XEventHandler: public EventSources::File {
 public:
-    XEventHandler(Display& x_display);
-    virtual void on_event() {}
+    XEventHandler(Display& x_display, XContext& win_proc_context);
+    virtual void on_event();
     virtual int get_fd() {return _x_fd;}
 
 private:
+    Display& _x_display;
+    XContext& _win_proc_context;
     int _x_fd;
 };
 
-XEventHandler::XEventHandler(Display& x_display)
+XEventHandler::XEventHandler(Display& x_display, XContext& win_proc_context)
+    : _x_display (x_display)
+    , _win_proc_context (win_proc_context)
 {
     if ((_x_fd = ConnectionNumber(&x_display)) == -1) {
         THROW("get x fd failed");
     }
 }
 
-class WakeupEventHandler: public EventsLoop::Trigger {
-public:
-    virtual void on_event() {}
-};
+void XEventHandler::on_event()
+{
+    while (XPending(&_x_display)) {
+        XPointer proc_pointer;
+        XEvent event;
 
-static WakeupEventHandler wakeup_handler;
-
-#define NSEC_PER_SEC (1000 * 1000 * 1000)
-
-class Timer {
-public:
-    Timer(timer_proc_t proc, void* opaque);
-    ~Timer();
-
-    void arm(uint32_t msec);
-    void disarm();
-    bool action(const timespec& now);
-
-    const timespec& get_experatoin() const { return _experatoin;}
-
-    static int get_timout();
-    static void timers_action();
-
-private:
-    void calc_next_experatoin_time();
-
-    static bool timespec_less(const timespec& time, const timespec& from);
-    static bool timespec_equal(const timespec& time, const timespec& from);
-    static bool timespec_less_or_equal(const timespec& time, const timespec& from);
-
-public:
-    static RecurciveMutex timers_lock;
-
-private:
-    timer_proc_t _proc;
-    void* _opaque;
-    bool _armed;
-    timespec _interval;
-    timespec _experatoin;
-
-    class Compare {
-    public:
-        bool operator () (const Timer* timer1, const Timer* timer2) const
-        {
-            if (!Timer::timespec_less(timer1->get_experatoin(), timer2->get_experatoin())) {
-                return Timer::timespec_equal(timer1->get_experatoin(), timer2->get_experatoin()) ?
-                                                                            timer1 < timer2 : false;
-            }
-            return true;
+        XNextEvent(&_x_display, &event);
+        if (event.xany.window == None) {
+            LOG_WARN("invalid window");
+            continue;
         }
-    };
 
-    typedef std::set<Timer*, Compare> TimersSet;
-    static TimersSet armed_timers;
-};
-
-Timer::TimersSet Timer::armed_timers;
-RecurciveMutex Timer::timers_lock;
+        if (XFindContext(&_x_display, event.xany.window, _win_proc_context, &proc_pointer)) {
+            THROW("no window proc");
+        }
+        ((XPlatform::win_proc_t)proc_pointer)(event);
+    }
+}
 
 Display* XPlatform::get_display()
 {
@@ -242,44 +207,8 @@ void XPlatform::cleare_win_proc(Window win)
 
 void Platform::send_quit_request()
 {
-    quit_request = true;
-    wakeup();
-}
-
-void Platform::wait_events()
-{
-    ASSERT(pthread_self() == main_thread);
-    XFlush(x_display);
-    if (!XPending(x_display)) {
-        events_loop.run_once(Timer::get_timout());
-        Timer::timers_action();
-    }
-}
-
-void Platform::wakeup()
-{
-    wakeup_handler.trigger();
-}
-
-bool Platform::process_events()
-{
-    ASSERT(pthread_self() == main_thread);
-    while (XPending(x_display)) {
-        XPointer proc_pointer;
-        XEvent event;
-
-        XNextEvent(x_display, &event);
-        if (event.xany.window == None) {
-            LOG_WARN("invalid window");
-            continue;
-        }
-
-        if (XFindContext(x_display, event.xany.window, win_proc_context, &proc_pointer)) {
-            THROW("no window proc");
-        }
-        ((XPlatform::win_proc_t)proc_pointer)(event);
-    }
-    return quit_request;
+    ASSERT(main_loop);
+    main_loop->quit(0);
 }
 
 uint64_t Platform::get_monolithic_time()
@@ -339,155 +268,6 @@ void Platform::set_thread_priority(void* thread, Platform::ThreadPriority in_pri
     if (setpriority(PRIO_PROCESS, tid, priority) == -1) {
         DBG(0, "setpriority failed %s", strerror(errno));
     }
-}
-
-Timer::Timer(timer_proc_t proc, void* opaque)
-    : _proc (proc)
-    , _opaque (opaque)
-    , _armed (false)
-{
-}
-
-Timer::~Timer()
-{
-    disarm();
-}
-
-void Timer::arm(uint32_t msec)
-{
-    disarm();
-    _interval.tv_sec = msec / 1000;
-    _interval.tv_nsec = (msec % 1000) * 1000 * 1000;
-    if (clock_gettime(CLOCK_MONOTONIC, &_experatoin)) {
-        THROW("gettime failed %s", strerror(errno));
-    }
-    calc_next_experatoin_time();
-    _armed = true;
-    armed_timers.insert(this);
-}
-
-void Timer::disarm()
-{
-    if (!_armed) {
-        return;
-    }
-    armed_timers.erase(this);
-    _armed = false;
-}
-
-#define TINER_COMPENSATION
-
-bool Timer::action(const timespec& now)
-{
-    ASSERT(_armed);
-    ASSERT(now.tv_nsec < NSEC_PER_SEC);
-
-    if (timespec_less(now, _experatoin)) {
-        return false;
-    }
-    armed_timers.erase(this);
-#ifndef TINER_COMPENSATION
-    _experatoin = now;
-#endif
-    calc_next_experatoin_time();
-#ifdef TINER_COMPENSATION
-    if (timespec_less_or_equal(_experatoin, now)) {
-        _experatoin = now;
-        calc_next_experatoin_time();
-    }
-#endif
-    armed_timers.insert(this);
-    _proc(_opaque, (TimerID)this);
-    return true;
-}
-
-int Timer::get_timout()
-{
-    RecurciveLock lock(Timer::timers_lock);
-    TimersSet::iterator iter;
-    iter = armed_timers.begin();
-    if (iter == armed_timers.end()) {
-        return -1;
-    }
-
-    timespec now;
-    if (clock_gettime(CLOCK_MONOTONIC, &now)) {
-        THROW("gettime failed %s", strerror(errno));
-    }
-
-    const timespec& next_time = (*iter)->get_experatoin();
-
-    if (!timespec_less(now, next_time)) {
-        return 0;
-    }
-    return ((next_time.tv_nsec - now.tv_nsec) / 1000 / 1000) +
-           (next_time.tv_sec - now.tv_sec) * 1000;
-}
-
-void Timer::timers_action()
-{
-    RecurciveLock lock(timers_lock);
-    timespec now;
-    if (clock_gettime(CLOCK_MONOTONIC, &now)) {
-        THROW("gettime failed %s", strerror(errno));
-    }
-
-    TimersSet::iterator iter;
-    while ((iter = armed_timers.begin()) != armed_timers.end() && (*iter)->action(now));
-}
-
-void Timer::calc_next_experatoin_time()
-{
-    _experatoin.tv_nsec += _interval.tv_nsec;
-    _experatoin.tv_sec += (_experatoin.tv_nsec / NSEC_PER_SEC) + _interval.tv_sec;
-    _experatoin.tv_nsec %= NSEC_PER_SEC;
-}
-
-bool Timer::timespec_less(const timespec& time, const timespec& from)
-{
-    return time.tv_sec < from.tv_sec || (time.tv_sec == from.tv_sec && time.tv_nsec < from.tv_nsec);
-}
-
-bool Timer::timespec_equal(const timespec& time, const timespec& from)
-{
-    return time.tv_sec == from.tv_sec && time.tv_nsec <= from.tv_nsec;
-}
-
-bool Timer::timespec_less_or_equal(const timespec& time, const timespec& from)
-{
-    return time.tv_sec < from.tv_sec ||
-           (time.tv_sec == from.tv_sec && time.tv_nsec <= from.tv_nsec);
-}
-
-TimerID Platform::create_interval_timer(timer_proc_t proc, void* opaque)
-{
-    return (TimerID) new Timer(proc, opaque);
-}
-
-bool Platform::activate_interval_timer(TimerID timer, unsigned int millisec)
-{
-    RecurciveLock lock(Timer::timers_lock);
-    ((Timer*)timer)->arm(millisec);
-    if (pthread_self() != main_thread) {
-        wakeup();
-    }
-    return true;
-}
-
-bool Platform::deactivate_interval_timer(TimerID timer)
-{
-    RecurciveLock lock(Timer::timers_lock);
-    ((Timer*)timer)->disarm();
-    return true;
-}
-
-void Platform::destroy_interval_timer(TimerID timer)
-{
-    if (timer == INVALID_TIMER) {
-        return;
-    }
-    RecurciveLock lock(Timer::timers_lock);
-    delete (Timer*)timer;
 }
 
 void Platform::set_event_listener(EventListener* listener)
@@ -2278,13 +2058,11 @@ void Platform::init()
 {
     int err, ev;
     int threads_enable;
-    XEventHandler *x_event_handler;
 
     DBG(0, "");
 
     threads_enable = XInitThreads();
 
-    main_thread = pthread_self();
 
     if (!(x_display = XOpenDisplay(NULL))) {
         THROW("open X display failed");
@@ -2341,10 +2119,6 @@ void Platform::init()
     init_xrandr();
     init_xrender();
 
-    x_event_handler = new XEventHandler(*x_display);
-    events_loop.add_file(*x_event_handler);
-    events_loop.add_trigger(wakeup_handler);
-
     struct sigaction act;
     memset(&act, 0, sizeof(act));
     sigfillset(&act.sa_mask);
@@ -2366,6 +2140,14 @@ void Platform::init()
     sigaction(SIGFPE, &act, NULL);
 
     atexit(cleanup);
+}
+
+void Platform::set_process_loop(ProcessLoop& main_process_loop)
+{
+    main_loop = &main_process_loop;
+    XEventHandler *x_event_handler;
+    x_event_handler = new XEventHandler(*x_display, win_proc_context);
+    main_loop->add_file(*x_event_handler);
 }
 
 uint32_t Platform::get_keyboard_modifiers()
@@ -2641,3 +2423,37 @@ LocalCursor* Platform::create_default_cursor()
     return new XDefaultCursor();
 }
 
+class PlatformTimer: public Timer {
+public:
+    PlatformTimer(timer_proc_t proc, void* opaque) : _proc(proc), _opaque(opaque) {}
+    void response(AbstractProcessLoop& events_loop) {_proc(_opaque, (TimerID)this);}
+
+private:
+    timer_proc_t _proc;
+    void* _opaque;
+};
+
+TimerID Platform::create_interval_timer(timer_proc_t proc, void* opaque)
+{
+    return (TimerID)(new PlatformTimer(proc, opaque));
+}
+
+bool Platform::activate_interval_timer(TimerID timer, unsigned int millisec)
+{
+    ASSERT(main_loop);
+    main_loop->activate_interval_timer((PlatformTimer*)timer, millisec);
+    return true;
+}
+
+bool Platform::deactivate_interval_timer(TimerID timer)
+{
+    ASSERT(main_loop);
+    main_loop->deactivate_interval_timer((PlatformTimer*)timer);
+    return true;
+}
+
+void Platform::destroy_interval_timer(TimerID timer)
+{
+    deactivate_interval_timer(timer);
+    ((PlatformTimer*)timer)->unref();
+}

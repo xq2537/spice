@@ -49,72 +49,35 @@
 mutex_t cairo_surface_user_data_mutex;
 #endif
 
-SyncEvent::SyncEvent()
-    : _err (false)
-    , _ready (false)
+void ConnectedEvent::response(AbstractProcessLoop& events_loop)
 {
+    static_cast<Application*>(events_loop.get_owner())->on_connected();
 }
 
-SyncEvent::~SyncEvent()
+void DisconnectedEvent::response(AbstractProcessLoop& events_loop)
 {
-}
-
-void SyncEvent::responce(Application& application)
-{
-    try {
-        do_responce(application);
-    } catch (Exception& e) {
-        LOG_WARN("unhandle exception: %s", e.what());
-        _err = true;
-    } catch (...) {
-        _err = true;
-    }
-    Lock lock(_mutex);
-    _ready = true;
-    _condition.notify_one();
-}
-
-void SyncEvent::wait()
-{
-    //todo: process event if on main thread
-    Lock lock(_mutex);
-    while (!_ready) {
-        _condition.wait(lock);
-    }
-}
-
-void ConnectedEvent::responce(Application& application)
-{
-    application.on_connected();
-}
-
-void DisconnectedEvent::responce(Application& application)
-{
-    application.show_splash(0);
+    Application* app = static_cast<Application*>(events_loop.get_owner());
+    app->show_splash(0);
 #ifndef RED_DEBUG
-    application.quit(SPICEC_ERROR_CODE_SUCCESS);
+    app->do_quit(SPICEC_ERROR_CODE_SUCCESS);
 #endif
 }
 
-void CoonnectionError::responce(Application& application)
+void ConnectionErrorEvent::response(AbstractProcessLoop& events_loop)
 {
-    application.show_splash(0);
+    Application* app = static_cast<Application*>(events_loop.get_owner());
+    app->show_splash(0);
 #ifndef RED_DEBUG
-    application.quit(_error_code);
+    app->do_quit(_error_code);
 #endif
 }
 
-void ErrorEvent::responce(Application& application)
-{
-    application.quit(SPICEC_ERROR_CODE_ERROR);
-}
-
-void MonitorsQuery::do_responce(Application& application)
+void MonitorsQuery::do_response(AbstractProcessLoop& events_loop)
 {
     Monitor* mon;
     int i = 0;
 
-    while ((mon = application.find_monitor(i++))) {
+    while ((mon = (static_cast<Application*>(events_loop.get_owner()))->find_monitor(i++))) {
         MonitorInfo info;
         info.size = mon->get_size();
         info.depth = 32;
@@ -235,15 +198,14 @@ enum AppCommands {
 };
 
 Application::Application()
-    : _client (*this)
-    , _enabled_channels(RED_CHANNEL_END, true)
+    : ProcessLoop (this)
+    , _client (*this)
+    , _enabled_channels (RED_CHANNEL_END, true)
     , _main_screen (NULL)
-    , _quitting (false)
     , _active (false)
     , _full_screen (false)
     , _changing_screens (false)
     , _exit_code (0)
-    , _events_gen (0)
     , _active_screen (NULL)
     , _gui_layer (new GUILayer())
     , _inputs_handler (&default_inputs_handler)
@@ -251,6 +213,7 @@ Application::Application()
     , _title (L"SPICEc:%d")
 {
     DBG(0, "");
+    Platform::set_process_loop(*this);
 
     init_monitors();
     init_key_table();
@@ -324,59 +287,13 @@ void Application::remove_inputs_handler(InputsHandler& handler)
     _inputs_handler = &default_inputs_handler;
 }
 
-void Application::process_events()
-{
-    _events_gen++;
-    for (;;) {
-        Event* event;
-        Lock lock(_events_lock);
-        if (_events.empty()) {
-            return;
-        }
-        event = _events.front();
-        if (event->_generation == _events_gen) {
-            Platform::wakeup();
-            return;
-        }
-        _events.pop_front();
-        lock.unlock();
-        event->responce(*this);
-        event->unref();
-    }
-}
-
-void Application::push_event(Event* event)
-{
-    Lock lock(_events_lock);
-    bool notify = _events.empty();
-    _events.push_back(event);
-    event->_generation = _events_gen;
-    event->ref();
-    if (notify) {
-        Platform::wakeup();
-    }
-}
-
-int Application::message_loop()
-{
-    for (;;) {
-        Platform::wait_events();
-        if (Platform::process_events()) {
-            _quitting = true;
-            break;
-        }
-        process_events();
-    }
-    return _exit_code;
-}
-
 void Application::abort()
 {
     Platform::set_event_listener(NULL);
     Platform::set_display_mode_listner(NULL);
     unpress_all();
     while (!_client.abort()) {
-        process_events();
+        ProcessLoop::process_events_queue();
         Platform::msleep(100);
     }
 }
@@ -397,22 +314,10 @@ void Application::connect()
 
 int Application::run()
 {
-    try {
-        _client.connect();
-        _exit_code = message_loop();
-    } catch (...) {
-        throw;
-    }
-    return _exit_code;
-}
+       _client.connect();
+       _exit_code = ProcessLoop::run();
+       return _exit_code;
 
-void Application::quit(int exit_code)
-{
-    if (!_quitting) {
-        _quitting = true;
-        _exit_code = exit_code;
-        Platform::send_quit_request();
-    }
 }
 
 RedScreen* Application::find_screen(int id)

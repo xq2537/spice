@@ -23,7 +23,7 @@
 #include "utils.h"
 #include "debug.h"
 
-Session::Session(int fd, EventsLoop& events_loop)
+Session::Session(int fd, ProcessLoop& events_loop)
     : _fd_client(fd)
     , _events_loop(events_loop)
 {
@@ -121,7 +121,7 @@ int LinuxListener::create_socket(const char *socket_name)
 }
 
 LinuxListener::LinuxListener(const char *name, NamedPipe::ListenerInterface &listener_interface,
-                             EventsLoop &events_loop)
+                             ProcessLoop& events_loop)
     : _listener_interface (listener_interface)
     , _events_loop (events_loop)
 {
