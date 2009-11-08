@@ -15,29 +15,37 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef _H_EVENTS_LOOP_P
-#define _H_EVENTS_LOOP_P
+#ifndef _H_EVENT_SOURCES_P
+#define _H_EVENT_SOURCES_P
 
 #include "common.h"
 
 #include <vector>
 
-class EventSourceOld;
+class EventSource;
+class Handle_p;
 
-class EventsLoop_p {
+class EventSources_p {
+protected:
+    /* return true if quit should be performed */
+    bool process_system_events();
+    void add_event(HANDLE event, EventSource* source);
+    void remove_event(EventSource* source);
 public:
-    class Trigger_p;
-public:
-    std::vector<EventSourceOld*> _events;
+    std::vector<EventSource*> _events;
     std::vector<HANDLE> _handles;
 };
 
-class EventsLoop_p::Trigger_p {
+class Handle_p {
 public:
-    HANDLE get_handle() { return event;}
+    Handle_p();
+    virtual ~Handle_p();
+    HANDLE get_handle() { return _event;}
+protected:
+    HANDLE _event;
+};
 
-public:
-    HANDLE event;
+class Trigger_p: public Handle_p {
 };
 
 #endif

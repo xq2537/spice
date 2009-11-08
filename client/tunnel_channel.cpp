@@ -256,18 +256,12 @@ TunnelChannel::TunnelChannel(RedClient& client, uint32_t id)
                          sizeof(RedTunnelSocketClosedAck));
     handler->set_handler(RED_TUNNEL_SOCKET_DATA,
                          &TunnelChannel::handle_socket_data, sizeof(RedTunnelSocketData));
-#ifdef TUNNEL_CONFIG
-    _config_listener = new TunnelConfigListenerIfc(*this);
-#endif
 }
 
 TunnelChannel::~TunnelChannel()
 {
     destroy_sockets();
     OutSocketMessage::clear_free_messages();
-#ifdef TUNNEL_CONFIG
-    delete _config_listener;
-#endif
 }
 
 void TunnelChannel::handle_init(RedPeer::InMessage* message)
@@ -587,10 +581,21 @@ void TunnelChannel::destroy_sockets()
     }
 }
 
+#ifdef TUNNEL_CONFIG
+void TunnelChannel::on_connect()
+{
+    _config_listener = new TunnelConfigListenerIfc(*this);
+
+}
+#endif
+
 void TunnelChannel::on_disconnect()
 {
     destroy_sockets();
     OutSocketMessage::clear_free_messages();
+#ifdef TUNNEL_CONFIG
+    delete _config_listener;
+#endif
 }
 
 #ifdef TUNNEL_CONFIG
@@ -646,23 +651,75 @@ ChannelFactory& TunnelChannel::Factory()
 }
 
 #ifdef TUNNEL_CONFIG
+class CreatePipeListenerEvent: public SyncEvent {
+public:
+    CreatePipeListenerEvent(NamedPipe::ListenerInterface& listener_ifc)
+        : _listener_ifc (listener_ifc)
+    {
+    }
+
+    virtual void do_response(AbstractProcessLoop& events_loop)
+    {
+        _listener_ref =  NamedPipe::create(TUNNEL_CONFIG_PIPE_NAME, _listener_ifc);
+    }
+
+    NamedPipe::ListenerRef get_listener() { return _listener_ref;}
+private:
+    NamedPipe::ListenerInterface& _listener_ifc;
+    NamedPipe::ListenerRef _listener_ref;
+};
+
+class DestroyPipeListenerEvent: public SyncEvent {
+public:
+    DestroyPipeListenerEvent(NamedPipe::ListenerRef listener_ref)
+        : _listener_ref (listener_ref)
+    {
+    }
+
+    virtual void do_response(AbstractProcessLoop& events_loop)
+    {
+        NamedPipe::destroy(_listener_ref);
+    }
+
+private:
+    NamedPipe::ListenerRef _listener_ref;
+};
+
+class DestroyPipeConnectionEvent: public SyncEvent {
+public:
+    DestroyPipeConnectionEvent(NamedPipe::ConnectionRef ref) : _conn_ref(ref) {}
+    virtual void do_response(AbstractProcessLoop& events_loop)
+    {
+        NamedPipe::destroy_connection(_conn_ref);
+    }
+private:
+    NamedPipe::ConnectionRef _conn_ref;
+};
+
 TunnelConfigListenerIfc::TunnelConfigListenerIfc(TunnelChannel& tunnel)
-    : _tunnel(tunnel)
+    : _tunnel (tunnel)
 {
-    _listener_ref = NamedPipe::create(TUNNEL_CONFIG_PIPE_NAME, *this);
+    AutoRef<CreatePipeListenerEvent> event(new CreatePipeListenerEvent(*this));
+    _tunnel.get_client().push_event(*event);
+    (*event)->wait();
+    _listener_ref = (*event)->get_listener();
 }
 
 TunnelConfigListenerIfc::~TunnelConfigListenerIfc()
 {
+    AutoRef<DestroyPipeListenerEvent> listen_event(new DestroyPipeListenerEvent(_listener_ref));
+    _tunnel.get_client().push_event(*listen_event);
+    (*listen_event)->wait();
     for (std::list<TunnelConfigConnectionIfc*>::iterator it = _connections.begin();
             it != _connections.end(); ++it) {
         if ((*it)->get_ref() != NamedPipe::INVALID_CONNECTION) {
-            NamedPipe::destroy_connection((*it)->get_ref());
+            AutoRef<DestroyPipeConnectionEvent> conn_event(new DestroyPipeConnectionEvent(
+                                                                    (*it)->get_ref()));
+            _tunnel.get_client().push_event(*conn_event);
+            (*conn_event)->wait();
         }
         delete (*it);
     }
-
-    NamedPipe::destroy(_listener_ref);
 }
 
 NamedPipe::ConnectionInterface& TunnelConfigListenerIfc::create()
@@ -684,11 +741,11 @@ void TunnelConfigListenerIfc::destroy_connection(TunnelConfigConnectionIfc* conn
 
 TunnelConfigConnectionIfc::TunnelConfigConnectionIfc(TunnelChannel& tunnel,
                                                      TunnelConfigListenerIfc& listener)
-    : _tunnel(tunnel)
-    , _listener(listener)
-    , _in_msg_len(0)
-    , _out_msg("")
-    , _out_msg_pos(0)
+    : _tunnel (tunnel)
+    , _listener (listener)
+    , _in_msg_len (0)
+    , _out_msg ("")
+    , _out_msg_pos (0)
 {
 }
 

@@ -331,7 +331,7 @@ public:
         cursor->set_opaque(native_cursor);
     }
 
-    virtual void responce(Application& application)
+    virtual void response(AbstractProcessLoop& events_loop)
     {
         CursorData *cursor = *_cursor;
         create_cursor();
@@ -345,7 +345,8 @@ public:
         _channel._cursor_rect.top = _y - cursor->header().hot_spot_y;
         _channel._cursor_rect.bottom = _channel._cursor_rect.top + cursor->header().height;
 
-        if (application.get_mouse_mode() == RED_MOUSE_MODE_CLIENT) {
+        if (static_cast<Application*>(events_loop.get_owner())->get_mouse_mode() ==
+            RED_MOUSE_MODE_CLIENT) {
             RedScreen* screen = _channel.screen();
             ASSERT(screen);
             screen->set_cursor(_visible ? cursor : NULL);
@@ -381,10 +382,11 @@ public:
     {
     }
 
-    virtual void responce(Application& application)
+    virtual void response(AbstractProcessLoop& events_loop)
     {
         _channel._cursor_visible = true;
-        if (application.get_mouse_mode() == RED_MOUSE_MODE_CLIENT) {
+        if (static_cast<Application*>(events_loop.get_owner())->get_mouse_mode() ==
+            RED_MOUSE_MODE_CLIENT) {
             RedScreen* screen = _channel.screen();
             ASSERT(screen);
             screen->set_cursor(_channel._cursor);
@@ -412,10 +414,11 @@ private:
 class CursorHideEvent: public Event {
 public:
     CursorHideEvent(CursorChannel& channel): _channel (channel) {}
-    virtual void responce(Application& application)
+    virtual void response(AbstractProcessLoop& events_loop)
     {
         _channel._cursor_visible = false;
-        if (application.get_mouse_mode() == RED_MOUSE_MODE_CLIENT) {
+        if (static_cast<Application*>(events_loop.get_owner())->get_mouse_mode() ==
+            RED_MOUSE_MODE_CLIENT) {
             RedScreen* screen = _channel.screen();
             ASSERT(screen);
             screen->set_cursor(NULL);
@@ -431,7 +434,7 @@ private:
 class CursorRemoveEvent: public Event {
 public:
     CursorRemoveEvent(CursorChannel& channel): _channel (channel) {}
-    virtual void responce(Application& application)
+    virtual void response(AbstractProcessLoop& events_loop)
     {
         _channel._cursor_visible = false;
         _channel.clear_area();
@@ -455,13 +458,14 @@ class CursorModeEvent: public Event {
 public:
     CursorModeEvent(CursorChannel& channel): _channel (channel) {}
 
-    virtual void responce(Application& application)
+    virtual void response(AbstractProcessLoop& events_loop)
     {
         RedScreen* screen = _channel.screen();
         if (!screen) {
             return;
         }
-        if (application.get_mouse_mode() == RED_MOUSE_MODE_CLIENT) {
+        if (static_cast<Application*>(events_loop.get_owner())->get_mouse_mode() ==
+            RED_MOUSE_MODE_CLIENT) {
             _channel.clear_area();
             screen->set_cursor(_channel._cursor_visible ? _channel._cursor : NULL);
         } else {

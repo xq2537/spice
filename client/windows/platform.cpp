@@ -28,9 +28,6 @@
 #include "cursor.h"
 #include "named_pipe.h"
 
-#define WM_USER_WAKEUP WM_USER
-#define NUM_TIMERS 100
-
 int gdi_handlers = 0;
 extern HINSTANCE instance;
 
@@ -44,61 +41,17 @@ public:
 static DefaultEventListener default_event_listener;
 static Platform::EventListener* event_listener = &default_event_listener;
 static HWND paltform_win;
-static HANDLE main_tread;
+static ProcessLoop* main_loop = NULL;
 
-struct Timer {
-    TimerID id;
-    timer_proc_t proc;
-    void* opaque;
-    Timer *next;
-};
-
-Timer timers[NUM_TIMERS];
-Timer* free_timers = NULL;
-Mutex timers_lock;
-
-static void free_timer(Timer* timer)
+void Platform::send_quit_request()
 {
-    Lock lock(timers_lock);
-    timer->proc = NULL;
-    timer->next = free_timers;
-    free_timers = timer;
-}
-
-static void init_timers()
-{
-    for (int i = 0; i < NUM_TIMERS; i++) {
-        timers[i].id = i;
-        free_timer(&timers[i]);
-    }
-}
-
-static Timer* alloc_timer()
-{
-    Timer* timer;
-
-    Lock lock(timers_lock);
-    if (!(timer = free_timers)) {
-        return NULL;
-    }
-
-    free_timers = free_timers->next;
-    return timer;
+    ASSERT(main_loop);
+    main_loop->quit(0);
 }
 
 static LRESULT CALLBACK PlatformWinProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message) {
-    case WM_TIMER: {
-        TimerID id = wParam - 1;
-        ASSERT(id < NUM_TIMERS);
-        Timer* timer = &timers[id];
-        timer->proc(timer->opaque, id);
-        break;
-    }
-    case WM_USER_WAKEUP: {
-        break;
-    }
     case WM_ACTIVATEAPP:
         if (wParam) {
             event_listener->on_app_activated();
@@ -147,80 +100,21 @@ static void create_message_wind()
     paltform_win = window;
 }
 
-void Platform::send_quit_request()
-{
-    ASSERT(GetCurrentThread() == main_tread);
-    PostQuitMessage(0);
-}
-
-static std::vector<HANDLE> events;
-static std::vector<EventOwner*> events_owners;
-
-void WinPlatform::add_event(EventOwner& event_owner)
-{
-    ASSERT(main_tread == GetCurrentThread());
-    int size = events.size();
-    if (size == MAXIMUM_WAIT_OBJECTS - 1) {
-        THROW("reached maximum allowed events to wait for");
-    }
-    events.resize(size + 1);
-    events_owners.resize(size + 1);
-    events[size] = event_owner.get_event_handle();
-    events_owners[size] = &event_owner;
-}
-
-void WinPlatform::remove_event(EventOwner& event_owner)
-{
-    ASSERT(main_tread == GetCurrentThread());
-    int size = events.size();
-    for (int i = 0; i < size; i++) {
-        if (events_owners[i] == &event_owner) {
-            for (i++; i < size; i++) {
-                events[i - 1] = events[i];
-                events_owners[i - 1] = events_owners[i];
-            }
-            events.resize(size - 1);
-            events_owners.resize(size - 1);
-            return;
-        }
-    }
-    THROW("event owner not found");
-}
-
-void Platform::wait_events()
-{
-    if (!events.size()) {
-        if (!WaitMessage()) {
-            THROW("wait failed %d", GetLastError());
-        }
-        return;
-    }
-
-    DWORD r = MsgWaitForMultipleObjectsEx(events.size(), &events[0], INFINITE, QS_ALLINPUT, 0);
-    if (r == WAIT_OBJECT_0 + events.size()) {
-        return;
-    }
-    if (r >= WAIT_OBJECT_0 && r <= WAIT_OBJECT_0 + events.size() - 1) {
-        events_owners[r - WAIT_OBJECT_0]->on_event();
-    } else if (r == WAIT_FAILED) {
-        THROW("wait multiple failed %d", GetLastError());
-    } else {
-        THROW("unexpected wait return %u", r);
-    }
-}
-
 NamedPipe::ListenerRef NamedPipe::create(const char *name, ListenerInterface& listener_interface)
 {
-    return (ListenerRef)(new WinListener(name, listener_interface));
+    ASSERT(main_loop && main_loop->is_same_thread(pthread_self()));
+    return (ListenerRef)(new WinListener(name, listener_interface, *main_loop));
 }
 
 void NamedPipe::destroy(ListenerRef listener_ref)
 {
+    ASSERT(main_loop && main_loop->is_same_thread(pthread_self()));
     delete (WinListener *)listener_ref;
 }
 
 void NamedPipe::destroy_connection(ConnectionRef conn_ref)
 {
+    ASSERT(main_loop && main_loop->is_same_thread(pthread_self()));
     delete (WinConnection *)conn_ref;
 }
 
@@ -232,26 +126,6 @@ int32_t NamedPipe::read(ConnectionRef conn_ref, uint8_t *buf, int32_t size)
 int32_t NamedPipe::write(ConnectionRef conn_ref, const uint8_t *buf, int32_t size)
 {
     return ((WinConnection *)conn_ref)->write(buf, size);
-}
-
-void Platform::wakeup()
-{
-    if (!PostMessage(paltform_win, WM_USER_WAKEUP, 0, 0)) {
-        THROW("post failed %d", GetLastError());
-    }
-}
-
-bool Platform::process_events()
-{
-    MSG msg;
-    while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
-        if (msg.message == WM_QUIT) {
-            return true;
-        }
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
-    }
-    return false;
 }
 
 void Platform::msleep(unsigned int msec)
@@ -300,48 +174,6 @@ void Platform::set_thread_priority(void* thread, Platform::ThreadPriority in_pri
 void Platform::set_event_listener(EventListener* listener)
 {
     event_listener = listener ? listener : &default_event_listener;
-}
-
-TimerID Platform::create_interval_timer(timer_proc_t proc, void* opaque)
-{
-    Timer* timer = alloc_timer();
-    if (!timer) {
-        return INVALID_TIMER;
-    }
-    timer->proc = proc;
-    timer->opaque = opaque;
-    return timer->id;
-}
-
-bool Platform::activate_interval_timer(TimerID timer, unsigned int millisec)
-{
-    if (timer >= NUM_TIMERS) {
-        return false;
-    }
-
-    if (!SetTimer(paltform_win, timer + 1, millisec, NULL)) {
-        return false;
-    }
-    return true;
-}
-
-bool Platform::deactivate_interval_timer(TimerID timer)
-{
-    if (timer >= NUM_TIMERS) {
-        return false;
-    }
-    KillTimer(paltform_win, timer + 1);
-    return true;
-}
-
-void Platform::destroy_interval_timer(TimerID timer)
-{
-    if (timer == INVALID_TIMER) {
-        return;
-    }
-    ASSERT(timer < NUM_TIMERS);
-    KillTimer(paltform_win, timer + 1);
-    free_timer(&timers[timer]);
 }
 
 uint64_t Platform::get_monolithic_time()
@@ -565,9 +397,12 @@ bool Platform::is_monitors_pos_valid()
 
 void Platform::init()
 {
-    main_tread = GetCurrentThread();
     create_message_wind();
-    init_timers();
+}
+
+void Platform::set_process_loop(ProcessLoop& main_process_loop)
+{
+    main_loop = &main_process_loop;
 }
 
 WaveRecordAbstract* Platform::create_recorder(RecordClinet& client,
@@ -664,7 +499,7 @@ WinLocalCursor::WinLocalCursor(CursorData* cursor_data)
     icon.yHotspot = header.hot_spot_y;
     icon.hbmColor = icon.hbmMask = NULL;
     HDC hdc = GetDC(NULL);
-    
+
     switch (header.type) {
     case CURSOR_TYPE_ALPHA:
     case CURSOR_TYPE_COLOR32:
@@ -784,3 +619,37 @@ Icon* Platform::load_icon(int id)
     return new WinIcon(icon);
 }
 
+class PlatformTimer: public Timer {
+public:
+    PlatformTimer(timer_proc_t proc, void* opaque) : _proc (proc), _opaque (opaque) {}
+    void response(AbstractProcessLoop& events_loop) {_proc(_opaque, (TimerID)this);}
+
+private:
+    timer_proc_t _proc;
+    void* _opaque;
+};
+
+TimerID Platform::create_interval_timer(timer_proc_t proc, void* opaque)
+{
+    return (TimerID)(new PlatformTimer(proc, opaque));
+}
+
+bool Platform::activate_interval_timer(TimerID timer, unsigned int millisec)
+{
+    ASSERT(main_loop);
+    main_loop->activate_interval_timer((PlatformTimer*)timer, millisec);
+    return true;
+}
+
+bool Platform::deactivate_interval_timer(TimerID timer)
+{
+    ASSERT(main_loop);
+    main_loop->deactivate_interval_timer((PlatformTimer*)timer);
+    return true;
+}
+
+void Platform::destroy_interval_timer(TimerID timer)
+{
+    deactivate_interval_timer(timer);
+    ((PlatformTimer*)timer)->unref();
+}

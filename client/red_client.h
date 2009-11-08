@@ -29,9 +29,9 @@
 #include "audio_channels.h"
 #include "red.h"
 #include "vd_agent.h"
+#include "process_loop.h"
 
 class Application;
-class Event;
 
 class MigChannel: public RedChannelBase {
 public:

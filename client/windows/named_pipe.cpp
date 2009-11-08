@@ -20,23 +20,22 @@
 #include "utils.h"
 #include "debug.h"
 
-PipeBuffer::PipeBuffer(HANDLE pipe)
+PipeBuffer::PipeBuffer(HANDLE pipe, ProcessLoop& process_loop)
     : _handler (NULL)
     , _pipe (pipe)
     , _start (0)
     , _end (0)
     , _pending (false)
+    , _process_loop(process_loop)
 {
     ZeroMemory(&_overlap, sizeof(_overlap));
-    _overlap.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-    _event_handle = _overlap.hEvent;
-    WinPlatform::add_event(*this);
+    _overlap.hEvent = this->get_handle();
+    _process_loop.add_handle(*this);
 }
 
 PipeBuffer::~PipeBuffer()
 {
-    WinPlatform::remove_event(*this);
-    CloseHandle(_event_handle);
+    _process_loop.remove_handle(*this);
 }
 
 DWORD PipeBuffer::get_overlapped_bytes()
@@ -127,10 +126,10 @@ void PipeWriter::on_event()
     }
 }
 
-WinConnection::WinConnection(HANDLE pipe)
+WinConnection::WinConnection(HANDLE pipe, ProcessLoop& process_loop)
     : _pipe (pipe)
-    , _writer (pipe)
-    , _reader (pipe)
+    , _writer (pipe, process_loop)
+    , _reader (pipe, process_loop)
 {
 }
 
@@ -158,24 +157,24 @@ void WinConnection::set_handler(NamedPipe::ConnectionInterface* handler)
     _writer.set_handler(handler);
 }
 
-WinListener::WinListener(const char *name, NamedPipe::ListenerInterface &listener_interface)
+WinListener::WinListener(const char *name, NamedPipe::ListenerInterface &listener_interface,
+                         ProcessLoop& process_loop)
     : _listener_interface (listener_interface)
     , _pipe (0)
+    , _process_loop (process_loop)
 {
     _pipename = new TCHAR[PIPE_MAX_NAME_LEN];
     swprintf_s(_pipename, PIPE_MAX_NAME_LEN, L"%s%S", PIPE_PREFIX, name);
     ZeroMemory(&_overlap, sizeof(_overlap));
-    _overlap.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-    _event_handle = _overlap.hEvent;
-    WinPlatform::add_event(*this);
+    _overlap.hEvent = this->get_handle();
+    _process_loop.add_handle(*this);
     create_pipe();
 }
 
 WinListener::~WinListener()
 {
     CancelIo(_pipe);
-    WinPlatform::remove_event(*this);
-    CloseHandle(_event_handle);
+    _process_loop.remove_handle(*this);
     delete[] _pipename;
 }
 
@@ -188,7 +187,7 @@ void WinListener::on_event()
         return;
     }
     DBG(0, "Pipe connected 0x%p", _pipe);
-    WinConnection *con = new WinConnection(_pipe);
+    WinConnection *con = new WinConnection(_pipe, _process_loop);
     NamedPipe::ConnectionInterface &con_interface = _listener_interface.create();
     con->set_handler(&con_interface);
     con_interface.bind((NamedPipe::ConnectionRef)con);
@@ -213,7 +212,7 @@ void WinListener::create_pipe()
         break;
     case ERROR_PIPE_CONNECTED: {
         DBG(0, "Pipe already connected");
-        WinConnection *con = new WinConnection(_pipe);
+        WinConnection *con = new WinConnection(_pipe, _process_loop);
         NamedPipe::ConnectionInterface &con_interface = _listener_interface.create();
         con->set_handler(&con_interface);
         con_interface.bind((NamedPipe::ConnectionRef)con);

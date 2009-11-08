@@ -19,11 +19,9 @@
 #define _H_PLATFORM
 
 #include "cursor.h"
+#include "process_loop.h"
+#include "event_sources.h"
 #include "events_loop.h"
-
-#define INVALID_TIMER (~TimerID(0))
-typedef unsigned long TimerID;
-typedef void (*timer_proc_t)(void* opaque, TimerID timer);
 
 class WaveRecordAbstract;
 class WavePlaybackAbstract;
@@ -32,25 +30,27 @@ class Icon;
 class Monitor;
 typedef std::list<Monitor*> MonitorsList;
 
+/* TODO: tmp till each channel will handle its own thread
+         timers or directly through the main thread */
+#define INVALID_TIMER (~TimerID(0))
+typedef unsigned long TimerID;
+typedef void (*timer_proc_t)(void* opaque, TimerID timer);
+
+
 class Platform {
 public:
     static void init();
-    static void wait_events();
-    static bool process_events();
-    static void wakeup();
+    static void set_process_loop(ProcessLoop& main_process_loop);
     static void msleep(unsigned int millisec);
     static void yield();
-    static void send_quit_request();
-    static TimerID create_interval_timer(timer_proc_t proc, void* opaque);
-    static bool activate_interval_timer(TimerID timer, unsigned int millisec);
-    static bool deactivate_interval_timer(TimerID timer);
-    static void destroy_interval_timer(TimerID timer);
     static uint64_t get_monolithic_time();
     static void get_temp_dir(std::string& path);
 
     static const MonitorsList& init_monitors();
     static void destroy_monitors();
     static bool is_monitors_pos_valid();
+
+    static void send_quit_request();
 
     enum ThreadPriority {
         PRIORITY_INVALID,
@@ -98,6 +98,12 @@ public:
 
     class DisplayModeListner;
     static void set_display_mode_listner(DisplayModeListner* listener);
+    /* TODO: tmp till each channel will handle its own thread
+             timers or directly through the main thread */
+    static TimerID create_interval_timer(timer_proc_t proc, void* opaque);
+    static bool activate_interval_timer(TimerID timer, unsigned int millisec);
+    static bool deactivate_interval_timer(TimerID timer);
+    static void destroy_interval_timer(TimerID timer);
 };
 
 class Platform::EventListener {
@@ -108,6 +114,7 @@ public:
     virtual void on_monitors_change() = 0;
 };
 
+// TODO: tmp till all channels work with ProcessLoop
 class Platform::RecordClinet {
 public:
     virtual ~RecordClinet() {}

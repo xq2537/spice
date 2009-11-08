@@ -28,9 +28,9 @@ class SetInputsHandlerEvent: public Event {
 public:
     SetInputsHandlerEvent(InputsChannel& channel) : _channel (channel) {}
 
-    virtual void responce(Application& application)
+    virtual void response(AbstractProcessLoop& events_loop)
     {
-        application.set_inputs_handler(_channel);
+        static_cast<Application*>(events_loop.get_owner())->set_inputs_handler(_channel);
     }
 
 private:
@@ -41,7 +41,7 @@ class KeyModifiersEvent: public Event {
 public:
     KeyModifiersEvent(InputsChannel& channel) : _channel (channel) {}
 
-    virtual void responce(Application& application)
+    virtual void response(AbstractProcessLoop& events_loop)
     {
         Lock lock(_channel._update_modifiers_lock);
         _channel._active_modifiers_event = false;
@@ -56,9 +56,9 @@ class RemoveInputsHandlerEvent: public SyncEvent {
 public:
     RemoveInputsHandlerEvent(InputsChannel& channel) : _channel (channel) {}
 
-    virtual void do_responce(Application& application)
+    virtual void do_response(AbstractProcessLoop& events_loop)
     {
-        application.remove_inputs_handler(_channel);
+        static_cast<Application*>(events_loop.get_owner())->remove_inputs_handler(_channel);
     }
 
 private:

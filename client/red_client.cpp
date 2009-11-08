@@ -19,6 +19,7 @@
 #include <math.h>
 #include "red_client.h"
 #include "application.h"
+#include "process_loop.h"
 #include "utils.h"
 #include "debug.h"
 
@@ -397,10 +398,12 @@ void RedClient::on_channel_disconnected(RedChannel& channel)
         _notify_disconnect = false;
         int connection_error = channel.get_connection_error();
         if (connection_error == SPICEC_ERROR_CODE_SUCCESS) {
+            AutoRef<DisconnectedEvent> disconn_event(new DisconnectedEvent());
             LOG_INFO("disconneted");
-            push_event(new DisconnectedEvent());
+            push_event(*disconn_event);
         } else {
-            push_event(new CoonnectionError(connection_error));
+             AutoRef<ConnectionErrorEvent> error_event(new ConnectionErrorEvent(connection_error));
+             push_event(*error_event);
         }
     }
     disconnect_channels();

@@ -25,6 +25,7 @@
 #include "platform.h"
 #include "menu.h"
 #include "hot_keys.h"
+#include "process_loop.h"
 
 class RedScreen;
 class Application;
@@ -35,71 +36,23 @@ class Monitor;
 class CmdLineParser;
 class Menu;
 
-class Event {
-public:
-    Event() : _refs (1) {}
-
-    virtual void responce(Application& application) = 0;
-
-    Event* ref() { ++_refs; return this;}
-    void unref() {if (--_refs == 0) delete this;}
-
-protected:
-    virtual ~Event() {}
-
-    AtomicCount _refs;
-    friend class Application;
-    uint32_t _generation;
-};
-
-class SyncEvent: public Event {
-public:
-    SyncEvent();
-
-    void wait();
-    bool success() { return !_err;}
-
-    virtual void do_responce(Application& application) {}
-
-protected:
-    virtual ~SyncEvent();
-
-private:
-    virtual void responce(Application& application);
-
-private:
-    Mutex _mutex;
-    Condition _condition;
-    bool _err;
-    bool _ready;
-};
 
 class ConnectedEvent: public Event {
 public:
-    ConnectedEvent() : Event() {}
-    virtual void responce(Application& application);
+    virtual void response(AbstractProcessLoop& events_loop);
 };
 
 class DisconnectedEvent: public Event {
 public:
-    DisconnectedEvent() : Event() {}
-    virtual void responce(Application& application);
+    virtual void response(AbstractProcessLoop& events_loop);
 };
 
-class CoonnectionError: public Event {
+class ConnectionErrorEvent: public Event {
 public:
-    CoonnectionError(int error_code) : Event(), _error_code (error_code) {}
-
-    virtual void responce(Application& application);
-
+    ConnectionErrorEvent(int error_code) : _error_code (error_code) {}
+    virtual void response(AbstractProcessLoop& events_loop);
 private:
     int _error_code;
-};
-
-class ErrorEvent: public Event {
-public:
-    ErrorEvent() : Event() {}
-    virtual void responce(Application& application);
 };
 
 struct MonitorInfo {
@@ -112,8 +65,7 @@ class MonitorsQuery: public SyncEvent {
 public:
     MonitorsQuery() {}
 
-    virtual void do_responce(Application& application);
-
+    virtual void do_response(AbstractProcessLoop& events_loop);
     std::vector<MonitorInfo>& get_monitors() {return _monitors;}
 
 private:
@@ -138,7 +90,8 @@ enum CanvasOption {
 #endif
 };
 
-class Application : public Platform::EventListener,
+class Application : public ProcessLoop,
+                    public Platform::EventListener,
                     public Platform::DisplayModeListner,
                     public CommandTarget {
 public:
@@ -146,8 +99,7 @@ public:
     virtual ~Application();
 
     int run();
-    void quit(int exit_code);
-    void push_event(Event* event);
+
     void set_inputs_handler(InputsHandler& handler);
     void remove_inputs_handler(InputsHandler& handler);
     RedScreen* find_screen(int id);
@@ -195,8 +147,6 @@ private:
     bool set_enable_channels(CmdLineParser& parser, bool enable, char *val);
     bool set_canvas_option(CmdLineParser& parser, char *val);
     bool process_cmd_line(int argc, char** argv);
-    void process_events();
-    int message_loop();
     void abort();
     void init_scan_code(int index);
     void init_korean_scan_code(int index);
@@ -234,6 +184,8 @@ private:
     static void init_logger();
     static void init_globals();
 
+    friend class DisconnectedEvent;
+    friend class ConnectionErrorEvent;
     friend class MonitorsQuery;
     friend class AutoAbort;
 
@@ -242,15 +194,11 @@ private:
     PeerConnectionOptMap _peer_con_opt;
     std::vector<bool> _enabled_channels;
     std::vector<RedScreen*> _screens;
-    std::list<Event*> _events;
     RedScreen* _main_screen;
-    Mutex _events_lock;
-    bool _quitting;
     bool _active;
     bool _full_screen;
     bool _changing_screens;
     int _exit_code;
-    uint32_t _events_gen;
     RedScreen* _active_screen;
     KeyInfo _key_table[REDKEY_NUM_KEYS];
     HotKeys _hot_keys;

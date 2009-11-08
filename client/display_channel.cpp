@@ -54,11 +54,12 @@ public:
     {
     }
 
-    virtual void do_responce(Application& application)
+    virtual void do_response(AbstractProcessLoop& events_loop)
     {
+        Application* app = (Application*)events_loop.get_owner();
         _channel.destroy_canvas();
         _channel.screen()->set_mode(_width, _height, _depth);
-        _channel.create_canvas(application.get_canvas_types(), _width, _height, _depth);
+        _channel.create_canvas(app->get_canvas_types(), _width, _height, _depth);
     }
 
 private:
@@ -75,9 +76,9 @@ public:
     {
     }
 
-    virtual void responce(Application& application)
+    virtual void response(AbstractProcessLoop& events_loop)
     {
-        application.hide_splash(_screen_id);
+        static_cast<Application*>(events_loop.get_owner())->hide_splash(_screen_id);
     }
 
 private:
@@ -831,7 +832,7 @@ public:
         ASSERT(_timer == INVALID_TIMER);
     }
 
-    virtual void do_responce(Application& application)
+    virtual void do_response(AbstractProcessLoop& events_loop)
     {
         if ((_timer = Platform::create_interval_timer(_proc, _user_data)) == INVALID_TIMER) {
             THROW("create timer failed");
@@ -850,7 +851,7 @@ class DestroyTimerEvent: public Event {
 public:
     DestroyTimerEvent(TimerID timer) : _timer (timer) {}
 
-    virtual void responce(Application& application)
+    virtual void response(AbstractProcessLoop& events_loop)
     {
         Platform::destroy_interval_timer(_timer);
     }
@@ -866,7 +867,7 @@ public:
     {
     }
 
-    virtual void responce(Application& application)
+    virtual void response(AbstractProcessLoop& events_loop)
     {
         _channel.activate_streams_timer();
     }

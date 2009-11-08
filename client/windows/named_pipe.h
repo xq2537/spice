@@ -19,8 +19,9 @@
 #define _H_NAMED_PIPE
 
 #include <windows.h>
+#include "process_loop.h"
+#include "event_sources.h"
 #include "platform.h"
-#include "win_platform.h"
 
 #define PIPE_TIMEOUT 5000
 #define PIPE_BUF_SIZE 8192
@@ -29,9 +30,9 @@
 
 class WinConnection;
 
-class PipeBuffer: public EventOwner {
+class PipeBuffer: public EventSources::Handle {
 public:
-    PipeBuffer(HANDLE pipe);
+    PipeBuffer(HANDLE pipe, ProcessLoop& process_loop);
     ~PipeBuffer();
     void set_handler(NamedPipe::ConnectionInterface* handler) { _handler = handler;}
     DWORD get_overlapped_bytes();
@@ -44,25 +45,26 @@ protected:
     uint32_t _end;
     uint8_t _data[PIPE_BUF_SIZE];
     bool _pending;
+    ProcessLoop& _process_loop;
 };
 
 class PipeReader: public PipeBuffer {
 public:
-    PipeReader(HANDLE pipe) : PipeBuffer(pipe) {}
+    PipeReader(HANDLE pipe, ProcessLoop& process_loop) : PipeBuffer(pipe, process_loop) {}
     int32_t read(uint8_t *buf, int32_t size);
     void on_event();
 };
 
 class PipeWriter: public PipeBuffer {
 public:
-    PipeWriter(HANDLE pipe) : PipeBuffer(pipe) {}
+    PipeWriter(HANDLE pipe, ProcessLoop& process_loop) : PipeBuffer(pipe, process_loop) {}
     int32_t write(const uint8_t *buf, int32_t size);
     void on_event();
 };
 
 class WinConnection {
 public:
-    WinConnection(HANDLE pipe);
+    WinConnection(HANDLE pipe, ProcessLoop& process_loop);
     ~WinConnection();
     int32_t read(uint8_t *buf, int32_t size);
     int32_t write(const uint8_t *buf, int32_t size);
@@ -74,9 +76,10 @@ private:
     PipeReader _reader;
 };
 
-class WinListener: public EventOwner {
+class WinListener: public EventSources::Handle {
 public:
-    WinListener(const char *name, NamedPipe::ListenerInterface &listener_interface);
+    WinListener(const char *name, NamedPipe::ListenerInterface &listener_interface,
+                ProcessLoop& process_loop);
     ~WinListener();
     void on_event();
 
@@ -88,6 +91,7 @@ private:
     NamedPipe::ListenerInterface &_listener_interface;
     OVERLAPPED _overlap;
     HANDLE _pipe;
+    ProcessLoop& _process_loop;
 };
 
 #endif

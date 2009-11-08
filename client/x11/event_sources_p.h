@@ -15,29 +15,48 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef _H_EVENTS_LOOP_P
-#define _H_EVENTS_LOOP_P
+#ifndef _H_EVENT_SOURCES_P
+#define _H_EVENT_SOURCES_P
 
 #include "common.h"
+#include "threads.h"
 
-#include <vector>
+#if __GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 8)
+#define USING_EVENT_FD
+#endif
 
-class EventSourceOld;
+#define INFINITE -1
 
-class EventsLoop_p {
+class EventWrapper;
+
+class EventSources_p {
 public:
-    class Trigger_p;
+    void remove_wrapper(EventWrapper*);
+
 public:
-    std::vector<EventSourceOld*> _events;
-    std::vector<HANDLE> _handles;
+    int _epoll;
+    typedef std::list<EventWrapper*> Events;
+    Events _events;
+
+    friend class EventWrapper;
 };
 
-class EventsLoop_p::Trigger_p {
+class Trigger_p {
 public:
-    HANDLE get_handle() { return event;}
+    Trigger_p() : _pending_int (false) {}
+    int get_fd() { return _event_fd;}
+    bool reset_event();
 
 public:
-    HANDLE event;
+    int _event_fd;
+#ifndef USING_EVENT_FD
+    int _event_write_fd;
+#endif
+    bool _pending_int;
+    Mutex _lock;
+};
+
+class Handle_p {
 };
 
 #endif

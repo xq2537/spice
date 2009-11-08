@@ -72,6 +72,7 @@ RED_COMMON_SRCS = 					\
 	$(top_srcdir)/client/pixels_source.h		\
 	$(top_srcdir)/client/platform.h			\
 	$(top_srcdir)/client/playback_channel.cpp	\
+	$(top_srcdir)/client/process_loop.cpp		\
 	$(top_srcdir)/client/quic.cpp			\
 	$(top_srcdir)/client/record_channel.cpp		\
 	$(top_srcdir)/client/red_channel.cpp		\
@@ -110,6 +111,7 @@ spicec_SOURCES =			\
 	atomic_count.h			\
 	events_loop_p.cpp		\
 	events_loop_p.h			\
+	event_sources_p.cpp		\
 	main.cpp			\
 	named_pipe.h                    \
 	named_pipe.cpp                  \

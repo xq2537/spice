@@ -225,6 +225,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\event_sources_p.cpp"
+				>
+			</File>
+			<File
 				RelativePath=".\events_loop_p.cpp"
 				>
 			</File>
@@ -308,6 +312,10 @@
 			</File>
 			<File
 				RelativePath="..\playback_channel.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\process_loop.cpp"
 				>
 			</File>
 			<File
@@ -437,6 +445,14 @@
 				>
 			</File>
 			<File
+				RelativePath="..\event_sources.h"
+				>
+			</File>
+			<File
+				RelativePath=".\event_sources_p.h"
+				>
+			</File>
+			<File
 				RelativePath="..\events_loop.h"
 				>
 			</File>
@@ -510,6 +526,10 @@
 			</File>
 			<File
 				RelativePath=".\playback.h"
+				>
+			</File>
+			<File
+				RelativePath="..\process_loop.h"
 				>
 			</File>
 			<File

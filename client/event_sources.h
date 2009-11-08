@@ -15,22 +15,24 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef _H_EVENTS_LOOP
-#define _H_EVENTS_LOOP
+#ifndef _H_EVENT_SOURCES
+#define _H_EVENT_SOURCES
 
 #include "common.h"
-#include "events_loop_p.h"
+#include "event_sources_p.h"
 
-class EventSourceOld;
+class EventSource;
 
-class EventsLoop: public EventsLoop_p {
+// TODO: the class is not thread safe
+class EventSources: public EventSources_p {
 public:
     class Trigger;
     class Socket;
     class File;
+    class Handle;
 
-    EventsLoop();
-    virtual ~EventsLoop();
+    EventSources();
+    virtual ~EventSources();
 
     void add_trigger(Trigger& trigger);
     void remove_trigger(Trigger& trigger);
@@ -38,23 +40,25 @@ public:
     void remove_socket(Socket& socket);
     void add_file(File& file);
     void remove_file(File& file);
-    void run();
-    // FIXME: temporary - need to adjust the loop for the main thread
-    void run_once(int timeout_milli = INFINITE);
+    void add_handle(Handle& handle);
+    void remove_handle(Handle& handle);
+
+    /* return true if the events loop should quit */
+    bool wait_events(int timeout_ms = INFINITE);
 };
 
-class EventSourceOld {
+class EventSource {
 public:
-    virtual ~EventSourceOld() {}
+    virtual ~EventSource() {}
     virtual void on_event() = 0;
 
 private:
     virtual void action() {on_event();}
 
-    friend class EventsLoop;
+    friend class EventSources;
 };
 
-class EventsLoop::Trigger: public EventSourceOld, private  EventsLoop_p::Trigger_p {
+class EventSources::Trigger: public EventSource, private Trigger_p {
 public:
     Trigger();
     virtual ~Trigger();
@@ -64,22 +68,27 @@ public:
 private:
     virtual void action();
 
-    friend class EventsLoop;
+    friend class EventSources;
 };
 
-class EventsLoop::Socket: public EventSourceOld {
+class EventSources::Socket: public EventSource {
 protected:
     virtual int get_socket() = 0;
 
-    friend class EventsLoop;
+    friend class EventSources;
 };
 
 
-class EventsLoop::File: public EventSourceOld {
+class EventSources::File: public EventSource {
 protected:
     virtual int get_fd() = 0;
 
-    friend class EventsLoop;
+    friend class EventSources;
+};
+
+class EventSources::Handle: public EventSource, public Handle_p {
+
+     friend class EventSources;
 };
 
 #endif

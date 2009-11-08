@@ -30,9 +30,10 @@ class UpdateEvent: public Event {
 public:
     UpdateEvent(int screen) : _screen (screen) {}
 
-    virtual void responce(Application& application)
+    virtual void response(AbstractProcessLoop& events_loop)
     {
-        RedScreen* screen = application.find_screen(_screen);
+        Application* app = static_cast<Application*>(events_loop.get_owner());
+        RedScreen* screen = app->find_screen(_screen);
         if (screen) {
             screen->update();
         }

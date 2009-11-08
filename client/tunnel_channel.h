@@ -61,6 +61,7 @@ protected:
     class TunnelSocket;
 
     virtual void on_disconnect();
+    virtual void on_connect();
 
 private:
     void handle_init(RedPeer::InMessage* message);
@@ -88,6 +89,7 @@ private:
     uint32_t _service_group;
 #ifdef TUNNEL_CONFIG
     TunnelConfigListenerIfc* _config_listener;
+    friend class TunnelConfigListenerIfc;
 #endif
 };
 
