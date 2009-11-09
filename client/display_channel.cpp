@@ -693,6 +693,8 @@ DisplayChannel::~DisplayChannel()
     if (screen()) {
         screen()->set_update_interrupt_trigger(NULL);
     }
+
+    destroy_canvas();
     destroy_strams();
 }
 
@@ -776,6 +778,7 @@ void DisplayChannel::recreate_ogl_context_interrupt()
 {
     Canvas* canvas = _canvas.release();
     if (canvas) {
+        ((GCanvas *)(canvas))->touch_context();
         ((GCanvas *)canvas)->textures_lost();
         delete canvas;
     }
@@ -783,6 +786,8 @@ void DisplayChannel::recreate_ogl_context_interrupt()
     if (!create_ogl_canvas(_x_res, _y_res, _depth, 0, _rendertype)) {
         THROW("create_ogl_canvas failed");
     }
+
+    ((GCanvas *)(_canvas.get()))->touch_context();
 }
 
 void DisplayChannel::recreate_ogl_context()
@@ -917,9 +922,9 @@ bool DisplayChannel::create_ogl_canvas(int width, int height, int depth,
             return false;
         }
 
-        screen()->untouch_context();
-
         canvas->set_mode(width, height, depth, win, rendertype);
+
+        screen()->untouch_context();
 
         _canvas.reset(canvas.release());
         _rendertype = rendertype;
@@ -954,6 +959,11 @@ void DisplayChannel::destroy_canvas()
     Canvas* canvas = _canvas.release();
 
     if (canvas) {
+#ifdef USE_OGL
+        if (canvas->get_pixmap_type() == CANVAS_TYPE_GL) {
+            ((GCanvas *)(canvas))->touch_context();
+        }
+#endif
         delete canvas;
     }
 }
@@ -1019,6 +1029,7 @@ void DisplayChannel::handle_mode(RedPeer::InMessage* message)
         if (_canvas.get()) {
             if (_canvas->get_pixmap_type() == CANVAS_TYPE_GL) {
                 screen()->unset_type_gl();
+                screen()->untouch_context();
                 //glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
             }
         }
@@ -1038,6 +1049,7 @@ void DisplayChannel::handle_mode(RedPeer::InMessage* message)
 
 #ifdef USE_OGL
     if (_canvas->get_pixmap_type() == CANVAS_TYPE_GL) {
+        ((GCanvas *)(_canvas.get()))->touch_context();
         screen()->set_update_interrupt_trigger(&_interrupt_update);
         screen()->set_type_gl();
     }
