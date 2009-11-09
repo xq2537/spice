@@ -3989,6 +3989,8 @@ static void red_update_area(RedWorker *worker, const Rect *area)
     QRegion rgn;
 
     if (!(ring_item = ring_get_head(ring))) {
+        worker->draw_context.validate_area(worker->draw_context.canvas, &worker->dev_info.draw_area,
+                                           area);
         return;
     }
 
@@ -4034,6 +4036,8 @@ static void red_update_area(RedWorker *worker, const Rect *area)
     region_destroy(&rgn);
 
     if (!last) {
+        worker->draw_context.validate_area(worker->draw_context.canvas, &worker->dev_info.draw_area,
+                                           area);
         return;
     }
 
