@@ -328,7 +328,8 @@ void RedClient::on_connecting()
 
 void RedClient::on_connect()
 {
-    push_event(new ConnectedEvent());
+    AutoRef<ConnectedEvent> event(new ConnectedEvent());
+    push_event(*event);
     _migrate.add_channel(new MigChannel(RED_CHANNEL_MAIN, 0, get_common_caps(),
                                         get_caps()));
 }
