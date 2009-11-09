@@ -217,9 +217,10 @@ bool Migrate::abort()
 
 #define AGENT_TIMEOUT (1000 * 30)
 
-void agent_timer_proc(void *opaque, TimerID timer)
+void AgentTimer::response(AbstractProcessLoop& events_loop)
 {
-    Platform::deactivate_interval_timer(timer);
+    Application* app = static_cast<Application*>(events_loop.get_owner());
+    app->deactivate_interval_timer(this);
     THROW_ERR(SPICEC_ERROR_CODE_AGENT_TIMEOUT, "vdagent timeout");
 }
 
@@ -241,7 +242,7 @@ RedClient::RedClient(Application& application)
     , _agent_msg_data (NULL)
     , _agent_msg_pos (0)
     , _agent_tokens (0)
-    , _agent_timer (Platform::create_interval_timer(agent_timer_proc, NULL))
+    , _agent_timer (new AgentTimer())
     , _migrate (*this)
     , _glz_window (0, _glz_debug)
 {
@@ -273,16 +274,13 @@ RedClient::RedClient(Application& application)
     message_loop->set_handler(RED_AGENT_DATA, &RedClient::handle_agent_data, 0);
     message_loop->set_handler(RED_AGENT_TOKEN, &RedClient::handle_agent_tokens,
                               sizeof(RedAgentTokens));
-    if (_agent_timer == INVALID_TIMER) {
-        THROW("invalid agent timer");
-    }
     start();
 }
 
 RedClient::~RedClient()
 {
     ASSERT(_channels.empty());
-    Platform::destroy_interval_timer(_agent_timer);
+    _application.deactivate_interval_timer(*_agent_timer);
     delete _agent_msg;
 }
 
@@ -313,6 +311,16 @@ void RedClient::push_event(Event* event)
     _application.push_event(event);
 }
 
+void RedClient::activate_interval_timer(Timer* timer, unsigned int millisec)
+{
+    _application.activate_interval_timer(timer, millisec);
+}
+
+void RedClient::deactivate_interval_timer(Timer* timer)
+{
+    _application.deactivate_interval_timer(timer);
+}
+
 void RedClient::on_connecting()
 {
     _notify_disconnect = true;
@@ -329,7 +337,7 @@ void RedClient::on_disconnect()
 {
     _migrate.abort();
     _connection_id = 0;
-    Platform::deactivate_interval_timer(_agent_timer);
+    _application.deactivate_interval_timer(*_agent_timer);
     _agent_mon_config_sent = false;
     delete[] _agent_msg_data;
     _agent_msg_data = NULL;
@@ -632,7 +640,7 @@ void RedClient::handle_init(RedPeer::InMessage* message)
         post_message(msg);
     }
     if (_auto_display_res) {
-        Platform::activate_interval_timer(_agent_timer, AGENT_TIMEOUT);
+        _application.activate_interval_timer(*_agent_timer, AGENT_TIMEOUT);
         if (_agent_connected) {
             send_agent_monitors_config();
         }
@@ -694,7 +702,7 @@ void RedClient::on_agent_reply(VDAgentReply* reply)
     switch (reply->type) {
     case VD_AGENT_MONITORS_CONFIG:
         post_message(new Message(REDC_ATTACH_CHANNELS, 0));
-        Platform::deactivate_interval_timer(_agent_timer);
+        _application.deactivate_interval_timer(*_agent_timer);
         break;
     default:
         THROW("unexpected vdagent reply type");

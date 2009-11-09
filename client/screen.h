@@ -27,15 +27,25 @@
 #include "platform.h"
 #include "process_loop.h"
 #include "threads.h"
+#include "utils.h"
 
 class Application;
 class ScreenLayer;
 class Monitor;
+class RedScreen;
 
 enum {
     SCREEN_LAYER_DISPLAY,
     SCREEN_LAYER_CURSOR,
     SCREEN_LAYER_GUI,
+};
+
+class UpdateTimer: public Timer {
+public:
+    UpdateTimer(RedScreen* screen) : _screen (screen) {}
+    virtual void response(AbstractProcessLoop& events_loop);
+private:
+    RedScreen* _screen;
 };
 
 class RedScreen: public RedWindow::Listener {
@@ -87,8 +97,8 @@ public:
     void update();
 
 private:
-    friend void periodic_update_proc(void *opaque, TimerID timer);
     friend class UpdateEvent;
+    friend class UpdateTimer;
 
     virtual ~RedScreen();
     void create_composit_area();
@@ -153,7 +163,7 @@ private:
     bool _key_interception;
     bool _update_by_timer;
     int _forec_update_timer;
-    TimerID _update_timer;
+    AutoRef<UpdateTimer> _update_timer;
     RedDrawable* _composit_area;
     uint64_t _update_mark;
 

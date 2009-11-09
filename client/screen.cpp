@@ -43,11 +43,9 @@ private:
     int _screen;
 };
 
-void periodic_update_proc(void *opaque, TimerID timer)
+void UpdateTimer::response(AbstractProcessLoop& events_loop)
 {
-    RedScreen* screen = (RedScreen*)opaque;
-
-    screen->periodic_update();
+    _screen->periodic_update();
 }
 
 RedScreen::RedScreen(Application& owner, int id, const std::wstring& name, int width, int height)
@@ -65,7 +63,7 @@ RedScreen::RedScreen(Application& owner, int id, const std::wstring& name, int w
     , _key_interception (false)
     , _update_by_timer (true)
     , _forec_update_timer (0)
-    , _update_timer (INVALID_TIMER)
+    , _update_timer (new UpdateTimer(this))
     , _composit_area (NULL)
     , _update_mark (1)
     , _monitor (NULL)
@@ -84,10 +82,6 @@ RedScreen::RedScreen(Application& owner, int id, const std::wstring& name, int w
     create_composit_area();
     _window.resize(_size.x, _size.y);
     save_position();
-    _update_timer = Platform::create_interval_timer(periodic_update_proc, this);
-    if (_update_timer == INVALID_TIMER) {
-        THROW("create timer failed");
-    }
     if ((_default_cursor = Platform::create_default_cursor()) == NULL) {
         THROW("create default cursor failed");
     }
@@ -106,7 +100,7 @@ RedScreen::~RedScreen()
     bool captured = is_captured();
     relase_inputs();
     destroy_composit_area();
-    Platform::destroy_interval_timer(_update_timer);
+    _owner.deactivate_interval_timer(*_update_timer);
     _owner.on_screen_destroyed(_id, captured);
     region_destroy(&_dirty_region);
     if (_default_cursor) {
@@ -333,7 +327,7 @@ void RedScreen::periodic_update()
         need_update = true;
     } else {
         if (!_forec_update_timer) {
-            Platform::deactivate_interval_timer(_update_timer);
+            _owner.deactivate_interval_timer(*_update_timer);
             _periodic_update = false;
         }
         need_update = false;
@@ -357,9 +351,7 @@ void RedScreen::activate_timer()
     }
     _periodic_update = true;
     lock.unlock();
-    if (!Platform::activate_interval_timer(_update_timer, 1000 / 30)) {
-        LOG_WARN("failed");
-    }
+    _owner.activate_interval_timer(*_update_timer, 1000 / 30);
 }
 
 void RedScreen::update()
