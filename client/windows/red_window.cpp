@@ -191,10 +191,12 @@ LRESULT CALLBACK RedWindow_p::WindowProc(HWND hWnd, UINT message, WPARAM wParam,
     case WM_ENTERSIZEMOVE:
     case WM_ENTERMENULOOP:
         window->get_listener().enter_modal_loop();
+        WinPlatform::enter_modal_loop();
         return DefWindowProc(hWnd, message, wParam, lParam);
     case WM_EXITSIZEMOVE:
     case WM_EXITMENULOOP:
         window->get_listener().exit_modal_loop();
+        WinPlatform::exit_modal_loop();
         return DefWindowProc(hWnd, message, wParam, lParam);
     case WM_SETCURSOR:
         if (!window->_pointer_in_window) {

@@ -43,6 +43,11 @@ static Platform::EventListener* event_listener = &default_event_listener;
 static HWND paltform_win;
 static ProcessLoop* main_loop = NULL;
 
+static const unsigned long MODAL_LOOP_TIMER_ID = 1;
+static const int MODAL_LOOP_DEFAULT_TIMEOUT = 100;
+static bool modal_loop_active = false;
+static bool set_modal_loop_timer();
+
 void Platform::send_quit_request()
 {
     ASSERT(main_loop);
@@ -52,6 +57,15 @@ void Platform::send_quit_request()
 static LRESULT CALLBACK PlatformWinProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message) {
+    case WM_TIMER:
+        if (modal_loop_active) {
+            main_loop->timers_action();
+            if (!set_modal_loop_timer()) {
+                LOG_WARN("failed to set modal loop timer");
+            }
+        } else {
+            LOG_WARN("received WM_TIMER not inside a modal loop");
+        }
     case WM_ACTIVATEAPP:
         if (wParam) {
             event_listener->on_app_activated();
@@ -617,4 +631,42 @@ Icon* Platform::load_icon(int id)
         return NULL;
     }
     return new WinIcon(icon);
+}
+
+void WinPlatform::enter_modal_loop()
+{
+    if (modal_loop_active) {
+        LOG_INFO("modal loop already active");
+        return;
+    }
+
+    if (set_modal_loop_timer()) {
+        modal_loop_active = true;
+    } else {
+        LOG_WARN("failed to create modal loop timer");
+    }
+}
+
+static bool set_modal_loop_timer()
+{
+    int timeout = main_loop->get_soonest_timeout();
+    if (timeout == INFINITE) {
+        timeout = MODAL_LOOP_DEFAULT_TIMEOUT; /* for cases timeouts are added after
+                                                 the enterance to the loop*/
+    }
+
+    if (!SetTimer(paltform_win, MODAL_LOOP_TIMER_ID, timeout, NULL)) {
+        return false;
+    }
+    return true;
+}
+
+void WinPlatform::exit_modal_loop()
+{
+    if (!modal_loop_active) {
+        LOG_INFO("not inside the loop");
+        return;
+    }
+    KillTimer(paltform_win, MODAL_LOOP_TIMER_ID);
+    modal_loop_active = false;
 }

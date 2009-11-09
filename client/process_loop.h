@@ -205,6 +205,11 @@ public:
     void deactivate_interval_timer(Timer* timer);
 
     void process_events_queue();
+    /* can be used for handling timers in modal loop state in Windows (mainly,
+       for updating the screen) */
+    int get_soonest_timeout();
+    void timers_action();
+
     void* get_owner() { return _owner;}
 
     bool is_same_thread(pthread_t thread) { return _started && pthread_equal(_thread, thread);}
