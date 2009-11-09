@@ -394,3 +394,13 @@ void ProcessLoop::deactivate_interval_timer(Timer* timer)
 {
     _timers_queue.deactivate_interval_timer(timer);
 }
+
+int ProcessLoop::get_soonest_timeout()
+{
+    return _timers_queue.get_soonest_timeout();
+}
+
+void ProcessLoop::timers_action()
+{
+    _timers_queue.timers_action();
+}

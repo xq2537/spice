@@ -20,6 +20,12 @@
 
 #include "icon.h"
 
+class WinPlatform {
+public:
+    static void enter_modal_loop();
+    static void exit_modal_loop();
+};
+
 class WinIcon: public Icon {
 public:
     WinIcon(HICON icon) : _icon (icon) {}
