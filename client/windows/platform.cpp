@@ -618,38 +618,3 @@ Icon* Platform::load_icon(int id)
     }
     return new WinIcon(icon);
 }
-
-class PlatformTimer: public Timer {
-public:
-    PlatformTimer(timer_proc_t proc, void* opaque) : _proc (proc), _opaque (opaque) {}
-    void response(AbstractProcessLoop& events_loop) {_proc(_opaque, (TimerID)this);}
-
-private:
-    timer_proc_t _proc;
-    void* _opaque;
-};
-
-TimerID Platform::create_interval_timer(timer_proc_t proc, void* opaque)
-{
-    return (TimerID)(new PlatformTimer(proc, opaque));
-}
-
-bool Platform::activate_interval_timer(TimerID timer, unsigned int millisec)
-{
-    ASSERT(main_loop);
-    main_loop->activate_interval_timer((PlatformTimer*)timer, millisec);
-    return true;
-}
-
-bool Platform::deactivate_interval_timer(TimerID timer)
-{
-    ASSERT(main_loop);
-    main_loop->deactivate_interval_timer((PlatformTimer*)timer);
-    return true;
-}
-
-void Platform::destroy_interval_timer(TimerID timer)
-{
-    deactivate_interval_timer(timer);
-    ((PlatformTimer*)timer)->unref();
-}

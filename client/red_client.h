@@ -112,6 +112,10 @@ public:
     }
 };
 
+class AgentTimer: public Timer {
+    virtual void response(AbstractProcessLoop& events_loop);
+};
+
 typedef std::map< int, RedPeer::ConnectionOptions::Type> PeerConnectionOptMap;
 
 class RedClient: public RedChannel {
@@ -131,6 +135,8 @@ public:
     virtual bool abort();
 
     void push_event(Event* event);
+    void activate_interval_timer(Timer* timer, unsigned int millisec);
+    void deactivate_interval_timer(Timer* timer);
 
     void set_target(const char* host, uint16_t port, uint16_t sport);
     const char* get_password() { return _password.c_str();}
@@ -206,7 +212,7 @@ private:
     uint8_t* _agent_msg_data;
     uint32_t _agent_msg_pos;
     uint32_t _agent_tokens;
-    TimerID _agent_timer;
+    AutoRef<AgentTimer> _agent_timer;
 
     PeerConnectionOptMap _con_opt_map;
     Migrate _migrate;

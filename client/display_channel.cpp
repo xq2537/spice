@@ -594,6 +594,33 @@ InterruptUpdate::InterruptUpdate(DisplayChannel& channel)
 {
 }
 
+StreamsTimer::StreamsTimer(DisplayChannel& channel)
+    : _channel (channel)
+{
+}
+
+void StreamsTimer::response(AbstractProcessLoop &events_loop)
+{
+    _channel.streams_time();
+}
+
+#define RESET_TIMEOUT (1000 * 5)
+
+class ResetTimer: public Timer {
+public:
+    ResetTimer(RedScreen* screen, RedClient& client) : _screen(screen), _client(client) {}
+    virtual void response(AbstractProcessLoop &events_loop);
+private:
+    RedScreen* _screen;
+    RedClient& _client;
+};
+
+void ResetTimer::response(AbstractProcessLoop &events_loop)
+{
+    _screen->unref();
+    _client.deactivate_interval_timer(this);
+}
+
 class DisplayHandler: public MessageHandlerImp<DisplayChannel, RED_DISPLAY_MESSAGES_END> {
 public:
     DisplayHandler(DisplayChannel& channel)
@@ -610,7 +637,7 @@ DisplayChannel::DisplayChannel(RedClient& client, uint32_t id,
     , _glz_window (glz_window)
     , _mark (false)
     , _update_mark (0)
-    , _streams_timer (INVALID_TIMER)
+    , _streams_timer (new StreamsTimer(*this))
     , _next_timer_time (0)
     , _active_streams (NULL)
     , _streams_trigger (*this)
@@ -817,49 +844,6 @@ void DisplayChannel::copy_pixels(const QRegion& dest_region,
     _canvas->copy_pixels(dest_region, dest_dc);
 }
 
-class CreateTimerEvent: public SyncEvent {
-public:
-    CreateTimerEvent(timer_proc_t proc, void* user_data)
-        : SyncEvent()
-        , _proc (proc)
-        , _user_data (user_data)
-        , _timer (INVALID_TIMER)
-    {
-    }
-
-    virtual ~CreateTimerEvent()
-    {
-        ASSERT(_timer == INVALID_TIMER);
-    }
-
-    virtual void do_response(AbstractProcessLoop& events_loop)
-    {
-        if ((_timer = Platform::create_interval_timer(_proc, _user_data)) == INVALID_TIMER) {
-            THROW("create timer failed");
-        }
-    }
-
-    TimerID release() { TimerID ret = _timer; _timer = INVALID_TIMER; return ret;}
-
-private:
-    timer_proc_t _proc;
-    void* _user_data;
-    TimerID _timer;
-};
-
-class DestroyTimerEvent: public Event {
-public:
-    DestroyTimerEvent(TimerID timer) : _timer (timer) {}
-
-    virtual void response(AbstractProcessLoop& events_loop)
-    {
-        Platform::destroy_interval_timer(_timer);
-    }
-
-private:
-    TimerID _timer;
-};
-
 class ActivateTimerEvent: public Event {
 public:
     ActivateTimerEvent(DisplayChannel& channel)
@@ -876,19 +860,6 @@ private:
     DisplayChannel& _channel;
 };
 
-void DisplayChannel::streams_timer_callback(void* opaque, TimerID timer)
-{
-    ((DisplayChannel *)opaque)->streams_time();
-}
-
-#define RESET_TIMEOUT (1000 * 5)
-
-void DisplayChannel::reset_timer_callback(void* opaque, TimerID timer)
-{
-    ((RedScreen *)opaque)->unref();
-    Platform::destroy_interval_timer(timer);
-}
-
 void DisplayChannel::on_connect()
 {
     Message* message = new Message(REDC_DISPLAY_INIT, sizeof(RedcDisplayInit));
@@ -898,13 +869,6 @@ void DisplayChannel::on_connect()
     init->glz_dictionary_id = 1;
     init->glz_dictionary_window_size = get_client().get_glz_window_size();
     post_message(message);
-    AutoRef<CreateTimerEvent> event(new CreateTimerEvent(streams_timer_callback, this));
-    get_client().push_event(*event);
-    (*event)->wait();
-    _streams_timer = (*event)->release();
-    if (!(*event)->success()) {
-        THROW("create timer failed");
-    }
 }
 
 void DisplayChannel::on_disconnect()
@@ -917,8 +881,7 @@ void DisplayChannel::on_disconnect()
         screen()->set_update_interrupt_trigger(NULL);
     }
     detach_from_screen(get_client().get_application());
-    AutoRef<DestroyTimerEvent> event(new DestroyTimerEvent(_streams_timer));
-    get_client().push_event(*event);
+    get_client().deactivate_interval_timer(*_streams_timer);
     AutoRef<SyncEvent> sync_event(new SyncEvent());
     get_client().push_event(*sync_event);
     (*sync_event)->wait();
@@ -1096,21 +1059,16 @@ void DisplayChannel::handle_mark(RedPeer::InMessage *message)
 
 void DisplayChannel::handle_reset(RedPeer::InMessage *message)
 {
-    TimerID reset_timer;
-
     screen()->set_update_interrupt_trigger(NULL);
 
     if (_canvas.get()) {
         _canvas->clear();
     }
-    reset_timer = Platform::create_interval_timer(reset_timer_callback, screen()->ref());
-    if (reset_timer == INVALID_TIMER) {
-        THROW("invalid reset timer");
-    }
+    AutoRef<ResetTimer> reset_timer(new ResetTimer(screen()->ref(), get_client()));
     detach_from_screen(get_client().get_application());
     _palette_cache.clear();
 
-    Platform::activate_interval_timer(reset_timer, RESET_TIMEOUT);
+    get_client().activate_interval_timer(*reset_timer, RESET_TIMEOUT);
 }
 
 void DisplayChannel::handle_inval_list(RedPeer::InMessage* message)
@@ -1391,10 +1349,10 @@ void DisplayChannel::streams_time()
     mm_time = get_client().get_mm_time();
     next_time = mm_time + 15;
     if (next_time && (!_next_timer_time || int(next_time - _next_timer_time) < 0)) {
-        Platform::activate_interval_timer(_streams_timer, MAX(int(next_time - mm_time), 0));
+        get_client().activate_interval_timer(*_streams_timer, MAX(int(next_time - mm_time), 0));
         _next_timer_time = next_time;
     } else if (!_next_timer_time) {
-        Platform::deactivate_interval_timer(_streams_timer);
+        get_client().deactivate_interval_timer(*_streams_timer);
     }
     timer_lock.unlock();
     lock.unlock();
@@ -1417,7 +1375,7 @@ void DisplayChannel::activate_streams_timer()
             return;
         }
         delta = _next_timer_time - get_client().get_mm_time();
-        Platform::activate_interval_timer(_streams_timer, delta);
+        get_client().activate_interval_timer(*_streams_timer, delta);
     }
 }
 

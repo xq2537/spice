@@ -70,6 +70,13 @@ private:
     DisplayChannel& _channel;
 };
 
+class StreamsTimer: public Timer {
+public:
+    StreamsTimer(DisplayChannel& channel);
+    virtual void response(AbstractProcessLoop& events_loop);
+private:
+    DisplayChannel& _channel;
+};
 
 class DisplayChannel: public RedChannel, public ScreenLayer {
 public:
@@ -145,9 +152,6 @@ private:
 
     static void set_clip_rects(const Clip& clip, uint32_t& num_clip_rects, Rect*& clip_rects,
                                unsigned long addr_offset, uint8_t *min, uint8_t *max);
-    static void streams_timer_callback(void* opaque, TimerID timer);
-    static void reset_timer_callback(void* opaque, TimerID timer);
-
 private:
     std::auto_ptr<Canvas> _canvas;
     PixmapCache& _pixmap_cache;
@@ -168,7 +172,7 @@ private:
     Mutex _streams_lock;
 
     Mutex _timer_lock;
-    TimerID _streams_timer;
+    AutoRef<StreamsTimer> _streams_timer;
     uint32_t _next_timer_time;
 
     std::vector<VideoStream*> _streams;
@@ -183,7 +187,7 @@ private:
     friend class VideoStream;
     friend class StreamsTrigger;
     friend class GLInterupt;
-    friend void streams_timer_callback(void* opaque, TimerID timer);
+    friend class StreamsTimer;
 };
 
 #endif

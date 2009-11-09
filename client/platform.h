@@ -30,13 +30,6 @@ class Icon;
 class Monitor;
 typedef std::list<Monitor*> MonitorsList;
 
-/* TODO: tmp till each channel will handle its own thread
-         timers or directly through the main thread */
-#define INVALID_TIMER (~TimerID(0))
-typedef unsigned long TimerID;
-typedef void (*timer_proc_t)(void* opaque, TimerID timer);
-
-
 class Platform {
 public:
     static void init();
@@ -98,12 +91,6 @@ public:
 
     class DisplayModeListner;
     static void set_display_mode_listner(DisplayModeListner* listener);
-    /* TODO: tmp till each channel will handle its own thread
-             timers or directly through the main thread */
-    static TimerID create_interval_timer(timer_proc_t proc, void* opaque);
-    static bool activate_interval_timer(TimerID timer, unsigned int millisec);
-    static bool deactivate_interval_timer(TimerID timer);
-    static void destroy_interval_timer(TimerID timer);
 };
 
 class Platform::EventListener {
