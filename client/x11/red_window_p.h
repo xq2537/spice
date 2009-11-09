@@ -61,6 +61,7 @@ protected:
     Icon* _icon;
     bool _ignore_foucs;
     bool _shadow_foucs_state;
+    Colormap _colormap;
 };
 
 #endif

@@ -954,6 +954,7 @@ void RedWindow_p::destroy(PixelsSource_p& pix_source)
         _glcont_copy = NULL;
     }
     XDestroyWindow(x_display, window);
+    XFreeColormap(x_display, _colormap);
     XFreeGC(x_display, pix_source.x_drawable.gc);
     pix_source.x_drawable.gc = NULL;
     pix_source.x_drawable.drawable = None;
@@ -979,17 +980,14 @@ void RedWindow_p::create(RedWindow& red_window, PixelsSource_p& pix_source, int 
                                 ButtonReleaseMask | PointerMotionMask | FocusChangeMask |
                                 EnterWindowMask | LeaveWindowMask;
 
-    Colormap colormap;
-
-    colormap = XCreateColormap(x_display, root_window, XPlatform::get_vinfo()[in_screen]->visual,
+    _colormap = XCreateColormap(x_display, root_window, XPlatform::get_vinfo()[in_screen]->visual,
                                AllocNone);
-    win_attributes.colormap = colormap;
+    win_attributes.colormap = _colormap;
     mask |= CWColormap;
     window = XCreateWindow(x_display, root_window, x, y,
                            width, height, 0, XPlatform::get_vinfo()[in_screen]->depth,
                            InputOutput, XPlatform::get_vinfo()[in_screen]->visual, mask,
                            &win_attributes);
-    XFreeColormap(x_display, colormap);
 
     if (!window) {
         THROW("create X window failed");

@@ -2073,9 +2073,7 @@ void Platform::init()
     fb_config = new GLXFBConfig *[ScreenCount(x_display)];
     memset(fb_config, 0, sizeof(GLXFBConfig *) * ScreenCount(x_display));
 
-    // working with KDE and visual from glXGetVisualFromFBConfig is not working
-    // well. for now disabling OGL.
-    if (0 && threads_enable && glXQueryExtension(x_display, &err, &ev)) {
+    if (threads_enable && glXQueryExtension(x_display, &err, &ev)) {
         int num_configs;
         int attrlist[] = {
             GLX_RENDER_TYPE, GLX_RGBA_BIT,
