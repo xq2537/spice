@@ -42,7 +42,7 @@ void WaveRecorder::EventTrigger::on_event()
     _recorder.on_event();
 }
 
-WaveRecorder::WaveRecorder(Platform::RecordClinet& client,
+WaveRecorder::WaveRecorder(Platform::RecordClient& client,
                            uint32_t sampels_per_sec,
                            uint32_t bits_per_sample,
                            uint32_t channels)

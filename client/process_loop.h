@@ -65,6 +65,10 @@ protected:
 #endif
 
 private:
+    void set_generation(uint32_t gen) { _generation = gen;}
+    uint32_t get_generation() { return _generation;}
+
+private:
     uint32_t _generation;
 
     friend class EventsQueue;
@@ -127,6 +131,7 @@ private:
     void disarm();
     uint64_t get_expiration() const { return _expiration;}
     void calc_next_expiration_time() { _expiration += _interval;}
+    void calc_next_expiration_time(uint64_t now);
 
     static uint64_t get_now();
 

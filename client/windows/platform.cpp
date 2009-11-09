@@ -405,7 +405,7 @@ void Platform::set_process_loop(ProcessLoop& main_process_loop)
     main_loop = &main_process_loop;
 }
 
-WaveRecordAbstract* Platform::create_recorder(RecordClinet& client,
+WaveRecordAbstract* Platform::create_recorder(RecordClient& client,
                                               uint32_t sampels_per_sec,
                                               uint32_t bits_per_sample,
                                               uint32_t channels)

@@ -97,7 +97,7 @@ int EventsQueue::push_event(Event* event)
 {
     Lock lock(_events_lock);
     _events.push_back(event);
-    event->_generation = _events_gen;
+    event->set_generation(_events_gen);
     event->ref();
 #ifdef RED_DEBUG
     event->set_process_loop(&_owner);
@@ -116,7 +116,7 @@ void EventsQueue::process_events()
             return;
         }
         event = _events.front();
-        if (event->_generation == _events_gen) {
+        if (event->get_generation() == _events_gen) {
             return;
         }
         _events.pop_front();
@@ -158,6 +158,22 @@ void Timer::arm(uint32_t msec)
 void Timer::disarm()
 {
     _is_armed = false;
+}
+
+#define TIMER_COMPENSATION
+
+void Timer::calc_next_expiration_time(uint64_t now)
+{
+#ifndef TIMER_COMPENSATION
+    _expiratoin = now;
+#endif
+    calc_next_expiration_time();
+#ifdef TIMER_COMPENSATION
+    if (_expiration <= now) {
+        _expiration = now;
+        calc_next_expiration_time();
+     }
+#endif
 }
 
 uint64_t Timer::get_now()
@@ -226,7 +242,6 @@ int TimersQueue::get_soonest_timeout()
     return (int)(next_time - now);
 }
 
-#define TIMER_COMPENSATION
 
 void TimersQueue::timers_action()
 {
@@ -238,16 +253,7 @@ void TimersQueue::timers_action()
            ((*iter)->get_expiration() <= now)) {
         Timer* timer = *iter;
         _armed_timers.erase(iter);
-#ifndef TIMER_COMPENSATION
-        timer->_experatoin = now;
-#endif
-        timer->calc_next_expiration_time();
-#ifdef TIMER_COMPENSATION
-        if (timer->_expiration <= now) {
-            timer->_expiration = now;
-            timer->calc_next_expiration_time();
-        }
-#endif
+        timer->calc_next_expiration_time(now);
         _armed_timers.insert(timer);
         timer->response(_owner);
     }

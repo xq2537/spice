@@ -23,7 +23,7 @@
 
 class WaveRecorder: public WaveRecordAbstract, public EventSources::Trigger {
 public:
-    WaveRecorder(Platform::RecordClinet& client, uint32_t sampels_per_sec,
+    WaveRecorder(Platform::RecordClient& client, uint32_t sampels_per_sec,
                  uint32_t bits_per_sample, uint32_t channels);
     virtual ~WaveRecorder();
 
@@ -42,7 +42,7 @@ private:
     void push_frames();
 
 private:
-    Platform::RecordClinet& _client;
+    Platform::RecordClient& _client;
     HWAVEIN _wave_in;
     uint8_t* _ring;
     uint32_t _ring_item_size;

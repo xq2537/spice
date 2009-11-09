@@ -26,7 +26,7 @@
 
 class WaveRecorder: public WaveRecordAbstract {
 public:
-    WaveRecorder(Platform::RecordClinet& client,
+    WaveRecorder(Platform::RecordClient& client,
                  uint32_t sampels_per_sec,
                  uint32_t bits_per_sample,
                  uint32_t channels);
@@ -44,7 +44,7 @@ private:
     void on_event();
 
 private:
-    Platform::RecordClinet& _client;
+    Platform::RecordClient& _client;
     snd_pcm_t* _pcm;
     snd_pcm_hw_params_t* _hw_params;
     snd_pcm_sw_params_t* _sw_params;

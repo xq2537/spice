@@ -29,7 +29,7 @@ static void CALLBACK in_proc(HWAVEIN handle, UINT msg, DWORD user_data, DWORD pa
     recorder->trigger();
 }
 
-WaveRecorder::WaveRecorder(Platform::RecordClinet& client, uint32_t sampels_per_sec,
+WaveRecorder::WaveRecorder(Platform::RecordClient& client, uint32_t sampels_per_sec,
                            uint32_t bits_per_sample, uint32_t channels)
     : _client (client)
     , _ring (NULL)

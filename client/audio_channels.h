@@ -58,7 +58,7 @@ private:
     uint32_t _frame_count;
 };
 
-class RecordChannel: public RedChannel, private Platform::RecordClinet {
+class RecordChannel: public RedChannel, private Platform::RecordClient {
 public:
     RecordChannel(RedClient& client, uint32_t id);
     ~RecordChannel(void);
