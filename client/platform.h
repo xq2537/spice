@@ -65,8 +65,8 @@ public:
 
     static void set_thread_priority(void *thread, ThreadPriority priority);
 
-    class RecordClinet;
-    static WaveRecordAbstract* create_recorder(RecordClinet& client,
+    class RecordClient;
+    static WaveRecordAbstract* create_recorder(RecordClient& client,
                                                uint32_t sampels_per_sec,
                                                uint32_t bits_per_sample,
                                                uint32_t channels);
@@ -114,10 +114,9 @@ public:
     virtual void on_monitors_change() = 0;
 };
 
-// TODO: tmp till all channels work with ProcessLoop
-class Platform::RecordClinet {
+class Platform::RecordClient {
 public:
-    virtual ~RecordClinet() {}
+    virtual ~RecordClient() {}
     virtual void add_event_source(EventSources::File& evnet_source) = 0;
     virtual void remove_event_source(EventSources::File& evnet_source) = 0;
     virtual void add_event_source(EventSources::Trigger& evnet_source) = 0;

@@ -108,7 +108,6 @@ struct SyncInfo {
 
 class RedChannel: public RedChannelBase {
 public:
-    friend class RedCannel;
     class MessageHandler;
     class OutMessage;
 

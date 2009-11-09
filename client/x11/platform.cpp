@@ -2212,7 +2212,7 @@ void Platform::set_keyboard_modifiers(uint32_t modifiers)
     }
 }
 
-WaveRecordAbstract* Platform::create_recorder(RecordClinet& client,
+WaveRecordAbstract* Platform::create_recorder(RecordClient& client,
                                               uint32_t sampels_per_sec,
                                               uint32_t bits_per_sample,
                                               uint32_t channels)
