@@ -230,6 +230,9 @@ TunnelChannel::TunnelChannel(RedClient& client, uint32_t id)
     , _max_socket_data_size(0)
     , _service_id(0)
     , _service_group(0)
+#ifdef TUNNEL_CONFIG
+    , _config_listener (NULL)
+#endif
 {
     TunnelHandler* handler = static_cast<TunnelHandler*>(get_message_handler());
 
@@ -585,7 +588,6 @@ void TunnelChannel::destroy_sockets()
 void TunnelChannel::on_connect()
 {
     _config_listener = new TunnelConfigListenerIfc(*this);
-
 }
 #endif
 
@@ -594,7 +596,10 @@ void TunnelChannel::on_disconnect()
     destroy_sockets();
     OutSocketMessage::clear_free_messages();
 #ifdef TUNNEL_CONFIG
-    delete _config_listener;
+    if (_config_listener) {
+        delete _config_listener;
+        _config_listener = NULL;
+    }
 #endif
 }
 
