@@ -36,6 +36,14 @@ static const PixmapHeader info_image = {
     _info_image.width * 4,
 };
 
+#include "images/alt_image.c"
+
+static const PixmapHeader alt_image = {
+    (uint8_t *)_alt_image.pixel_data,
+    _alt_image.width,
+    _alt_image.height,
+    _alt_image.width * 4,
+};
 
 typedef struct ResImage {
     int id;
@@ -45,6 +53,7 @@ typedef struct ResImage {
 static const ResImage res_image_map[] = {
     { SPLASH_IMAGE_RES_ID, &splash_image},
     { INFO_IMAGE_RES_ID, &info_image},
+    { ALT_IMAGE_RES_ID, &alt_image},
     {0, NULL},
 };
 

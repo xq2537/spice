@@ -41,10 +41,14 @@
 #include "mutex.h"
 #include "cmd_line_parser.h"
 #include "tunnel_channel.h"
+#include "rect.h"
 
 #include <log4cpp/BasicConfigurator.hh>
 #include <log4cpp/FileAppender.hh>
 #include <log4cpp/RollingFileAppender.hh>
+
+#define STICKY_KEY_PIXMAP ALT_IMAGE_RES_ID
+#define STICKY_KEY_TIMEOUT 750
 
 #ifdef CAIRO_CANVAS_CACH_IS_SHARED
 mutex_t cairo_surface_user_data_mutex;
@@ -95,6 +99,7 @@ public:
 
     void set_splash_mode();
     void set_info_mode();
+    void set_sticky(bool is_on);
     virtual void on_size_changed();
 
 private:
@@ -104,22 +109,29 @@ private:
 private:
     ImageFromRes _splash_pixmap;
     AlphaImageFromRes _info_pixmap;
+    AlphaImageFromRes _sticky_pixmap;
     Point _splash_pos;
     Point _info_pos;
+    Point _sticky_pos;
+    Rect _sticky_rect;
     bool _splash_mode;
-    Mutex _update_lock;
+    bool _sticky_on;
+    RecurciveMutex _update_lock;
 };
 
 GUILayer::GUILayer()
     : ScreenLayer(SCREEN_LAYER_GUI, false)
     , _splash_pixmap (SPLASH_IMAGE_RES_ID)
     , _info_pixmap (INFO_IMAGE_RES_ID)
+    , _sticky_pixmap (STICKY_KEY_PIXMAP)
     , _splash_mode (false)
+    , _sticky_on (false)
 {
 }
 
 void GUILayer::draw_splash(const QRegion& dest_region, RedDrawable& dest)
 {
+    ASSERT(!_sticky_on);
     for (int i = 0; i < (int)dest_region.num_rects; i++) {
         Rect* r = &dest_region.rects[i];
         dest.copy_pixels(_splash_pixmap, r->left - _splash_pos.x, r->top - _splash_pos.y, *r);
@@ -130,13 +142,18 @@ void GUILayer::draw_info(const QRegion& dest_region, RedDrawable& dest)
 {
     for (int i = 0; i < (int)dest_region.num_rects; i++) {
         Rect* r = &dest_region.rects[i];
-        dest.blend_pixels(_info_pixmap, r->left - _info_pos.x, r->top - _info_pos.y, *r);
+        /* is rect inside sticky region or info region? */
+        if (_sticky_on && rect_intersects(*r, _sticky_rect)) {
+            dest.blend_pixels(_sticky_pixmap, r->left - _sticky_pos.x, r->top - _sticky_pos.y, *r);
+        } else {
+            dest.blend_pixels(_info_pixmap, r->left - _info_pos.x, r->top - _info_pos.y, *r);
+        }
     }
 }
 
 void GUILayer::copy_pixels(const QRegion& dest_region, RedDrawable& dest_dc)
 {
-    Lock lock(_update_lock);
+    RecurciveLock lock(_update_lock);
     if (_splash_mode) {
         draw_splash(dest_region, dest_dc);
     } else {
@@ -146,7 +163,7 @@ void GUILayer::copy_pixels(const QRegion& dest_region, RedDrawable& dest_dc)
 
 void GUILayer::set_splash_mode()
 {
-    Lock lock(_update_lock);
+    RecurciveLock lock(_update_lock);
     Point size = _splash_pixmap.get_size();
     Point screen_size = screen()->get_size();
     Rect r;
@@ -158,11 +175,12 @@ void GUILayer::set_splash_mode()
     _splash_mode = true;
     lock.unlock();
     set_rect_area(r);
+    ASSERT(!_sticky_on);
 }
 
 void GUILayer::set_info_mode()
 {
-    Lock lock(_update_lock);
+    RecurciveLock lock(_update_lock);
     Point size = _info_pixmap.get_size();
     Point screen_size = screen()->get_size();
     Rect r;
@@ -175,11 +193,52 @@ void GUILayer::set_info_mode()
     _splash_mode = false;
     lock.unlock();
     set_rect_area(r);
+
+    set_sticky(_sticky_on);
+}
+
+void GUILayer::set_sticky(bool is_on)
+{
+    RecurciveLock lock(_update_lock);
+    if (!_sticky_on && !is_on) {
+        return;
+    }
+
+    Point size = _sticky_pixmap.get_size();
+    Point screen_size = screen()->get_size();
+
+    _sticky_on = is_on;
+    if (_sticky_on) {
+        _sticky_pos.x = (screen_size.x - size.x) / 2;
+        _sticky_pos.y = screen_size.y * 2 / 3;
+        _sticky_rect.left = _sticky_pos.x;
+        _sticky_rect.top = _sticky_pos.y;
+        _sticky_rect.right = _sticky_rect.left + size.x;
+        _sticky_rect.bottom = _sticky_rect.top + size.y;
+        add_rect_area(_sticky_rect);
+        invalidate();
+    } else {
+        remove_rect_area(_sticky_rect);
+    }
 }
 
 void GUILayer::on_size_changed()
 {
     set_info_mode();
+}
+
+void StickyKeyTimer::response(AbstractProcessLoop& events_loop)
+{
+    Application* app = (Application*)events_loop.get_owner();
+    StickyInfo* sticky_info = &app->_sticky_info;
+    ASSERT(app->is_sticky_trace_key(sticky_info->key));
+    ASSERT(app->_key_table[sticky_info->key ].press);
+    ASSERT(sticky_info->key_first_down);
+    ASSERT(sticky_info->key_down);
+    sticky_info->sticky_mode = true;
+    DBG(0, "ON sticky");
+    app->_gui_layer->set_sticky(true);
+    app->deactivate_interval_timer(this);
 }
 
 static InputsHandler default_inputs_handler;
@@ -212,6 +271,8 @@ Application::Application()
     , _inputs_handler (&default_inputs_handler)
     , _monitors (NULL)
     , _title (L"SPICEc:%d")
+    , _splash_mode (true)
+    , _sys_key_intercept_mode (false)
 {
     DBG(0, "");
     Platform::set_process_loop(*this);
@@ -248,6 +309,13 @@ Application::Application()
 #endif
                                                           , _commands_map));
     _hot_keys = parser->get();
+
+    _sticky_info.trace_is_on = false;
+    _sticky_info.sticky_mode = false;
+    _sticky_info.key_first_down = false;
+    _sticky_info.key_down = false;
+    _sticky_info.key  = REDKEY_INVALID;
+    _sticky_info.timer.reset(new StickyKeyTimer());
 }
 
 Application::~Application()
@@ -473,6 +541,7 @@ void Application::init_pause_scan_code()
 void Application::init_key_table()
 {
     memset(_key_table, 0, sizeof(_key_table));
+    _num_keys_pressed = 0;
     init_scan_code(REDKEY_ESCAPE);
     init_scan_code(REDKEY_1);
     init_scan_code(REDKEY_2);
@@ -608,12 +677,13 @@ inline uint32_t Application::get_break_scan_code(RedKey key)
 
 void Application::unpress_all()
 {
+    reset_sticky();
     for (int i = 0; i < REDKEY_NUM_KEYS; i++) {
         if (_key_table[i].press) {
             uint32_t scan_code = get_break_scan_code((RedKey)i);
             ASSERT(scan_code);
             _inputs_handler->on_key_up(scan_code);
-            _key_table[i].press = false;
+            unpress_key((RedKey)i);
         }
     }
 }
@@ -792,6 +862,57 @@ static void show_red_key(RedKey key)
 
 #endif
 
+bool Application::press_key(RedKey key)
+{
+    if (_key_table[key].press) {
+        return true;
+    } else {
+        _key_table[key].press = true;
+        _num_keys_pressed++;
+        return false;
+    }
+}
+
+bool Application::unpress_key(RedKey key)
+{
+    ASSERT(!_sticky_info.key_down || !is_sticky_trace_key(key));
+
+    if (_key_table[key].press) {
+        _key_table[key].press = false;
+        _num_keys_pressed--;
+        ASSERT(_num_keys_pressed >= 0);
+        return true;
+    } else {
+        return false;
+    }
+}
+
+inline bool Application::is_sticky_trace_key(RedKey key)
+{
+    return ((key == REDKEY_L_ALT) || (key == REDKEY_R_ALT));
+}
+
+void Application::reset_sticky()
+{
+    _sticky_info.trace_is_on = !_splash_mode && _sys_key_intercept_mode;
+    _sticky_info.key_first_down = false;
+    deactivate_interval_timer(*_sticky_info.timer);
+    if (_sticky_info.sticky_mode) {
+        ASSERT(_key_table[_sticky_info.key].press);
+        // if it is physically down, we shouldn't unpress it
+        if (!_sticky_info.key_down) {
+            do_on_key_up(_sticky_info.key);
+        }
+        _sticky_info.sticky_mode = false;
+        DBG(0, "OFF sticky");
+        _gui_layer->set_sticky(false);
+    }
+    _sticky_info.key_down = false;
+
+    _sticky_info.key = REDKEY_INVALID;
+
+}
+
 void Application::on_key_down(RedKey key)
 {
     if (key <= 0 || key >= REDKEY_NUM_KEYS) {
@@ -803,7 +924,30 @@ void Application::on_key_down(RedKey key)
         LOG_WARN("no make code for %d", key);
         return;
     }
-    _key_table[key].press = true;
+
+    bool was_pressed = press_key(key);
+    if (_sticky_info.trace_is_on) {
+        if (key == _sticky_info.key) {
+            _sticky_info.key_down = true;
+        }
+
+        if (!_sticky_info.sticky_mode) {
+            // during tracing (traced key was pressed and no keyboard event has occured till now)
+            if (_sticky_info.key_first_down) {
+                ASSERT(_sticky_info.key != REDKEY_INVALID);
+                if (key != _sticky_info.key) {
+                    reset_sticky();
+                }
+            } else if (is_sticky_trace_key(key) && (_num_keys_pressed == 1) && !was_pressed) {
+                ASSERT(_sticky_info.key == REDKEY_INVALID);
+                // start tracing
+                _sticky_info.key =  key;
+                _sticky_info.key_first_down = true;
+                _sticky_info.key_down = true;
+                activate_interval_timer(*_sticky_info.timer, STICKY_KEY_TIMEOUT);
+            }
+        }
+    }
 
     int command = get_hotkeys_commnad();
     if (command != APP_CMD_INVALID) {
@@ -815,17 +959,18 @@ void Application::on_key_down(RedKey key)
     if (!_active_screen->intercepts_sys_key() &&
                                            (key == REDKEY_LEFT_CMD || key == REDKEY_RIGHT_CMD ||
                                             key == REDKEY_MENU || _key_table[REDKEY_L_ALT].press)) {
-        _key_table[key].press = false;
+        unpress_key(key);
         return;
     }
-    if ((_key_table[REDKEY_L_CTRL].press || _key_table[REDKEY_R_CTRL].press) &&
-        (_key_table[REDKEY_L_ALT].press || _key_table[REDKEY_R_ALT].press)) {
+    if (!_sticky_info.sticky_mode &&
+        ((_key_table[REDKEY_L_CTRL].press || _key_table[REDKEY_R_CTRL].press) &&
+        (_key_table[REDKEY_L_ALT].press || _key_table[REDKEY_R_ALT].press))) {
         if (key == REDKEY_END || key == REDKEY_PAD_1) {
-            _key_table[key].press = false;
+            unpress_key(key);
             _inputs_handler->on_key_down(get_make_scan_code(REDKEY_DELETE));
             _inputs_handler->on_key_up(get_break_scan_code(REDKEY_DELETE));
         } else if (key == REDKEY_DELETE || key == REDKEY_PAD_POINT) {
-            _key_table[key].press = false;
+            unpress_key(key);
             return;
         }
     }
@@ -834,12 +979,9 @@ void Application::on_key_down(RedKey key)
     _inputs_handler->on_key_down(scan_code);
 }
 
-void Application::on_key_up(RedKey key)
+void Application::do_on_key_up(RedKey key)
 {
-    if (key < 0 || key >= REDKEY_NUM_KEYS || !_key_table[key].press) {
-        return;
-    }
-    _key_table[key].press = false;
+    unpress_key(key);
     uint32_t scan_code = get_break_scan_code(key);
     if (!scan_code) {
         LOG_WARN("no break code for %d", key);
@@ -848,9 +990,43 @@ void Application::on_key_up(RedKey key)
     _inputs_handler->on_key_up(scan_code);
 }
 
+void Application::on_key_up(RedKey key)
+{
+    if(key < 0 || key >= REDKEY_NUM_KEYS || !_key_table[key].press) {
+        return;
+    }
+
+    if (_sticky_info.trace_is_on) {
+        ASSERT(_sticky_info.sticky_mode || (key == _sticky_info.key) ||
+               (_sticky_info.key == REDKEY_INVALID));
+        if (key == _sticky_info.key) {
+            _sticky_info.key_down = false;
+            if (_sticky_info.key_first_down) {
+                _sticky_info.key_first_down = false;
+                if (!_sticky_info.sticky_mode) {
+                    reset_sticky();
+                } else {
+                    return; // ignore the sticky-key first release
+                }
+            }
+        }
+
+        if (_sticky_info.sticky_mode) {
+            RedKey old_sticky_key = _sticky_info.key;
+            reset_sticky();
+            if (key == old_sticky_key) {
+                return; // no need to send key_up twice
+            }
+        }
+    }
+
+    do_on_key_up(key);
+ }
+
 void Application::on_deactivate_screen(RedScreen* screen)
 {
     if (_active_screen == screen) {
+        _sys_key_intercept_mode = false;
         release_capture();
         _active_screen = NULL;
     }
@@ -858,7 +1034,24 @@ void Application::on_deactivate_screen(RedScreen* screen)
 
 void Application::on_activate_screen(RedScreen* screen)
 {
+    ASSERT(!_active_screen || (_active_screen == screen));
     _active_screen = screen;
+}
+
+void Application::on_start_screen_key_interception(RedScreen* screen)
+{
+    ASSERT(screen == _active_screen);
+
+    _sys_key_intercept_mode = true;
+    reset_sticky();
+}
+
+void Application::on_stop_screen_key_interception(RedScreen* screen)
+{
+    ASSERT(screen == _active_screen);
+
+    _sys_key_intercept_mode = false;
+    reset_sticky();
 }
 
 void Application::on_app_activated()
@@ -997,6 +1190,7 @@ void Application::show_full_screen()
 
 void Application::enter_full_screen()
 {
+    LOG_INFO("");
     _changing_screens = true;
     release_capture();
     assign_monitors();
@@ -1015,6 +1209,7 @@ void Application::exit_full_screen()
     if (!_full_screen) {
         return;
     }
+    LOG_INFO("");
     release_capture();
     for (int i = 0; i < (int)_screens.size(); i++) {
         if (_screens[i]) {
@@ -1088,7 +1283,9 @@ void Application::show_splash(int screen_id)
     if (screen_id != 0) {
         return;
     }
+    _splash_mode = true;
     release_capture();
+    ASSERT(!_sticky_info.trace_is_on);
     (*_gui_layer).set_splash_mode();
 }
 
@@ -1097,7 +1294,9 @@ void Application::hide_splash(int screen_id)
     if (screen_id != 0) {
         return;
     }
+    _splash_mode = false;
     (*_gui_layer).set_info_mode();
+    reset_sticky();
 }
 
 uint32_t Application::get_mouse_mode()

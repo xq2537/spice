@@ -67,6 +67,9 @@ static Atom wm_state_fullscreen;
 
 static Atom wm_user_time;
 
+static RedWindow* focus_window;
+static unsigned long focus_serial = 0;
+
 #define USE_X11_KEYCODE
 
 #ifdef USE_X11_KEYCODE
@@ -734,6 +737,15 @@ void RedWindow_p::win_proc(XEvent& event)
         break;
     case KeyRelease: {
         RedKey key = to_red_key_code(event.xkey.keycode);
+        XEvent next_event;
+        if (XCheckWindowEvent(x_display, red_window->_win, ~long(0), &next_event)) {
+            XPutBackEvent(x_display, &next_event);
+            if ((next_event.type == KeyPress) &&
+                (event.xkey.keycode == next_event.xkey.keycode) &&
+                (event.xkey.time == next_event.xkey.time)) {
+                break;
+            }
+        }
         if (key != REDKEY_KOREAN_HANGUL && key != REDKEY_KOREAN_HANGUL_HANJA) {
             red_window->get_listener().on_key_release(key);
         }
@@ -772,17 +784,42 @@ void RedWindow_p::win_proc(XEvent& event)
         break;
     }
     case FocusIn:
+        if (event.xany.serial < focus_serial) {
+            DBG(0, "Ignored FocusIn win=%p (serial=%d, Last foucs serial=%d)",
+                   red_window,  event.xany.serial, focus_serial);
+            break;
+        }
+
         if (!red_window->_ignore_foucs) {
+            RedWindow* prev_focus_window = focus_window;
+            focus_window = red_window;
+            focus_serial = event.xany.serial;
+            if (prev_focus_window && (red_window != prev_focus_window)) {
+                prev_focus_window->on_focus_out();
+            }
             red_window->on_focus_in();
         } else {
             red_window->_shadow_foucs_state = true;
+            memcpy(&red_window->_shadow_focus_event, &event, sizeof(XEvent));
         }
         break;
     case FocusOut:
-        if (! red_window->_ignore_foucs) {
+        if (event.xany.serial <= focus_serial) {
+            DBG(0, "Ignored FocusOut win=%p (serial=%d, Last foucs serial=%d)",
+                   red_window, event.xany.serial, focus_serial);
+            break;
+        }
+
+        if (!red_window->_ignore_foucs) {
+            focus_serial = event.xany.serial;
+            if (red_window != focus_window) {
+                break;
+            }
+            focus_window = NULL;
             red_window->on_focus_out();
         } else {
             red_window->_shadow_foucs_state = false;
+            memcpy(&red_window->_shadow_focus_event, &event, sizeof(XEvent));
         }
         break;
     case ConfigureNotify:
@@ -805,10 +842,20 @@ void RedWindow_p::win_proc(XEvent& event)
         red_window->set_visibale(false);
         break;
     case EnterNotify:
-        red_window->on_pointer_enter();
+        if (!red_window->_ignore_pointer) {
+            red_window->on_pointer_enter();
+        } else {
+            red_window->_shadow_pointer_state = true;
+            memcpy(&red_window->_shadow_pointer_event, &event, sizeof(XEvent));
+        }
         break;
     case LeaveNotify:
-        red_window->on_pointer_leave();
+        if (!red_window->_ignore_pointer) {
+             red_window->on_pointer_leave();
+        } else {
+            red_window->_shadow_pointer_state = false;
+            memcpy(&red_window->_shadow_pointer_event, &event, sizeof(XEvent));
+        }
         break;
     }
 }
@@ -931,6 +978,7 @@ RedWindow_p::RedWindow_p()
     , _glcont_copy (NULL)
     , _icon (NULL)
     , _ignore_foucs (false)
+    , _ignore_pointer (false)
 {
 }
 
@@ -1101,7 +1149,8 @@ RedWindow::RedWindow(RedWindow::Listener& listener, int screen)
     , _cursor_visible (true)
     , _focused (false)
     , _pointer_in_window (false)
-    , _key_interception (false)
+    , _trace_key_interception (false)
+    , _key_interception_on (false)
     , _menu (NULL)
 {
     ASSERT(x_display);
@@ -1501,33 +1550,67 @@ void RedWindow::do_start_key_interception()
 {
     // Working with KDE: XGrabKeyboard generate focusout and focusin events
     // while we have the focus. This behavior trigger infinite recursive. for
-    // that reason we temporary disable focus event handling.
+    // that reason we temporary disable focus event handling. Same happens
+    // LeaveNotify and EnterNotify.
 
     ASSERT(_focused);
     _ignore_foucs = true;
+    _ignore_pointer = true;
     _shadow_foucs_state = true;
+    _shadow_pointer_state = true;
+    _shadow_focus_event.xany.serial = 0;
     XGrabKeyboard(x_display, _win, True, GrabModeAsync, GrabModeAsync, CurrentTime);
     sync();
     _listener.on_start_key_interception();
     _ignore_foucs = false;
+    _ignore_pointer = false;
+    _key_interception_on = true;
     if (!_shadow_foucs_state) {
-        on_focus_out();
+        DBG(0, "put back shadowed focus out");
+        XPutBackEvent(x_display, &_shadow_focus_event);
+    } else if (_shadow_focus_event.xany.serial > 0) {
+        ASSERT(focus_window == this);
+        focus_serial = _shadow_focus_event.xany.serial;
+    }
+
+    if (!_shadow_pointer_state) {
+        DBG(0, "put back shadowed pointer leave");
+        XPutBackEvent(x_display, &_shadow_pointer_event);
     }
 }
 
 void RedWindow::do_stop_key_interception()
 {
+    _ignore_foucs = true;
+    _ignore_pointer = true;
+    _shadow_foucs_state = _focused;
+    _shadow_pointer_state = _pointer_in_window;
+    _shadow_focus_event.xany.serial = 0;
     XUngrabKeyboard(x_display, CurrentTime);
     sync();
+    _key_interception_on = false;
     _listener.on_stop_key_interception();
+    _ignore_foucs = false;
+    _ignore_pointer = false;
+    if (_shadow_foucs_state != _focused) {
+        DBG(0, "put back shadowed focus event");
+        XPutBackEvent(x_display, &_shadow_focus_event);
+     } else if (_shadow_focus_event.xany.serial > 0) {
+        focus_serial = _shadow_focus_event.xany.serial;
+    }
+
+    if (_shadow_pointer_state != _pointer_in_window) {
+        DBG(0, "put back shadowed pointer event");
+        XPutBackEvent(x_display, &_shadow_pointer_event);
+    }
 }
 
 void RedWindow::start_key_interception()
 {
-    if (_key_interception) {
+    if (_trace_key_interception) {
         return;
     }
-    _key_interception = true;
+    _trace_key_interception = true;
     if (_pointer_in_window && _focused) {
         do_start_key_interception();
     }
@@ -1535,11 +1618,11 @@ void RedWindow::start_key_interception()
 
 void RedWindow::stop_key_interception()
 {
-    if (!_key_interception) {
+    if (!_trace_key_interception) {
         return;
     }
-    _key_interception = false;
-    if (_focused && _pointer_in_window) {
+    _trace_key_interception = false;
+    if (_key_interception_on) {
         do_stop_key_interception();
     }
 }
@@ -1840,11 +1923,11 @@ void RedWindow::on_focus_in()
         return;
     }
     _focused = true;
-    if (_key_interception && _pointer_in_window) {
-        do_start_key_interception();
-    }
     XPlatform::on_focus_in();
     get_listener().on_activate();
+    if (_trace_key_interception && _pointer_in_window) {
+        do_start_key_interception();
+    }
 }
 
 void RedWindow::on_focus_out()
@@ -1853,9 +1936,11 @@ void RedWindow::on_focus_out()
         return;
     }
     _focused = false;
-    do_stop_key_interception();
-    XPlatform::on_focus_out();
+    if (_key_interception_on) {
+        do_stop_key_interception();
+    }
     get_listener().on_deactivate();
+    XPlatform::on_focus_out();
 }
 
 void RedWindow::on_pointer_enter()
@@ -1865,7 +1950,7 @@ void RedWindow::on_pointer_enter()
     }
     _pointer_in_window = true;
     _listener.on_pointer_enter();
-    if (_focused && _key_interception) {
+    if (_focused && _trace_key_interception) {
         do_start_key_interception();
     }
 }
@@ -1877,7 +1962,7 @@ void RedWindow::on_pointer_leave()
     }
     _pointer_in_window = false;
     _listener.on_pointer_leave();
-    if (_focused && _key_interception) {
+    if (_key_interception_on) {
         do_stop_key_interception();
     }
 }

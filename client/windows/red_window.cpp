@@ -25,6 +25,8 @@
 #include "win_platform.h"
 #include "platform_utils.h"
 
+#include <list>
+
 #define NATIVE_CAPTION_STYLE (WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX)
 
 extern HINSTANCE instance;
@@ -33,7 +35,11 @@ static ATOM class_atom = 0;
 static const LPCWSTR win_class_name = L"redc_wclass";
 static HWND focus_window = NULL;
 static HHOOK low_keyboard_hook = NULL;
+static HHOOK msg_filter_hook = NULL;
+typedef std::list<RedKey> KeysList;
+static KeysList filtered_up_keys;
 
+static LRESULT CALLBACK MessageFilterProc(int nCode, WPARAM wParam, LPARAM lParam);
 
 static inline int to_red_mouse_state(WPARAM wParam)
 {
@@ -76,6 +82,16 @@ static inline RedKey translate_key(int virtual_key, uint32_t scan, bool escape)
 static int menu_cmd_to_app(WPARAM wparam)
 {
     return 0;
+}
+
+static inline void send_filtered_keys(RedWindow* window)
+{
+    KeysList::iterator iter;
+
+    for (iter = filtered_up_keys.begin(); iter != filtered_up_keys.end(); iter++) {
+        window->get_listener().on_key_release(*iter);
+    }
+    filtered_up_keys.clear();
 }
 
 LRESULT CALLBACK RedWindow_p::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -153,7 +169,7 @@ LRESULT CALLBACK RedWindow_p::WindowProc(HWND hWnd, UINT message, WPARAM wParam,
         RedKey key = translate_key(wParam, HIWORD(lParam) & 0xff, (lParam & (1 << 24)) != 0);
         window->get_listener().on_key_press(key);
         // Allow Windows to translate Alt-F4 to WM_CLOSE message.
-        if (!window->_key_interception) {
+        if (!window->_key_interception_on) {
             return DefWindowProc(hWnd, message, wParam, lParam);
         }
         break;
@@ -164,13 +180,6 @@ LRESULT CALLBACK RedWindow_p::WindowProc(HWND hWnd, UINT message, WPARAM wParam,
         window->get_listener().on_key_release(key);
         break;
     }
-    case WM_ACTIVATE:
-        if (LOWORD(wParam) == WA_INACTIVE) {
-            window->get_listener().on_deactivate();
-        } else {
-            window->get_listener().on_activate();
-        }
-        break;
     case WM_DESTROY:
         PostQuitMessage(0);
         break;
@@ -190,13 +199,25 @@ LRESULT CALLBACK RedWindow_p::WindowProc(HWND hWnd, UINT message, WPARAM wParam,
         return DefWindowProc(hWnd, message, wParam, lParam);
     case WM_ENTERSIZEMOVE:
     case WM_ENTERMENULOOP:
+        ASSERT(filtered_up_keys.empty());
+        DBG(0, "enter modal");
         window->get_listener().enter_modal_loop();
         WinPlatform::enter_modal_loop();
+        if (msg_filter_hook) {
+            LOG_WARN("entering modal loop while filter hook is active");
+            UnhookWindowsHookEx(msg_filter_hook);
+        }
+        msg_filter_hook = SetWindowsHookEx(WH_MSGFILTER, MessageFilterProc,
+                                           GetModuleHandle(NULL), GetCurrentThreadId());
         return DefWindowProc(hWnd, message, wParam, lParam);
     case WM_EXITSIZEMOVE:
     case WM_EXITMENULOOP:
+        DBG(0, "exit modal");
         window->get_listener().exit_modal_loop();
         WinPlatform::exit_modal_loop();
+        UnhookWindowsHookEx(msg_filter_hook);
+        msg_filter_hook = NULL;
+        send_filtered_keys(window);
         return DefWindowProc(hWnd, message, wParam, lParam);
     case WM_SETCURSOR:
         if (!window->_pointer_in_window) {
@@ -324,7 +345,8 @@ RedWindow::RedWindow(RedWindow::Listener& listener, int screen_id)
     , _cursor_visible (true)
     , _focused (false)
     , _pointer_in_window (false)
-    , _key_interception (false)
+    , _trace_key_interception (false)
+    , _key_interception_on (false)
     , _menu (NULL)
 {
     RECT win_rect;
@@ -486,6 +508,7 @@ void RedWindow::resize(int width, int height)
 void RedWindow::activate()
 {
     SetActiveWindow(_win);
+    SetFocus(_win);
 }
 
 void RedWindow::minimize()
@@ -667,32 +690,32 @@ static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lP
 
 void RedWindow::do_start_key_interception()
 {
+    _key_interception_on = true;
+    _listener.on_start_key_interception();
     if (low_keyboard_hook) {
         return;
     }
     low_keyboard_hook = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc,
                                          GetModuleHandle(NULL), 0);
-    _listener.on_start_key_interception();
 }
 
 void RedWindow::do_stop_key_interception()
 {
+    _key_interception_on = false;
+    _listener.on_stop_key_interception();
     if (!low_keyboard_hook) {
         return;
     }
-
     UnhookWindowsHookEx(low_keyboard_hook);
     low_keyboard_hook = NULL;
-    _listener.on_stop_key_interception();
 }
 
 void RedWindow::start_key_interception()
 {
-    if (_key_interception) {
+    if (_trace_key_interception) {
         return;
     }
-    _key_interception = true;
-    focus_window = _win;
+    _trace_key_interception = true;
     if (_focused && _pointer_in_window) {
         do_start_key_interception();
     }
@@ -700,11 +723,11 @@ void RedWindow::start_key_interception()
 
 void RedWindow::stop_key_interception()
 {
-    if (!_key_interception) {
+    if (!_trace_key_interception) {
         return;
     }
-    _key_interception = false;
-    if (_focused && _pointer_in_window) {
+    _trace_key_interception = false;
+    if (_key_interception_on) {
         do_stop_key_interception();
     }
 }
@@ -743,7 +766,9 @@ void RedWindow::unset_type_gl()
 void RedWindow::on_focus_in()
 {
     _focused = true;
-    if (_pointer_in_window && _key_interception) {
+    focus_window = _win;
+    get_listener().on_activate();
+    if (_pointer_in_window && _trace_key_interception) {
         do_start_key_interception();
     }
 }
@@ -753,8 +778,13 @@ void RedWindow::on_focus_out()
     if (!_focused) {
         return;
     }
+
     _focused = false;
-    do_stop_key_interception();
+
+    if (_key_interception_on) {
+        do_stop_key_interception();
+    }
+    get_listener().on_deactivate();
 }
 
 void RedWindow::on_pointer_enter()
@@ -762,6 +792,7 @@ void RedWindow::on_pointer_enter()
     if (_pointer_in_window) {
         return;
     }
+
     if (_cursor_visible) {
         if (_local_cursor) {
             _local_cursor->set(_win);
@@ -780,7 +811,7 @@ void RedWindow::on_pointer_enter()
     if (!TrackMouseEvent(&tme)) {
         THROW("track mouse event failed");
     }
-    if (_focused && _key_interception) {
+    if (_focused && _trace_key_interception) {
         do_start_key_interception();
     }
 }
@@ -795,7 +826,7 @@ void RedWindow::on_pointer_leave()
     }
     _pointer_in_window = false;
     _listener.on_pointer_leave();
-    if (_focused && _key_interception) {
+    if (_key_interception_on) {
         do_stop_key_interception();
     }
 }
@@ -933,3 +964,23 @@ void RedWindow::set_menu(Menu* menu)
     insert_menu(_menu, _sys_menu, _commands_map);
 }
 
+static LRESULT CALLBACK MessageFilterProc(int nCode, WPARAM wParam, LPARAM lParam)
+{
+    if (nCode >= 0)
+    {
+        MSG* msg = (MSG*)lParam;
+
+        switch (msg->message) {
+        case WM_SYSKEYUP:
+        case WM_KEYUP: {
+            RedKey key = translate_key(msg->wParam, HIWORD(msg->lParam) & 0xff,
+                                       (msg->lParam & (1 << 24)) != 0);
+            filtered_up_keys.push_back(key);
+            break;
+        }
+        default:
+            break;
+        }
+    }
+    return CallNextHookEx(NULL, nCode, wParam, lParam);
+}

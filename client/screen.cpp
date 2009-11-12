@@ -93,11 +93,13 @@ RedScreen::RedScreen(Application& owner, int id, const std::wstring& name, int w
     _window.set_menu(*menu);
     AutoRef<Icon> icon(Platform::load_icon(RED_ICON_RES_ID));
     _window.set_icon(*icon);
+    _window.start_key_interception();
 }
 
 RedScreen::~RedScreen()
 {
     bool captured = is_captured();
+    _window.stop_key_interception();
     relase_inputs();
     destroy_composit_area();
     _owner.deactivate_interval_timer(*_update_timer);
@@ -435,9 +437,6 @@ void RedScreen::capture_inputs()
         reset_mouse_pos();
         _window.cupture_mouse();
     }
-#ifndef NO_KEY_GRAB
-    _window.start_key_interception();
-#endif
     _captured = true;
 }
 
@@ -446,9 +445,6 @@ void RedScreen::relase_inputs()
     if (!_captured) {
         return;
     }
-#ifndef NO_KEY_GRAB
-    _window.stop_key_interception();
-#endif
     _captured = false;
     _window.release_mouse();
     if (_owner.get_mouse_mode() == RED_MOUSE_MODE_SERVER) {
@@ -576,12 +572,29 @@ void RedScreen::on_pointer_enter()
     if (!_frame_area) {
         _pointer_location = POINTER_IN_ACTIVE_AREA;
         update_active_cursor();
+        if (_full_screen) {
+            /* allowing enterance to key interception mode without
+               requiring the user to press the window */
+            activate();
+        }
     }
 }
 
 void RedScreen::on_pointer_leave()
 {
     _pointer_location = POINTER_OUTSIDE_WINDOW;
+}
+
+void RedScreen::on_start_key_interception()
+{
+    _key_interception = true;
+    _owner.on_start_screen_key_interception(this);
+}
+
+void RedScreen::on_stop_key_interception()
+{
+    _key_interception = false;
+    _owner.on_stop_screen_key_interception(this);
 }
 
 void RedScreen::enter_modal_loop()

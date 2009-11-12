@@ -19,6 +19,7 @@
 #define _H_RED_WINDOW_P
 
 #include <GL/glx.h>
+#include <X11/Xlib.h>
 
 typedef Window Win;
 typedef GLXContext RedGlContext;
@@ -61,6 +62,10 @@ protected:
     Icon* _icon;
     bool _ignore_foucs;
     bool _shadow_foucs_state;
+    XEvent _shadow_focus_event;
+    bool _ignore_pointer;
+    bool _shadow_pointer_state;
+    XEvent _shadow_pointer_event;
     Colormap _colormap;
 };
 

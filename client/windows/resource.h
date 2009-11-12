@@ -6,6 +6,7 @@
 #define SPLASH_IMAGE_RES_ID             101
 #define INFO_IMAGE_RES_ID               102
 #define IDI_ICON_APPLICATION            103
+#define ALT_IMAGE_RES_ID                104
 
 // Next default values for new objects
 // 
