@@ -136,8 +136,8 @@ private:
     virtual void on_activate();
     virtual void on_pointer_enter();
     virtual void on_pointer_leave();
-    virtual void on_start_key_interception() { _key_interception = true;}
-    virtual void on_stop_key_interception() { _key_interception = false;}
+    virtual void on_start_key_interception();
+    virtual void on_stop_key_interception();
     virtual void enter_modal_loop();
     virtual void exit_modal_loop();
 

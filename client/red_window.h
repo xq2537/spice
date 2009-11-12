@@ -106,7 +106,8 @@ private:
     bool _cursor_visible;
     bool _focused;
     bool _pointer_in_window;
-    bool _key_interception;
+    bool _trace_key_interception;
+    bool _key_interception_on;
     Menu* _menu;
 
     friend class RedWindow_p;

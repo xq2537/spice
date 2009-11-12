@@ -90,6 +90,25 @@ enum CanvasOption {
 #endif
 };
 
+class StickyKeyTimer: public Timer {
+public:
+    virtual void response(AbstractProcessLoop& events_loop);
+};
+
+typedef struct StickyInfo {
+    bool trace_is_on;
+    bool sticky_mode;
+    bool key_first_down; // True when (1) a potential sticky key is pressed,
+                         // and none of the other keys are pressed and (2) in the moment
+                         // of pressing, _sticky_mode is false. When the key is up
+                         // for the first time, it is set to false.
+    bool key_down;       // The physical state of the sticky key. Valid only till
+                         // stickiness is removed.
+    RedKey key;          // the key that is currently being traced, or,
+                         // if _sticky mode is on, the sticky key
+    AutoRef<StickyKeyTimer> timer;
+} StickyInfo;
+
 class Application : public ProcessLoop,
                     public Platform::EventListener,
                     public Platform::DisplayModeListner,
@@ -114,6 +133,8 @@ public:
     void on_key_up(RedKey key);
     void on_deactivate_screen(RedScreen* screen);
     void on_activate_screen(RedScreen* screen);
+    void on_start_screen_key_interception(RedScreen* screen);
+    void on_stop_screen_key_interception(RedScreen* screen);
     virtual void on_app_activated();
     virtual void on_app_deactivated();
     virtual void on_monitors_change();
@@ -180,6 +201,13 @@ private:
     int get_hotkeys_commnad();
     bool is_key_set_pressed(const HotkeySet& key_set);
     bool is_cad_pressed();
+    void do_on_key_up(RedKey key);
+
+    // returns the press value before operation (i.e., if it was already pressed)
+    bool press_key(RedKey key);
+    bool unpress_key(RedKey key);
+    void reset_sticky();
+    static bool is_sticky_trace_key(RedKey key);
 
     static void init_logger();
     static void init_globals();
@@ -188,6 +216,7 @@ private:
     friend class ConnectionErrorEvent;
     friend class MonitorsQuery;
     friend class AutoAbort;
+    friend class StickyKeyTimer;
 
 private:
     RedClient _client;
@@ -201,12 +230,16 @@ private:
     int _exit_code;
     RedScreen* _active_screen;
     KeyInfo _key_table[REDKEY_NUM_KEYS];
+    int _num_keys_pressed;
     HotKeys _hot_keys;
     CommandsMap _commands_map;
     std::auto_ptr<GUILayer> _gui_layer;
     InputsHandler* _inputs_handler;
     const MonitorsList* _monitors;
     std::wstring _title;
+    bool _splash_mode;
+    bool _sys_key_intercept_mode;
+    StickyInfo _sticky_info;
     std::vector<int> _canvas_types;
     AutoRef<Menu> _app_menu;
 };
