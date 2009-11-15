@@ -19,6 +19,8 @@
 #include "utils.h"
 #include "debug.h"
 
+#define REING_SIZE_MS 300
+
 WavePlayer::WavePlayer(uint32_t sampels_per_sec, uint32_t bits_per_sample, uint32_t channels)
     : _pcm (NULL)
     , _hw_params (NULL)
@@ -117,7 +119,8 @@ bool WavePlayer::init(uint32_t sampels_per_sec,
         return false;
     }
 
-    snd_pcm_uframes_t buffer_size = (sampels_per_sec * 80 / 1000) / frame_size * frame_size;
+    snd_pcm_uframes_t buffer_size;
+    buffer_size = (sampels_per_sec * REING_SIZE_MS / 1000) / frame_size * frame_size;
 
     if ((err = snd_pcm_hw_params_set_buffer_size_near(_pcm, _hw_params, &buffer_size)) < 0) {
         LOG_ERROR("cannot set buffer size %s", snd_strerror(err));
