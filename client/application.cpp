@@ -62,8 +62,9 @@ void ConnectedEvent::response(AbstractProcessLoop& events_loop)
 void DisconnectedEvent::response(AbstractProcessLoop& events_loop)
 {
     Application* app = static_cast<Application*>(events_loop.get_owner());
+#ifdef RED_DEBUG
     app->show_splash(0);
-#ifndef RED_DEBUG
+#else
     app->do_quit(SPICEC_ERROR_CODE_SUCCESS);
 #endif
 }
@@ -71,8 +72,9 @@ void DisconnectedEvent::response(AbstractProcessLoop& events_loop)
 void ConnectionErrorEvent::response(AbstractProcessLoop& events_loop)
 {
     Application* app = static_cast<Application*>(events_loop.get_owner());
+#ifdef RED_DEBUG
     app->show_splash(0);
-#ifndef RED_DEBUG
+#else
     app->do_quit(_error_code);
 #endif
 }
