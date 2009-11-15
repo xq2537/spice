@@ -21,8 +21,8 @@
 #include "debug.h"
 
 
-#define RING_SIZE_MS 160
-#define START_MARK_MS 80
+#define RING_SIZE_MS 380
+#define START_MARK_MS 300
 #define LOW_MARK_MS 40
 
 
