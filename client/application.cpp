@@ -1418,13 +1418,6 @@ int Application::get_hotkeys_commnad()
     return (iter != _hot_keys.end()) ? iter->first : APP_CMD_INVALID;
 }
 
-bool Application::is_cad_pressed()
-{
-    return ((_key_table[REDKEY_L_CTRL].press || _key_table[REDKEY_R_CTRL].press) &&
-            (_key_table[REDKEY_L_ALT].press || _key_table[REDKEY_R_ALT].press) &&
-            (_key_table[REDKEY_DELETE].press || _key_table[REDKEY_PAD_POINT].press));
-}
-
 void Application::send_key_down(RedKey key)
 {
     _key_handler->on_key_down(get_make_scan_code(key));

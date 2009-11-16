@@ -206,7 +206,6 @@ private:
     void menu_item_callback(unsigned int item_id);
     int get_hotkeys_commnad();
     bool is_key_set_pressed(const HotkeySet& key_set);
-    bool is_cad_pressed();
     void do_on_key_up(RedKey key);
     void __remove_key_handler(KeyHandler& handler);
 
