@@ -108,6 +108,13 @@ void ScreenLayer::invalidate()
     invalidate(_area);
 }
 
+void ScreenLayer::notify_changed()
+{
+    if (_screen) {
+        _screen->on_layer_changed(*this);
+    }
+}
+
 void ScreenLayer::set_area(const QRegion& area)
 {
     Lock lock(_area_lock);
@@ -115,6 +122,7 @@ void ScreenLayer::set_area(const QRegion& area)
     region_destroy(&_area);
     region_clone(&_area, &area);
     invalidate();
+    notify_changed();
 }
 
 void ScreenLayer::clear_area()
@@ -122,6 +130,7 @@ void ScreenLayer::clear_area()
     Lock lock(_area_lock);
     invalidate();
     region_clear(&_area);
+    notify_changed();
 }
 
 void ScreenLayer::set_rect_area(const Rect& r)
@@ -131,6 +140,7 @@ void ScreenLayer::set_rect_area(const Rect& r)
     region_clear(&_area);
     region_add(&_area, &r);
     invalidate();
+    notify_changed();
 }
 
 void ScreenLayer::offset_area(int dx, int dy)
@@ -139,12 +149,14 @@ void ScreenLayer::offset_area(int dx, int dy)
     invalidate();
     region_offset(&_area, dx, dy);
     invalidate();
+    notify_changed();
 }
 
 void ScreenLayer::add_rect_area(const Rect& r)
 {
     Lock lock(_area_lock);
     region_add(&_area, &r);
+    notify_changed();
 }
 
 void ScreenLayer::remove_rect_area(const Rect& r)
@@ -152,6 +164,7 @@ void ScreenLayer::remove_rect_area(const Rect& r)
     Lock lock(_area_lock);
     invalidate();
     region_remove(&_area, &r);
+    notify_changed();
 }
 
 void ScreenLayer::begin_update(QRegion& direct_rgn, QRegion& composit_rgn)
@@ -173,6 +186,12 @@ void ScreenLayer::begin_update(QRegion& direct_rgn, QRegion& composit_rgn)
         region_or(&_composit_area, &_direct_area);
         region_clear(&_direct_area);
     }
+}
+
+bool ScreenLayer::contains_point(int x, int y)
+{
+    Lock lock(_area_lock);
+    return !!region_contains_point(&_area, x, y);
 }
 
 void ScreenLayer::attach_to_screen(Application& applicaion, int screen_id)

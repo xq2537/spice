@@ -118,6 +118,11 @@ class AgentTimer: public Timer {
 
 typedef std::map< int, RedPeer::ConnectionOptions::Type> PeerConnectionOptMap;
 
+class ForEachChannelFunc {
+public:
+    virtual bool operator() (RedChannel& channel) = 0;
+};
+
 class RedClient: public RedChannel {
 public:
     friend class RedChannel;
@@ -153,6 +158,8 @@ public:
     PixmapCache& get_pixmap_cache() {return _pixmap_cache;}
     uint64_t get_pixmap_cache_size() { return _pixmap_cache_size;}
     void on_display_mode_change();
+    void for_each_channel(ForEachChannelFunc& func);
+    void on_mouse_capture_trigger(RedScreen& screen);
 
     GlzDecoderWindow& get_glz_window() {return _glz_window;}
     int get_glz_window_size() { return _glz_window_size;}

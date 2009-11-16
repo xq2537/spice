@@ -726,9 +726,9 @@ void RedWindow_p::win_proc(XEvent& event)
         if (event.xmotion.x >= 0 && event.xmotion.y >= 0 &&
             event.xmotion.x < size.x && event.xmotion.y < size.y) {
             Point origin = red_window->get_origin();
-            red_window->get_listener().on_mouse_motion(event.xmotion.x - origin.x,
-                                                       event.xmotion.y - origin.y,
-                                                       to_red_buttons_state(event.xmotion.state));
+            red_window->get_listener().on_pointer_motion(event.xmotion.x - origin.x,
+                                                         event.xmotion.y - origin.y,
+                                                         to_red_buttons_state(event.xmotion.state));
         }
         break;
     }
@@ -758,7 +758,7 @@ void RedWindow_p::win_proc(XEvent& event)
             DBG(0, "ButtonPress: invalid button %u", event.xbutton.button);
             break;
         }
-        red_window->get_listener().on_button_press(button, state);
+        red_window->get_listener().on_mouse_button_press(button, state);
         break;
     }
     case ButtonRelease: {
@@ -768,7 +768,7 @@ void RedWindow_p::win_proc(XEvent& event)
             DBG(0, "ButtonRelease: invalid button %u", event.xbutton.button);
             break;
         }
-        red_window->get_listener().on_button_release(button, state);
+        red_window->get_listener().on_mouse_button_release(button, state);
         break;
     }
     case Expose: {
@@ -843,7 +843,9 @@ void RedWindow_p::win_proc(XEvent& event)
         break;
     case EnterNotify:
         if (!red_window->_ignore_pointer) {
-            red_window->on_pointer_enter();
+            Point origin = red_window->get_origin();
+            red_window->on_pointer_enter(event.xcrossing.x - origin.x, event.xcrossing.y - origin.y,
+                                         to_red_buttons_state(event.xmotion.state));
         } else {
             red_window->_shadow_pointer_state = true;
             memcpy(&red_window->_shadow_pointer_event, &event, sizeof(XEvent));
@@ -1943,13 +1945,13 @@ void RedWindow::on_focus_out()
     XPlatform::on_focus_out();
 }
 
-void RedWindow::on_pointer_enter()
+void RedWindow::on_pointer_enter(int x, int y, unsigned int buttons_state)
 {
     if (_pointer_in_window) {
         return;
     }
     _pointer_in_window = true;
-    _listener.on_pointer_enter();
+    _listener.on_pointer_enter(x, y, buttons_state);
     if (_focused && _trace_key_interception) {
         do_start_key_interception();
     }

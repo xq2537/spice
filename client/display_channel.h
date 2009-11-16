@@ -35,6 +35,8 @@ class RedScreen;
 class ChannelFactory;
 class VideoStream;
 class DisplayChannel;
+class CursorData;
+class InputsChannel;
 
 class StreamsTrigger: public EventSources::Trigger {
 public:
@@ -93,6 +95,19 @@ public:
     virtual void post_migrate();
 #endif
     virtual void update_interrupt();
+    void set_cursor(CursorData* cursor);
+    void hide_cursor();
+    void set_capture_mode(bool on);
+
+    virtual bool pointer_test(int x, int y);
+    virtual void on_pointer_enter(int x, int y, unsigned int buttons_state);
+    virtual void on_pointer_motion(int x, int y, unsigned int buttons_state);
+    virtual void on_pointer_leave();
+    virtual void on_mouse_button_press(int button, int buttons_state);
+    virtual void on_mouse_button_release(int button, int buttons_state);
+
+    void attach_inputs(InputsChannel* inputs_channel);
+    void detach_inputs();
 
     static ChannelFactory& Factory();
 
@@ -115,6 +130,7 @@ private:
     void create_canvas(const std::vector<int>& canvas_type, int width, int height,
                        int depth);
     void destroy_strams();
+    void update_cursor();
 
     void handle_mode(RedPeer::InMessage* message);
     void handle_mark(RedPeer::InMessage* message);
@@ -175,6 +191,15 @@ private:
     AutoRef<StreamsTimer> _streams_timer;
     uint32_t _next_timer_time;
 
+    AutoRef<CursorData> _cursor;
+    bool _cursor_visibal;
+    bool _active_pointer;
+    bool _capture_mouse_mode;
+    InputsChannel* _inputs_channel;
+
+    Point _pointer_pos;
+    int _buttons_state;
+
     std::vector<VideoStream*> _streams;
     VideoStream* _active_streams;
     StreamsTrigger _streams_trigger;
@@ -182,12 +207,15 @@ private:
     GLInterruptRecreate _gl_interrupt_recreate;
 #endif
     InterruptUpdate _interrupt_update;
+
     friend class SetModeEvent;
     friend class ActivateTimerEvent;
     friend class VideoStream;
     friend class StreamsTrigger;
     friend class GLInterupt;
     friend class StreamsTimer;
+    friend class AttachChannelsEvent;
+    friend class DetachChannelsEvent;
 };
 
 #endif

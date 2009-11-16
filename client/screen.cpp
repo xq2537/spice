@@ -43,6 +43,29 @@ private:
     int _screen;
 };
 
+class LayerChangedEvent: public Event {
+public:
+    LayerChangedEvent (int screen) : _screen (screen) {}
+
+    virtual void response(AbstractProcessLoop& events_loop)
+    {
+        Application* app = static_cast<Application*>(events_loop.get_owner());
+        RedScreen* screen = app->find_screen(_screen);
+        if (screen) {
+            Lock lock(screen->_layer_changed_lock);
+            screen->_active_layer_change_event = false;
+            lock.unlock();
+            if (screen->_pointer_on_screen) {
+                screen->update_pointer_layer();
+            }
+        }
+    }
+
+private:
+    int _screen;
+};
+
+
 void UpdateTimer::response(AbstractProcessLoop& events_loop)
 {
     _screen->periodic_update();
@@ -54,11 +77,9 @@ RedScreen::RedScreen(Application& owner, int id, const std::wstring& name, int w
     , _refs (1)
     , _window (*this)
     , _active (false)
-    , _captured (false)
     , _full_screen (false)
     , _out_of_sync (false)
     , _frame_area (false)
-    , _cursor_visible (true)
     , _periodic_update (false)
     , _key_interception (false)
     , _update_by_timer (true)
@@ -68,11 +89,13 @@ RedScreen::RedScreen(Application& owner, int id, const std::wstring& name, int w
     , _update_mark (1)
     , _monitor (NULL)
     , _default_cursor (NULL)
-    , _active_cursor (NULL)
     , _inactive_cursor (NULL)
-    , _pointer_location (POINTER_OUTSIDE_WINDOW)
     , _pixel_format_index (0)
     , _update_interrupt_trigger (NULL)
+    , _pointer_layer (NULL)
+    , _mouse_captured (false)
+    , _active_layer_change_event (false)
+    , _pointer_on_screen (false)
 {
     region_init(&_dirty_region);
     set_name(name);
@@ -98,9 +121,9 @@ RedScreen::RedScreen(Application& owner, int id, const std::wstring& name, int w
 
 RedScreen::~RedScreen()
 {
-    bool captured = is_captured();
+    bool captured = is_mouse_captured();
     _window.stop_key_interception();
-    relase_inputs();
+    relase_mouse();
     destroy_composit_area();
     _owner.deactivate_interval_timer(*_update_timer);
     _owner.on_screen_destroyed(_id, captured);
@@ -108,9 +131,7 @@ RedScreen::~RedScreen()
     if (_default_cursor) {
         _default_cursor->unref();
     }
-    if (_active_cursor) {
-        _active_cursor->unref();
-    }
+
     if (_inactive_cursor) {
         _inactive_cursor->unref();
     }
@@ -168,7 +189,7 @@ void RedScreen::set_mode(int width, int height, int depth)
         bool cuptur = _owner.rearrange_monitors(*this);
         __show_full_screen();
         if (cuptur) {
-            capture_inputs();
+            capture_mouse();
         }
     } else {
         _window.resize(_size.x, _size.y);
@@ -182,6 +203,17 @@ void RedScreen::set_name(const std::wstring& name)
         wstring_printf(_name, name.c_str(), _id);
     }
     _window.set_title(_name);
+}
+
+void RedScreen::on_layer_changed(ScreenLayer& layer)
+{
+    Lock lock(_layer_changed_lock);
+    if (_active_layer_change_event) {
+        return;
+    }
+    _active_layer_change_event = true;
+    AutoRef<LayerChangedEvent> change_event(new LayerChangedEvent(_id));
+    _owner.push_event(*change_event);
 }
 
 void RedScreen::attach_layer(ScreenLayer& layer)
@@ -200,11 +232,22 @@ void RedScreen::attach_layer(ScreenLayer& layer)
     ref();
     lock.unlock();
     layer.invalidate();
+    if (_pointer_on_screen) {
+        update_pointer_layer();
+    }
 }
 
 void RedScreen::detach_layer(ScreenLayer& layer)
 {
+    bool need_pointer_layer_update = false;
+    if (_pointer_layer == &layer) {
+        _pointer_layer->on_pointer_leave();
+        _pointer_layer = NULL;
+        need_pointer_layer_update = true;
+    }
+
     RecurciveLock lock(_update_lock);
+
     int order = layer.z_order();
 
     if ((int)_layes.size() < order + 1 || _layes[order] != &layer) {
@@ -218,6 +261,9 @@ void RedScreen::detach_layer(ScreenLayer& layer)
     invalidate(layer_area);
     region_destroy(&layer_area);
     unref();
+    if (need_pointer_layer_update && !update_pointer_layer()) {
+        _window.set_cursor(_inactive_cursor);
+    }
 }
 
 void RedScreen::composit_to_screen(RedDrawable& win_dc, const QRegion& region)
@@ -427,121 +473,180 @@ void RedScreen::reset_mouse_pos()
     _window.set_mouse_position(_mouse_anchor_point.x, _mouse_anchor_point.y);
 }
 
-void RedScreen::capture_inputs()
+void RedScreen::capture_mouse()
 {
-    if (_captured || !_window.get_mouse_anchor_point(_mouse_anchor_point)) {
+    if (_mouse_captured || !_window.get_mouse_anchor_point(_mouse_anchor_point)) {
         return;
     }
-    if (_owner.get_mouse_mode() == RED_MOUSE_MODE_SERVER) {
-        _window.hide_cursor();
-        reset_mouse_pos();
-        _window.cupture_mouse();
+
+    if (_pointer_layer) {
+        _pointer_layer->on_pointer_leave();
+        _pointer_layer = NULL;
     }
-    _captured = true;
+    _pointer_on_screen = false;
+    _mouse_captured = true;
+    _window.hide_cursor();
+    reset_mouse_pos();
+    _window.cupture_mouse();
 }
 
-void RedScreen::relase_inputs()
+void RedScreen::relase_mouse()
 {
-    if (!_captured) {
+    if (!_mouse_captured) {
         return;
     }
-    _captured = false;
+    _mouse_captured = false;
     _window.release_mouse();
-    if (_owner.get_mouse_mode() == RED_MOUSE_MODE_SERVER) {
-        _window.set_cursor(_default_cursor);
-    }
+    update_pointer_layer();
 }
 
-void RedScreen::set_cursor(CursorData* cursor)
+void RedScreen::set_cursor(LocalCursor* cursor)
 {
-    if (cursor) {
-        if (_active_cursor) {
-            _active_cursor->unref();
-        }
-        if (!cursor->get_local()) {
-            AutoRef<LocalCursor> cur(Platform::create_local_cursor(cursor));
-            if (*cur == NULL) {
-                THROW("create local cursor failed");
-            }
-            cursor->set_local(*cur);
-            _active_cursor = (*cur)->ref();
-        } else {
-            _active_cursor = (cursor->get_local())->ref();
-        }
+    if (_mouse_captured) {
+        return;
     }
-    _cursor_visible = !!cursor;
-    update_active_cursor();
+
+    _window.set_cursor(cursor);
 }
 
-void RedScreen::update_active_cursor()
+void RedScreen::hide_cursor()
 {
-    if (_owner.get_mouse_mode() == RED_MOUSE_MODE_CLIENT &&
-                                                      _pointer_location == POINTER_IN_ACTIVE_AREA) {
-        if (_cursor_visible && _active_cursor) {
-            _window.set_cursor(_active_cursor);
-        } else {
-            _window.hide_cursor();
+    _window.hide_cursor();
+}
+
+ScreenLayer* RedScreen::find_pointer_layer()
+{
+    for (int i = _layes.size() - 1; i >= 0; i--) {
+        ScreenLayer* layer;
+
+        if (!(layer = _layes[i])) {
+            continue;
         }
+
+        if (layer->pointer_test(_pointer_pos.x, _pointer_pos.y)) {
+            return layer;
+        }
+    }
+    return NULL;
+}
+
+bool RedScreen::update_pointer_layer()
+{
+    ASSERT(!_mouse_captured);
+
+    ScreenLayer* now = find_pointer_layer();
+
+    if (now == _pointer_layer) {
+        return false;
+    }
+
+    if (_pointer_layer) {
+        _pointer_layer->on_pointer_leave();
+    }
+
+    _pointer_layer = find_pointer_layer();
+
+    if (_pointer_layer) {
+        _pointer_layer->on_pointer_enter(_pointer_pos.x, _pointer_pos.y, _mouse_botton_state);
+    } else {
+        set_cursor(_inactive_cursor);
+    }
+
+    return true;
+}
+
+void RedScreen::on_pointer_enter(int x, int y, unsigned int buttons_state)
+{
+    if (_mouse_captured) {
+        return;
+    }
+
+    _pointer_on_screen = true;
+    _pointer_pos.x = x;
+    _pointer_pos.y = y;
+    _mouse_botton_state = buttons_state;
+
+    ScreenLayer* layer = find_pointer_layer();
+    if (!layer) {
+        set_cursor(_inactive_cursor);
+        return;
+    }
+
+    _pointer_layer = layer;
+    _pointer_layer->on_pointer_enter(_pointer_pos.x, _pointer_pos.y, buttons_state);
+
+    if (_full_screen) {
+        /* allowing enterance to key interception mode without
+           requiring the user to press the window
+        */
+        activate();
     }
 }
 
 void RedScreen::on_mouse_motion(int x, int y, unsigned int buttons_state)
 {
-    switch (_owner.get_mouse_mode()) {
-    case RED_MOUSE_MODE_CLIENT:
-        if (!_frame_area) {
-            _owner.on_mouse_position(x, y, buttons_state, _id);
-        } else if (x >= 0 && x < _size.x && y >= 0 && y < _size.y) {
-            _owner.on_mouse_position(x, y, buttons_state, _id);
-            if (_pointer_location != POINTER_IN_ACTIVE_AREA) {
-                _pointer_location = POINTER_IN_ACTIVE_AREA;
-                update_active_cursor();
-            }
-        } else if (_pointer_location != POINTER_IN_FRAME_AREA) {
-            _pointer_location = POINTER_IN_FRAME_AREA;
-            _window.set_cursor(_inactive_cursor);
-        }
-        break;
-    case RED_MOUSE_MODE_SERVER:
-        if (_captured && (x != _mouse_anchor_point.x || y != _mouse_anchor_point.y)) {
-            _owner.on_mouse_motion(x - _mouse_anchor_point.x,
-                                   y - _mouse_anchor_point.y,
-                                   buttons_state);
-            reset_mouse_pos();
-        }
-        break;
-    default:
-        THROW("invalid mouse mode");
+    if (x != _mouse_anchor_point.x || y != _mouse_anchor_point.y) {
+        _owner.on_mouse_motion(x - _mouse_anchor_point.x,
+                               y - _mouse_anchor_point.y,
+                               buttons_state);
+        reset_mouse_pos();
     }
 }
 
-void RedScreen::on_button_press(RedButton button, unsigned int buttons_state)
+void RedScreen::on_pointer_motion(int x, int y, unsigned int buttons_state)
 {
-    if (_owner.get_mouse_mode() == RED_MOUSE_MODE_CLIENT &&
-                                                      _pointer_location != POINTER_IN_ACTIVE_AREA) {
+    if (_mouse_captured) {
+        on_mouse_motion(x, y, buttons_state);
         return;
     }
-    if (!mouse_is_captured()) {
-        if (_owner.get_mouse_mode() == RED_MOUSE_MODE_SERVER && button != REDC_MOUSE_LBUTTON) {
-            return;
-        }
-        capture_inputs();
-        if (_owner.get_mouse_mode() == RED_MOUSE_MODE_SERVER) {
-            return;
-        }
+
+    _pointer_pos.x = x;
+    _pointer_pos.y = y;
+    _mouse_botton_state = buttons_state;
+
+    if (update_pointer_layer() || !_pointer_layer) {
+        return;
     }
-    _owner.on_mouse_down(button, buttons_state);
+
+    _pointer_layer->on_pointer_motion(x, y, buttons_state);
 }
 
-void RedScreen::on_button_release(RedButton button, unsigned int buttons_state)
+void RedScreen::on_mouse_button_press(RedButton button, unsigned int buttons_state)
 {
-    if (!mouse_is_captured()) {
-        if (_owner.get_mouse_mode() == RED_MOUSE_MODE_SERVER) {
-            return;
-        }
-        capture_inputs();
+    if (_mouse_captured) {
+        _owner.on_mouse_down(button, buttons_state);
+        return;
     }
-    _owner.on_mouse_up(button, buttons_state);
+
+    if (!_pointer_layer) {
+        return;
+    }
+
+    _pointer_layer->on_mouse_button_press(button, buttons_state);
+}
+
+void RedScreen::on_mouse_button_release(RedButton button, unsigned int buttons_state)
+{
+    if (_mouse_captured) {
+        _owner.on_mouse_up(button, buttons_state);
+        return;
+    }
+
+    if (!_pointer_layer) {
+        return;
+    }
+    _pointer_layer->on_mouse_button_release(button, buttons_state);
+}
+
+void RedScreen::on_pointer_leave()
+{
+    ASSERT(!_mouse_captured);
+
+    if (_pointer_layer) {
+        _pointer_layer->on_pointer_leave();
+        _pointer_layer = NULL;
+    }
+    _pointer_on_screen = false;
 }
 
 void RedScreen::on_key_press(RedKey key)
@@ -556,7 +661,7 @@ void RedScreen::on_key_release(RedKey key)
 
 void RedScreen::on_deactivate()
 {
-    relase_inputs();
+    relase_mouse();
     _active = false;
     _owner.on_deactivate_screen(this);
 }
@@ -567,23 +672,6 @@ void RedScreen::on_activate()
     _owner.on_activate_screen(this);
 }
 
-void RedScreen::on_pointer_enter()
-{
-    if (!_frame_area) {
-        _pointer_location = POINTER_IN_ACTIVE_AREA;
-        update_active_cursor();
-        if (_full_screen) {
-            /* allowing enterance to key interception mode without
-               requiring the user to press the window */
-            activate();
-        }
-    }
-}
-
-void RedScreen::on_pointer_leave()
-{
-    _pointer_location = POINTER_OUTSIDE_WINDOW;
-}
 
 void RedScreen::on_start_key_interception()
 {

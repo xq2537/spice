@@ -29,12 +29,13 @@ public:
     virtual ~InputsChannel();
 
     virtual void on_mouse_motion(int dx, int dy, int buttons_state);
-    virtual void on_mouse_position(int x, int y, int buttons_state, int display_id);
     virtual void on_mouse_down(int button, int buttons_state);
     virtual void on_mouse_up(int button, int buttons_state);
     virtual void on_key_down(uint32_t scan_code);
     virtual void on_key_up(uint32_t scan_code);
     virtual void on_focus_in();
+
+    void on_mouse_position(int x, int y, int buttons_state, int display_id);
 
     static ChannelFactory& Factory();
 
@@ -69,6 +70,8 @@ private:
     friend class MotionMessage;
     friend class PositionMessage;
     friend class KeyModifiersEvent;
+    friend class SetInputsHandlerEvent;
+    friend class RemoveInputsHandlerEvent;
 };
 
 

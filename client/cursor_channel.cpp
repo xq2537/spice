@@ -17,6 +17,7 @@
 
 #include "common.h"
 #include "cursor_channel.h"
+#include "display_channel.h"
 #include "cursor.h"
 #include "red_client.h"
 #include "application.h"
@@ -283,165 +284,66 @@ private:
     uint32_t* _palette;
 };
 
-class CursorSetEvent: public Event {
+class AttachDispayEvent: public Event {
 public:
-    CursorSetEvent(CursorChannel& channel, CursorData *cursor, int x, int y, bool visable)
+    AttachDispayEvent(CursorChannel& channel)
         : _channel (channel)
-        , _cursor (cursor->ref())
-        , _x (x)
-        , _y (y)
-        , _visible (visable)
     {
     }
 
-    void create_cursor()
-    {
-        CursorData *cursor = *_cursor;
-        CursorOpaque* native_cursor = cursor->get_opaque();
+    class UpdateDisplayChannel: public ForEachChannelFunc {
+    public:
+        UpdateDisplayChannel(CursorChannel& channel)
+            : _channel (channel)
+        {
+        }
 
-        if (native_cursor) {
+        virtual bool operator() (RedChannel& channel)
+        {
+            if (channel.get_type() != RED_CHANNEL_DISPLAY ||
+                                                      channel.get_id() != _channel.get_id()) {
+                return true;
+            }
+
+            _channel.attach_display(&static_cast<DisplayChannel&>(channel));
+            return false;
+        }
+
+    private:
+        CursorChannel& _channel;
+    };
+
+    virtual void response(AbstractProcessLoop& events_loop)
+    {
+        UpdateDisplayChannel func(_channel);
+        _channel.get_client().for_each_channel(func);
+    }
+
+private:
+    CursorChannel& _channel;
+};
+
+class CursorUpdateEvent: public Event {
+public:
+    CursorUpdateEvent(CursorChannel& channel)
+        : _channel (channel)
+    {
+    }
+
+    virtual void response(AbstractProcessLoop& events_loop)
+    {
+        DisplayChannel* display_channel = _channel._display_channel;
+        if (!display_channel) {
             return;
         }
 
-        switch (cursor->header().type) {
-        case CURSOR_TYPE_ALPHA:
-            native_cursor = new AlphaCursor(cursor->header(), cursor->data());
-            break;
-        case CURSOR_TYPE_COLOR32:
-            native_cursor = new ColorCursor32(cursor->header(), cursor->data());
-            break;
-        case CURSOR_TYPE_MONO:
-            native_cursor = new MonoCursor(cursor->header(), cursor->data());
-            break;
-        case CURSOR_TYPE_COLOR4:
-            native_cursor = new ColorCursor4(cursor->header(), cursor->data());
-            break;
-        case CURSOR_TYPE_COLOR8:
-            native_cursor = new UnsupportedCursor(cursor->header());
-            break;
-        case CURSOR_TYPE_COLOR16:
-            native_cursor = new ColorCursor16(cursor->header(), cursor->data());
-            break;
-        case CURSOR_TYPE_COLOR24:
-            native_cursor = new UnsupportedCursor(cursor->header());
-            break;
-        default:
-            THROW("invalid curosr type");
-        }
-        cursor->set_opaque(native_cursor);
-    }
-
-    virtual void response(AbstractProcessLoop& events_loop)
-    {
-        CursorData *cursor = *_cursor;
-        create_cursor();
         Lock lock(_channel._update_lock);
-
-        _channel._hot_pos.x = _x;
-        _channel._hot_pos.y = _y;
-        _channel._cursor_visible = _visible;
-        _channel._cursor_rect.left = _x - cursor->header().hot_spot_x;
-        _channel._cursor_rect.right = _channel._cursor_rect.left + cursor->header().width;
-        _channel._cursor_rect.top = _y - cursor->header().hot_spot_y;
-        _channel._cursor_rect.bottom = _channel._cursor_rect.top + cursor->header().height;
-
-        if (static_cast<Application*>(events_loop.get_owner())->get_mouse_mode() ==
-            RED_MOUSE_MODE_CLIENT) {
-            RedScreen* screen = _channel.screen();
-            ASSERT(screen);
-            screen->set_cursor(_visible ? cursor : NULL);
-        } else {
-            if (_visible) {
-                _channel.set_rect_area(_channel._cursor_rect);
-            } else {
-                _channel.clear_area();
-            }
+        if (_channel._cursor_visible) {
+            display_channel->set_cursor(_channel._cursor);
+            return;
         }
 
-        if (_channel._cursor) {
-            _channel._cursor->unref();
-        }
-
-        _channel._cursor = cursor->ref();
-    }
-
-private:
-    CursorChannel& _channel;
-    AutoRef<CursorData> _cursor;
-    int _x;
-    int _y;
-    bool _visible;
-};
-
-class CursorMoveEvent: public Event {
-public:
-    CursorMoveEvent(CursorChannel& channel, int x, int y)
-        : _channel (channel)
-        , _x (x)
-        , _y (y)
-    {
-    }
-
-    virtual void response(AbstractProcessLoop& events_loop)
-    {
-        _channel._cursor_visible = true;
-        if (static_cast<Application*>(events_loop.get_owner())->get_mouse_mode() ==
-            RED_MOUSE_MODE_CLIENT) {
-            RedScreen* screen = _channel.screen();
-            ASSERT(screen);
-            screen->set_cursor(_channel._cursor);
-        } else {
-            Lock lock(_channel._update_lock);
-            int dx = _x - _channel._hot_pos.x;
-            int dy = _y - _channel._hot_pos.y;
-            _channel._hot_pos.x += dx;
-            _channel._hot_pos.y += dy;
-            _channel._cursor_rect.left += dx;
-            _channel._cursor_rect.right += dx;
-            _channel._cursor_rect.top += dy;
-            _channel._cursor_rect.bottom += dy;
-            lock.unlock();
-            _channel.set_rect_area(_channel._cursor_rect);
-        }
-    }
-
-private:
-    CursorChannel& _channel;
-    int _x;
-    int _y;
-};
-
-class CursorHideEvent: public Event {
-public:
-    CursorHideEvent(CursorChannel& channel): _channel (channel) {}
-    virtual void response(AbstractProcessLoop& events_loop)
-    {
-        _channel._cursor_visible = false;
-        if (static_cast<Application*>(events_loop.get_owner())->get_mouse_mode() ==
-            RED_MOUSE_MODE_CLIENT) {
-            RedScreen* screen = _channel.screen();
-            ASSERT(screen);
-            screen->set_cursor(NULL);
-        } else {
-            _channel.clear_area();
-        }
-    }
-
-private:
-    CursorChannel& _channel;
-};
-
-class CursorRemoveEvent: public Event {
-public:
-    CursorRemoveEvent(CursorChannel& channel): _channel (channel) {}
-    virtual void response(AbstractProcessLoop& events_loop)
-    {
-        _channel._cursor_visible = false;
-        _channel.clear_area();
-        if (_channel._cursor) {
-            _channel._cursor->unref();
-            _channel._cursor = NULL;
-        }
+        display_channel->hide_cursor();
     }
 
 private:
@@ -454,51 +356,12 @@ public:
         : MessageHandlerImp<CursorChannel, RED_CURSOR_MESSAGES_END>(channel) {}
 };
 
-class CursorModeEvent: public Event {
-public:
-    CursorModeEvent(CursorChannel& channel): _channel (channel) {}
-
-    virtual void response(AbstractProcessLoop& events_loop)
-    {
-        RedScreen* screen = _channel.screen();
-        if (!screen) {
-            return;
-        }
-        if (static_cast<Application*>(events_loop.get_owner())->get_mouse_mode() ==
-            RED_MOUSE_MODE_CLIENT) {
-            _channel.clear_area();
-            screen->set_cursor(_channel._cursor_visible ? _channel._cursor : NULL);
-        } else {
-            if (_channel._cursor_visible && _channel._cursor) {
-                _channel.set_rect_area(_channel._cursor_rect);
-            } else {
-                _channel.clear_area();
-            }
-        }
-        screen->relase_inputs();
-    }
-
-private:
-    CursorChannel& _channel;
-};
-
-CursorModeTrigger::CursorModeTrigger(CursorChannel& channel)
-    : _channel (channel)
-{
-}
-
-void CursorModeTrigger::on_event()
-{
-    AutoRef<CursorModeEvent> set_event(new CursorModeEvent(_channel));
-    _channel.get_client().push_event(*set_event);
-}
-
 CursorChannel::CursorChannel(RedClient& client, uint32_t id)
     : RedChannel(client, RED_CHANNEL_CURSOR, id, new CursorHandler(*this))
     , ScreenLayer(SCREEN_LAYER_CURSOR, false)
     , _cursor (NULL)
-    , _cursor_trigger (*this)
     , _cursor_visible (false)
+    , _display_channel (NULL)
 {
     CursorHandler* handler = static_cast<CursorHandler*>(get_message_handler());
 
@@ -523,8 +386,6 @@ CursorChannel::CursorChannel(RedClient& client, uint32_t id)
     handler->set_handler(RED_CURSOR_INVAL_ONE, &CursorChannel::handle_inval_one,
                          sizeof(RedInvalOne));
     handler->set_handler(RED_CURSOR_INVAL_ALL, &CursorChannel::handle_inval_all, 0);
-
-    get_process_loop().add_trigger(_cursor_trigger);
 }
 
 CursorChannel::~CursorChannel()
@@ -534,6 +395,8 @@ CursorChannel::~CursorChannel()
 
 void CursorChannel::on_connect()
 {
+    AutoRef<AttachDispayEvent> attach_event(new AttachDispayEvent(*this));
+    get_client().push_event(*attach_event);
 }
 
 void CursorChannel::on_disconnect()
@@ -546,20 +409,78 @@ void CursorChannel::on_disconnect()
     detach_from_screen(get_client().get_application());
 }
 
+void CursorChannel::update_display_cursor()
+{
+    if (!_display_channel) {
+        return;
+    }
+
+    AutoRef<CursorUpdateEvent> update_event(new CursorUpdateEvent(*this));
+    get_client().push_event(*update_event);
+}
+
 void CursorChannel::remove_cursor()
 {
-    AutoRef<CursorRemoveEvent> event(new CursorRemoveEvent(*this));
-    get_client().push_event(*event);
+    Lock lock(_update_lock);
+    _cursor_visible = false;
+    if (_cursor) {
+        _cursor->unref();
+        _cursor = NULL;
+    }
+    lock.unlock();
+    clear_area();
+    update_display_cursor();
 }
 
 void CursorChannel::copy_pixels(const QRegion& dest_region, RedDrawable& dest_dc)
 {
     Lock lock(_update_lock);
+
+    if (!_cursor_visible) {
+        return;
+    }
+
     for (int i = 0; i < (int)dest_region.num_rects; i++) {
         ASSERT(_cursor && _cursor->get_opaque());
         ((NaitivCursor*)_cursor->get_opaque())->draw(dest_dc, _cursor_rect.left, _cursor_rect.top,
                                                      dest_region.rects[i]);
     }
+}
+
+void CursorChannel::create_native_cursor(CursorData* cursor)
+{
+    CursorOpaque* native_cursor = cursor->get_opaque();
+
+    if (native_cursor) {
+        return;
+    }
+
+    switch (cursor->header().type) {
+    case CURSOR_TYPE_ALPHA:
+        native_cursor = new AlphaCursor(cursor->header(), cursor->data());
+        break;
+    case CURSOR_TYPE_COLOR32:
+        native_cursor = new ColorCursor32(cursor->header(), cursor->data());
+        break;
+    case CURSOR_TYPE_MONO:
+        native_cursor = new MonoCursor(cursor->header(), cursor->data());
+        break;
+    case CURSOR_TYPE_COLOR4:
+        native_cursor = new ColorCursor4(cursor->header(), cursor->data());
+        break;
+    case CURSOR_TYPE_COLOR8:
+        native_cursor = new UnsupportedCursor(cursor->header());
+        break;
+    case CURSOR_TYPE_COLOR16:
+        native_cursor = new ColorCursor16(cursor->header(), cursor->data());
+        break;
+    case CURSOR_TYPE_COLOR24:
+        native_cursor = new UnsupportedCursor(cursor->header());
+        break;
+    default:
+        THROW("invalid curosr type");
+    }
+    cursor->set_opaque(native_cursor);
 }
 
 void CursorChannel::set_cursor(RedCursor& red_cursor, int data_size, int x, int y, bool visible)
@@ -582,8 +503,53 @@ void CursorChannel::set_cursor(RedCursor& red_cursor, int data_size, int x, int 
     }
 
     AutoRef<CursorData> cursor_ref(cursor);
-    AutoRef<CursorSetEvent> set_event(new CursorSetEvent(*this, *cursor_ref, x, y, visible));
-    get_client().push_event(*set_event);
+    create_native_cursor(cursor);
+
+    Lock lock(_update_lock);
+    _hot_pos.x = x;
+    _hot_pos.y = y;
+    _cursor_visible = visible;
+    _cursor_rect.left = x - cursor->header().hot_spot_x;
+    _cursor_rect.right = _cursor_rect.left + cursor->header().width;
+    _cursor_rect.top = y - cursor->header().hot_spot_y;
+    _cursor_rect.bottom = _cursor_rect.top + cursor->header().height;
+
+    if (_cursor) {
+        _cursor->unref();
+    }
+    _cursor = cursor->ref();
+    lock.unlock();
+
+    update_display_cursor();
+
+    if (get_client().get_mouse_mode() == RED_MOUSE_MODE_SERVER) {
+        if (_cursor_visible) {
+            set_rect_area(_cursor_rect);
+        } else {
+            clear_area();
+        }
+    }
+}
+
+void CursorChannel::attach_display(DisplayChannel* channel)
+{
+    if (_display_channel) {
+        return;
+    }
+
+    _display_channel = channel;
+
+    Lock lock(_update_lock);
+    if (!_cursor_visible) {
+        return;
+    }
+
+    _display_channel->set_cursor(_cursor);
+}
+
+void CursorChannel::detach_display()
+{
+    _display_channel = NULL;
 }
 
 void CursorChannel::handle_init(RedPeer::InMessage *message)
@@ -592,7 +558,6 @@ void CursorChannel::handle_init(RedPeer::InMessage *message)
     attach_to_screen(get_client().get_application(), get_id());
     remove_cursor();
     _cursor_cache.clear();
-    set_cursor_mode();
     set_cursor(init->cursor, message->size() - sizeof(RedCursorInit), init->position.x,
                init->position.y, init->visible != 0);
 }
@@ -614,15 +579,41 @@ void CursorChannel::handle_cursor_set(RedPeer::InMessage* message)
 void CursorChannel::handle_cursor_move(RedPeer::InMessage* message)
 {
     RedCursorMove* move = (RedCursorMove*)message->data();
-    AutoRef<CursorMoveEvent> event(new CursorMoveEvent(*this, move->postition.x,
-                                                       move->postition.y));
-    get_client().push_event(*event);
+
+    if (!_cursor) {
+        return;
+    }
+
+    Lock lock(_update_lock);
+    _cursor_visible = true;
+    int dx = move->postition.x - _hot_pos.x;
+    int dy = move->postition.y - _hot_pos.y;
+    _hot_pos.x += dx;
+    _hot_pos.y += dy;
+    _cursor_rect.left += dx;
+    _cursor_rect.right += dx;
+    _cursor_rect.top += dy;
+    _cursor_rect.bottom += dy;
+    lock.unlock();
+
+    if (get_client().get_mouse_mode() == RED_MOUSE_MODE_SERVER) {
+        set_rect_area(_cursor_rect);
+        return;
+    }
+
+    update_display_cursor();
 }
 
 void CursorChannel::handle_cursor_hide(RedPeer::InMessage* message)
 {
-    AutoRef<CursorHideEvent> event(new CursorHideEvent(*this));
-    get_client().push_event(*event);
+    Lock lock(_update_lock);
+
+    _cursor_visible = false;
+    update_display_cursor();
+
+    if (get_client().get_mouse_mode() == RED_MOUSE_MODE_SERVER) {
+        clear_area();
+    }
 }
 
 void CursorChannel::handle_cursor_trail(RedPeer::InMessage* message)
@@ -642,9 +633,18 @@ void CursorChannel::handle_inval_all(RedPeer::InMessage* message)
     _cursor_cache.clear();
 }
 
-void CursorChannel::set_cursor_mode()
+void CursorChannel::on_mouse_mode_change()
 {
-    _cursor_trigger.trigger();
+    Lock lock(_update_lock);
+
+    if (get_client().get_mouse_mode() == RED_MOUSE_MODE_CLIENT) {
+        clear_area();
+        return;
+    }
+
+    if (_cursor_visible) {
+        set_rect_area(_cursor_rect);
+    }
 }
 
 class CursorFactory: public ChannelFactory {

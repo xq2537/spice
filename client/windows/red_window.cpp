@@ -116,12 +116,15 @@ LRESULT CALLBACK RedWindow_p::WindowProc(HWND hWnd, UINT message, WPARAM wParam,
         break;
     }
     case WM_MOUSEMOVE: {
-        if (!window->_pointer_in_window) {
-            window->on_pointer_enter();
-        }
         Point origin = window->get_origin();
-        window->get_listener().on_mouse_motion(LOWORD(lParam) - origin.x, HIWORD(lParam) - origin.y,
-                                               to_red_mouse_state(wParam));
+        int x = LOWORD(lParam) - origin.x;
+        int y = HIWORD(lParam) - origin.y;
+        unsigned int buttons_state = to_red_mouse_state(wParam);
+        if (!window->_pointer_in_window) {
+            window->on_pointer_enter(x, y, buttons_state);
+        } else {
+            window->get_listener().on_pointer_motion(x, y, buttons_state);
+        }
         break;
     }
     case WM_MOUSELEAVE:
@@ -134,34 +137,40 @@ LRESULT CALLBACK RedWindow_p::WindowProc(HWND hWnd, UINT message, WPARAM wParam,
         window->on_focus_out();
         break;
     case WM_LBUTTONDOWN:
-        window->get_listener().on_button_press(REDC_MOUSE_LBUTTON, to_red_mouse_state(wParam));
+        window->get_listener().on_mouse_button_press(REDC_MOUSE_LBUTTON,
+                                                     to_red_mouse_state(wParam));
         break;
     case WM_LBUTTONUP:
-        window->get_listener().on_button_release(REDC_MOUSE_LBUTTON, to_red_mouse_state(wParam));
+        window->get_listener().on_mouse_button_release(REDC_MOUSE_LBUTTON,
+                                                       to_red_mouse_state(wParam));
         break;
     case WM_RBUTTONDOWN:
-        window->get_listener().on_button_press(REDC_MOUSE_RBUTTON, to_red_mouse_state(wParam));
+        window->get_listener().on_mouse_button_press(REDC_MOUSE_RBUTTON,
+                                                     to_red_mouse_state(wParam));
         break;
     case WM_RBUTTONUP:
-        window->get_listener().on_button_release(REDC_MOUSE_RBUTTON, to_red_mouse_state(wParam));
+        window->get_listener().on_mouse_button_release(REDC_MOUSE_RBUTTON,
+                                                       to_red_mouse_state(wParam));
         break;
     case WM_MBUTTONDOWN:
-        window->get_listener().on_button_press(REDC_MOUSE_MBUTTON, to_red_mouse_state(wParam));
+        window->get_listener().on_mouse_button_press(REDC_MOUSE_MBUTTON,
+                                                     to_red_mouse_state(wParam));
         break;
     case WM_MBUTTONUP:
-        window->get_listener().on_button_release(REDC_MOUSE_MBUTTON, to_red_mouse_state(wParam));
+        window->get_listener().on_mouse_button_release(REDC_MOUSE_MBUTTON,
+                                                       to_red_mouse_state(wParam));
         break;
     case WM_MOUSEWHEEL:
         if (HIWORD(wParam) & 0x8000) {
-            window->get_listener().on_button_press(REDC_MOUSE_DBUTTON,
-                                                   to_red_mouse_state(wParam));
-            window->get_listener().on_button_release(REDC_MOUSE_DBUTTON,
-                                                     to_red_mouse_state(wParam));
+            window->get_listener().on_mouse_button_press(REDC_MOUSE_DBUTTON,
+                                                         to_red_mouse_state(wParam));
+            window->get_listener().on_mouse_button_release(REDC_MOUSE_DBUTTON,
+                                                           to_red_mouse_state(wParam));
         } else {
-            window->get_listener().on_button_press(REDC_MOUSE_UBUTTON,
-                                                   to_red_mouse_state(wParam));
-            window->get_listener().on_button_release(REDC_MOUSE_UBUTTON,
-                                                     to_red_mouse_state(wParam));
+            window->get_listener().on_mouse_button_press(REDC_MOUSE_UBUTTON,
+                                                         to_red_mouse_state(wParam));
+            window->get_listener().on_mouse_button_release(REDC_MOUSE_UBUTTON,
+                                                           to_red_mouse_state(wParam));
         }
         break;
     case WM_SYSKEYDOWN:
@@ -795,7 +804,7 @@ void RedWindow::on_focus_out()
     get_listener().on_deactivate();
 }
 
-void RedWindow::on_pointer_enter()
+void RedWindow::on_pointer_enter(int x, int y, unsigned int buttons_state)
 {
     if (_pointer_in_window) {
         return;
@@ -810,7 +819,7 @@ void RedWindow::on_pointer_enter()
         while (ShowCursor(FALSE) > -1);
     }
     _pointer_in_window = true;
-    _listener.on_pointer_enter();
+    _listener.on_pointer_enter(x, y, buttons_state);
 
     TRACKMOUSEEVENT tme;
     tme.cbSize = sizeof(TRACKMOUSEEVENT);

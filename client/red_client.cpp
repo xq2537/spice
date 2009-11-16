@@ -23,6 +23,48 @@
 #include "utils.h"
 #include "debug.h"
 
+
+class MouseModeEvent: public Event {
+public:
+    MouseModeEvent(RedClient& client)
+        : _client (client)
+    {
+    }
+
+    class SetModeFunc: public ForEachChannelFunc {
+    public:
+        SetModeFunc(bool capture_mode)
+            : _capture_mode (capture_mode)
+        {
+        }
+
+        virtual bool operator() (RedChannel& channel)
+        {
+            if (channel.get_type() == RED_CHANNEL_DISPLAY) {
+                static_cast<DisplayChannel&>(channel).set_capture_mode(_capture_mode);
+            }
+            return true;
+        }
+
+    public:
+        bool _capture_mode;
+    };
+
+    virtual void response(AbstractProcessLoop& events_loop)
+    {
+        bool capture_mode = _client.get_mouse_mode() == RED_MOUSE_MODE_SERVER;
+        if (!capture_mode) {
+            _client.get_application().release_mouse_capture();
+        }
+
+        SetModeFunc func(capture_mode);
+        _client.for_each_channel(func);
+    }
+
+private:
+    RedClient& _client;
+};
+
 Migrate::Migrate(RedClient& client)
     : _client (client)
     , _running (false)
@@ -344,6 +386,9 @@ void RedClient::on_disconnect()
     _agent_msg_data = NULL;
     _agent_msg_pos = 0;
     _agent_tokens = 0;
+    AutoRef<SyncEvent> sync_event(new SyncEvent());
+    get_client().push_event(*sync_event);
+    (*sync_event)->wait();
 }
 
 void RedClient::delete_channels()
@@ -355,6 +400,19 @@ void RedClient::delete_channels()
         _channels.pop_front();
         delete channel;
     }
+}
+
+void RedClient::for_each_channel(ForEachChannelFunc& func)
+{
+    Lock lock(_channels_lock);
+    Channels::iterator iter = _channels.begin();
+    for (; iter != _channels.end() && func(**iter) ;iter++);
+}
+
+
+void RedClient::on_mouse_capture_trigger(RedScreen& screen)
+{
+    _application.capture_mouse();
 }
 
 RedPeer::ConnectionOptions::Type RedClient::get_connection_options(uint32_t channel_type)
@@ -611,9 +669,11 @@ void RedClient::set_mouse_mode(uint32_t supported_modes, uint32_t current_mode)
         Channels::iterator iter = _channels.begin();
         for (; iter != _channels.end(); ++iter) {
             if ((*iter)->get_type() == RED_CHANNEL_CURSOR) {
-                ((CursorChannel *)(*iter))->set_cursor_mode();
+                ((CursorChannel *)(*iter))->on_mouse_mode_change();
             }
         }
+        AutoRef<MouseModeEvent> event(new MouseModeEvent(*this));
+        push_event(*event);
     }
     // FIXME: use configured mouse mode (currently, use client mouse mode if supported by server)
     if ((supported_modes & RED_MOUSE_MODE_CLIENT) && (current_mode != RED_MOUSE_MODE_CLIENT)) {

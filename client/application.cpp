@@ -358,6 +358,22 @@ void Application::remove_inputs_handler(InputsHandler& handler)
     _inputs_handler = &default_inputs_handler;
 }
 
+void Application::capture_mouse()
+{
+    if (!_active_screen) {
+        return;
+    }
+    _active_screen->capture_mouse();
+}
+
+void Application::release_mouse_capture()
+{
+    if (!_active_screen || !_active_screen->is_mouse_captured()) {
+        return;
+    }
+    _active_screen->relase_mouse();
+}
+
 void Application::abort()
 {
     Platform::set_event_listener(NULL);
@@ -402,10 +418,10 @@ RedScreen* Application::find_screen(int id)
 bool Application::release_capture()
 {
     unpress_all();
-    if (!_active_screen || !_active_screen->is_captured()) {
+    if (!_active_screen || !_active_screen->is_mouse_captured()) {
         return false;
     }
-    _active_screen->relase_inputs();
+    _active_screen->relase_mouse();
     return true;
 }
 
@@ -455,7 +471,7 @@ RedScreen* Application::get_screen(int id)
 
             if (capture) {
                 _main_screen->activate();
-                _main_screen->capture_inputs();
+                _main_screen->capture_mouse();
             }
         } else if (id != 0) {
             screen->show(false, _main_screen);
@@ -489,7 +505,7 @@ void Application::on_screen_destroyed(int id, bool was_captured)
         position_screens();
         if (capture) {
             _main_screen->activate();
-            _main_screen->capture_inputs();
+            _main_screen->capture_mouse();
         }
     }
 }
@@ -497,11 +513,6 @@ void Application::on_screen_destroyed(int id, bool was_captured)
 void Application::on_mouse_motion(int dx, int dy, int buttons_state)
 {
     _inputs_handler->on_mouse_motion(dx, dy, buttons_state);
-}
-
-void Application::on_mouse_position(int x, int y, int buttons_state, int display_id)
-{
-    _inputs_handler->on_mouse_position(x, y, buttons_state, display_id);
 }
 
 void Application::on_mouse_down(int button, int buttons_state)
@@ -1084,7 +1095,7 @@ bool Application::rearrange_monitors(RedScreen& screen)
     if (capture && _main_screen != &screen) {
         capture = false;
         _main_screen->activate();
-        _main_screen->capture_inputs();
+        _main_screen->capture_mouse();
     }
     return capture;
 }
@@ -1194,14 +1205,16 @@ void Application::enter_full_screen()
 {
     LOG_INFO("");
     _changing_screens = true;
-    release_capture();
+    bool capture = release_capture();
     assign_monitors();
     hide();
     prepare_monitors();
     position_screens();
     show_full_screen();
     _main_screen->activate();
-    _main_screen->capture_inputs();
+    if (capture) {
+        _main_screen->capture_mouse();
+    }
     _changing_screens = false;
     _full_screen = true;
 }

@@ -57,20 +57,22 @@ public:
 
     void attach_layer(ScreenLayer& layer);
     void detach_layer(ScreenLayer& layer);
+    void on_layer_changed(ScreenLayer& layer);
     void set_mode(int width, int height, int depth);
     void set_name(const std::wstring& name);
     uint64_t invalidate(const Rect& rect, bool urgent);
     void invalidate(const QRegion &region);
-    void relase_inputs();
-    void capture_inputs();
-    bool is_captured() { return _captured;}
+    void capture_mouse();
+    void relase_mouse();
+    bool is_mouse_captured() { return _mouse_captured;}
     bool intercepts_sys_key() { return _key_interception;}
     Point get_size() { return _size;}
     bool has_monitor() { return _monitor != 0;}
     void set_monitor(Monitor *monitor) { _monitor = monitor;}
     Monitor* get_monitor() { return _monitor;}
     RedWindow* get_window() { return &_window;}
-    void set_cursor(CursorData* cursor);
+    void set_cursor(LocalCursor* cursor);
+    void hide_cursor();
     void exit_full_screen();
     void minimize();
     void show(bool activate, RedScreen* pos);
@@ -123,19 +125,23 @@ private:
     void composit_to_screen(RedDrawable& win_dc, const QRegion& region);
 
     void reset_mouse_pos();
-    bool mouse_is_captured() { return _captured;}
-    void update_active_cursor();
+    ScreenLayer* find_pointer_layer();
+    bool update_pointer_layer();
 
     virtual void on_exposed_rect(const Rect& area);
-    virtual void on_mouse_motion(int x, int y, unsigned int buttons_state);
+    virtual void on_pointer_enter(int x, int y, unsigned int buttons_state);
+    virtual void on_pointer_motion(int x, int y, unsigned int buttons_state);
+    virtual void on_pointer_leave();
+    void on_mouse_motion(int x, int y, unsigned int buttons_state);
+    virtual void on_mouse_button_press(RedButton button, unsigned int buttons_state);
+    virtual void on_mouse_button_release(RedButton button, unsigned int buttons_state);
+
     virtual void on_key_press(RedKey key);
     virtual void on_key_release(RedKey key);
-    virtual void on_button_press(RedButton button, unsigned int buttons_state);
-    virtual void on_button_release(RedButton button, unsigned int buttons_state);
+
     virtual void on_deactivate();
     virtual void on_activate();
-    virtual void on_pointer_enter();
-    virtual void on_pointer_leave();
+
     virtual void on_start_key_interception();
     virtual void on_stop_key_interception();
     virtual void enter_modal_loop();
@@ -154,11 +160,9 @@ private:
     QRegion _dirty_region;
     RecurciveMutex _update_lock;
     bool _active;
-    bool _captured;
     bool _full_screen;
     bool _out_of_sync;
     bool _frame_area;
-    bool _cursor_visible;
     bool _periodic_update;
     bool _key_interception;
     bool _update_by_timer;
@@ -174,17 +178,20 @@ private:
     Monitor* _monitor;
 
     LocalCursor* _default_cursor;
-    LocalCursor* _active_cursor;
     LocalCursor* _inactive_cursor;
 
-    enum PointerLocation {
-        POINTER_IN_ACTIVE_AREA,
-        POINTER_IN_FRAME_AREA,
-        POINTER_OUTSIDE_WINDOW,
-    };
-    PointerLocation _pointer_location;
     int _pixel_format_index;
     EventSources::Trigger *_update_interrupt_trigger;
+
+    ScreenLayer* _pointer_layer;
+    bool _mouse_captured;
+    Mutex _layer_changed_lock;
+    bool _active_layer_change_event;
+    bool _pointer_on_screen;
+    Point _pointer_pos;
+    unsigned int _mouse_botton_state;
+
+    friend class LayerChangedEvent;
 };
 
 #endif

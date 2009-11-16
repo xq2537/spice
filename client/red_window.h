@@ -92,7 +92,7 @@ public:
 private:
     void on_focus_in();
     void on_focus_out();
-    void on_pointer_enter();
+    void on_pointer_enter(int x, int y, unsigned int buttons_state);
     void on_pointer_leave();
 
     void do_start_key_interception();
@@ -117,15 +117,19 @@ class RedWindow::Listener {
 public:
     virtual ~Listener() {}
     virtual void on_exposed_rect(const Rect& area) = 0;
-    virtual void on_mouse_motion(int x, int y, unsigned int buttons_state) = 0;
+
+    virtual void on_pointer_enter(int x, int y, unsigned int buttons_state) = 0;
+    virtual void on_pointer_motion(int x, int y, unsigned int buttons_state) = 0;
+    virtual void on_pointer_leave() = 0;
+    virtual void on_mouse_button_press(RedButton button, unsigned int buttons_state) = 0;
+    virtual void on_mouse_button_release(RedButton button, unsigned int buttons_state) = 0;
+
     virtual void on_key_press(RedKey key) = 0;
     virtual void on_key_release(RedKey key) = 0;
-    virtual void on_button_press(RedButton button, unsigned int buttons_state) = 0;
-    virtual void on_button_release(RedButton button, unsigned int buttons_state) = 0;
+
     virtual void on_deactivate() = 0;
     virtual void on_activate() = 0;
-    virtual void on_pointer_enter() = 0;
-    virtual void on_pointer_leave() = 0;
+
     virtual void on_start_key_interception() = 0;
     virtual void on_stop_key_interception() = 0;
     virtual void enter_modal_loop() = 0;

@@ -45,6 +45,7 @@ public:
     void invalidate();
     uint64_t invalidate(const Rect& r, bool urgent = false);
     void invalidate(const QRegion& r);
+    bool contains_point(int x, int y);
 
     virtual void copy_pixels(const QRegion& dest_region, RedDrawable& dest_dc) {}
 
@@ -61,8 +62,16 @@ public:
 
     virtual void on_update_completion(uint64_t mark) {}
 
+    virtual bool pointer_test(int x, int y) { return false;}
+    virtual void on_pointer_enter(int x, int y, unsigned int buttons_state) {}
+    virtual void on_pointer_motion(int x, int y, unsigned int buttons_state) {}
+    virtual void on_pointer_leave() {}
+    virtual void on_mouse_button_press(int button, int buttons_state) {}
+    virtual void on_mouse_button_release(int button, int buttons_state) {}
+
 private:
     uint64_t invalidate_rect(const Rect& r, bool urgent);
+    void notify_changed();
 
 private:
     RedScreen* _screen;

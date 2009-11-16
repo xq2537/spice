@@ -25,6 +25,7 @@
 
 class ChannelFactory;
 class CursorChannel;
+class DisplayChannel;
 
 class CursorCacheTreat {
 public:
@@ -43,28 +44,25 @@ public:
 
 typedef Cache<CursorData, CursorCacheTreat, 1024> CursorCache;
 
-class CursorModeTrigger: public EventSources::Trigger {
-public:
-    CursorModeTrigger(CursorChannel& channel);
-    virtual void on_event();
-
-private:
-    CursorChannel& _channel;
-};
-
 class CursorChannel: public RedChannel, public ScreenLayer {
 public:
     CursorChannel(RedClient& client, uint32_t id);
     virtual ~CursorChannel();
 
     static ChannelFactory& Factory();
-    void set_cursor_mode();
+    void on_mouse_mode_change();
+
+    void attach_display(DisplayChannel* channel);
+    void detach_display();
 
 protected:
     virtual void on_connect();
     virtual void on_disconnect();
 
 private:
+    static void create_native_cursor(CursorData* cursor);
+
+    void update_display_cursor();
     void set_cursor(RedCursor& red_cursor, int data_size, int x, int y, bool visible);
     void remove_cursor();
 
@@ -79,21 +77,17 @@ private:
     void handle_inval_one(RedPeer::InMessage* message);
     void handle_inval_all(RedPeer::InMessage* message);
 
-    friend class CursorSetEvent;
-    friend class CursorMoveEvent;
-    friend class CursorHideEvent;
-    friend class CursorRemoveEvent;
-    friend class CursorModeTrigger;
-    friend class CursorModeEvent;
+    friend class AttachDispayEvent;
+    friend class CursorUpdateEvent;
 
 private:
     CursorCache _cursor_cache;
     CursorData* _cursor;
-    CursorModeTrigger _cursor_trigger;
     Point _hot_pos;
     Rect _cursor_rect;
     Mutex _update_lock;
     bool _cursor_visible;
+    DisplayChannel* _display_channel;
 };
 
 #endif

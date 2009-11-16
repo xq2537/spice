@@ -21,6 +21,7 @@
 #include "debug.h"
 #include "red_client.h"
 #include "application.h"
+#include "display_channel.h"
 
 #define SYNC_REMOTH_MODIFIRES
 
@@ -28,9 +29,30 @@ class SetInputsHandlerEvent: public Event {
 public:
     SetInputsHandlerEvent(InputsChannel& channel) : _channel (channel) {}
 
+    class AttachFunc: public ForEachChannelFunc {
+    public:
+        AttachFunc(InputsChannel& channel)
+            : _channel (channel)
+        {
+        }
+
+        virtual bool operator() (RedChannel& channel)
+        {
+            if (channel.get_type() == RED_CHANNEL_DISPLAY) {
+                static_cast<DisplayChannel&>(channel).attach_inputs(&_channel);
+            }
+            return true;
+        }
+
+    public:
+        InputsChannel& _channel;
+    };
+
     virtual void response(AbstractProcessLoop& events_loop)
     {
         static_cast<Application*>(events_loop.get_owner())->set_inputs_handler(_channel);
+        AttachFunc func(_channel);
+        _channel.get_client().for_each_channel(func);
     }
 
 private:
@@ -56,9 +78,22 @@ class RemoveInputsHandlerEvent: public SyncEvent {
 public:
     RemoveInputsHandlerEvent(InputsChannel& channel) : _channel (channel) {}
 
+    class DetachFunc: public ForEachChannelFunc {
+    public:
+        virtual bool operator() (RedChannel& channel)
+        {
+            if (channel.get_type() == RED_CHANNEL_DISPLAY) {
+                static_cast<DisplayChannel&>(channel).detach_inputs();
+            }
+            return true;
+        }
+    };
+
     virtual void do_response(AbstractProcessLoop& events_loop)
     {
         static_cast<Application*>(events_loop.get_owner())->remove_inputs_handler(_channel);
+        DetachFunc detach_func;
+        _channel.get_client().for_each_channel(detach_func);
     }
 
 private:

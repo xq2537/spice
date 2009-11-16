@@ -121,12 +121,13 @@ public:
 
     void set_inputs_handler(InputsHandler& handler);
     void remove_inputs_handler(InputsHandler& handler);
+    void capture_mouse();
+    void release_mouse_capture();
     RedScreen* find_screen(int id);
     RedScreen* get_screen(int id);
 
     void on_screen_destroyed(int id, bool was_captured);
     void on_mouse_motion(int dx, int dy, int buttons_state);
-    void on_mouse_position(int x, int y, int buttons_state, int display_id);
     void on_mouse_down(int button, int buttons_state);
     void on_mouse_up(int button, int buttons_state);
     void on_key_down(RedKey key);

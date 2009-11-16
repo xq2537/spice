@@ -23,7 +23,6 @@ class InputsHandler {
 public:
     virtual ~InputsHandler() {}
     virtual void on_mouse_motion(int dx, int dy, int buttons_state) {}
-    virtual void on_mouse_position(int x, int y, int buttons_state, int display_id) {}
     virtual void on_mouse_down(int button, int buttons_state) {}
     virtual void on_mouse_up(int button, int buttons_state) {}
     virtual void on_key_down(uint32_t scan_code) {}

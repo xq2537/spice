@@ -41,6 +41,8 @@
 #endif
 #include "platform_utils.h"
 #include "ffmpeg_inc.h"
+#include "inputs_channel.h"
+#include "cursor_channel.h"
 
 static Mutex avcodec_mutex;
 
@@ -599,7 +601,7 @@ StreamsTimer::StreamsTimer(DisplayChannel& channel)
 {
 }
 
-void StreamsTimer::response(AbstractProcessLoop &events_loop)
+void StreamsTimer::response(AbstractProcessLoop& events_loop)
 {
     _channel.streams_time();
 }
@@ -609,13 +611,13 @@ void StreamsTimer::response(AbstractProcessLoop &events_loop)
 class ResetTimer: public Timer {
 public:
     ResetTimer(RedScreen* screen, RedClient& client) : _screen(screen), _client(client) {}
-    virtual void response(AbstractProcessLoop &events_loop);
+    virtual void response(AbstractProcessLoop& events_loop);
 private:
     RedScreen* _screen;
     RedClient& _client;
 };
 
-void ResetTimer::response(AbstractProcessLoop &events_loop)
+void ResetTimer::response(AbstractProcessLoop& events_loop)
 {
     _screen->unref();
     _client.deactivate_interval_timer(this);
@@ -639,6 +641,10 @@ DisplayChannel::DisplayChannel(RedClient& client, uint32_t id,
     , _update_mark (0)
     , _streams_timer (new StreamsTimer(*this))
     , _next_timer_time (0)
+    , _cursor_visibal (false)
+    , _active_pointer (false)
+    , _capture_mouse_mode (false)
+    , _inputs_channel (NULL)
     , _active_streams (NULL)
     , _streams_trigger (*this)
 #ifdef USE_OGL
@@ -801,6 +807,130 @@ void DisplayChannel::recreate_ogl_context()
 
 #endif
 
+void DisplayChannel::update_cursor()
+{
+    if (!screen() || !_active_pointer) {
+        return;
+    }
+
+    if (_capture_mouse_mode) {
+        //todo: use special cursor for capture mode
+        AutoRef<LocalCursor> default_cursor(Platform::create_default_cursor());
+        screen()->set_cursor(*default_cursor);
+        return;
+    }
+
+    if (!_cursor_visibal || !*_cursor) {
+        screen()->hide_cursor();
+        return;
+    }
+
+
+    if (!(*_cursor)->get_local()) {
+        AutoRef<LocalCursor> local_cursor(Platform::create_local_cursor(*_cursor));
+        if (*local_cursor == NULL) {
+            THROW("create local cursor failed");
+        }
+        (*_cursor)->set_local(*local_cursor);
+    }
+    screen()->set_cursor((*_cursor)->get_local());
+}
+
+void DisplayChannel::set_cursor(CursorData* cursor)
+{
+    ASSERT(cursor);
+    _cursor.reset(cursor->ref());
+    _cursor_visibal = true;
+    update_cursor();
+}
+
+void DisplayChannel::hide_cursor()
+{
+    _cursor_visibal = false;
+    update_cursor();
+}
+
+void DisplayChannel::attach_inputs(InputsChannel* inputs_channel)
+{
+    if (_inputs_channel) {
+        return;
+    }
+
+    _inputs_channel = inputs_channel;
+    if (_active_pointer && !_capture_mouse_mode) {
+        _inputs_channel->on_mouse_position(_pointer_pos.x, _pointer_pos.y,
+                                           _buttons_state, get_id());
+    }
+}
+
+void DisplayChannel::detach_inputs()
+{
+    _inputs_channel = NULL;
+}
+
+bool DisplayChannel::pointer_test(int x, int y)
+{
+    return contains_point(x, y);
+}
+
+void DisplayChannel::on_pointer_enter(int x, int y, unsigned int buttons_state)
+{
+    _active_pointer = true;
+    update_cursor();
+    on_pointer_motion(x, y, buttons_state);
+}
+
+void DisplayChannel::on_pointer_motion(int x, int y, unsigned int buttons_state)
+{
+    _pointer_pos.x = x;
+    _pointer_pos.y = y;
+    _buttons_state = buttons_state;
+    if (!_capture_mouse_mode && _inputs_channel) {
+        _inputs_channel->on_mouse_position(x, y, buttons_state, get_id());
+    }
+}
+
+void DisplayChannel::on_pointer_leave()
+{
+    _active_pointer = false;
+}
+
+void DisplayChannel::on_mouse_button_press(int button, int buttons_state)
+{
+    _buttons_state = buttons_state;
+    if (!_capture_mouse_mode && _inputs_channel) {
+        _inputs_channel->on_mouse_down(button, buttons_state);
+    }
+}
+
+void DisplayChannel::on_mouse_button_release(int button, int buttons_state)
+{
+    _buttons_state = buttons_state;
+    if (_capture_mouse_mode) {
+        if (button == REDC_MOUSE_LBUTTON) {
+            get_client().on_mouse_capture_trigger(*screen());
+        }
+        return;
+    }
+
+    if (_inputs_channel) {
+        _inputs_channel->on_mouse_up(button, buttons_state);
+    }
+}
+
+void DisplayChannel::set_capture_mode(bool on)
+{
+    if (_capture_mouse_mode == on) {
+        return;
+    }
+    _capture_mouse_mode = on;
+    update_cursor();
+    if (_inputs_channel && !_capture_mouse_mode && _active_pointer) {
+        _inputs_channel->on_mouse_position(_pointer_pos.x, _pointer_pos.y, _buttons_state,
+                                           get_id());
+    }
+}
+
 void DisplayChannel::update_interrupt()
 {
     if (!_canvas.get() || !screen()) {
@@ -865,6 +995,77 @@ private:
     DisplayChannel& _channel;
 };
 
+class AttachChannelsEvent : public Event {
+public:
+    AttachChannelsEvent(DisplayChannel& channel) : Event(), _channel (channel) {}
+
+    class AttachChannels: public ForEachChannelFunc {
+    public:
+        AttachChannels(DisplayChannel& channel)
+            : _channel (channel)
+        {
+        }
+
+        virtual bool operator() (RedChannel& channel)
+        {
+            if (channel.get_type() == RED_CHANNEL_CURSOR && channel.get_id() == _channel.get_id()) {
+                static_cast<CursorChannel&>(channel).attach_display(&_channel);
+            } else if (channel.get_type() == RED_CHANNEL_INPUTS) {
+                _channel.attach_inputs(&static_cast<InputsChannel&>(channel));
+            }
+            return false;
+        }
+
+    private:
+        DisplayChannel& _channel;
+    };
+
+    virtual void response(AbstractProcessLoop& events_loop)
+    {
+        uint32_t mouse_mode = _channel.get_client().get_mouse_mode();
+        _channel._capture_mouse_mode =  (mouse_mode == RED_MOUSE_MODE_SERVER);
+        AttachChannels for_each_func(_channel);
+        _channel.get_client().for_each_channel(for_each_func);
+    }
+
+private:
+    DisplayChannel& _channel;
+};
+
+class DetachChannelsEvent : public Event {
+public:
+    DetachChannelsEvent(DisplayChannel& channel) : Event(), _channel (channel) {}
+
+    class DetatchChannels: public ForEachChannelFunc {
+    public:
+        DetatchChannels(DisplayChannel& channel)
+            : _channel (channel)
+        {
+        }
+
+        virtual bool operator() (RedChannel& channel)
+        {
+            if (channel.get_type() == RED_CHANNEL_CURSOR && channel.get_id() == _channel.get_id()) {
+                static_cast<CursorChannel&>(channel).detach_display();
+                return true;
+            }
+            return false;
+        }
+
+    private:
+        DisplayChannel& _channel;
+    };
+
+    virtual void response(AbstractProcessLoop& events_loop)
+    {
+        DetatchChannels for_each_func(_channel);
+        _channel.get_client().for_each_channel(for_each_func);
+    }
+
+private:
+    DisplayChannel& _channel;
+};
+
 void DisplayChannel::on_connect()
 {
     Message* message = new Message(REDC_DISPLAY_INIT, sizeof(RedcDisplayInit));
@@ -874,6 +1075,8 @@ void DisplayChannel::on_connect()
     init->glz_dictionary_id = 1;
     init->glz_dictionary_window_size = get_client().get_glz_window_size();
     post_message(message);
+    AutoRef<AttachChannelsEvent> attach_channels(new AttachChannelsEvent(*this));
+    get_client().push_event(*attach_channels);
 }
 
 void DisplayChannel::on_disconnect()
@@ -885,6 +1088,8 @@ void DisplayChannel::on_disconnect()
     if (screen()) {
         screen()->set_update_interrupt_trigger(NULL);
     }
+    AutoRef<DetachChannelsEvent> detach_channels(new DetachChannelsEvent(*this));
+    get_client().push_event(*detach_channels);
     detach_from_screen(get_client().get_application());
     get_client().deactivate_interval_timer(*_streams_timer);
     AutoRef<SyncEvent> sync_event(new SyncEvent());
@@ -1030,7 +1235,6 @@ void DisplayChannel::handle_mode(RedPeer::InMessage* message)
             if (_canvas->get_pixmap_type() == CANVAS_TYPE_GL) {
                 screen()->unset_type_gl();
                 screen()->untouch_context();
-                //glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
             }
         }
     }
