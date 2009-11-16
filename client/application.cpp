@@ -243,7 +243,8 @@ void StickyKeyTimer::response(AbstractProcessLoop& events_loop)
     app->deactivate_interval_timer(this);
 }
 
-static InputsHandler default_inputs_handler;
+static MouseHandler default_mouse_handler;
+static KeyHandler default_key_handler;
 
 enum AppCommands {
     APP_CMD_INVALID,
@@ -270,7 +271,8 @@ Application::Application()
     , _exit_code (0)
     , _active_screen (NULL)
     , _gui_layer (new GUILayer())
-    , _inputs_handler (&default_inputs_handler)
+    , _key_handler (&default_key_handler)
+    , _mouse_handler (&default_mouse_handler)
     , _monitors (NULL)
     , _title (L"SPICEc:%d")
     , _splash_mode (true)
@@ -278,7 +280,6 @@ Application::Application()
 {
     DBG(0, "");
     Platform::set_process_loop(*this);
-
     init_monitors();
     init_key_table();
     init_menu();
@@ -341,21 +342,68 @@ void Application::init_menu()
     _app_menu.reset(root_menu.release());
 }
 
-void Application::set_inputs_handler(InputsHandler& handler)
+void Application::__remove_key_handler(KeyHandler& handler)
 {
-    unpress_all();
-    _inputs_handler = &handler;
-    if (_active) {
-        handler.on_focus_in();
+    KeyHandlersStack::iterator iter = _key_handlers.begin();
+
+    for (; iter != _key_handlers.end(); iter++) {
+        if (*iter == &handler) {
+            _key_handlers.erase(iter);
+            return;
+        }
     }
 }
 
-void Application::remove_inputs_handler(InputsHandler& handler)
+void Application::set_key_handler(KeyHandler& handler)
 {
-    if (_inputs_handler != &handler) {
+    if (&handler == _key_handler) {
         return;
     }
-    _inputs_handler = &default_inputs_handler;
+
+    __remove_key_handler(handler);
+    if (!_key_handler->permit_focus_loss()) {
+        _key_handlers.push_front(&handler);
+        return;
+    }
+
+    unpress_all();
+    if (_active) {
+        _key_handler->on_focus_out();
+    }
+
+    _key_handlers.push_front(_key_handler);
+    _key_handler = &handler;
+    if (_active) {
+        _key_handler->on_focus_in();
+    }
+}
+
+void Application::remove_key_handler(KeyHandler& handler)
+{
+    bool is_current = (&handler == _key_handler);
+
+    if (!is_current) {
+        __remove_key_handler(handler);
+        return;
+    }
+
+    KeyHandler damy_handler;
+    _key_handler = &damy_handler;
+    set_key_handler(**_key_handlers.begin());
+    __remove_key_handler(damy_handler);
+}
+
+void Application::set_mouse_handler(MouseHandler& handler)
+{
+    _mouse_handler = &handler;
+}
+
+void Application::remove_mouse_handler(MouseHandler& handler)
+{
+    if (_mouse_handler != &handler) {
+        return;
+    }
+    _mouse_handler = &default_mouse_handler;
 }
 
 void Application::capture_mouse()
@@ -512,17 +560,17 @@ void Application::on_screen_destroyed(int id, bool was_captured)
 
 void Application::on_mouse_motion(int dx, int dy, int buttons_state)
 {
-    _inputs_handler->on_mouse_motion(dx, dy, buttons_state);
+    _mouse_handler->on_mouse_motion(dx, dy, buttons_state);
 }
 
 void Application::on_mouse_down(int button, int buttons_state)
 {
-    _inputs_handler->on_mouse_down(button, buttons_state);
+    _mouse_handler->on_mouse_down(button, buttons_state);
 }
 
 void Application::on_mouse_up(int button, int buttons_state)
 {
-    _inputs_handler->on_mouse_up(button, buttons_state);
+    _mouse_handler->on_mouse_up(button, buttons_state);
 }
 
 void Application::init_scan_code(int index)
@@ -695,7 +743,7 @@ void Application::unpress_all()
         if (_key_table[i].press) {
             uint32_t scan_code = get_break_scan_code((RedKey)i);
             ASSERT(scan_code);
-            _inputs_handler->on_key_up(scan_code);
+            _key_handler->on_key_up(scan_code);
             unpress_key((RedKey)i);
         }
     }
@@ -980,8 +1028,8 @@ void Application::on_key_down(RedKey key)
         (_key_table[REDKEY_L_ALT].press || _key_table[REDKEY_R_ALT].press))) {
         if (key == REDKEY_END || key == REDKEY_PAD_1) {
             unpress_key(key);
-            _inputs_handler->on_key_down(get_make_scan_code(REDKEY_DELETE));
-            _inputs_handler->on_key_up(get_break_scan_code(REDKEY_DELETE));
+            _key_handler->on_key_down(get_make_scan_code(REDKEY_DELETE));
+            _key_handler->on_key_up(get_break_scan_code(REDKEY_DELETE));
         } else if (key == REDKEY_DELETE || key == REDKEY_PAD_POINT) {
             unpress_key(key);
             return;
@@ -989,7 +1037,7 @@ void Application::on_key_down(RedKey key)
     }
 #endif
 
-    _inputs_handler->on_key_down(scan_code);
+    _key_handler->on_key_down(scan_code);
 }
 
 void Application::do_on_key_up(RedKey key)
@@ -1000,7 +1048,7 @@ void Application::do_on_key_up(RedKey key)
         LOG_WARN("no break code for %d", key);
         return;
     }
-    _inputs_handler->on_key_up(scan_code);
+    _key_handler->on_key_up(scan_code);
 }
 
 void Application::on_key_up(RedKey key)
@@ -1070,13 +1118,13 @@ void Application::on_stop_screen_key_interception(RedScreen* screen)
 void Application::on_app_activated()
 {
     _active = true;
-    _inputs_handler->on_focus_in();
+    _key_handler->on_focus_in();
 }
 
 void Application::on_app_deactivated()
 {
     _active = false;
-    _inputs_handler->on_focus_out();
+    _key_handler->on_focus_out();
 #ifdef WIN32
     if (!_changing_screens) {
         exit_full_screen();
@@ -1379,12 +1427,12 @@ bool Application::is_cad_pressed()
 
 void Application::send_key_down(RedKey key)
 {
-    _inputs_handler->on_key_down(get_make_scan_code(key));
+    _key_handler->on_key_down(get_make_scan_code(key));
 }
 
 void Application::send_key_up(RedKey key)
 {
-    _inputs_handler->on_key_up(get_break_scan_code(key));
+    _key_handler->on_key_up(get_break_scan_code(key));
 }
 
 void Application::send_alt_ctl_del()

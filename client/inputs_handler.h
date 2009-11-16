@@ -18,17 +18,22 @@
 #ifndef _H_INPUTS_HANDLER
 #define _H_INPUTS_HANDLER
 
-
-class InputsHandler {
+class KeyHandler {
 public:
-    virtual ~InputsHandler() {}
-    virtual void on_mouse_motion(int dx, int dy, int buttons_state) {}
-    virtual void on_mouse_down(int button, int buttons_state) {}
-    virtual void on_mouse_up(int button, int buttons_state) {}
+    virtual ~KeyHandler() {}
     virtual void on_key_down(uint32_t scan_code) {}
     virtual void on_key_up(uint32_t scan_code) {}
     virtual void on_focus_in() {}
     virtual void on_focus_out() {}
+    virtual bool permit_focus_loss() { return true;}
+};
+
+class MouseHandler {
+public:
+    virtual ~MouseHandler() {}
+    virtual void on_mouse_motion(int dx, int dy, int buttons_state) {}
+    virtual void on_mouse_down(int button, int buttons_state) {}
+    virtual void on_mouse_up(int button, int buttons_state) {}
 };
 
 #endif

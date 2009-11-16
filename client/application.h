@@ -109,6 +109,9 @@ typedef struct StickyInfo {
     AutoRef<StickyKeyTimer> timer;
 } StickyInfo;
 
+
+typedef std::list<KeyHandler*> KeyHandlersStack;
+
 class Application : public ProcessLoop,
                     public Platform::EventListener,
                     public Platform::DisplayModeListner,
@@ -119,8 +122,10 @@ public:
 
     int run();
 
-    void set_inputs_handler(InputsHandler& handler);
-    void remove_inputs_handler(InputsHandler& handler);
+    void set_key_handler(KeyHandler& handler);
+    void remove_key_handler(KeyHandler& handler);
+    void set_mouse_handler(MouseHandler& handler);
+    void remove_mouse_handler(MouseHandler& handler);
     void capture_mouse();
     void release_mouse_capture();
     RedScreen* find_screen(int id);
@@ -203,6 +208,7 @@ private:
     bool is_key_set_pressed(const HotkeySet& key_set);
     bool is_cad_pressed();
     void do_on_key_up(RedKey key);
+    void __remove_key_handler(KeyHandler& handler);
 
     // returns the press value before operation (i.e., if it was already pressed)
     bool press_key(RedKey key);
@@ -235,7 +241,9 @@ private:
     HotKeys _hot_keys;
     CommandsMap _commands_map;
     std::auto_ptr<GUILayer> _gui_layer;
-    InputsHandler* _inputs_handler;
+    KeyHandler* _key_handler;
+    KeyHandlersStack _key_handlers;
+    MouseHandler* _mouse_handler;
     const MonitorsList* _monitors;
     std::wstring _title;
     bool _splash_mode;

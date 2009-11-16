@@ -50,7 +50,8 @@ public:
 
     virtual void response(AbstractProcessLoop& events_loop)
     {
-        static_cast<Application*>(events_loop.get_owner())->set_inputs_handler(_channel);
+        static_cast<Application*>(events_loop.get_owner())->set_key_handler(_channel);
+        static_cast<Application*>(events_loop.get_owner())->set_mouse_handler(_channel);
         AttachFunc func(_channel);
         _channel.get_client().for_each_channel(func);
     }
@@ -91,7 +92,8 @@ public:
 
     virtual void do_response(AbstractProcessLoop& events_loop)
     {
-        static_cast<Application*>(events_loop.get_owner())->remove_inputs_handler(_channel);
+        static_cast<Application*>(events_loop.get_owner())->remove_key_handler(_channel);
+        static_cast<Application*>(events_loop.get_owner())->remove_mouse_handler(_channel);
         DetachFunc detach_func;
         _channel.get_client().for_each_channel(detach_func);
     }

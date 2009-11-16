@@ -23,7 +23,7 @@
 
 class ChannelFactory;
 
-class InputsChannel: public RedChannel, public InputsHandler {
+class InputsChannel: public RedChannel, public KeyHandler, public MouseHandler {
 public:
     InputsChannel(RedClient& client, uint32_t id);
     virtual ~InputsChannel();
