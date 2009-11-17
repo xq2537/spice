@@ -1231,10 +1231,22 @@ void Application::exit_full_screen()
 
 bool Application::toggle_full_screen()
 {
+    RedKey shift_pressed = REDKEY_INVALID;
+
+    if (_key_table[REDKEY_L_SHIFT].press) {
+        shift_pressed = REDKEY_L_SHIFT;
+    } else if (_key_table[REDKEY_R_SHIFT].press) {
+        shift_pressed = REDKEY_R_SHIFT;
+    }
     if (_full_screen) {
         exit_full_screen();
     } else {
         enter_full_screen();
+    }
+    uint32_t modifiers = Platform::get_keyboard_modifiers();
+    if ((shift_pressed == REDKEY_L_SHIFT && (modifiers & Platform::L_SHIFT_MODIFIER)) ||
+           (shift_pressed == REDKEY_R_SHIFT && (modifiers & Platform::R_SHIFT_MODIFIER))) {
+        on_key_down(shift_pressed);
     }
     return _full_screen;
 }

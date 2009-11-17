@@ -444,7 +444,7 @@ static void toggle_modifier(int key)
     SendInput(2, inputs, sizeof(INPUT));
 }
 
-uint32_t Platform::get_keyboard_modifiers()
+uint32_t Platform::get_keyboard_lock_modifiers()
 {
     uint32_t modifiers = 0;
     if ((GetKeyState(VK_SCROLL) & 1)) {
@@ -459,7 +459,7 @@ uint32_t Platform::get_keyboard_modifiers()
     return modifiers;
 }
 
-void Platform::set_keyboard_modifiers(uint32_t modifiers)
+void Platform::set_keyboard_lock_modifiers(uint32_t modifiers)
 {
     if (((modifiers >> SCROLL_LOCK_MODIFIER_SHIFT) & 1) != (GetKeyState(VK_SCROLL) & 1)) {
         toggle_modifier(VK_SCROLL);
@@ -472,6 +472,23 @@ void Platform::set_keyboard_modifiers(uint32_t modifiers)
     if (((modifiers >> CAPS_LOCK_MODIFIER_SHIFT) & 1) != (GetKeyState(VK_CAPITAL) & 1)) {
         toggle_modifier(VK_CAPITAL);
     }
+}
+
+#define KEY_BIT(keymap, key, bit) (keymap[key] & 0x80 ? bit : 0)
+
+uint32_t Platform::get_keyboard_modifiers()
+{
+    BYTE keymap[256];
+
+    if (!GetKeyboardState(keymap)) {
+        return 0;
+    }
+    return KEY_BIT(keymap, VK_LSHIFT, L_SHIFT_MODIFIER) |
+           KEY_BIT(keymap, VK_RSHIFT, R_SHIFT_MODIFIER) |
+           KEY_BIT(keymap, VK_LCONTROL, L_CTRL_MODIFIER) |
+           KEY_BIT(keymap, VK_RCONTROL, R_CTRL_MODIFIER) |
+           KEY_BIT(keymap, VK_LMENU, L_ALT_MODIFIER) |
+           KEY_BIT(keymap, VK_RMENU, R_ALT_MODIFIER);
 }
 
 class WinBaseLocalCursor: public LocalCursor {

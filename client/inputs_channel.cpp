@@ -327,7 +327,7 @@ void InputsChannel::set_local_modifiers()
         modifiers |= Platform::CAPS_LOCK_MODIFIER;
     }
 
-    Platform::set_keyboard_modifiers(_modifiers);
+    Platform::set_keyboard_lock_modifiers(_modifiers);
 }
 
 void InputsChannel::on_focus_in()
@@ -335,7 +335,7 @@ void InputsChannel::on_focus_in()
 #ifdef SYNC_REMOTH_MODIFIRES
     Message* message = new Message(REDC_INPUTS_KEY_MODIFAIERS, sizeof(RedcKeyDown));
     RedcKeyModifiers* modifiers = (RedcKeyModifiers*)message->data();
-    modifiers->modifiers = Platform::get_keyboard_modifiers();
+    modifiers->modifiers = Platform::get_keyboard_lock_modifiers();
     post_message(message);
 #else
     set_local_modifiers();
