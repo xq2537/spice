@@ -24,6 +24,8 @@
 #include <log4cpp/Category.hh>
 #include <log4cpp/convenience.h>
 
+#include "platform.h"
+
 #ifdef WIN32
 #define snprintf _snprintf
 #endif
@@ -74,10 +76,11 @@ static inline std::string pretty_func_to_func_name(const std::string& f_name)
 
 LOG4CPP_LOGGER("spice")
 
-#define LOG(type, format, ...) {                                                \
-    std::string log_message;                                                    \
-    string_printf(log_message, "%s: " format, FUNC_NAME, ## __VA_ARGS__);       \
-    LOG4CPP_##type(logger, log_message.c_str());                                \
+#define LOG(type, format, ...) {                                                        \
+    std::string log_message;                                                            \
+    string_printf(log_message, "[%llu:%llu] %s: " format, Platform::get_process_id(),   \
+                  Platform::get_thread_id(), FUNC_NAME, ## __VA_ARGS__);                \
+    LOG4CPP_##type(logger, log_message.c_str());                                        \
 }
 
 #define LOG_INFO(format, ...) LOG(INFO, format, ## __VA_ARGS__)

@@ -207,6 +207,17 @@ void Platform::get_temp_dir(std::string& path)
     delete[] tmp_path;
 }
 
+uint64_t Platform::get_process_id()
+{
+    static uint64_t pid = GetCurrentProcessId();
+    return pid;
+}
+
+uint64_t Platform::get_thread_id()
+{
+    return GetCurrentThreadId();
+}
+
 class WinMonitor: public Monitor {
 public:
     WinMonitor(int id, const wchar_t* name, const wchar_t* string);
