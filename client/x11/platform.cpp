@@ -2148,7 +2148,7 @@ void Platform::set_process_loop(ProcessLoop& main_process_loop)
     main_loop->add_file(*x_event_handler);
 }
 
-uint32_t Platform::get_keyboard_modifiers()
+uint32_t Platform::get_keyboard_lock_modifiers()
 {
     XKeyboardState keyboard_state;
     uint32_t modifiers = 0;
@@ -2195,9 +2195,9 @@ static void  set_keyboard_led(XLed led, int set)
     }
 }
 
-void Platform::set_keyboard_modifiers(uint32_t modifiers)
+void Platform::set_keyboard_lock_modifiers(uint32_t modifiers)
 {
-    uint32_t now = get_keyboard_modifiers();
+    uint32_t now = get_keyboard_lock_modifiers();
 
     if ((now & CAPS_LOCK_MODIFIER) != (modifiers & CAPS_LOCK_MODIFIER)) {
         set_keyboard_led(X11_CAPS_LOCK_LED, !!(modifiers & CAPS_LOCK_MODIFIER));
@@ -2208,6 +2208,25 @@ void Platform::set_keyboard_modifiers(uint32_t modifiers)
     if ((now & SCROLL_LOCK_MODIFIER) != (modifiers & SCROLL_LOCK_MODIFIER)) {
         set_keyboard_led(X11_SCROLL_LOCK_LED, !!(modifiers & SCROLL_LOCK_MODIFIER));
     }
+}
+
+uint32_t key_bit(char* keymap, int key, uint32_t bit)
+{
+    KeyCode key_code = XKeysymToKeycode(x_display, key);
+    return (((keymap[key_code >> 3] >> (key_code & 7)) & 1) ? bit : 0);
+}
+
+uint32_t Platform::get_keyboard_modifiers()
+{
+    char keymap[32];
+
+    XQueryKeymap(x_display, keymap);
+    return key_bit(keymap, XK_Shift_L, L_SHIFT_MODIFIER) |
+           key_bit(keymap, XK_Shift_R, R_SHIFT_MODIFIER) |
+           key_bit(keymap, XK_Control_L, L_CTRL_MODIFIER) |
+           key_bit(keymap, XK_Control_R, R_CTRL_MODIFIER) |
+           key_bit(keymap, XK_Alt_L, L_ALT_MODIFIER) |
+           key_bit(keymap, XK_Alt_R, R_ALT_MODIFIER);
 }
 
 WaveRecordAbstract* Platform::create_recorder(RecordClient& client,

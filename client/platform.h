@@ -77,8 +77,26 @@ public:
         CAPS_LOCK_MODIFIER = (1 << CAPS_LOCK_MODIFIER_SHIFT),
     };
 
+    static uint32_t get_keyboard_lock_modifiers();
+    static void set_keyboard_lock_modifiers(uint32_t modifiers);
+
+    enum {
+        L_SHIFT_MODIFIER_SHIFT,
+        R_SHIFT_MODIFIER_SHIFT,
+        L_CTRL_MODIFIER_SHIFT,
+        R_CTRL_MODIFIER_SHIFT,
+        L_ALT_MODIFIER_SHIFT,
+        R_ALT_MODIFIER_SHIFT,
+
+        L_SHIFT_MODIFIER = (1 << L_SHIFT_MODIFIER_SHIFT),
+        R_SHIFT_MODIFIER = (1 << R_SHIFT_MODIFIER_SHIFT),
+        L_CTRL_MODIFIER = (1 << L_CTRL_MODIFIER_SHIFT),
+        R_CTRL_MODIFIER = (1 << R_CTRL_MODIFIER_SHIFT),
+        L_ALT_MODIFIER = (1 << L_ALT_MODIFIER_SHIFT),
+        R_ALT_MODIFIER = (1 << R_ALT_MODIFIER_SHIFT),
+    };
+
     static uint32_t get_keyboard_modifiers();
-    static void set_keyboard_modifiers(uint32_t modifiers);
 
     static LocalCursor* create_local_cursor(CursorData* cursor_data);
     static LocalCursor* create_inactive_cursor();
