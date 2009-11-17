@@ -223,6 +223,17 @@ void Platform::get_temp_dir(std::string& path)
     path = "/tmp/";
 }
 
+uint64_t Platform::get_process_id()
+{
+    static uint64_t pid = uint64_t(getpid());
+    return pid;
+}
+
+uint64_t Platform::get_thread_id()
+{
+    return uint64_t(syscall(SYS_gettid));
+}
+
 void Platform::msleep(unsigned int millisec)
 {
     usleep(millisec * 1000);
