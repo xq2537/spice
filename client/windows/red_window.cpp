@@ -666,10 +666,6 @@ static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lP
         dwMsg += hooked->scanCode << 16;
         dwMsg += hooked->flags << 24;
 
-        // Forward these keys so the keyboard leds will light up.
-        BOOL bNextHook = ((hooked->vkCode == VK_CAPITAL) ||
-                          (hooked->vkCode == VK_SCROLL) || (hooked->vkCode == VK_NUMLOCK));
-
         // In some cases scan code of VK_RSHIFT is fake shift (probably a bug) so we
         // convert it to non extended code. Also, QEmu doesn't expect num-lock to be
         // an extended key.
@@ -679,7 +675,19 @@ static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lP
 
         SendMessage(focus_window, wParam, hooked->vkCode, dwMsg);
 
-        if (bNextHook == FALSE) {
+        // Forward all modifier key strokes to update keyboard leds & shift/ctrl/alt state
+        switch (hooked->vkCode) {
+        case VK_CAPITAL:
+        case VK_SCROLL:
+        case VK_NUMLOCK:
+        case VK_LSHIFT:
+        case VK_RSHIFT:
+        case VK_LCONTROL:
+        case VK_RCONTROL:
+        case VK_LMENU:
+        case VK_RMENU:
+            break;
+        default:
             return 1;
         }
     }
