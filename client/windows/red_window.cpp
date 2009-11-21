@@ -94,6 +94,46 @@ static inline void send_filtered_keys(RedWindow* window)
     filtered_up_keys.clear();
 }
 
+static inline bool is_high_surrogate(uint32_t val)
+{
+    return val >= 0xd800 &&  val <= 0xdbff;
+}
+
+static inline bool is_low_surrogate(uint32_t val)
+{
+    return val >= 0xdc00 &&  val <= 0xdfff;
+}
+
+static uint32_t utf16_to_utf32(uint16_t*& utf16, int& len)
+{
+    if (!len) {
+        return 0;
+    }
+
+    uint32_t val = utf16[0];
+
+    if (!is_high_surrogate(val)) {
+        utf16++;
+        len--;
+        return val;
+    }
+
+    if (len < 2) {
+        THROW("partial char");
+    }
+
+    uint32_t val2 = utf16[1];
+
+    if (!is_low_surrogate(val2)) {
+        THROW("invalid sequence");
+    }
+
+    utf16 += 2;
+    len -= 2;
+
+    return (((val & 0x3ff) << 10) | (val2 & 0x3ff)) + 0x10000;
+}
+
 LRESULT CALLBACK RedWindow_p::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     RedWindow* window = (RedWindow*)GetWindowLong(hWnd, GWL_USERDATA);
@@ -177,6 +217,19 @@ LRESULT CALLBACK RedWindow_p::WindowProc(HWND hWnd, UINT message, WPARAM wParam,
     case WM_KEYDOWN: {
         RedKey key = translate_key(wParam, HIWORD(lParam) & 0xff, (lParam & (1 << 24)) != 0);
         window->get_listener().on_key_press(key);
+
+        BYTE key_state[256];
+        WCHAR buff[10];
+        uint16_t* str_buf = (uint16_t*)buff;
+        GetKeyboardState(key_state);
+        int n = ToUnicode(wParam, HIWORD(lParam) & 0xff, key_state, buff, 10, 0);
+        if (n > 0) {
+            uint32_t utf32;
+            while ((utf32 = utf16_to_utf32(str_buf, n)) != 0) {
+                window->get_listener().on_char(utf32);
+            }
+        }
+
         // Allow Windows to translate Alt-F4 to WM_CLOSE message.
         if (!window->_key_interception_on) {
             return DefWindowProc(hWnd, message, wParam, lParam);

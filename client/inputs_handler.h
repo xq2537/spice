@@ -25,6 +25,7 @@ public:
     virtual ~KeyHandler() {}
     virtual void on_key_down(RedKey key) {}
     virtual void on_key_up(RedKey key) {}
+    virtual void on_char(uint32_t ch) {}
     virtual void on_focus_in() {}
     virtual void on_focus_out() {}
     virtual bool permit_focus_loss() { return true;}

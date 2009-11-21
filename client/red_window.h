@@ -126,6 +126,7 @@ public:
 
     virtual void on_key_press(RedKey key) = 0;
     virtual void on_key_release(RedKey key) = 0;
+    virtual void on_char(uint32_t ch) = 0;
 
     virtual void on_deactivate() = 0;
     virtual void on_activate() = 0;

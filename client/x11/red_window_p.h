@@ -50,6 +50,7 @@ public:
     static Cursor create_invisible_cursor(Window window);
 
     void set_glx(int width, int height);
+    static void handle_key_press_event(RedWindow& red_window, XKeyEvent* event);
 
 protected:
     int _screen;

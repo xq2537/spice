@@ -131,6 +131,7 @@ public:
     void on_mouse_up(int button, int buttons_state);
     void on_key_down(RedKey key);
     void on_key_up(RedKey key);
+    void on_char(uint32_t ch);
     void on_deactivate_screen(RedScreen* screen);
     void on_activate_screen(RedScreen* screen);
     void on_start_screen_key_interception(RedScreen* screen);

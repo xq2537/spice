@@ -138,6 +138,7 @@ private:
 
     virtual void on_key_press(RedKey key);
     virtual void on_key_release(RedKey key);
+    virtual void on_char(uint32_t ch);
 
     virtual void on_deactivate();
     virtual void on_activate();

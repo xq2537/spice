@@ -23,6 +23,7 @@ public:
     static Display* get_display();
     static XVisualInfo** get_vinfo();
     static GLXFBConfig** get_fbconfig();
+    static XIC get_input_context();
 
     typedef void (*win_proc_t)(XEvent& event);
     static void set_win_proc(Window win, win_proc_t proc);

@@ -64,7 +64,9 @@
 
 static Display* x_display = NULL;
 static XVisualInfo **vinfo = NULL;
-static GLXFBConfig **fb_config;
+static GLXFBConfig **fb_config = NULL;
+static XIM x_input_method = NULL;
+static XIC x_input_context = NULL;
 
 static XContext win_proc_context;
 static ProcessLoop* main_loop = NULL;
@@ -191,6 +193,11 @@ XVisualInfo** XPlatform::get_vinfo()
 GLXFBConfig** XPlatform::get_fbconfig()
 {
     return fb_config;
+}
+
+XIC XPlatform::get_input_context()
+{
+    return x_input_context;
 }
 
 void XPlatform::set_win_proc(Window win, win_proc_t proc)
@@ -2021,6 +2028,25 @@ static void init_kbd()
     num_lock_mask = get_modifier_mask(XK_Num_Lock);
 }
 
+static void init_XIM()
+{
+    char app_name[20];
+    strcpy(app_name, "spicec");
+
+    XSetLocaleModifiers("");
+    x_input_method = XOpenIM(x_display, NULL, app_name, app_name);
+
+    if (!x_input_method) {
+        THROW("open IM failed");
+    }
+
+    x_input_context = XCreateIC(x_input_method, XNInputStyle, XIMPreeditNone | XIMStatusNone, NULL);
+
+    if (!x_input_context) {
+        THROW("create IC failed");
+    }
+}
+
 static int x_error_handler(Display* display, XErrorEvent* error_event)
 {
     char error_str[256];
@@ -2071,6 +2097,8 @@ void Platform::init()
     int threads_enable;
 
     DBG(0, "");
+
+    setlocale(LC_ALL, "");
 
     threads_enable = XInitThreads();
 
@@ -2127,6 +2155,7 @@ void Platform::init()
     init_kbd();
     init_xrandr();
     init_xrender();
+    init_XIM();
 
     struct sigaction act;
     memset(&act, 0, sizeof(act));

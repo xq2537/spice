@@ -907,7 +907,12 @@ void Application::on_key_up(RedKey key)
     }
 
     do_on_key_up(key);
- }
+}
+
+void Application::on_char(uint32_t ch)
+{
+    _key_handler->on_char(ch);
+}
 
 void Application::on_deactivate_screen(RedScreen* screen)
 {

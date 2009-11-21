@@ -54,6 +54,7 @@
 static Display* x_display = NULL;
 static XContext user_data_context;
 static bool using_evdev = false;
+static XIC x_input_context = NULL;
 
 static Atom wm_protocol_atom;
 static Atom wm_delete_window_atom;
@@ -711,6 +712,49 @@ static inline RedButton to_red_button(unsigned int botton, unsigned int& state, 
     return ret;
 }
 
+void RedWindow_p::handle_key_press_event(RedWindow& window, XKeyEvent* event)
+{
+    static int buf_size = 0;
+    static char* utf8_buf = NULL;
+    static wchar_t* utf32_buf = NULL;
+
+    KeySym key_sym;
+    Status status;
+    int len;
+
+    window.get_listener().on_key_press(to_red_key_code(event->keycode));
+    for (;;) {
+        len = XwcLookupString(x_input_context, event, utf32_buf, buf_size, &key_sym, &status);
+        if (status != XBufferOverflow) {
+            break;
+        }
+
+        free(utf32_buf);
+        free(utf32_buf);
+        utf8_buf = new char[len];
+        utf32_buf = new wchar_t[len];
+        buf_size = len;
+    }
+
+    switch (status) {
+    case XLookupChars:
+    case XLookupBoth: {
+        uint32_t* now = (uint32_t*)utf32_buf;
+        uint32_t* end = now + len;
+
+        for (; now < end; now++) {
+            window.get_listener().on_char(*now);
+        }
+        break;
+    }
+    case XLookupNone:
+    case XLookupKeySym:
+        break;
+    default:
+        THROW("unexpected status %d", status);
+    }
+}
+
 void RedWindow_p::win_proc(XEvent& event)
 {
     XPointer window_pointer;
@@ -733,7 +777,7 @@ void RedWindow_p::win_proc(XEvent& event)
         break;
     }
     case KeyPress:
-        red_window->get_listener().on_key_press(to_red_key_code(event.xkey.keycode));
+        red_window->handle_key_press_event(*red_window, &event.xkey);
         break;
     case KeyRelease: {
         RedKey key = to_red_key_code(event.xkey.keycode);
@@ -1925,6 +1969,7 @@ void RedWindow::on_focus_in()
         return;
     }
     _focused = true;
+    XwcResetIC(x_input_context);
     XPlatform::on_focus_in();
     get_listener().on_activate();
     if (_trace_key_interception && _pointer_in_window) {
@@ -1976,6 +2021,7 @@ void RedWindow::set_menu(Menu* menu)
 void RedWindow::init()
 {
     x_display = XPlatform::get_display();
+    x_input_context = XPlatform::get_input_context();
     ASSERT(x_display);
     user_data_context = XUniqueContext();
 

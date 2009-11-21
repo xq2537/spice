@@ -659,6 +659,11 @@ void RedScreen::on_key_release(RedKey key)
     _owner.on_key_up(key);
 }
 
+void RedScreen::on_char(uint32_t ch)
+{
+    _owner.on_char(ch);
+}
+
 void RedScreen::on_deactivate()
 {
     relase_mouse();
