@@ -93,11 +93,12 @@ struct CoreInterface {
 };
 
 #define VD_INTERFACE_QXL "qxl"
-#define VD_INTERFACE_QXL_MAJOR 1
-#define VD_INTERFACE_QXL_MINOR 2
+#define VD_INTERFACE_QXL_MAJOR 2
+#define VD_INTERFACE_QXL_MINOR 0
 typedef struct QXLInterface QXLInterface;
 typedef void (*qxl_mode_change_notifier_t)(void *opaque);
 typedef struct QXLWorker QXLWorker;
+typedef struct QXLDevMemSlot QXLDevMemSlot;
 union QXLReleaseInfo;
 struct QXLCommand;
 struct QXLWorker {
@@ -112,6 +113,9 @@ struct QXLWorker {
     void (*start)(QXLWorker *worker);
     void (*stop)(QXLWorker *worker);
     void (*update_area)(QXLWorker *worker);
+    void (*add_memslot)(QXLWorker *worker, QXLDevMemSlot *slot);
+    void (*del_memslot)(QXLWorker *worker, uint32_t slot_id);
+    void (*reset_memslots)(QXLWorker *worker);
 };
 
 typedef struct DrawArea {
@@ -124,10 +128,6 @@ typedef struct DrawArea {
 } DrawArea;
 
 typedef struct QXLDevInfo {
-    long phys_delta;
-    unsigned long phys_start;
-    unsigned long phys_end;
-
     uint32_t x_res;
     uint32_t y_res;
     uint32_t bits;
@@ -137,6 +137,20 @@ typedef struct QXLDevInfo {
 
     uint32_t ram_size;
 } QXLDevInfo;
+
+typedef struct QXLDevInitInfo {
+    uint32_t num_memslots;
+    uint8_t memslot_gen_bits;
+    uint8_t memslot_id_bits;
+} QXLDevInitInfo;
+
+struct QXLDevMemSlot {
+    uint32_t slot_id;
+    uint32_t generation;
+    unsigned long virt_start;
+    unsigned long virt_end;
+    uint64_t addr_delta;
+};
 
 struct QXLInterface {
     VDInterface base;
@@ -152,6 +166,7 @@ struct QXLInterface {
                                         void *opaque);
     void (*unregister_mode_change)(QXLInterface *qxl, VDObjectRef notifier);
 
+    void (*get_init_info)(QXLInterface *qxl, QXLDevInitInfo *info);
     void (*get_info)(QXLInterface *qxl, QXLDevInfo *info);
     int (*get_command)(QXLInterface *qxl, struct QXLCommand *cmd);
     int (*req_cmd_notification)(QXLInterface *qxl);

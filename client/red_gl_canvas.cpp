@@ -100,9 +100,9 @@ void GCanvas::set_mode(int width, int height, int depth, RedWindow *win,
     }
 }
 
-void GCanvas::set_access_params(ADDRESS delta, unsigned long base, unsigned long max)
+void GCanvas::set_access_params(unsigned long base, unsigned long max)
 {
-    gl_canvas_set_access_params(_canvas, delta, base, max);
+    gl_canvas_set_access_params(_canvas, base, max);
 }
 
 void GCanvas::draw_fill(Rect *bbox, Clip *clip, Fill *fill)

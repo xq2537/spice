@@ -46,7 +46,7 @@ public:
     virtual CanvasType get_pixmap_type();
 
 protected:
-    virtual void set_access_params(ADDRESS delta, unsigned long base, unsigned long max);
+    virtual void set_access_params(unsigned long base, unsigned long max);
     virtual void draw_fill(Rect *bbox, Clip *clip, Fill *fill);
     virtual void draw_copy(Rect *bbox, Clip *clip, Copy *copy);
     virtual void draw_opaque(Rect *bbox, Clip *clip, Opaque *opaque);

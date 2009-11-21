@@ -55,10 +55,7 @@ void canvas_group_start(CairoCanvas *canvas, int n_clip_rects, Rect *clip_rects)
 void canvas_group_end(CairoCanvas *canvas);
 void canvas_set_addr_delta(CairoCanvas *canvas, ADDRESS delta);
 #ifdef CAIRO_CANVAS_ACCESS_TEST
-void canvas_set_access_params(CairoCanvas *canvas, ADDRESS delta, unsigned long base,
-                              unsigned long max);
-#else
-void canvas_set_access_params(CairoCanvas *canvas, ADDRESS delta);
+void canvas_set_access_params(CairoCanvas *canvas, unsigned long base, unsigned long max);
 #endif
 
 cairo_t *canvas_get_cairo(CairoCanvas *canvas);
@@ -77,6 +74,10 @@ CairoCanvas *canvas_create(cairo_t *cairo, int bits
 #endif
 #ifdef USE_GLZ
                            , void *glz_decoder_opaque, glz_decode_fn_t glz_decode
+#endif
+#ifndef CAIRO_CANVAS_NO_CHUNKS
+                           , void *get_virt_opaque, get_virt_fn_t get_virt,
+                           void *validate_virt_opaque, validate_virt_fn_t validate_virt
 #endif
                            );
 void canvas_destroy(CairoCanvas *canvas);

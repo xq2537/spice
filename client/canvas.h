@@ -213,7 +213,7 @@ public:
     virtual CanvasType get_pixmap_type() { return CANVAS_TYPE_INVALID; }
 
 protected:
-    virtual void set_access_params(ADDRESS delta, unsigned long base, unsigned long max) = 0;
+    virtual void set_access_params(unsigned long base, unsigned long max) = 0;
     virtual void draw_fill(Rect *bbox, Clip *clip, Fill *fill) = 0;
     virtual void draw_copy(Rect *bbox, Clip *clip, Copy *copy) = 0;
     virtual void draw_opaque(Rect *bbox, Clip *clip, Opaque *opaque) = 0;

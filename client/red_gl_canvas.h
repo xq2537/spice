@@ -42,7 +42,7 @@ public:
     void put_image(const PixmapHeader& image, const Rect& dest,
                    const QRegion* clip);
 
-    void set_access_params(ADDRESS delta, unsigned long base, unsigned long max);
+    void set_access_params(unsigned long base, unsigned long max);
     void draw_fill(Rect *bbox, Clip *clip, Fill *fill);
     void draw_copy(Rect *bbox, Clip *clip, Copy *copy);
     void draw_opaque(Rect *bbox, Clip *clip, Opaque *opaque);

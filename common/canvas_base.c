@@ -151,7 +151,10 @@ typedef struct QuicData {
     jmp_buf jmp_env;
 #ifndef CAIRO_CANVAS_NO_CHUNKS
     ADDRESS next;
-    ADDRESS address_delta;
+    get_virt_fn_t get_virt;
+    void *get_virt_opaque;
+    validate_virt_fn_t validate_virt;
+    void *validate_virt_opaque;
 #endif
     char message_buf[512];
 } QuicData;
@@ -160,7 +163,6 @@ typedef struct CanvasBase {
     uint32_t color_shift;
     uint32_t color_mask;
     QuicData quic_data;
-    ADDRESS address_delta;
 #ifdef CAIRO_CANVAS_ACCESS_TEST
     unsigned long base;
     unsigned long max;
@@ -256,7 +258,6 @@ static cairo_surface_t *canvas_get_quic(CanvasBase *canvas, QUICImage *image, in
     tmp = (DataChunk **)image->quic.data;
     chunk = *tmp;
     quic_data->next = chunk->next;
-    quic_data->address_delta = canvas->address_delta;
     if (quic_decode_begin(quic_data->quic, (uint32_t *)chunk->data, chunk->size >> 2,
                           &type, &width, &height) == QUIC_ERROR) {
         CANVAS_ERROR("quic decode begin failed");
@@ -1486,14 +1487,20 @@ static int quic_usr_more_space(QuicUsrContext *usr, uint32_t **io_ptr, int rows_
 {
     QuicData *quic_data = (QuicData *)usr;
     DataChunk *chunk;
+    uint32_t size;
 
     if (!quic_data->next) {
         return 0;
     }
-    chunk = (DataChunk *)GET_ADDRESS(quic_data->next + quic_data->address_delta);
+    chunk = (DataChunk *)quic_data->get_virt(quic_data->get_virt_opaque, quic_data->next,
+                                             sizeof(DataChunk));
+    size = chunk->size;
+    quic_data->validate_virt(quic_data->validate_virt_opaque, (unsigned long)chunk->data,
+                             quic_data->next, size);
+
     quic_data->next = chunk->next;
     *io_ptr = (uint32_t *)chunk->data;
-    return chunk->size >> 2;
+    return size >> 2;
 }
 
 #endif
@@ -1504,20 +1511,11 @@ static int quic_usr_more_lines(QuicUsrContext *usr, uint8_t **lines)
 }
 
 #ifdef CAIRO_CANVAS_ACCESS_TEST
-static void __canvas_set_access_params(CanvasBase *canvas, ADDRESS delta, unsigned long base,
-                                       unsigned long max)
+static void __canvas_set_access_params(CanvasBase *canvas, unsigned long base, unsigned long max)
 {
-    canvas->address_delta = delta;
     canvas->base = base;
     canvas->max = max;
 }
-
-#else
-static void __canvas_set_access_params(CanvasBase *canvas, ADDRESS delta)
-{
-    canvas->address_delta = delta;
-}
-
 #endif
 
 static void canvas_base_destroy(CanvasBase *canvas)
@@ -1551,6 +1549,10 @@ static int canvas_base_init(CanvasBase *canvas, int depth
 #ifdef USE_GLZ
                             , void *glz_decoder_opaque, glz_decode_fn_t glz_decode
 #endif
+#ifndef CAIRO_CANVAS_NO_CHUNKS
+                           , void *get_virt_opaque, get_virt_fn_t get_virt,
+                           void *validate_virt_opaque, validate_virt_fn_t validate_virt
+#endif
                             )
 {
     canvas->quic_data.usr.error = quic_usr_error;
@@ -1560,6 +1562,12 @@ static int canvas_base_init(CanvasBase *canvas, int depth
     canvas->quic_data.usr.free = quic_usr_free;
     canvas->quic_data.usr.more_space = quic_usr_more_space;
     canvas->quic_data.usr.more_lines = quic_usr_more_lines;
+#ifndef CAIRO_CANVAS_NO_CHUNKS
+    canvas->quic_data.get_virt_opaque = get_virt_opaque;
+    canvas->quic_data.get_virt = get_virt;
+    canvas->quic_data.validate_virt_opaque = validate_virt_opaque;
+    canvas->quic_data.validate_virt = validate_virt;
+#endif
     if (!(canvas->quic_data.quic = quic_create(&canvas->quic_data.usr))) {
             return 0;
     }

@@ -54,10 +54,7 @@ void gdi_canvas_put_image(GdiCanvas *canvas, HDC dc, const Rect *dest, const uin
 void gdi_canvas_clear(GdiCanvas *canvas);
 
 #ifdef CAIRO_CANVAS_ACCESS_TEST
-void gdi_canvas_set_access_params(GdiCanvas *canvas, ADDRESS delta, unsigned long base,
-                                  unsigned long max);
-#else
-void gdi_canvas_set_access_params(GdiCanvas *canvas, ADDRESS delta);
+void gdi_canvas_set_access_params(GdiCanvas *canvas, unsigned long base, unsigned long max);
 #endif
 
 

@@ -107,7 +107,7 @@ void Canvas::begin_draw(RedDrawBase& base, int size, size_t min_size)
 {
     _base = (unsigned long)&base;
     _max = _base + size;
-    set_access_params(_base, _base, _max);
+    set_access_params(_base, _max);
     access_test(&base, min_size);
     localalize_ptr(&base.clip.data);
 }

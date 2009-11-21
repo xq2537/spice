@@ -52,7 +52,7 @@
 
 #define REDHAT_PCI_VENDOR_ID 0x1b36
 #define QXL_DEVICE_ID 0x0100 /* 0x100-0x11f reserved for spice */
-#define QXL_REVISION 0x01
+#define QXL_REVISION 0x02
 
 #define QXL_ROM_MAGIC (*(UINT32*)"QXRO")
 #define QXL_RAM_MAGIC (*(UINT32*)"QXRA")
@@ -75,6 +75,8 @@ enum {
     QXL_IO_RESET,
     QXL_IO_SET_MODE,
     QXL_IO_LOG,
+    QXL_IO_MEMSLOT_ADD,
+    QXL_IO_MEMSLOT_DEL,
 
     QXL_IO_RANGE_SIZE
 };
@@ -93,6 +95,12 @@ typedef struct ATTR_PACKED QXLRom {
     UINT32 draw_area_size;
     UINT32 ram_header_offset;
     UINT32 mm_clock;
+    UINT64 flags;
+    UINT8 slots_start;
+    UINT8 slots_end;
+    UINT8 slot_gen_bits;
+    UINT8 slot_id_bits;
+    UINT8 slot_generation;
 } QXLRom;
 
 typedef struct ATTR_PACKED QXLMode {
@@ -129,6 +137,11 @@ typedef struct ATTR_PACKED QXLCommand {
 } QXLCommand;
 
 
+typedef struct ATTR_PACKED QXLMemSlot {
+    UINT64 mem_start;
+    UINT64 mem_end;
+} QXLMemSlot;
+
 RING_DECLARE(QXLCommandRing, QXLCommand, 32);
 RING_DECLARE(QXLCursorRing, QXLCommand, 32);
 
@@ -148,6 +161,8 @@ typedef struct ATTR_PACKED QXLRam {
     QXLCursorRing cursor_ring;
     QXLReleaseRing release_ring;
     Rect update_area;
+    QXLMemSlot mem_slot;
+    UINT64 flags;
 } QXLRam;
 
 typedef union QXLReleaseInfo {

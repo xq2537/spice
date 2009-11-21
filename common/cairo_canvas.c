@@ -1569,18 +1569,10 @@ cairo_t *canvas_get_cairo(CairoCanvas *canvas)
 }
 
 #ifdef CAIRO_CANVAS_ACCESS_TEST
-void canvas_set_access_params(CairoCanvas *canvas, ADDRESS delta, unsigned long base,
-                              unsigned long max)
+void canvas_set_access_params(CairoCanvas *canvas, unsigned long base, unsigned long max)
 {
-    __canvas_set_access_params(&canvas->base, delta, base, max);
+    __canvas_set_access_params(&canvas->base, base, max);
 }
-
-#else
-void canvas_set_access_params(CairoCanvas *canvas, ADDRESS delta)
-{
-    __canvas_set_access_params(&canvas->base, delta);
-}
-
 #endif
 
 void canvas_destroy(CairoCanvas *canvas)
@@ -1614,6 +1606,10 @@ CairoCanvas *canvas_create(cairo_t *cairo, int bits
 #ifdef USE_GLZ
                             , void *glz_decoder_opaque, glz_decode_fn_t glz_decode
 #endif
+#ifndef CAIRO_CANVAS_NO_CHUNKS
+                           , void *get_virt_opaque, get_virt_fn_t get_virt,
+                           void *validate_virt_opaque, validate_virt_fn_t validate_virt
+#endif
                            )
 {
     CairoCanvas *canvas;
@@ -1644,6 +1640,13 @@ CairoCanvas *canvas_create(cairo_t *cairo, int bits
                                ,
                                glz_decoder_opaque,
                                glz_decode
+#endif
+#ifndef CAIRO_CANVAS_NO_CHUNKS
+                               ,
+                               get_virt_opaque,
+                               get_virt,
+                               validate_virt_opaque,
+                               validate_virt
 #endif
                                );
     canvas->cairo = cairo;

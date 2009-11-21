@@ -83,8 +83,9 @@ static inline void FUNC_NAME(red_rgb_to_yuv420_line)(const uint8_t* line0, const
     }
 }
 
-static inline int FUNC_NAME(red_rgb_to_yuv420)(const Rect *src, const Bitmap *image,
-                                               AVFrame *frame, long phys_delta, int id,
+static inline int FUNC_NAME(red_rgb_to_yuv420)(RedWorker *worker, const Rect *src,
+                                               const Bitmap *image, AVFrame *frame,
+                                               long phys_delta, int memslot_id, int id,
                                                Stream *stream)
 {
     QXLDataChunk *chunk;
@@ -107,14 +108,16 @@ static inline int FUNC_NAME(red_rgb_to_yuv420)(const Rect *src, const Bitmap *im
 
     const int skip_lines = stream->top_down ? src->top : image->y - (src->bottom - 0);
     for (i = 0; i < skip_lines; i++) {
-        red_get_image_line(&chunk, &offset, image_stride, phys_delta);
+        red_get_image_line(worker, &chunk, &offset, image_stride, phys_delta, memslot_id);
     }
 
     const int image_hight = src->bottom - src->top;
     const int image_width = src->right - src->left;
     for (i = 0; i < image_hight / 2; i++) {
-        uint8_t* line0 = red_get_image_line(&chunk, &offset, image_stride, phys_delta);
-        uint8_t* line1 = red_get_image_line(&chunk, &offset, image_stride, phys_delta);
+        uint8_t* line0 = red_get_image_line(worker, &chunk, &offset, image_stride, phys_delta,
+                                            memslot_id);
+        uint8_t* line1 = red_get_image_line(worker, &chunk, &offset, image_stride, phys_delta,
+                                            memslot_id);
 
         if (!line0 || !line1) {
             return FALSE;
@@ -131,7 +134,8 @@ static inline int FUNC_NAME(red_rgb_to_yuv420)(const Rect *src, const Bitmap *im
     }
 
     if ((image_hight & 1)) {
-        uint8_t* line = red_get_image_line(&chunk, &offset, image_stride, phys_delta);
+        uint8_t* line = red_get_image_line(worker, &chunk, &offset, image_stride, phys_delta,
+                                           memslot_id);
         if (!line) {
             return FALSE;
         }

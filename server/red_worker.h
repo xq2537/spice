@@ -62,6 +62,9 @@ enum {
     RED_WORKER_MESSAGE_SET_COMPRESSION,
     RED_WORKER_MESSAGE_SET_STREAMING_VIDEO,
     RED_WORKER_MESSAGE_SET_MOUSE_MODE,
+    RED_WORKER_MESSAGE_ADD_MEMSLOT,
+    RED_WORKER_MESSAGE_DEL_MEMSLOT,
+    RED_WORKER_MESSAGE_RESET_MEMSLOTS,
 };
 
 typedef uint32_t RedWorkeMessage;
@@ -84,6 +87,9 @@ typedef struct WorkerInitData {
     uint32_t renderers[RED_MAX_RENDERERS];
     image_compression_t image_compression;
     int streaming_video;
+    uint32_t num_memslots;
+    uint8_t memslot_gen_bits;
+    uint8_t memslot_id_bits;
 } WorkerInitData;
 
 void *red_worker_main(void *arg);

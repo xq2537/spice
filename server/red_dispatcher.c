@@ -247,6 +247,34 @@ static void qxl_worker_update_area(QXLWorker *qxl_worker)
     ASSERT(message == RED_WORKER_MESSAGE_READY);
 }
 
+static void qxl_worker_add_memslot(QXLWorker *qxl_worker, QXLDevMemSlot *mem_slot)
+{
+    RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
+    RedWorkeMessage message = RED_WORKER_MESSAGE_ADD_MEMSLOT;
+
+    write_message(dispatcher->channel, &message);
+    send_data(dispatcher->channel, mem_slot, sizeof(QXLDevMemSlot));
+    read_message(dispatcher->channel, &message);
+    ASSERT(message == RED_WORKER_MESSAGE_READY);
+}
+
+static void qxl_worker_del_memslot(QXLWorker *qxl_worker, uint32_t slot_id)
+{
+    RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
+    RedWorkeMessage message = RED_WORKER_MESSAGE_DEL_MEMSLOT;
+
+    write_message(dispatcher->channel, &message);
+    send_data(dispatcher->channel, &slot_id, sizeof(uint32_t));
+}
+
+static void qxl_worker_reset_memslots(QXLWorker *qxl_worker)
+{
+    RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
+    RedWorkeMessage message = RED_WORKER_MESSAGE_RESET_MEMSLOTS;
+
+    write_message(dispatcher->channel, &message);
+}
+
 static void qxl_worker_wakeup(QXLWorker *qxl_worker)
 {
     RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
@@ -386,6 +414,7 @@ RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface)
     int channels[2];
     RedWorkeMessage message;
     WorkerInitData init_data;
+    QXLDevInitInfo init_info;
     int r;
     Channel *reds_channel;
     Channel *cursor_channel;
@@ -433,6 +462,15 @@ RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface)
     dispatcher->base.start = qxl_worker_start;
     dispatcher->base.stop = qxl_worker_stop;
     dispatcher->base.update_area = qxl_worker_update_area;
+    dispatcher->base.add_memslot = qxl_worker_add_memslot;
+    dispatcher->base.del_memslot = qxl_worker_del_memslot;
+    dispatcher->base.reset_memslots = qxl_worker_reset_memslots;
+
+    qxl_interface->get_init_info(qxl_interface, &init_info);
+
+    init_data.memslot_id_bits = init_info.memslot_id_bits;
+    init_data.memslot_gen_bits = init_info.memslot_gen_bits;
+    init_data.num_memslots = init_info.num_memslots;
 
     sigfillset(&thread_sig_mask);
     sigdelset(&thread_sig_mask, SIGILL);

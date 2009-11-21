@@ -48,10 +48,7 @@ void gl_canvas_set_top_mask(GLCanvas *canvas, int num_rect, const Rect *rects);
 void gl_canvas_clear_top_mask(GLCanvas *canvas);
 
 #ifdef CAIRO_CANVAS_ACCESS_TEST
-void gl_canvas_set_access_params(GLCanvas *canvas, ADDRESS delta, unsigned long base,
-                                 unsigned long max);
-#else
-void gl_canvas_set_access_params(GLCanvas *canvas, ADDRESS delta);
+void gl_canvas_set_access_params(GLCanvas *canvas, unsigned long base, unsigned long max);
 #endif
 
 void *gl_canvas_get_usr_data(GLCanvas *canvas);
@@ -75,6 +72,10 @@ GLCanvas *gl_canvas_create(void *usr_data, int width, int height, int depth
 #endif
 #ifdef USE_GLZ
                            , void *glz_decoder_opaque, glz_decode_fn_t glz_decode
+#endif
+#ifndef CAIRO_CANVAS_NO_CHUNKS
+                           , void *get_virt_opaque, get_virt_fn_t get_virt,
+                           void *validate_virt_opaque, validate_virt_fn_t validate_virt
 #endif
                            );
 void gl_canvas_destroy(GLCanvas *, int);

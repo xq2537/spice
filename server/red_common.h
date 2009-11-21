@@ -38,13 +38,13 @@
 #define ALIGN(a, b) (((a) + ((b) - 1)) & ~((b) - 1))
 #endif
 
-#define ASSERT(x) if (!(x)) { 					\
-	printf("%s: ASSERT %s failed\n", __FUNCTION__, #x); 	\
-	abort();					        \
+#define ASSERT(x) if (!(x)) {                               \
+    printf("%s: ASSERT %s failed\n", __FUNCTION__, #x);     \
+    abort();                                                \
 }
 
-#define PANIC(str) {                              \
-    printf("%s: panic: %s\n", __FUNCTION__, str);   \
+#define PANIC(format, ...) {                              \
+    printf("%s: panic: " format "\n", __FUNCTION__, ## __VA_ARGS__ );   \
     abort();                                        \
 }
 

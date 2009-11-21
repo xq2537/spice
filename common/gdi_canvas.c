@@ -1668,18 +1668,10 @@ void gdi_canvas_clear(GdiCanvas *canvas)
 }
 
 #ifdef CAIRO_CANVAS_ACCESS_TEST
-void gdi_canvas_set_access_params(GdiCanvas *canvas, ADDRESS delta, unsigned long base,
-                                  unsigned long max)
+void gdi_canvas_set_access_params(GdiCanvas *canvas, unsigned long base, unsigned long max)
 {
-    __canvas_set_access_params(&canvas->base, delta, base, max);
+    __canvas_set_access_params(&canvas->base, base, max);
 }
-
-#else
-void gdi_canvas_set_access_params(GdiCanvas *canvas, ADDRESS delta)
-{
-    __gdi_canvas_set_access_params(&canvas->base, delta);
-}
-
 #endif
 
 void gdi_canvas_destroy(GdiCanvas *canvas)

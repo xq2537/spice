@@ -91,9 +91,9 @@ void GDICanvas::set_mode(int width, int height, int depth)
     }
 }
 
-void GDICanvas::set_access_params(ADDRESS delta, unsigned long base, unsigned long max)
+void GDICanvas::set_access_params(unsigned long base, unsigned long max)
 {
-    gdi_canvas_set_access_params(_canvas, delta, base, max);
+    gdi_canvas_set_access_params(_canvas, base, max);
 }
 
 void GDICanvas::draw_fill(Rect *bbox, Clip *clip, Fill *fill)

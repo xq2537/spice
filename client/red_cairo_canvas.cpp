@@ -108,9 +108,9 @@ void CCanvas::set_mode(int width, int height, int depth, RedWindow *win)
     }
 }
 
-void CCanvas::set_access_params(ADDRESS delta, unsigned long base, unsigned long max)
+void CCanvas::set_access_params(unsigned long base, unsigned long max)
 {
-    canvas_set_access_params(_canvas, delta, base, max);
+    canvas_set_access_params(_canvas, base, max);
 }
 
 void CCanvas::draw_fill(Rect *bbox, Clip *clip, Fill *fill)
