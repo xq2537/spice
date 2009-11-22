@@ -332,16 +332,40 @@ void InputsChannel::on_mouse_up(int button, int buttons_state)
     post_message(message);
 }
 
-void InputsChannel::on_key_down(uint32_t scan_code)
+InputsChannel::KeyInfo InputsChannel::_scan_table[REDKEY_NUM_KEYS];
+
+uint32_t InputsChannel::get_make_scan_code(RedKey key)
 {
+    return _scan_table[key].make_scan;
+}
+
+uint32_t InputsChannel::get_break_scan_code(RedKey key)
+{
+    return _scan_table[key].break_scan;
+}
+
+void InputsChannel::on_key_down(RedKey key)
+{
+    uint32_t scan_code = get_make_scan_code(key);
+    if (!scan_code) {
+        LOG_WARN("no make code for %d", key);
+        return;
+    }
+
     Message* message = new Message(REDC_INPUTS_KEY_DOWN, sizeof(RedcKeyDown));
     RedcKeyDown* event = (RedcKeyDown*)message->data();
     event->code = scan_code;
     post_message(message);
 }
 
-void InputsChannel::on_key_up(uint32_t scan_code)
+void InputsChannel::on_key_up(RedKey key)
 {
+    uint32_t scan_code = get_break_scan_code(key);
+    if (!scan_code) {
+        LOG_WARN("no break code for %d", key);
+        return;
+    }
+
     Message* message = new Message(REDC_INPUTS_KEY_UP, sizeof(RedcKeyUp));
     RedcKeyUp* event = (RedcKeyUp*)message->data();
     event->code = scan_code;
@@ -378,6 +402,168 @@ void InputsChannel::on_focus_in()
     set_local_modifiers();
 #endif
 }
+
+void InputsChannel::init_scan_code(int index)
+{
+    ASSERT((index & 0x80) == 0);
+    _scan_table[index].make_scan = index;
+    _scan_table[index].break_scan = index | 0x80;
+}
+
+void InputsChannel::init_korean_scan_code(int index)
+{
+    _scan_table[index].make_scan = index;
+    _scan_table[index].break_scan = index;
+}
+
+void InputsChannel::init_escape_scan_code(int index)
+{
+    ASSERT(((index - REDKEY_ESCAPE_BASE) & 0x80) == 0);
+    _scan_table[index].make_scan = 0xe0 | ((index - REDKEY_ESCAPE_BASE) << 8);
+    _scan_table[index].break_scan = _scan_table[index].make_scan | 0x8000;
+}
+
+void InputsChannel::init_pause_scan_code()
+{
+    _scan_table[REDKEY_PAUSE].make_scan = 0x451de1;
+    _scan_table[REDKEY_PAUSE].break_scan = 0xc59de1;
+}
+
+void InputsChannel::init_scan_table()
+{
+    memset(_scan_table, 0, sizeof(_scan_table));
+    init_scan_code(REDKEY_ESCAPE);
+    init_scan_code(REDKEY_1);
+    init_scan_code(REDKEY_2);
+    init_scan_code(REDKEY_3);
+    init_scan_code(REDKEY_4);
+    init_scan_code(REDKEY_5);
+    init_scan_code(REDKEY_6);
+    init_scan_code(REDKEY_7);
+    init_scan_code(REDKEY_8);
+    init_scan_code(REDKEY_9);
+    init_scan_code(REDKEY_0);
+    init_scan_code(REDKEY_MINUS);
+    init_scan_code(REDKEY_EQUALS);
+    init_scan_code(REDKEY_BACKSPACE);
+    init_scan_code(REDKEY_TAB);
+    init_scan_code(REDKEY_Q);
+    init_scan_code(REDKEY_W);
+    init_scan_code(REDKEY_E);
+    init_scan_code(REDKEY_R);
+    init_scan_code(REDKEY_T);
+    init_scan_code(REDKEY_Y);
+    init_scan_code(REDKEY_U);
+    init_scan_code(REDKEY_I);
+    init_scan_code(REDKEY_O);
+    init_scan_code(REDKEY_P);
+    init_scan_code(REDKEY_L_BRACKET);
+    init_scan_code(REDKEY_R_BRACKET);
+    init_scan_code(REDKEY_ENTER);
+    init_scan_code(REDKEY_L_CTRL);
+    init_scan_code(REDKEY_A);
+    init_scan_code(REDKEY_S);
+    init_scan_code(REDKEY_D);
+    init_scan_code(REDKEY_F);
+    init_scan_code(REDKEY_G);
+    init_scan_code(REDKEY_H);
+    init_scan_code(REDKEY_J);
+    init_scan_code(REDKEY_K);
+    init_scan_code(REDKEY_L);
+    init_scan_code(REDKEY_SEMICOLON);
+    init_scan_code(REDKEY_QUOTE);
+    init_scan_code(REDKEY_BACK_QUOTE);
+    init_scan_code(REDKEY_L_SHIFT);
+    init_scan_code(REDKEY_BACK_SLASH);
+    init_scan_code(REDKEY_Z);
+    init_scan_code(REDKEY_X);
+    init_scan_code(REDKEY_C);
+    init_scan_code(REDKEY_V);
+    init_scan_code(REDKEY_B);
+    init_scan_code(REDKEY_N);
+    init_scan_code(REDKEY_M);
+    init_scan_code(REDKEY_COMMA);
+    init_scan_code(REDKEY_PERIOD);
+    init_scan_code(REDKEY_SLASH);
+    init_scan_code(REDKEY_R_SHIFT);
+    init_scan_code(REDKEY_PAD_MULTIPLY);
+    init_scan_code(REDKEY_L_ALT);
+    init_scan_code(REDKEY_SPACE);
+    init_scan_code(REDKEY_CAPS_LOCK);
+    init_scan_code(REDKEY_F1);
+    init_scan_code(REDKEY_F2);
+    init_scan_code(REDKEY_F3);
+    init_scan_code(REDKEY_F4);
+    init_scan_code(REDKEY_F5);
+    init_scan_code(REDKEY_F6);
+    init_scan_code(REDKEY_F7);
+    init_scan_code(REDKEY_F8);
+    init_scan_code(REDKEY_F9);
+    init_scan_code(REDKEY_F10);
+    init_scan_code(REDKEY_NUM_LOCK);
+    init_scan_code(REDKEY_SCROLL_LOCK);
+    init_scan_code(REDKEY_PAD_7);
+    init_scan_code(REDKEY_PAD_8);
+    init_scan_code(REDKEY_PAD_9);
+    init_scan_code(REDKEY_PAD_MINUS);
+    init_scan_code(REDKEY_PAD_4);
+    init_scan_code(REDKEY_PAD_5);
+    init_scan_code(REDKEY_PAD_6);
+    init_scan_code(REDKEY_PAD_PLUS);
+    init_scan_code(REDKEY_PAD_1);
+    init_scan_code(REDKEY_PAD_2);
+    init_scan_code(REDKEY_PAD_3);
+    init_scan_code(REDKEY_PAD_0);
+    init_scan_code(REDKEY_PAD_POINT);
+
+    init_scan_code(REDKEY_EUROPEAN);
+    init_scan_code(REDKEY_F11);
+    init_scan_code(REDKEY_F12);
+
+    init_scan_code(REDKEY_JAPANESE_HIRAGANA_KATAKANA);
+    init_scan_code(REDKEY_JAPANESE_BACKSLASH);
+    init_scan_code(REDKEY_JAPANESE_HENKAN);
+    init_scan_code(REDKEY_JAPANESE_MUHENKAN);
+    init_scan_code(REDKEY_JAPANESE_YEN);
+
+    init_korean_scan_code(REDKEY_KOREAN_HANGUL);
+    init_korean_scan_code(REDKEY_KOREAN_HANGUL_HANJA);
+
+    init_escape_scan_code(REDKEY_ESCAPE_BASE);
+    init_escape_scan_code(REDKEY_PAD_ENTER);
+    init_escape_scan_code(REDKEY_R_CTRL);
+    init_escape_scan_code(REDKEY_FAKE_L_SHIFT);
+    init_escape_scan_code(REDKEY_PAD_DIVIDE);
+    init_escape_scan_code(REDKEY_FAKE_R_SHIFT);
+    init_escape_scan_code(REDKEY_CTRL_PRINT_SCREEN);
+    init_escape_scan_code(REDKEY_R_ALT);
+    init_escape_scan_code(REDKEY_CTRL_BREAK);
+    init_escape_scan_code(REDKEY_HOME);
+    init_escape_scan_code(REDKEY_UP);
+    init_escape_scan_code(REDKEY_PAGEUP);
+    init_escape_scan_code(REDKEY_LEFT);
+    init_escape_scan_code(REDKEY_RIGHT);
+    init_escape_scan_code(REDKEY_END);
+    init_escape_scan_code(REDKEY_DOWN);
+    init_escape_scan_code(REDKEY_PAGEDOWN);
+    init_escape_scan_code(REDKEY_INSERT);
+    init_escape_scan_code(REDKEY_DELETE);
+    init_escape_scan_code(REDKEY_LEFT_CMD);
+    init_escape_scan_code(REDKEY_RIGHT_CMD);
+    init_escape_scan_code(REDKEY_MENU);
+
+    init_pause_scan_code();
+}
+
+class InitGlobals {
+public:
+    InitGlobals()
+    {
+        InputsChannel::init_scan_table();
+    }
+};
+
+static InitGlobals init_globals;
 
 class InputsFactory: public ChannelFactory {
 public:

@@ -31,8 +31,8 @@ public:
     virtual void on_mouse_motion(int dx, int dy, int buttons_state);
     virtual void on_mouse_down(int button, int buttons_state);
     virtual void on_mouse_up(int button, int buttons_state);
-    virtual void on_key_down(uint32_t scan_code);
-    virtual void on_key_up(uint32_t scan_code);
+    virtual void on_key_down(RedKey key);
+    virtual void on_key_up(RedKey key);
     virtual void on_focus_in();
 
     void on_mouse_position(int x, int y, int buttons_state, int display_id);
@@ -53,6 +53,14 @@ private:
     void handle_modifaiers(RedPeer::InMessage* message);
     void handle_motion_ack(RedPeer::InMessage* message);
 
+    static uint32_t get_make_scan_code(RedKey key);
+    static uint32_t get_break_scan_code(RedKey key);
+    static void init_scan_code(int index);
+    static void init_korean_scan_code(int index);
+    static void init_escape_scan_code(int index);
+    static void init_pause_scan_code();
+    static void init_scan_table();
+
 private:
     Mutex _motion_lock;
     int _mouse_buttons_state;
@@ -67,6 +75,14 @@ private:
     Mutex _update_modifiers_lock;
     bool _active_modifiers_event;
 
+    struct KeyInfo {
+        uint32_t make_scan;
+        uint32_t break_scan;
+    };
+
+    static KeyInfo _scan_table[REDKEY_NUM_KEYS];
+
+    friend class InitGlobals;
     friend class MotionMessage;
     friend class PositionMessage;
     friend class KeyModifiersEvent;

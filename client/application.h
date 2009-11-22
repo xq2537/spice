@@ -72,12 +72,6 @@ private:
     std::vector<MonitorInfo> _monitors;
 };
 
-struct KeyInfo {
-    uint32_t _make;
-    uint32_t _break;
-    bool press;
-};
-
 enum CanvasOption {
     CANVAS_OPTION_INVALID,
     CANVAS_OPTION_CAIRO,
@@ -175,14 +169,7 @@ private:
     bool set_canvas_option(CmdLineParser& parser, char *val);
     bool process_cmd_line(int argc, char** argv);
     void abort();
-    void init_scan_code(int index);
-    void init_korean_scan_code(int index);
-    void init_escape_scan_code(int index);
-    void init_pause_scan_code();
-    void init_key_table();
     void init_menu();
-    uint32_t get_make_scan_code(RedKey key);
-    uint32_t get_break_scan_code(RedKey key);
     void unpress_all();
     bool release_capture();
     bool do_connect();
@@ -235,7 +222,7 @@ private:
     bool _changing_screens;
     int _exit_code;
     RedScreen* _active_screen;
-    KeyInfo _key_table[REDKEY_NUM_KEYS];
+    bool _keyboard_state[REDKEY_NUM_KEYS];
     int _num_keys_pressed;
     HotKeys _hot_keys;
     CommandsMap _commands_map;

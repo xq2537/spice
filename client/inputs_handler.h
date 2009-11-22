@@ -18,11 +18,13 @@
 #ifndef _H_INPUTS_HANDLER
 #define _H_INPUTS_HANDLER
 
+#include "red_key.h"
+
 class KeyHandler {
 public:
     virtual ~KeyHandler() {}
-    virtual void on_key_down(uint32_t scan_code) {}
-    virtual void on_key_up(uint32_t scan_code) {}
+    virtual void on_key_down(RedKey key) {}
+    virtual void on_key_up(RedKey key) {}
     virtual void on_focus_in() {}
     virtual void on_focus_out() {}
     virtual bool permit_focus_loss() { return true;}

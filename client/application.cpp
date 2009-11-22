@@ -234,7 +234,7 @@ void StickyKeyTimer::response(AbstractProcessLoop& events_loop)
     Application* app = (Application*)events_loop.get_owner();
     StickyInfo* sticky_info = &app->_sticky_info;
     ASSERT(app->is_sticky_trace_key(sticky_info->key));
-    ASSERT(app->_key_table[sticky_info->key ].press);
+    ASSERT(app->_keyboard_state[sticky_info->key]);
     ASSERT(sticky_info->key_first_down);
     ASSERT(sticky_info->key_down);
     sticky_info->sticky_mode = true;
@@ -270,6 +270,7 @@ Application::Application()
     , _changing_screens (false)
     , _exit_code (0)
     , _active_screen (NULL)
+    , _num_keys_pressed (0)
     , _gui_layer (new GUILayer())
     , _key_handler (&default_key_handler)
     , _mouse_handler (&default_mouse_handler)
@@ -281,7 +282,7 @@ Application::Application()
     DBG(0, "");
     Platform::set_process_loop(*this);
     init_monitors();
-    init_key_table();
+    memset(_keyboard_state, 0, sizeof(_keyboard_state));
     init_menu();
     _main_screen = get_screen(0);
     _main_screen->attach_layer(*_gui_layer);
@@ -573,177 +574,12 @@ void Application::on_mouse_up(int button, int buttons_state)
     _mouse_handler->on_mouse_up(button, buttons_state);
 }
 
-void Application::init_scan_code(int index)
-{
-    ASSERT((index & 0x80) == 0);
-    _key_table[index]._make = index;
-    _key_table[index]._break = index | 0x80;
-}
-
-void Application::init_korean_scan_code(int index)
-{
-    _key_table[index]._make = index;
-    _key_table[index]._break = index;
-}
-
-void Application::init_escape_scan_code(int index)
-{
-    ASSERT(((index - REDKEY_ESCAPE_BASE) & 0x80) == 0);
-    _key_table[index]._make = 0xe0 | ((index - REDKEY_ESCAPE_BASE) << 8);
-    _key_table[index]._break = _key_table[index]._make | 0x8000;
-}
-
-void Application::init_pause_scan_code()
-{
-    _key_table[REDKEY_PAUSE]._make = 0x451de1;
-    _key_table[REDKEY_PAUSE]._break = 0xc59de1;
-}
-
-void Application::init_key_table()
-{
-    memset(_key_table, 0, sizeof(_key_table));
-    _num_keys_pressed = 0;
-    init_scan_code(REDKEY_ESCAPE);
-    init_scan_code(REDKEY_1);
-    init_scan_code(REDKEY_2);
-    init_scan_code(REDKEY_3);
-    init_scan_code(REDKEY_4);
-    init_scan_code(REDKEY_5);
-    init_scan_code(REDKEY_6);
-    init_scan_code(REDKEY_7);
-    init_scan_code(REDKEY_8);
-    init_scan_code(REDKEY_9);
-    init_scan_code(REDKEY_0);
-    init_scan_code(REDKEY_MINUS);
-    init_scan_code(REDKEY_EQUALS);
-    init_scan_code(REDKEY_BACKSPACE);
-    init_scan_code(REDKEY_TAB);
-    init_scan_code(REDKEY_Q);
-    init_scan_code(REDKEY_W);
-    init_scan_code(REDKEY_E);
-    init_scan_code(REDKEY_R);
-    init_scan_code(REDKEY_T);
-    init_scan_code(REDKEY_Y);
-    init_scan_code(REDKEY_U);
-    init_scan_code(REDKEY_I);
-    init_scan_code(REDKEY_O);
-    init_scan_code(REDKEY_P);
-    init_scan_code(REDKEY_L_BRACKET);
-    init_scan_code(REDKEY_R_BRACKET);
-    init_scan_code(REDKEY_ENTER);
-    init_scan_code(REDKEY_L_CTRL);
-    init_scan_code(REDKEY_A);
-    init_scan_code(REDKEY_S);
-    init_scan_code(REDKEY_D);
-    init_scan_code(REDKEY_F);
-    init_scan_code(REDKEY_G);
-    init_scan_code(REDKEY_H);
-    init_scan_code(REDKEY_J);
-    init_scan_code(REDKEY_K);
-    init_scan_code(REDKEY_L);
-    init_scan_code(REDKEY_SEMICOLON);
-    init_scan_code(REDKEY_QUOTE);
-    init_scan_code(REDKEY_BACK_QUOTE);
-    init_scan_code(REDKEY_L_SHIFT);
-    init_scan_code(REDKEY_BACK_SLASH);
-    init_scan_code(REDKEY_Z);
-    init_scan_code(REDKEY_X);
-    init_scan_code(REDKEY_C);
-    init_scan_code(REDKEY_V);
-    init_scan_code(REDKEY_B);
-    init_scan_code(REDKEY_N);
-    init_scan_code(REDKEY_M);
-    init_scan_code(REDKEY_COMMA);
-    init_scan_code(REDKEY_PERIOD);
-    init_scan_code(REDKEY_SLASH);
-    init_scan_code(REDKEY_R_SHIFT);
-    init_scan_code(REDKEY_PAD_MULTIPLY);
-    init_scan_code(REDKEY_L_ALT);
-    init_scan_code(REDKEY_SPACE);
-    init_scan_code(REDKEY_CAPS_LOCK);
-    init_scan_code(REDKEY_F1);
-    init_scan_code(REDKEY_F2);
-    init_scan_code(REDKEY_F3);
-    init_scan_code(REDKEY_F4);
-    init_scan_code(REDKEY_F5);
-    init_scan_code(REDKEY_F6);
-    init_scan_code(REDKEY_F7);
-    init_scan_code(REDKEY_F8);
-    init_scan_code(REDKEY_F9);
-    init_scan_code(REDKEY_F10);
-    init_scan_code(REDKEY_NUM_LOCK);
-    init_scan_code(REDKEY_SCROLL_LOCK);
-    init_scan_code(REDKEY_PAD_7);
-    init_scan_code(REDKEY_PAD_8);
-    init_scan_code(REDKEY_PAD_9);
-    init_scan_code(REDKEY_PAD_MINUS);
-    init_scan_code(REDKEY_PAD_4);
-    init_scan_code(REDKEY_PAD_5);
-    init_scan_code(REDKEY_PAD_6);
-    init_scan_code(REDKEY_PAD_PLUS);
-    init_scan_code(REDKEY_PAD_1);
-    init_scan_code(REDKEY_PAD_2);
-    init_scan_code(REDKEY_PAD_3);
-    init_scan_code(REDKEY_PAD_0);
-    init_scan_code(REDKEY_PAD_POINT);
-
-    init_scan_code(REDKEY_EUROPEAN);
-    init_scan_code(REDKEY_F11);
-    init_scan_code(REDKEY_F12);
-
-    init_scan_code(REDKEY_JAPANESE_HIRAGANA_KATAKANA);
-    init_scan_code(REDKEY_JAPANESE_BACKSLASH);
-    init_scan_code(REDKEY_JAPANESE_HENKAN);
-    init_scan_code(REDKEY_JAPANESE_MUHENKAN);
-    init_scan_code(REDKEY_JAPANESE_YEN);
-
-    init_korean_scan_code(REDKEY_KOREAN_HANGUL);
-    init_korean_scan_code(REDKEY_KOREAN_HANGUL_HANJA);
-
-    init_escape_scan_code(REDKEY_ESCAPE_BASE);
-    init_escape_scan_code(REDKEY_PAD_ENTER);
-    init_escape_scan_code(REDKEY_R_CTRL);
-    init_escape_scan_code(REDKEY_FAKE_L_SHIFT);
-    init_escape_scan_code(REDKEY_PAD_DIVIDE);
-    init_escape_scan_code(REDKEY_FAKE_R_SHIFT);
-    init_escape_scan_code(REDKEY_CTRL_PRINT_SCREEN);
-    init_escape_scan_code(REDKEY_R_ALT);
-    init_escape_scan_code(REDKEY_CTRL_BREAK);
-    init_escape_scan_code(REDKEY_HOME);
-    init_escape_scan_code(REDKEY_UP);
-    init_escape_scan_code(REDKEY_PAGEUP);
-    init_escape_scan_code(REDKEY_LEFT);
-    init_escape_scan_code(REDKEY_RIGHT);
-    init_escape_scan_code(REDKEY_END);
-    init_escape_scan_code(REDKEY_DOWN);
-    init_escape_scan_code(REDKEY_PAGEDOWN);
-    init_escape_scan_code(REDKEY_INSERT);
-    init_escape_scan_code(REDKEY_DELETE);
-    init_escape_scan_code(REDKEY_LEFT_CMD);
-    init_escape_scan_code(REDKEY_RIGHT_CMD);
-    init_escape_scan_code(REDKEY_MENU);
-
-    init_pause_scan_code();
-}
-
-inline uint32_t Application::get_make_scan_code(RedKey key)
-{
-    return _key_table[key]._make;
-}
-
-inline uint32_t Application::get_break_scan_code(RedKey key)
-{
-    return _key_table[key]._break;
-}
-
 void Application::unpress_all()
 {
     reset_sticky();
     for (int i = 0; i < REDKEY_NUM_KEYS; i++) {
-        if (_key_table[i].press) {
-            uint32_t scan_code = get_break_scan_code((RedKey)i);
-            ASSERT(scan_code);
-            _key_handler->on_key_up(scan_code);
+        if (_keyboard_state[i]) {
+            _key_handler->on_key_up((RedKey)i);
             unpress_key((RedKey)i);
         }
     }
@@ -925,10 +761,10 @@ static void show_red_key(RedKey key)
 
 bool Application::press_key(RedKey key)
 {
-    if (_key_table[key].press) {
+    if (_keyboard_state[key]) {
         return true;
     } else {
-        _key_table[key].press = true;
+        _keyboard_state[key] = true;
         _num_keys_pressed++;
         return false;
     }
@@ -938,8 +774,8 @@ bool Application::unpress_key(RedKey key)
 {
     ASSERT(!_sticky_info.key_down || !is_sticky_trace_key(key));
 
-    if (_key_table[key].press) {
-        _key_table[key].press = false;
+    if (_keyboard_state[key]) {
+        _keyboard_state[key] = false;
         _num_keys_pressed--;
         ASSERT(_num_keys_pressed >= 0);
         return true;
@@ -959,7 +795,7 @@ void Application::reset_sticky()
     _sticky_info.key_first_down = false;
     deactivate_interval_timer(*_sticky_info.timer);
     if (_sticky_info.sticky_mode) {
-        ASSERT(_key_table[_sticky_info.key].press);
+        ASSERT(_keyboard_state[_sticky_info.key]);
         // if it is physically down, we shouldn't unpress it
         if (!_sticky_info.key_down) {
             do_on_key_up(_sticky_info.key);
@@ -977,12 +813,6 @@ void Application::reset_sticky()
 void Application::on_key_down(RedKey key)
 {
     if (key <= 0 || key >= REDKEY_NUM_KEYS) {
-        return;
-    }
-
-    uint32_t scan_code = get_make_scan_code(key);
-    if (!scan_code) {
-        LOG_WARN("no make code for %d", key);
         return;
     }
 
@@ -1019,17 +849,17 @@ void Application::on_key_down(RedKey key)
 #ifdef WIN32
     if (!_active_screen->intercepts_sys_key() &&
                                            (key == REDKEY_LEFT_CMD || key == REDKEY_RIGHT_CMD ||
-                                            key == REDKEY_MENU || _key_table[REDKEY_L_ALT].press)) {
+                                            key == REDKEY_MENU || _keyboard_state[REDKEY_L_ALT])) {
         unpress_key(key);
         return;
     }
     if (!_sticky_info.sticky_mode &&
-        ((_key_table[REDKEY_L_CTRL].press || _key_table[REDKEY_R_CTRL].press) &&
-        (_key_table[REDKEY_L_ALT].press || _key_table[REDKEY_R_ALT].press))) {
+        ((_keyboard_state[REDKEY_L_CTRL] || _keyboard_state[REDKEY_R_CTRL]) &&
+        (_keyboard_state[REDKEY_L_ALT] || _keyboard_state[REDKEY_R_ALT]))) {
         if (key == REDKEY_END || key == REDKEY_PAD_1) {
             unpress_key(key);
-            _key_handler->on_key_down(get_make_scan_code(REDKEY_DELETE));
-            _key_handler->on_key_up(get_break_scan_code(REDKEY_DELETE));
+            _key_handler->on_key_down(REDKEY_DELETE);
+            _key_handler->on_key_up(REDKEY_DELETE);
         } else if (key == REDKEY_DELETE || key == REDKEY_PAD_POINT) {
             unpress_key(key);
             return;
@@ -1037,23 +867,18 @@ void Application::on_key_down(RedKey key)
     }
 #endif
 
-    _key_handler->on_key_down(scan_code);
+    _key_handler->on_key_down(key);
 }
 
 void Application::do_on_key_up(RedKey key)
 {
     unpress_key(key);
-    uint32_t scan_code = get_break_scan_code(key);
-    if (!scan_code) {
-        LOG_WARN("no break code for %d", key);
-        return;
-    }
-    _key_handler->on_key_up(scan_code);
+    _key_handler->on_key_up(key);
 }
 
 void Application::on_key_up(RedKey key)
 {
-    if(key < 0 || key >= REDKEY_NUM_KEYS || !_key_table[key].press) {
+    if(key < 0 || key >= REDKEY_NUM_KEYS || !_keyboard_state[key]) {
         return;
     }
 
@@ -1294,9 +1119,9 @@ bool Application::toggle_full_screen()
 {
     RedKey shift_pressed = REDKEY_INVALID;
 
-    if (_key_table[REDKEY_L_SHIFT].press) {
+    if (_keyboard_state[REDKEY_L_SHIFT]) {
         shift_pressed = REDKEY_L_SHIFT;
-    } else if (_key_table[REDKEY_R_SHIFT].press) {
+    } else if (_keyboard_state[REDKEY_R_SHIFT]) {
         shift_pressed = REDKEY_R_SHIFT;
     }
     if (_full_screen) {
@@ -1395,7 +1220,7 @@ bool Application::is_key_set_pressed(const HotkeySet& key_set)
     HotkeySet::const_iterator iter = key_set.begin();
 
     while (iter != key_set.end()) {
-        if (!(_key_table[iter->main].press || _key_table[iter->alter].press)) {
+        if (!(_keyboard_state[iter->main] || _keyboard_state[iter->alter])) {
             break;
         }
         ++iter;
@@ -1420,12 +1245,12 @@ int Application::get_hotkeys_commnad()
 
 void Application::send_key_down(RedKey key)
 {
-    _key_handler->on_key_down(get_make_scan_code(key));
+    _key_handler->on_key_down(key);
 }
 
 void Application::send_key_up(RedKey key)
 {
-    _key_handler->on_key_up(get_break_scan_code(key));
+    _key_handler->on_key_up(key);
 }
 
 void Application::send_alt_ctl_del()
