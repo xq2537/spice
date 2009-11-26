@@ -74,6 +74,11 @@
 #define USE_XRANDR_1_2
 #endif
 
+#ifdef HAVE_XINERAMA
+#include <X11/extensions/Xinerama.h>
+#define USE_XINERAMA_1_0
+#endif
+
 static Display* x_display = NULL;
 static bool x_shm_avail = false;
 static XVisualInfo **vinfo = NULL;
@@ -105,6 +110,10 @@ static bool using_xfixes_1_0 = false;
 
 static int xfixes_event_base;
 static int xfixes_error_base;
+
+#ifdef USE_XINERAMA_1_0
+static bool using_xinerama_1_0 = false;
+#endif
 
 static unsigned int caps_lock_mask = 0;
 static unsigned int num_lock_mask = 0;
@@ -1068,6 +1077,91 @@ bool DynamicScreen::set_screen_size(int size_index)
     set_height(sizes[size_index].height);
     return true;
 }
+
+#ifdef USE_XINERAMA_1_0
+
+class XineramaMonitor;
+typedef std::list<XineramaMonitor*> XineramaMonitorsList;
+
+class XineramaScreen : public XScreen {
+public:
+    XineramaScreen(Display* display, int screen, int& next_mon_id, XineramaScreenInfo* xin_screens,
+                   int num_xin_screens);
+    virtual ~XineramaScreen();
+
+    void publish_monitors(MonitorsList& monitors);
+
+private:
+    XineramaMonitorsList _monitors;
+};
+
+class XineramaMonitor : public Monitor {
+public:
+    XineramaMonitor(int id, XineramaScreenInfo& xin_screen);
+
+    virtual void do_set_mode(int width, int height);
+    virtual void do_restore() {}
+    virtual int get_depth() { return 32;}
+    virtual SpicePoint get_position() { return _position;}
+    virtual SpicePoint get_size() const { return _size;}
+    virtual bool is_out_of_sync() { return _out_of_sync;}
+    virtual int get_screen_id() { return 0;}
+
+private:
+    SpicePoint _position;
+    SpicePoint _size;
+    bool _out_of_sync;
+};
+
+XineramaScreen::XineramaScreen(Display* display, int screen, int& next_mon_id,
+                               XineramaScreenInfo* xin_screens, int num_xin_screens)
+    : XScreen(display, screen)
+{
+    X_DEBUG_SYNC(display);
+    for (int i = 0; i < num_xin_screens; i++) {
+        _monitors.push_back(new XineramaMonitor(next_mon_id++, xin_screens[i]));
+    }
+    Window root_window = RootWindow(display, screen);
+    XSelectInput(display, root_window, StructureNotifyMask);
+    XRRSelectInput(display, root_window, RRScreenChangeNotifyMask);     // TODO: this fails if we don't have RR extension (but do have XINERAMA)
+    XPlatform::set_win_proc(root_window, root_win_proc);     // Xlib:  extension "RANDR" missing on display ":3.0".
+    X_DEBUG_SYNC(display);
+}
+
+XineramaScreen::~XineramaScreen()
+{
+    while (!_monitors.empty()) {
+        XineramaMonitor* monitor = _monitors.front();
+        _monitors.pop_front();
+        delete monitor;
+    }
+}
+
+void XineramaScreen::publish_monitors(MonitorsList& monitors)
+{
+    XineramaMonitorsList::iterator iter = _monitors.begin();
+    for (; iter != _monitors.end(); iter++) {
+        monitors.push_back(*iter);
+    }
+}
+
+XineramaMonitor::XineramaMonitor(int id, XineramaScreenInfo& screen_info)
+    : Monitor(id)
+    , _out_of_sync (false)
+{
+    _position.x = screen_info.x_org;
+    _position.y = screen_info.y_org;
+    _size.x = screen_info.width;
+    _size.y = screen_info.height;
+}
+
+
+void XineramaMonitor::do_set_mode(int width, int height)
+{
+    _out_of_sync = width > _size.x || height > _size.y;
+}
+
+#endif
 
 #ifdef USE_XRANDR_1_2
 
@@ -2314,6 +2408,35 @@ void XMonitor::set_mode(const XRRModeInfo& mode)
 
 #endif
 
+#ifdef USE_XINERAMA_1_0
+
+static XineramaScreenInfo* init_xinerama_screens(int* num_xin_screens)
+{
+    XineramaScreenInfo* xin_screens = NULL;
+
+    if (using_xinerama_1_0 && ScreenCount(x_display) == 1) {
+        int ncrtc = 0;
+#ifdef USE_XRANDR_1_2
+        if (using_xrandr_1_2) {
+            AutoScreenRes res(XRRGetScreenResources(x_display, RootWindow(x_display, 0)));
+            if (res.valid()) {
+                ncrtc = res->ncrtc;
+            }
+        }
+#endif
+        if (ncrtc < 2) {
+            xin_screens = XineramaQueryScreens(x_display, num_xin_screens);
+        }
+    }
+    if (xin_screens && *num_xin_screens < 2) {
+        XFree(xin_screens);
+        return NULL;
+    }
+    return xin_screens;
+}
+
+#endif
+
 static MonitorsList monitors;
 static Monitor* primary_monitor = NULL;
 
@@ -2324,6 +2447,15 @@ const MonitorsList& Platform::init_monitors()
 {
     int next_mon_id = 0;
     ASSERT(screens.empty());
+
+#ifdef USE_XINERAMA_1_0
+    int num_xin_screens;
+    XineramaScreenInfo* xin_screens = init_xinerama_screens(&num_xin_screens);
+    if (xin_screens) {
+        screens.push_back(new XineramaScreen(x_display, 0, next_mon_id, xin_screens, num_xin_screens));
+        XFree(xin_screens);
+    } else
+#endif
 #ifdef USE_XRANDR_1_2
     if (using_xrandr_1_2) {
         for (int i = 0; i < ScreenCount(x_display); i++) {
@@ -2944,6 +3076,20 @@ static void init_xrender()
         XRenderQueryVersion(x_display, &major, &minor) && (major > 0 || minor >= 5);
 }
 
+static void init_xinerama()
+{
+#ifdef USE_XINERAMA_1_0
+    int event_base;
+    int error_base;
+    int major;
+    int minor;
+
+    using_xinerama_1_0 = XineramaQueryExtension(x_display, &event_base, &error_base) &&
+        XineramaQueryVersion(x_display, &major, &minor) && major >= 1 && minor >= 0 &&
+        XineramaIsActive(x_display);
+#endif
+}
+
 static void init_xfixes()
 {
     int major;
@@ -3148,6 +3294,7 @@ void Platform::init()
     init_xrender();
     init_xfixes();
     init_XIM();
+    init_xinerama();
 
     struct sigaction act;
     memset(&act, 0, sizeof(act));

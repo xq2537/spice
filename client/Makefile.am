@@ -226,6 +226,7 @@ INCLUDES = \
 	$(XRANDR_CFLAGS)				\
 	$(XFIXES_CFLAGS)				\
 	$(WARN_CFLAGS)					\
+	$(XINERAMA_CFLAGS)				\
 	$(NULL)
 
 spicec_LDFLAGS = $(SPICEC_STATIC_LINKAGE_BSTATIC)
@@ -246,6 +247,7 @@ spicec_LDADD =						\
 	$(XFIXES_LIBS)					\
 	$(XRANDR_LIBS)					\
 	$(Z_LIBS)					\
+	$(XINERAMA_LIBS)				\
 	$(NULL)
 
 EXTRA_DIST =				\

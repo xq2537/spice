@@ -283,6 +283,19 @@ if test "$red_target" = "x11"; then
 	AC_SUBST(MISC_X_LIBS)
 fi
 
+PKG_CHECK_MODULES(XINERAMA,
+        xinerama >= 1.0,
+        have_xinerama=yes,
+        have_xinerama=no)
+
+AM_CONDITIONAL([HAVE_XINERAMA], [test "x$have_xinerama" = "xyes"])
+if test "x$have_xinerama" = "xyes" ; then
+  AC_DEFINE([HAVE_XINERAMA], [], [Define if we have Xinerama])
+  AC_SUBST(XINERAMA_CFLAGS)
+  AC_SUBST(XINERAMA_LIBS)
+  SPICE_REQUIRES+=" xinerama"
+fi
+
 # Add parameter for (partial) static linkage of spice client.
 # this is used to achive single binary package for all (?) distros.
 AC_ARG_ENABLE(static-linkage,
@@ -522,6 +535,8 @@ echo "
         Build Spice client:       ${enable_client}
 
         Have XRANDR 1.2:          ${have_xrandr12}
+
+        Have Xinerama:            ${have_xinerama}
 
         Support tunneling:        ${enable_tunnel}
 
