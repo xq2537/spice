@@ -81,7 +81,7 @@ static struct in_addr spice_addr = {INADDR_ANY};
 static int ticketing_enabled = 1; //Ticketing is enabled by default
 static pthread_mutex_t *lock_cs;
 static long *lock_count;
-uint32_t streaming_video = TRUE;
+uint32_t streaming_video = STREAM_VIDEO_FILTER;
 image_compression_t image_compression = IMAGE_COMPRESS_AUTO_GLZ;
 void *red_tunnel = NULL;
 int agent_mouse = TRUE;
@@ -3494,7 +3494,21 @@ static void reds_do_info_spice()
         core->term_printf(core, " ic=invalid");
     }
 
-    core->term_printf(core, " sv=%s", streaming_video ? "on" : "off");
+    switch (streaming_video) {
+        case STREAM_VIDEO_ALL:
+            core->term_printf(core, " sv=all");
+            break;
+        case STREAM_VIDEO_FILTER:
+            core->term_printf(core, " sv=filter");
+            break;
+        case STREAM_VIDEO_OFF:
+            core->term_printf(core, " sv=off");
+            break;
+        case STREAM_VIDEO_INVALID:
+        default:
+            core->term_printf(core, " sv=invalid");
+
+    }
     core->term_printf(core, " playback-compression=%s\n",
                       snd_get_playback_compression() ? "on" : "off");
 }
@@ -3536,17 +3550,29 @@ static void reds_do_set_image_compression(const char *val)
     set_image_compression(real_val);
 }
 
+static int reds_get_streaming_video(const char *val)
+{
+    if (strcmp(val, "on") == 0) {
+        return STREAM_VIDEO_FILTER;
+    } else if (strcmp(val, "filter") == 0) {
+        return STREAM_VIDEO_FILTER;
+    } else if (strcmp(val, "all") == 0) {
+        return STREAM_VIDEO_ALL;
+    } else if (strcmp(val, "off") == 0){
+        return STREAM_VIDEO_OFF;
+    } else {
+        return STREAM_VIDEO_INVALID;
+    }
+}
+
 static void reds_do_set_streaming_video(const char *val)
 {
-    uint32_t new_val;
-    if (strcmp(val, "on") == 0) {
-        new_val = TRUE;
-    } else if (strcmp(val, "off") == 0) {
-        new_val = FALSE;
-    } else {
+    uint32_t new_val = reds_get_streaming_video(val);
+    if (new_val == STREAM_VIDEO_INVALID) {
         core->term_printf(core, "bad streaming video arg\n");
         return;
     }
+
     if (new_val == streaming_video) {
         return;
     }
@@ -3884,9 +3910,8 @@ int __attribute__ ((visibility ("default"))) spice_parse_args(const char *in_arg
             if (!val) {
                 goto error;
             }
-            if (strcmp(val, "off") == 0) {
-                streaming_video = FALSE;
-            } else if (strcmp(val, "on") != 0) {
+            streaming_video = reds_get_streaming_video(val);
+            if (streaming_video == STREAM_VIDEO_INVALID) {
                 goto error;
             }
             break;
@@ -4583,7 +4608,7 @@ static void add_monitor_action_commands(QTermInterface *mon)
     mon->add_action_command_handler(mon, "spice", "set_streaming_video", "s",
                                     reds_do_set_streaming_video,
                                     "",
-                                    "<on|off>");
+                                    "<on|filter|all|off>");
     mon->add_action_command_handler(mon, "spice", "set_playback_compression", "s",
                                     reds_do_set_playback_compression,
                                     "",
