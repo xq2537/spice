@@ -74,7 +74,9 @@
 #define RED_STREAM_DETACTION_MAX_DELTA ((1000 * 1000 * 1000) / 5) // 1/5 sec
 #define RED_STREAM_CONTINUS_MAX_DELTA ((1000 * 1000 * 1000) / 2) // 1/2 sec
 #define RED_STREAM_TIMOUT (1000 * 1000 * 1000)
-#define RED_STREAM_START_CONDITION 20
+#define RED_STREAM_FRAMES_START_CONDITION 20
+#define RED_STREAM_GRADUAL_FRAMES_START_CONDITION 0.2
+#define RED_STREAM_FRAMES_RESET_CONDITION 100
 
 #define FPS_TEST_INTERVAL 1
 #define MAX_FPS 30
@@ -755,6 +757,13 @@ typedef struct DrawItem {
     Shadow *shadow;
 } DrawItem;
 
+typedef enum {
+    BITMAP_GRADUAL_INVALID,
+    BITMAP_GRADUAL_NOT_AVAIL,
+    BITMAP_GRADUAL_TRUE,
+    BITMAP_GRADUAL_FALSE,
+} BitmapGradualType;
+
 struct Drawable {
     uint8_t refs;
     RingItem list_link;
@@ -769,10 +778,13 @@ struct Drawable {
 
     red_time_t creation_time;
     int frames_count;
+    int gradual_frames_count;
+    int last_gradual_frame;
     Stream *stream;
 #ifdef STREAM_TRACE
     int streamable;
 #endif
+    BitmapGradualType copy_bitmap_graduality;
 };
 
 typedef struct _Drawable _Drawable;
@@ -840,6 +852,8 @@ typedef struct DrawContext {
 typedef struct ItemTrace {
     red_time_t time;
     int frames_count;
+    int gradual_frames_count;
+    int last_gradual_frame;
     int width;
     int height;
     Rect dest_area;
@@ -965,6 +979,8 @@ static void red_display_release_stream_clip(DisplayChannel* channel, StreamClipI
 static int red_display_free_some_independent_glz_drawables(DisplayChannel *channel);
 static void red_display_free_glz_drawable(DisplayChannel *channel, RedGlzDrawable *drawable);
 static void reset_rate(StreamAgent *stream_agent);
+static int _bitmap_is_gradual(RedWorker *worker, Bitmap *bitmap);
+static inline int _stride_is_extra(Bitmap *bitmap);
 
 #ifdef DUMP_BITMAP
 static void dump_bitmap(RedWorker *worker, Bitmap *bitmap);
@@ -1400,6 +1416,8 @@ static inline void red_add_item_trace(RedWorker *worker, Drawable *item)
     trace = &worker->items_trace[worker->next_item_trace++ & ITEMS_TRACE_MASK];
     trace->time = item->creation_time;
     trace->frames_count = item->frames_count;
+    trace->gradual_frames_count = item->gradual_frames_count;
+    trace->last_gradual_frame = item->last_gradual_frame;
     Rect* src_area = &item->qxl_drawable->u.copy.src_area;
     trace->width = src_area->right - src_area->left;
     trace->height = src_area->bottom - src_area->top;
@@ -2676,6 +2694,70 @@ static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream)
     agent->drops = 0;
 }
 
+static inline void red_update_copy_graduality(RedWorker* worker, Drawable *drawable)
+{
+    QXLImage *qxl_image;
+    ASSERT(drawable->qxl_drawable->type == QXL_DRAW_COPY);
+
+    if (worker->streaming_video != STREAM_VIDEO_FILTER) {
+        drawable->copy_bitmap_graduality = BITMAP_GRADUAL_INVALID;
+        return;
+    }
+
+    if (drawable->copy_bitmap_graduality != BITMAP_GRADUAL_INVALID) {
+        return; // already set
+    }
+
+    qxl_image = (QXLImage *)(drawable->qxl_drawable->u.copy.src_bitmap +
+                             worker->dev_info.phys_delta);
+
+    if (!BITMAP_FMT_IS_RGB[qxl_image->bitmap.format] || _stride_is_extra(&qxl_image->bitmap) ||
+        (qxl_image->bitmap.flags & QXL_BITMAP_UNSTABLE)) {
+        drawable->copy_bitmap_graduality = BITMAP_GRADUAL_NOT_AVAIL;
+    } else  {
+        if (_bitmap_is_gradual(worker, &qxl_image->bitmap)) {
+            drawable->copy_bitmap_graduality = BITMAP_GRADUAL_TRUE;
+        } else {
+            drawable->copy_bitmap_graduality = BITMAP_GRADUAL_FALSE;
+        }
+    }
+}
+
+static inline int red_is_stream_start(Drawable *drawable)
+{
+    return ((drawable->frames_count >= RED_STREAM_FRAMES_START_CONDITION) &&
+            (drawable->gradual_frames_count >=
+            (RED_STREAM_GRADUAL_FRAMES_START_CONDITION * drawable->frames_count)));
+}
+
+static void red_stream_add_frame(RedWorker* worker, Drawable *frame_drawable,
+                                 int frames_count,
+                                 int gradual_frames_count,
+                                 int last_gradual_frame)
+{
+    red_update_copy_graduality(worker, frame_drawable);
+    frame_drawable->frames_count = frames_count + 1;
+    frame_drawable->gradual_frames_count  = gradual_frames_count;
+
+    if (frame_drawable->copy_bitmap_graduality != BITMAP_GRADUAL_FALSE) {
+        if ((frame_drawable->frames_count - last_gradual_frame) >
+            RED_STREAM_FRAMES_RESET_CONDITION) {
+            frame_drawable->frames_count = 1;
+            frame_drawable->gradual_frames_count = 1;
+        } else {
+            frame_drawable->gradual_frames_count++;
+        }
+
+        frame_drawable->last_gradual_frame = frame_drawable->frames_count;
+    } else {
+        frame_drawable->last_gradual_frame = last_gradual_frame;
+    }
+
+    if (red_is_stream_start(frame_drawable)) {
+        red_create_stream(worker, frame_drawable);
+    }
+}
+
 static inline void red_stream_maintenance(RedWorker *worker, Drawable *candidate, Drawable *prev)
 {
     Stream *stream;
@@ -2691,6 +2773,8 @@ static inline void red_stream_maintenance(RedWorker *worker, Drawable *candidate
 #else
     if (!worker->streaming_video ||
                         !red_is_next_stream_frame(candidate, prev, worker->dev_info.phys_delta)) {
+    if ((worker->streaming_video == STREAM_VIDEO_OFF) ||
+                         !red_is_next_stream_frame(candidate, prev, worker->dev_info.phys_delta) {
         return;
     }
 #endif
@@ -2719,9 +2803,11 @@ static inline void red_stream_maintenance(RedWorker *worker, Drawable *candidate
             }
         }
 #endif
-    } else if ((candidate->frames_count = prev->frames_count + 1) ==
-                                                                RED_STREAM_START_CONDITION) {
-        red_create_stream(worker, candidate);
+    } else {
+        red_stream_add_frame(worker, candidate,
+                             prev->frames_count,
+                             prev->gradual_frames_count,
+                             prev->last_gradual_frame);
     }
 }
 
@@ -2823,12 +2909,12 @@ static inline void red_use_stream_trace(RedWorker *worker, Drawable *drawable)
     trace = worker->items_trace;
     trace_end = trace + NUM_TRACE_ITEMS;
     for (; trace < trace_end; trace++) {
-        if (__red_is_next_stream_frame(drawable, trace->width, trace->height, &trace->dest_area,
-                                       trace->time, NULL, worker->dev_info.phys_delta)) {
-            if ((drawable->frames_count = trace->frames_count + 1) == RED_STREAM_START_CONDITION) {
-                red_create_stream(worker, drawable);
-            }
-            return;
+        if (__red_is_next_stream_frame(drawable, trace->width, trace->height,
+                                       &trace->dest_area, trace->time, NULL, worker->dev_info.phys_delta)) {
+            red_stream_add_frame(worker, drawable,
+                                 trace->frames_count,
+                                 trace->gradual_frames_count,
+                                 trace->last_gradual_frame);
         }
     }
 }
@@ -3174,7 +3260,7 @@ static inline void red_update_streamable(RedWorker *worker, Drawable *drawable,
 {
     QXLImage *qxl_image;
 
-    if (!worker->streaming_video) {
+    if (worker->streaming_video == STREAM_VIDEO_OFF) {
         return;
     }
 
@@ -5398,8 +5484,12 @@ static inline int red_compress_image(DisplayChannel *display_channel,
                 if ((src->x < MIN_DIMENSION_TO_QUIC) || (src->y < MIN_DIMENSION_TO_QUIC)) {
                     quic_compress = FALSE;
                 } else {
-                    quic_compress = BITMAP_FMT_IS_RGB[src->format] &&
-                        _bitmap_is_gradual(display_channel->base.worker, src);
+                    if (drawable->copy_bitmap_graduality == BITMAP_GRADUAL_INVALID) {
+                        quic_compress = BITMAP_FMT_IS_RGB[src->format] &&
+                            _bitmap_is_gradual(display_channel->base.worker, src);
+                    } else {
+                        quic_compress = (drawable->copy_bitmap_graduality == BITMAP_GRADUAL_TRUE);
+                    }
                 }
             } else {
                 quic_compress = FALSE;
@@ -8191,7 +8281,20 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         break;
     case RED_WORKER_MESSAGE_SET_STREAMING_VIDEO:
         receive_data(worker->channel, &worker->streaming_video, sizeof(uint32_t));
-        red_printf("sv %u", worker->streaming_video);
+        ASSERT(worker->streaming_video != STREAM_VIDEO_INVALID);
+        switch(worker->streaming_video) {
+            case STREAM_VIDEO_ALL:
+                red_printf("sv all");
+                break;
+            case STREAM_VIDEO_FILTER:
+                red_printf("sv filter");
+                break;
+            case STREAM_VIDEO_OFF:
+                red_printf("sv off");
+                break;
+            default:
+                red_printf("sv invalid");
+        }
         break;
     case RED_WORKER_MESSAGE_SET_MOUSE_MODE:
         receive_data(worker->channel, &worker->mouse_mode, sizeof(uint32_t));
