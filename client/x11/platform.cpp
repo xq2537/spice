@@ -26,7 +26,9 @@
 #include <X11/extensions/render.h>
 #include <X11/extensions/XKB.h>
 #include <X11/extensions/Xrender.h>
+#include <X11/extensions/XShm.h>
 #include <unistd.h>
+#include <sys/socket.h>
 #include <sys/epoll.h>
 #include <sys/resource.h>
 #include <sys/types.h>
@@ -63,6 +65,7 @@
 #endif
 
 static Display* x_display = NULL;
+static bool x_shm_avail = false;
 static XVisualInfo **vinfo = NULL;
 static GLXFBConfig **fb_config = NULL;
 static XIM x_input_method = NULL;
@@ -183,6 +186,11 @@ void XEventHandler::on_event()
 Display* XPlatform::get_display()
 {
     return x_display;
+}
+
+bool XPlatform::is_x_shm_avail()
+{
+    return x_shm_avail;
 }
 
 XVisualInfo** XPlatform::get_vinfo()
@@ -2095,6 +2103,9 @@ void Platform::init()
 {
     int err, ev;
     int threads_enable;
+    int connection_fd;
+    socklen_t sock_len;
+    struct sockaddr sock_addr;
 
     DBG(0, "");
 
@@ -2105,6 +2116,12 @@ void Platform::init()
 
     if (!(x_display = XOpenDisplay(NULL))) {
         THROW("open X display failed");
+    }
+
+    connection_fd = ConnectionNumber(x_display);
+    if (!getsockname(connection_fd, &sock_addr, &sock_len) &&
+        XShmQueryExtension(x_display) && sock_addr.sa_family == AF_UNIX ) {
+        x_shm_avail = true;
     }
 
     vinfo = new XVisualInfo *[ScreenCount(x_display)];
