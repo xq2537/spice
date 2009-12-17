@@ -36,6 +36,7 @@ RedPixmapCairo::RedPixmapCairo(int width, int height, RedPixmap::Format format,
     XShmSegmentInfo *shminfo = NULL;
     _data = NULL;
     XVisualInfo *vinfo = NULL;
+    bool using_shm = false;
 
 
     try {
@@ -45,7 +46,9 @@ RedPixmapCairo::RedPixmapCairo(int width, int height, RedPixmap::Format format,
             vinfo = XPlatform::get_vinfo()[win->get_screen_num()];
         }
 
-        if (vinfo && XShmQueryExtension(XPlatform::get_display())) {
+        using_shm = vinfo && XPlatform::is_x_shm_avail();
+
+        if (using_shm) {
             int depth;
 
             switch (format) {
@@ -146,14 +149,14 @@ RedPixmapCairo::RedPixmapCairo(int width, int height, RedPixmap::Format format,
         if (cairo_status(cairo) != CAIRO_STATUS_SUCCESS) {
             THROW("cairo create failed failed");
         }
-        if (!(vinfo && XShmQueryExtension(XPlatform::get_display()))) {
+        if (!using_shm) {
             ((PixelsSource_p*)get_opaque())->pixmap.cairo_surf = cairo_surf;
         } else {
             ((PixelsSource_p*)get_opaque())->x_shm_drawable.cairo_surf = cairo_surf;
         }
         ((RedDrawable_p*)get_opaque())->cairo = cairo;
     } catch (...) {
-        if (vinfo && XShmQueryExtension(XPlatform::get_display())) {
+        if (using_shm) {
             if (image) {
                 XDestroyImage(image);
             }

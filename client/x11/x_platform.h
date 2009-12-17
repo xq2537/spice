@@ -30,6 +30,8 @@ public:
 
     static void on_focus_in();
     static void on_focus_out();
+
+    static bool is_x_shm_avail();
 };
 
 #endif
