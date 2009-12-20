@@ -2910,7 +2910,7 @@ static inline void red_use_stream_trace(RedWorker *worker, Drawable *drawable)
     trace_end = trace + NUM_TRACE_ITEMS;
     for (; trace < trace_end; trace++) {
         if (__red_is_next_stream_frame(drawable, trace->width, trace->height,
-                                       &trace->dest_area, trace->time, NULL, worker->dev_info.phys_delta)) {
+                              &trace->dest_area, trace->time, NULL, worker->dev_info.phys_delta)) {
             red_stream_add_frame(worker, drawable,
                                  trace->frames_count,
                                  trace->gradual_frames_count,
@@ -3183,7 +3183,9 @@ static void add_clip_rects(QRegion *rgn, PHYSICAL data, unsigned long phys_delta
 
 static inline Shadow *__new_shadow(RedWorker *worker, Drawable *item, Point *delta)
 {
-    ASSERT(delta->x || delta->y);
+    if (!delta->x && !delta->y) {
+        return NULL;
+    }
 
     Shadow *shadow = malloc(sizeof(Shadow));
     if (!shadow) {
