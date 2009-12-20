@@ -3297,7 +3297,9 @@ static void add_clip_rects(RedWorker *worker, QRegion *rgn, PHYSICAL data)
 
 static inline Shadow *__new_shadow(RedWorker *worker, Drawable *item, Point *delta)
 {
-    ASSERT(delta->x || delta->y);
+    if (!delta->x && !delta->y) {
+        return NULL;
+    }
 
     Shadow *shadow = malloc(sizeof(Shadow));
     if (!shadow) {
