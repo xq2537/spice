@@ -3163,7 +3163,11 @@ static void openssl_thread_setup()
 
 static void reds_init_ssl()
 {
+#if OPENSSL_VERSION_NUMBER >= 0x10000000L
+    const SSL_METHOD *ssl_method;
+#else
     SSL_METHOD *ssl_method;
+#endif
     int return_code;
     long ssl_options = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3;
 
