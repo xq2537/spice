@@ -405,6 +405,9 @@ int red_dispatcher_count()
 uint32_t red_dispatcher_qxl_ram_size()
 {
     QXLDevInfo qxl_info;
+    if (!dispatchers) {
+        return 0;
+    }
     dispatchers->qxl_interface->get_info(dispatchers->qxl_interface, &qxl_info);
     return qxl_info.ram_size;
 }
