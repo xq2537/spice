@@ -64,7 +64,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="log4cppD.lib libqcairo-2.dll.lib libeay32MTd.lib ssleay32MTd.lib ws2_32.lib msimg32.lib winmm.lib avcodec-52.lib avutil-49.lib libcelt_0_5_1D.lib pthreadsD.lib version.lib"
+				AdditionalDependencies="log4cppD.lib libqcairo-2.dll.lib libeay32MTd.lib ssleay32MTd.lib ws2_32.lib msimg32.lib winmm.lib avcodec-51.lib avutil-49.lib libcelt_0_5_1D.lib pthreadsD.lib version.lib"
 				OutputFile="$(OutDir)\spicec.exe"
 				LinkIncremental="2"
 				AdditionalLibraryDirectories="&quot;$(SPICE_LIBS)\lib&quot;"
@@ -144,7 +144,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="log4cpp.lib libqcairo-2.dll.lib libeay32MT.lib ssleay32MT.lib ws2_32.lib msimg32.lib winmm.lib avcodec-52.lib avutil-49.lib libcelt_0_5_1.lib pthreads.lib version.lib"
+				AdditionalDependencies="log4cpp.lib libqcairo-2.dll.lib libeay32MT.lib ssleay32MT.lib ws2_32.lib msimg32.lib winmm.lib avcodec-51.lib avutil-49.lib libcelt_0_5_1.lib pthreads.lib version.lib"
 				OutputFile="$(OutDir)\spicec.exe"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories="&quot;$(SPICE_LIBS)\lib&quot;"
