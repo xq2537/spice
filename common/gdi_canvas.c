@@ -1157,14 +1157,19 @@ void gdi_canvas_draw_transparent(GdiCanvas *canvas, Rect *bbox, Clip *clip,
 }
 
 static void gdi_draw_bitmap_alpha(HDC dest_dc, const Rect *src, const Rect *dest,
-                                  HDC src_dc, uint8_t alpha)
+                                  HDC src_dc, uint8_t alpha, int use_bitmap_alpha)
 {
     BLENDFUNCTION bf;
 
     bf.BlendOp = AC_SRC_OVER;
     bf.BlendFlags = 0;
     bf.SourceConstantAlpha = alpha;
-    bf.AlphaFormat = AC_SRC_ALPHA;
+
+    if (use_bitmap_alpha) {
+        bf.AlphaFormat = AC_SRC_ALPHA;
+    } else {
+        bf.AlphaFormat = 0;
+    }
 
     if (!AlphaBlend(dest_dc, dest->left, dest->top, dest->right - dest->left,
                     dest->bottom - dest->top, src_dc, src->left, src->top,
@@ -1176,7 +1181,7 @@ static void gdi_draw_bitmap_alpha(HDC dest_dc, const Rect *src, const Rect *dest
 static void gdi_draw_image_alpha(HDC dest_dc, const Rect *src, const Rect *dest,
                                  const uint8_t *bitmap_data, int bit_stride,
                                  int bit_width, int bit_height, uint8_t alpha,
-                                 int rotate)
+                                 int rotate, int use_bitmap_alpha)
 {
     HDC dc;
     HBITMAP bitmap;
@@ -1185,7 +1190,7 @@ static void gdi_draw_image_alpha(HDC dest_dc, const Rect *src, const Rect *dest,
     create_bitmap(&bitmap, &prev_bitmap, &dc, bitmap_data, bit_width, bit_height,
                   bit_stride, 32, rotate);
 
-    gdi_draw_bitmap_alpha(dest_dc, src, dest, dc, alpha);
+    gdi_draw_bitmap_alpha(dest_dc, src, dest, dc, alpha, use_bitmap_alpha);
 
     release_bitmap(dc, bitmap, prev_bitmap, 0);
 }
@@ -1195,8 +1200,10 @@ void gdi_canvas_draw_alpha_blend(GdiCanvas *canvas, Rect *bbox, Clip *clip, Alph
     cairo_surface_t *surface;
     GdiImage image;
     BitmapCache *bitmap_cache;
+    int use_bitmap_alpha;
 
     surface = canvas_get_image(&canvas->base, alpha_blend->src_bitmap);
+    use_bitmap_alpha = cairo_image_surface_get_format(surface) == CAIRO_FORMAT_ARGB32;
     bitmap_cache = (BitmapCache *)cairo_surface_get_user_data(surface, &bitmap_data_type);
 
     Lock lock(*canvas->lock);
@@ -1207,7 +1214,8 @@ void gdi_canvas_draw_alpha_blend(GdiCanvas *canvas, Rect *bbox, Clip *clip, Alph
 
         dc = create_compatible_dc();
         prev_bitmap = (HBITMAP)SelectObject(dc, bitmap_cache->bitmap);
-        gdi_draw_bitmap_alpha(canvas->dc, &alpha_blend->src_area, bbox, dc, alpha_blend->alpha);
+        gdi_draw_bitmap_alpha(canvas->dc, &alpha_blend->src_area, bbox, dc, alpha_blend->alpha,
+                              use_bitmap_alpha);
         SelectObject(dc, prev_bitmap);
         DeleteObject(dc);
         ReleaseMutex(bitmap_cache->mutex);
@@ -1215,7 +1223,7 @@ void gdi_canvas_draw_alpha_blend(GdiCanvas *canvas, Rect *bbox, Clip *clip, Alph
         surface_to_image(surface, &image);
         gdi_draw_image_alpha(canvas->dc, &alpha_blend->src_area, bbox, image.pixels,
                              image.stride, image.width, image.height,
-                             alpha_blend->alpha, 0);
+                             alpha_blend->alpha, 0, use_bitmap_alpha);
     }
 
     cairo_surface_destroy(surface);
