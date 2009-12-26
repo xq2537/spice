@@ -62,21 +62,7 @@ void ConnectedEvent::response(AbstractProcessLoop& events_loop)
 void DisconnectedEvent::response(AbstractProcessLoop& events_loop)
 {
     Application* app = static_cast<Application*>(events_loop.get_owner());
-#ifdef RED_DEBUG
-    app->show_splash(0);
-#else
-    app->do_quit(SPICEC_ERROR_CODE_SUCCESS);
-#endif
-}
-
-void ConnectionErrorEvent::response(AbstractProcessLoop& events_loop)
-{
-    Application* app = static_cast<Application*>(events_loop.get_owner());
-#ifdef RED_DEBUG
-    app->show_splash(0);
-#else
-    app->do_quit(_error_code);
-#endif
+    app->on_disconnected(_error_code);
 }
 
 void VisibilityEvent::response(AbstractProcessLoop& events_loop)
@@ -601,6 +587,16 @@ void Application::unpress_all()
 
 void Application::on_connected()
 {
+
+}
+
+void Application::on_disconnected(int error_code)
+{
+#ifdef RED_DEBUG
+    show_splash(0);
+#else
+    do_quit(error_code);
+#endif
 }
 
 void Application::on_visibility_start(int screen_id)

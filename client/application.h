@@ -44,13 +44,10 @@ public:
 
 class DisconnectedEvent: public Event {
 public:
+    DisconnectedEvent() : _error_code (SPICEC_ERROR_CODE_SUCCESS) {}
+    DisconnectedEvent(int error_code) : _error_code (error_code) {}
     virtual void response(AbstractProcessLoop& events_loop);
-};
 
-class ConnectionErrorEvent: public Event {
-public:
-    ConnectionErrorEvent(int error_code) : _error_code (error_code) {}
-    virtual void response(AbstractProcessLoop& events_loop);
 private:
     int _error_code;
 };
@@ -152,6 +149,7 @@ public:
     virtual void on_monitors_change();
     virtual void on_display_mode_change();
     void on_connected();
+    void on_disconnected(int spice_error_code);
     void on_disconnecting();
     void on_visibility_start(int screen_id);
 

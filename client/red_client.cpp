@@ -469,14 +469,8 @@ void RedClient::on_channel_disconnected(RedChannel& channel)
     if (_notify_disconnect) {
         _notify_disconnect = false;
         int connection_error = channel.get_connection_error();
-        if (connection_error == SPICEC_ERROR_CODE_SUCCESS) {
-            AutoRef<DisconnectedEvent> disconn_event(new DisconnectedEvent());
-            LOG_INFO("disconneted");
-            push_event(*disconn_event);
-        } else {
-             AutoRef<ConnectionErrorEvent> error_event(new ConnectionErrorEvent(connection_error));
-             push_event(*error_event);
-        }
+        AutoRef<DisconnectedEvent> disconn_event(new DisconnectedEvent(connection_error));
+        push_event(*disconn_event);
     }
     disconnect_channels();
     RedPeer::disconnect();
