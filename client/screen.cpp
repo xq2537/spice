@@ -192,7 +192,14 @@ void RedScreen::set_mode(int width, int height, int depth)
             capture_mouse();
         }
     } else {
+        bool cuptur = is_mouse_captured();
+        if (cuptur) {
+            relase_mouse();
+        }
         _window.resize(_size.x, _size.y);
+        if (_active && cuptur) {
+            capture_mouse();
+        }
     }
     notify_new_size();
 }
@@ -676,7 +683,6 @@ void RedScreen::on_activate()
     _active = true;
     _owner.on_activate_screen(this);
 }
-
 
 void RedScreen::on_start_key_interception()
 {
