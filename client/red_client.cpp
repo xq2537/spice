@@ -422,10 +422,15 @@ RedPeer::ConnectionOptions::Type RedClient::get_connection_options(uint32_t chan
 
 void RedClient::connect()
 {
-    //todo wait for disconnect state
-    if (_connection_id || !abort_channels()) {
+    if (_connection_id) {
         return;
     }
+
+    while (!abort_channels()) {
+        _application.process_events_queue();
+        Platform::msleep(100);
+    }
+
     _pixmap_cache.clear();
     _glz_window.clear();
     memset(_sync_info, 0, sizeof(_sync_info));
