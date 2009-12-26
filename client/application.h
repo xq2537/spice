@@ -55,6 +55,16 @@ private:
     int _error_code;
 };
 
+class VisibilityEvent: public Event {
+public:
+    VisibilityEvent(int screen_id) : _screen_id (screen_id) {}
+
+    virtual void response(AbstractProcessLoop& events_loop);
+
+private:
+    int _screen_id;
+};
+
 struct MonitorInfo {
     int depth;
     Point size;
@@ -143,6 +153,7 @@ public:
     virtual void on_display_mode_change();
     void on_connected();
     void on_disconnecting();
+    void on_visibility_start(int screen_id);
 
     bool rearrange_monitors(RedScreen& screen);
     void enter_full_screen();

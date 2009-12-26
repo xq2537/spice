@@ -79,6 +79,12 @@ void ConnectionErrorEvent::response(AbstractProcessLoop& events_loop)
 #endif
 }
 
+void VisibilityEvent::response(AbstractProcessLoop& events_loop)
+{
+    Application* app = static_cast<Application*>(events_loop.get_owner());
+    app->on_visibility_start(_screen_id);
+}
+
 void MonitorsQuery::do_response(AbstractProcessLoop& events_loop)
 {
     Monitor* mon;
@@ -595,6 +601,15 @@ void Application::unpress_all()
 
 void Application::on_connected()
 {
+}
+
+void Application::on_visibility_start(int screen_id)
+{
+    if (screen_id) {
+        return;
+    }
+
+    hide_splash(0);
 }
 
 void Application::on_disconnecting()

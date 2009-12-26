@@ -88,22 +88,6 @@ private:
     AutoRef<RedScreen> _screen;
 };
 
-class DisplayMarkEvent: public Event {
-public:
-    DisplayMarkEvent(int screen_id)
-        : _screen_id (screen_id)
-    {
-    }
-
-    virtual void response(AbstractProcessLoop& events_loop)
-    {
-        static_cast<Application*>(events_loop.get_owner())->hide_splash(_screen_id);
-    }
-
-private:
-    int _screen_id;
-};
-
 #define CLIP_ARRAY_SIZE 1500
 #define CLIP_ARRAY_SHIFT 500
 
@@ -1290,7 +1274,7 @@ void DisplayChannel::handle_mark(RedPeer::InMessage *message)
     area.right = _x_res;
     area.bottom = _y_res;
 
-    AutoRef<DisplayMarkEvent> event(new DisplayMarkEvent(get_id()));
+    AutoRef<VisibilityEvent> event(new VisibilityEvent(get_id()));
     get_client().push_event(*event);
     set_rect_area(area);
 }
