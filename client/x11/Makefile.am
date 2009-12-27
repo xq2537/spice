@@ -22,6 +22,7 @@ INCLUDES = \
 	$(CELT051_CFLAGS)				\
 	$(SSL_CFLAGS)					\
 	$(XRANDR_CFLAGS)				\
+	$(CEGUI_CFLAGS)					\
 	$(WARN_CFLAGS)                                  \
 	$(NULL)
 
@@ -101,7 +102,11 @@ RED_COMMON_SRCS = 					\
 	$(top_srcdir)/client/tunnel_channel.h		\
 	$(top_srcdir)/client/utils.cpp			\
 	$(top_srcdir)/client/utils.h			\
-        $(top_srcdir)/client/icon.h                     \
+	$(top_srcdir)/client/icon.h                     \
+	$(top_srcdir)/client/gui/softrenderer.h         \
+	$(top_srcdir)/client/gui/softrenderer.cpp       \
+	$(top_srcdir)/client/gui/softtexture.h		\
+	$(top_srcdir)/client/gui/softtexture.cpp	\
 	$(NULL)
 
 bin_PROGRAMS = spicec
@@ -141,7 +146,7 @@ spicec_LDFLAGS = \
 	$(LOG4CPP_LIBS)					\
 	$(CELT051_LIBS)					\
 	$(SSL_LIBS)					\
-	$(SPICEC_STATIC_LINKAGE_BDYNAMIC)
+	$(CEGUI_LIBS)
 
 spicec_LDADD =						\
 	$(QCAIRO_LIBS)					\
@@ -149,5 +154,6 @@ spicec_LDADD =						\
 	$(ALSA_LIBS)					\
 	$(GL_LIBS)					\
 	$(XRANDR_LIBS)					\
+	$(CEGUI_LIBS)					\
 	-lrt
 
