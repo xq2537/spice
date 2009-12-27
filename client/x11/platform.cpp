@@ -249,6 +249,15 @@ uint64_t Platform::get_thread_id()
     return uint64_t(syscall(SYS_gettid));
 }
 
+void Platform::error_beep()
+{
+    if (!x_display) {
+        return;
+    }
+
+    XBell(x_display, 0);
+}
+
 void Platform::msleep(unsigned int millisec)
 {
     usleep(millisec * 1000);

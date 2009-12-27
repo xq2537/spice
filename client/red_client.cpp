@@ -274,9 +274,12 @@ public:
 RedClient::RedClient(Application& application)
     : RedChannel(*this, RED_CHANNEL_MAIN, 0, new MainChannelLoop(*this))
     , _application (application)
+    , _port (-1)
+    , _sport (-1)
     , _connection_id (0)
     , _mouse_mode (RED_MOUSE_MODE_SERVER)
     , _notify_disconnect (false)
+    , _auto_display_res (false)
     , _aborting (false)
     , _agent_connected (false)
     , _agent_mon_config_sent (false)
@@ -326,22 +329,7 @@ RedClient::~RedClient()
     delete _agent_msg;
 }
 
-void RedClient::init(const char* host, int port, int sport, const char *password,
-                     bool auto_display_res)
-{
-    _host = host;
-    _port = port;
-    _sport = sport;
-    _auto_display_res = auto_display_res;
-
-    if (password != NULL) {
-        _password = password;
-    } else {
-        _password = "";
-    }
-}
-
-void RedClient::set_target(const char* host, uint16_t port, uint16_t sport)
+void RedClient::set_target(const std::string& host, int port, int sport)
 {
     _port = port;
     _sport = sport;

@@ -37,7 +37,9 @@ class RedScreen;
 enum {
     SCREEN_LAYER_DISPLAY,
     SCREEN_LAYER_CURSOR,
+    SCREEN_LAYER_GUI_BARIER,
     SCREEN_LAYER_GUI,
+    SCREEN_LAYER_INFO,
 };
 
 class UpdateTimer: public Timer {

@@ -131,8 +131,6 @@ public:
     RedClient(Application& application);
     ~RedClient();
 
-    void init(const char* host, int port, int sport, const char *password, bool auto_display_res);
-
     void register_channel_factory(ChannelFactory& factory);
 
     virtual void connect();
@@ -143,9 +141,11 @@ public:
     void activate_interval_timer(Timer* timer, unsigned int millisec);
     void deactivate_interval_timer(Timer* timer);
 
-    void set_target(const char* host, uint16_t port, uint16_t sport);
-    const char* get_password() { return _password.c_str();}
-    const char* get_host() { return _host.c_str();}
+    void set_target(const std::string&, int port, int sport);
+    void set_password(const std::string& password) { _password = password;}
+    void set_auto_display_res(bool auto_display_res) { _auto_display_res = auto_display_res;}
+    const std::string& get_password() { return _password;}
+    const std::string& get_host() { return _host;}
     int get_port() { return _port;}
     int get_sport() { return _sport;}
     virtual uint32_t get_connection_id() { return _connection_id;}
@@ -202,10 +202,10 @@ private:
 private:
     Application& _application;
 
-    std::string _password;
     std::string _host;
     int _port;
     int _sport;
+    std::string _password;
     uint32_t _connection_id;
     uint32_t _mouse_mode;
     Mutex _notify_lock;

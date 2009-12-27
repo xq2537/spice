@@ -107,6 +107,10 @@ RED_COMMON_SRCS = 					\
 	$(top_srcdir)/client/gui/softrenderer.cpp       \
 	$(top_srcdir)/client/gui/softtexture.h		\
 	$(top_srcdir)/client/gui/softtexture.cpp	\
+	$(top_srcdir)/client/gui/resource_provider.h	\
+	$(top_srcdir)/client/gui/resource_provider.cpp	\
+	$(top_srcdir)/client/gui/gui.h			\
+	$(top_srcdir)/client/gui/gui.cpp		\
 	$(NULL)
 
 bin_PROGRAMS = spicec

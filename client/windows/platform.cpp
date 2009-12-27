@@ -218,6 +218,11 @@ uint64_t Platform::get_thread_id()
     return GetCurrentThreadId();
 }
 
+void Platform::error_beep()
+{
+    MessageBeep(MB_ICONERROR);
+}
+
 class WinMonitor: public Monitor {
 public:
     WinMonitor(int id, const wchar_t* name, const wchar_t* string);

@@ -40,6 +40,7 @@ public:
     static void get_temp_dir(std::string& path);
     static uint64_t get_process_id();
     static uint64_t get_thread_id();
+    static void error_beep();
 
     static const MonitorsList& init_monitors();
     static void destroy_monitors();

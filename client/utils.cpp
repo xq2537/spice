@@ -37,3 +37,14 @@ void wstring_printf(std::wstring& str, const wchar_t* format, ...)
     va_end(ap);
 }
 
+int str_to_port(const char *str)
+{
+    long port;
+    char *endptr;
+    port = strtol(str, &endptr, 0);
+    if (endptr != str + strlen(str) || port < 0 || port > 0xffff) {
+        return -1;
+    }
+    return port;
+}
+

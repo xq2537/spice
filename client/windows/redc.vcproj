@@ -241,6 +241,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\gui\gui.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\hot_keys.cpp"
 				>
 			</File>
@@ -371,6 +375,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\gui\resource_provider.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\rop3.cpp"
 				>
 			</File>
@@ -481,6 +489,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\gui\gui.h"
+				>
+			</File>
+			<File
 				RelativePath="..\hot_keys.h"
 				>
 			</File>
@@ -566,6 +578,10 @@
 			</File>
 			<File
 				RelativePath=".\resource.h"
+				>
+			</File>
+			<File
+				RelativePath="..\gui\resource_provider.h"
 				>
 			</File>
 			<File

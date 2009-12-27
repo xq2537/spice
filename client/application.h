@@ -30,11 +30,18 @@
 class RedScreen;
 class Application;
 class ScreenLayer;
-class GUILayer;
+class InfoLayer;
 class InputsHandler;
 class Monitor;
 class CmdLineParser;
 class Menu;
+class GUI;
+class GUITimer;
+class GUIBarrier;
+
+#ifdef GUI_DEMO
+class TestTimer;
+#endif
 
 
 class ConnectedEvent: public Event {
@@ -112,12 +119,28 @@ typedef struct StickyInfo {
 
 
 typedef std::list<KeyHandler*> KeyHandlersStack;
+typedef std::list<GUIBarrier*> GUIBarriers;
 
 class Application : public ProcessLoop,
                     public Platform::EventListener,
                     public Platform::DisplayModeListner,
                     public CommandTarget {
 public:
+
+    enum State {
+        DISCONNECTED,
+        CONNECTING,
+        CONNECTED,
+        VISIBILITY,
+        DISCONECTING,
+    };
+
+    enum GuiMode {
+        GUI_MODE_FULL,
+        GUI_MODE_ACTIVE_SESSION,
+        GUI_MODE_MINIMAL,
+    };
+
     Application();
     virtual ~Application();
 
@@ -158,8 +181,6 @@ public:
     void exit_full_screen();
     bool toggle_full_screen();
     void minimize();
-    void show_splash(int screen_id);
-    void hide_splash(int screen_id);
     void set_title(std::wstring& title);
     void hide();
     void show();
@@ -172,12 +193,32 @@ public:
     Menu* get_app_menu();
     virtual void do_command(int command);
 
+
+    //controller interface begin
+    bool connect(const std::string& host, int port, int sport, const std::string& password);
+    void disconnect();
+    void quit();
+    void hide_me();
+    void beep();
+    bool is_disconnect_allowed();
+
+    const std::string& get_host();
+    int get_port();
+    int get_sport();
+    const std::string& get_password();
+    //controller interface end
+
+#ifdef GUI_DEMO
+    void message_box_test();
+#endif
+
     static int main(int argc, char** argv, const char* version_str);
 
 private:
     bool set_channels_security(CmdLineParser& parser, bool on, char *val);
     bool set_enable_channels(CmdLineParser& parser, bool enable, char *val);
     bool set_canvas_option(CmdLineParser& parser, char *val);
+    void register_channels();
     bool process_cmd_line(int argc, char** argv);
     void abort();
     void init_menu();
@@ -185,6 +226,7 @@ private:
     bool release_capture();
     bool do_connect();
     bool do_disconnect();
+    void set_state(State);
 
     void restore_screens_size();
     Monitor* find_monitor(int id);
@@ -207,6 +249,16 @@ private:
     bool is_key_set_pressed(const HotkeySet& key_set);
     void do_on_key_up(RedKey key);
     void __remove_key_handler(KeyHandler& handler);
+
+    void show_info_layer();
+    void hide_info_layer();
+    void attach_gui_barriers();
+    void detach_gui_barriers();
+    void show_gui();
+    void hide_gui();
+    void create_gui_barrier(RedScreen& screen, int id);
+    void destroyed_gui_barrier(int id);
+    void destroyed_gui_barriers();
 
     // returns the press value before operation (i.e., if it was already pressed)
     bool press_key(RedKey key);
@@ -238,17 +290,25 @@ private:
     int _num_keys_pressed;
     HotKeys _hot_keys;
     CommandsMap _commands_map;
-    std::auto_ptr<GUILayer> _gui_layer;
+    std::auto_ptr<InfoLayer> _info_layer;
     KeyHandler* _key_handler;
     KeyHandlersStack _key_handlers;
     MouseHandler* _mouse_handler;
     const MonitorsList* _monitors;
     std::wstring _title;
-    bool _splash_mode;
     bool _sys_key_intercept_mode;
     StickyInfo _sticky_info;
     std::vector<int> _canvas_types;
     AutoRef<Menu> _app_menu;
+    std::auto_ptr<GUI> _gui;
+    AutoRef<GUITimer> _gui_timer;
+    GUIBarriers _gui_barriers;
+    GuiMode _gui_mode;
+#ifdef GUI_DEMO
+    AutoRef<TestTimer> _gui_test_timer;
+#endif
+
+    State _state;
 };
 
 #endif

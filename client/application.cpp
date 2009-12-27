@@ -42,6 +42,7 @@
 #include "cmd_line_parser.h"
 #include "tunnel_channel.h"
 #include "rect.h"
+#include "gui/gui.h"
 
 #include <log4cpp/BasicConfigurator.hh>
 #include <log4cpp/FileAppender.hh>
@@ -85,54 +86,86 @@ void MonitorsQuery::do_response(AbstractProcessLoop& events_loop)
     }
 }
 
-class GUILayer: public ScreenLayer {
+//todo: add inactive visual appearance
+class GUIBarrier: public ScreenLayer {
 public:
-    GUILayer();
+    GUIBarrier(int id)
+        : ScreenLayer(SCREEN_LAYER_GUI_BARIER, true)
+        , _id (id)
+        , _cursor (Platform::create_inactive_cursor())
+    {
+    }
+
+    ~GUIBarrier()
+    {
+        detach();
+    }
+
+    int get_id() { return _id;}
+
+    void attach(RedScreen& in_screen)
+    {
+        if (screen()) {
+            ASSERT(&in_screen == screen())
+            return;
+        }
+        in_screen.attach_layer(*this);
+    }
+
+    void detach()
+    {
+        if (!screen()) {
+            return;
+        }
+        screen()->detach_layer(*this);
+    }
+
+    virtual bool pointer_test(int x, int y) { return true;}
+    virtual void on_pointer_enter(int x, int y, unsigned int buttons_state)
+    {
+        AutoRef<LocalCursor> cursor(Platform::create_inactive_cursor());
+        screen()->set_cursor(*cursor);
+        return;
+    }
+
+private:
+    int _id;
+    AutoRef<LocalCursor> _cursor;
+};
+
+class InfoLayer: public ScreenLayer {
+public:
+    InfoLayer();
 
     virtual void copy_pixels(const QRegion& dest_region, RedDrawable& dest_dc);
 
-    void set_splash_mode();
     void set_info_mode();
     void set_sticky(bool is_on);
     virtual void on_size_changed();
 
 private:
-    void draw_splash(const QRegion& dest_region, RedDrawable& dest);
     void draw_info(const QRegion& dest_region, RedDrawable& dest);
+    void update_sticky_rect();
 
 private:
-    ImageFromRes _splash_pixmap;
     AlphaImageFromRes _info_pixmap;
     AlphaImageFromRes _sticky_pixmap;
-    Point _splash_pos;
     Point _info_pos;
     Point _sticky_pos;
     Rect _sticky_rect;
-    bool _splash_mode;
     bool _sticky_on;
     RecurciveMutex _update_lock;
 };
 
-GUILayer::GUILayer()
-    : ScreenLayer(SCREEN_LAYER_GUI, false)
-    , _splash_pixmap (SPLASH_IMAGE_RES_ID)
+InfoLayer::InfoLayer()
+    : ScreenLayer(SCREEN_LAYER_INFO, false)
     , _info_pixmap (INFO_IMAGE_RES_ID)
     , _sticky_pixmap (STICKY_KEY_PIXMAP)
-    , _splash_mode (false)
     , _sticky_on (false)
 {
 }
 
-void GUILayer::draw_splash(const QRegion& dest_region, RedDrawable& dest)
-{
-    ASSERT(!_sticky_on);
-    for (int i = 0; i < (int)dest_region.num_rects; i++) {
-        Rect* r = &dest_region.rects[i];
-        dest.copy_pixels(_splash_pixmap, r->left - _splash_pos.x, r->top - _splash_pos.y, *r);
-    }
-}
-
-void GUILayer::draw_info(const QRegion& dest_region, RedDrawable& dest)
+void InfoLayer::draw_info(const QRegion& dest_region, RedDrawable& dest)
 {
     for (int i = 0; i < (int)dest_region.num_rects; i++) {
         Rect* r = &dest_region.rects[i];
@@ -145,36 +178,18 @@ void GUILayer::draw_info(const QRegion& dest_region, RedDrawable& dest)
     }
 }
 
-void GUILayer::copy_pixels(const QRegion& dest_region, RedDrawable& dest_dc)
+void InfoLayer::copy_pixels(const QRegion& dest_region, RedDrawable& dest_dc)
 {
     RecurciveLock lock(_update_lock);
-    if (_splash_mode) {
-        draw_splash(dest_region, dest_dc);
-    } else {
-        draw_info(dest_region, dest_dc);
-    }
+    draw_info(dest_region, dest_dc);
 }
 
-void GUILayer::set_splash_mode()
+void InfoLayer::set_info_mode()
 {
     RecurciveLock lock(_update_lock);
-    Point size = _splash_pixmap.get_size();
-    Point screen_size = screen()->get_size();
-    Rect r;
 
-    _splash_pos.y = r.top = (screen_size.y - size.y) / 2;
-    _splash_pos.x = r.left = (screen_size.x - size.x) / 2;
-    r.bottom = r.top + size.y;
-    r.right = r.left + size.x;
-    _splash_mode = true;
-    lock.unlock();
-    set_rect_area(r);
-    ASSERT(!_sticky_on);
-}
+    ASSERT(screen());
 
-void GUILayer::set_info_mode()
-{
-    RecurciveLock lock(_update_lock);
     Point size = _info_pixmap.get_size();
     Point screen_size = screen()->get_size();
     Rect r;
@@ -184,45 +199,45 @@ void GUILayer::set_info_mode()
     _info_pos.x = r.right - size.x;
     _info_pos.y = r.top = 0;
     r.bottom = r.top + size.y;
-    _splash_mode = false;
     lock.unlock();
     set_rect_area(r);
-
+    update_sticky_rect();
     set_sticky(_sticky_on);
 }
 
-void GUILayer::set_sticky(bool is_on)
+void InfoLayer::update_sticky_rect()
+{
+    Point size = _sticky_pixmap.get_size();
+    Point screen_size = screen()->get_size();
+
+    _sticky_pos.x = (screen_size.x - size.x) / 2;
+    _sticky_pos.y = screen_size.y * 2 / 3;
+    _sticky_rect.left = _sticky_pos.x;
+    _sticky_rect.top = _sticky_pos.y;
+    _sticky_rect.right = _sticky_rect.left + size.x;
+    _sticky_rect.bottom = _sticky_rect.top + size.y;
+}
+
+void InfoLayer::set_sticky(bool is_on)
 {
     RecurciveLock lock(_update_lock);
     if (!_sticky_on && !is_on) {
         return;
     }
 
-    Point size = _sticky_pixmap.get_size();
-    Point screen_size = screen()->get_size();
-
     _sticky_on = is_on;
+
     if (_sticky_on) {
-        _sticky_pos.x = (screen_size.x - size.x) / 2;
-        _sticky_pos.y = screen_size.y * 2 / 3;
-        _sticky_rect.left = _sticky_pos.x;
-        _sticky_rect.top = _sticky_pos.y;
-        _sticky_rect.right = _sticky_rect.left + size.x;
-        _sticky_rect.bottom = _sticky_rect.top + size.y;
         add_rect_area(_sticky_rect);
-        invalidate();
+        invalidate(_sticky_rect);
     } else {
         remove_rect_area(_sticky_rect);
     }
 }
 
-void GUILayer::on_size_changed()
+void InfoLayer::on_size_changed()
 {
-    if (_splash_mode) {
-        set_splash_mode();
-    } else {
-        set_info_mode();
-    }
+    set_info_mode();
 }
 
 void StickyKeyTimer::response(AbstractProcessLoop& events_loop)
@@ -235,9 +250,45 @@ void StickyKeyTimer::response(AbstractProcessLoop& events_loop)
     ASSERT(sticky_info->key_down);
     sticky_info->sticky_mode = true;
     DBG(0, "ON sticky");
-    app->_gui_layer->set_sticky(true);
+    app->_info_layer->set_sticky(true);
     app->deactivate_interval_timer(this);
 }
+
+class GUITimer: public Timer {
+public:
+    GUITimer(GUI& gui)
+        : _gui (gui)
+    {
+    }
+
+    virtual void response(AbstractProcessLoop& events_loop)
+    {
+        _gui.idle();
+    }
+
+private:
+    GUI& _gui;
+};
+
+
+#ifdef GUI_DEMO
+class TestTimer: public Timer {
+public:
+    TestTimer(Application& app)
+        : _app (app)
+    {
+    }
+
+    virtual void response(AbstractProcessLoop& events_loop)
+    {
+        _app.message_box_test();
+    }
+
+private:
+    Application& _app;
+};
+#endif
+
 
 static MouseHandler default_mouse_handler;
 static KeyHandler default_key_handler;
@@ -254,6 +305,7 @@ enum AppCommands {
     APP_CMD_CONNECT,
     APP_CMD_DISCONNECT,
 #endif
+    APP_CMD_SHOW_GUI,
 };
 
 Application::Application()
@@ -267,13 +319,14 @@ Application::Application()
     , _exit_code (0)
     , _active_screen (NULL)
     , _num_keys_pressed (0)
-    , _gui_layer (new GUILayer())
+    , _info_layer (new InfoLayer())
     , _key_handler (&default_key_handler)
     , _mouse_handler (&default_mouse_handler)
     , _monitors (NULL)
     , _title (L"SPICEc:%d")
-    , _splash_mode (true)
     , _sys_key_intercept_mode (false)
+    , _gui_mode (GUI_MODE_FULL)
+    , _state (DISCONNECTED)
 {
     DBG(0, "");
     Platform::set_process_loop(*this);
@@ -281,8 +334,6 @@ Application::Application()
     memset(_keyboard_state, 0, sizeof(_keyboard_state));
     init_menu();
     _main_screen = get_screen(0);
-    _main_screen->attach_layer(*_gui_layer);
-    _gui_layer->set_splash_mode();
 
     Platform::set_event_listener(this);
     Platform::set_display_mode_listner(this);
@@ -293,6 +344,7 @@ Application::Application()
     _commands_map["connect"] = APP_CMD_CONNECT;
     _commands_map["disconnect"] = APP_CMD_DISCONNECT;
 #endif
+    _commands_map["show-gui"] = APP_CMD_SHOW_GUI;
 
     _canvas_types.resize(1);
 #ifdef WIN32
@@ -307,6 +359,7 @@ Application::Application()
                                                           ",connect=shift+f5"
                                                           ",disconnect=shift+f6"
 #endif
+                                                          ",show-gui=shift+f7"
                                                           , _commands_map));
     _hot_keys = parser->get();
 
@@ -316,11 +369,32 @@ Application::Application()
     _sticky_info.key_down = false;
     _sticky_info.key  = REDKEY_INVALID;
     _sticky_info.timer.reset(new StickyKeyTimer());
+
+    _gui.reset(new GUI(*this, DISCONNECTED));
+    _gui_timer.reset(new GUITimer(*_gui.get()));
+    activate_interval_timer(*_gui_timer, 1000 / 30);
+#ifdef GUI_DEMO
+    _gui_test_timer.reset(new TestTimer(*this));
+    activate_interval_timer(*_gui_test_timer, 1000 * 30);
+#endif
+    for (int i = RED_CHANNEL_MAIN; i < RED_CHANNEL_END; i++) {
+        _peer_con_opt[i] = RedPeer::ConnectionOptions::CON_OP_BOTH;
+    }
 }
 
 Application::~Application()
 {
-    _main_screen->detach_layer(*_gui_layer);
+    deactivate_interval_timer(*_gui_timer);
+#ifdef GUI_DEMO
+    deactivate_interval_timer(*_gui_test_timer);
+#endif
+    destroyed_gui_barriers();
+    _gui->set_screen(NULL);
+
+    if (_info_layer->screen()) {
+        _main_screen->detach_layer(*_info_layer);
+    }
+
     _main_screen->unref();
     destroy_monitors();
 }
@@ -405,7 +479,7 @@ void Application::remove_mouse_handler(MouseHandler& handler)
 
 void Application::capture_mouse()
 {
-    if (!_active_screen) {
+    if (!_active_screen || _gui->screen()) {
         return;
     }
     _active_screen->capture_mouse();
@@ -441,15 +515,20 @@ private:
 
 void Application::connect()
 {
+    ASSERT(_state == DISCONNECTED);
+    set_state(CONNECTING);
     _client.connect();
 }
 
 int Application::run()
 {
-       _client.connect();
-       _exit_code = ProcessLoop::run();
-       return _exit_code;
+    if (_gui_mode != GUI_MODE_FULL) {
+        connect();
+    }
 
+    show_gui();
+    _exit_code = ProcessLoop::run();
+    return _exit_code;
 }
 
 RedScreen* Application::find_screen(int id)
@@ -505,6 +584,7 @@ RedScreen* Application::get_screen(int id)
             size.y = SCREEN_INIT_HEIGHT;
         }
         screen = _screens[id] = new RedScreen(*this, id, _title, size.x, size.y);
+        create_gui_barrier(*screen, id);
 
         if (id != 0) {
             if (_full_screen) {
@@ -532,9 +612,64 @@ RedScreen* Application::get_screen(int id)
     return screen;
 }
 
+void Application::attach_gui_barriers()
+{
+    GUIBarriers::iterator iter = _gui_barriers.begin();
+
+    for (; iter != _gui_barriers.end(); iter++) {
+        GUIBarrier* barrier = *iter;
+        ASSERT((int)_screens.size() > barrier->get_id() && _screens[barrier->get_id()]);
+        barrier->attach(*_screens[barrier->get_id()]);
+    }
+}
+
+void Application::detach_gui_barriers()
+{
+    GUIBarriers::iterator iter = _gui_barriers.begin();
+
+    for (; iter != _gui_barriers.end(); iter++) {
+        GUIBarrier* barrier = *iter;
+        barrier->detach();
+    }
+}
+
+void Application::create_gui_barrier(RedScreen& screen, int id)
+{
+     GUIBarrier* barrier = new GUIBarrier(id);
+     _gui_barriers.push_front(barrier);
+     if (_gui.get() && _gui->screen()) {
+         barrier->attach(screen);
+     }
+}
+
+void Application::destroyed_gui_barriers()
+{
+    while (_gui_barriers.begin() != _gui_barriers.end()) {
+        GUIBarrier* barrier = *_gui_barriers.begin();
+        _gui_barriers.erase(_gui_barriers.begin());
+        delete barrier;
+    }
+}
+
+void Application::destroyed_gui_barrier(int id)
+{
+    GUIBarriers::iterator iter = _gui_barriers.begin();
+
+    for (; iter != _gui_barriers.end(); iter++) {
+        GUIBarrier* barrier = *iter;
+        if (barrier->get_id() == id) {
+            _gui_barriers.erase(iter);
+            delete barrier;
+            return;
+        }
+    }
+}
+
 void Application::on_screen_destroyed(int id, bool was_captured)
 {
     bool reposition = false;
+
+    destroyed_gui_barrier(id);
 
     if ((int)_screens.size() < id + 1 || !_screens[id]) {
         THROW("no screen");
@@ -585,18 +720,32 @@ void Application::unpress_all()
     }
 }
 
+void Application::set_state(State state)
+{
+    if (state == _state) {
+        return;
+    }
+    _state = state;
+    _gui->set_state(_state);
+    if (_gui->screen() && !_gui->is_visible()) {
+        hide_gui();
+    }
+    reset_sticky();
+}
+
 void Application::on_connected()
 {
-
+    set_state(CONNECTED);
 }
 
 void Application::on_disconnected(int error_code)
 {
-#ifdef RED_DEBUG
-    show_splash(0);
-#else
-    do_quit(error_code);
-#endif
+    if (_gui_mode != GUI_MODE_FULL) {
+        ProcessLoop::quit(error_code);
+        return;
+    }
+    set_state(DISCONNECTED);
+    show_gui();
 }
 
 void Application::on_visibility_start(int screen_id)
@@ -604,8 +753,8 @@ void Application::on_visibility_start(int screen_id)
     if (screen_id) {
         return;
     }
-
-    hide_splash(0);
+    set_state(VISIBILITY);
+    hide_gui();
 }
 
 void Application::on_disconnecting()
@@ -619,6 +768,88 @@ Menu* Application::get_app_menu()
         return NULL;
     }
     return (*_app_menu)->ref();
+}
+
+void Application::show_info_layer()
+{
+    if (_info_layer->screen() || _state != VISIBILITY) {
+        return;
+    }
+
+    _main_screen->attach_layer(*_info_layer);
+    _info_layer->set_info_mode();
+    reset_sticky();
+}
+
+void Application::hide_info_layer()
+{
+    if (!_info_layer->screen()) {
+        return;
+    }
+
+    _main_screen->detach_layer(*_info_layer);
+    reset_sticky();
+}
+
+#ifdef GUI_DEMO
+
+class TestResponce: public GUI::BoxResponse {
+public:
+    virtual void response(int response)
+    {
+        DBG(0, "%d", response);
+    }
+
+    virtual void aborted()
+    {
+        DBG(0, "");
+    }
+};
+
+
+TestResponce response_test;
+
+void Application::message_box_test()
+{
+    GUI::ButtonsList list(3);
+    list[0].id = 101;
+    list[0].text = "Yes";
+    list[1].id = 102;
+    list[1].text = "No";
+    list[2].id = 103;
+    list[2].text = "Don't Know";
+
+
+    if (!_gui->message_box(GUI::QUESTION, "My question", list, &response_test)) {
+        DBG(0, "busy");
+    } else {
+        show_gui();
+    }
+}
+
+#endif
+
+void Application::show_gui()
+{
+    if (_gui->screen() || !_gui->prepare_dialog()) {
+        return;
+    }
+
+    hide_info_layer();
+    release_capture();
+    _gui->set_screen(_main_screen);
+    attach_gui_barriers();
+}
+
+void Application::hide_gui()
+{
+    if (!_gui->screen()) {
+        return;
+    }
+
+    _gui->set_screen(NULL);
+    detach_gui_barriers();
+    show_info_layer();
 }
 
 void Application::do_command(int command)
@@ -650,6 +881,9 @@ void Application::do_command(int command)
         do_disconnect();
         break;
 #endif
+    case APP_CMD_SHOW_GUI:
+        show_gui();
+        break;
     }
 }
 
@@ -810,7 +1044,7 @@ inline bool Application::is_sticky_trace_key(RedKey key)
 
 void Application::reset_sticky()
 {
-    _sticky_info.trace_is_on = !_splash_mode && _sys_key_intercept_mode;
+    _sticky_info.trace_is_on = (_state == VISIBILITY) && _sys_key_intercept_mode;
     _sticky_info.key_first_down = false;
     deactivate_interval_timer(*_sticky_info.timer);
     if (_sticky_info.sticky_mode) {
@@ -821,12 +1055,11 @@ void Application::reset_sticky()
         }
         _sticky_info.sticky_mode = false;
         DBG(0, "OFF sticky");
-        _gui_layer->set_sticky(false);
+        _info_layer->set_sticky(false);
     }
     _sticky_info.key_down = false;
 
     _sticky_info.key = REDKEY_INVALID;
-
 }
 
 void Application::on_key_down(RedKey key)
@@ -1228,27 +1461,6 @@ void Application::on_display_mode_change()
     _client.on_display_mode_change();
 }
 
-void Application::show_splash(int screen_id)
-{
-    if (screen_id != 0) {
-        return;
-    }
-    _splash_mode = true;
-    release_capture();
-    ASSERT(!_sticky_info.trace_is_on);
-    (*_gui_layer).set_splash_mode();
-}
-
-void Application::hide_splash(int screen_id)
-{
-    if (screen_id != 0) {
-        return;
-    }
-    _splash_mode = false;
-    (*_gui_layer).set_info_mode();
-    reset_sticky();
-}
-
 uint32_t Application::get_mouse_mode()
 {
     return _client.get_mouse_mode();
@@ -1346,16 +1558,61 @@ void Application::send_hotkey_key_set(const HotkeySet& key_set)
     }
 }
 
-static inline int str_to_port(const char *str)
+
+//controller interface begin
+
+bool Application::connect(const std::string& host, int port, int sport, const std::string& password)
 {
-    long port;
-    char *endptr;
-    port = strtol(str, &endptr, 0);
-    if (endptr != str + strlen(str) || port < 0 || port > 0xffff) {
-        return -1;
+    if (_state != DISCONNECTED) {
+        return false;
     }
-    return port;
+    _client.set_target(host, port, sport);
+    _client.set_password(password);
+    connect();
+    return true;
 }
+
+void Application::disconnect()
+{
+    do_disconnect();
+}
+
+void Application::quit()
+{
+    ProcessLoop::quit(SPICEC_ERROR_CODE_SUCCESS);
+}
+
+void Application::hide_me()
+{
+    hide_gui();
+}
+
+bool Application::is_disconnect_allowed()
+{
+    return _gui_mode == GUI_MODE_FULL;
+}
+
+const std::string& Application::get_host()
+{
+    return _client.get_host();
+}
+
+int Application::get_port()
+{
+    return _client.get_port();
+}
+
+int Application::get_sport()
+{
+    return _client.get_sport();
+}
+
+const std::string& Application::get_password()
+{
+    return _client.get_password();
+}
+
+//controller interface end
 
 bool Application::set_channels_security(CmdLineParser& parser, bool on, char *val)
 {
@@ -1455,6 +1712,33 @@ bool Application::set_enable_channels(CmdLineParser& parser, bool enable, char *
     return true;
 }
 
+void Application::register_channels()
+{
+    if (_enabled_channels[RED_CHANNEL_DISPLAY]) {
+        _client.register_channel_factory(DisplayChannel::Factory());
+    }
+
+    if (_enabled_channels[RED_CHANNEL_CURSOR]) {
+        _client.register_channel_factory(CursorChannel::Factory());
+    }
+
+    if (_enabled_channels[RED_CHANNEL_INPUTS]) {
+        _client.register_channel_factory(InputsChannel::Factory());
+    }
+
+    if (_enabled_channels[RED_CHANNEL_PLAYBACK]) {
+        _client.register_channel_factory(PlaybackChannel::Factory());
+    }
+
+    if (_enabled_channels[RED_CHANNEL_RECORD]) {
+        _client.register_channel_factory(RecordChannel::Factory());
+    }
+
+    if (_enabled_channels[RED_CHANNEL_TUNNEL]) {
+        _client.register_channel_factory(TunnelChannel::Factory());
+    }
+}
+
 bool Application::process_cmd_line(int argc, char** argv)
 {
     std::string host;
@@ -1476,6 +1760,15 @@ bool Application::process_cmd_line(int argc, char** argv)
         SPICE_OPT_DISABLE_CHANNELS,
         SPICE_OPT_CANVAS_TYPE,
     };
+
+    if (argc == 1) {
+        _gui_mode = GUI_MODE_FULL;
+        register_channels();
+        _main_screen->show(true, NULL);
+        return true;
+    }
+
+    _gui_mode = GUI_MODE_ACTIVE_SESSION;
 
     CmdLineParser parser("Spice client", false);
 
@@ -1504,13 +1797,9 @@ bool Application::process_cmd_line(int argc, char** argv)
     parser.add(SPICE_OPT_CANVAS_TYPE, "canvas-type", "set rendering canvas", "canvas_type", true);
     parser.set_multi(SPICE_OPT_CANVAS_TYPE, ',');
 
-    _peer_con_opt[RED_CHANNEL_MAIN] = RedPeer::ConnectionOptions::CON_OP_INVALID;
-    _peer_con_opt[RED_CHANNEL_DISPLAY] = RedPeer::ConnectionOptions::CON_OP_INVALID;
-    _peer_con_opt[RED_CHANNEL_INPUTS] = RedPeer::ConnectionOptions::CON_OP_INVALID;
-    _peer_con_opt[RED_CHANNEL_CURSOR] = RedPeer::ConnectionOptions::CON_OP_INVALID;
-    _peer_con_opt[RED_CHANNEL_PLAYBACK] = RedPeer::ConnectionOptions::CON_OP_INVALID;
-    _peer_con_opt[RED_CHANNEL_RECORD] = RedPeer::ConnectionOptions::CON_OP_INVALID;
-    _peer_con_opt[RED_CHANNEL_TUNNEL] = RedPeer::ConnectionOptions::CON_OP_INVALID;
+    for (int i = RED_CHANNEL_MAIN; i < RED_CHANNEL_END; i++) {
+        _peer_con_opt[i] = RedPeer::ConnectionOptions::CON_OP_INVALID;
+    }
 
     parser.begin(argc, argv);
 
@@ -1626,31 +1915,11 @@ bool Application::process_cmd_line(int argc, char** argv)
         return false;
     }
 
-    if (_enabled_channels[RED_CHANNEL_DISPLAY]) {
-        _client.register_channel_factory(DisplayChannel::Factory());
-    }
+    register_channels();
 
-    if (_enabled_channels[RED_CHANNEL_CURSOR]) {
-        _client.register_channel_factory(CursorChannel::Factory());
-    }
-
-    if (_enabled_channels[RED_CHANNEL_INPUTS]) {
-        _client.register_channel_factory(InputsChannel::Factory());
-    }
-
-    if (_enabled_channels[RED_CHANNEL_PLAYBACK]) {
-        _client.register_channel_factory(PlaybackChannel::Factory());
-    }
-
-    if (_enabled_channels[RED_CHANNEL_RECORD]) {
-        _client.register_channel_factory(RecordChannel::Factory());
-    }
-
-    if (_enabled_channels[RED_CHANNEL_TUNNEL]) {
-        _client.register_channel_factory(TunnelChannel::Factory());
-    }
-
-    _client.init(host.c_str(), port, sport, password.c_str(), auto_display_res);
+    _client.set_target(host, port, sport);
+    _client.set_password(password);
+    _client.set_auto_display_res(auto_display_res);
 
     if (full_screen) {
         enter_full_screen();

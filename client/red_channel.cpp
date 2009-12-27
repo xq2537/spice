@@ -401,7 +401,8 @@ void RedChannel::run()
                                               _client.get_port(),
                                               _client.get_sport());
                 RedChannelBase::connect(con_options, _client.get_connection_id(),
-                                        _client.get_host(), _client.get_password());
+                                        _client.get_host().c_str(),
+                                        _client.get_password().c_str());
                 on_connect();
                 set_state(CONNECTED_STATE);
                 _loop.add_socket(*this);

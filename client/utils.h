@@ -98,6 +98,8 @@ static inline void set_bit_be(const void* addr, int bit)
     ((uint8_t*)addr)[bit >> 3] |= (0x80 >> (bit & 0x07));
 }
 
+int str_to_port(const char *str);
+
 void string_vprintf(std::string& str, const char* format, va_list ap);
 void string_printf(std::string& str, const char *format, ...);
 void wstring_vprintf(std::wstring& str, const wchar_t* format, va_list ap);

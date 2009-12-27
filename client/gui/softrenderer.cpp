@@ -64,19 +64,23 @@ void SoftRenderer::setupImageCodec()
 #else
     String _default_codec_name(STRINGIZE(TGAImageCodec/*CEGUI_DEFAULT_IMAGE_CODEC*/));
     DynamicModule* module = NULL;
+
     try {
         DynamicModule* module = new DynamicModule(String("CEGUI") + _default_codec_name);
 
         _destroy_image_codec = (void(*)(ImageCodec*))module->getSymbolAddress("destroyImageCodec");
+
         if (!_destroy_image_codec) {
             throw GenericException("Missing destroyImageCodec symbol");
         }
 
         ImageCodec* (*create_f)(void);
         create_f = (ImageCodec* (*)(void))module->getSymbolAddress("createImageCodec");
+
         if (!create_f) {
             throw GenericException("Missing createImageCodec symbol");
         }
+
         _image_codec = create_f();
     } catch (...) {
         delete module;
@@ -86,13 +90,11 @@ void SoftRenderer::setupImageCodec()
 #endif
 }
 
-
 void SoftRenderer::cleanupImageCodec()
 {
     _destroy_image_codec(_image_codec);
     delete _image_codec_module;
 }
-
 
 static inline uint8_t calac_pixel(uint64_t c1, uint64_t c2, uint64_t c3, uint64_t a_mul)
 {
@@ -368,5 +370,4 @@ uint SoftRenderer::getVertScreenDPI() const
 }
 
 }
-
 
