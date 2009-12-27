@@ -29,6 +29,8 @@
 #define TRUE 1
 #define FALSE 0
 
+#define TAB "    "
+
 #define ERROR(str) printf("%s: error: %s\n", prog_name, str); exit(-1);
 
 static char *prog_name = NULL;
@@ -213,10 +215,10 @@ static int icon_to_c_struct(const Icon *icon, const char *dest_file, const char 
     uint32_t mask_stride = ALIGN(icon->width, 8) / 8;
     uint32_t mask_size = mask_stride * icon->height;
     fprintf(f, "static const struct {\n"
-               "\tuint32_t width;\n"
-               "\tuint32_t height;\n"
-               "\tuint8_t pixmap[%u];\n"
-               "\tuint8_t mask[%u];\n"
+               TAB "uint32_t width;\n"
+               TAB "uint32_t height;\n"
+               TAB "uint8_t pixmap[%u];\n"
+               TAB "uint8_t mask[%u];\n"
                "} %s = { %u, %u, {",
             pixmap_size, mask_size, image_name, icon->width, icon->height);
 
@@ -226,8 +228,8 @@ static int icon_to_c_struct(const Icon *icon, const char *dest_file, const char 
     for (i = 0; i < icon->height; i++) {
         uint8_t *now = line;
         for (j = 0; j < icon->width; j++, now += 4) {
-            if ((line_size++ % 6) == 0) {
-                fprintf(f, "\n\t\t");
+            if ((line_size++ % 4) == 0) {
+                fprintf(f, "\n" TAB);
             }
             put_char(f, now[0]);
             put_char(f, now[1]);
@@ -239,14 +241,14 @@ static int icon_to_c_struct(const Icon *icon, const char *dest_file, const char 
 
 
     fseek(f, -1, SEEK_CUR);
-    fprintf(f, "},\n\n\t\t{");
+    fprintf(f, "},\n\n" TAB TAB "{");
 
     line = (uint8_t *)(icon->mask + ((icon->height - 1) * mask_stride));
     line_size = 0;
     for (i = 0; i < icon->height; i++) {
         for (j = 0; j < mask_stride; j++) {
             if (line_size && (line_size % 12) == 0) {
-                fprintf(f, "\n\t\t ");
+                fprintf(f, "\n" TAB);
             }
             line_size++;
             put_char(f, line[j]);
