@@ -83,6 +83,7 @@ RedScreen::RedScreen(Application& owner, int id, const std::wstring& name, int w
     , _periodic_update (false)
     , _key_interception (false)
     , _update_by_timer (true)
+    , _size_locked (false)
     , _forec_update_timer (0)
     , _update_timer (new UpdateTimer(this))
     , _composit_area (NULL)
@@ -148,7 +149,7 @@ void RedScreen::show(bool activate, RedScreen* pos)
 
 RedScreen* RedScreen::ref()
 {
-    _refs++;
+    ++_refs;
     return this;
 }
 
@@ -179,7 +180,7 @@ void RedScreen::adjust_window_rect(int x, int y)
     _window.move_and_resize(x, y, _size.x, _size.y);
 }
 
-void RedScreen::set_mode(int width, int height, int depth)
+void RedScreen::resize(int width, int height)
 {
     RecurciveLock lock(_update_lock);
     _size.x = width;
@@ -202,6 +203,18 @@ void RedScreen::set_mode(int width, int height, int depth)
         }
     }
     notify_new_size();
+}
+
+void RedScreen::lock_size()
+{
+    ASSERT(!_size_locked);
+    _size_locked = true;
+}
+
+void RedScreen::unlock_size()
+{
+    _size_locked = false;
+    _owner.on_screen_unlocked(*this);
 }
 
 void RedScreen::set_name(const std::wstring& name)

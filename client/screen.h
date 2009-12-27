@@ -58,7 +58,7 @@ public:
     void attach_layer(ScreenLayer& layer);
     void detach_layer(ScreenLayer& layer);
     void on_layer_changed(ScreenLayer& layer);
-    void set_mode(int width, int height, int depth);
+    void resize(int width, int height);
     void set_name(const std::wstring& name);
     uint64_t invalidate(const Rect& rect, bool urgent);
     void invalidate(const QRegion &region);
@@ -68,6 +68,9 @@ public:
     bool intercepts_sys_key() { return _key_interception;}
     Point get_size() { return _size;}
     bool has_monitor() { return _monitor != 0;}
+    void lock_size();
+    void unlock_size();
+    bool is_size_locked() { return _size_locked;}
     void set_monitor(Monitor *monitor) { _monitor = monitor;}
     Monitor* get_monitor() { return _monitor;}
     RedWindow* get_window() { return &_window;}
@@ -154,7 +157,7 @@ private:
 private:
     Application& _owner;
     int _id;
-    int _refs;
+    AtomicCount _refs;
     std::wstring _name;
     RedWindow _window;
     std::vector<ScreenLayer*> _layes;
@@ -167,6 +170,7 @@ private:
     bool _periodic_update;
     bool _key_interception;
     bool _update_by_timer;
+    bool _size_locked;
     int _forec_update_timer;
     AutoRef<UpdateTimer> _update_timer;
     RedDrawable* _composit_area;

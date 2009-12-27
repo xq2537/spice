@@ -226,7 +226,11 @@ void GUILayer::set_sticky(bool is_on)
 
 void GUILayer::on_size_changed()
 {
-    set_info_mode();
+    if (_splash_mode) {
+        set_splash_mode();
+    } else {
+        set_info_mode();
+    }
 }
 
 void StickyKeyTimer::response(AbstractProcessLoop& events_loop)
@@ -499,31 +503,35 @@ RedScreen* Application::get_screen(int id)
     }
 
     if (!(screen = _screens[id])) {
-        Monitor* mon;
+        Monitor* mon = find_monitor(id);
+        Point size;
 
-        if (_client.is_auto_display_res() && (mon = find_monitor(id))) {
+        if (_full_screen && mon) {
             Point size = mon->get_size();
-            screen = _screens[id] = new RedScreen(*this, id, _title, size.x, size.y);
         } else {
-            screen = _screens[id] = new RedScreen(*this, id, _title, SCREEN_INIT_WIDTH,
-                                                  SCREEN_INIT_HEIGHT);
+            size.x = SCREEN_INIT_WIDTH;
+            size.y = SCREEN_INIT_HEIGHT;
         }
-        if (_full_screen) {
-            bool capture;
+        screen = _screens[id] = new RedScreen(*this, id, _title, size.x, size.y);
 
-            mon = get_monitor(id);
-            capture = release_capture();
-            screen->set_monitor(mon);
-            position_screens();
-            screen->show_full_screen();
-            prepare_monitors();
+        if (id != 0) {
+            if (_full_screen) {
+                bool capture;
 
-            if (capture) {
-                _main_screen->activate();
-                _main_screen->capture_mouse();
+                mon = get_monitor(id);
+                capture = release_capture();
+                screen->set_monitor(mon);
+                position_screens();
+                screen->show_full_screen();
+                prepare_monitors();
+
+                if (capture) {
+                    _main_screen->activate();
+                    _main_screen->capture_mouse();
+                }
+            } else {
+                screen->show(false, _main_screen);
             }
-        } else if (id != 0) {
-            screen->show(false, _main_screen);
         }
     } else {
         screen = screen->ref();
@@ -962,6 +970,15 @@ void Application::on_app_deactivated()
 #endif
 }
 
+void Application::on_screen_unlocked(RedScreen& screen)
+{
+    if (_full_screen) {
+        return;
+    }
+
+    screen.resize(SCREEN_INIT_WIDTH, SCREEN_INIT_HEIGHT);
+}
+
 bool Application::rearrange_monitors(RedScreen& screen)
 {
     if (!_full_screen) {
@@ -1012,14 +1029,20 @@ void Application::assign_monitors()
 
 void Application::prepare_monitors()
 {
+    //todo: test match of monitors size/position against real world size/position
     for (int i = 0; i < (int)_screens.size(); i++) {
         Monitor* mon;
         if (_screens[i] && (mon = _screens[i]->get_monitor())) {
-            Point size = _screens[i]->get_size();
-            mon->set_mode(size.x, size.y);
+
+            if (_screens[i]->is_size_locked()) {
+                Point size = _screens[i]->get_size();
+                mon->set_mode(size.x, size.y);
+            } else {
+                Point size = mon->get_size();
+                _screens[i]->resize(size.x, size.y);
+            }
         }
     }
-    //todo: test match of monitors size/position against real world size/position
 }
 
 void Application::restore_monitors()
@@ -1097,6 +1120,16 @@ void Application::enter_full_screen()
     _full_screen = true;
 }
 
+void Application::restore_screens_size()
+{
+    for (int i = 0; i < (int)_screens.size(); i++) {
+        if (_screens[i]->is_size_locked()) {
+            continue;
+        }
+        _screens[i]->resize(SCREEN_INIT_WIDTH, SCREEN_INIT_HEIGHT);
+    }
+}
+
 void Application::exit_full_screen()
 {
     if (!_full_screen) {
@@ -1116,6 +1149,7 @@ void Application::exit_full_screen()
     }
     restore_monitors();
     _full_screen = false;
+    restore_screens_size();
     show();
     _main_screen->activate();
 }
@@ -1606,12 +1640,6 @@ bool Application::process_cmd_line(int argc, char** argv)
     }
 
     _client.init(host.c_str(), port, sport, password.c_str(), auto_display_res);
-    if (auto_display_res) {
-        Monitor* mon = find_monitor(0);
-        ASSERT(mon);
-        Point size = mon->get_size();
-        _main_screen->set_mode(size.x, size.y, 32);
-    }
 
     if (full_screen) {
         enter_full_screen();

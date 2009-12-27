@@ -125,6 +125,7 @@ public:
     RedScreen* find_screen(int id);
     RedScreen* get_screen(int id);
 
+    void on_screen_unlocked(RedScreen& screen);
     void on_screen_destroyed(int id, bool was_captured);
     void on_mouse_motion(int dx, int dy, int buttons_state);
     void on_mouse_down(int button, int buttons_state);
@@ -176,6 +177,7 @@ private:
     bool do_connect();
     bool do_disconnect();
 
+    void restore_screens_size();
     Monitor* find_monitor(int id);
     Monitor* get_monitor(int id);
     void init_monitors();

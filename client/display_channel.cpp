@@ -60,7 +60,8 @@ public:
     {
         Application* app = (Application*)events_loop.get_owner();
         _channel.destroy_canvas();
-        _channel.screen()->set_mode(_width, _height, _depth);
+        _channel.screen()->lock_size();
+        _channel.screen()->resize(_width, _height);
         _channel.create_canvas(app->get_canvas_types(), _width, _height, _depth);
     }
 
@@ -69,6 +70,22 @@ private:
     int _width;
     int _height;
     int _depth;
+};
+
+class UnlockScreenEvent: public Event {
+public:
+    UnlockScreenEvent(RedScreen* screen)
+        : _screen (screen->ref())
+    {
+    }
+
+    virtual void response(AbstractProcessLoop& events_loop)
+    {
+        (*_screen)->unlock_size();
+    }
+
+private:
+    AutoRef<RedScreen> _screen;
 };
 
 class DisplayMarkEvent: public Event {
@@ -1088,9 +1105,14 @@ void DisplayChannel::on_disconnect()
     if (screen()) {
         screen()->set_update_interrupt_trigger(NULL);
     }
+
     AutoRef<DetachChannelsEvent> detach_channels(new DetachChannelsEvent(*this));
     get_client().push_event(*detach_channels);
-    detach_from_screen(get_client().get_application());
+    if (screen()) {
+        AutoRef<UnlockScreenEvent> unlock_event(new UnlockScreenEvent(screen()));
+        get_client().push_event(*unlock_event);
+        detach_from_screen(get_client().get_application());
+    }
     get_client().deactivate_interval_timer(*_streams_timer);
     AutoRef<SyncEvent> sync_event(new SyncEvent());
     get_client().push_event(*sync_event);
@@ -1280,7 +1302,12 @@ void DisplayChannel::handle_reset(RedPeer::InMessage *message)
     if (_canvas.get()) {
         _canvas->clear();
     }
+
     AutoRef<ResetTimer> reset_timer(new ResetTimer(screen()->ref(), get_client()));
+
+    AutoRef<UnlockScreenEvent> unlock_event(new UnlockScreenEvent(screen()));
+    get_client().push_event(*unlock_event);
+
     detach_from_screen(get_client().get_application());
     _palette_cache.clear();
 
