@@ -3,13 +3,12 @@
 // Used by redc.rc
 //
 #define RED_ICON_RES_ID                 5
-#define SPLASH_IMAGE_RES_ID             101
 #define INFO_IMAGE_RES_ID               102
 #define IDI_ICON_APPLICATION            103
 #define ALT_IMAGE_RES_ID                104
 
 // Next default values for new objects
-// 
+//
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        106

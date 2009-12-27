@@ -52,7 +52,6 @@ END
 // Bitmap
 //
 
-SPLASH_IMAGE_RES_ID     BITMAP                  "splash.bmp"
 INFO_IMAGE_RES_ID       BITMAP                  "static_title.bmp"
 ALT_IMAGE_RES_ID        BITMAP                  "sticky_alt.bmp"
 

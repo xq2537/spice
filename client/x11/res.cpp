@@ -18,15 +18,6 @@
 #include "common.h"
 #include "resource.h"
 
-#include "images/splash_image.c"
-
-static const PixmapHeader splash_image = {
-    (uint8_t *)_splash_image.pixel_data,
-    _splash_image.width,
-    _splash_image.height,
-    _splash_image.width * 4,
-};
-
 #include "images/info_image.c"
 
 static const PixmapHeader info_image = {
@@ -51,7 +42,6 @@ typedef struct ResImage {
 } ResImage;
 
 static const ResImage res_image_map[] = {
-    { SPLASH_IMAGE_RES_ID, &splash_image},
     { INFO_IMAGE_RES_ID, &info_image},
     { ALT_IMAGE_RES_ID, &alt_image},
     {0, NULL},

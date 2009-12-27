@@ -639,10 +639,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\splash.bmp"
-				>
-			</File>
-			<File
 				RelativePath=".\static_title.bmp"
 				>
 			</File>
