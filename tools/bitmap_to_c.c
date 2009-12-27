@@ -30,6 +30,8 @@
 #define TRUE 1
 #define FALSE 0
 
+#define TAB "    "
+
 #define ERROR(str) printf("%s: error: %s\n", prog_name, str); exit(-1);
 
 static char *prog_name = NULL;
@@ -185,8 +187,8 @@ static void do_dump_with_alpha_conversion(const Pixmap *pixmap, FILE *f)
     for (i = 0; i < pixmap->height; i++) {
         uint8_t *now = line;
         for (j = 0; j < pixmap->width; j++, now += 4) {
-            if ((line_size++ % 6) == 0) {
-                fprintf(f, "\n\t\t");
+            if ((line_size++ % 4) == 0) {
+                fprintf(f, "\n" TAB);
             }
             double alpha = (double)now[3] / 0xff;
             put_char(f, alpha * now[0]);
@@ -207,8 +209,8 @@ static void do_dump_32bpp(const Pixmap *pixmap, FILE *f)
     for (i = 0; i < pixmap->height; i++) {
         uint8_t *now = line;
         for (j = 0; j < pixmap->width; j++, now += 4) {
-            if ((line_size++ % 6) == 0) {
-                fprintf(f, "\n\t\t");
+            if ((line_size++ % 4) == 0) {
+                fprintf(f, "\n" TAB);
             }
             put_char(f, now[0]);
             put_char(f, now[1]);
@@ -228,8 +230,8 @@ static void do_dump_24bpp(const Pixmap *pixmap, FILE *f)
     for (i = 0; i < pixmap->height; i++) {
         uint8_t *now = line;
         for (j = 0; j < pixmap->width; j++, now += 3) {
-            if ((line_size++ % 6) == 0) {
-                fprintf(f, "\n\t\t");
+            if ((line_size++ % 4) == 0) {
+                fprintf(f, "\n" TAB);
             }
             put_char(f, now[0]);
             put_char(f, now[1]);
@@ -259,9 +261,9 @@ static int pixmap_to_c_struct(const Pixmap *pixmap, const char *dest_file, const
 
     uint32_t data_size = pixmap->width * sizeof(uint32_t) * pixmap->height;
     fprintf(f, "static const struct {\n"
-               "\tuint32_t width;\n"
-               "\tuint32_t height;\n"
-               "\tuint8_t pixel_data[%u];\n"
+               TAB "uint32_t width;\n"
+               TAB "uint32_t height;\n"
+               TAB "uint8_t pixel_data[%u];\n"
                "} %s = { %u, %u, {",
             data_size, image_name, pixmap->width, pixmap->height);
 
