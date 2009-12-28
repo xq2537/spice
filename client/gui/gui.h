@@ -81,6 +81,7 @@ private:
     void init_cegui();
     void conditional_update();
     void set_dialog(Dialog* dialog);
+    void dettach_dialog(Dialog* dialog);
 
 private:
     Application& _app;

@@ -212,6 +212,7 @@ public:
     CEGUI::System& gui_system() { return _gui.gui_system();}
 
     void set_dialog(Dialog* dialog) { _gui.set_dialog(dialog);}
+    void dettach() { _gui.dettach_dialog(this);}
     TabFactorys& get_factoris() { return _gui._tab_factorys;}
 
     bool message_box(MessageType type, const char *text, const ButtonsList& buttons,
@@ -481,14 +482,19 @@ private:
 
 class PreLoginDialog: public TabDialog {
 public:
-    PreLoginDialog(GUI& gui);
+    PreLoginDialog(GUI& gui, LoginDialog* login_dialog);
+    virtual ~PreLoginDialog() { delete _login_dialog;}
 
     bool handle_back(const CEGUI::EventArgs& e);
     bool handle_quit(const CEGUI::EventArgs& e);
+
+private:
+    LoginDialog* _login_dialog;
 };
 
-PreLoginDialog::PreLoginDialog(GUI& gui)
+PreLoginDialog::PreLoginDialog(GUI& gui, LoginDialog* login_dialog)
     : TabDialog(gui, false)
+    , _login_dialog (login_dialog)
 {
     try {
 
@@ -509,7 +515,10 @@ PreLoginDialog::PreLoginDialog(GUI& gui)
 
 bool PreLoginDialog::handle_back(const CEGUI::EventArgs& e)
 {
-    set_dialog(new LoginDialog(_gui));
+    ASSERT(_login_dialog);
+    LoginDialog* login_dialog = _login_dialog;
+    _login_dialog = NULL;
+    set_dialog(login_dialog);
     return true;
 }
 
@@ -675,7 +684,8 @@ bool LoginDialog::handle_quit(const CEGUI::EventArgs& e)
 
 bool LoginDialog::handle_options(const CEGUI::EventArgs& e)
 {
-    set_dialog(new PreLoginDialog(_gui));
+    dettach();
+    set_dialog(new PreLoginDialog(_gui, this));
     return true;
 }
 
@@ -1051,6 +1061,16 @@ void GUI::set_dialog(Dialog* dialog)
 
     _dialog = dialog;
     gui_system().setGUISheet(&_dialog->root_window());
+    update_layer_area();
+}
+
+void GUI::dettach_dialog(Dialog* dialog)
+{
+    if (!dialog || _dialog != dialog) {
+        return;
+    }
+    gui_system().setGUISheet(NULL);
+    _dialog = NULL;
     update_layer_area();
 }
 
