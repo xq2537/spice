@@ -18,6 +18,7 @@
 #include "common.h"
 #include "monitor.h"
 #include "debug.h"
+#include "platform.h"
 
 uint32_t Monitor::self_monitors_change = 0;
 
@@ -33,3 +34,13 @@ bool Monitor::is_self_change()
     return self_monitors_change != 0;
 }
 
+void Monitor::set_mode(int width, int height)
+{
+    do_set_mode(width, height);
+    Platform::reset_cursor_pos();
+}
+void Monitor::restore()
+{
+    do_restore();
+    Platform::reset_cursor_pos();
+}

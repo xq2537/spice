@@ -41,7 +41,7 @@ public:
     void wait_for_reparent();
     void wait_for_map();
     void wait_for_unmap();
-    void sync();
+    void sync(bool shadowed = false);
     void set_visibale(bool vis) { _visibale = vis;}
     void move_to_current_desktop();
     Window get_window() {return _win;}
@@ -60,9 +60,11 @@ protected:
     Point _show_pos;
     GLXContext _glcont_copy;
     Icon* _icon;
+    bool _focused;
     bool _ignore_foucs;
     bool _shadow_foucs_state;
     XEvent _shadow_focus_event;
+    bool _pointer_in_window;
     bool _ignore_pointer;
     bool _shadow_pointer_state;
     XEvent _shadow_pointer_event;
