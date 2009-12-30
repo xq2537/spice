@@ -10,6 +10,7 @@ ACLOCAL_FLAGS=""
 LIBTOOLIZE=${LIBTOOLIZE-libtoolize}
 LIBTOOLIZE_FLAGS="--copy --force"
 AUTOHEADER=${AUTOHEADER-autoheader}
+AUTOMAKE=${AUTOMAKE-automake}
 AUTOMAKE_FLAGS="--add-missing --gnu"
 AUTOCONF=${AUTOCONF-autoconf}
 
