@@ -154,11 +154,35 @@ do_cmd() {
 # Run for top level directory
 
 printbold "Setting up $PACKAGE toplevel"
-do_cmd $LIBTOOLIZE $LIBTOOLIZE_FLAGS
-do_cmd $ACLOCAL $ACLOCAL_FLAGS
-do_cmd $AUTOHEADER
-do_cmd $AUTOMAKE $AUTOMAKE_FLAGS
-do_cmd $AUTOCONF
+
+config_specific_directory ()
+{
+    local d=${1:-.}
+    local cur=$(pwd)
+    if [ "$d" != "." ]; then
+        cd $d
+        printbold " -----    Entering  $d -----"
+    fi
+    touch NEWS README AUTHORS ChangeLog ### ToDo: define those.
+    mkdir -p m4
+    do_cmd $LIBTOOLIZE $LIBTOOLIZE_FLAGS
+    do_cmd $ACLOCAL $ACLOCAL_FLAGS
+    do_cmd $AUTOHEADER
+    do_cmd $AUTOMAKE $AUTOMAKE_FLAGS
+    do_cmd $AUTOCONF --force
+    if [ "$d" != "." ]; then
+        cd $cur
+        printbold " -----    Exiting   $d -----"
+    fi
+}
+
+subdirs=$(grep '^AC_CONFIG_SUBDIRS' configure.ac | \
+          sed 's/AC_CONFIG_SUBDIRS(\[\(.*\)\]) *$/\1/')
+printbold "subdirs are $subdirs"
+
+for sd in $subdirs .; do
+   config_specific_directory $sd
+done
 
 cd $ORIGDIR || exit $?
 rm -f config.cache
