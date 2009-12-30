@@ -42,6 +42,30 @@ public:
     class OutMessage;
     class DisconnectedException {};
 
+    class HostAuthOptions {
+    public:
+
+        enum Type {
+            HOST_AUTH_OP_PUBKEY = 1,
+            HOST_AUTH_OP_NAME = (1 << 1),
+            HOST_AUTH_OP_SUBJECT = (1 << 2),
+        };
+
+        typedef std::vector<uint8_t> PublicKey;
+        typedef std::pair<std::string, std::string> CertFieldValuePair;
+        typedef std::list<CertFieldValuePair> CertFieldValueList;
+
+        HostAuthOptions() : type_flags(0) {}
+
+    public:
+
+        int type_flags;
+
+        PublicKey host_pubkey;
+        CertFieldValueList host_subject;
+        std::string CA_file;
+    };
+
     class ConnectionOptions {
     public:
 
@@ -52,10 +76,12 @@ public:
             CON_OP_BOTH,
         };
 
-        ConnectionOptions(Type in_type, int in_port, int in_sport)
+        ConnectionOptions(Type in_type, int in_port, int in_sport,
+                          const HostAuthOptions& in_host_auth)
             : type (in_type)
             , unsecure_port (in_port)
             , secure_port (in_sport)
+            , host_auth (in_host_auth)
         {
         }
 
@@ -75,12 +101,10 @@ public:
         Type type;
         int unsecure_port;
         int secure_port;
+        HostAuthOptions host_auth; // for secure connection
     };
 
-    void connect_unsecure(uint32_t ip, int port);
     void connect_unsecure(const char* host, int port);
-
-    void connect_secure(const ConnectionOptions& options, uint32_t ip);
     void connect_secure(const ConnectionOptions& options, const char* host);
 
     void disconnect();
@@ -99,6 +123,15 @@ public:
 protected:
     virtual void on_event() {}
     virtual int get_socket() { return _peer;}
+
+    static bool x509_cert_host_name_compare(const char *cert_name, int cert_name_size,
+                                            const char *host_name);
+
+    static bool verify_pubkey(X509* cert, const HostAuthOptions::PublicKey& key);
+    static bool verify_host_name(X509* cert, const char* host_name);
+    static bool verify_subject(X509* cert, const HostAuthOptions::CertFieldValueList& subject);
+
+    static int ssl_verify_callback(int preverify_ok, X509_STORE_CTX *ctx);
 
 private:
     void shutdown();

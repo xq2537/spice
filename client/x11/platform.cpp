@@ -64,6 +64,8 @@
 #define USE_XRANDR_1_2
 #endif
 
+#define SPICE_CONFIG_DIR ".spicec/"
+
 static Display* x_display = NULL;
 static bool x_shm_avail = false;
 static XVisualInfo **vinfo = NULL;
@@ -1893,6 +1895,18 @@ void Platform::destroy_monitors()
 bool Platform::is_monitors_pos_valid()
 {
     return (ScreenCount(x_display) == 1);
+}
+
+void Platform::get_spice_config_dir(std::string& path)
+{
+    char* home_dir = getenv("HOME");
+    if (!home_dir) {
+        throw Exception("get home dir failed");
+    }
+
+    path = home_dir;
+    path += "/";
+    path += SPICE_CONFIG_DIR;
 }
 
 static void root_win_proc(XEvent& event)

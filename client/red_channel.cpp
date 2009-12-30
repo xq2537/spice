@@ -89,6 +89,8 @@ void RedChannelBase::link(uint32_t connection_id, const std::string& password)
                   header.major_version);
     }
 
+    _remote_minor = header.minor_version;
+
     AutoArray<uint8_t> reply_buf(new uint8_t[header.size]);
     recive(reply_buf.get(), header.size);
 
@@ -155,11 +157,11 @@ void RedChannelBase::link(uint32_t connection_id, const std::string& password)
 }
 
 void RedChannelBase::connect(const ConnectionOptions& options, uint32_t connection_id,
-                             uint32_t ip, std::string password)
+                             const char* host, std::string password)
 {
     if (options.allow_unsecure()) {
         try {
-            RedPeer::connect_unsecure(ip, options.unsecure_port);
+            RedPeer::connect_unsecure(host, options.unsecure_port);
             link(connection_id, password);
             return;
         } catch (...) {
@@ -170,14 +172,8 @@ void RedChannelBase::connect(const ConnectionOptions& options, uint32_t connecti
         }
     }
     ASSERT(options.allow_secure());
-    RedPeer::connect_secure(options, ip);
+    RedPeer::connect_secure(options, host);
     link(connection_id, password);
-}
-
-void RedChannelBase::connect(const ConnectionOptions& options, uint32_t connection_id,
-                             const char* host, std::string password)
-{
-    connect(options, connection_id, host_by_name(host), password);
 }
 
 void RedChannelBase::set_capability(ChannelCaps& caps, uint32_t cap)
@@ -399,7 +395,8 @@ void RedChannel::run()
                 set_state(CONNECTING_STATE);
                 ConnectionOptions con_options(_client.get_connection_options(get_type()),
                                               _client.get_port(),
-                                              _client.get_sport());
+                                              _client.get_sport(),
+                                              _client.get_host_auth_options());
                 RedChannelBase::connect(con_options, _client.get_connection_id(),
                                         _client.get_host(), _client.get_password());
                 on_connect();

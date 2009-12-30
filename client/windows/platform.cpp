@@ -17,6 +17,8 @@
 
 #include "common.h"
 
+#include <shlobj.h>
+
 #include "platform.h"
 #include "win_platform.h"
 #include "utils.h"
@@ -27,6 +29,8 @@
 #include "playback.h"
 #include "cursor.h"
 #include "named_pipe.h"
+
+#define SPICE_CONFIG_DIR "spicec\\"
 
 int gdi_handlers = 0;
 extern HINSTANCE instance;
@@ -425,6 +429,21 @@ void Platform::destroy_monitors()
 bool Platform::is_monitors_pos_valid()
 {
     return true;
+}
+
+void Platform::get_spice_config_dir(std::string& path)
+{
+    char app_data_path[MAX_PATH];
+    HRESULT res = SHGetFolderPathA(NULL, CSIDL_APPDATA,  NULL, 0, app_data_path);
+    if (res != S_OK) {
+        throw Exception("get user app data dir failed");
+    }
+
+    path = app_data_path;
+    if (strcmp((app_data_path + strlen(app_data_path) - 2), "\\") != 0) {
+        path += "\\";
+    }
+    path += SPICE_CONFIG_DIR;
 }
 
 void Platform::init()
