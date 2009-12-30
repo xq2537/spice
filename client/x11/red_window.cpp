@@ -2046,3 +2046,7 @@ void RedWindow::init()
 #endif
 }
 
+void RedWindow::cleanup()
+{
+}
+

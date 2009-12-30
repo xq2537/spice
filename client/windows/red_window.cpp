@@ -35,6 +35,7 @@ static ATOM class_atom = 0;
 static const LPCWSTR win_class_name = L"redc_wclass";
 static HWND focus_window = NULL;
 static HHOOK low_keyboard_hook = NULL;
+static bool low_keyboard_hook_on = false;
 static HHOOK msg_filter_hook = NULL;
 typedef std::list<RedKey> KeysList;
 static KeysList filtered_up_keys;
@@ -714,30 +715,14 @@ Point RedWindow::get_size()
 
 static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-    if ((nCode == HC_ACTION)) {
+    if  (low_keyboard_hook_on && focus_window && nCode == HC_ACTION) {
         KBDLLHOOKSTRUCT *hooked = (KBDLLHOOKSTRUCT*)lParam;
-        DWORD dwMsg = 1;
+        DWORD dwMsg = (hooked->flags << 24) | (hooked->scanCode << 16) | 1;
 
-        //  dwMsg shall contain the information that would be stored
-        //  in the usual lParam argument of a WM_KEYDOWN message.
-        //  All information like hardware scan code and other flags
-        //  are stored within one double word at different bit offsets.
-        //  Refer to MSDN for further information:
-        //
-        //  (Keystroke Messages)
-        dwMsg += hooked->scanCode << 16;
-        dwMsg += hooked->flags << 24;
-
-        // In some cases scan code of VK_RSHIFT is fake shift (probably a bug) so we
-        // convert it to non extended code. Also, QEmu doesn't expect num-lock to be
-        // an extended key.
-        if ((hooked->vkCode == VK_NUMLOCK) || (hooked->vkCode == VK_RSHIFT)) {
+        if (hooked->vkCode == VK_NUMLOCK || hooked->vkCode == VK_RSHIFT) {
             dwMsg &= ~(1 << 24);
+            SendMessage(focus_window, wParam, hooked->vkCode, dwMsg);
         }
-
-        SendMessage(focus_window, wParam, hooked->vkCode, dwMsg);
-
-        // Forward all modifier key strokes to update keyboard leds & shift/ctrl/alt state
         switch (hooked->vkCode) {
         case VK_CAPITAL:
         case VK_SCROLL:
@@ -750,34 +735,25 @@ static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lP
         case VK_RMENU:
             break;
         default:
+            SendMessage(focus_window, wParam, hooked->vkCode, dwMsg);
             return 1;
         }
     }
-
-    // In all other cases, we call the next hook and return it's value.
     return CallNextHookEx(NULL, nCode, wParam, lParam);
 }
 
 void RedWindow::do_start_key_interception()
 {
+    low_keyboard_hook_on = true;
     _key_interception_on = true;
     _listener.on_start_key_interception();
-    if (low_keyboard_hook) {
-        return;
-    }
-    low_keyboard_hook = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc,
-                                         GetModuleHandle(NULL), 0);
 }
 
 void RedWindow::do_stop_key_interception()
 {
+    low_keyboard_hook_on = false;
     _key_interception_on = false;
     _listener.on_stop_key_interception();
-    if (!low_keyboard_hook) {
-        return;
-    }
-    UnhookWindowsHookEx(low_keyboard_hook);
-    low_keyboard_hook = NULL;
 }
 
 void RedWindow::start_key_interception()
@@ -807,6 +783,13 @@ void RedWindow::init()
     if (!(class_atom = register_class(instance))) {
         THROW("register class failed");
     }
+    low_keyboard_hook = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc,
+                                         GetModuleHandle(NULL), 0);
+}
+
+void RedWindow::cleanup()
+{
+    UnhookWindowsHookEx(low_keyboard_hook);
 }
 
 #ifdef USE_OGL
@@ -850,6 +833,7 @@ void RedWindow::on_focus_out()
     }
 
     _focused = false;
+    focus_window = NULL;
 
     if (_key_interception_on) {
         do_stop_key_interception();

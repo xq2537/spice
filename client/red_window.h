@@ -86,6 +86,7 @@ public:
     void unset_type_gl();
 
     static void init();
+    static void cleanup();
 
     Listener& get_listener() { return _listener;}
 
