@@ -914,6 +914,32 @@ void Application::reset_sticky()
 
 }
 
+struct ModifierKey {
+    int modifier;
+    RedKey key;
+};
+
+ModifierKey modifier_keys[] = {
+    {Platform::L_SHIFT_MODIFIER, REDKEY_L_SHIFT},
+    {Platform::R_SHIFT_MODIFIER, REDKEY_R_SHIFT},
+    {Platform::L_CTRL_MODIFIER, REDKEY_L_CTRL},
+    {Platform::R_CTRL_MODIFIER, REDKEY_R_CTRL},
+    {Platform::L_ALT_MODIFIER, REDKEY_L_ALT},
+    {Platform::R_ALT_MODIFIER, REDKEY_R_ALT},
+};
+
+void Application::sync_keyboard_modifiers()
+{
+    uint32_t modifiers = Platform::get_keyboard_modifiers();
+    for (int i = 0; i < sizeof(modifier_keys) / sizeof(modifier_keys[0]); i++) {
+        if (modifiers & modifier_keys[i].modifier) {
+            on_key_down(modifier_keys[i].key);
+        } else {
+            on_key_up(modifier_keys[i].key);
+        }
+    }
+}
+
 void Application::on_key_down(RedKey key)
 {
     if (key <= 0 || key >= REDKEY_NUM_KEYS) {
@@ -1037,6 +1063,7 @@ void Application::on_activate_screen(RedScreen* screen)
 {
     ASSERT(!_active_screen || (_active_screen == screen));
     _active_screen = screen;
+    sync_keyboard_modifiers();
 }
 
 void Application::on_start_screen_key_interception(RedScreen* screen)
@@ -1211,6 +1238,7 @@ void Application::exit_full_screen()
         return;
     }
     LOG_INFO("");
+    _changing_screens = true;
     release_capture();
     for (int i = 0; i < (int)_screens.size(); i++) {
         if (_screens[i]) {
@@ -1226,26 +1254,15 @@ void Application::exit_full_screen()
     _full_screen = false;
     show();
     _main_screen->activate();
+    _changing_screens = false;
 }
 
 bool Application::toggle_full_screen()
 {
-    RedKey shift_pressed = REDKEY_INVALID;
-
-    if (_key_table[REDKEY_L_SHIFT].press) {
-        shift_pressed = REDKEY_L_SHIFT;
-    } else if (_key_table[REDKEY_R_SHIFT].press) {
-        shift_pressed = REDKEY_R_SHIFT;
-    }
     if (_full_screen) {
         exit_full_screen();
     } else {
         enter_full_screen();
-    }
-    uint32_t modifiers = Platform::get_keyboard_modifiers();
-    if ((shift_pressed == REDKEY_L_SHIFT && (modifiers & Platform::L_SHIFT_MODIFIER)) ||
-           (shift_pressed == REDKEY_R_SHIFT && (modifiers & Platform::R_SHIFT_MODIFIER))) {
-        on_key_down(shift_pressed);
     }
     return _full_screen;
 }
@@ -1774,15 +1791,25 @@ void Application::init_globals()
     RedWindow::init();
 }
 
+void Application::cleanup_globals()
+{
+    RedWindow::cleanup();
+}
+
 int Application::main(int argc, char** argv, const char* version_str)
 {
+    int ret;
+
     init_globals();
     LOG_INFO("starting %s", version_str);
     std::auto_ptr<Application> app(new Application());
     AutoAbort auto_abort(*app.get());
-    if (!app->process_cmd_line(argc, argv)) {
-        return app->_exit_code;
+    if (app->process_cmd_line(argc, argv)) {
+        ret = app->run();
+    } else {
+        ret = app->_exit_code;
     }
-    return app->run();
+    cleanup_globals();
+    return ret;
 }
 

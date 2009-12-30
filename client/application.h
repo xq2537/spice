@@ -208,9 +208,11 @@ private:
     bool unpress_key(RedKey key);
     void reset_sticky();
     static bool is_sticky_trace_key(RedKey key);
+    void sync_keyboard_modifiers();
 
     static void init_logger();
     static void init_globals();
+    static void cleanup_globals();
 
     friend class DisconnectedEvent;
     friend class ConnectionErrorEvent;
