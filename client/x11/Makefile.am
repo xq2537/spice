@@ -1,5 +1,8 @@
 NULL =
 
+COMMON_DIR=$(SPICE_COMMON_SRCDIR)
+CLIENT_DIR=..
+
 SUBDIRS = images
 
 INCLUDES = \
@@ -11,9 +14,9 @@ INCLUDES = \
 	-DUSE_OGL					\
 	-I. 						\
 	-I..						\
-	-I$(top_srcdir)/common				\
-	-I$(top_srcdir)/common/linux		\
-	-I$(top_srcdir)/client				\
+	-I$(COMMON_DIR)					\
+	-I$(COMMON_DIR)/linux				\
+	-I$(CLIENT_DIR)					\
 	$(GL_CFLAGS)					\
 	$(ALSA_CFLAGS)					\
 	$(FFMPEG_CFLAGS)				\
@@ -27,77 +30,77 @@ INCLUDES = \
 
 
 RED_COMMON_SRCS = 					\
-	$(top_srcdir)/client/application.cpp		\
-	$(top_srcdir)/client/application.h		\
-	$(top_srcdir)/client/audio_channels.h		\
-	$(top_srcdir)/client/audio_devices.h		\
-	$(top_srcdir)/client/cache.hpp			\
-	$(top_srcdir)/client/cairo_canvas.cpp		\
-	$(top_srcdir)/client/canvas.cpp			\
-	$(top_srcdir)/client/canvas.h			\
-	$(top_srcdir)/client/canvas_utils.cpp		\
-	$(top_srcdir)/client/red_cairo_canvas.cpp	\
-	$(top_srcdir)/client/red_cairo_canvas.h		\
-	$(top_srcdir)/client/cmd_line_parser.cpp	\
-	$(top_srcdir)/client/cmd_line_parser.h		\
-	$(top_srcdir)/client/common.h			\
-	$(top_srcdir)/client/cursor_channel.cpp		\
-	$(top_srcdir)/client/cursor_channel.h		\
-	$(top_srcdir)/client/cursor.cpp			\
-	$(top_srcdir)/client/cursor.h			\
-	$(top_srcdir)/client/debug.h			\
-	$(top_srcdir)/client/display_channel.cpp	\
-	$(top_srcdir)/client/display_channel.h		\
-	$(top_srcdir)/client/red_gl_canvas.cpp		\
-	$(top_srcdir)/client/red_gl_canvas.h		\
-	$(top_srcdir)/client/gl_canvas.cpp		\
-	$(top_srcdir)/client/glc.cpp			\
-	$(top_srcdir)/client/glz_decoded_image.h	\
-	$(top_srcdir)/client/glz_decoder_config.h	\
-	$(top_srcdir)/client/glz_decoder.cpp		\
-	$(top_srcdir)/client/glz_decoder.h		\
-	$(top_srcdir)/client/glz_decoder_window.cpp	\
-	$(top_srcdir)/client/glz_decoder_window.h	\
-	$(top_srcdir)/client/inputs_channel.cpp		\
-	$(top_srcdir)/client/inputs_channel.h		\
-	$(top_srcdir)/client/inputs_handler.h		\
-	$(top_srcdir)/client/lz.cpp			\
-	$(top_srcdir)/client/monitor.cpp		\
-	$(top_srcdir)/client/monitor.h			\
-	$(top_srcdir)/client/menu.cpp			\
-	$(top_srcdir)/client/menu.h			\
-	$(top_srcdir)/client/pixels_source.h		\
-	$(top_srcdir)/client/platform.h			\
-	$(top_srcdir)/client/playback_channel.cpp	\
-	$(top_srcdir)/client/process_loop.cpp		\
-	$(top_srcdir)/client/quic.cpp			\
-	$(top_srcdir)/client/record_channel.cpp		\
-	$(top_srcdir)/client/red_channel.cpp		\
-	$(top_srcdir)/client/red_channel.h		\
-	$(top_srcdir)/client/red_client.cpp		\
-	$(top_srcdir)/client/red_client.h		\
-	$(top_srcdir)/client/red_drawable.h		\
-	$(top_srcdir)/client/red_key.h			\
-	$(top_srcdir)/client/red_peer.cpp		\
-	$(top_srcdir)/client/red_peer.h			\
-	$(top_srcdir)/client/red_pixmap_cairo.h		\
-	$(top_srcdir)/client/red_pixmap_gl.h		\
-	$(top_srcdir)/client/red_pixmap.h		\
-	$(top_srcdir)/client/red_types.h		\
-	$(top_srcdir)/client/red_window.h		\
-	$(top_srcdir)/client/region.cpp			\
-	$(top_srcdir)/client/rop3.cpp			\
-	$(top_srcdir)/client/screen.cpp			\
-	$(top_srcdir)/client/screen.h			\
-	$(top_srcdir)/client/screen_layer.cpp		\
-	$(top_srcdir)/client/screen_layer.h		\
-	$(top_srcdir)/client/shared_cache.hpp		\
-	$(top_srcdir)/client/hot_keys.cpp		\
-	$(top_srcdir)/client/hot_keys.h			\
-	$(top_srcdir)/client/threads.cpp		\
-	$(top_srcdir)/client/utils.cpp			\
-	$(top_srcdir)/client/utils.h			\
-    $(top_srcdir)/client/icon.h                        \
+	$(CLIENT_DIR)/application.cpp			\
+	$(CLIENT_DIR)/application.h			\
+	$(CLIENT_DIR)/audio_channels.h			\
+	$(CLIENT_DIR)/audio_devices.h			\
+	$(CLIENT_DIR)/cache.hpp				\
+	$(CLIENT_DIR)/cairo_canvas.cpp			\
+	$(CLIENT_DIR)/canvas.cpp			\
+	$(CLIENT_DIR)/canvas.h				\
+	$(CLIENT_DIR)/canvas_utils.cpp			\
+	$(CLIENT_DIR)/red_cairo_canvas.cpp		\
+	$(CLIENT_DIR)/red_cairo_canvas.h		\
+	$(CLIENT_DIR)/cmd_line_parser.cpp		\
+	$(CLIENT_DIR)/cmd_line_parser.h			\
+	$(CLIENT_DIR)/common.h				\
+	$(CLIENT_DIR)/cursor_channel.cpp		\
+	$(CLIENT_DIR)/cursor_channel.h			\
+	$(CLIENT_DIR)/cursor.cpp			\
+	$(CLIENT_DIR)/cursor.h				\
+	$(CLIENT_DIR)/debug.h				\
+	$(CLIENT_DIR)/display_channel.cpp		\
+	$(CLIENT_DIR)/display_channel.h			\
+	$(CLIENT_DIR)/red_gl_canvas.cpp			\
+	$(CLIENT_DIR)/red_gl_canvas.h			\
+	$(CLIENT_DIR)/gl_canvas.cpp			\
+	$(CLIENT_DIR)/glc.cpp				\
+	$(CLIENT_DIR)/glz_decoded_image.h		\
+	$(CLIENT_DIR)/glz_decoder_config.h		\
+	$(CLIENT_DIR)/glz_decoder.cpp			\
+	$(CLIENT_DIR)/glz_decoder.h			\
+	$(CLIENT_DIR)/glz_decoder_window.cpp		\
+	$(CLIENT_DIR)/glz_decoder_window.h		\
+	$(CLIENT_DIR)/inputs_channel.cpp		\
+	$(CLIENT_DIR)/inputs_channel.h			\
+	$(CLIENT_DIR)/inputs_handler.h			\
+	$(CLIENT_DIR)/lz.cpp				\
+	$(CLIENT_DIR)/monitor.cpp			\
+	$(CLIENT_DIR)/monitor.h				\
+	$(CLIENT_DIR)/menu.cpp				\
+	$(CLIENT_DIR)/menu.h				\
+	$(CLIENT_DIR)/pixels_source.h			\
+	$(CLIENT_DIR)/platform.h			\
+	$(CLIENT_DIR)/playback_channel.cpp		\
+	$(CLIENT_DIR)/process_loop.cpp			\
+	$(CLIENT_DIR)/quic.cpp				\
+	$(CLIENT_DIR)/record_channel.cpp		\
+	$(CLIENT_DIR)/red_channel.cpp			\
+	$(CLIENT_DIR)/red_channel.h			\
+	$(CLIENT_DIR)/red_client.cpp			\
+	$(CLIENT_DIR)/red_client.h			\
+	$(CLIENT_DIR)/red_drawable.h			\
+	$(CLIENT_DIR)/red_key.h				\
+	$(CLIENT_DIR)/red_peer.cpp			\
+	$(CLIENT_DIR)/red_peer.h			\
+	$(CLIENT_DIR)/red_pixmap_cairo.h		\
+	$(CLIENT_DIR)/red_pixmap_gl.h			\
+	$(CLIENT_DIR)/red_pixmap.h			\
+	$(CLIENT_DIR)/red_types.h			\
+	$(CLIENT_DIR)/red_window.h			\
+	$(CLIENT_DIR)/region.cpp			\
+	$(CLIENT_DIR)/rop3.cpp				\
+	$(CLIENT_DIR)/screen.cpp			\
+	$(CLIENT_DIR)/screen.h				\
+	$(CLIENT_DIR)/screen_layer.cpp			\
+	$(CLIENT_DIR)/screen_layer.h			\
+	$(CLIENT_DIR)/shared_cache.hpp			\
+	$(CLIENT_DIR)/hot_keys.cpp			\
+	$(CLIENT_DIR)/hot_keys.h			\
+	$(CLIENT_DIR)/threads.cpp			\
+	$(CLIENT_DIR)/utils.cpp				\
+	$(CLIENT_DIR)/utils.h				\
+	$(CLIENT_DIR)/icon.h                        	\
 	$(NULL)
 
 bin_PROGRAMS = spicec
