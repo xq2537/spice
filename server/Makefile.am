@@ -1,9 +1,11 @@
 NULL =
 
+COMMON_DIR=$(SPICE_COMMON_SRCDIR)
+
 INCLUDES = \
 	-I. 					\
-	-I$(top_srcdir)/common			\
-	-I$(top_srcdir)/common/linux	\
+	-I$(COMMON_DIR)			\
+	-I$(COMMON_DIR)/linux		\
 	$(FFMPEG_CFLAGS)			\
 	$(QCAIRO_CFLAGS)			\
 	$(GL_CFLAGS)				\
@@ -16,16 +18,16 @@ INCLUDES = \
 	$(VISIBILITY_HIDDEN_CFLAGS)		\
 	$(NULL)
 
-COMMON_SRCS = 						\
-	$(top_srcdir)/common/cairo_canvas.c		\
-	$(top_srcdir)/common/gl_canvas.c		\
-	$(top_srcdir)/common/region.c			\
-	$(top_srcdir)/common/glc.c			\
-	$(top_srcdir)/common/ogl_ctx.c			\
-	$(top_srcdir)/common/rop3.c			\
-	$(top_srcdir)/common/quic.c			\
-	$(top_srcdir)/common/lz.c			\
-	$(top_srcdir)/common/canvas_utils.c		\
+COMMON_SRCS = 				 	\
+	$(COMMON_DIR)/cairo_canvas.c		\
+	$(COMMON_DIR)/gl_canvas.c			\
+	$(COMMON_DIR)/region.c			\
+	$(COMMON_DIR)/glc.c				\
+	$(COMMON_DIR)/ogl_ctx.c			\
+	$(COMMON_DIR)/rop3.c			\
+	$(COMMON_DIR)/quic.c			\
+	$(COMMON_DIR)/lz.c				\
+	$(COMMON_DIR)/canvas_utils.c		\
 	$(NULL)
 
 lib_LTLIBRARIES = libspice.la
