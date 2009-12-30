@@ -1,11 +1,5 @@
 #! /bin/sh
 
-srcdir=`dirname $0`
-test -z "$srcdir" && srcdir=.
-
-ORIGDIR=`pwd`
-cd $srcdir
-
 # FIXME: can replace this entire script with
 # the following line if we can require autoconf 2.60:
 # autoreconf -v --force --install || exit 1
@@ -39,6 +33,7 @@ srcdir=`dirname $ARGV0`
 test -z "$srcdir" && srcdir=.
 
 ORIGDIR=`pwd`
+cd $srcdir
 
 # Not all echo versions allow -n, so we check what is possible. This test is
 # based on the one in autoconf.
@@ -156,7 +151,6 @@ do_cmd() {
 # Run for top level directory
 
 printbold "Setting up $PACKAGE toplevel"
-cd $srcdir
 do_cmd $LIBTOOLIZE $LIBTOOLIZE_FLAGS
 do_cmd $ACLOCAL $ACLOCAL_FLAGS
 do_cmd $AUTOHEADER
