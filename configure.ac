@@ -8,6 +8,10 @@ AC_INIT(spice, [SPICE_MAJOR.SPICE_MINOR.SPICE_MICRO], [], spice)
 
 AC_CONFIG_MACRO_DIR([m4])
 
+# Define default SPICE_COMMON_SRCDIR
+# Maybe overwritten by ./configure.ac.shared
+SPICE_COMMON_SRCDIR='$(top_srcdir)'/common
+
 m4_include(configure.ac.shared)
 
 AC_PROG_LIBTOOL
@@ -67,7 +71,7 @@ fi
 AC_MSG_RESULT($have_gcc4)
 AC_SUBST(VISIBILITY_HIDDEN_CFLAGS)
 
-
+AC_SUBST(SPICE_COMMON_SRCDIR)
 AC_SUBST(SPICE_REQUIRES)
 AC_SUBST(SPICE_NONPKGCONFIG_CFLAGS)
 AC_SUBST(SPICE_NONPKGCONFIG_LIBS)
@@ -92,7 +96,7 @@ echo "
         prefix:                   ${prefix}
         c compiler:               ${CC}
         c++ compiler:	          ${CXX}
-     
+
         Have XRANDR 1.2:          ${have_xrandr12}
 
         Red target:               ${red_target}
