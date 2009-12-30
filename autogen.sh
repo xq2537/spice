@@ -1,5 +1,7 @@
 #! /bin/sh
 
+set -e # exit on errors
+
 # FIXME: can replace this entire script with
 # the following line if we can require autoconf 2.60:
 # autoreconf -v --force --install || exit 1
