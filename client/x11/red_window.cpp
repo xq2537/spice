@@ -889,7 +889,7 @@ void RedWindow_p::win_proc(XEvent& event)
         if (!red_window->_ignore_pointer) {
             Point origin = red_window->get_origin();
             red_window->on_pointer_enter(event.xcrossing.x - origin.x, event.xcrossing.y - origin.y,
-                                         to_red_buttons_state(event.xmotion.state));
+                                         to_red_buttons_state(event.xcrossing.state));
         } else {
             red_window->_shadow_pointer_state = true;
             memcpy(&red_window->_shadow_pointer_event, &event, sizeof(XEvent));
@@ -906,12 +906,34 @@ void RedWindow_p::win_proc(XEvent& event)
     }
 }
 
-void RedWindow_p::sync()
+void RedWindow_p::sync(bool shadowed)
 {
+    if (shadowed) {
+        _ignore_foucs = true;
+        _ignore_pointer = true;
+        _shadow_foucs_state = _focused;
+        _shadow_pointer_state = _pointer_in_window;
+        _shadow_focus_event.xany.serial = 0;
+    }
     XSync(x_display, False);
     XEvent event;
     while (XCheckWindowEvent(x_display, _win, ~long(0), &event)) {
         win_proc(event);
+    }
+    if (!shadowed) {
+        return;
+    }
+    _ignore_foucs = false;
+    _ignore_pointer = false;
+    if (_shadow_foucs_state != _focused) {
+        DBG(0, "put back shadowed focus event");
+        XPutBackEvent(x_display, &_shadow_focus_event);
+    } else if (_shadow_focus_event.xany.serial > 0) {
+        focus_serial = _shadow_focus_event.xany.serial;
+    }
+    if (_shadow_pointer_state != _pointer_in_window) {
+        DBG(0, "put back shadowed pointer event");
+        XPutBackEvent(x_display, &_shadow_pointer_event);
     }
 }
 
@@ -1023,7 +1045,9 @@ RedWindow_p::RedWindow_p()
     : _win (None)
     , _glcont_copy (NULL)
     , _icon (NULL)
+    , _focused (false)
     , _ignore_foucs (false)
+    , _pointer_in_window (false)
     , _ignore_pointer (false)
 {
 }
@@ -1193,8 +1217,6 @@ RedWindow::RedWindow(RedWindow::Listener& listener, int screen)
     , _type (TYPE_NORMAL)
     , _local_cursor (NULL)
     , _cursor_visible (true)
-    , _focused (false)
-    , _pointer_in_window (false)
     , _trace_key_interception (false)
     , _key_interception_on (false)
     , _menu (NULL)
@@ -1600,55 +1622,18 @@ void RedWindow::do_start_key_interception()
     // LeaveNotify and EnterNotify.
 
     ASSERT(_focused);
-    _ignore_foucs = true;
-    _ignore_pointer = true;
-    _shadow_foucs_state = true;
-    _shadow_pointer_state = true;
-    _shadow_focus_event.xany.serial = 0;
     XGrabKeyboard(x_display, _win, True, GrabModeAsync, GrabModeAsync, CurrentTime);
-    sync();
+    sync(true);
     _listener.on_start_key_interception();
-    _ignore_foucs = false;
-    _ignore_pointer = false;
     _key_interception_on = true;
-    if (!_shadow_foucs_state) {
-        DBG(0, "put back shadowed focus out");
-        XPutBackEvent(x_display, &_shadow_focus_event);
-    } else if (_shadow_focus_event.xany.serial > 0) {
-        ASSERT(focus_window == this);
-        focus_serial = _shadow_focus_event.xany.serial;
-    }
-
-    if (!_shadow_pointer_state) {
-        DBG(0, "put back shadowed pointer leave");
-        XPutBackEvent(x_display, &_shadow_pointer_event);
-    }
 }
 
 void RedWindow::do_stop_key_interception()
 {
-    _ignore_foucs = true;
-    _ignore_pointer = true;
-    _shadow_foucs_state = _focused;
-    _shadow_pointer_state = _pointer_in_window;
-    _shadow_focus_event.xany.serial = 0;
     XUngrabKeyboard(x_display, CurrentTime);
-    sync();
+    sync(true);
     _key_interception_on = false;
     _listener.on_stop_key_interception();
-    _ignore_foucs = false;
-    _ignore_pointer = false;
-    if (_shadow_foucs_state != _focused) {
-        DBG(0, "put back shadowed focus event");
-        XPutBackEvent(x_display, &_shadow_focus_event);
-     } else if (_shadow_focus_event.xany.serial > 0) {
-        focus_serial = _shadow_focus_event.xany.serial;
-    }
-
-    if (_shadow_pointer_state != _pointer_in_window) {
-        DBG(0, "put back shadowed pointer event");
-        XPutBackEvent(x_display, &_shadow_pointer_event);
-    }
 }
 
 void RedWindow::start_key_interception()
@@ -1705,7 +1690,7 @@ void RedWindow::hide_cursor()
 void RedWindow::release_mouse()
 {
     XUngrabPointer(x_display, CurrentTime);
-    sync();
+    sync(true);
 }
 
 void RedWindow::cupture_mouse()

@@ -56,6 +56,8 @@ protected:
     uint32_t _modal_refs;
     HMODULE _no_taskmgr_dll;
     HHOOK _no_taskmgr_hook;
+    bool _focused;
+    bool _pointer_in_window;
     bool _minimized;
     bool _valid_pos;
     int _x;

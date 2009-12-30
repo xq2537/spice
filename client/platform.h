@@ -101,6 +101,8 @@ public:
 
     static uint32_t get_keyboard_modifiers();
 
+    static void reset_cursor_pos();
+
     static LocalCursor* create_local_cursor(CursorData* cursor_data);
     static LocalCursor* create_inactive_cursor();
     static LocalCursor* create_default_cursor();

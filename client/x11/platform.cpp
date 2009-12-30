@@ -507,17 +507,19 @@ public:
         monitors.push_back(this);
     }
 
-    virtual void set_mode(int width, int height)
-    {
-        _out_of_sync = width > get_width() || height > get_height();
-    }
-
-    virtual void restore() {}
     virtual int get_depth() { return XPlatform::get_vinfo()[0]->depth;}
     virtual Point get_position() { return XScreen::get_position();}
     virtual Point get_size() const { Point pt = {get_width(), get_height()}; return pt;}
     virtual bool is_out_of_sync() { return _out_of_sync;}
     virtual int get_screen_id() { return get_screen();}
+
+protected:
+    virtual void do_set_mode(int width, int height)
+    {
+        _out_of_sync = width > get_width() || height > get_height();
+    }
+
+    virtual void do_restore() {}
 
 private:
     bool _out_of_sync;
@@ -529,13 +531,15 @@ public:
     virtual ~DynamicScreen();
 
     void publish_monitors(MonitorsList& monitors);
-    virtual void set_mode(int width, int height);
-    virtual void restore();
     virtual int get_depth() { return XPlatform::get_vinfo()[0]->depth;}
     virtual Point get_position() { return XScreen::get_position();}
     virtual Point get_size() const { Point pt = {get_width(), get_height()}; return pt;}
     virtual bool is_out_of_sync() { return _out_of_sync;}
     virtual int get_screen_id() { return get_screen();}
+
+protected:
+    virtual void do_set_mode(int width, int height);
+    virtual void do_restore();
 
 private:
     bool set_screen_size(int size_index);
@@ -589,7 +593,7 @@ public:
     }
 };
 
-void DynamicScreen::set_mode(int width, int height)
+void DynamicScreen::do_set_mode(int width, int height)
 {
     int num_sizes;
 
@@ -611,7 +615,7 @@ void DynamicScreen::set_mode(int width, int height)
     X_DEBUG_SYNC(get_display());
 }
 
-void DynamicScreen::restore()
+void DynamicScreen::do_restore()
 {
     X_DEBUG_SYNC(get_display());
     if (is_broken() || (get_width() == _saved_width && get_height() == _saved_height)) {
@@ -705,8 +709,6 @@ public:
     XMonitor(MultyMonScreen& container, int id, RRCrtc crtc);
     virtual ~XMonitor();
 
-    virtual void set_mode(int width, int height);
-    virtual void restore();
     virtual int get_depth();
     virtual Point get_position();
     virtual Point get_size() const;
@@ -734,6 +736,10 @@ public:
 
     static void inc_change_ref() { Monitor::self_monitors_change++;}
     static void dec_change_ref() { Monitor::self_monitors_change--;}
+
+protected:
+    virtual void do_set_mode(int width, int height);
+    virtual void do_restore();
 
 private:
     void update_position();
@@ -1673,7 +1679,7 @@ XRRModeInfo* XMonitor::find_mode(int width, int height, XRRScreenResources* res)
     return NULL;
 }
 
-void XMonitor::set_mode(int width, int height)
+void XMonitor::do_set_mode(int width, int height)
 {
     if (width == _size.x && height == _size.y) {
         _out_of_sync = false;
@@ -1759,12 +1765,12 @@ bool XMonitor::position_changed()
     return _position.x != _saved_position.x || _position.y != _saved_position.y;
 }
 
-void XMonitor::restore()
+void XMonitor::do_restore()
 {
     if (!mode_changed()) {
         return;
     }
-    set_mode(_saved_size.x, _saved_size.y);
+    do_set_mode(_saved_size.x, _saved_size.y);
 }
 
 int XMonitor::get_depth()
@@ -1847,6 +1853,7 @@ void XMonitor::set_mode(const XRRModeInfo& mode)
 #endif
 
 static MonitorsList monitors;
+static Monitor* primary_monitor = NULL;
 
 typedef std::list<XScreen*> ScreenList;
 static ScreenList screens;
@@ -1877,11 +1884,20 @@ const MonitorsList& Platform::init_monitors()
     for (; iter != screens.end(); iter++) {
         (*iter)->publish_monitors(monitors);
     }
+    MonitorsList::iterator mon_iter = monitors.begin();
+    for (; mon_iter != monitors.end(); mon_iter++) {
+        Monitor *mon = *mon_iter;
+        if (mon->get_id() == 0) {
+            primary_monitor = mon;
+            break;
+        }
+    }
     return monitors;
 }
 
 void Platform::destroy_monitors()
 {
+    primary_monitor = NULL;
     monitors.clear();
     while (!screens.empty()) {
         XScreen* screen = screens.front();
@@ -2293,6 +2309,17 @@ uint32_t Platform::get_keyboard_modifiers()
            key_bit(keymap, XK_Control_R, R_CTRL_MODIFIER) |
            key_bit(keymap, XK_Alt_L, L_ALT_MODIFIER) |
            key_bit(keymap, XK_Alt_R, R_ALT_MODIFIER);
+}
+
+void Platform::reset_cursor_pos()
+{
+    if (!primary_monitor) {
+        return;
+    }
+    Point pos =  primary_monitor->get_position();
+    Point size =  primary_monitor->get_size();
+    Window root_window = RootWindow(x_display, DefaultScreen(x_display));
+    XWarpPointer(x_display, None, root_window, 0, 0, 0, 0, pos.x + size.x / 2, pos.y + size.y / 2);
 }
 
 WaveRecordAbstract* Platform::create_recorder(RecordClient& client,

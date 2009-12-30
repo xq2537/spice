@@ -227,8 +227,6 @@ class WinMonitor: public Monitor {
 public:
     WinMonitor(int id, const wchar_t* name, const wchar_t* string);
 
-    virtual void set_mode(int width, int height);
-    virtual void restore();
     virtual int get_depth() { return _depth;}
     virtual Point get_position();
     virtual Point get_size() const { Point size = {_width, _height}; return size;}
@@ -237,6 +235,8 @@ public:
 
 protected:
     virtual ~WinMonitor();
+    virtual void do_set_mode(int width, int height);
+    virtual void do_restore();
 
 private:
     void update_position();
@@ -266,7 +266,7 @@ WinMonitor::WinMonitor(int id, const wchar_t* name, const wchar_t* string)
 
 WinMonitor::~WinMonitor()
 {
-    restore();
+    do_restore();
 }
 
 void WinMonitor::update_position()
@@ -362,7 +362,7 @@ bool WinMonitor::best_display_setting(uint32_t width, uint32_t height, uint32_t 
                                                                         == DISP_CHANGE_SUCCESSFUL;
 }
 
-void WinMonitor::set_mode(int width, int height)
+void WinMonitor::do_set_mode(int width, int height)
 {
     update_position();
     if (width == _width && height == _height) {
@@ -380,31 +380,37 @@ void WinMonitor::set_mode(int width, int height)
     update_position();
 }
 
-void WinMonitor::restore()
+void WinMonitor::do_restore()
 {
     if (_active) {
         _active = false;
         self_monitors_change++;
         ChangeDisplaySettingsEx(_dev_name.c_str(), NULL, NULL, 0, NULL);
         self_monitors_change--;
+        update_position();
     }
 }
 
 static MonitorsList monitors;
+static Monitor* primary_monitor = NULL;
 
 const MonitorsList& Platform::init_monitors()
 {
     ASSERT(monitors.empty());
 
     int id = 0;
+    Monitor* mon;
     DISPLAY_DEVICE device_info;
     DWORD device_id = 0;
     device_info.cb = sizeof(device_info);
     while (EnumDisplayDevices(NULL, device_id, &device_info, 0)) {
         if ((device_info.StateFlags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP) &&
-                                      !(device_info.StateFlags & DISPLAY_DEVICE_MIRRORING_DRIVER)) {
-            monitors.push_back(new WinMonitor(id++, device_info.DeviceName,
-                                              device_info.DeviceString));
+                 !(device_info.StateFlags & DISPLAY_DEVICE_MIRRORING_DRIVER)) {
+            mon = new WinMonitor(id++, device_info.DeviceName, device_info.DeviceString);
+            monitors.push_back(mon);
+            if (device_info.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE) {
+                primary_monitor = mon;
+            }
         }
         device_id++;
     }
@@ -413,6 +419,7 @@ const MonitorsList& Platform::init_monitors()
 
 void Platform::destroy_monitors()
 {
+    primary_monitor = NULL;
     while (!monitors.empty()) {
         Monitor* monitor = monitors.front();
         monitors.pop_front();
@@ -505,6 +512,16 @@ uint32_t Platform::get_keyboard_modifiers()
            KEY_BIT(keymap, VK_RCONTROL, R_CTRL_MODIFIER) |
            KEY_BIT(keymap, VK_LMENU, L_ALT_MODIFIER) |
            KEY_BIT(keymap, VK_RMENU, R_ALT_MODIFIER);
+}
+
+void Platform::reset_cursor_pos()
+{
+    if (!primary_monitor) {
+        return;
+    }
+    Point pos =  primary_monitor->get_position();
+    Point size =  primary_monitor->get_size();
+    SetCursorPos(pos.x + size.x / 2, pos.y + size.y / 2);
 }
 
 class WinBaseLocalCursor: public LocalCursor {

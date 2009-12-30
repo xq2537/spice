@@ -29,8 +29,8 @@ public:
     void set_free() {_free = true;}
     void set_used() {_free = false;}
 
-    virtual void set_mode(int width, int height) = 0;
-    virtual void restore() = 0;
+    void set_mode(int width, int height);
+    void restore();
     virtual int get_depth() = 0;
     virtual Point get_position() = 0;
     virtual Point get_size() const = 0;
@@ -41,6 +41,8 @@ public:
 
 protected:
     virtual ~Monitor() {}
+    virtual void do_set_mode(int width, int height) = 0;
+    virtual void do_restore() = 0;
 
 private:
     int _id;

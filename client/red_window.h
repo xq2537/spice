@@ -105,8 +105,6 @@ private:
     Type _type;
     LocalCursor* _local_cursor;
     bool _cursor_visible;
-    bool _focused;
-    bool _pointer_in_window;
     bool _trace_key_interception;
     bool _key_interception_on;
     Menu* _menu;
