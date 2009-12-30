@@ -13,6 +13,9 @@ AC_CONFIG_AUX_DIR(.)
 AM_INIT_AUTOMAKE([dist-bzip2])
 AM_MAINTAINER_MODE
 
+# Define default SPICE_COMMON_SRCDIR
+SPICE_COMMON_SRCDIR='$(top_srcdir)'/common
+
 AS_IF([test "$CFLAGS" = ""], [], [_cflags_is_set=yes])
 AC_PROG_CC
 AS_IF([test "$CXXFLAGS" = ""], [], [_cxxflags_is_set=yes])
@@ -311,7 +314,7 @@ fi
 AC_MSG_RESULT($have_gcc4)
 AC_SUBST(VISIBILITY_HIDDEN_CFLAGS)
 
-
+AC_SUBST(SPICE_COMMON_SRCDIR)
 AC_SUBST(SPICE_REQUIRES)
 AC_SUBST(SPICE_NONPKGCONFIG_CFLAGS)
 AC_SUBST(SPICE_NONPKGCONFIG_LIBS)
@@ -339,7 +342,7 @@ echo "
         prefix:                   ${prefix}
         c compiler:               ${CC}
         c++ compiler:	          ${CXX}
-     
+
         Have XRANDR 1.2:          ${have_xrandr12}
 
         Red target:               ${red_target}
