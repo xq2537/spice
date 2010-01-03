@@ -47,3 +47,13 @@ COMMON_SRCS = 				\
 
 EXTRA_DIST = $(COMMON_SRCS)
 
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = spice-common.pc
+
+common_srcdir=$(prefix)/src/spice-common
+common_src_DATA = $(COMMON_SRCS)
+
+linux_includedir=$(common_srcdir)/linux
+linux_include_DATA=linux/ffmpeg_inc.h
+
+DISTCLEANFILES = spice-common.pc linux/ffmpeg_inc.h
