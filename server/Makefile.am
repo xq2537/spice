@@ -69,9 +69,9 @@ libspice_la_SOURCES =				\
 	snd_worker.h				\
 	spice.h					\
 	vd_interface.h				\
-	$(COMMON_SRCS)				\
 	$(NULL)
 
+nodist_libspice_la_SOURCES = $(COMMON_SRCS)
 libspiceincludedir = $(includedir)/libspice
 libspiceinclude_HEADERS =               	\
 	spice.h					\
