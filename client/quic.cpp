@@ -16,5 +16,5 @@
 */
 
 #include "common.h"
-#include "../common/quic.c"
+#include "quic.c"
 

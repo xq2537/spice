@@ -21,5 +21,5 @@
 
 #define CANVAS_ERROR(format, ...) THROW(format, ## __VA_ARGS__)
 
-#include "../common/canvas_utils.c"
+#include "canvas_utils.c"
 

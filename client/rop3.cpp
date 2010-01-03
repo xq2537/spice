@@ -16,5 +16,5 @@
 */
 
 #include "common.h"
-#include "../common/rop3.c"
+#include "rop3.c"
 

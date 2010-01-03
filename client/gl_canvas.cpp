@@ -17,5 +17,5 @@
 
 #define GL_GLEXT_PROTOTYPES
 #include "common.h"
-#include "../common/gl_canvas.c"
+#include "gl_canvas.c"
 

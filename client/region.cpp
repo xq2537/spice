@@ -16,5 +16,5 @@
 */
 
 #include "common.h"
-#include "../common/region.c"
+#include "region.c"
 

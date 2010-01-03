@@ -20,5 +20,5 @@
 
 #define CANVAS_ERROR(format, ...) THROW(format, ## __VA_ARGS__)
 
-#include "../common/gdi_canvas.c"
+#include "gdi_canvas.c"
 

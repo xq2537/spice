@@ -16,5 +16,5 @@
 */
 
 #include "common.h"
-#include "../common/lz.c"
+#include "lz.c"
 
