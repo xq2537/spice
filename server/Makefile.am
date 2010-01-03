@@ -82,3 +82,9 @@ EXTRA_DIST =					\
 	glz_encode_match_tmpl.c			\
 	glz_encode_tmpl.c			\
 	$(NULL)
+
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = spice.pc
+
+DISTCLEANFILES =                                \
+	spice.pc
