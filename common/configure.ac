@@ -8,7 +8,7 @@ AC_INIT(spice-common, [SPICE_MAJOR.SPICE_MINOR.SPICE_MICRO], [], spice-common)
 
 AC_CONFIG_MACRO_DIR([m4])
 
-m4_include(../configure.ac.shared)
+m4_include(configure.ac.shared)
 
 AC_CONFIG_FILES([Makefile linux/ffmpeg_inc.h spice-common.pc])
 AC_OUTPUT

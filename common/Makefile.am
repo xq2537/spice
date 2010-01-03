@@ -57,3 +57,6 @@ linux_includedir=$(common_srcdir)/linux
 linux_include_DATA=linux/ffmpeg_inc.h
 
 DISTCLEANFILES = spice-common.pc linux/ffmpeg_inc.h
+
+dist-hook:
+	cp -p -f ../autogen.sh ../configure.ac.shared $(distdir)

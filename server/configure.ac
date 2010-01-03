@@ -12,7 +12,7 @@ AC_CONFIG_MACRO_DIR([m4])
 # Maybe overwritten by ../configure.ac.shared
 SPICE_COMMON_SRCDIR='$(top_srcdir)'/../common
 
-m4_include(../configure.ac.shared)
+m4_include(configure.ac.shared)
 
 AC_PROG_LIBTOOL
 

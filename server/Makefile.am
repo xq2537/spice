@@ -88,3 +88,6 @@ pkgconfig_DATA = spice.pc
 
 DISTCLEANFILES =                                \
 	spice.pc
+
+dist-hook:
+	cp -p -f ../autogen.sh ../configure.ac.shared $(distdir)

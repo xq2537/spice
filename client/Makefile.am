@@ -87,3 +87,6 @@ RED_COMMON_SRCS =	 		\
 	$(NULL)
 
 EXTRA_DIST = $(RED_COMMON_SRCS)
+
+dist-hook:
+	cp -p -f ../autogen.sh ../configure.ac.shared $(distdir)
