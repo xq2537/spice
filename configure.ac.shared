@@ -181,6 +181,18 @@ if test "x$use_spice_common" != "xno"; then
     SPICE_COMMON_SRCDIR=$(pkg-config --variable=common_src_dir spice-common)
 fi
 
+
+#
+# patchid and distribution -- better identify the release
+#
+AC_ARG_VAR(PATCHID, [identify release by last patch id])
+AH_TEMPLATE(PATCHID, [identify release by last patch id])
+AC_DEFINE_UNQUOTED(PATCHID, ["$ac_env_PATCHID_value"])
+
+AC_ARG_VAR(DISTRIBUTION, [identify release by last distribution])
+AH_TEMPLATE(DISTRIBUTION, [identify release by last distribution])
+AC_DEFINE_UNQUOTED(DISTRIBUTION, ["$ac_env_DISTRIBUTION_value"])
+
 dnl ===========================================================================
 dnl check compiler flags
 
