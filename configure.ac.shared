@@ -99,12 +99,22 @@ AC_SUBST(CELT051_LIBS)
 AC_SUBST(CELT051_LIBDIR)
 SPICE_REQUIRES+=" celt051 >= 0.5.1.1"
 
-PKG_CHECK_MODULES(FFMPEG, libavcodec libavutil)
-AC_SUBST(FFMPEG_CFLAGS)
-AC_SUBST(FFMPEG_LIBS)
-FFMPEG_LIBDIR=`pkg-config --variable=libdir libavutil`
-AC_SUBST(FFMPEG_LIBDIR)
-SPICE_REQUIRES+=" libavcodec libavutil"
+AC_MSG_CHECKING(for ffmpeg-spice)
+PKG_CHECK_EXISTS(libavcodec-spice libavutil-spice, [use_ffmpeg_spice=yes], [use_ffmpeg_spice=no])
+AC_MSG_RESULT($use_ffmpeg_spice)
+AC_MSG_CHECKING(for ffmpeg)
+PKG_CHECK_EXISTS(libavcodec libavutil, [use_ffmpeg=yes], [use_ffmpeg=no])
+AC_MSG_RESULT($use_ffmpeg)
+if test "$use_ffmpeg_spice" = "yes"; then
+    PKG_CHECK_MODULES(FFMPEG, libavcodec-spice libavutil-spice)
+    FFMPEG_LIBDIR=`pkg-config --variable=libdir libavutil-spice`
+elif test "$use_ffmpeg" = "yes"; then
+    PKG_CHECK_MODULES(FFMPEG, libavcodec libavutil)
+    FFMPEG_LIBDIR=`pkg-config --variable=libdir libavutil`
+else
+    echo "please install ffmpeg-spice or ffmpeg devel package"
+    exit 1
+fi
 
 saved_CPPFLAGS="$CPPFLAGS"
 CPPFLAGS="$CPPFLAGS $FFMPEG_CFLAGS"
