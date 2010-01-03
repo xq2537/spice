@@ -1,0 +1,6 @@
+prefix=@prefix@
+common_src_dir=${prefix}/src/spice-common
+
+Name: @PACKAGE@
+Description: Spice common sources
+Version: @VERSION@
