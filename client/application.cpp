@@ -1491,6 +1491,10 @@ bool Application::set_canvas_option(CmdLineParser& parser, char *val)
 #ifdef WIN32
     canvas_types["gdi"] = CANVAS_OPTION_GDI;
 #endif
+#ifdef USE_OGL
+    canvas_types["gl_fbo"] = CANVAS_OPTION_OGL_FBO;
+    canvas_types["gl_pbuff"] = CANVAS_OPTION_OGL_PBUFF;
+#endif
     _canvas_types.clear();
     do {
         CanvasNamesMap::iterator iter = canvas_types.find(val);
