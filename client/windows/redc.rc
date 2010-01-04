@@ -101,7 +101,7 @@ END
 
 // Icon with lowest ID value placed first to ensure application icon
 // remains consistent on all systems.
-RED_ICON_RES_ID         ICON                    "solideice.ico"
+RED_ICON_RES_ID         ICON                    "spice.ico"
 #endif    // English (U.S.) resources
 /////////////////////////////////////////////////////////////////////////////
 
