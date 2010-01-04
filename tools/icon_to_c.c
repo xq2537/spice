@@ -33,6 +33,8 @@
 
 #define ERROR(str) printf("%s: error: %s\n", prog_name, str); exit(-1);
 
+#define ALIGN(a, b) (((a) + ((b) - 1)) & ~((b) - 1))
+
 static char *prog_name = NULL;
 
 static size_t read_input(const char *file_name, uint8_t** out_buf)
@@ -153,9 +155,18 @@ static Icon *init_icon(uint8_t *buf, size_t buf_size)
         if (bitmap->header_size != 40) {
             ERROR("invalid bitmap header");
         }
+
+        if (ico->plans == 0) { // 0 and 1 are equivalent
+            ico->plans = 1;
+        }
+
         if (bitmap->width != ico->width || bitmap->height != ico->height * 2 ||
-            bitmap->plans != ico->plans || bitmap->bpp != ico->bpp || !bitmap->image_size) {
+            bitmap->plans != ico->plans || bitmap->bpp != ico->bpp) {
             ERROR("invalid bitmap header");
+        }
+
+        if (!bitmap->image_size) {
+            bitmap->image_size = ALIGN(bitmap->bpp * bitmap->width, 32) / 8 * bitmap->height;
         }
 
         if (bitmap->compression || bitmap->horizontal_resolution || bitmap->vertical_resolution ||
