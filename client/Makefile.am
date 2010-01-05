@@ -48,6 +48,7 @@ RED_COMMON_SRCS =	 		\
 	platform.h			\
 	playback_channel.cpp		\
 	process_loop.cpp		\
+	process_loop.h			\
 	quic.cpp			\
 	read_write_mutex.h		\
 	record_channel.cpp		\
@@ -77,6 +78,12 @@ RED_COMMON_SRCS =	 		\
         threads.h			\
 	utils.cpp			\
 	utils.h				\
+	icon.h				\
+	event_sources.h			\
+	red_gdi_canvas.cpp		\
+	red_gdi_canvas.h		\
+	red_pixmap_gdi.h		\
+	gdi_canvas.cpp			\
 	$(NULL)
 
 EXTRA_DIST = $(RED_COMMON_SRCS)

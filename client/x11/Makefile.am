@@ -108,6 +108,7 @@ bin_PROGRAMS = spicec
 spicec_SOURCES =			\
 	atomic_count.h			\
 	event_sources_p.cpp		\
+	event_sources_p.h		\
 	main.cpp			\
 	named_pipe.h                    \
 	named_pipe.cpp                  \
