@@ -1233,6 +1233,40 @@ static void release_upgrade_item(RedWorker* worker, UpgradeItem *item)
     }
 }
 
+static void red_pipe_clear_device_resources(RedChannel *channel)
+{
+    Ring *ring;
+    PipeItem *item;
+
+    ASSERT(channel);
+    ring = &channel->pipe;
+    item = (PipeItem *) ring;
+    while ((item = (PipeItem *)ring_next(ring, (RingItem *)item))) {
+        PipeItem *tmp_item = item;
+
+        switch (item->type) {
+        case PIPE_ITEM_TYPE_DRAW:
+            item = (PipeItem *)ring_prev(ring, (RingItem *)item);
+            ring_remove(&tmp_item->link);
+            release_drawable(channel->worker, CONTAINEROF(tmp_item, Drawable, pipe_item));
+            channel->pipe_size--;
+            break;
+        case PIPE_ITEM_TYPE_CURSOR:
+            item = (PipeItem *)ring_prev(ring, (RingItem *)item);
+            ring_remove(&tmp_item->link);
+            red_release_cursor(channel->worker, (CursorItem *)tmp_item);
+            channel->pipe_size--;
+            break;
+        case PIPE_ITEM_TYPE_UPGRADE:
+            item = (PipeItem *)ring_prev(ring, (RingItem *)item);
+            ring_remove(&tmp_item->link);
+            release_upgrade_item(channel->worker, (UpgradeItem *)tmp_item);
+            channel->pipe_size--;
+            break;
+        }
+    }
+}
+
 static void red_pipe_clear(RedChannel *channel)
 {
     PipeItem *item;
@@ -8136,6 +8170,12 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         red_printf("detach");
         red_display_clear_glz_drawables(worker->display_channel);
         red_current_clear(worker);
+        if (worker->display_channel) {
+            red_pipe_clear_device_resources(&worker->display_channel->base);
+        }
+        if (worker->cursor_channel) {
+            red_pipe_clear_device_resources(&worker->cursor_channel->base);
+        }
 #ifdef STREAM_TRACE
         red_reset_stream_trace(worker);
 #endif
