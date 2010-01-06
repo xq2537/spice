@@ -66,6 +66,7 @@ static LRESULT CALLBACK PlatformWinProc(HWND hWnd, UINT message, WPARAM wParam, 
         } else {
             LOG_WARN("received WM_TIMER not inside a modal loop");
         }
+        break;
     case WM_ACTIVATEAPP:
         if (wParam) {
             event_listener->on_app_activated();
