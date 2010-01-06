@@ -268,6 +268,56 @@ struct QTermInterface {
     void (*remove_info_command_handler)(QTermInterface *term, VDObjectRef obj);
 };
 
+#define VD_INTERFACE_QTERM2 "qemu_terminal_2"
+#define VD_INTERFACE_QTERM2_MAJOR 1
+#define VD_INTERFACE_QTERM2_MINOR 0
+typedef struct QTerm2Interface QTerm2Interface;
+
+enum VDIArgType{
+    ARG_TYPE_INVALID,
+    ARG_TYPE_INT,
+    ARG_TYPE_STRING,
+};
+
+typedef struct VDIArgDescriptor {
+    char* name;
+    int type;
+    int optional;
+} VDIArgDescriptor;
+
+typedef struct VDICmdArg {
+    VDIArgDescriptor descriptor;
+    union {
+        uint64_t int_val;
+        const char *string_val;
+    };
+} VDICmdArg;
+
+typedef void (*VDICmdHandler)(const VDICmdArg* args);
+typedef void (*VDIInfoCmdHandler)(void);
+
+struct QTerm2Interface {
+    VDInterface base;
+
+    VDObjectRef (*add_action_command_handler)(QTerm2Interface *term,
+                                              const char *module_name,
+                                              const char *command_name,
+                                              const VDIArgDescriptor *args_type,
+                                              VDICmdHandler handler,
+                                              const char *params_text,
+                                              const char *help_text);
+
+    void (*remove_action_command_handler)(QTerm2Interface *term, VDObjectRef obj);
+
+    VDObjectRef (*add_info_command_handler)(QTerm2Interface *term,
+                                            const char *module_name,
+                                            const char *command_name,
+                                            VDIInfoCmdHandler handler,
+                                            const char *help_text);
+
+    void (*remove_info_command_handler)(QTerm2Interface *term, VDObjectRef obj);
+};
+
 #define VD_INTERFACE_PLAYBACK "playback"
 #define VD_INTERFACE_PLAYBACK_MAJOR 1
 #define VD_INTERFACE_PLAYBACK_MINOR 1

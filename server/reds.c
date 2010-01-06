@@ -378,6 +378,21 @@ void (*log_proc)(CoreInterface *core, LogLevel level, const char* component,
     }                                                               \
 }
 
+static int args_is_empty(const VDICmdArg* args)
+{
+    return !args || args[0].descriptor.type == ARG_TYPE_INVALID;
+}
+
+const int args_is_string(const VDICmdArg* args)
+{
+    return !args_is_empty(args) && args->descriptor.type == ARG_TYPE_STRING;
+}
+
+const int args_is_int(const VDICmdArg* args)
+{
+    return !args_is_empty(args) && args->descriptor.type == ARG_TYPE_INT;
+}
+
 static ChannelSecurityOptions *find_channel_security(int id)
 {
     ChannelSecurityOptions *now = channels_security;
@@ -505,6 +520,16 @@ static void reds_do_disable_ticketing(void)
     core->term_printf(core, "Ticketing is now disabled.\n");
 }
 
+static void reds_do_disable_ticketing_2(const VDICmdArg* args)
+{
+    if (!args_is_empty(args)) {
+        red_printf("invalid args");
+        return;
+    }
+
+    reds_do_disable_ticketing();
+}
+
 static char *base64decode(const char *input, int length)
 {
     BIO *b64;
@@ -627,6 +652,16 @@ static void do_reset_statistics()
             node->value = 0;
         }
     }
+}
+
+static void do_reset_statistics_2(const VDICmdArg* args)
+{
+    if (!args_is_empty(args)) {
+        red_printf("invalid args");
+        return;
+    }
+
+    do_reset_statistics();
 }
 
 void insert_stat_node(StatNodeRef parent, StatNodeRef ref)
@@ -1151,6 +1186,31 @@ static void do_ping_client(const char *opt, int has_interval, int interval)
         core->term_printf(core, "ping invalid option: %s\n", opt);
         return;
     }
+}
+
+static void do_ping_client_2(const VDICmdArg* args)
+{
+    if (args_is_empty(args)) {
+        do_ping_client(NULL, FALSE, 0);
+        return;
+    }
+
+    if (!args_is_string(args)) {
+        red_printf("invalid args");
+        return;
+    }
+
+    if (args_is_empty(&args[1])) {
+        do_ping_client(args[0].string_val, FALSE, 0);
+        return;
+    }
+
+    if (!args_is_int(&args[1])) {
+        red_printf("invalid args");
+        return;
+    }
+
+    do_ping_client(args[0].string_val, TRUE, args[1].int_val);
 }
 
 static void ping_timer_cb()
@@ -3440,6 +3500,26 @@ error:
     free(local_args);
 }
 
+static void reds_do_set_ticket_2(const VDICmdArg *args)
+{
+    const char *arg2 = NULL;
+
+    if (!args_is_string(args)) {
+        red_printf("invalid args");
+        return;
+    }
+
+    if (!args_is_empty(&args[1])) {
+        if (!args_is_string(&args[1])) {
+            red_printf("invalid args");
+            return;
+        }
+        arg2 = args[1].string_val;
+    }
+
+    reds_do_set_ticket(args[0].string_val, arg2);
+}
+
 static void reds_do_set_ticket64(const char *password64, const char *args)
 {
     char *password;
@@ -3457,6 +3537,26 @@ static void reds_do_set_ticket64(const char *password64, const char *args)
     }
     reds_do_set_ticket(password, args);
     free(password);
+}
+
+static void reds_do_set_ticket64_2(const VDICmdArg *args)
+{
+    const char *arg2 = NULL;
+
+    if (!args_is_string(args)) {
+        red_printf("invalid args");
+        return;
+    }
+
+    if (!args_is_empty(&args[1])) {
+        if (!args_is_string(&args[1])) {
+            red_printf("invalid args");
+            return;
+        }
+        arg2 = args[1].string_val;
+    }
+
+    reds_do_set_ticket64(args[0].string_val, arg2);
 }
 
 static void reds_do_info_spice()
@@ -3554,6 +3654,16 @@ static void reds_do_set_image_compression(const char *val)
     set_image_compression(real_val);
 }
 
+static void reds_do_set_image_compression_2(const VDICmdArg *args)
+{
+    if (!args_is_string(args)) {
+        red_printf("invalid args");
+        return;
+    }
+
+    reds_do_set_image_compression(args[0].string_val);
+}
+
 static int reds_get_streaming_video(const char *val)
 {
     if (strcmp(val, "on") == 0) {
@@ -3584,6 +3694,16 @@ static void reds_do_set_streaming_video(const char *val)
     red_dispatcher_on_sv_change();
 }
 
+static void reds_do_set_streaming_video_2(const VDICmdArg *args)
+{
+    if (!args_is_string(args)) {
+        red_printf("invalid args");
+        return;
+    }
+
+    reds_do_set_streaming_video(args[0].string_val);
+}
+
 static void reds_do_set_agent_mouse(const char *val)
 {
     int new_val;
@@ -3602,6 +3722,16 @@ static void reds_do_set_agent_mouse(const char *val)
     reds_update_mouse_mode();
 }
 
+static void reds_do_set_agent_mouse_2(const VDICmdArg *args)
+{
+    if (!args_is_string(args)) {
+        red_printf("invalid args");
+        return;
+    }
+
+    reds_do_set_agent_mouse(args[0].string_val);
+}
+
 static void reds_do_set_playback_compression(const char *val)
 {
     int on;
@@ -3614,6 +3744,16 @@ static void reds_do_set_playback_compression(const char *val)
         return;
     }
     snd_set_playback_compression(on);
+}
+
+static void reds_do_set_playback_compression_2(const VDICmdArg *args)
+{
+    if (!args_is_string(args)) {
+        red_printf("invalid args");
+        return;
+    }
+
+    reds_do_set_playback_compression(args[0].string_val);
 }
 
 static OptionsMap _spice_options[] = {
@@ -4625,7 +4765,7 @@ static void add_monitor_action_commands(QTermInterface *mon)
     mon->add_action_command_handler(mon, "spice", "set_ticket64", "ss?",
                                     reds_do_set_ticket64,
                                     "<password> [expiration=<seconds>]"
-                                    "                            [,connected=keep|disconnect|fail]",
+                                    "[,connected=keep|disconnect|fail]",
                                     "set the spice connection ticket");
     mon->add_action_command_handler(mon, "spice", "disable_ticketing", "",
                                     reds_do_disable_ticketing,
@@ -4647,7 +4787,93 @@ static void add_monitor_action_commands(QTermInterface *mon)
 #endif
 }
 
+static void add_monitor_action_commands_2(QTerm2Interface *mon)
+{
+    VDIArgDescriptor s[] = {
+        { "arg1", ARG_TYPE_STRING, FALSE},
+        { NULL, 0, 0},
+    };
+
+    VDIArgDescriptor empty[] = {
+        { NULL, 0, 0}
+    };
+
+    VDIArgDescriptor s_s_o[] = {
+        { "arg1", ARG_TYPE_STRING, FALSE},
+        { "arg2", ARG_TYPE_STRING, TRUE},
+        { NULL, 0, 0}
+    };
+
+    VDIArgDescriptor s_o_i_o[] = {
+        { "arg1", ARG_TYPE_STRING, TRUE},
+        { "arg2", ARG_TYPE_INT, TRUE},
+        { NULL, 0, 0}
+    };
+
+    mon->add_action_command_handler(mon, "spice", "set_image_compression", s,
+                                    reds_do_set_image_compression_2,
+                                    "<[on|auto_glz|auto_lz|quic|glz|lz|off]>",
+                                    "");
+
+    mon->add_action_command_handler(mon, "spice", "set_streaming_video", s,
+                                    reds_do_set_streaming_video_2,
+                                    "<on|filter|all|off>",
+                                    "");
+
+    mon->add_action_command_handler(mon, "spice", "set_playback_compression", s,
+                                    reds_do_set_playback_compression_2,
+                                    "<on|off>",
+                                    "");
+
+    mon->add_action_command_handler(mon, "spice", "set_ticket", s_s_o,
+                                    reds_do_set_ticket_2,
+                                    "<password> [expiration=<seconds>]"
+                                    "[,connected=keep|disconnect|fail]",
+                                    "set the spice connection ticket");
+    mon->add_action_command_handler(mon, "spice", "set_ticket64", s_s_o,
+                                    reds_do_set_ticket64_2,
+                                    "<password> [expiration=<seconds>]"
+                                    "[,connected=keep|disconnect|fail]",
+                                    "set the spice connection ticket");
+    mon->add_action_command_handler(mon, "spice", "disable_ticketing", empty,
+                                    reds_do_disable_ticketing_2,
+                                    "",
+                                    "entirely disables OTP");
+    mon->add_action_command_handler(mon, "spice", "set_agent_mouse", s,
+                                    reds_do_set_agent_mouse_2,
+                                    "<on|off>",
+                                    "");
+#ifdef RED_STATISTICS
+    mon->add_action_command_handler(mon, "spice", "reset_stat", empty,
+                                    do_reset_statistics_2,
+                                    "",
+                                    "reset spice statistics");
+    mon->add_action_command_handler(mon, "spice", "ping_client", s_o_i_o,
+                                    do_ping_client_2,
+                                    "[on [interval]|off]",
+                                    "ping spice client to measure roundtrip");
+#endif
+}
+
 static void add_monitor_info_commands(QTermInterface *mon)
+{
+    mon->add_info_command_handler(mon, "spice", "state",
+                                  reds_do_info_spice,
+                                  "show spice state");
+    mon->add_info_command_handler(mon, "spice", "ticket",
+                                  reds_do_info_ticket,
+                                  "show ticket");
+#ifdef RED_STATISTICS
+    mon->add_info_command_handler(mon, "spice", "stat",
+                                  do_info_statistics,
+                                  "show spice statistics");
+    mon->add_info_command_handler(mon, "spice", "rtt_client",
+                                  do_info_rtt_client,
+                                  "show rtt to spice client");
+#endif
+}
+
+static void add_monitor_info_commands_2(QTerm2Interface *mon)
 {
     mon->add_info_command_handler(mon, "spice", "state",
                                   reds_do_info_spice,
@@ -4763,6 +4989,20 @@ static void interface_change_notifier(void *opaque, VDInterface *interface,
             }
             add_monitor_action_commands((QTermInterface *)interface);
             add_monitor_info_commands((QTermInterface *)interface);
+        } else if (strcmp(interface->type, VD_INTERFACE_QTERM2) == 0) {
+            static int was_here = FALSE;
+            red_printf("VD_INTERFACE_QTERM2");
+            if (was_here) {
+                return;
+            }
+            was_here = TRUE;
+            if (interface->major_version != VD_INTERFACE_QTERM2_MAJOR ||
+                interface->minor_version < VD_INTERFACE_QTERM2_MINOR) {
+                red_printf("unsuported qterm interface");
+                return;
+            }
+            add_monitor_action_commands_2((QTerm2Interface *)interface);
+            add_monitor_info_commands_2((QTerm2Interface *)interface);
         } else if (strcmp(interface->type, VD_INTERFACE_TABLET) == 0) {
             red_printf("VD_INTERFACE_TABLET");
             if (tablet) {
