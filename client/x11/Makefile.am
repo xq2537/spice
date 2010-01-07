@@ -1,7 +1,7 @@
 NULL =
 
 COMMON_DIR=$(SPICE_COMMON_SRCDIR)
-CLIENT_DIR=..
+CLIENT_DIR=$(top_srcdir)
 
 SUBDIRS = images
 
