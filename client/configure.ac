@@ -57,7 +57,7 @@ AC_SUBST(SPICE_REQUIRES)
 AC_SUBST(SPICE_NONPKGCONFIG_CFLAGS)
 AC_SUBST(SPICE_NONPKGCONFIG_LIBS)
 
-AC_CONFIG_FILES([Makefile x11/Makefile x11/images/Makefile])
+AC_CONFIG_FILES([Makefile x11/Makefile x11/images/Makefile x11/ffmpeg_inc.h])
 AC_OUTPUT
 
 dnl ==========================================================================

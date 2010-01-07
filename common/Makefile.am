@@ -53,10 +53,8 @@ pkgconfig_DATA = spice-common.pc
 common_srcdir=$(prefix)/src/spice-common
 common_src_DATA = $(COMMON_SRCS)
 
-linux_includedir=$(common_srcdir)/linux
-linux_include_DATA=linux/ffmpeg_inc.h
-
-DISTCLEANFILES = spice-common.pc linux/ffmpeg_inc.h
+DISTCLEANFILES = spice-common.pc
 
 dist-hook:
 	cp -p -f ../autogen.sh ../configure.ac.shared $(distdir)
+

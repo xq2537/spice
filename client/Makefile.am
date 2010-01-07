@@ -86,7 +86,10 @@ RED_COMMON_SRCS =	 		\
 	gdi_canvas.cpp			\
 	$(NULL)
 
-EXTRA_DIST = $(RED_COMMON_SRCS)
+EXTRA_DIST = $(RED_COMMON_SRCS) \
+	x11/ffmpeg_inc.h.in
+
+DISTCLEANFILES = x11/ffmpeg_inc.h
 
 dist-hook:
 	cp -p -f ../autogen.sh ../configure.ac.shared $(distdir)

@@ -5,7 +5,6 @@ COMMON_DIR=$(SPICE_COMMON_SRCDIR)
 INCLUDES = \
 	-I. 					\
 	-I$(COMMON_DIR)			\
-	-I$(COMMON_DIR)/linux		\
 	$(FFMPEG_CFLAGS)			\
 	$(QCAIRO_CFLAGS)			\
 	$(GL_CFLAGS)				\
@@ -81,12 +80,14 @@ libspiceinclude_HEADERS =               	\
 EXTRA_DIST =					\
 	glz_encode_match_tmpl.c			\
 	glz_encode_tmpl.c			\
+	ffmpeg_inc.h.in				\
 	$(NULL)
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = spice.pc
 
 DISTCLEANFILES =                                \
+	ffmpeg_inc.h				\
 	spice.pc
 
 dist-hook:

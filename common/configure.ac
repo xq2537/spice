@@ -10,7 +10,7 @@ AC_CONFIG_MACRO_DIR([m4])
 
 m4_include(configure.ac.shared)
 
-AC_CONFIG_FILES([Makefile linux/ffmpeg_inc.h spice-common.pc])
+AC_CONFIG_FILES([Makefile spice-common.pc])
 AC_OUTPUT
 
 dnl ==========================================================================

@@ -15,7 +15,6 @@ INCLUDES = \
 	-I. 						\
 	-I..						\
 	-I$(COMMON_DIR)					\
-	-I$(COMMON_DIR)/linux				\
 	-I$(CLIENT_DIR)					\
 	$(GL_CFLAGS)					\
 	$(ALSA_CFLAGS)					\
