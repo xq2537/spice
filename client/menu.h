@@ -35,37 +35,51 @@ public:
         MENU_ITEM_TYPE_SEPARATOR,
     };
 
+    enum ItemState {
+        MENU_ITEM_STATE_CHECKED = 1 << 0,
+        MENU_ITEM_STATE_DIM     = 1 << 1,
+    };
+
     Menu* ref() { _refs++; return this;}
     void unref() { if (!--_refs) delete this;}
 
+    void set_name(const std::string& name) { _name = name;}
     const std::string& get_name() { return _name;}
     CommandTarget& get_target() { return _target;}
 
-    void add_command(const std::string& name, int cmd_id);
+    void add_command(const std::string& name, int cmd_id, int state = 0);
     void add_separator();
     void add_sub(Menu* sub);
 
+    void remove_command(int cmd_id);
+    void remove_sub(Menu* menu);
+
     ItemType item_type_at(int pos);
-    void command_at(int pos, std::string& name, int& cmd_id);
+    void command_at(int pos, std::string& name, int& cmd_id, int& state);
     Menu* sub_at(int pos);
+
+    void clear();
 
 private:
     virtual ~Menu();
 
     class MenuCommand {
     public:
-        MenuCommand(const std::string& name, int cmd_id)
+        MenuCommand(const std::string& name, int cmd_id, int state)
             : _name (name)
             , _cmd_id (cmd_id)
+            , _state (state)
         {
         }
 
         const std::string& get_name() { return _name;}
         int get_cmd_id() { return _cmd_id;}
+        int get_state() { return _state;}
 
     private:
         std::string _name;
         int _cmd_id;
+        int _state;
     };
 
     struct MenuItem {
