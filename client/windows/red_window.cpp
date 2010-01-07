@@ -906,17 +906,24 @@ static void utf8_to_wchar(const std::string& src, std::wstring& dest)
     MultiByteToWideChar(CP_UTF8, 0, src.c_str(), -1, (wchar_t *)dest.c_str(), len);
 }
 
-static void insert_command(HMENU menu, const std::string& name, int id)
+static void insert_command(HMENU menu, const std::string& name, int id, int state)
 {
     MENUITEMINFO item_info;
     item_info.cbSize = sizeof(item_info);
-    item_info.fMask = MIIM_TYPE | MIIM_ID;
+    item_info.fMask = MIIM_ID | MIIM_STRING | MIIM_STATE;
     item_info.fType = MFT_STRING;
     std::wstring wname;
     utf8_to_wchar(name, wname);
     item_info.cch = wname.size();
     item_info.dwTypeData = (wchar_t *)wname.c_str();
     item_info.wID = id;
+    item_info.fState = MFS_ENABLED;
+    if (state & Menu::MENU_ITEM_STATE_CHECKED) {
+        item_info.fState |= MFS_CHECKED;
+    }
+    if (state & Menu::MENU_ITEM_STATE_DIM) {
+        item_info.fState |= MFS_DISABLED;
+    }
     InsertMenuItem(menu, GetMenuItemCount(menu), TRUE, &item_info);
 }
 
@@ -969,10 +976,11 @@ static void insert_menu(Menu* menu, HMENU native, CommandMap& _commands_map)
         case Menu::MENU_ITEM_TYPE_COMMAND: {
             std::string name;
             int command_id;
-            menu->command_at(pos, name, command_id);
+            int state;
+            menu->command_at(pos, name, command_id, state);
             int sys_command = alloc_sys_cmd_id();
             _commands_map[sys_command] = CommandInfo(menu, command_id);
-            insert_command(native, name, sys_command);
+            insert_command(native, name, sys_command, state);
             break;
         }
         case Menu::MENU_ITEM_TYPE_MENU: {

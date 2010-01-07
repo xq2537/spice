@@ -20,7 +20,6 @@
 #include "utils.h"
 #include "debug.h"
 
-
 Menu::Menu(CommandTarget& target, const std::string& name)
     : _refs (1)
     , _target (target)
@@ -30,13 +29,7 @@ Menu::Menu(CommandTarget& target, const std::string& name)
 
 Menu::~Menu()
 {
-    for (unsigned int i = 0; i < _items.size(); i++) {
-        if (_items[i].type == MENU_ITEM_TYPE_COMMAND) {
-            delete (MenuCommand*)_items[i].obj;
-        } else if (_items[i].type == MENU_ITEM_TYPE_MENU) {
-            ((Menu*)_items[i].obj)->unref();
-        }
-    }
+    clear();
 }
 
 void Menu::add_item(MenuItem& item)
@@ -46,9 +39,9 @@ void Menu::add_item(MenuItem& item)
     _items[pos] = item;
 }
 
-void Menu::add_command(const std::string& name, int cmd_id)
+void Menu::add_command(const std::string& name, int cmd_id, int state)
 {
-    MenuCommand* cmd = new MenuCommand(name, cmd_id);
+    MenuCommand* cmd = new MenuCommand(name, cmd_id, state);
     MenuItem item;
     item.type = MENU_ITEM_TYPE_COMMAND;
     item.obj = cmd;
@@ -72,6 +65,29 @@ void Menu::add_sub(Menu* menu)
     add_item(item);
 }
 
+void Menu::remove_command(int cmd_id)
+{
+    for (unsigned int i = 0; i < _items.size(); i++) {
+        if (_items[i].type == MENU_ITEM_TYPE_COMMAND &&
+                ((MenuCommand*)_items[i].obj)->get_cmd_id() == cmd_id) {
+            delete (MenuCommand*)_items[i].obj;
+            _items.erase(_items.begin() + i);
+            return;
+        }
+    }
+}
+
+void Menu::remove_sub(Menu* menu)
+{
+    for (unsigned int i = 0; i < _items.size(); i++) {
+        if (_items[i].type == MENU_ITEM_TYPE_MENU && (Menu*)_items[i].obj == menu) {
+            ((Menu*)_items[i].obj)->unref();
+            _items.erase(_items.begin() + i);
+            return;
+        }
+    }
+}
+
 Menu::ItemType Menu::item_type_at(int pos)
 {
     if (pos >= (int)_items.size()) {
@@ -80,7 +96,7 @@ Menu::ItemType Menu::item_type_at(int pos)
     return _items[pos].type;
 }
 
-void Menu::command_at(int pos, std::string& name, int& cmd_id)
+void Menu::command_at(int pos, std::string& name, int& cmd_id, int& state)
 {
     if (_items[pos].type != MENU_ITEM_TYPE_COMMAND) {
         THROW("incorrect item type");
@@ -88,6 +104,7 @@ void Menu::command_at(int pos, std::string& name, int& cmd_id)
     MenuCommand* cmd = (MenuCommand*)_items[pos].obj;
     name = cmd->get_name();
     cmd_id = cmd->get_cmd_id();
+    state = cmd->get_state();
 }
 
 Menu* Menu::sub_at(int pos)
@@ -98,3 +115,14 @@ Menu* Menu::sub_at(int pos)
     return ((Menu*)_items[pos].obj)->ref();
 }
 
+void Menu::clear()
+{
+    for (unsigned int i = 0; i < _items.size(); i++) {
+        if (_items[i].type == MENU_ITEM_TYPE_COMMAND) {
+            delete (MenuCommand*)_items[i].obj;
+        } else if (_items[i].type == MENU_ITEM_TYPE_MENU) {
+            ((Menu*)_items[i].obj)->unref();
+        }
+    }
+    _items.clear();
+}
