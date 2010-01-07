@@ -56,5 +56,5 @@ common_src_DATA = $(COMMON_SRCS)
 DISTCLEANFILES = spice-common.pc
 
 dist-hook:
-	cp -p -f ../autogen.sh ../configure.ac.shared $(distdir)
+	cp -p -f ./autogen.sh ../configure.ac.shared $(distdir)
 

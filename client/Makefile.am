@@ -92,4 +92,4 @@ EXTRA_DIST = $(RED_COMMON_SRCS) \
 DISTCLEANFILES = x11/ffmpeg_inc.h
 
 dist-hook:
-	cp -p -f ../autogen.sh ../configure.ac.shared $(distdir)
+	cp -p -f ./autogen.sh ../configure.ac.shared $(distdir)
