@@ -55,6 +55,8 @@
 mutex_t cairo_surface_user_data_mutex;
 #endif
 
+static const char* app_name = "spicec";
+
 void ConnectedEvent::response(AbstractProcessLoop& events_loop)
 {
     static_cast<Application*>(events_loop.get_owner())->on_connected();
@@ -1600,8 +1602,8 @@ bool Application::process_cmd_line(int argc, char** argv)
 
     _host_auth_opt.type_flags = RedPeer::HostAuthOptions::HOST_AUTH_OP_NAME;
 
-    Platform::get_spice_config_dir(_host_auth_opt.CA_file);
-    _host_auth_opt.CA_file += CA_FILE_NAME;
+    Platform::get_app_data_dir(_host_auth_opt.CA_file, app_name);
+    Platform::path_append(_host_auth_opt.CA_file, CA_FILE_NAME);
 
     parser.begin(argc, argv);
 
@@ -1754,15 +1756,17 @@ bool Application::process_cmd_line(int argc, char** argv)
 
 void Application::init_logger()
 {
-    std::string temp_dir_name;
-    Platform::get_temp_dir(temp_dir_name);
-    std::string log_file_name = temp_dir_name + "spicec.log";
+    std::string log_file_name;
+    Platform::get_app_data_dir(log_file_name, app_name);
+    Platform::path_append(log_file_name, "spicec.log");
 
     int fd = ::open(log_file_name.c_str(), O_CREAT | O_APPEND | O_WRONLY, 0644);
+
     if (fd == -1) {
         log4cpp::BasicConfigurator::configure();
         return;
     }
+
     log4cpp::Category& root = log4cpp::Category::getRoot();
 #ifdef RED_DEBUG
     root.setPriority(log4cpp::Priority::DEBUG);

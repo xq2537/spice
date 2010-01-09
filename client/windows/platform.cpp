@@ -30,8 +30,6 @@
 #include "cursor.h"
 #include "named_pipe.h"
 
-#define SPICE_CONFIG_DIR "spicec\\"
-
 int gdi_handlers = 0;
 extern HINSTANCE instance;
 
@@ -432,6 +430,7 @@ bool Platform::is_monitors_pos_valid()
     return true;
 }
 
+/*
 void Platform::get_spice_config_dir(std::string& path)
 {
     char app_data_path[MAX_PATH];
@@ -445,6 +444,29 @@ void Platform::get_spice_config_dir(std::string& path)
         path += "\\";
     }
     path += SPICE_CONFIG_DIR;
+}
+*/
+
+static void Platform::get_app_data_dir(std::string& path, const std::string& app_name);
+{
+    char app_data_path[MAX_PATH];
+    HRESULT res = SHGetFolderPathA(NULL, CSIDL_APPDATA,  NULL, 0, app_data_path);
+    if (res != S_OK) {
+        throw Exception("get user app data dir failed");
+    }
+
+    path = app_data_path;
+    path_append(path, app_name);
+
+    if (!CreateDirectory(path.c_str()) && GetLastError() != ERROR_ALREADY_EXISTS) {
+        throw Exception("create user app data dir failed");
+    }
+}
+
+static void Platform::path_append(std::string& path, const std::string& partial_path)
+{
+    path += "\\";
+    path += partial_path;
 }
 
 void Platform::init()
