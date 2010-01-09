@@ -1899,11 +1899,17 @@ void Platform::get_app_data_dir(std::string& path, const std::string& app_name)
 {
     const char* home_dir = getenv("HOME");
 
-    if (!home_dir) {
+    if (!home_dir || strlen(home_dir) == 0) {
         throw Exception("get home dir failed");
     }
 
     path = home_dir;
+    std::string::iterator end = path.end();
+
+    while (end != path.begin() && *(end - 1) == '/') {
+        path.erase(--end);
+    }
+
     path += "/.";
     path += app_name;
 

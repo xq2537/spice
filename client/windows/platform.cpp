@@ -430,24 +430,7 @@ bool Platform::is_monitors_pos_valid()
     return true;
 }
 
-/*
-void Platform::get_spice_config_dir(std::string& path)
-{
-    char app_data_path[MAX_PATH];
-    HRESULT res = SHGetFolderPathA(NULL, CSIDL_APPDATA,  NULL, 0, app_data_path);
-    if (res != S_OK) {
-        throw Exception("get user app data dir failed");
-    }
-
-    path = app_data_path;
-    if (strcmp((app_data_path + strlen(app_data_path) - 2), "\\") != 0) {
-        path += "\\";
-    }
-    path += SPICE_CONFIG_DIR;
-}
-*/
-
-static void Platform::get_app_data_dir(std::string& path, const std::string& app_name);
+void Platform::get_app_data_dir(std::string& path, const std::string& app_name)
 {
     char app_data_path[MAX_PATH];
     HRESULT res = SHGetFolderPathA(NULL, CSIDL_APPDATA,  NULL, 0, app_data_path);
@@ -458,12 +441,12 @@ static void Platform::get_app_data_dir(std::string& path, const std::string& app
     path = app_data_path;
     path_append(path, app_name);
 
-    if (!CreateDirectory(path.c_str()) && GetLastError() != ERROR_ALREADY_EXISTS) {
+    if (!CreateDirectoryA(path.c_str(), NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
         throw Exception("create user app data dir failed");
     }
 }
 
-static void Platform::path_append(std::string& path, const std::string& partial_path)
+void Platform::path_append(std::string& path, const std::string& partial_path)
 {
     path += "\\";
     path += partial_path;
