@@ -165,9 +165,10 @@ public:
     static int main(int argc, char** argv, const char* version_str);
 
 private:
-    bool set_channels_security(CmdLineParser& parser, bool on, char *val);
-    bool set_enable_channels(CmdLineParser& parser, bool enable, char *val);
-    bool set_canvas_option(CmdLineParser& parser, char *val);
+    bool set_channels_security(CmdLineParser& parser, bool on, char *val, const char* arg0);
+    bool set_enable_channels(CmdLineParser& parser, bool enable, char *val, const char* arg0);
+    bool set_canvas_option(CmdLineParser& parser, char *val, const char* arg0);
+    void on_cmd_line_invalid_arg(const char* arg0, const char* what, const char* val);
     bool process_cmd_line(int argc, char** argv);
     void abort();
     void init_scan_code(int index);

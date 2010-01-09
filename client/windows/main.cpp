@@ -22,12 +22,6 @@ extern "C" {
 #include "pthread.h"
 }
 
-//#define OPEN_CONSOLE
-#ifdef OPEN_CONSOLE
-#include <io.h>
-#include <conio.h>
-#endif
-
 #include "application.h"
 #include "debug.h"
 #include "utils.h"
@@ -83,23 +77,6 @@ int WINAPI WinMain(HINSTANCE hInstance,
 
     try {
         init_version_string();
-#ifdef OPEN_CONSOLE
-        AllocConsole();
-        HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
-        int hConHandle = _open_osfhandle((intptr_t)h, _O_TEXT);
-        FILE * fp = _fdopen(hConHandle, "w");
-        *stdout = *fp;
-
-        h = GetStdHandle(STD_INPUT_HANDLE);
-        hConHandle = _open_osfhandle((intptr_t)h, _O_TEXT);
-        fp = _fdopen(hConHandle, "r");
-        *stdin = *fp;
-
-        h = GetStdHandle(STD_ERROR_HANDLE);
-        hConHandle = _open_osfhandle((intptr_t)h, _O_TEXT);
-        fp = _fdopen(hConHandle, "w");
-        *stderr = *fp;
-#endif
         pthread_win32_process_attach_np();
         init_winsock();
         exit_val = Application::main(__argc, __argv, version_string);
@@ -114,11 +91,10 @@ int WINAPI WinMain(HINSTANCE hInstance,
         LOG_ERROR("unhandled exception");
         exit_val = SPICEC_ERROR_CODE_ERROR;
     }
+
     log4cpp::Category::shutdown();
-#ifdef OPEN_CONSOLE
-    _getch();
-#endif
     pthread_win32_process_detach_np();
+
     return exit_val;
 }
 

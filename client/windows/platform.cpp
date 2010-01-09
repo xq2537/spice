@@ -18,6 +18,8 @@
 #include "common.h"
 
 #include <shlobj.h>
+#include <io.h>
+#include <conio.h>
 
 #include "platform.h"
 #include "win_platform.h"
@@ -739,4 +741,66 @@ void WinPlatform::exit_modal_loop()
     }
     KillTimer(paltform_win, MODAL_LOOP_TIMER_ID);
     modal_loop_active = false;
+}
+
+static bool has_console = false;
+
+static void create_console()
+{
+    static Mutex console_mutex;
+
+    Lock lock(console_mutex);
+
+    if (has_console) {
+        return;
+    }
+
+    AllocConsole();
+    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+    int hConHandle = _open_osfhandle((intptr_t)h, _O_TEXT);
+    FILE * fp = _fdopen(hConHandle, "w");
+    *stdout = *fp;
+
+    h = GetStdHandle(STD_INPUT_HANDLE);
+    hConHandle = _open_osfhandle((intptr_t)h, _O_TEXT);
+    fp = _fdopen(hConHandle, "r");
+    *stdin = *fp;
+
+    h = GetStdHandle(STD_ERROR_HANDLE);
+    hConHandle = _open_osfhandle((intptr_t)h, _O_TEXT);
+    fp = _fdopen(hConHandle, "w");
+    *stderr = *fp;
+
+    has_console = true;
+
+    HWND consol_window = GetConsoleWindow();
+
+    if (consol_window) {
+        SetForegroundWindow(consol_window);
+    }
+}
+
+class ConsoleWait {
+public:
+    ~ConsoleWait()
+    {
+        if (has_console) {
+            Platform::term_printf("\n\nPress any key to exit...");
+            _getch();
+        }
+    }
+
+} console_wait;
+
+
+void Platform::term_printf(const char* format, ...)
+{
+    if (!has_console) {
+        create_console();
+    }
+
+    va_list ap;
+    va_start(ap, format);
+    vprintf(format, ap);
+    va_end(ap);
 }
