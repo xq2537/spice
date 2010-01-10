@@ -38,7 +38,7 @@ AC_OUTPUT
 dnl ==========================================================================
 echo "
 
-        Spice Server $VERSION
+        Spice Server $full_version
         ==============
 
         prefix:                   ${prefix}

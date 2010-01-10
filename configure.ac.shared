@@ -193,6 +193,14 @@ AC_ARG_VAR(DISTRIBUTION, [identify release by last distribution])
 AH_TEMPLATE(DISTRIBUTION, [identify release by last distribution])
 AC_DEFINE_UNQUOTED(DISTRIBUTION, ["$ac_env_DISTRIBUTION_value"])
 
+if test -n "${DISTRIBUTION}"; then
+    dist=".${DISTRIBUTION}"
+fi
+if test -n "${PATCHID}"; then
+    patchid="-${PATCHID}"
+fi
+full_version="${VERSION}${patchid}${dist}"
+
 dnl ===========================================================================
 dnl check compiler flags
 
