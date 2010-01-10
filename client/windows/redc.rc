@@ -62,8 +62,8 @@ ALT_IMAGE_RES_ID        BITMAP                  "sticky_alt.bmp"
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,4,1,0
- PRODUCTVERSION 0,4,1,0
+ FILEVERSION 0,4,2,0
+ PRODUCTVERSION 0,4,2,0
  FILEFLAGSMASK 0x17L
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -80,12 +80,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Red Hat Inc."
             VALUE "FileDescription", "Spice client"
-            VALUE "FileVersion", "0, 4, 1, 0"
+            VALUE "FileVersion", "0, 4, 2, 0"
             VALUE "InternalName", "spicec"
             VALUE "LegalCopyright", "Copyright (c) 2009  Red Hat, Inc. and/or its affiliates."
             VALUE "OriginalFilename", "spicec.exe"
             VALUE "ProductName", "Red Hat Spice"
-            VALUE "ProductVersion", "0, 4, 1, 0"
+            VALUE "ProductVersion", "0, 4, 2, 0"
         END
     END
     BLOCK "VarFileInfo"

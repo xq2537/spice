@@ -2,7 +2,7 @@ AC_PREREQ([2.57])
 
 m4_define([SPICE_MAJOR], 0)
 m4_define([SPICE_MINOR], 4)
-m4_define([SPICE_MICRO], 1)
+m4_define([SPICE_MICRO], 2)
 
 AC_INIT(spice-common, [SPICE_MAJOR.SPICE_MINOR.SPICE_MICRO], [], spice-common)
 
