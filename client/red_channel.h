@@ -55,13 +55,13 @@ public:
     uint8_t get_type() { return _type;}
     uint8_t get_id() { return _id;}
 
-    void connect(const ConnectionOptions& options, uint32_t connection_id, uint32_t ip,
-                 std::string password);
     void connect(const ConnectionOptions& options, uint32_t connection_id, const char *host,
                  std::string password);
 
     const ChannelCaps& get_common_caps() { return _common_caps;}
     const ChannelCaps& get_caps() {return _caps;}
+
+     uint32_t get_peer_minor() { return _remote_minor;}
 
 protected:
     void set_common_capability(uint32_t cap);
@@ -83,6 +83,8 @@ private:
 
     ChannelCaps _remote_common_caps;
     ChannelCaps _remote_caps;
+
+    uint32_t _remote_minor;
 };
 
 class SendTrigger: public EventSources::Trigger {

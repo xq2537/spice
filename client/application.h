@@ -187,6 +187,7 @@ public:
     void external_show();
     void connect();
     const PeerConnectionOptMap& get_con_opt_map() {return _peer_con_opt;}
+    const RedPeer::HostAuthOptions& get_host_auth_opt() { return _host_auth_opt;}
     uint32_t get_mouse_mode();
     const std::vector<int>& get_canvas_types() { return _canvas_types;}
 
@@ -280,6 +281,7 @@ private:
 private:
     RedClient _client;
     PeerConnectionOptMap _peer_con_opt;
+    RedPeer::HostAuthOptions _host_auth_opt;
     std::vector<bool> _enabled_channels;
     std::vector<RedScreen*> _screens;
     RedScreen* _main_screen;

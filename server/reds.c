@@ -61,9 +61,10 @@ static VDIPortInterface *vdagent = NULL;
 
 #define MIGRATION_NOTIFY_SPICE_KEY "spice_mig_ext"
 
-#define REDS_MIG_VERSION 1
+#define REDS_MIG_VERSION 3
 #define REDS_MIG_CONTINUE 1
 #define REDS_MIG_ABORT 2
+#define REDS_MIG_DIFF_VERSION 3
 
 #define REDS_AGENT_WINDOW_SIZE 10
 #define REDS_TOKENS_TO_SEND 5
@@ -278,6 +279,7 @@ typedef struct RedsState {
     uint32_t ping_id;
     uint32_t net_test_id;
     int net_test_stage;
+    int peer_minor_version;
 } RedsState;
 
 uint64_t bitrate_per_sec = ~0;
@@ -2908,6 +2910,8 @@ static void reds_handle_read_header_done(void *opaque)
         return;
     }
 
+    reds->peer_minor_version = header->minor_version;
+
     if (header->size < sizeof(RedLinkMess)) {
         reds_send_link_error(link, RED_ERR_INVALID_DATA);
         red_printf("bad size %u", header->size);
@@ -4175,11 +4179,19 @@ typedef struct RedsMigSpice {
     char *host;
     int port;
     int sport;
+    uint16_t cert_pub_key_type;
+    uint32_t cert_pub_key_len;
+    uint8_t* cert_pub_key;
 } RedsMigSpice;
 
 typedef struct RedsMigSpiceMessage {
     uint32_t link_id;
 } RedsMigSpiceMessage;
+
+typedef struct RedsMigCertPubKeyInfo {
+    uint16_t type;
+    uint32_t len;
+} RedsMigCertPubKeyInfo;
 
 static int reds_mig_actual_read(RedsMigSpice *s)
 {
@@ -4289,7 +4301,9 @@ static void reds_mig_continue(RedsMigSpice *s)
     red_printf("");
     core->set_file_handlers(core, s->fd, NULL, NULL, NULL);
     host_len = strlen(s->host) + 1;
-    if (!(item = new_simple_out_item(RED_MIGRATE_BEGIN, sizeof(RedMigrationBegin) + host_len))) {
+    item = new_simple_out_item(RED_MIGRATE_BEGIN,
+                               sizeof(RedMigrationBegin) + host_len + s->cert_pub_key_len);
+    if (!(item)) {
         red_printf("alloc item failed");
         reds_disconnect();
         return;
@@ -4297,7 +4311,13 @@ static void reds_mig_continue(RedsMigSpice *s)
     migrate = (RedMigrationBegin *)item->data;
     migrate->port = s->port;
     migrate->sport = s->sport;
-    memcpy(migrate->host, s->host, host_len);
+    migrate->host_offset = sizeof(RedMigrationBegin);
+    migrate->host_size = host_len;
+    migrate->pub_key_type = s->cert_pub_key_type;
+    migrate->pub_key_offset = sizeof(RedMigrationBegin) + host_len;
+    migrate->pub_key_size = s->cert_pub_key_len;
+    memcpy((uint8_t*)(migrate) + migrate->host_offset , s->host, host_len);
+    memcpy((uint8_t*)(migrate) + migrate->pub_key_offset, s->cert_pub_key, s->cert_pub_key_len);
     reds_push_pipe_item(&item->base);
 
     free(s->local_args);
@@ -4362,6 +4382,68 @@ static void reds_mig_send_ticket(RedsMigSpice *s)
     BIO_free(bio_key);
 }
 
+static void reds_mig_receive_cert_public_key(RedsMigSpice *s)
+{
+    s->cert_pub_key = malloc(s->cert_pub_key_len);
+    if (!s->cert_pub_key) {
+        red_printf("alloc failed");
+        reds_mig_failed(s);
+        return;
+    }
+
+    memcpy(s->cert_pub_key, s->read.buf, s->cert_pub_key_len);
+
+    s->read.size = RED_TICKET_PUBKEY_BYTES;
+    s->read.end_pos = 0;
+    s->read.handle_data = reds_mig_send_ticket;
+
+    core->set_file_handlers(core, s->fd, reds_mig_read, NULL, s);
+}
+
+static void reds_mig_receive_cert_public_key_info(RedsMigSpice *s)
+{
+    RedsMigCertPubKeyInfo* pubkey_info = (RedsMigCertPubKeyInfo*)s->read.buf;
+    s->cert_pub_key_type = pubkey_info->type;
+    s->cert_pub_key_len = pubkey_info->len;
+
+    if (s->cert_pub_key_len > RECIVE_BUF_SIZE) {
+        red_printf("certificate public key length exceeds buffer size");
+        reds_mig_failed(s);
+        return;
+    }
+
+    if (s->cert_pub_key_len) {
+        s->read.size = s->cert_pub_key_len;
+        s->read.end_pos = 0;
+        s->read.handle_data = reds_mig_receive_cert_public_key;
+    } else {
+        s->cert_pub_key = NULL;
+        s->read.size = RED_TICKET_PUBKEY_BYTES;
+        s->read.end_pos = 0;
+        s->read.handle_data = reds_mig_send_ticket;
+    }
+
+    core->set_file_handlers(core, s->fd, reds_mig_read, NULL, s);
+}
+
+static void reds_mig_handle_send_abort_done(RedsMigSpice *s)
+{
+    reds_mig_failed(s);
+}
+
+static void reds_mig_receive_version(RedsMigSpice *s)
+{
+    uint32_t* dest_version;
+    uint32_t resault;
+    dest_version = (uint32_t*)s->read.buf;
+    resault = REDS_MIG_ABORT;
+    memcpy(s->write.buf, &resault, sizeof(resault));
+    s->write.length = sizeof(resault);
+    s->write.now = s->write.buf;
+    s->write.handle_done = reds_mig_handle_send_abort_done;
+    core->set_file_handlers(core, s->fd, reds_mig_write, reds_mig_write, s);
+}
+
 static void reds_mig_control(RedsMigSpice *spice_migration)
 {
     uint32_t *control;
@@ -4371,9 +4453,9 @@ static void reds_mig_control(RedsMigSpice *spice_migration)
 
     switch (*control) {
     case REDS_MIG_CONTINUE:
-        spice_migration->read.size = RED_TICKET_PUBKEY_BYTES;
+        spice_migration->read.size = sizeof(RedsMigCertPubKeyInfo);
         spice_migration->read.end_pos = 0;
-        spice_migration->read.handle_data = reds_mig_send_ticket;
+        spice_migration->read.handle_data = reds_mig_receive_cert_public_key_info;
 
         core->set_file_handlers(core, spice_migration->fd, reds_mig_read,
                                 NULL, spice_migration);
@@ -4381,6 +4463,15 @@ static void reds_mig_control(RedsMigSpice *spice_migration)
     case REDS_MIG_ABORT:
         red_printf("abort");
         reds_mig_failed(spice_migration);
+        break;
+    case REDS_MIG_DIFF_VERSION:
+        red_printf("different versions");
+        spice_migration->read.size = sizeof(uint32_t);
+        spice_migration->read.end_pos = 0;
+        spice_migration->read.handle_data = reds_mig_receive_version;
+
+        core->set_file_handlers(core, spice_migration->fd, reds_mig_read,
+                                NULL, spice_migration);
         break;
     default:
         red_printf("invalid control");
@@ -4420,6 +4511,12 @@ static void reds_mig_started(void *opaque, const char *in_args)
 
     if (reds->peer == NULL) {
         red_printf("not connected to peer");
+        goto error;
+    }
+
+    if ((RED_VERSION_MAJOR == 1) && (reds->peer_minor_version < 2)) {
+        red_printf("minor version mismatch client %u server %u",
+                   reds->peer_minor_version, RED_VERSION_MINOR);
         goto error;
     }
 
@@ -4625,6 +4722,85 @@ static void reds_mig_write_all(int fd, void *buf, int len, const char *name)
     }
 }
 
+static void reds_mig_send_cert_public_key(int fd)
+{
+    FILE* cert_file;
+    X509* x509;
+    EVP_PKEY* pub_key;
+    unsigned char* pp = NULL;
+    int length;
+    BIO* mem_bio;
+    RedsMigCertPubKeyInfo pub_key_info_msg;
+
+    if (spice_secure_port == -1) {
+        pub_key_info_msg.type = RED_PUBKEY_TYPE_INVALID;
+        pub_key_info_msg.len = 0;
+        reds_mig_write_all(fd, &pub_key_info_msg, sizeof(pub_key_info_msg), "cert public key info");
+        return;
+    }
+
+    cert_file =  fopen(ssl_parameters.certs_file, "r");
+    if (!cert_file) {
+        red_error("opening certificate failed");
+    }
+
+    x509 = PEM_read_X509_AUX(cert_file, NULL, NULL, NULL);
+    if (!x509) {
+        red_error("reading x509 cert failed");
+    }
+    pub_key = X509_get_pubkey(x509);
+    if (!pub_key) {
+        red_error("reading public key failed");
+    }
+
+    mem_bio = BIO_new(BIO_s_mem());
+    i2d_PUBKEY_bio(mem_bio, pub_key);
+    if (BIO_flush(mem_bio) != 1) {
+        red_error("bio flush failed");
+    }
+    length = BIO_get_mem_data(mem_bio, &pp);
+
+    switch(pub_key->type) {
+    case EVP_PKEY_RSA:
+        pub_key_info_msg.type = RED_PUBKEY_TYPE_RSA;
+        break;
+    case EVP_PKEY_RSA2:
+        pub_key_info_msg.type = RED_PUBKEY_TYPE_RSA2;
+        break;
+    case EVP_PKEY_DSA:
+        pub_key_info_msg.type = RED_PUBKEY_TYPE_DSA;
+        break;
+    case EVP_PKEY_DSA1:
+        pub_key_info_msg.type = RED_PUBKEY_TYPE_DSA1;
+        break;
+    case EVP_PKEY_DSA2:
+        pub_key_info_msg.type = RED_PUBKEY_TYPE_DSA2;
+        break;
+    case EVP_PKEY_DSA3:
+        pub_key_info_msg.type = RED_PUBKEY_TYPE_DSA3;
+        break;
+    case EVP_PKEY_DSA4:
+        pub_key_info_msg.type = RED_PUBKEY_TYPE_DSA4;
+        break;
+    case EVP_PKEY_DH:
+        pub_key_info_msg.type = RED_PUBKEY_TYPE_DH;
+        break;
+    case EVP_PKEY_EC:
+        pub_key_info_msg.type = RED_PUBKEY_TYPE_EC;
+        break;
+    default:
+        red_error("invalid public key type");
+    }
+    pub_key_info_msg.len = length;
+    reds_mig_write_all(fd, &pub_key_info_msg, sizeof(pub_key_info_msg), "cert public key info");
+    reds_mig_write_all(fd, pp, length, "cert public key");
+
+    BIO_free(mem_bio);
+    fclose(cert_file);
+    EVP_PKEY_free(pub_key);
+    X509_free(x509);
+}
+
 static void reds_mig_recv(void *opaque, int fd)
 {
     uint32_t ack_message = *(uint32_t *)"ack_";
@@ -4639,16 +4815,36 @@ static void reds_mig_recv(void *opaque, int fd)
     BUF_MEM *buff;
 
     reds_mig_read_all(fd, &version, sizeof(version), "version");
-
-    if (version != REDS_MIG_VERSION) {
+    // starting from version 3, if the version of the src is bigger
+    // than ours, we send our version to the src.
+    if (version < REDS_MIG_VERSION) {
         resault = REDS_MIG_ABORT;
         reds_mig_write_all(fd, &resault, sizeof(resault), "resault");
         mig->notifier_done(mig, reds->mig_notifier);
         return;
+    } else if (version > REDS_MIG_VERSION) {
+        uint32_t src_resault;
+        uint32_t self_version = REDS_MIG_VERSION;
+        resault = REDS_MIG_DIFF_VERSION;
+        reds_mig_write_all(fd, &resault, sizeof(resault), "resault");
+        reds_mig_write_all(fd, &self_version, sizeof(self_version), "dest-version");
+        reds_mig_read_all(fd, &src_resault, sizeof(src_resault), "src resault");
+
+        if (src_resault == REDS_MIG_ABORT) {
+            red_printf("abort (response to REDS_MIG_DIFF_VERSION)");
+            mig->notifier_done(mig, reds->mig_notifier);
+            return;
+        } else if (src_resault != REDS_MIG_CONTINUE) {
+            red_printf("invalid response to REDS_MIG_DIFF_VERSION");
+            mig->notifier_done(mig, reds->mig_notifier);
+            return;
+        }
+    } else {
+        resault = REDS_MIG_CONTINUE;
+        reds_mig_write_all(fd, &resault, sizeof(resault), "resault");
     }
 
-    resault = REDS_MIG_CONTINUE;
-    reds_mig_write_all(fd, &resault, sizeof(resault), "resault");
+    reds_mig_send_cert_public_key(fd);
 
     ticketing_info.bn = BN_new();
     if (!ticketing_info.bn) {

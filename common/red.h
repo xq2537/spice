@@ -46,7 +46,7 @@
 
 #define RED_MAGIC (*(uint32_t*)"REDQ")
 #define RED_VERSION_MAJOR (~(uint32_t)0 - 1)
-#define RED_VERSION_MINOR 1
+#define RED_VERSION_MINOR 2
 
 // Encryption & Ticketing Parameters
 #define RED_MAX_PASSWORD_LENGTH 60
@@ -209,10 +209,27 @@ typedef struct ATTR_PACKED RedMultiMediaTime {
     uint32_t time;
 } RedMultiMediaTime;
 
+enum {
+    RED_PUBKEY_TYPE_INVALID,
+    RED_PUBKEY_TYPE_RSA,
+    RED_PUBKEY_TYPE_RSA2,
+    RED_PUBKEY_TYPE_DSA,
+    RED_PUBKEY_TYPE_DSA1,
+    RED_PUBKEY_TYPE_DSA2,
+    RED_PUBKEY_TYPE_DSA3,
+    RED_PUBKEY_TYPE_DSA4,
+    RED_PUBKEY_TYPE_DH,
+    RED_PUBKEY_TYPE_EC,
+};
+
 typedef struct ATTR_PACKED RedMigrationBegin {
     uint16_t port;
     uint16_t sport;
-    char host[0];
+    uint32_t host_offset;
+    uint32_t host_size;
+    uint16_t pub_key_type;
+    uint32_t pub_key_offset;
+    uint32_t pub_key_size;
 } RedMigrationBegin;
 
 enum {

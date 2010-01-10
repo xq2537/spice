@@ -51,6 +51,8 @@
 #define STICKY_KEY_PIXMAP ALT_IMAGE_RES_ID
 #define STICKY_KEY_TIMEOUT 750
 
+#define CA_FILE_NAME "spice_truststore.pem"
+
 #ifdef CAIRO_CANVAS_CACH_IS_SHARED
 mutex_t cairo_surface_user_data_mutex;
 #endif
@@ -1818,6 +1820,11 @@ bool Application::process_cmd_line(int argc, char** argv)
         _peer_con_opt[i] = RedPeer::ConnectionOptions::CON_OP_INVALID;
     }
 
+    _host_auth_opt.type_flags = RedPeer::HostAuthOptions::HOST_AUTH_OP_NAME;
+
+    Platform::get_spice_config_dir(_host_auth_opt.CA_file);
+    _host_auth_opt.CA_file += CA_FILE_NAME;
+
     parser.begin(argc, argv);
 
     char* val;
@@ -1836,12 +1843,11 @@ bool Application::process_cmd_line(int argc, char** argv)
             break;
         }
         case SPICE_OPT_SPORT: {
-            if ((port = str_to_port(val)) == -1) {
+            if ((sport = str_to_port(val)) == -1) {
                 std::cout << "invalid secure port " << val << "\n";
                 _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
                 return false;
             }
-            sport = port;
             break;
         }
         case SPICE_OPT_FULL_SCREEN:

@@ -23,6 +23,15 @@
 #include "utils.h"
 #include "debug.h"
 
+#ifdef __GNUC__
+typedef struct __attribute__ ((__packed__)) OldRedMigrationBegin {
+#else
+typedef struct __declspec(align(1)) OldRedMigrationBegin {
+#endif
+    uint16_t port;
+    uint16_t sport;
+    char host[0];
+} OldRedMigrationBegin;
 
 class MouseModeEvent: public Event {
 public:
@@ -156,18 +165,19 @@ void Migrate::connect_one(MigChannel& channel, const RedPeer::ConnectionOptions&
 void Migrate::run()
 {
     uint32_t connection_id;
+    RedPeer::ConnectionOptions::Type conn_type;
 
     DBG(0, "");
     try {
-        RedPeer::ConnectionOptions con_opt(_client.get_connection_options(RED_CHANNEL_MAIN),
-                                           _port, _port);
+        conn_type = _client.get_connection_options(RED_CHANNEL_MAIN);
+        RedPeer::ConnectionOptions con_opt(conn_type, _port, _sport, _auth_options);
         MigChannels::iterator iter = _channels.begin();
         connection_id = _client.get_connection_id();
         connect_one(**iter, con_opt, connection_id);
+
         for (++iter; iter != _channels.end(); ++iter) {
-            con_opt = RedPeer::ConnectionOptions(
-                                                _client.get_connection_options((*iter)->get_type()),
-                                                _port, _sport);
+            conn_type = _client.get_connection_options((*iter)->get_type());
+            con_opt = RedPeer::ConnectionOptions(conn_type, _port, _sport, _auth_options);
             connect_one(**iter, con_opt, connection_id);
         }
         _connected = true;
@@ -199,9 +209,24 @@ void Migrate::start(const RedMigrationBegin* migrate)
 {
     DBG(0, "");
     abort();
-    _host.assign(migrate->host);
-    _port = migrate->port ? migrate->port : -1;
-    _sport = migrate->sport ? migrate->sport : -1;
+    if ((RED_VERSION_MAJOR == 1) && (_client.get_peer_minor() < 2)) {
+        LOG_INFO("server minor version incompatible for destination authentication"
+                 "(missing dest pubkey in RedMigrationBegin)");
+        OldRedMigrationBegin* old_migrate = (OldRedMigrationBegin*)migrate;
+        _host.assign(old_migrate->host);
+        _port = old_migrate->port ? old_migrate->port : -1;
+        _sport = old_migrate->sport ? old_migrate->sport : -1;;
+        _auth_options = _client.get_host_auth_options();
+    } else {
+        _host.assign(((char*)migrate) + migrate->host_offset);
+        _port = migrate->port ? migrate->port : -1;
+        _sport = migrate->sport ? migrate->sport : -1;
+        _auth_options.type_flags = RedPeer::HostAuthOptions::HOST_AUTH_OP_PUBKEY;
+        _auth_options.host_pubkey.assign(((uint8_t*)migrate)+ migrate->pub_key_offset,
+                                         ((uint8_t*)migrate)+ migrate->pub_key_offset +
+                                         migrate->pub_key_size);
+    }
+
     _password = _client._password;
     Lock lock(_lock);
     _running = true;
@@ -433,6 +458,8 @@ void RedClient::connect()
     for (; iter != end; iter++) {
         _con_opt_map[(*iter).first] = (*iter).second;
     }
+
+    _host_auth_opt = _application.get_host_auth_opt();
     RedChannel::connect();
 }
 

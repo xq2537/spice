@@ -48,6 +48,8 @@ public:
 
     static void send_quit_request();
 
+    static void get_spice_config_dir(std::string& path);
+
     enum ThreadPriority {
         PRIORITY_INVALID,
         PRIORITY_TIME_CRITICAL,
