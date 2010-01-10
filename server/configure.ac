@@ -32,7 +32,7 @@ AC_SUBST(SPICE_REQUIRES)
 AC_SUBST(SPICE_NONPKGCONFIG_CFLAGS)
 AC_SUBST(SPICE_NONPKGCONFIG_LIBS)
 
-AC_CONFIG_FILES([Makefile spice.pc ffmpeg_inc.h])
+AC_CONFIG_FILES([Makefile spice-server.pc ffmpeg_inc.h])
 AC_OUTPUT
 
 dnl ==========================================================================

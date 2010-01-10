@@ -84,11 +84,11 @@ EXTRA_DIST =					\
 	$(NULL)
 
 pkgconfigdir = $(libdir)/pkgconfig
-pkgconfig_DATA = spice.pc
+pkgconfig_DATA = spice-server.pc
 
 DISTCLEANFILES =                                \
 	ffmpeg_inc.h				\
-	spice.pc
+	spice-server.pc
 
 dist-hook:
 	cp -p -f ./autogen.sh ../configure.ac.shared $(distdir)
