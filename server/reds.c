@@ -5371,13 +5371,17 @@ static void init_vd_agent_resources()
     state->plug.wakeup = reds_agent_wakeup;
 }
 
-const char *version_string = VERSION;
+static const char *version_string = VERSION;
+static const char *patch_string = PATCHID;
+static const char *distro_string = DISTRIBUTION;
 
 void __attribute__ ((visibility ("default"))) spice_init(CoreInterface *core_interface)
 {
     VDInterface *interface = NULL;
 
-    red_printf("starting %s", version_string);
+    red_printf("starting %s%s%s%s%s", version_string,
+               strlen(patch_string) ? "-" : "", patch_string,
+               strlen(distro_string) ? "." : "", distro_string);
 
     if (core_interface->base.base_version != VM_INTERFACE_VERSION) {
         red_error("bad base interface version");
