@@ -1635,7 +1635,8 @@ const std::string& Application::get_password()
 
 //controller interface end
 
-bool Application::set_channels_security(CmdLineParser& parser, bool on, char *val)
+bool Application::set_channels_security(CmdLineParser& parser, bool on, char *val,
+                                        const char* arg0)
 {
     RedPeer::ConnectionOptions::Type option;
     option = (on) ? RedPeer::ConnectionOptions::CON_OP_SECURE :
@@ -1653,7 +1654,8 @@ bool Application::set_channels_security(CmdLineParser& parser, bool on, char *va
 
     if (!strcmp(val, "all")) {
         if ((val = parser.next_argument())) {
-            std::cout << "\"all\" is exclusive in secure-channels\n";
+            Platform::term_printf("%s: \"all\" is exclusive in secure-channels\n", arg0);
+            _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
             return false;
         }
         PeerConnectionOptMap::iterator iter = _peer_con_opt.begin();
@@ -1666,7 +1668,8 @@ bool Application::set_channels_security(CmdLineParser& parser, bool on, char *va
     do {
         ChannelsNamesMap::iterator iter = channels_names.find(val);
         if (iter == channels_names.end()) {
-            std::cout << "bad channel name \"" << val << "\" in secure-channels\n";
+            Platform::term_printf("%s: bad channel name \"%s\" in secure-channels\n", arg0, val);
+            _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
             return false;
         }
         _peer_con_opt[(*iter).second] = option;
@@ -1674,7 +1677,7 @@ bool Application::set_channels_security(CmdLineParser& parser, bool on, char *va
     return true;
 }
 
-bool Application::set_canvas_option(CmdLineParser& parser, char *val)
+bool Application::set_canvas_option(CmdLineParser& parser, char *val, const char* arg0)
 {
     typedef std::map< std::string, CanvasOption> CanvasNamesMap;
     CanvasNamesMap canvas_types;
@@ -1688,19 +1691,23 @@ bool Application::set_canvas_option(CmdLineParser& parser, char *val)
     canvas_types["gl_pbuff"] = CANVAS_OPTION_OGL_PBUFF;
 #endif
     _canvas_types.clear();
+
     do {
         CanvasNamesMap::iterator iter = canvas_types.find(val);
         if (iter == canvas_types.end()) {
-            std::cout << "bad canvas type \"" << val << "\"\n";
+            Platform::term_printf("%s: bad canvas type \"%s\"\n", arg0, val);
+            _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
             return false;
         }
         _canvas_types.resize(_canvas_types.size() + 1);
         _canvas_types[_canvas_types.size() - 1] = (*iter).second;
     } while ((val = parser.next_argument()));
+
     return true;
 }
 
-bool Application::set_enable_channels(CmdLineParser& parser, bool enable, char *val)
+bool Application::set_enable_channels(CmdLineParser& parser, bool enable, char *val,
+                                      const char* arg0)
 {
     typedef std::map< std::string, int> ChannelsNamesMap;
     ChannelsNamesMap channels_names;
@@ -1713,7 +1720,8 @@ bool Application::set_enable_channels(CmdLineParser& parser, bool enable, char *
 
     if (!strcmp(val, "all")) {
         if ((val = parser.next_argument())) {
-            std::cout << "\"all\" is exclusive\n";
+            Platform::term_printf("%s: \"all\" is exclusive\n", arg0);
+            _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
             return false;
         }
         for (unsigned int i = 0; i < _enabled_channels.size(); i++) {
@@ -1725,12 +1733,19 @@ bool Application::set_enable_channels(CmdLineParser& parser, bool enable, char *
     do {
         ChannelsNamesMap::iterator iter = channels_names.find(val);
         if (iter == channels_names.end()) {
-            std::cout << "bad channel name \"" << val << "\"\n";
+            Platform::term_printf("%s: bad channel name \"%s\"\n", arg0, val);
+            _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
             return false;
         }
         _enabled_channels[(*iter).second] = enable;
     } while ((val = parser.next_argument()));
     return true;
+}
+
+void Application::on_cmd_line_invalid_arg(const char* arg0, const char* what, const char* val)
+{
+    Platform::term_printf("%s: invalid %s value %s\n", arg0, what, val);
+    _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
 }
 
 void Application::register_channels()
@@ -1838,16 +1853,14 @@ bool Application::process_cmd_line(int argc, char** argv)
             break;
         case SPICE_OPT_PORT: {
             if ((port = str_to_port(val)) == -1) {
-                std::cout << "invalid port " << val << "\n";
-                _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
+                on_cmd_line_invalid_arg(argv[0], "port", val);
                 return false;
             }
             break;
         }
         case SPICE_OPT_SPORT: {
             if ((sport = str_to_port(val)) == -1) {
-                std::cout << "invalid secure port " << val << "\n";
-                _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
+                on_cmd_line_invalid_arg(argv[0], "secure port", val);
                 return false;
             }
             break;
@@ -1855,8 +1868,7 @@ bool Application::process_cmd_line(int argc, char** argv)
         case SPICE_OPT_FULL_SCREEN:
             if (val) {
                 if (strcmp(val, "auto-conf")) {
-                    std::cout << "invalid full screen mode " << val << "\n";
-                    _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
+                    on_cmd_line_invalid_arg(argv[0], "full screen mode", val);
                     return false;
                 }
                 auto_display_res = true;
@@ -1867,33 +1879,27 @@ bool Application::process_cmd_line(int argc, char** argv)
             password = val;
             break;
         case SPICE_OPT_SECURE_CHANNELS:
-            if (!set_channels_security(parser, true, val)) {
+            if (!set_channels_security(parser, true, val, argv[0])) {
                 return false;
             }
             break;
         case SPICE_OPT_UNSECURE_CHANNELS:
-            if (!set_channels_security(parser, false, val)) {
+            if (!set_channels_security(parser, false, val, argv[0])) {
                 return false;
             }
             break;
         case SPICE_OPT_ENABLE_CHANNELS:
-            if (!set_enable_channels(parser, true, val)) {
-                std::cout << "invalid channels " << val << "\n";
-                _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
+            if (!set_enable_channels(parser, true, val, argv[0])) {
                 return false;
             }
             break;
         case SPICE_OPT_DISABLE_CHANNELS:
-            if (!set_enable_channels(parser, false, val)) {
-                std::cout << "invalid channels " << val << "\n";
-                _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
+            if (!set_enable_channels(parser, false, val, argv[0])) {
                 return false;
             }
             break;
         case SPICE_OPT_CANVAS_TYPE:
-            if (!set_canvas_option(parser, val)) {
-                std::cout << "invalid canvas option " << val << "\n";
-                _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
+            if (!set_canvas_option(parser, val, argv[0])) {
                 return false;
             }
             break;
@@ -1901,14 +1907,16 @@ bool Application::process_cmd_line(int argc, char** argv)
             parser.show_help();
             return false;
         case CmdLineParser::OPTION_ERROR:
+            _exit_code = SPICEC_ERROR_CODE_CMD_LINE_ERROR;
             return false;
         default:
-            throw Exception("cmd line error");
+            throw Exception("cmd line error", SPICEC_ERROR_CODE_CMD_LINE_ERROR);
         }
     }
 
     if (parser.is_set(SPICE_OPT_SECURE_CHANNELS) && !parser.is_set(SPICE_OPT_SPORT)) {
-        std::cout << "missing --secure-port\n";
+        Platform::term_printf("%s: missing --secure-port\n", argv[0]);
+        _exit_code = SPICEC_ERROR_CODE_CMD_LINE_ERROR;
         return false;
     }
 
@@ -1936,7 +1944,9 @@ bool Application::process_cmd_line(int argc, char** argv)
             (*iter).second = RedPeer::ConnectionOptions::CON_OP_SECURE;
             continue;
         }
-        std::cout << "missing --port or --sport\n";
+
+        Platform::term_printf("%s: missing --port or --sport\n", argv[0]);
+        _exit_code = SPICEC_ERROR_CODE_CMD_LINE_ERROR;
         return false;
     }
 

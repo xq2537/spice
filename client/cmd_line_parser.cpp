@@ -344,7 +344,7 @@ int CmdLineParser::get_option(char** val)
         int name_pos = (opt_obj->type == REQUIRED_ARGUMENT) ? optind - 2 : optind - 1;
         std::string cmd_name(_argv[name_pos] + 2);
         if (cmd_name.find(opt_obj->name) != 0) {
-            std::cout << _argv[0] << ": invalid option '--" << cmd_name << "'\n";
+            Platform::term_printf("%s: invalid option '--%s'\n", _argv[0], cmd_name.c_str());
             return OPTION_ERROR;
         }
 #endif
@@ -360,11 +360,11 @@ int CmdLineParser::get_option(char** val)
     case -1: {
         *val = NULL;
         if (!_positional_args && optind != _argc) {
-            std::cout << _argv[0] << ": unexpected positional arguments\n";
+            Platform::term_printf("%s: unexpected positional arguments\n", _argv[0]);
             return OPTION_ERROR;
         }
         if ((opt_obj = find_missing_opt())) {
-            std::cout << _argv[0] << ": option --" << opt_obj->name << " is required\n";
+            Platform::term_printf("%s: option --%s is required\n", _argv[0], opt_obj->name.c_str());
             return OPTION_ERROR;
         }
         _done = true;
@@ -378,18 +378,19 @@ int CmdLineParser::get_option(char** val)
 #ifdef DISABLE_ABBREVIATE
             std::string cmd_name(_argv[optind - 1] + 2);
             if (cmd_name.find(opt_obj->name) != 0) {
-                std::cout << _argv[0] << ": invalid option '--" << cmd_name << "'\n";
+                Platform::term_printf("%s: invalid option '--%s'\n", _argv[0], cmd_name.c_str());
                 return OPTION_ERROR;
             }
 #endif
-            std::cout << _argv[0] << ": option --" << opt_obj->name << " requires an argument\n";
+            Platform::term_printf("%s: option --%s requires an argument\n",
+                                  _argv[0], opt_obj->name.c_str());
         } else if (optopt == 0) {
-            std::cout << _argv[0] << ": invalid option '" << _argv[optind - 1] << "'\n";
+            Platform::term_printf("%s: invalid option '%s'\n", _argv[0], _argv[optind - 1]);
         } else if ((opt_obj = find((char)optopt))) {
-            std::cout << _argv[0] << ": option '-" << opt_obj->short_name <<
-                "' requires an argument\n";
+            Platform::term_printf("%s: option '-%c' requires an argument\n",
+                                  _argv[0], opt_obj->short_name);
         } else {
-            std::cout << _argv[0] << ": invalid option '-" << char(optopt) << "'\n";
+            Platform::term_printf("%s: invalid option '-%c'\n", _argv[0], char(optopt));
         }
         return OPTION_ERROR;
     default:
@@ -447,13 +448,13 @@ void CmdLineParser::show_help()
 {
     static const int HELP_START_POS = 30;
     static const int HELP_WIDTH = 80 - HELP_START_POS;
+    std::ostringstream os;
 
-    std::cout << basename(_argv[0]) << " - " << _description.c_str() << "\n\noptions:\n\n";
+    os << basename(_argv[0]) << " - " << _description.c_str() << "\n\noptions:\n\n";
 
     Options::iterator iter = _options.begin();
     for (; iter != _options.end(); ++iter) {
         CmdLineParser::Option* opt = *iter;
-        std::ostringstream os;
 
         if (opt->short_name) {
             os << "  -" << opt->short_name << ", ";
@@ -516,9 +517,9 @@ void CmdLineParser::show_help()
                 line.clear();
             }
         } while (line.size() || std::getline(is, line));
-
-        std::cout << os.str();
     }
-    std::cout << "\n";
+
+    os << "\n";
+    Platform::term_printf(os.str().c_str());
 }
 
