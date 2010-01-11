@@ -38,6 +38,8 @@ public:
     static void yield();
     static uint64_t get_monolithic_time();
     static void get_temp_dir(std::string& path);
+    static void get_app_data_dir(std::string& path, const std::string& app_name);
+    static void path_append(std::string& path, const std::string& partial_path);
     static uint64_t get_process_id();
     static uint64_t get_thread_id();
     static void error_beep();
@@ -47,8 +49,6 @@ public:
     static bool is_monitors_pos_valid();
 
     static void send_quit_request();
-
-    static void get_spice_config_dir(std::string& path);
 
     enum ThreadPriority {
         PRIORITY_INVALID,

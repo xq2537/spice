@@ -64,8 +64,6 @@
 #define USE_XRANDR_1_2
 #endif
 
-#define SPICE_CONFIG_DIR ".spicec/"
-
 static Display* x_display = NULL;
 static bool x_shm_avail = false;
 static XVisualInfo **vinfo = NULL;
@@ -1913,16 +1911,27 @@ bool Platform::is_monitors_pos_valid()
     return (ScreenCount(x_display) == 1);
 }
 
-void Platform::get_spice_config_dir(std::string& path)
+void Platform::get_app_data_dir(std::string& path, const std::string& app_name)
 {
-    char* home_dir = getenv("HOME");
+    const char* home_dir = getenv("HOME");
+
     if (!home_dir) {
         throw Exception("get home dir failed");
     }
 
     path = home_dir;
+    path += "/.";
+    path += app_name;
+
+    if (mkdir(path.c_str(), 0700) == -1 && errno != EEXIST) {
+        throw Exception("create appdata dir failed");
+    }
+}
+
+void Platform::path_append(std::string& path, const std::string& partial_path)
+{
     path += "/";
-    path += SPICE_CONFIG_DIR;
+    path += partial_path;
 }
 
 static void root_win_proc(XEvent& event)
