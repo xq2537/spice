@@ -1971,12 +1971,12 @@ void Application::init_logger()
 #ifdef RED_DEBUG
     root.setPriority(log4cpp::Priority::DEBUG);
     root.removeAllAppenders();
-    ::close(fd);
-    root.addAppender(new log4cpp::RollingFileAppender("_", log_file_name));
+    root.addAppender(new log4cpp::FileAppender("_", fd));
 #else
     root.setPriority(log4cpp::Priority::INFO);
     root.removeAllAppenders();
-    root.addAppender(new log4cpp::FileAppender("_", fd));
+    ::close(fd);
+    root.addAppender(new log4cpp::RollingFileAppender("_", log_file_name));
 #endif
 }
 
