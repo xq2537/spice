@@ -177,7 +177,7 @@ AC_ARG_WITH(spice-common,
                 [use_spice_common=no])
 
 if test "x$use_spice_common" != "xno"; then
-    PKG_CHECK_MODULES(SPICE_COMMON, spice-common = 0.4.1)
+    PKG_CHECK_MODULES(SPICE_COMMON, spice-common = 0.4.2)
     SPICE_COMMON_SRCDIR=$(pkg-config --variable=common_src_dir spice-common)
 fi
 
