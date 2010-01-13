@@ -8,6 +8,5 @@ There is NO WARRANTY for this software, not even the implied
 warranties of MERCHANTABILITY, NONINFRINGEMENT, or FITNESS FOR A
 PARTICULAR PURPOSE.
 
-Implementation of the SPICE protocol.
-Includes spice-server (library) and spice-client.
+Implementation of the server side of SPICE protocol (library).
 For more information look at spice-space.org

@@ -148,7 +148,7 @@ if test -n "$p"; then
     printbold "Setting up $p toplevel"
 fi
 
-touch NEWS README AUTHORS ChangeLog ### ToDo: define those.
+touch NEWS AUTHORS ChangeLog ### ToDo: define those.
 mkdir -p m4
 do_cmd $LIBTOOLIZE $LIBTOOLIZE_FLAGS
 do_cmd $ACLOCAL $ACLOCAL_FLAGS
