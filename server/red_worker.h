@@ -46,8 +46,6 @@ enum {
     RED_WORKER_MESSAGE_UPDATE,
     RED_WORKER_MESSAGE_WAKEUP,
     RED_WORKER_MESSAGE_OOM,
-    RED_WORKER_MESSAGE_ATTACH,
-    RED_WORKER_MESSAGE_DETACH,
     RED_WORKER_MESSAGE_READY,
     RED_WORKER_MESSAGE_DISPLAY_CONNECT,
     RED_WORKER_MESSAGE_DISPLAY_DISCONNECT,
@@ -65,6 +63,12 @@ enum {
     RED_WORKER_MESSAGE_ADD_MEMSLOT,
     RED_WORKER_MESSAGE_DEL_MEMSLOT,
     RED_WORKER_MESSAGE_RESET_MEMSLOTS,
+    RED_WORKER_MESSAGE_DESTROY_SURFACES,
+    RED_WORKER_MESSAGE_CREATE_PRIMARY_SURFACE,
+    RED_WORKER_MESSAGE_DESTROY_PRIMARY_SURFACE,
+    RED_WORKER_MESSAGE_RESET_CURSOR,
+    RED_WORKER_MESSAGE_RESET_IMAGE_CACHE,
+    RED_WORKER_MESSAGE_DESTROY_SURFACE_WAIT,
 };
 
 typedef uint32_t RedWorkeMessage;
@@ -88,8 +92,10 @@ typedef struct WorkerInitData {
     image_compression_t image_compression;
     int streaming_video;
     uint32_t num_memslots;
+    uint32_t num_memslots_groups;
     uint8_t memslot_gen_bits;
     uint8_t memslot_id_bits;
+    uint8_t internal_groupslot_id;
 } WorkerInitData;
 
 void *red_worker_main(void *arg);

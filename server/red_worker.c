@@ -216,6 +216,7 @@ typedef struct BufDescriptor {
     uint32_t size;
     uint8_t *data;
     uint32_t slot_id;
+    uint32_t group_id;
 } BufDescriptor;
 
 enum {
@@ -286,8 +287,10 @@ enum {
 
 typedef struct CursorItem {
     PipeItem pipe_data;
+    uint32_t group_id;
     int refs;
     int type;
+    QXLCursorCmd *qxl_cursor;
 } CursorItem;
 
 typedef struct LocalCursor {
@@ -509,9 +512,11 @@ typedef struct FreeList {
 
 typedef struct DisplayChannel DisplayChannel;
 
-typedef void *(*enc_get_virt_fn_t)(void *get_virt_opaque, unsigned long addr, uint32_t add_size);
+typedef void *(*enc_get_virt_fn_t)(void *get_virt_opaque, unsigned long addr, uint32_t add_size,
+                                   uint32_t group_id);
 typedef void (*enc_validate_virt_fn_t)(void *validate_virt_opaque, unsigned long virt,
-                                       unsigned long from_addr, uint32_t add_size);
+                                       unsigned long from_addr, uint32_t add_size,
+                                       uint32_t group_id);
 typedef struct  {
     DisplayChannel *display_channel;
     RedCompressBuf *bufs_head;
@@ -521,6 +526,7 @@ typedef struct  {
         struct {
             ADDRESS next;
             uint32_t stride;
+            uint32_t group_id;
 
             void *enc_get_virt_opaque;
             enc_get_virt_fn_t enc_get_virt;
@@ -574,6 +580,8 @@ struct RedGlzDrawable {
     RingItem link;    // ordered by the time it was encoded
     QXLDrawable *qxl_drawable;
     Drawable    *drawable;
+    uint32_t     group_id;
+    uint8_t     *self_bitmap;
     GlzDrawableInstanceItem instances_pool[MAX_GLZ_DRAWABLE_INSTANCES];
     Ring instances;
     uint8_t instances_count;
@@ -793,6 +801,8 @@ struct Drawable {
     int streamable;
 #endif
     BitmapGradualType copy_bitmap_graduality;
+    uint32_t group_id;
+    uint8_t *self_bitmap;
 };
 
 typedef struct _Drawable _Drawable;
@@ -800,6 +810,14 @@ struct _Drawable {
     union {
         Drawable drawable;
         _Drawable *next;
+    } u;
+};
+
+typedef struct _CursorItem _CursorItem;
+struct _CursorItem {
+    union {
+        CursorItem cursor_item;
+        _CursorItem *next;
     } u;
 };
 
@@ -826,13 +844,10 @@ typedef void (*draw_alpha_blend_t)(void *canvas, Rect *bbox, Clip *clip, AlphaBl
 typedef void (*read_pixels_t)(void *canvas, uint8_t *dest, int dest_stride, const Rect *area);
 typedef void (*set_top_mask_t)(void *canvas, int num_rect, const Rect *rects);
 typedef void (*clear_top_mask_t)(void *canvas);
-typedef void (*validate_area_t)(void *canvas, const DrawArea *draw_area, const Rect *area);
+typedef void (*validate_area_t)(void *canvas, int32_t stride, uint8_t *line_0, const Rect *area);
 typedef void (*destroy_t)(void *canvas);
 
-
-typedef struct DrawContext {
-    void *canvas;
-    int top_down;
+typedef struct DrawFuncs {
     draw_fill_t draw_fill;
     draw_copy_t draw_copy;
     draw_opaque_t draw_opaque;
@@ -851,8 +866,22 @@ typedef struct DrawContext {
     clear_top_mask_t clear_top_mask;
     validate_area_t validate_area;
     destroy_t destroy;
+} DrawFuncs;
+
+typedef struct DrawContext {
+    void *canvas;
+    int top_down;
+    uint32_t width;
+    uint32_t height;
+    int32_t stride;
+    uint8_t depth;
+    void *line_0;
 } DrawContext;
 
+typedef struct Surface {
+    uint32_t refs;
+    DrawContext context;
+} Surface;
 
 #ifdef STREAM_TRACE
 typedef struct ItemTrace {
@@ -879,6 +908,7 @@ typedef struct MemSlot {
 } MemSlot;
 
 #define NUM_DRAWABLES 1000
+#define NUM_CURSORS 100
 
 typedef struct RedWorker {
     EventListener dev_listener;
@@ -887,17 +917,18 @@ typedef struct RedWorker {
     QXLInterface *qxl;
     int id;
     int channel;
-    int attached;
     int running;
     uint32_t *pending;
-    QXLDevInfo dev_info;
     int epoll;
     unsigned int epoll_timeout;
     uint32_t repoll_cmd_ring;
     uint32_t repoll_cursor_ring;
-    DrawContext draw_context;
     uint32_t num_renderers;
     uint32_t renderers[RED_MAX_RENDERERS];
+    uint32_t renderer;
+
+    DrawFuncs draw_funcs;
+    Surface surface;
 
     Ring current_list;
     Ring current;
@@ -919,14 +950,21 @@ typedef struct RedWorker {
     _Drawable drawables[NUM_DRAWABLES];
     _Drawable *free_drawables;
 
-    MemSlot *mem_slots;
+    _CursorItem cursor_items[NUM_CURSORS];
+    _CursorItem *free_cursor_items;
+
+    MemSlot **mem_slots;
+    uint32_t num_memslots_groups;
     uint32_t num_memslots;
     uint8_t mem_slot_bits;
     uint8_t generation_bits;
     uint8_t memslot_id_shift;
     uint8_t memslot_gen_shift;
+    uint8_t internal_groupslot_id;
     unsigned long memslot_gen_mask;
     unsigned long memslot_clean_virt_mask;
+
+    uint32_t preload_group_id;
 
     uint32_t local_images_pos;
     LocalImage local_images[MAX_BITMAPS];
@@ -971,7 +1009,7 @@ typedef struct RedWorker {
 
 pthread_mutex_t avcodec_lock = PTHREAD_MUTEX_INITIALIZER;
 
-static void red_draw_qxl_drawable(RedWorker *worker, QXLDrawable *drawable);
+static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable);
 static void red_current_flush(RedWorker *worker);
 static void display_channel_push(RedWorker *worker);
 #ifdef DRAW_ALL
@@ -1001,11 +1039,11 @@ static void red_display_release_stream_clip(DisplayChannel* channel, StreamClipI
 static int red_display_free_some_independent_glz_drawables(DisplayChannel *channel);
 static void red_display_free_glz_drawable(DisplayChannel *channel, RedGlzDrawable *drawable);
 static void reset_rate(StreamAgent *stream_agent);
-static int _bitmap_is_gradual(RedWorker *worker, Bitmap *bitmap);
+static int _bitmap_is_gradual(RedWorker *worker, Bitmap *bitmap, uint32_t group_id);
 static inline int _stride_is_extra(Bitmap *bitmap);
 
 #ifdef DUMP_BITMAP
-static void dump_bitmap(RedWorker *worker, Bitmap *bitmap);
+static void dump_bitmap(RedWorker *worker, Bitmap *bitmap, uint32_t group_id);
 #endif
 
 #ifdef COMPRESS_STAT
@@ -1068,18 +1106,41 @@ static inline unsigned long __get_clean_virt(RedWorker *worker, unsigned long ad
     return addr & worker->memslot_clean_virt_mask;
 }
 
-static inline unsigned long get_virt_delta(RedWorker *worker, unsigned long addr)
+static inline void print_memslots(RedWorker *worker)
+{
+    int i;
+    int x;
+
+    for (i = 0; i < worker->num_memslots_groups; ++i) {
+        for (x = 0; x < worker->num_memslots; ++x) {
+            if (!worker->mem_slots[i][x].virt_start_addr &&
+                !worker->mem_slots[i][x].virt_end_addr) {
+                continue;
+            }
+            printf("id %d, group %d, virt start %lx, virt end %lx, generation %u, delta %lx\n",
+                   x, i, worker->mem_slots[i][x].virt_start_addr,
+                   worker->mem_slots[i][x].virt_end_addr, worker->mem_slots[i][x].generation,
+                   worker->mem_slots[i][x].address_delta);
+            }
+    }
+}
+
+static inline unsigned long get_virt_delta(RedWorker *worker, unsigned long addr, int group_id)
 {
     MemSlot *slot;
     int slot_id;
     int generation;
+
+    if (group_id > worker->num_memslots_groups) {
+        PANIC("group_id %d too big", group_id);
+    }
 
     slot_id = get_memslot_id(worker, addr);
     if (slot_id > worker->num_memslots) {
         PANIC("slod_id %d too big", slot_id);
     }
 
-    slot = &worker->mem_slots[slot_id];
+    slot = &worker->mem_slots[group_id][slot_id];
 
     generation = get_generation(worker, addr);
     if (generation != slot->generation) {
@@ -1090,21 +1151,25 @@ static inline unsigned long get_virt_delta(RedWorker *worker, unsigned long addr
 }
 
 static inline void validate_virt(RedWorker *worker, unsigned long virt, int slot_id,
-                                 uint32_t add_size)
+                                 uint32_t add_size, uint32_t group_id)
 {
     MemSlot *slot;
 
-    slot = &worker->mem_slots[slot_id];
+    slot = &worker->mem_slots[group_id][slot_id];
     if ((virt + add_size) < virt) {
         PANIC("virtual address overlap");
     }
 
     if (virt < slot->virt_start_addr || (virt + add_size) > slot->virt_end_addr) {
-        PANIC("virtual address out of range 0x%lx 0x%lx", virt, slot->address_delta);
+        print_memslots(worker);
+        PANIC("virtual address out of range 0x%lx 0x%lx %d %d 0x%lx 0x%lx 0x%lx", virt,
+              slot->address_delta, slot_id, group_id, slot->virt_start_addr, slot->virt_end_addr,
+              virt + add_size);
     }
 }
 
-static inline unsigned long get_virt(RedWorker *worker, unsigned long addr, uint32_t add_size)
+static inline unsigned long get_virt(RedWorker *worker, unsigned long addr, uint32_t add_size,
+                                     int group_id)
 {
     int slot_id;
     int generation;
@@ -1112,36 +1177,56 @@ static inline unsigned long get_virt(RedWorker *worker, unsigned long addr, uint
 
     MemSlot *slot;
 
+    if (group_id > worker->num_memslots_groups) {
+        PANIC("group_id too big");
+    }
+
     slot_id = get_memslot_id(worker, addr);
     if (slot_id > worker->num_memslots) {
         PANIC("slot_id too big");
     }
 
-    slot = &worker->mem_slots[slot_id];
+    slot = &worker->mem_slots[group_id][slot_id];
 
     generation = get_generation(worker, addr);
     if (generation != slot->generation) {
-        PANIC("address generation is not valid");
+        print_memslots(worker);
+        PANIC("address generation is not valid, group_id %d, slot_id %d, gen %d, slot_gen %d\n",
+              group_id, slot_id, generation, slot->generation);
     }
 
     h_virt = __get_clean_virt(worker, addr);
     h_virt += slot->address_delta;
 
-    validate_virt(worker, h_virt, slot_id, add_size);
+    validate_virt(worker, h_virt, slot_id, add_size, group_id);
 
     return h_virt;
 }
 
-static void *cb_get_virt(void *opaque, unsigned long addr, uint32_t add_size)
+static void *cb_get_virt(void *opaque, unsigned long addr, uint32_t add_size, uint32_t group_id)
 {
-    return (void *)get_virt((RedWorker *)opaque, addr, add_size);
+    return (void *)get_virt((RedWorker *)opaque, addr, add_size, group_id);
 }
 
 static void cb_validate_virt(void *opaque, unsigned long virt, unsigned long from_addr,
-                             uint32_t add_size)
+                             uint32_t add_size, uint32_t group_id)
 {
     int slot_id = get_memslot_id((RedWorker *)opaque, from_addr);
-    validate_virt((RedWorker *)opaque, virt, slot_id, add_size);
+    validate_virt((RedWorker *)opaque, virt, slot_id, add_size, group_id);
+}
+
+static void *cb_get_virt_preload_group(void *opaque, unsigned long addr, uint32_t add_size)
+{
+    return (void *)get_virt((RedWorker *)opaque, addr, add_size,
+                            ((RedWorker *)opaque)->preload_group_id);
+}
+
+static void cb_validate_virt_preload_group(void *opaque, unsigned long virt,
+                                           unsigned long from_addr, uint32_t add_size)
+{
+    int slot_id = get_memslot_id((RedWorker *)opaque, from_addr);
+    validate_virt((RedWorker *)opaque, virt, slot_id, add_size,
+                  ((RedWorker *)opaque)->preload_group_id);
 }
 
 char *draw_type_to_str(UINT8 type)
@@ -1445,15 +1530,42 @@ static void drawables_init(RedWorker *worker)
     }
 }
 
-static inline void free_qxl_drawable(RedWorker *worker, QXLDrawable *drawable)
+
+static void red_reset_stream_trace(RedWorker *worker);
+
+static inline void __red_destroy_surface(RedWorker *worker)
 {
-    if (drawable->bitmap_offset) {
-        PHYSICAL *addr = (PHYSICAL *)((uint8_t *)drawable + drawable->bitmap_offset);
-        if (*addr) {
-            free((uint8_t *)*addr);
-        }
+    Surface *surface = &worker->surface;
+
+    if (!--worker->surface.refs) {
+#ifdef STREAM_TRACE
+        red_reset_stream_trace(worker);
+#endif
+        worker->draw_funcs.destroy(surface->context.canvas);
+        surface->context.canvas = NULL;
     }
-    worker->qxl->release_resource(worker->qxl, &drawable->release_info);
+}
+
+static inline void red_destroy_surface(RedWorker *worker)
+{
+    Surface *surface = &worker->surface;
+
+    PANIC_ON(!surface->context.canvas);
+    __red_destroy_surface(worker);
+}
+
+static inline void free_qxl_drawable(RedWorker *worker, QXLDrawable *drawable, uint32_t group_id,
+                                     uint8_t *self_bitmap)
+{
+    QXLReleaseInfoExt release_info_ext;
+    red_destroy_surface(worker);
+
+    if (self_bitmap) {
+        free(self_bitmap);
+    }
+    release_info_ext.group_id = group_id;
+    release_info_ext.info = &drawable->release_info;
+    worker->qxl->release_resource(worker->qxl, release_info_ext);
 }
 
 static inline void release_drawable(RedWorker *worker, Drawable *item)
@@ -1472,7 +1584,7 @@ static inline void release_drawable(RedWorker *worker, Drawable *item)
         if (item->red_glz_drawable) {
             item->red_glz_drawable->drawable = NULL;
         } else { // no refernce to the qxl drawable left
-            free_qxl_drawable(worker, item->qxl_drawable);
+            free_qxl_drawable(worker, item->qxl_drawable, item->group_id, item->self_bitmap);
         }
         free_drawable(worker, item);
     }
@@ -2006,7 +2118,8 @@ static inline void __current_add_drawable(RedWorker *worker, Drawable *drawable,
 
 #ifdef USE_EXCLUDE_RGN
 
-static int is_equal_path(RedWorker *worker, ADDRESS p1, ADDRESS p2)
+static int is_equal_path(RedWorker *worker, ADDRESS p1, ADDRESS p2, uint32_t group_id1,
+                         uint32_t group_id2)
 {
     QXLPath *path1;
     QXLPath *path2;
@@ -2020,8 +2133,8 @@ static int is_equal_path(RedWorker *worker, ADDRESS p1, ADDRESS p2)
 
     ASSERT(p1 && p2);
 
-    path1 = (QXLPath *)get_virt(worker, p1, sizeof(QXLPath));
-    path2 = (QXLPath *)get_virt(worker, p2, sizeof(QXLPath));
+    path1 = (QXLPath *)get_virt(worker, p1, sizeof(QXLPath), group_id1);
+    path2 = (QXLPath *)get_virt(worker, p2, sizeof(QXLPath), group_id2);
 
     if ((size = path1->data_size) != path2->data_size) {
         return FALSE;
@@ -2047,7 +2160,8 @@ static int is_equal_path(RedWorker *worker, ADDRESS p1, ADDRESS p2)
         }
         if ((size1 -= now) == 0) {
             ASSERT(chunk1->next_chunk)
-            chunk1 = (QXLDataChunk *)get_virt(worker, chunk1->next_chunk, sizeof(QXLDataChunk));
+            chunk1 = (QXLDataChunk *)get_virt(worker, chunk1->next_chunk, sizeof(QXLDataChunk),
+                                              group_id1);
             size1 = chunk1->data_size;
             data1 = chunk1->data;
         } else {
@@ -2056,7 +2170,8 @@ static int is_equal_path(RedWorker *worker, ADDRESS p1, ADDRESS p2)
 
         if ((size2 -= now) == 0) {
             ASSERT(chunk2->next_chunk)
-            chunk2 = (QXLDataChunk *)get_virt(worker, chunk2->next_chunk, sizeof(QXLDataChunk));
+            chunk2 = (QXLDataChunk *)get_virt(worker, chunk2->next_chunk, sizeof(QXLDataChunk),
+                                              group_id2);
             size2 = chunk2->data_size;
             data2 = chunk2->data;
         } else {
@@ -2087,34 +2202,37 @@ static inline int rect_is_equal(const Rect *r1, const Rect *r2)
 }
 
 // partial imp
-static int is_same_geometry(RedWorker *worker, QXLDrawable *d1, QXLDrawable *d2)
+static int is_same_geometry(RedWorker *worker, Drawable *d1, Drawable *d2)
 {
-    if (d1->type != d2->type) {
+    if (d1->qxl_drawable->type != d2->qxl_drawable->type) {
         return FALSE;
     }
 
-    switch (d1->type) {
+    switch (d1->qxl_drawable->type) {
     case QXL_DRAW_STROKE:
-        return is_equal_line_attr(&d1->u.stroke.attr, &d2->u.stroke.attr) &&
-               is_equal_path(worker, d1->u.stroke.path, d2->u.stroke.path);
+        return is_equal_line_attr(&d1->qxl_drawable->u.stroke.attr,
+                                  &d2->qxl_drawable->u.stroke.attr) &&
+               is_equal_path(worker, d1->qxl_drawable->u.stroke.path,
+                             d2->qxl_drawable->u.stroke.path, d1->group_id,
+                             d2->group_id);
     case QXL_DRAW_FILL:
-        return rect_is_equal(&d1->bbox, &d2->bbox);
+        return rect_is_equal(&d1->qxl_drawable->bbox, &d2->qxl_drawable->bbox);
     default:
         return FALSE;
     }
 }
 
-static int is_same_drawable(RedWorker *worker, QXLDrawable *d1, QXLDrawable *d2)
+static int is_same_drawable(RedWorker *worker, Drawable *d1, Drawable *d2)
 {
     if (!is_same_geometry(worker, d1, d2)) {
         return FALSE;
     }
 
-    switch (d1->type) {
+    switch (d1->qxl_drawable->type) {
     case QXL_DRAW_STROKE:
-        return is_equal_brush(&d1->u.stroke.brush, &d2->u.stroke.brush);
+        return is_equal_brush(&d1->qxl_drawable->u.stroke.brush, &d2->qxl_drawable->u.stroke.brush);
     case QXL_DRAW_FILL:
-        return is_equal_brush(&d1->u.fill.brush, &d2->u.fill.brush);
+        return is_equal_brush(&d1->qxl_drawable->u.fill.brush, &d2->qxl_drawable->u.fill.brush);
     default:
         return FALSE;
     }
@@ -2575,7 +2693,7 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
     stream->frame_buf = frame_buf;
     stream->frame_buf_end = frame_buf + pict_size;
     QXLImage *qxl_image = (QXLImage *)get_virt(worker, drawable->qxl_drawable->u.copy.src_bitmap,
-                                               sizeof(QXLImage));
+                                               sizeof(QXLImage), drawable->group_id);
     stream->top_down = !!(qxl_image->bitmap.flags & BITMAP_TOP_DOWN);
     drawable->stream = stream;
 
@@ -2677,7 +2795,7 @@ static inline int __red_is_next_stream_frame(RedWorker *worker,
 
     if (stream) {
         QXLImage *qxl_image = (QXLImage *)get_virt(worker, qxl_drawable->u.copy.src_bitmap,
-                                                   sizeof(QXLImage));
+                                                   sizeof(QXLImage), candidate->group_id);
         if (stream->top_down != !!(qxl_image->bitmap.flags & BITMAP_TOP_DOWN)) {
             return FALSE;
         }
@@ -2731,7 +2849,8 @@ static inline int red_is_next_stream_frame(RedWorker *worker, Drawable *candidat
         return FALSE;
     }
 
-    qxl_image = (QXLImage *)get_virt(worker, qxl_drawable->u.copy.src_bitmap, sizeof(QXLImage));
+    qxl_image = (QXLImage *)get_virt(worker, qxl_drawable->u.copy.src_bitmap, sizeof(QXLImage),
+                                     candidate->group_id);
 
     if (qxl_image->descriptor.type != IMAGE_TYPE_BITMAP) {
         return FALSE;
@@ -2822,13 +2941,13 @@ static inline void red_update_copy_graduality(RedWorker* worker, Drawable *drawa
     }
 
     qxl_image = (QXLImage *)get_virt(worker, drawable->qxl_drawable->u.copy.src_bitmap,
-                                     sizeof(QXLImage));
+                                     sizeof(QXLImage), drawable->group_id);
 
     if (!BITMAP_FMT_IS_RGB[qxl_image->bitmap.format] || _stride_is_extra(&qxl_image->bitmap) ||
         (qxl_image->bitmap.flags & QXL_BITMAP_UNSTABLE)) {
         drawable->copy_bitmap_graduality = BITMAP_GRADUAL_NOT_AVAIL;
     } else  {
-        if (_bitmap_is_gradual(worker, &qxl_image->bitmap)) {
+        if (_bitmap_is_gradual(worker, &qxl_image->bitmap, drawable->group_id)) {
             drawable->copy_bitmap_graduality = BITMAP_GRADUAL_TRUE;
         } else {
             drawable->copy_bitmap_graduality = BITMAP_GRADUAL_FALSE;
@@ -2927,8 +3046,6 @@ static inline int red_current_add_equal(RedWorker *worker, DrawItem *item, TreeI
     DrawItem *other_draw_item;
     Drawable *drawable;
     Drawable *other_drawable;
-    QXLDrawable *qxl_drawable;
-    QXLDrawable *other_qxl_drawable;
 
     if (other->type != TREE_ITEM_TYPE_DRAWABLE) {
         return FALSE;
@@ -2941,9 +3058,6 @@ static inline int red_current_add_equal(RedWorker *worker, DrawItem *item, TreeI
 
     drawable = CONTAINEROF(item, Drawable, tree_item);
     other_drawable = CONTAINEROF(other_draw_item, Drawable, tree_item);
-
-    qxl_drawable = drawable->qxl_drawable;
-    other_qxl_drawable = other_drawable->qxl_drawable;
 
     if (item->effect == QXL_EFFECT_OPAQUE) {
         int add_after = !!other_drawable->stream;
@@ -2960,7 +3074,7 @@ static inline int red_current_add_equal(RedWorker *worker, DrawItem *item, TreeI
 
     switch (item->effect) {
     case QXL_EFFECT_REVERT_ON_DUP:
-        if (is_same_drawable(worker, qxl_drawable, other_qxl_drawable)) {
+        if (is_same_drawable(worker, drawable, other_drawable)) {
             if (!ring_item_is_linked(&other_drawable->pipe_item.link)) {
                 red_pipe_add_drawable(worker, drawable);
             }
@@ -2969,7 +3083,7 @@ static inline int red_current_add_equal(RedWorker *worker, DrawItem *item, TreeI
         }
         break;
     case QXL_EFFECT_OPAQUE_BRUSH:
-        if (is_same_geometry(worker, qxl_drawable, other_qxl_drawable)) {
+        if (is_same_geometry(worker, drawable, other_drawable)) {
             __current_add_drawable(worker, drawable, &other->siblings_link);
             remove_drawable(worker, other_drawable);
             red_pipe_add_drawable(worker, drawable);
@@ -2977,7 +3091,7 @@ static inline int red_current_add_equal(RedWorker *worker, DrawItem *item, TreeI
         }
         break;
     case QXL_EFFECT_NOP_ON_DUP:
-        if (is_same_drawable(worker, qxl_drawable, other_qxl_drawable)) {
+        if (is_same_drawable(worker, drawable, other_drawable)) {
             return TRUE;
         }
         break;
@@ -3268,16 +3382,17 @@ static inline int red_current_add(RedWorker *worker, Drawable *drawable)
 
 #endif
 
-static void add_clip_rects(RedWorker *worker, QRegion *rgn, PHYSICAL data)
+static void add_clip_rects(RedWorker *worker, QRegion *rgn, PHYSICAL data, uint32_t group_id)
 {
     while (data) {
         QXLDataChunk *chunk;
         Rect *now;
         Rect *end;
         uint32_t data_size;
-        chunk = (QXLDataChunk *)get_virt(worker, data, sizeof(QXLDataChunk));
+        chunk = (QXLDataChunk *)get_virt(worker, data, sizeof(QXLDataChunk), group_id);
         data_size = chunk->data_size;
-        validate_virt(worker, (unsigned long)chunk->data, get_memslot_id(worker, data), data_size);
+        validate_virt(worker, (unsigned long)chunk->data, get_memslot_id(worker, data), data_size,
+                      group_id);
         now = (Rect *)chunk->data;
         end = now + data_size / sizeof(Rect);
 
@@ -3386,7 +3501,8 @@ static inline void red_update_streamable(RedWorker *worker, Drawable *drawable,
         return;
     }
 
-    qxl_image = (QXLImage *)get_virt(worker, qxl_drawable->u.copy.src_bitmap, sizeof(QXLImage));
+    qxl_image = (QXLImage *)get_virt(worker, qxl_drawable->u.copy.src_bitmap, sizeof(QXLImage),
+                                     drawable->group_id);
     if (qxl_image->descriptor.type != IMAGE_TYPE_BITMAP) {
         return;
     }
@@ -3450,24 +3566,23 @@ static void red_get_area(RedWorker *worker, const Rect *area, uint8_t *dest, int
         red_update_area(worker, area);
     }
 
-    worker->draw_context.read_pixels(worker->draw_context.canvas, dest, dest_stride, area);
+    worker->draw_funcs.read_pixels(worker->surface.context.canvas, dest, dest_stride, area);
 }
 
-static inline int red_handle_self_bitmap(RedWorker *worker, QXLDrawable *drawable)
+static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
 {
     QXLImage *image;
     int32_t width;
     int32_t height;
     uint8_t *dest;
     int dest_stride;
-    PHYSICAL *addr;
 
-    if (!drawable->bitmap_offset) {
+    if (!drawable->qxl_drawable->self_bitmap) {
         return TRUE;
     }
 
-    width = drawable->bbox.right - drawable->bbox.left;
-    height = drawable->bbox.bottom - drawable->bbox.top;
+    width = drawable->qxl_drawable->bbox.right - drawable->qxl_drawable->bbox.left;
+    height = drawable->qxl_drawable->bbox.bottom - drawable->qxl_drawable->bbox.top;
     dest_stride = width * sizeof(uint32_t);
 
     if (!(image = malloc(sizeof(QXLImage) + height * dest_stride))) {
@@ -3480,7 +3595,7 @@ static inline int red_handle_self_bitmap(RedWorker *worker, QXLDrawable *drawabl
     image->descriptor.flags = 0;
 
     QXL_SET_IMAGE_ID(image, QXL_IMAGE_GROUP_RED, ++worker->bits_unique);
-    image->bitmap.flags = QXL_BITMAP_DIRECT | (worker->draw_context.top_down ?
+    image->bitmap.flags = QXL_BITMAP_DIRECT | (worker->surface.context.top_down ?
                                                QXL_BITMAP_TOP_DOWN : 0);
     image->bitmap.format = BITMAP_FMT_32BIT;
     image->bitmap.stride = dest_stride;
@@ -3489,11 +3604,9 @@ static inline int red_handle_self_bitmap(RedWorker *worker, QXLDrawable *drawabl
     image->bitmap.data = (PHYSICAL)dest;
     image->bitmap.palette = 0;
 
-    red_get_area(worker, &drawable->bitmap_area, dest, dest_stride, TRUE);
+    red_get_area(worker, &drawable->qxl_drawable->self_bitmap_area, dest, dest_stride, TRUE);
 
-    addr = (PHYSICAL *)((uint8_t *)drawable + drawable->bitmap_offset);
-    ASSERT(*addr == 0);
-    *addr = (PHYSICAL)image;
+    drawable->self_bitmap = (uint8_t *)image;
     return TRUE;
 }
 
@@ -3515,8 +3628,8 @@ static void free_one_drawable(RedWorker *worker, int force_glz_free)
     container_cleanup(worker, container);
 }
 
-static Drawable *get_drawable(RedWorker *worker, uint8_t effect, QXLDrawable *qxl_drawable)
-{
+static Drawable *get_drawable(RedWorker *worker, uint8_t effect, QXLDrawable *qxl_drawable,
+                              uint32_t group_id) {
     Drawable *drawable;
     struct timespec time;
 
@@ -3540,15 +3653,21 @@ static Drawable *get_drawable(RedWorker *worker, uint8_t effect, QXLDrawable *qx
     drawable->tree_item.effect = effect;
     red_pipe_item_init(&drawable->pipe_item, PIPE_ITEM_TYPE_DRAW);
     drawable->qxl_drawable = qxl_drawable;
+    drawable->group_id = group_id;
 
     return drawable;
 }
 
-static inline void red_process_drawable(RedWorker *worker, QXLDrawable *drawable)
+static inline void red_process_drawable(RedWorker *worker, QXLDrawable *drawable, uint32_t group_id)
 {
-    Drawable *item = get_drawable(worker, drawable->effect, drawable);
+    Drawable *item = get_drawable(worker, drawable->effect, drawable, group_id);
 
     ASSERT(item);
+    PANIC_ON(!worker->surface.context.canvas);
+    ASSERT(worker->surface.refs != 0);
+
+    worker->surface.refs++;
+
     region_add(&item->tree_item.base.rgn, &drawable->bbox);
 #ifdef PIPE_DEBUG
     printf("TEST: DRAWABLE: id %u type %s effect %u bbox %u %u %u %u\n",
@@ -3562,7 +3681,7 @@ static inline void red_process_drawable(RedWorker *worker, QXLDrawable *drawable
         QRegion rgn;
 
         region_init(&rgn);
-        add_clip_rects(worker, &rgn, drawable->clip.data + OFFSETOF(QXLClipRects, chunk));
+        add_clip_rects(worker, &rgn, drawable->clip.data + OFFSETOF(QXLClipRects, chunk), group_id);
         region_and(&item->tree_item.base.rgn, &rgn);
         region_destroy(&rgn);
     } else if (drawable->clip.type == CLIP_TYPE_PATH) {
@@ -3577,7 +3696,7 @@ static inline void red_process_drawable(RedWorker *worker, QXLDrawable *drawable
         return;
     }
 
-    if (!red_handle_self_bitmap(worker, drawable)) {
+    if (!red_handle_self_bitmap(worker, item)) {
         release_drawable(worker, item);
         return;
     }
@@ -3589,21 +3708,22 @@ static inline void red_process_drawable(RedWorker *worker, QXLDrawable *drawable
         }
         red_pipe_add_drawable(worker, item);
 #ifdef DRAW_ALL
-        red_draw_qxl_drawable(worker, drawable);
+        red_draw_qxl_drawable(worker, item);
 #endif
     }
     release_drawable(worker, item);
 }
 
-static void localize_path(RedWorker *worker, PHYSICAL *in_path)
+static void localize_path(RedWorker *worker, PHYSICAL *in_path, uint32_t group_id)
 {
     QXLPath *path;
     uint8_t *data;
     uint32_t data_size;
     QXLDataChunk *chunk;
+    int memslot_id = get_memslot_id(worker, *in_path);
 
     ASSERT(in_path && *in_path);
-    path = (QXLPath *)get_virt(worker, *in_path, sizeof(QXLPath));
+    path = (QXLPath *)get_virt(worker, *in_path, sizeof(QXLPath), group_id);
     data = malloc(sizeof(UINT32) + path->data_size);
     ASSERT(data);
     *in_path = (PHYSICAL)data;
@@ -3612,12 +3732,11 @@ static void localize_path(RedWorker *worker, PHYSICAL *in_path)
     chunk = &path->chunk;
     do {
         data_size = chunk->data_size;
-        validate_virt(worker, (unsigned long)chunk->data, get_memslot_id(worker, *in_path),
-                      data_size);
+        validate_virt(worker, (unsigned long)chunk->data, memslot_id, data_size, group_id);
         memcpy(data, chunk->data, data_size);
         data += data_size;
         chunk = chunk->next_chunk ? (QXLDataChunk *)get_virt(worker, chunk->next_chunk,
-                                                             sizeof(QXLDataChunk)) : NULL;
+                                                             sizeof(QXLDataChunk), group_id) : NULL;
     } while (chunk);
 }
 
@@ -3628,13 +3747,14 @@ static void unlocalize_path(PHYSICAL *path)
     *path = 0;
 }
 
-static void localize_str(RedWorker *worker, PHYSICAL *in_str)
+static void localize_str(RedWorker *worker, PHYSICAL *in_str, uint32_t group_id)
 {
-    QXLString *qxl_str = (QXLString *)get_virt(worker, *in_str, sizeof(QXLString));
+    QXLString *qxl_str = (QXLString *)get_virt(worker, *in_str, sizeof(QXLString), group_id);
     QXLDataChunk *chunk;
     String *str;
     uint8_t *dest;
     uint32_t data_size;
+    int memslot_id = get_memslot_id(worker, *in_str);
 
     ASSERT(in_str);
     str = malloc(sizeof(UINT32) + qxl_str->data_size);
@@ -3645,15 +3765,18 @@ static void localize_str(RedWorker *worker, PHYSICAL *in_str)
     dest = str->data;
     chunk = &qxl_str->chunk;
     for (;;) {
+        PHYSICAL next_chunk;
+
         data_size = chunk->data_size;
-        validate_virt(worker, (unsigned long)chunk->data, get_memslot_id(worker, *in_str),
-                      data_size);
+        validate_virt(worker, (unsigned long)chunk->data, memslot_id, data_size, group_id);
         memcpy(dest, chunk->data, data_size);
         if (!chunk->next_chunk) {
             return;
         }
         dest += data_size;
-        chunk = (QXLDataChunk *)get_virt(worker, chunk->next_chunk, sizeof(QXLDataChunk));
+        next_chunk = chunk->next_chunk;
+        memslot_id = get_memslot_id(worker, next_chunk);
+        chunk = (QXLDataChunk *)get_virt(worker, next_chunk, sizeof(QXLDataChunk), group_id);
     }
 }
 
@@ -3664,7 +3787,7 @@ static void unlocalize_str(PHYSICAL *str)
     *str = 0;
 }
 
-static void localize_clip(RedWorker *worker, Clip *clip)
+static void localize_clip(RedWorker *worker, Clip *clip, uint32_t group_id)
 {
     switch (clip->type) {
     case CLIP_TYPE_NONE:
@@ -3672,9 +3795,10 @@ static void localize_clip(RedWorker *worker, Clip *clip)
     case CLIP_TYPE_RECTS: {
         QXLClipRects *clip_rects;
         QXLDataChunk *chunk;
+        int memslot_id = get_memslot_id(worker, clip->data);
         uint8_t *data;
         uint32_t data_size;
-        clip_rects = (QXLClipRects *)get_virt(worker, clip->data, sizeof(QXLClipRects));
+        clip_rects = (QXLClipRects *)get_virt(worker, clip->data, sizeof(QXLClipRects), group_id);
         chunk = &clip_rects->chunk;
         ASSERT(clip->data);
         data = malloc(sizeof(UINT32) + clip_rects->num_rects * sizeof(Rect));
@@ -3684,17 +3808,17 @@ static void localize_clip(RedWorker *worker, Clip *clip)
         data += sizeof(UINT32);
         do {
             data_size = chunk->data_size;
-            validate_virt(worker, (unsigned long)chunk->data, get_memslot_id(worker, clip->data),
-                          data_size);
+            validate_virt(worker, (unsigned long)chunk->data, memslot_id, data_size, group_id);
             memcpy(data, chunk->data, data_size);
             data += data_size;
             chunk = chunk->next_chunk ? (QXLDataChunk *)get_virt(worker, chunk->next_chunk,
-                                                                 sizeof(QXLDataChunk)) : NULL;
+                                                                 sizeof(QXLDataChunk), group_id) :
+                                         NULL;
         } while (chunk);
         break;
     }
     case CLIP_TYPE_PATH:
-        localize_path(worker, &clip->data);
+        localize_path(worker, &clip->data, group_id);
         break;
     default:
         red_printf("invalid clip type");
@@ -3854,13 +3978,13 @@ static void image_cache_eaging(ImageCache *cache)
 #endif
 }
 
-static void localize_bitmap(RedWorker *worker, PHYSICAL *in_bitmap)
+static void localize_bitmap(RedWorker *worker, PHYSICAL *in_bitmap, uint32_t group_id)
 {
     QXLImage *image;
     QXLImage *local_image;
 
     ASSERT(in_bitmap && *in_bitmap);
-    image = (QXLImage *)get_virt(worker, *in_bitmap, sizeof(QXLImage));
+    image = (QXLImage *)get_virt(worker, *in_bitmap, sizeof(QXLImage), group_id);
     local_image = (QXLImage *)alloc_local_image(worker);
     *local_image = *image;
     *in_bitmap = (PHYSICAL)local_image;
@@ -3888,7 +4012,8 @@ static void localize_bitmap(RedWorker *worker, PHYSICAL *in_bitmap)
     case IMAGE_TYPE_BITMAP:
         if (image->bitmap.flags & QXL_BITMAP_DIRECT) {
             local_image->bitmap.data = (PHYSICAL)get_virt(worker, image->bitmap.data,
-                                                          image->bitmap.stride * image->bitmap.y);
+                                                          image->bitmap.stride * image->bitmap.y,
+                                                          group_id);
         } else {
             PHYSICAL src_data;
             int size = image->bitmap.y * image->bitmap.stride;
@@ -3903,10 +4028,10 @@ static void localize_bitmap(RedWorker *worker, PHYSICAL *in_bitmap)
                 int cp_size;
 
                 ASSERT(src_data);
-                chunk = (QXLDataChunk *)get_virt(worker, src_data, sizeof(QXLDataChunk));
+                chunk = (QXLDataChunk *)get_virt(worker, src_data, sizeof(QXLDataChunk), group_id);
                 data_size = chunk->data_size;
                 validate_virt(worker, (unsigned long)chunk->data, get_memslot_id(worker, src_data),
-                              data_size);
+                              data_size, group_id);
                 cp_size = MIN(data_size, size);
                 memcpy(data, chunk->data, cp_size);
                 data += cp_size;
@@ -3922,12 +4047,14 @@ static void localize_bitmap(RedWorker *worker, PHYSICAL *in_bitmap)
             Palette *shadow_palette;
 
             int slot_id = get_memslot_id(worker, local_image->bitmap.palette);
-            tmp_palette = (Palette *)get_virt(worker, local_image->bitmap.palette, sizeof(Palette));
+            tmp_palette = (Palette *)get_virt(worker, local_image->bitmap.palette,
+                                              sizeof(Palette), group_id);
 
             num_ents = tmp_palette->num_ents;
             ents = tmp_palette->ents;
 
-            validate_virt(worker, (unsigned long)ents, slot_id, (num_ents * sizeof(uint32_t)));
+            validate_virt(worker, (unsigned long)ents, slot_id, (num_ents * sizeof(uint32_t)),
+                          group_id);
 
             shadow_palette = (Palette *)malloc(sizeof(Palette) + num_ents * sizeof(uint32_t) +
                                                sizeof(PHYSICAL));
@@ -3973,10 +4100,10 @@ static void unlocalize_bitmap(PHYSICAL *bitmap)
     }
 }
 
-static void localize_brush(RedWorker *worker, Brush *brush)
+static void localize_brush(RedWorker *worker, Brush *brush, uint32_t group_id)
 {
     if (brush->type == BRUSH_TYPE_PATTERN) {
-        localize_bitmap(worker, &brush->u.pattern.pat);
+        localize_bitmap(worker, &brush->u.pattern.pat, group_id);
     }
 }
 
@@ -3987,10 +4114,10 @@ static void unlocalize_brush(Brush *brush)
     }
 }
 
-static void localize_mask(RedWorker *worker, QMask *mask)
+static void localize_mask(RedWorker *worker, QMask *mask, uint32_t group_id)
 {
     if (mask->bitmap) {
-        localize_bitmap(worker, &mask->bitmap);
+        localize_bitmap(worker, &mask->bitmap, group_id);
     }
 }
 
@@ -4001,14 +4128,15 @@ static void unlocalize_mask(QMask *mask)
     }
 }
 
-static void localize_attr(RedWorker *worker, LineAttr *attr)
+static void localize_attr(RedWorker *worker, LineAttr *attr, uint32_t group_id)
 {
     if (attr->style_nseg) {
         uint8_t *buf;
         uint8_t *data;
 
         ASSERT(attr->style);
-        buf = (uint8_t *)get_virt(worker, attr->style, attr->style_nseg * sizeof(uint32_t));
+        buf = (uint8_t *)get_virt(worker, attr->style, attr->style_nseg * sizeof(uint32_t),
+                                  group_id);
         data = malloc(attr->style_nseg * sizeof(uint32_t));
         ASSERT(data);
         memcpy(data, buf, attr->style_nseg * sizeof(uint32_t));
@@ -4024,129 +4152,133 @@ static void unlocalize_attr(LineAttr *attr)
     }
 }
 
-static void red_draw_qxl_drawable(RedWorker *worker, QXLDrawable *drawable)
+static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
 {
-    Clip clip = drawable->clip;
+    Clip clip = drawable->qxl_drawable->clip;
 
     worker->local_images_pos = 0;
     image_cache_eaging(&worker->image_cache);
 
-    localize_clip(worker, &clip);
-    switch (drawable->type) {
+    worker->preload_group_id = drawable->group_id;
+
+    localize_clip(worker, &clip, drawable->group_id);
+    switch (drawable->qxl_drawable->type) {
     case QXL_DRAW_FILL: {
-        Fill fill = drawable->u.fill;
-        localize_brush(worker, &fill.brush);
-        localize_mask(worker, &fill.mask);
-        worker->draw_context.draw_fill(worker->draw_context.canvas, &drawable->bbox, &clip, &fill);
-        unlocalize_mask(&fill.mask);
+        Fill fill = drawable->qxl_drawable->u.fill;
+        localize_brush(worker, &fill.brush, drawable->group_id);
+        localize_mask(worker, &fill.mask, drawable->group_id);
+        worker->draw_funcs.draw_fill(worker->surface.context.canvas, &drawable->qxl_drawable->bbox,
+                                     &clip, &fill); unlocalize_mask(&fill.mask);
         unlocalize_brush(&fill.brush);
         break;
     }
     case QXL_DRAW_OPAQUE: {
-        Opaque opaque = drawable->u.opaque;
-        localize_brush(worker, &opaque.brush);
-        localize_bitmap(worker, &opaque.src_bitmap);
-        localize_mask(worker, &opaque.mask);
-        worker->draw_context.draw_opaque(worker->draw_context.canvas, &drawable->bbox, &clip,
-                                         &opaque);
+        Opaque opaque = drawable->qxl_drawable->u.opaque;
+        localize_brush(worker, &opaque.brush, drawable->group_id);
+        localize_bitmap(worker, &opaque.src_bitmap, drawable->group_id);
+        localize_mask(worker, &opaque.mask, drawable->group_id);
+        worker->draw_funcs.draw_opaque(worker->surface.context.canvas,
+                                       &drawable->qxl_drawable->bbox, &clip, &opaque);
         unlocalize_mask(&opaque.mask);
         unlocalize_bitmap(&opaque.src_bitmap);
         unlocalize_brush(&opaque.brush);
         break;
     }
     case QXL_DRAW_COPY: {
-        Copy copy = drawable->u.copy;
-        localize_bitmap(worker, &copy.src_bitmap);
-        localize_mask(worker, &copy.mask);
-        worker->draw_context.draw_copy(worker->draw_context.canvas, &drawable->bbox, &clip, &copy);
+        Copy copy = drawable->qxl_drawable->u.copy;
+        localize_bitmap(worker, &copy.src_bitmap, drawable->group_id);
+        localize_mask(worker, &copy.mask, drawable->group_id);
+        worker->draw_funcs.draw_copy(worker->surface.context.canvas, &drawable->qxl_drawable->bbox,
+                                     &clip, &copy);
         unlocalize_mask(&copy.mask);
         unlocalize_bitmap(&copy.src_bitmap);
         break;
     }
     case QXL_DRAW_TRANSPARENT: {
-        Transparent transparent = drawable->u.transparent;
-        localize_bitmap(worker, &transparent.src_bitmap);
-        worker->draw_context.draw_transparent(worker->draw_context.canvas, &drawable->bbox, &clip,
-                                              &transparent);
+        Transparent transparent = drawable->qxl_drawable->u.transparent;
+        localize_bitmap(worker, &transparent.src_bitmap, drawable->group_id);
+        worker->draw_funcs.draw_transparent(worker->surface.context.canvas,
+                                            &drawable->qxl_drawable->bbox, &clip, &transparent);
         unlocalize_bitmap(&transparent.src_bitmap);
         break;
     }
     case QXL_DRAW_ALPHA_BLEND: {
-        AlphaBlnd alpha_blend = drawable->u.alpha_blend;
-        localize_bitmap(worker, &alpha_blend.src_bitmap);
-        worker->draw_context.draw_alpha_blend(worker->draw_context.canvas, &drawable->bbox, &clip,
-                                              &alpha_blend);
+        AlphaBlnd alpha_blend = drawable->qxl_drawable->u.alpha_blend;
+        localize_bitmap(worker, &alpha_blend.src_bitmap, drawable->group_id);
+        worker->draw_funcs.draw_alpha_blend(worker->surface.context.canvas,
+                                            &drawable->qxl_drawable->bbox, &clip, &alpha_blend);
         unlocalize_bitmap(&alpha_blend.src_bitmap);
         break;
     }
     case QXL_COPY_BITS: {
-        worker->draw_context.copy_bits(worker->draw_context.canvas, &drawable->bbox, &clip,
-                                       &drawable->u.copy_bits.src_pos);
+        worker->draw_funcs.copy_bits(worker->surface.context.canvas, &drawable->qxl_drawable->bbox,
+                                     &clip, &drawable->qxl_drawable->u.copy_bits.src_pos);
         break;
     }
     case QXL_DRAW_BLEND: {
-        Blend blend = drawable->u.blend;
-        localize_bitmap(worker, &blend.src_bitmap);
-        localize_mask(worker, &blend.mask);
-        worker->draw_context.draw_blend(worker->draw_context.canvas, &drawable->bbox, &clip,
-                                        &blend);
+        Blend blend = drawable->qxl_drawable->u.blend;
+        localize_bitmap(worker, &blend.src_bitmap, drawable->group_id);
+        localize_mask(worker, &blend.mask, drawable->group_id);
+        worker->draw_funcs.draw_blend(worker->surface.context.canvas, &drawable->qxl_drawable->bbox,
+                                      &clip, &blend);
         unlocalize_mask(&blend.mask);
         unlocalize_bitmap(&blend.src_bitmap);
         break;
     }
     case QXL_DRAW_BLACKNESS: {
-        Blackness blackness = drawable->u.blackness;
-        localize_mask(worker, &blackness.mask);
-        worker->draw_context.draw_blackness(worker->draw_context.canvas, &drawable->bbox, &clip,
-                                            &blackness);
+        Blackness blackness = drawable->qxl_drawable->u.blackness;
+        localize_mask(worker, &blackness.mask, drawable->group_id);
+        worker->draw_funcs.draw_blackness(worker->surface.context.canvas,
+                                          &drawable->qxl_drawable->bbox, &clip, &blackness);
         unlocalize_mask(&blackness.mask);
         break;
     }
     case QXL_DRAW_WHITENESS: {
-        Whiteness whiteness = drawable->u.whiteness;
-        localize_mask(worker, &whiteness.mask);
-        worker->draw_context.draw_whiteness(worker->draw_context.canvas, &drawable->bbox, &clip,
-                                            &whiteness);
+        Whiteness whiteness = drawable->qxl_drawable->u.whiteness;
+        localize_mask(worker, &whiteness.mask, drawable->group_id);
+        worker->draw_funcs.draw_whiteness(worker->surface.context.canvas,
+                                          &drawable->qxl_drawable->bbox, &clip, &whiteness);
         unlocalize_mask(&whiteness.mask);
         break;
     }
     case QXL_DRAW_INVERS: {
-        Invers invers = drawable->u.invers;
-        localize_mask(worker, &invers.mask);
-        worker->draw_context.draw_invers(worker->draw_context.canvas, &drawable->bbox, &clip,
-                                         &invers);
+        Invers invers = drawable->qxl_drawable->u.invers;
+        localize_mask(worker, &invers.mask, drawable->group_id);
+        worker->draw_funcs.draw_invers(worker->surface.context.canvas,
+                                       &drawable->qxl_drawable->bbox, &clip, &invers);
         unlocalize_mask(&invers.mask);
         break;
     }
     case QXL_DRAW_ROP3: {
-        Rop3 rop3 = drawable->u.rop3;
-        localize_brush(worker, &rop3.brush);
-        localize_bitmap(worker, &rop3.src_bitmap);
-        localize_mask(worker, &rop3.mask);
-        worker->draw_context.draw_rop3(worker->draw_context.canvas, &drawable->bbox, &clip, &rop3);
-        unlocalize_mask(&rop3.mask);
+        Rop3 rop3 = drawable->qxl_drawable->u.rop3;
+        localize_brush(worker, &rop3.brush, drawable->group_id);
+        localize_bitmap(worker, &rop3.src_bitmap, drawable->group_id);
+        localize_mask(worker, &rop3.mask, drawable->group_id);
+        worker->draw_funcs.draw_rop3(worker->surface.context.canvas, &drawable->qxl_drawable->bbox,
+                                     &clip, &rop3); unlocalize_mask(&rop3.mask);
         unlocalize_bitmap(&rop3.src_bitmap);
         unlocalize_brush(&rop3.brush);
         break;
     }
     case QXL_DRAW_STROKE: {
-        Stroke stroke = drawable->u.stroke;
-        localize_brush(worker, &stroke.brush);
-        localize_path(worker, &stroke.path);
-        localize_attr(worker, &stroke.attr);
-        worker->draw_context.draw_stroke(worker->draw_context.canvas, &drawable->bbox, &clip,
-                                         &stroke);
+        Stroke stroke = drawable->qxl_drawable->u.stroke;
+        localize_brush(worker, &stroke.brush, drawable->group_id);
+        localize_path(worker, &stroke.path, drawable->group_id);
+        localize_attr(worker, &stroke.attr, drawable->group_id);
+        worker->draw_funcs.draw_stroke(worker->surface.context.canvas,
+                                       &drawable->qxl_drawable->bbox, &clip, &stroke);
         unlocalize_attr(&stroke.attr);
         unlocalize_path(&stroke.path);
         unlocalize_brush(&stroke.brush);
         break;
     }
     case QXL_DRAW_TEXT: {
-        Text text = drawable->u.text;
-        localize_brush(worker, &text.fore_brush);
-        localize_brush(worker, &text.back_brush);
-        localize_str(worker, &text.str);
-        worker->draw_context.draw_text(worker->draw_context.canvas, &drawable->bbox, &clip, &text);
+        Text text = drawable->qxl_drawable->u.text;
+        localize_brush(worker, &text.fore_brush, drawable->group_id);
+        localize_brush(worker, &text.back_brush, drawable->group_id);
+        localize_str(worker, &text.str, drawable->group_id);
+        worker->draw_funcs.draw_text(worker->surface.context.canvas, &drawable->qxl_drawable->bbox,
+                                     &clip, &text);
         unlocalize_str(&text.str);
         unlocalize_brush(&text.back_brush);
         unlocalize_brush(&text.fore_brush);
@@ -4164,13 +4296,13 @@ static void red_draw_drawable(RedWorker *worker, Drawable *drawable)
 {
 #ifdef UPDATE_AREA_BY_TREE
     //todo: add need top mask flag
-    worker->draw_context.set_top_mask(worker->draw_context.canvas,
-                                      drawable->tree_item.base.rgn.num_rects,
-                                      drawable->tree_item.base.rgn.rects);
+    worker->draw_funcs.set_top_mask(worker->surface.context.canvas,
+                                    drawable->tree_item.base.rgn.num_rects,
+                                    drawable->tree_item.base.rgn.rects);
 #endif
-    red_draw_qxl_drawable(worker, drawable->qxl_drawable);
+    red_draw_qxl_drawable(worker, drawable);
 #ifdef UPDATE_AREA_BY_TREE
-    worker->draw_context.clear_top_mask(worker->draw_context.canvas);
+    worker->draw_funcs.clear_top_mask(worker->surface.context.canvas);
 #endif
 }
 
@@ -4231,8 +4363,8 @@ static void red_update_area(RedWorker *worker, const Rect *area)
     QRegion rgn;
 
     if (!(ring_item = ring_get_head(ring))) {
-        worker->draw_context.validate_area(worker->draw_context.canvas, &worker->dev_info.draw_area,
-                                           area);
+        worker->draw_context.validate_area(worker->draw_context.canvas,
+                                           &worker->dev_info.surface0_area, area);
         return;
     }
 
@@ -4252,8 +4384,8 @@ static void red_update_area(RedWorker *worker, const Rect *area)
         current_remove_drawable(worker, drawable);
         container_cleanup(worker, container);
     }
-    worker->draw_context.validate_area(worker->draw_context.canvas, &worker->dev_info.draw_area,
-                                       area);
+    worker->draw_funcs.validate_area(worker->surface.context.canvas, worker->surface.context.stride,
+                                     worker->surface.context.line_0, area);
 }
 
 #else
@@ -4278,8 +4410,9 @@ static void red_update_area(RedWorker *worker, const Rect *area)
     region_destroy(&rgn);
 
     if (!last) {
-        worker->draw_context.validate_area(worker->draw_context.canvas, &worker->dev_info.draw_area,
-                                           area);
+        worker->draw_funcs.validate_area(worker->surface.context.canvas,
+                                         worker->surface.context.stride,
+                                         worker->surface.context.line_0, area);
         return;
     }
 
@@ -4293,25 +4426,32 @@ static void red_update_area(RedWorker *worker, const Rect *area)
         current_remove_drawable(worker, now);
         container_cleanup(worker, container);
     } while (now != last);
-    worker->draw_context.validate_area(worker->draw_context.canvas, &worker->dev_info.draw_area,
-                                       area);
+    worker->draw_funcs.validate_area(worker->surface.context.canvas, worker->surface.context.stride,
+                                     worker->surface.context.line_0, area);
 }
 
 #endif
 
 #endif
 
+static inline void free_cursor_item(RedWorker *worker, CursorItem *item);
+
 static void red_release_cursor(RedWorker *worker, CursorItem *cursor)
 {
     if (!--cursor->refs) {
+        QXLReleaseInfoExt release_info_ext;
         QXLCursorCmd *cursor_cmd;
 
         if (cursor->type == CURSOR_TYPE_LOCAL) {
             free(cursor);
             return;
         }
-        cursor_cmd = CONTAINEROF(cursor, QXLCursorCmd, device_data);
-        worker->qxl->release_resource(worker->qxl, &cursor_cmd->release_info);
+
+        cursor_cmd = cursor->qxl_cursor;
+        release_info_ext.group_id = cursor->group_id;
+        release_info_ext.info = &cursor_cmd->release_info;
+        worker->qxl->release_resource(worker->qxl, release_info_ext);
+        free_cursor_item(worker, cursor);
     }
 }
 
@@ -4324,14 +4464,52 @@ static void red_set_cursor(RedWorker *worker, CursorItem *cursor)
     worker->cursor = cursor;
 }
 
-void qxl_process_cursor(RedWorker *worker, QXLCursorCmd *cursor_cmd)
+static inline CursorItem *alloc_cursor_item(RedWorker *worker)
 {
-    CursorItem *item = (CursorItem *)cursor_cmd->device_data;
-    int cursor_show = FALSE;
+    CursorItem *cursor;
+    if (!worker->free_cursor_items) {
+        return NULL;
+    }
+    cursor = &worker->free_cursor_items->u.cursor_item;
+    worker->free_cursor_items = worker->free_cursor_items->u.next;
+    return cursor;
+}
 
-    red_pipe_item_init(&item->pipe_data, PIPE_ITEM_TYPE_CURSOR);
-    item->refs = 1;
-    item->type = CURSOR_TYPE_INVALID;
+static inline void free_cursor_item(RedWorker *worker, CursorItem *item)
+{
+    ((_CursorItem *)item)->u.next = worker->free_cursor_items;
+    worker->free_cursor_items = (_CursorItem *)item;
+}
+
+static void cursor_items_init(RedWorker *worker)
+{
+    int i;
+
+    worker->free_cursor_items = NULL;
+    for (i = 0; i < NUM_CURSORS; i++) {
+        free_cursor_item(worker, &worker->cursor_items[i].u.cursor_item);
+    }
+}
+
+static CursorItem *get_cursor_item(RedWorker *worker, QXLCursorCmd *cmd, uint32_t group_id)
+{
+    CursorItem *cursor_item;
+
+    PANIC_ON(!(cursor_item = alloc_cursor_item(worker)));
+
+    cursor_item->refs = 1;
+    red_pipe_item_init(&cursor_item->pipe_data, PIPE_ITEM_TYPE_CURSOR);
+    cursor_item->type = CURSOR_TYPE_INVALID;
+    cursor_item->group_id = group_id;
+    cursor_item->qxl_cursor = cmd;
+
+    return cursor_item;
+}
+
+void qxl_process_cursor(RedWorker *worker, QXLCursorCmd *cursor_cmd, uint32_t group_id)
+{
+    CursorItem *item = get_cursor_item(worker, cursor_cmd, group_id);
+    int cursor_show = FALSE;
 
     switch (cursor_cmd->type) {
     case QXL_CURSOR_SET:
@@ -4374,11 +4552,11 @@ static inline uint64_t red_now()
 
 static int red_process_cursor(RedWorker *worker, uint32_t max_pipe_size)
 {
-    QXLCommand cmd;
+    QXLCommandExt ext_cmd;
     int n = 0;
 
     while (!worker->cursor_channel || worker->cursor_channel->base.pipe_size <= max_pipe_size) {
-        if (!worker->qxl->get_cursor_command(worker->qxl, &cmd)) {
+        if (!worker->qxl->get_cursor_command(worker->qxl, &ext_cmd)) {
             if (worker->repoll_cursor_ring < CMD_RING_POLL_RETRIES) {
                 worker->repoll_cursor_ring++;
                 worker->epoll_timeout = MIN(worker->epoll_timeout, CMD_RING_POLL_TIMEOUT);
@@ -4392,11 +4570,12 @@ static int red_process_cursor(RedWorker *worker, uint32_t max_pipe_size)
             continue;
         }
         worker->repoll_cursor_ring = 0;
-        switch (cmd.type) {
+        switch (ext_cmd.cmd.type) {
         case QXL_CMD_CURSOR: {
-            QXLCursorCmd *cursor_cmd = (QXLCursorCmd *)get_virt(worker, cmd.data,
-                                                                sizeof(QXLCursorCmd));
-            qxl_process_cursor(worker, cursor_cmd);
+            QXLCursorCmd *cursor_cmd = (QXLCursorCmd *)get_virt(worker, ext_cmd.cmd.data,
+                                                                sizeof(QXLCursorCmd),
+                                                                ext_cmd.group_id);
+            qxl_process_cursor(worker, cursor_cmd, ext_cmd.group_id);
             break;
         }
         default:
@@ -4409,12 +4588,12 @@ static int red_process_cursor(RedWorker *worker, uint32_t max_pipe_size)
 
 static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size)
 {
-    QXLCommand cmd;
+    QXLCommandExt ext_cmd;
     int n = 0;
     uint64_t start = red_now();
 
     while (!worker->display_channel || worker->display_channel->base.pipe_size <= max_pipe_size) {
-        if (!worker->qxl->get_command(worker->qxl, &cmd)) {
+        if (!worker->qxl->get_command(worker->qxl, &ext_cmd)) {
             if (worker->repoll_cmd_ring < CMD_RING_POLL_RETRIES) {
                 worker->repoll_cmd_ring++;
                 worker->epoll_timeout = MIN(worker->epoll_timeout, CMD_RING_POLL_TIMEOUT);
@@ -4429,30 +4608,33 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size)
         }
         stat_inc_counter(worker->command_counter, 1);
         worker->repoll_cmd_ring = 0;
-        switch (cmd.type) {
+        switch (ext_cmd.cmd.type) {
         case QXL_CMD_DRAW: {
-            QXLDrawable *drawable = (QXLDrawable *)get_virt(worker, cmd.data, sizeof(QXLDrawable));
-            red_process_drawable(worker, drawable);
+            QXLDrawable *drawable = (QXLDrawable *)get_virt(worker, ext_cmd.cmd.data,
+                                                            sizeof(QXLDrawable), ext_cmd.group_id);
+            red_process_drawable(worker, drawable, ext_cmd.group_id);
             break;
         }
         case QXL_CMD_UPDATE: {
-            QXLUpdateCmd *draw_cmd = (QXLUpdateCmd *)get_virt(worker, cmd.data,
-                                                              sizeof(QXLUpdateCmd));
+            QXLReleaseInfoExt release_info_ext;
+            QXLUpdateCmd *draw_cmd = (QXLUpdateCmd *)get_virt(worker, ext_cmd.cmd.data,
+                                                              sizeof(QXLUpdateCmd),
+                                                              ext_cmd.group_id);
             red_update_area(worker, &draw_cmd->area);
             worker->qxl->notify_update(worker->qxl, draw_cmd->update_id);
-            worker->qxl->release_resource(worker->qxl, &draw_cmd->release_info);
-            break;
-        }
-        case QXL_CMD_CURSOR: {
-            QXLCursorCmd *cursor_cmd = (QXLCursorCmd *)get_virt(worker, cmd.data,
-                                                                sizeof(QXLCursorCmd));
-            qxl_process_cursor(worker, cursor_cmd);
+            release_info_ext.group_id = ext_cmd.group_id;
+            release_info_ext.info = &draw_cmd->release_info;
+            worker->qxl->release_resource(worker->qxl, release_info_ext);
             break;
         }
         case QXL_CMD_MESSAGE: {
-            QXLMessage *message = (QXLMessage *)get_virt(worker, cmd.data, sizeof(QXLMessage));
+            QXLReleaseInfoExt release_info_ext;
+            QXLMessage *message = (QXLMessage *)get_virt(worker, ext_cmd.cmd.data,
+                                                         sizeof(QXLMessage), ext_cmd.group_id);
             red_printf("MESSAGE: %s", message->data);
-            worker->qxl->release_resource(worker->qxl, &message->release_info);
+            release_info_ext.group_id = ext_cmd.group_id;
+            release_info_ext.info = &message->release_info;
+            worker->qxl->release_resource(worker->qxl, release_info_ext);
             break;
         }
         default:
@@ -4504,11 +4686,13 @@ static void red_add_screen_image(RedWorker *worker)
     int stride;
     Rect area;
 
-    if (!worker->display_channel) {
+    if (!worker->display_channel || !worker->surface.context.canvas) {
         return;
     }
-    stride = worker->dev_info.x_res << 2;
-    if (!(item = (ImageItem *)malloc(sizeof(ImageItem) + worker->dev_info.y_res * stride))) {
+
+    stride = worker->surface.context.width << 2;
+    if (!(item = (ImageItem *)malloc(sizeof(ImageItem) +
+                                     worker->surface.context.height * stride))) {
         //warn
         return;
     }
@@ -4517,22 +4701,22 @@ static void red_add_screen_image(RedWorker *worker)
 
     item->refs = 1;
     item->pos.x = item->pos.y = 0;
-    item->width = worker->dev_info.x_res;
-    item->height = worker->dev_info.y_res;
+    item->width = worker->surface.context.width;
+    item->height = worker->surface.context.height;
     item->stride = stride;
-    item->top_down = worker->draw_context.top_down;
+    item->top_down = worker->surface.context.top_down;
 
     area.top = area.left = 0;
-    area.right = worker->dev_info.x_res;
-    area.bottom = worker->dev_info.y_res;
-    worker->draw_context.read_pixels(worker->draw_context.canvas, item->data, stride, &area);
+    area.right = worker->surface.context.width;
+    area.bottom = worker->surface.context.height;
+    worker->draw_funcs.read_pixels(worker->surface.context.canvas, item->data, stride, &area);
     red_pipe_add_image_item(worker, item);
     release_image_item(item);
     display_channel_push(worker);
 }
 
 static void inline __add_buf(RedChannel *channel, uint32_t type, void *data, uint32_t size,
-                             uint32_t slot_id)
+                             uint32_t slot_id, uint32_t group_id)
 {
     int pos = channel->send_data.n_bufs++;
     ASSERT(pos < MAX_SEND_BUFS);
@@ -4540,65 +4724,70 @@ static void inline __add_buf(RedChannel *channel, uint32_t type, void *data, uin
     channel->send_data.bufs[pos].size = size;
     channel->send_data.bufs[pos].data = data;
     channel->send_data.bufs[pos].slot_id = slot_id;
+    channel->send_data.bufs[pos].group_id = group_id;
 }
 
 static void add_buf(RedChannel *channel, uint32_t type, void *data, uint32_t size,
-                    uint32_t slot_id)
+                    uint32_t slot_id, uint32_t group_id)
 {
-    __add_buf(channel, type, data, size, slot_id);
+    __add_buf(channel, type, data, size, slot_id, group_id);
     channel->send_data.header.size += size;
 }
 
-static void fill_path(DisplayChannel *display_channel, PHYSICAL *in_path)
+static void fill_path(DisplayChannel *display_channel, PHYSICAL *in_path, uint32_t group_id)
 {
     RedWorker *worker;
     RedChannel *channel = &display_channel->base;
+    int memslot_id;
     worker = channel->worker;
     ASSERT(in_path && *in_path);
-    QXLPath *path = (QXLPath *)get_virt(worker, *in_path, sizeof(QXLPath));
+    memslot_id  = get_memslot_id(worker, *in_path);
+    QXLPath *path = (QXLPath *)get_virt(worker, *in_path, sizeof(QXLPath), group_id);
     *in_path = channel->send_data.header.size;
-    add_buf(channel, BUF_TYPE_RAW, &path->data_size, sizeof(UINT32), 0);
-    add_buf(channel, BUF_TYPE_CHUNK, &path->chunk, path->data_size,
-            get_memslot_id(worker, *in_path));
+    add_buf(channel, BUF_TYPE_RAW, &path->data_size, sizeof(UINT32), 0, 0);
+    add_buf(channel, BUF_TYPE_CHUNK, &path->chunk, path->data_size, memslot_id, group_id);
 }
 
-static void fill_str(DisplayChannel *display_channel, PHYSICAL *in_str)
+static void fill_str(DisplayChannel *display_channel, PHYSICAL *in_str, uint32_t group_id)
 {
     RedWorker *worker;
     RedChannel *channel = &display_channel->base;
+    int memslot_id;
     worker = channel->worker;
     ASSERT(in_str && *in_str);
-    QXLString *str = (QXLString *)get_virt(worker, *in_str, sizeof(QXLString));
+    memslot_id  = get_memslot_id(worker, *in_str);
+    QXLString *str = (QXLString *)get_virt(worker, *in_str, sizeof(QXLString), group_id);
     *in_str = channel->send_data.header.size;
-    add_buf(channel, BUF_TYPE_RAW, &str->length, sizeof(UINT32), 0);
-    add_buf(channel, BUF_TYPE_CHUNK, &str->chunk, str->data_size, get_memslot_id(worker, *in_str));
+    add_buf(channel, BUF_TYPE_RAW, &str->length, sizeof(UINT32), 0, 0);
+    add_buf(channel, BUF_TYPE_CHUNK, &str->chunk, str->data_size, memslot_id, group_id);
 }
 
-static inline void fill_rects_clip(RedChannel *channel, PHYSICAL *in_clip)
+static inline void fill_rects_clip(RedChannel *channel, PHYSICAL *in_clip, uint32_t group_id)
 {
     RedWorker *worker = channel->worker;
     QXLClipRects *clip;
+    int memslot_id = get_memslot_id(worker, *in_clip);
 
     ASSERT(in_clip && *in_clip);
-    clip = (QXLClipRects *)get_virt(worker, *in_clip, sizeof(QXLClipRects));
+    clip = (QXLClipRects *)get_virt(worker, *in_clip, sizeof(QXLClipRects), group_id);
     *in_clip = channel->send_data.header.size;
-    add_buf(channel, BUF_TYPE_RAW, &clip->num_rects, sizeof(UINT32), 0);
-    add_buf(channel, BUF_TYPE_CHUNK, &clip->chunk, clip->num_rects * sizeof(Rect),
-            get_memslot_id(worker, *in_clip));
+    add_buf(channel, BUF_TYPE_RAW, &clip->num_rects, sizeof(UINT32), 0, 0);
+    add_buf(channel, BUF_TYPE_CHUNK, &clip->chunk, clip->num_rects * sizeof(Rect), memslot_id,
+            group_id);
 }
 
-static void fill_base(DisplayChannel *display_channel, RedDrawBase *base, QXLDrawable *drawable,
+static void fill_base(DisplayChannel *display_channel, RedDrawBase *base, Drawable *drawable,
                       uint32_t size)
 {
     RedChannel *channel = &display_channel->base;
-    add_buf(channel, BUF_TYPE_RAW, base, size, 0);
-    base->box = drawable->bbox;
-    base->clip = drawable->clip;
+    add_buf(channel, BUF_TYPE_RAW, base, size, 0, 0);
+    base->box = drawable->qxl_drawable->bbox;
+    base->clip = drawable->qxl_drawable->clip;
 
     if (base->clip.type == CLIP_TYPE_RECTS) {
-        fill_rects_clip(channel, &base->clip.data);
+        fill_rects_clip(channel, &base->clip.data, drawable->group_id);
     } else if (base->clip.type == CLIP_TYPE_PATH) {
-        fill_path(display_channel, &base->clip.data);
+        fill_path(display_channel, &base->clip.data, drawable->group_id);
     }
 }
 
@@ -4609,7 +4798,8 @@ static inline RedImage *alloc_image(DisplayChannel *display_channel)
 }
 
 /* io_palette is relative address of the palette*/
-static inline void fill_palette(DisplayChannel *display_channel, ADDRESS *io_palette, UINT8 *flags)
+static inline void fill_palette(DisplayChannel *display_channel, ADDRESS *io_palette, UINT8 *flags,
+                                uint32_t group_id)
 {
     RedChannel *channel = &display_channel->base;
     RedWorker *worker = channel->worker;
@@ -4618,7 +4808,7 @@ static inline void fill_palette(DisplayChannel *display_channel, ADDRESS *io_pal
     if (!(*io_palette)) {
         return;
     }
-    palette = (Palette *)get_virt(worker, *io_palette, sizeof(Palette));
+    palette = (Palette *)get_virt(worker, *io_palette, sizeof(Palette), group_id);
     if (palette->unique) {
         if (red_palette_cache_find(display_channel, palette->unique)) {
             *flags |= BITMAP_PAL_FROM_CACHE;
@@ -4631,7 +4821,7 @@ static inline void fill_palette(DisplayChannel *display_channel, ADDRESS *io_pal
     }
     *io_palette = channel->send_data.header.size;
     add_buf(channel, BUF_TYPE_RAW, palette,
-            sizeof(Palette) + palette->num_ents * sizeof(UINT32), 0);
+            sizeof(Palette) + palette->num_ents * sizeof(UINT32), 0, 0);
 }
 
 static inline RedCompressBuf *red_display_alloc_compress_buf(DisplayChannel *display_channel)
@@ -4705,6 +4895,8 @@ static RedGlzDrawable *red_display_get_glz_drawable(DisplayChannel *channel, Dra
     ret->display_channel = channel;
     ret->qxl_drawable = drawable->qxl_drawable;
     ret->drawable = drawable;
+    ret->group_id = drawable->group_id;
+    ret->self_bitmap = drawable->self_bitmap;
     ret->instances_count = 0;
     ring_init(&ret->instances);
 
@@ -4768,7 +4960,8 @@ static void red_display_free_glz_drawable_instance(DisplayChannel *channel,
         if (drawable) {
             drawable->red_glz_drawable = NULL;
         } else { // no reference to the qxl drawable left
-            free_qxl_drawable(channel->base.worker, glz_drawable->qxl_drawable);
+            free_qxl_drawable(channel->base.worker, glz_drawable->qxl_drawable,
+                              glz_drawable->group_id, glz_drawable->self_bitmap);
         }
 
         if (ring_item_is_linked(&glz_drawable->link)) {
@@ -5021,7 +5214,7 @@ static inline int encoder_usr_more_lines(EncoderData *enc_data, uint8_t **lines)
 
     QXLDataChunk *chunk = (QXLDataChunk *)enc_data->u.lines_data.enc_get_virt(
                           enc_data->u.lines_data.enc_get_virt_opaque, enc_data->u.lines_data.next,
-                          sizeof(QXLDataChunk));
+                          sizeof(QXLDataChunk), enc_data->u.lines_data.group_id);
 
     data_size = chunk->data_size;
     data = chunk->data;
@@ -5032,7 +5225,7 @@ static inline int encoder_usr_more_lines(EncoderData *enc_data, uint8_t **lines)
 
     enc_data->u.lines_data.enc_validate_virt(enc_data->u.lines_data.enc_validate_virt_opaque,
                                              (unsigned long)data, enc_data->u.lines_data.next,
-                                             data_size);
+                                             data_size, enc_data->u.lines_data.group_id);
 
     enc_data->u.lines_data.next = chunk->next_chunk;
     *lines = data;
@@ -5070,7 +5263,7 @@ static int quic_usr_more_lines_revers(QuicUsrContext *usr, uint8_t **lines)
     QXLDataChunk *chunk = (QXLDataChunk *)quic_data->u.lines_data.enc_get_virt(
                           quic_data->u.lines_data.enc_get_virt_opaque,
                           quic_data->u.lines_data.next,
-                          sizeof(QXLDataChunk));
+                          sizeof(QXLDataChunk), quic_data->u.lines_data.group_id);
 
     data_size = chunk->data_size;
     data = chunk->data;
@@ -5081,7 +5274,8 @@ static int quic_usr_more_lines_revers(QuicUsrContext *usr, uint8_t **lines)
 
     quic_data->u.lines_data.enc_validate_virt(quic_data->u.lines_data.enc_validate_virt_opaque,
                                               (unsigned long)data,
-                                              quic_data->u.lines_data.next, data_size);
+                                              quic_data->u.lines_data.next, data_size,
+                                              quic_data->u.lines_data.group_id);
 
     quic_data->u.lines_data.next = chunk->prev_chunk;
     *lines = data + data_size - quic_data->u.lines_data.stride;
@@ -5231,7 +5425,7 @@ typedef uint16_t rgb16_pixel_t;
 #define GRADUAL_SCORE_RGB16_TH 0
 
 // assumes that stride doesn't overflow
-static int _bitmap_is_gradual(RedWorker *worker, Bitmap *bitmap)
+static int _bitmap_is_gradual(RedWorker *worker, Bitmap *bitmap, uint32_t group_id)
 {
     double score = 0.0;
     int num_samples = 0;
@@ -5245,20 +5439,20 @@ static int _bitmap_is_gradual(RedWorker *worker, Bitmap *bitmap)
         switch (bitmap->format) {
         case BITMAP_FMT_16BIT: {
             uint8_t *lines = (uint8_t*)get_virt(worker, bitmap->data, x * y *
-                                                sizeof(rgb16_pixel_t));
+                                                sizeof(rgb16_pixel_t), group_id);
             compute_lines_gradual_score_rgb16((rgb16_pixel_t*)lines, x, y, &score, &num_samples);
             break;
         }
         case BITMAP_FMT_24BIT: {
             uint8_t *lines = (uint8_t*)get_virt(worker, bitmap->data, x * y *
-                                                sizeof(rgb24_pixel_t));
+                                                sizeof(rgb24_pixel_t), group_id);
             compute_lines_gradual_score_rgb24((rgb24_pixel_t*)lines, x, y, &score, &num_samples);
             break;
         }
         case BITMAP_FMT_32BIT:
         case BITMAP_FMT_RGBA: {
             uint8_t *lines = (uint8_t*)get_virt(worker, bitmap->data, x * y *
-                                                sizeof(rgb32_pixel_t));
+                                                sizeof(rgb32_pixel_t), group_id);
             compute_lines_gradual_score_rgb32((rgb32_pixel_t*)lines, x, y, &score, &num_samples);
             break;
         }
@@ -5274,21 +5468,22 @@ static int _bitmap_is_gradual(RedWorker *worker, Bitmap *bitmap)
         ADDRESS relative_address = bitmap->data;
 
         while (relative_address) {
-            chunk = (QXLDataChunk *)get_virt(worker, relative_address, sizeof(QXLDataChunk));
+            chunk = (QXLDataChunk *)get_virt(worker, relative_address, sizeof(QXLDataChunk),
+                                             group_id);
             num_lines = chunk->data_size / bitmap->stride;
             x = bitmap->x;
             switch (bitmap->format) {
             case BITMAP_FMT_16BIT:
                 validate_virt(worker, (unsigned long)chunk->data,
                               get_memslot_id(worker, relative_address),
-                              sizeof(rgb16_pixel_t) * x * num_lines);
+                              sizeof(rgb16_pixel_t) * x * num_lines, group_id);
                 compute_lines_gradual_score_rgb16((rgb16_pixel_t*)chunk->data, x, num_lines,
                                                   &chunk_score, &chunk_num_samples);
                 break;
             case BITMAP_FMT_24BIT:
                 validate_virt(worker, (unsigned long)chunk->data,
                               get_memslot_id(worker, relative_address),
-                              sizeof(rgb24_pixel_t) * x * num_lines);
+                              sizeof(rgb24_pixel_t) * x * num_lines, group_id);
                 compute_lines_gradual_score_rgb24((rgb24_pixel_t*)chunk->data, x, num_lines,
                                                   &chunk_score, &chunk_num_samples);
                 break;
@@ -5296,7 +5491,7 @@ static int _bitmap_is_gradual(RedWorker *worker, Bitmap *bitmap)
             case BITMAP_FMT_RGBA:
                 validate_virt(worker, (unsigned long)chunk->data,
                               get_memslot_id(worker, relative_address),
-                              sizeof(rgb32_pixel_t) *  x * num_lines);
+                              sizeof(rgb32_pixel_t) *  x * num_lines, group_id);
                 compute_lines_gradual_score_rgb32((rgb32_pixel_t*)chunk->data, x, num_lines,
                                                   &chunk_score, &chunk_num_samples);
                 break;
@@ -5400,7 +5595,7 @@ static inline int red_glz_compress_image(DisplayChannel *display_channel,
 
     if ((src->flags & QXL_BITMAP_DIRECT)) {
         glz_data->usr.more_lines = glz_usr_no_more_lines;
-        lines = (uint8_t*)get_virt(worker, src->data, src->stride * src->y);
+        lines = (uint8_t*)get_virt(worker, src->data, src->stride * src->y, drawable->group_id);
         num_lines = src->y;
     } else {
         glz_data->data.u.lines_data.enc_get_virt = cb_get_virt;
@@ -5409,6 +5604,7 @@ static inline int red_glz_compress_image(DisplayChannel *display_channel,
         glz_data->data.u.lines_data.enc_validate_virt_opaque = worker;
         glz_data->data.u.lines_data.stride = src->stride;
         glz_data->data.u.lines_data.next = src->data;
+        glz_data->data.u.lines_data.group_id = drawable->group_id;
         glz_data->usr.more_lines = glz_usr_more_lines;
         lines = NULL;
         num_lines = 0;
@@ -5437,7 +5633,7 @@ static inline int red_glz_compress_image(DisplayChannel *display_channel,
 
 static inline int red_lz_compress_image(DisplayChannel *display_channel,
                                         RedImage *dest, Bitmap *src,
-                                        compress_send_data_t* o_comp_data)
+                                        compress_send_data_t* o_comp_data, uint32_t group_id)
 {
     RedWorker *worker = display_channel->base.worker;
     LzData *lz_data = &worker->lz_data;
@@ -5471,8 +5667,8 @@ static inline int red_lz_compress_image(DisplayChannel *display_channel,
     if ((src->flags & QXL_BITMAP_DIRECT)) {
         lz_data->usr.more_lines = lz_usr_no_more_lines;
         size = lz_encode(lz, type, src->x, src->y, (src->flags & QXL_BITMAP_TOP_DOWN),
-                         (uint8_t*)get_virt(worker, src->data, src->stride * src->y), src->y,
-                         src->stride, (uint8_t*)lz_data->data.bufs_head->buf,
+                         (uint8_t*)get_virt(worker, src->data, src->stride * src->y, group_id),
+                         src->y, src->stride, (uint8_t*)lz_data->data.bufs_head->buf,
                          sizeof(lz_data->data.bufs_head->buf));
     } else {
         lz_data->data.u.lines_data.enc_get_virt = cb_get_virt;
@@ -5481,6 +5677,7 @@ static inline int red_lz_compress_image(DisplayChannel *display_channel,
         lz_data->data.u.lines_data.enc_validate_virt_opaque = worker;
         lz_data->data.u.lines_data.stride = src->stride;
         lz_data->data.u.lines_data.next = src->data;
+        lz_data->data.u.lines_data.group_id = group_id;
         lz_data->usr.more_lines = lz_usr_more_lines;
 
         size = lz_encode(lz, type, src->x, src->y, (src->flags & QXL_BITMAP_TOP_DOWN),
@@ -5521,7 +5718,8 @@ static inline int red_lz_compress_image(DisplayChannel *display_channel,
 }
 
 static inline int red_quic_compress_image(DisplayChannel *display_channel, RedImage *dest,
-                                          Bitmap *src, compress_send_data_t* o_comp_data)
+                                          Bitmap *src, compress_send_data_t* o_comp_data,
+                                          uint32_t group_id)
 {
     RedWorker *worker = display_channel->base.worker;
     QuicData *quic_data = &worker->quic_data;
@@ -5574,11 +5772,11 @@ static inline int red_quic_compress_image(DisplayChannel *display_channel, RedIm
         uint8_t *data;
 
         if (!(src->flags & QXL_BITMAP_TOP_DOWN)) {
-            data = (uint8_t*)get_virt(worker, src->data, src->stride * src->y) +
+            data = (uint8_t*)get_virt(worker, src->data, src->stride * src->y, group_id) +
                    src->stride * (src->y - 1);
             stride = -src->stride;
         } else {
-            data = (uint8_t*)get_virt(worker, src->data, src->stride * src->y);
+            data = (uint8_t*)get_virt(worker, src->data, src->stride * src->y, group_id);
             stride = src->stride;
         }
 
@@ -5619,20 +5817,26 @@ static inline int red_quic_compress_image(DisplayChannel *display_channel, RedIm
         quic_data->data.u.lines_data.enc_validate_virt = cb_validate_virt;
         quic_data->data.u.lines_data.enc_validate_virt_opaque = worker;
         quic_data->data.u.lines_data.stride = src->stride;
+        quic_data->data.u.lines_data.group_id = group_id;
 
         if ((src->flags & QXL_BITMAP_TOP_DOWN)) {
             quic_data->data.u.lines_data.next = src->data;
             quic_data->usr.more_lines = quic_usr_more_lines;
             stride = src->stride;
         } else {
-            QXLDataChunk *chunk = (QXLDataChunk *)get_virt(worker, src->data, sizeof(QXLDataChunk));
+            ADDRESS prev_addr = src->data;
+            QXLDataChunk *chunk = (QXLDataChunk *)get_virt(worker, src->data,
+                                                           sizeof(QXLDataChunk), group_id);
             while (chunk->next_chunk) {
-                chunk = (QXLDataChunk *)get_virt(worker, chunk->next_chunk, sizeof(QXLDataChunk));
+                prev_addr = chunk->next_chunk;
+                chunk = (QXLDataChunk *)get_virt(worker, chunk->next_chunk, sizeof(QXLDataChunk),
+                                                 group_id);
                 ASSERT(chunk->prev_chunk);
             }
-            quic_data->data.u.lines_data.next = (ADDRESS)chunk -
+            quic_data->data.u.lines_data.next = (ADDRESS)prev_addr -
                                                 get_virt_delta(worker,
-                                                               get_memslot_id(worker, src->data));
+                                                               get_memslot_id(worker, src->data),
+                                                               group_id);
             quic_data->usr.more_lines = quic_usr_more_lines_revers;
             stride = -src->stride;
         }
@@ -5699,7 +5903,8 @@ static inline int red_compress_image(DisplayChannel *display_channel,
                 } else {
                     if (drawable->copy_bitmap_graduality == BITMAP_GRADUAL_INVALID) {
                         quic_compress = BITMAP_FMT_IS_RGB[src->format] &&
-                            _bitmap_is_gradual(display_channel->base.worker, src);
+                            _bitmap_is_gradual(display_channel->base.worker, src,
+                                               drawable->group_id);
                     } else {
                         quic_compress = (drawable->copy_bitmap_graduality == BITMAP_GRADUAL_TRUE);
                     }
@@ -5714,7 +5919,7 @@ static inline int red_compress_image(DisplayChannel *display_channel,
 #ifdef COMPRESS_DEBUG
         red_printf("QUIC compress");
 #endif
-        return red_quic_compress_image(display_channel, dest, src, o_comp_data);
+        return red_quic_compress_image(display_channel, dest, src, o_comp_data, drawable->group_id);
     } else {
         int glz;
         int ret;
@@ -5743,7 +5948,8 @@ static inline int red_compress_image(DisplayChannel *display_channel,
         }
 
         if (!glz) {
-            ret = red_lz_compress_image(display_channel, dest, src, o_comp_data);
+            ret = red_lz_compress_image(display_channel, dest, src, o_comp_data,
+                                        drawable->group_id);
 #ifdef COMPRESS_DEBUG
             red_printf("LZ LOCAL compress");
 #endif
@@ -5784,12 +5990,13 @@ static void fill_bits(DisplayChannel *display_channel, PHYSICAL *in_bitmap, Draw
     RedImage *image;
     QXLImage *qxl_image;
     uint8_t *data;
+    int memslot_id;
     compress_send_data_t comp_send_data;
 
     ASSERT(*in_bitmap);
 
     image = alloc_image(display_channel);
-    qxl_image = (QXLImage *)get_virt(worker, *in_bitmap, sizeof(QXLImage));
+    qxl_image = (QXLImage *)get_virt(worker, *in_bitmap, sizeof(QXLImage), drawable->group_id);
 
     image->descriptor.id = qxl_image->descriptor.id;
     image->descriptor.type = qxl_image->descriptor.type;
@@ -5797,12 +6004,13 @@ static void fill_bits(DisplayChannel *display_channel, PHYSICAL *in_bitmap, Draw
     image->descriptor.width = qxl_image->descriptor.width;
     image->descriptor.height = qxl_image->descriptor.height;
 
+    memslot_id = get_memslot_id(worker, *in_bitmap);
     *in_bitmap = channel->send_data.header.size;
     if ((qxl_image->descriptor.flags & QXL_IMAGE_CACHE)) {
         if (pixmap_cache_hit(display_channel->pixmap_cache, image->descriptor.id,
                              display_channel)) {
             image->descriptor.type = IMAGE_TYPE_FROM_CACHE;
-            add_buf(channel, BUF_TYPE_RAW, image, sizeof(ImageDescriptor), 0);
+            add_buf(channel, BUF_TYPE_RAW, image, sizeof(ImageDescriptor), 0, 0);
             stat_inc_counter(display_channel->cache_hits_counter, 1);
             return;
         }
@@ -5811,7 +6019,7 @@ static void fill_bits(DisplayChannel *display_channel, PHYSICAL *in_bitmap, Draw
     switch (qxl_image->descriptor.type) {
     case IMAGE_TYPE_BITMAP:
 #ifdef DUMP_BITMAP
-        dump_bitmap(display_channel->base.worker, &qxl_image->bitmap);
+        dump_bitmap(display_channel->base.worker, &qxl_image->bitmap, drawable->group_id);
 #endif
         /* Images must be added to the cache only after they are compressed
            in order to prevent starvation in the client between pixmap_cache and
@@ -5830,36 +6038,38 @@ static void fill_bits(DisplayChannel *display_channel, PHYSICAL *in_bitmap, Draw
             image_data = image->bitmap.data;
             image->bitmap.flags = image->bitmap.flags & BITMAP_TOP_DOWN;
 
-            add_buf(channel, BUF_TYPE_RAW, image, sizeof(BitmapImage), 0);
-            fill_palette(display_channel, &(image->bitmap.palette), &(image->bitmap.flags));
+            add_buf(channel, BUF_TYPE_RAW, image, sizeof(BitmapImage), 0, 0);
+            fill_palette(display_channel, &(image->bitmap.palette), &(image->bitmap.flags),
+                         drawable->group_id);
             image->bitmap.data = channel->send_data.header.size;
             if (qxl_image->bitmap.flags & QXL_BITMAP_DIRECT) {
-                data = (uint8_t *)get_virt(worker, image_data, stride * y);
-                add_buf(channel, BUF_TYPE_RAW, data, y * stride, 0);
+                data = (uint8_t *)get_virt(worker, image_data, stride * y, drawable->group_id);
+                add_buf(channel, BUF_TYPE_RAW, data, y * stride, 0, 0);
             } else {
-                data = (uint8_t *)get_virt(worker, image_data, sizeof(QXLDataChunk));
-                add_buf(channel, BUF_TYPE_CHUNK, data, y * stride,
-                        get_memslot_id(worker, image_data));
+                data = (uint8_t *)get_virt(worker, image_data, sizeof(QXLDataChunk),
+                                           drawable->group_id);
+                add_buf(channel, BUF_TYPE_CHUNK, data, y * stride, memslot_id, drawable->group_id);
             }
         } else {
             red_display_add_image_to_pixmap_cache(display_channel, qxl_image, image);
 
             add_buf((RedChannel *)display_channel, BUF_TYPE_RAW, image, comp_send_data.raw_size,
-                    0);
+                    0, 0);
             add_buf((RedChannel *)display_channel, BUF_TYPE_COMPRESS_BUF,
-                    comp_send_data.comp_buf, comp_send_data.comp_buf_size, 0);
+                    comp_send_data.comp_buf, comp_send_data.comp_buf_size, 0, 0);
 
             if (comp_send_data.plt_ptr != NULL) {
-                fill_palette(display_channel, comp_send_data.plt_ptr, comp_send_data.flags_ptr);
+                fill_palette(display_channel, comp_send_data.plt_ptr, comp_send_data.flags_ptr,
+                             drawable->group_id);
             }
         }
         break;
     case IMAGE_TYPE_QUIC:
         red_display_add_image_to_pixmap_cache(display_channel, qxl_image, image);
         image->quic = qxl_image->quic;
-        add_buf(channel, BUF_TYPE_RAW, image, sizeof(QUICImage), 0);
+        add_buf(channel, BUF_TYPE_RAW, image, sizeof(QUICImage), 0, 0);
         add_buf(channel, BUF_TYPE_CHUNK, qxl_image->quic.data, qxl_image->quic.data_size,
-                get_memslot_id(worker, *in_bitmap));
+                memslot_id, drawable->group_id);
         break;
     default:
         red_error("invalid image type %u", image->descriptor.type);
@@ -5887,15 +6097,15 @@ static void fill_mask(DisplayChannel *display_channel, QMask *mask, Drawable *dr
     }
 }
 
-static void fill_attr(DisplayChannel *display_channel, LineAttr *attr)
+static void fill_attr(DisplayChannel *display_channel, LineAttr *attr, uint32_t group_id)
 {
     if (attr->style_nseg) {
         RedChannel *channel = &display_channel->base;
         uint8_t *buf = (uint8_t *)get_virt(channel->worker, attr->style,
-                                           attr->style_nseg * sizeof(uint32_t));
+                                           attr->style_nseg * sizeof(uint32_t), group_id);
         ASSERT(attr->style);
         attr->style = channel->send_data.header.size;
-        add_buf(channel, BUF_TYPE_RAW, buf, attr->style_nseg * sizeof(uint32_t), 0);
+        add_buf(channel, BUF_TYPE_RAW, buf, attr->style_nseg * sizeof(uint32_t), 0, 0);
     }
 }
 
@@ -5912,9 +6122,9 @@ static void fill_cursor(CursorChannel *cursor_channel, RedCursor *red_cursor, Cu
         QXLCursorCmd *cursor_cmd;
         QXLCursor *qxl_cursor;
 
-        cursor_cmd = CONTAINEROF(cursor, QXLCursorCmd, device_data);
+        cursor_cmd = cursor->qxl_cursor;
         qxl_cursor = (QXLCursor *)get_virt(channel->worker, cursor_cmd->u.set.shape,
-                                           sizeof(QXLCursor));
+                                           sizeof(QXLCursor), cursor->group_id);
         red_cursor->flags = 0;
         red_cursor->header = qxl_cursor->header;
 
@@ -5930,14 +6140,15 @@ static void fill_cursor(CursorChannel *cursor_channel, RedCursor *red_cursor, Cu
 
         if (qxl_cursor->data_size) {
             add_buf(channel, BUF_TYPE_CHUNK, &qxl_cursor->chunk, qxl_cursor->data_size,
-                    get_memslot_id(channel->worker, cursor_cmd->u.set.shape));
+                    get_memslot_id(channel->worker, cursor_cmd->u.set.shape), cursor->group_id);
         }
     } else {
         LocalCursor *local_cursor;
         ASSERT(cursor->type == CURSOR_TYPE_LOCAL);
         local_cursor = (LocalCursor *)cursor;
         *red_cursor = local_cursor->red_cursor;
-        add_buf(channel, BUF_TYPE_RAW, local_cursor->red_cursor.data, local_cursor->data_size, 0);
+        add_buf(channel, BUF_TYPE_RAW, local_cursor->red_cursor.data, local_cursor->data_size, 0,
+                0);
     }
 }
 
@@ -5971,7 +6182,7 @@ static inline void red_send_qxl_drawable(RedWorker *worker, DisplayChannel *disp
     switch (drawable->type) {
     case QXL_DRAW_FILL:
         channel->send_data.header.type = RED_DISPLAY_DRAW_FILL;
-        fill_base(display_channel, &display_channel->send_data.u.fill.base, drawable,
+        fill_base(display_channel, &display_channel->send_data.u.fill.base, item,
                   sizeof(RedFill));
         display_channel->send_data.u.fill.data = drawable->u.fill;
         fill_brush(display_channel, &display_channel->send_data.u.fill.data.brush, item);
@@ -5979,7 +6190,7 @@ static inline void red_send_qxl_drawable(RedWorker *worker, DisplayChannel *disp
         break;
     case QXL_DRAW_OPAQUE:
         channel->send_data.header.type = RED_DISPLAY_DRAW_OPAQUE;
-        fill_base(display_channel, &display_channel->send_data.u.opaque.base, drawable,
+        fill_base(display_channel, &display_channel->send_data.u.opaque.base, item,
                   sizeof(RedOpaque));
         display_channel->send_data.u.opaque.data = drawable->u.opaque;
         fill_bits(display_channel, &display_channel->send_data.u.opaque.data.src_bitmap, item);
@@ -5988,35 +6199,34 @@ static inline void red_send_qxl_drawable(RedWorker *worker, DisplayChannel *disp
         break;
     case QXL_DRAW_COPY:
         channel->send_data.header.type = RED_DISPLAY_DRAW_COPY;
-        fill_base(display_channel, &display_channel->send_data.u.copy.base, drawable,
-                  sizeof(RedCopy));
+        fill_base(display_channel, &display_channel->send_data.u.copy.base, item, sizeof(RedCopy));
         display_channel->send_data.u.copy.data = drawable->u.copy;
         fill_bits(display_channel, &display_channel->send_data.u.copy.data.src_bitmap, item);
         fill_mask(display_channel, &display_channel->send_data.u.copy.data.mask, item);
         break;
     case QXL_DRAW_TRANSPARENT:
         channel->send_data.header.type = RED_DISPLAY_DRAW_TRANSPARENT;
-        fill_base(display_channel, &display_channel->send_data.u.transparent.base, drawable,
+        fill_base(display_channel, &display_channel->send_data.u.transparent.base, item,
                   sizeof(RedTransparent));
         display_channel->send_data.u.transparent.data = drawable->u.transparent;
         fill_bits(display_channel, &display_channel->send_data.u.transparent.data.src_bitmap, item);
         break;
     case QXL_DRAW_ALPHA_BLEND:
         channel->send_data.header.type = RED_DISPLAY_DRAW_ALPHA_BLEND;
-        fill_base(display_channel, &display_channel->send_data.u.alpha_blend.base, drawable,
+        fill_base(display_channel, &display_channel->send_data.u.alpha_blend.base, item,
                   sizeof(RedAlphaBlend));
         display_channel->send_data.u.alpha_blend.data = drawable->u.alpha_blend;
         fill_bits(display_channel, &display_channel->send_data.u.alpha_blend.data.src_bitmap, item);
         break;
     case QXL_COPY_BITS:
         channel->send_data.header.type = RED_DISPLAY_COPY_BITS;
-        fill_base(display_channel, &display_channel->send_data.u.copy_bits.base, drawable,
+        fill_base(display_channel, &display_channel->send_data.u.copy_bits.base, item,
                   sizeof(RedCopyBits));
         display_channel->send_data.u.copy_bits.src_pos = drawable->u.copy_bits.src_pos;
         break;
     case QXL_DRAW_BLEND:
         channel->send_data.header.type = RED_DISPLAY_DRAW_BLEND;
-        fill_base(display_channel, &display_channel->send_data.u.blend.base, drawable,
+        fill_base(display_channel, &display_channel->send_data.u.blend.base, item,
                   sizeof(RedBlend));
         display_channel->send_data.u.blend.data = drawable->u.blend;
         fill_bits(display_channel, &display_channel->send_data.u.blend.data.src_bitmap, item);
@@ -6024,28 +6234,28 @@ static inline void red_send_qxl_drawable(RedWorker *worker, DisplayChannel *disp
         break;
     case QXL_DRAW_BLACKNESS:
         channel->send_data.header.type = RED_DISPLAY_DRAW_BLACKNESS;
-        fill_base(display_channel, &display_channel->send_data.u.blackness.base, drawable,
+        fill_base(display_channel, &display_channel->send_data.u.blackness.base, item,
                   sizeof(RedBlackness));
         display_channel->send_data.u.blackness.data = drawable->u.blackness;
         fill_mask(display_channel, &display_channel->send_data.u.blackness.data.mask, item);
         break;
     case QXL_DRAW_WHITENESS:
         channel->send_data.header.type = RED_DISPLAY_DRAW_WHITENESS;
-        fill_base(display_channel, &display_channel->send_data.u.whiteness.base, drawable,
+        fill_base(display_channel, &display_channel->send_data.u.whiteness.base, item,
                   sizeof(RedWhiteness));
         display_channel->send_data.u.whiteness.data = drawable->u.whiteness;
         fill_mask(display_channel, &display_channel->send_data.u.whiteness.data.mask, item);
         break;
     case QXL_DRAW_INVERS:
         channel->send_data.header.type = RED_DISPLAY_DRAW_INVERS;
-        fill_base(display_channel, &display_channel->send_data.u.invers.base, drawable,
+        fill_base(display_channel, &display_channel->send_data.u.invers.base, item,
                   sizeof(RedInvers));
         display_channel->send_data.u.invers.data = drawable->u.invers;
         fill_mask(display_channel, &display_channel->send_data.u.invers.data.mask, item);
         break;
     case QXL_DRAW_ROP3:
         channel->send_data.header.type = RED_DISPLAY_DRAW_ROP3;
-        fill_base(display_channel, &display_channel->send_data.u.rop3.base, drawable,
+        fill_base(display_channel, &display_channel->send_data.u.rop3.base, item,
                   sizeof(RedRop3));
         display_channel->send_data.u.rop3.data = drawable->u.rop3;
         fill_bits(display_channel, &display_channel->send_data.u.rop3.data.src_bitmap, item);
@@ -6054,21 +6264,20 @@ static inline void red_send_qxl_drawable(RedWorker *worker, DisplayChannel *disp
         break;
     case QXL_DRAW_STROKE:
         channel->send_data.header.type = RED_DISPLAY_DRAW_STROKE;
-        fill_base(display_channel, &display_channel->send_data.u.stroke.base, drawable,
+        fill_base(display_channel, &display_channel->send_data.u.stroke.base, item,
                   sizeof(RedStroke));
         display_channel->send_data.u.stroke.data = drawable->u.stroke;
-        fill_path(display_channel, &display_channel->send_data.u.stroke.data.path);
-        fill_attr(display_channel, &display_channel->send_data.u.stroke.data.attr);
+        fill_path(display_channel, &display_channel->send_data.u.stroke.data.path, item->group_id);
+        fill_attr(display_channel, &display_channel->send_data.u.stroke.data.attr, item->group_id);
         fill_brush(display_channel, &display_channel->send_data.u.stroke.data.brush, item);
         break;
     case QXL_DRAW_TEXT:
         channel->send_data.header.type = RED_DISPLAY_DRAW_TEXT;
-        fill_base(display_channel, &display_channel->send_data.u.text.base, drawable,
-                  sizeof(RedText));
+        fill_base(display_channel, &display_channel->send_data.u.text.base, item, sizeof(RedText));
         display_channel->send_data.u.text.data = drawable->u.text;
         fill_brush(display_channel, &display_channel->send_data.u.text.data.fore_brush, item);
         fill_brush(display_channel, &display_channel->send_data.u.text.data.back_brush, item);
-        fill_str(display_channel, &display_channel->send_data.u.text.data.str);
+        fill_str(display_channel, &display_channel->send_data.u.text.data.str, item->group_id);
         break;
     default:
         red_error("invalid type");
@@ -6133,14 +6342,16 @@ static inline uint32_t __fill_iovec(RedWorker *worker, BufDescriptor *buf, int s
             data_size -= skip_now;
 
             if (data_size) {
-                validate_virt(worker, (unsigned long)chunk->data, buf->slot_id, data_size);
+                validate_virt(worker, (unsigned long)chunk->data, buf->slot_id, data_size,
+                              buf->group_id);
                 size += data_size;
                 vec[*vec_index].iov_base = chunk->data + skip_now;
                 vec[*vec_index].iov_len = data_size;
                 (*vec_index)++;
             }
             chunk = chunk->next_chunk ?
-                    (QXLDataChunk *)get_virt(worker, chunk->next_chunk, sizeof(QXLDataChunk)) :
+                    (QXLDataChunk *)get_virt(worker, chunk->next_chunk, sizeof(QXLDataChunk),
+                                             buf->group_id) :
                     NULL;
         } while (chunk && *vec_index < MAX_SEND_VEC);
         break;
@@ -6277,29 +6488,31 @@ static inline void display_begin_send_massage(DisplayChannel *channel, void *ite
         if (sync_count) {
             sub_list->size = 2;
             add_buf((RedChannel*)channel, BUF_TYPE_RAW, sub_list,
-                    sizeof(*sub_list) + 2 * sizeof(sub_list->sub_messages[0]), 0);
+                    sizeof(*sub_list) + 2 * sizeof(sub_list->sub_messages[0]), 0, 0);
             sub_list->sub_messages[0] = channel->base.send_data.header.size;
             sub_header[0].type = RED_WAIT_FOR_CHANNELS;
             sub_header[0].size = sizeof(free_list->wait.header) +
                                  sync_count * sizeof(free_list->wait.buf[0]);
-            add_buf((RedChannel*)channel, BUF_TYPE_RAW, sub_header, sizeof(*sub_header), 0);
+            add_buf((RedChannel*)channel, BUF_TYPE_RAW, sub_header, sizeof(*sub_header), 0, 0);
             free_list->wait.header.wait_count = sync_count;
             add_buf((RedChannel*)channel, BUF_TYPE_RAW, &free_list->wait.header,
-                    sub_header[0].size, 0);
+                    sub_header[0].size, 0, 0);
             sub_list->sub_messages[1] = channel->base.send_data.header.size;
             sub_index = 1;
         } else {
             sub_list->size = 1;
             add_buf((RedChannel*)channel, BUF_TYPE_RAW, sub_list,
-                    sizeof(*sub_list) + sizeof(sub_list->sub_messages[0]), 0);
+                    sizeof(*sub_list) + sizeof(sub_list->sub_messages[0]), 0, 0);
             sub_list->sub_messages[0] = channel->base.send_data.header.size;
             sub_index = 0;
         }
         sub_header[sub_index].type = RED_DISPLAY_INVAL_LIST;
         sub_header[sub_index].size = sizeof(*free_list->res) + free_list->res->count *
                                      sizeof(free_list->res->resorces[0]);
-        add_buf((RedChannel*)channel, BUF_TYPE_RAW, &sub_header[sub_index], sizeof(*sub_header), 0);
-        add_buf((RedChannel*)channel, BUF_TYPE_RAW, free_list->res, sub_header[sub_index].size, 0);
+        add_buf((RedChannel*)channel, BUF_TYPE_RAW, &sub_header[sub_index], sizeof(*sub_header), 0,
+                0);
+        add_buf((RedChannel*)channel, BUF_TYPE_RAW, free_list->res, sub_header[sub_index].size, 0,
+                0);
     }
     red_begin_send_massage((RedChannel *)channel, item);
 }
@@ -6322,14 +6535,16 @@ static inline void red_unref_channel(RedChannel *channel)
 }
 
 static inline uint8_t *red_get_image_line(RedWorker *worker, QXLDataChunk **chunk, int *offset,
-                                          int stride, long phys_delta, int memslot_id)
+                                          int stride, long phys_delta, int memslot_id,
+                                          uint32_t group_id)
 {
     uint8_t *ret;
     uint32_t data_size;
 
-    validate_virt(worker, (unsigned long)*chunk, memslot_id, sizeof(QXLDataChunk));
+    validate_virt(worker, (unsigned long)*chunk, memslot_id, sizeof(QXLDataChunk),
+                  group_id);
     data_size = (*chunk)->data_size;
-    validate_virt(worker, (unsigned long)(*chunk)->data, memslot_id, data_size);
+    validate_virt(worker, (unsigned long)(*chunk)->data, memslot_id, data_size, group_id);
 
     if (data_size == *offset) {
         if ((*chunk)->next_chunk == 0) {
@@ -6383,7 +6598,7 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
     channel = &display_channel->base;
     worker = channel->worker;
     qxl_image = (QXLImage *)get_virt(worker,  drawable->qxl_drawable->u.copy.src_bitmap,
-                                     sizeof(QXLImage));
+                                     sizeof(QXLImage), drawable->group_id);
 
     if (qxl_image->descriptor.type != IMAGE_TYPE_BITMAP ||
                                             (qxl_image->bitmap.flags & QXL_BITMAP_DIRECT)) {
@@ -6403,27 +6618,27 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
     case BITMAP_FMT_32BIT:
         if (!red_rgb_to_yuv420_32bpp(worker, &drawable->qxl_drawable->u.copy.src_area,
                                      &qxl_image->bitmap, stream->av_frame,
-                                     get_virt_delta(worker, data),
+                                     get_virt_delta(worker, data, drawable->group_id),
                                      get_memslot_id(worker, data),
-                                     stream - worker->streams_buf, stream)) {
+                                     stream - worker->streams_buf, stream, drawable->group_id)) {
             return FALSE;
         }
         break;
     case BITMAP_FMT_16BIT:
         if (!red_rgb_to_yuv420_16bpp(worker, &drawable->qxl_drawable->u.copy.src_area,
                                      &qxl_image->bitmap, stream->av_frame,
-                                     get_virt_delta(worker, data),
+                                     get_virt_delta(worker, data, drawable->group_id),
                                      get_memslot_id(worker, data),
-                                     stream - worker->streams_buf, stream)) {
+                                     stream - worker->streams_buf, stream, drawable->group_id)) {
             return FALSE;
         }
         break;
     case BITMAP_FMT_24BIT:
         if (!red_rgb_to_yuv420_24bpp(worker, &drawable->qxl_drawable->u.copy.src_area,
                                      &qxl_image->bitmap, stream->av_frame,
-                                     get_virt_delta(worker, data),
+                                     get_virt_delta(worker, data, drawable->group_id),
                                      get_memslot_id(worker, data),
-                                     stream - worker->streams_buf, stream)) {
+                                     stream - worker->streams_buf, stream, drawable->group_id)) {
             return FALSE;
         }
         break;
@@ -6496,9 +6711,9 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
  #endif
     channel->send_data.header.type = RED_DISPLAY_STREAM_DATA;
     RedStreamData* stream_data = &display_channel->send_data.u.stream_data;
-    add_buf(channel, BUF_TYPE_RAW, stream_data, sizeof(RedStreamData), 0);
+    add_buf(channel, BUF_TYPE_RAW, stream_data, sizeof(RedStreamData), 0, 0);
     add_buf(channel, BUF_TYPE_RAW, display_channel->send_data.stream_outbuf,
-            n + FF_INPUT_BUFFER_PADDING_SIZE, 0);
+            n + FF_INPUT_BUFFER_PADDING_SIZE, 0, 0);
 
     stream_data->id = stream - worker->streams_buf;
     stream_data->multi_media_time = drawable->qxl_drawable->mm_time;
@@ -6529,13 +6744,18 @@ static void red_send_mode(DisplayChannel *display_channel)
 
     ASSERT(display_channel);
     worker = display_channel->base.worker;
+
+    if (!worker->surface.context.canvas) {
+        return;
+    }
+
     channel = &display_channel->base;
     channel->send_data.header.type = RED_DISPLAY_MODE;
-    display_channel->send_data.u.mode.x_res = worker->dev_info.x_res;
-    display_channel->send_data.u.mode.y_res = worker->dev_info.y_res;
-    display_channel->send_data.u.mode.bits = worker->dev_info.bits;
+    display_channel->send_data.u.mode.x_res = worker->surface.context.width;
+    display_channel->send_data.u.mode.y_res = worker->surface.context.height;
+    display_channel->send_data.u.mode.bits = worker->surface.context.depth;
 
-    add_buf(channel, BUF_TYPE_RAW, &display_channel->send_data.u.mode, sizeof(RedMode), 0);
+    add_buf(channel, BUF_TYPE_RAW, &display_channel->send_data.u.mode, sizeof(RedMode), 0, 0);
 
     display_begin_send_massage(display_channel, NULL);
 }
@@ -6548,7 +6768,7 @@ static void red_send_set_ack(RedChannel *channel)
     channel->send_data.u.ack.window = channel->client_ack_window;
     channel->messages_window = 0;
 
-    add_buf(channel, BUF_TYPE_RAW, &channel->send_data.u.ack, sizeof(RedSetAck), 0);
+    add_buf(channel, BUF_TYPE_RAW, &channel->send_data.u.ack, sizeof(RedSetAck), 0, 0);
     red_begin_send_massage(channel, NULL);
 }
 
@@ -6571,7 +6791,7 @@ static inline void __red_send_inval(RedChannel *channel, CacheItem *cach_item,
 {
     channel->send_data.header.type = cach_item->inval_type;
     inval_one->id = *(uint64_t *)&cach_item->id;
-    add_buf(channel, BUF_TYPE_RAW, inval_one, sizeof(*inval_one), 0);
+    add_buf(channel, BUF_TYPE_RAW, inval_one, sizeof(*inval_one), 0, 0);
 }
 
 static void red_send_inval(RedChannel *channel, CacheItem *cach_item, RedInvalOne *inval_one)
@@ -6593,7 +6813,7 @@ static void display_channel_send_migrate(DisplayChannel *display_channel)
     display_channel->send_data.u.migrate.flags = RED_MIGRATE_NEED_FLUSH |
                                                  RED_MIGRATE_NEED_DATA_TRANSFER;
     add_buf((RedChannel*)display_channel, BUF_TYPE_RAW, &display_channel->send_data.u.migrate,
-            sizeof(display_channel->send_data.u.migrate), 0);
+            sizeof(display_channel->send_data.u.migrate), 0, 0);
     display_channel->expect_migrate_mark = TRUE;
     display_begin_send_massage(display_channel, NULL);
 }
@@ -6625,7 +6845,7 @@ static void display_channel_send_migrate_data(DisplayChannel *display_channel)
                                         &display_channel->glz_data.usr);
 
     add_buf((RedChannel *)display_channel, BUF_TYPE_RAW, &display_channel->send_data.u.migrate_data,
-            sizeof(display_channel->send_data.u.migrate_data), 0);
+            sizeof(display_channel->send_data.u.migrate_data), 0, 0);
     display_begin_send_massage(display_channel, NULL);
 }
 
@@ -6652,7 +6872,7 @@ static void display_channel_pixmap_sync(DisplayChannel *display_channel)
     pthread_mutex_unlock(&pixmap_cache->lock);
 
     add_buf((RedChannel *)display_channel, BUF_TYPE_RAW, wait,
-            sizeof(*wait) + sizeof(wait->wait_list[0]), 0);
+            sizeof(*wait) + sizeof(wait->wait_list[0]), 0, 0);
     display_begin_send_massage(display_channel, NULL);
 }
 
@@ -6664,7 +6884,7 @@ static void display_channel_reset_cache(DisplayChannel *display_channel)
     pixmap_cache_reset(display_channel->pixmap_cache, display_channel, wait);
 
     add_buf((RedChannel *)display_channel, BUF_TYPE_RAW, wait,
-            sizeof(*wait) + wait->wait_count * sizeof(wait->wait_list[0]), 0);
+            sizeof(*wait) + wait->wait_count * sizeof(wait->wait_list[0]), 0, 0);
     display_begin_send_massage(display_channel, NULL);
 }
 
@@ -6699,7 +6919,7 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
 
     channel->send_data.header.type = RED_DISPLAY_DRAW_COPY;
 
-    add_buf(channel, BUF_TYPE_RAW, &display_channel->send_data.u.copy, sizeof(RedCopy), 0);
+    add_buf(channel, BUF_TYPE_RAW, &display_channel->send_data.u.copy, sizeof(RedCopy), 0, 0);
     display_channel->send_data.u.copy.base.box.left = item->pos.x;
     display_channel->send_data.u.copy.base.box.top = item->pos.y;
     display_channel->send_data.u.copy.base.box.right = item->pos.x + bitmap.x;
@@ -6717,17 +6937,18 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
 
     compress_send_data_t comp_send_data;
 
-    if (red_quic_compress_image(display_channel, red_image, &bitmap, &comp_send_data)) {
-        add_buf(channel, BUF_TYPE_RAW, red_image, comp_send_data.raw_size, 0);
+    if (red_quic_compress_image(display_channel, red_image, &bitmap, &comp_send_data,
+                                worker->internal_groupslot_id)) {
+        add_buf(channel, BUF_TYPE_RAW, red_image, comp_send_data.raw_size, 0, 0);
         add_buf(channel, BUF_TYPE_COMPRESS_BUF, comp_send_data.comp_buf,
-                comp_send_data.comp_buf_size, 0);
+                comp_send_data.comp_buf_size, 0, 0);
     } else {
         red_image->descriptor.type = IMAGE_TYPE_BITMAP;
         red_image->bitmap = bitmap;
         red_image->bitmap.flags &= ~QXL_BITMAP_DIRECT;
-        add_buf(channel, BUF_TYPE_RAW, red_image, sizeof(BitmapImage), 0);
+        add_buf(channel, BUF_TYPE_RAW, red_image, sizeof(BitmapImage), 0, 0);
         red_image->bitmap.data = channel->send_data.header.size;
-        add_buf(channel, BUF_TYPE_RAW, item->data, bitmap.y * bitmap.stride, 0);
+        add_buf(channel, BUF_TYPE_RAW, item->data, bitmap.y * bitmap.stride, 0, 0);
     }
     display_begin_send_massage(display_channel, &item->link);
 }
@@ -6748,12 +6969,12 @@ static void red_display_send_upgrade(DisplayChannel *display_channel, UpgradeIte
     ASSERT(qxl_drawable->u.copy.rop_decriptor == ROPD_OP_PUT);
     ASSERT(qxl_drawable->u.copy.mask.bitmap == 0);
 
-    add_buf(channel, BUF_TYPE_RAW, copy, sizeof(RedCopy), 0);
+    add_buf(channel, BUF_TYPE_RAW, copy, sizeof(RedCopy), 0, 0);
     copy->base.box = qxl_drawable->bbox;
     copy->base.clip.type = CLIP_TYPE_RECTS;
     copy->base.clip.data = channel->send_data.header.size;
-    add_buf(channel, BUF_TYPE_RAW, &item->region.num_rects, sizeof(uint32_t), 0);
-    add_buf(channel, BUF_TYPE_RAW, item->region.rects, sizeof(Rect) * item->region.num_rects, 0);
+    add_buf(channel, BUF_TYPE_RAW, &item->region.num_rects, sizeof(uint32_t), 0, 0);
+    add_buf(channel, BUF_TYPE_RAW, item->region.rects, sizeof(Rect) * item->region.num_rects, 0, 0);
     copy->data = qxl_drawable->u.copy;
     fill_bits(display_channel, &copy->data.src_bitmap, item->drawable);
 
@@ -6779,12 +7000,12 @@ static void red_display_send_stream_start(DisplayChannel *display_channel, Strea
     stream_create->stream_height = ALIGN(stream_create->src_height, 2);
     stream_create->dest = stream->dest_area;
 
-    add_buf(channel, BUF_TYPE_RAW, stream_create, sizeof(*stream_create), 0);
+    add_buf(channel, BUF_TYPE_RAW, stream_create, sizeof(*stream_create), 0, 0);
     if (stream->current) {
         QXLDrawable *qxl_drawable = stream->current->qxl_drawable;
         stream_create->clip = qxl_drawable->clip;
         if (qxl_drawable->clip.type == CLIP_TYPE_RECTS) {
-            fill_rects_clip(channel, &stream_create->clip.data);
+            fill_rects_clip(channel, &stream_create->clip.data, stream->current->group_id);
         } else {
             ASSERT(qxl_drawable->clip.type == CLIP_TYPE_NONE);
         }
@@ -6794,7 +7015,7 @@ static void red_display_send_stream_start(DisplayChannel *display_channel, Strea
         stream_create->clip.data = channel->send_data.header.size;
         display_channel->send_data.u.stream_create.num_rects = 0;
         add_buf(channel, BUF_TYPE_RAW, &display_channel->send_data.u.stream_create.num_rects,
-                sizeof(uint32_t), 0);
+                sizeof(uint32_t), 0, 0);
         display_begin_send_massage(display_channel, NULL);
     }
 }
@@ -6811,16 +7032,16 @@ static void red_display_send_stream_clip(DisplayChannel *display_channel,
 
     channel->send_data.header.type = RED_DISPLAY_STREAM_CLIP;
     RedStreamClip *stream_clip = &display_channel->send_data.u.stream_clip;
-    add_buf(channel, BUF_TYPE_RAW, stream_clip, sizeof(*stream_clip), 0);
+    add_buf(channel, BUF_TYPE_RAW, stream_clip, sizeof(*stream_clip), 0, 0);
     stream_clip->id = agent - display_channel->stream_agents;
     if ((stream_clip->clip.type = item->clip_type) == CLIP_TYPE_NONE) {
         stream_clip->clip.data = 0;
     } else {
         ASSERT(stream_clip->clip.type == CLIP_TYPE_RECTS);
         stream_clip->clip.data = channel->send_data.header.size;
-        add_buf(channel, BUF_TYPE_RAW, &item->region.num_rects, sizeof(uint32_t), 0);
+        add_buf(channel, BUF_TYPE_RAW, &item->region.num_rects, sizeof(uint32_t), 0, 0);
         add_buf(channel, BUF_TYPE_RAW, item->region.rects,
-                item->region.num_rects * sizeof(Rect), 0);
+                item->region.num_rects * sizeof(Rect), 0, 0);
     }
     display_begin_send_massage(display_channel, item);
 }
@@ -6831,7 +7052,7 @@ static void red_display_send_stream_end(DisplayChannel *display_channel, StreamA
     channel->send_data.header.type = RED_DISPLAY_STREAM_DESTROY;
     display_channel->send_data.u.stream_destroy.id = agent - display_channel->stream_agents;
     add_buf(channel, BUF_TYPE_RAW, &display_channel->send_data.u.stream_destroy,
-            sizeof(RedStreamDestroy), 0);
+            sizeof(RedStreamDestroy), 0, 0);
     display_begin_send_massage(display_channel, NULL);
 }
 
@@ -6854,7 +7075,7 @@ static void red_send_cursor_init(CursorChannel *channel)
     channel->send_data.u.cursor_init.trail_length = worker->cursor_trail_length;
     channel->send_data.u.cursor_init.trail_frequency = worker->cursor_trail_frequency;
     add_buf(&channel->base, BUF_TYPE_RAW, &channel->send_data.u.cursor_init, sizeof(RedCursorInit),
-            0);
+            0, 0);
 
     fill_cursor(channel, &channel->send_data.u.cursor_init.cursor, worker->cursor);
 
@@ -6872,7 +7093,7 @@ static void red_send_local_cursor(CursorChannel *cursor_channel, LocalCursor *cu
     cursor_channel->send_data.u.cursor_set.postition = cursor->position;
     cursor_channel->send_data.u.cursor_set.visible = channel->worker->cursor_visible;
     add_buf(channel, BUF_TYPE_RAW, &cursor_channel->send_data.u.cursor_set,
-            sizeof(RedCursorSet), 0);
+            sizeof(RedCursorSet), 0, 0);
     fill_cursor(cursor_channel, &cursor_channel->send_data.u.cursor_set.cursor, &cursor->base);
 
     red_begin_send_massage(channel, cursor);
@@ -6885,7 +7106,7 @@ static void cursor_channel_send_migrate(CursorChannel *cursor_channel)
     cursor_channel->base.send_data.header.type = RED_MIGRATE;
     cursor_channel->send_data.u.migrate.flags = 0;
     add_buf((RedChannel*)cursor_channel, BUF_TYPE_RAW, &cursor_channel->send_data.u.migrate,
-            sizeof(cursor_channel->send_data.u.migrate), 0);
+            sizeof(cursor_channel->send_data.u.migrate), 0, 0);
     red_begin_send_massage((RedChannel*)cursor_channel, NULL);
 }
 
@@ -6898,20 +7119,20 @@ static void red_send_cursor(CursorChannel *cursor_channel, CursorItem *cursor)
 
     channel = &cursor_channel->base;
 
-    cmd = CONTAINEROF(cursor, QXLCursorCmd, device_data);
+    cmd = cursor->qxl_cursor;
     switch (cmd->type) {
     case QXL_CURSOR_MOVE:
         channel->send_data.header.type = RED_CURSOR_MOVE;
         cursor_channel->send_data.u.cursor_move.postition = cmd->u.position;
         add_buf(channel, BUF_TYPE_RAW, &cursor_channel->send_data.u.cursor_move,
-                sizeof(RedCursorMove), 0);
+                sizeof(RedCursorMove), 0, 0);
         break;
     case QXL_CURSOR_SET:
         channel->send_data.header.type = RED_CURSOR_SET;
         cursor_channel->send_data.u.cursor_set.postition = cmd->u.set.position;
         cursor_channel->send_data.u.cursor_set.visible = channel->worker->cursor_visible;
         add_buf(channel, BUF_TYPE_RAW, &cursor_channel->send_data.u.cursor_set,
-                sizeof(RedCursorSet), 0);
+                sizeof(RedCursorSet), 0, 0);
         fill_cursor(cursor_channel, &cursor_channel->send_data.u.cursor_set.cursor, cursor);
         break;
     case QXL_CURSOR_HIDE:
@@ -6922,7 +7143,7 @@ static void red_send_cursor(CursorChannel *cursor_channel, CursorItem *cursor)
         cursor_channel->send_data.u.cursor_trail.length = cmd->u.trail.length;
         cursor_channel->send_data.u.cursor_trail.frequency = cmd->u.trail.frequency;
         add_buf(channel, BUF_TYPE_RAW, &cursor_channel->send_data.u.cursor_trail,
-                sizeof(RedCursorTrail), 0);
+                sizeof(RedCursorTrail), 0, 0);
         break;
     default:
         red_error("bad cursor command %d", cmd->type);
@@ -7221,47 +7442,41 @@ static void destroy_cairo_canvas(CairoCanvas *canvas)
     cairo_destroy(cairo);
 }
 
-static void validate_area_nop(void *canvas, const DrawArea *draw_area, const Rect *area)
+static void validate_area_nop(void *canvas, int32_t stride, uint8_t *line_0, const Rect *area)
 {
 }
 
-static void init_cairo_draw_context(RedWorker *worker, CairoCanvas *canvas)
+static void init_cairo_draw_funcs(RedWorker *worker)
 {
-    worker->draw_context.canvas = canvas;
-    worker->draw_context.top_down = TRUE;
-    worker->draw_context.draw_fill = (draw_fill_t)canvas_draw_fill;
-    worker->draw_context.draw_copy = (draw_copy_t)canvas_draw_copy;
-    worker->draw_context.draw_opaque = (draw_opaque_t)canvas_draw_opaque;
-    worker->draw_context.copy_bits = (copy_bits_t)canvas_copy_bits;
-    worker->draw_context.draw_text = (draw_text_t)canvas_draw_text;
-    worker->draw_context.draw_stroke = (draw_stroke_t)canvas_draw_stroke;
-    worker->draw_context.draw_rop3 = (draw_rop3_t)canvas_draw_rop3;
-    worker->draw_context.draw_blend = (draw_blend_t)canvas_draw_blend;
-    worker->draw_context.draw_blackness = (draw_blackness_t)canvas_draw_blackness;
-    worker->draw_context.draw_whiteness = (draw_whiteness_t)canvas_draw_whiteness;
-    worker->draw_context.draw_invers = (draw_invers_t)canvas_draw_invers;
-    worker->draw_context.draw_transparent = (draw_transparent_t)canvas_draw_transparent;
-    worker->draw_context.draw_alpha_blend = (draw_alpha_blend_t)canvas_draw_alpha_blend;
-    worker->draw_context.read_pixels = (read_pixels_t)canvas_read_bits;
+    worker->draw_funcs.draw_fill = (draw_fill_t)canvas_draw_fill;
+    worker->draw_funcs.draw_copy = (draw_copy_t)canvas_draw_copy;
+    worker->draw_funcs.draw_opaque = (draw_opaque_t)canvas_draw_opaque;
+    worker->draw_funcs.copy_bits = (copy_bits_t)canvas_copy_bits;
+    worker->draw_funcs.draw_text = (draw_text_t)canvas_draw_text;
+    worker->draw_funcs.draw_stroke = (draw_stroke_t)canvas_draw_stroke;
+    worker->draw_funcs.draw_rop3 = (draw_rop3_t)canvas_draw_rop3;
+    worker->draw_funcs.draw_blend = (draw_blend_t)canvas_draw_blend;
+    worker->draw_funcs.draw_blackness = (draw_blackness_t)canvas_draw_blackness;
+    worker->draw_funcs.draw_whiteness = (draw_whiteness_t)canvas_draw_whiteness;
+    worker->draw_funcs.draw_invers = (draw_invers_t)canvas_draw_invers;
+    worker->draw_funcs.draw_transparent = (draw_transparent_t)canvas_draw_transparent;
+    worker->draw_funcs.draw_alpha_blend = (draw_alpha_blend_t)canvas_draw_alpha_blend;
+    worker->draw_funcs.read_pixels = (read_pixels_t)canvas_read_bits;
 
-    worker->draw_context.set_top_mask = (set_top_mask_t)canvas_group_start;
-    worker->draw_context.clear_top_mask = (clear_top_mask_t)canvas_group_end;
-    worker->draw_context.validate_area = validate_area_nop;
-    worker->draw_context.destroy = (destroy_t)destroy_cairo_canvas;
+    worker->draw_funcs.set_top_mask = (set_top_mask_t)canvas_group_start;
+    worker->draw_funcs.clear_top_mask = (clear_top_mask_t)canvas_group_end;
+    worker->draw_funcs.validate_area = validate_area_nop;
+    worker->draw_funcs.destroy = (destroy_t)destroy_cairo_canvas;
 }
 
-static int create_cairo_context(RedWorker *worker)
+static CairoCanvas *create_cairo_context(RedWorker *worker, uint32_t width, uint32_t height,
+                                         int32_t stride, uint8_t depth, void *line_0)
 {
     cairo_surface_t *cairo_surface;
-    CairoCanvas *canvas;
     cairo_t *cairo;
 
-    cairo_surface = cairo_image_surface_create_for_data(worker->dev_info.draw_area.line_0,
-                                                        CAIRO_FORMAT_RGB24,
-                                                        worker->dev_info.draw_area.width,
-                                                        worker->dev_info.draw_area.heigth,
-                                                        worker->dev_info.draw_area.stride);
-
+    cairo_surface = cairo_image_surface_create_for_data(line_0,  CAIRO_FORMAT_RGB24, width, height,
+                                                        stride);
     if (cairo_surface_status(cairo_surface) != CAIRO_STATUS_SUCCESS) {
         red_error("create cairo surface failed, %s",
                   cairo_status_to_string(cairo_surface_status(cairo_surface)));
@@ -7273,14 +7488,9 @@ static int create_cairo_context(RedWorker *worker)
                   cairo_status_to_string(cairo_status(cairo)));
     }
 
-    if (!(canvas = canvas_create(cairo, worker->dev_info.bits, &worker->image_cache,
-                                 image_cache_put, image_cache_get, worker, cb_get_virt,
-                                 worker, cb_validate_virt))) {
-        red_error("create cairo canvas failed");
-    }
-    init_cairo_draw_context(worker, canvas);
-    red_printf("using cairo canvas");
-    return TRUE;
+    return canvas_create(cairo, depth, &worker->image_cache, image_cache_put, image_cache_get,
+                         worker, cb_get_virt_preload_group, worker,
+                         cb_validate_virt_preload_group);
 }
 
 static void destroy_gl_canvas(GLCanvas *canvas)
@@ -7297,7 +7507,7 @@ static void destroy_gl_canvas(GLCanvas *canvas)
     oglctx_destroy(ctx);
 }
 
-static void gl_validate_area(GLCanvas *canvas, DrawArea *draw_area, const Rect *area)
+static void gl_validate_area(GLCanvas *canvas, int32_t stride, uint8_t *line_0, const Rect *area)
 {
     int h;
 
@@ -7305,121 +7515,217 @@ static void gl_validate_area(GLCanvas *canvas, DrawArea *draw_area, const Rect *
         return;
     }
 
-    ASSERT(draw_area->stride < 0);
-    uint8_t *dest = draw_area->line_0 + (area->top * draw_area->stride) +
-                    area->left * sizeof(uint32_t);
-    dest += (h - 1) * draw_area->stride;
-    gl_canvas_read_pixels(canvas, dest, -draw_area->stride, area);
+    ASSERT(stride < 0);
+    uint8_t *dest = line_0 + (area->top * stride) + area->left * sizeof(uint32_t);
+    dest += (h - 1) * stride;
+    gl_canvas_read_pixels(canvas, dest, -stride, area);
 }
 
-static void init_ogl_draw_context(RedWorker *worker, GLCanvas *canvas)
+static void init_ogl_draw_funcs(RedWorker *worker)
 {
-    worker->draw_context.canvas = canvas;
-    worker->draw_context.top_down = FALSE;
-    worker->draw_context.draw_fill = (draw_fill_t)gl_canvas_draw_fill;
-    worker->draw_context.draw_copy = (draw_copy_t)gl_canvas_draw_copy;
-    worker->draw_context.draw_opaque = (draw_opaque_t)gl_canvas_draw_opaque;
-    worker->draw_context.copy_bits = (copy_bits_t)gl_canvas_copy_pixels;
-    worker->draw_context.draw_text = (draw_text_t)gl_canvas_draw_text;
-    worker->draw_context.draw_stroke = (draw_stroke_t)gl_canvas_draw_stroke;
-    worker->draw_context.draw_rop3 = (draw_rop3_t)gl_canvas_draw_rop3;
-    worker->draw_context.draw_blend = (draw_blend_t)gl_canvas_draw_blend;
-    worker->draw_context.draw_blackness = (draw_blackness_t)gl_canvas_draw_blackness;
-    worker->draw_context.draw_whiteness = (draw_whiteness_t)gl_canvas_draw_whiteness;
-    worker->draw_context.draw_invers = (draw_invers_t)gl_canvas_draw_invers;
-    worker->draw_context.draw_transparent = (draw_transparent_t)gl_canvas_draw_transparent;
-    worker->draw_context.draw_alpha_blend = (draw_alpha_blend_t)gl_canvas_draw_alpha_blend;
-    worker->draw_context.read_pixels = (read_pixels_t)gl_canvas_read_pixels;
+    worker->draw_funcs.draw_fill = (draw_fill_t)gl_canvas_draw_fill;
+    worker->draw_funcs.draw_copy = (draw_copy_t)gl_canvas_draw_copy;
+    worker->draw_funcs.draw_opaque = (draw_opaque_t)gl_canvas_draw_opaque;
+    worker->draw_funcs.copy_bits = (copy_bits_t)gl_canvas_copy_pixels;
+    worker->draw_funcs.draw_text = (draw_text_t)gl_canvas_draw_text;
+    worker->draw_funcs.draw_stroke = (draw_stroke_t)gl_canvas_draw_stroke;
+    worker->draw_funcs.draw_rop3 = (draw_rop3_t)gl_canvas_draw_rop3;
+    worker->draw_funcs.draw_blend = (draw_blend_t)gl_canvas_draw_blend;
+    worker->draw_funcs.draw_blackness = (draw_blackness_t)gl_canvas_draw_blackness;
+    worker->draw_funcs.draw_whiteness = (draw_whiteness_t)gl_canvas_draw_whiteness;
+    worker->draw_funcs.draw_invers = (draw_invers_t)gl_canvas_draw_invers;
+    worker->draw_funcs.draw_transparent = (draw_transparent_t)gl_canvas_draw_transparent;
+    worker->draw_funcs.draw_alpha_blend = (draw_alpha_blend_t)gl_canvas_draw_alpha_blend;
+    worker->draw_funcs.read_pixels = (read_pixels_t)gl_canvas_read_pixels;
 
-    worker->draw_context.set_top_mask = (set_top_mask_t)gl_canvas_set_top_mask;
-    worker->draw_context.clear_top_mask = (clear_top_mask_t)gl_canvas_clear_top_mask;
-    worker->draw_context.validate_area = (validate_area_t)gl_validate_area;
-    worker->draw_context.destroy = (destroy_t)destroy_gl_canvas;
+    worker->draw_funcs.set_top_mask = (set_top_mask_t)gl_canvas_set_top_mask;
+    worker->draw_funcs.clear_top_mask = (clear_top_mask_t)gl_canvas_clear_top_mask;
+    worker->draw_funcs.validate_area = (validate_area_t)gl_validate_area;
+    worker->draw_funcs.destroy = (destroy_t)destroy_gl_canvas;
 }
 
-static int create_ogl_context_common(RedWorker *worker, OGLCtx *ctx)
+static GLCanvas *create_ogl_context_common(RedWorker *worker, OGLCtx *ctx, uint32_t width,
+                                           uint32_t height, int32_t stride, uint8_t depth)
 {
     GLCanvas *canvas;
-    int width;
-    int height;
-
-    width = worker->dev_info.x_res;
-    height = worker->dev_info.y_res;
 
     oglctx_make_current(ctx);
-    if (!(canvas = gl_canvas_create(ctx, width, height, worker->dev_info.bits, &worker->image_cache,
-                                    image_cache_put, image_cache_get, worker, cb_get_virt,
-                                    worker, cb_validate_virt))) {
-        return FALSE;
+    if (!(canvas = gl_canvas_create(ctx, width, height, depth, &worker->image_cache,
+                                    image_cache_put, image_cache_get, worker,
+                                    cb_get_virt_preload_group,
+                                    worker, cb_validate_virt_preload_group))) {
+        return NULL;
     }
 
-    init_ogl_draw_context(worker, canvas);
     gl_canvas_clear(canvas);
-    red_printf("using ogl %s canvas", oglctx_type_str(ctx));
-    return TRUE;
+
+    return canvas;
 }
 
-static int create_ogl_pbuf_context(RedWorker *worker)
+static GLCanvas *create_ogl_pbuf_context(RedWorker *worker, uint32_t width, uint32_t height,
+                                         int32_t stride, uint8_t depth)
 {
     OGLCtx *ctx;
+    GLCanvas *canvas;
 
-    if (!(ctx = pbuf_create(worker->dev_info.x_res, worker->dev_info.y_res))) {
-        return FALSE;
+    if (!(ctx = pbuf_create(width, height))) {
+        return NULL;
     }
 
-    if (!create_ogl_context_common(worker, ctx)) {
+    if (!(canvas = create_ogl_context_common(worker, ctx, width, height, stride, depth))) {
         oglctx_destroy(ctx);
-        return FALSE;
+        return NULL;
     }
 
-    return TRUE;
+    return canvas;
 }
 
-static int create_ogl_pixmap_context(RedWorker *worker)
-{
+static GLCanvas *create_ogl_pixmap_context(RedWorker *worker, uint32_t width, uint32_t height,
+                                           int32_t stride, uint8_t depth) {
     OGLCtx *ctx;
+    GLCanvas *canvas;
 
-    if (!(ctx = pixmap_create(worker->dev_info.x_res, worker->dev_info.y_res))) {
-        return FALSE;
+    if (!(ctx = pixmap_create(width, height))) {
+        return NULL;
     }
 
-    if (!create_ogl_context_common(worker, ctx)) {
+    if (!(canvas = create_ogl_context_common(worker, ctx, width, height, stride, depth))) {
         oglctx_destroy(ctx);
-        return FALSE;
+        return NULL;
     }
 
-    return TRUE;
+    return canvas;
 }
 
-static void red_create_draw_context(RedWorker *worker)
+static inline void surface_init_draw_funcs(RedWorker *worker, uint32_t renderer)
 {
-    int i;
+    switch (renderer) {
+    case RED_RENDERER_CAIRO:
+        init_cairo_draw_funcs(worker);
+        red_printf("using cairo canvas");
+        return;
+    case RED_RENDERER_OGL_PBUF:
+        init_ogl_draw_funcs(worker);
+        red_printf("using opengl pbuff canvas");
+        return;
+    case RED_RENDERER_OGL_PIXMAP:
+        init_ogl_draw_funcs(worker);
+        red_printf("using opengl pixmap canvas");
+        return;
+    default:
+        red_error("invalid renderer type");
+    };
+}
 
-    worker->draw_context.destroy(worker->draw_context.canvas);
-    worker->draw_context.canvas = NULL;
+static inline void *create_canvas_for_surface(RedWorker *worker, Surface *surface,
+                                              uint32_t renderer, uint32_t width, uint32_t height,
+                                              int32_t stride, uint8_t depth, void *line_0)
+{
+    void *canvas;
+
+    switch (renderer) {
+    case RED_RENDERER_CAIRO:
+        canvas = create_cairo_context(worker, width, height, stride, depth, line_0);
+        surface->context.top_down = TRUE;
+        return canvas;
+    case RED_RENDERER_OGL_PBUF:
+        canvas = create_ogl_pbuf_context(worker, width, height, stride, depth);
+        surface->context.top_down = FALSE;
+        return canvas;
+    case RED_RENDERER_OGL_PIXMAP:
+        canvas = create_ogl_pixmap_context(worker, width, height, stride, depth);
+        surface->context.top_down = FALSE;
+        return canvas;
+    default:
+        red_error("invalid renderer type");
+    };
+}
+
+static inline void red_create_surface(RedWorker *worker, uint32_t width, uint32_t height,
+                                      int32_t stride, uint8_t depth, void *line_0)
+{
+    uint32_t i;
+    Surface *surface = &worker->surface;
+
+    if (stride >= 0) {
+        PANIC("Untested path stride >= 0");
+    }
+    PANIC_ON(surface->context.canvas);
+
+    surface->context.width = width;
+    surface->context.height = height;
+    surface->context.depth = depth;
+    surface->context.stride = stride;
+    surface->context.line_0 = line_0;
+    surface->refs = 1;
+
+    if (worker->renderer != RED_RENDERER_INVALID) {
+        surface->context.canvas = create_canvas_for_surface(worker, surface, worker->renderer,
+                                                            width, height, stride,
+                                                            surface->context.depth, line_0);
+        if (!surface->context.canvas) {
+            PANIC("drawing canvas creating failed - can`t create same type canvas");
+        }
+        return;
+    }
+
     for (i = 0; i < worker->num_renderers; i++) {
-        switch (worker->renderers[i]) {
-        case RED_RENDERER_CAIRO:
-            if (create_cairo_context(worker)) {
-                return;
-            }
-            break;
-        case RED_RENDERER_OGL_PBUF:
-            if (create_ogl_pbuf_context(worker)) {
-                return;
-            }
-            break;
-        case RED_RENDERER_OGL_PIXMAP:
-            if (create_ogl_pixmap_context(worker)) {
-                return;
-            }
-            break;
-        default:
-            red_error("invalid renderer type");
+        surface->context.canvas = create_canvas_for_surface(worker, surface, worker->renderers[i],
+                                                            width, height, stride,
+                                                            surface->context.depth, line_0);
+        if (surface->context.canvas) {
+            worker->renderer = worker->renderers[i];
+            surface_init_draw_funcs(worker, worker->renderers[i]);
+            return;
         }
     }
-    red_error("create renderer failed");
-    memset(worker->dev_info.draw_area.buf, 0, worker->dev_info.draw_area.size);
+
+    PANIC("unable to create drawing canvas");
+}
+
+static void red_wait_outgoiong_item(RedChannel *channel);
+
+static inline void flush_display_commands(RedWorker *worker)
+{
+    for (;;) {
+        uint64_t end_time;
+
+        while (red_process_commands(worker, MAX_PIPE_SIZE)) {
+            display_channel_push(worker);
+        }
+
+        if (!worker->qxl->has_command(worker->qxl)) {
+            break;
+        }
+        end_time = red_now() + DISPLAY_CLIENT_TIMEOUT * 10;
+        int sleep_count = 0;
+        for (;;) {
+            display_channel_push(worker);
+            if (!worker->display_channel ||
+                                         worker->display_channel->base.pipe_size <= MAX_PIPE_SIZE) {
+                break;
+            }
+            RedChannel *channel = (RedChannel *)worker->display_channel;
+            red_ref_channel(channel);
+            red_receive(channel);
+            red_send_data(channel, NULL);
+            if (red_now() >= end_time) {
+                red_printf("update timout");
+                red_disconnect_display((RedChannel *)worker->display_channel);
+            } else {
+                sleep_count++;
+                usleep(DISPLAY_CLIENT_RETRY_INTERVAL);
+            }
+            red_unref_channel(channel);
+        }
+    }
+}
+
+static inline void red_flush_surface_pipe(RedWorker *worker)
+{
+    if (worker->display_channel) {
+        display_channel_push(worker);
+    }
 }
 
 static void push_new_mode(RedWorker *worker)
@@ -7480,7 +7786,7 @@ static void on_new_display_channel(RedWorker *worker)
         return;
     }
     display_channel->base.messages_window = 0;
-    if (worker->attached) {
+    if (worker->surface.context.canvas) {
         red_current_flush(worker);
         push_new_mode(worker);
         red_add_screen_image(worker);
@@ -8098,7 +8404,7 @@ static void on_new_cursor_channel(RedWorker *worker)
 
     channel->base.messages_window = 0;
     red_pipe_add_type(&channel->base, PIPE_ITEM_TYPE_SET_ACK);
-    if (worker->attached && !channel->base.migrate) {
+    if (worker->surface.context.canvas && !channel->base.migrate) {
         red_pipe_add_type(&worker->cursor_channel->base, PIPE_ITEM_TYPE_CURSOR_INIT);
     }
 }
@@ -8208,9 +8514,10 @@ static void red_cursor_flush(RedWorker *worker)
 
     ASSERT(worker->cursor->type == CURSOR_TYPE_DEV);
 
-    cursor_cmd = CONTAINEROF(worker->cursor, QXLCursorCmd, device_data);
+    cursor_cmd = worker->cursor->qxl_cursor;
     ASSERT(cursor_cmd->type == QXL_CURSOR_SET);
-    qxl_cursor = (QXLCursor *)get_virt(worker, cursor_cmd->u.set.shape, sizeof(QXLCursor));
+    qxl_cursor = (QXLCursor *)get_virt(worker, cursor_cmd->u.set.shape, sizeof(QXLCursor),
+                                       worker->cursor->group_id);
 
     local = _new_local_cursor(&qxl_cursor->header, qxl_cursor->data_size,
                               worker->cursor_position);
@@ -8226,7 +8533,8 @@ static void red_cursor_flush(RedWorker *worker)
         data_size -= chunk->data_size;
         dest += chunk->data_size;
         chunk = chunk->next_chunk ?
-                (QXLDataChunk *)get_virt(worker, chunk->next_chunk, sizeof(QXLDataChunk)) : NULL;
+                (QXLDataChunk *)get_virt(worker, chunk->next_chunk, sizeof(QXLDataChunk),
+                                         worker->internal_groupslot_id) : NULL;
     }
     red_set_cursor(worker, &local->base);
     red_release_cursor(worker, &local->base);
@@ -8293,39 +8601,10 @@ static inline void handle_dev_update(RedWorker *worker)
 {
     RedWorkeMessage message;
 
-    ASSERT(worker->attached && worker->running);
-    for (;;) {
-        uint64_t end_time;
+    ASSERT(worker->surface.context.canvas && worker->running);
 
-        while (red_process_commands(worker, MAX_PIPE_SIZE)) {
-            display_channel_push(worker);
-        }
+    flush_display_commands(worker);
 
-        if (!worker->qxl->has_command(worker->qxl)) {
-            break;
-        }
-        end_time = red_now() + DISPLAY_CLIENT_TIMEOUT;
-        int sleep_count = 0;
-        for (;;) {
-            display_channel_push(worker);
-            if (!worker->display_channel ||
-                                         worker->display_channel->base.pipe_size <= MAX_PIPE_SIZE) {
-                break;
-            }
-            RedChannel *channel = (RedChannel *)worker->display_channel;
-            red_ref_channel(channel);
-            red_receive(channel);
-            red_send_data(channel, NULL);
-            if (red_now() >= end_time) {
-                red_printf("update timout");
-                red_disconnect_display((RedChannel *)worker->display_channel);
-            } else {
-                sleep_count++;
-                usleep(DISPLAY_CLIENT_RETRY_INTERVAL);
-            }
-            red_unref_channel(channel);
-        }
-    }
     red_update_area(worker, worker->qxl->get_update_area(worker->qxl));
     message = RED_WORKER_MESSAGE_READY;
     write_message(worker->channel, &message);
@@ -8339,12 +8618,13 @@ static inline void handle_dev_add_memslot(RedWorker *worker)
 
     receive_data(worker->channel, &dev_slot, sizeof(QXLDevMemSlot));
 
+    ASSERT(worker->num_memslots_groups > dev_slot.slot_group_id);
     ASSERT(worker->num_memslots > dev_slot.slot_id);
-
-    worker->mem_slots[dev_slot.slot_id].address_delta = dev_slot.addr_delta;
-    worker->mem_slots[dev_slot.slot_id].virt_start_addr = dev_slot.virt_start;
-    worker->mem_slots[dev_slot.slot_id].virt_end_addr = dev_slot.virt_end;
-    worker->mem_slots[dev_slot.slot_id].generation = dev_slot.generation;
+    worker->mem_slots[dev_slot.slot_group_id][dev_slot.slot_id].address_delta = dev_slot.addr_delta;
+    worker->mem_slots[dev_slot.slot_group_id][dev_slot.slot_id].virt_start_addr =
+                                                                                dev_slot.virt_start;
+    worker->mem_slots[dev_slot.slot_group_id][dev_slot.slot_id].virt_end_addr = dev_slot.virt_end;
+    worker->mem_slots[dev_slot.slot_group_id][dev_slot.slot_id].generation = dev_slot.generation;
 
     message = RED_WORKER_MESSAGE_READY;
     write_message(worker->channel, &message);
@@ -8353,23 +8633,172 @@ static inline void handle_dev_add_memslot(RedWorker *worker)
 static inline void handle_dev_del_memslot(RedWorker *worker)
 {
     uint32_t slot_id;
+    uint32_t slot_group_id;
 
+    receive_data(worker->channel, &slot_group_id, sizeof(uint32_t));
     receive_data(worker->channel, &slot_id, sizeof(uint32_t));
 
+    ASSERT(worker->num_memslots_groups > slot_group_id);
     ASSERT(worker->num_memslots > slot_id);
 
-    worker->mem_slots[slot_id].virt_start_addr = 0;
-    worker->mem_slots[slot_id].virt_end_addr = 0;
+    worker->mem_slots[slot_group_id][slot_id].virt_start_addr = 0;
+    worker->mem_slots[slot_group_id][slot_id].virt_end_addr = 0;
+}
+
+static inline void destroy_surface_wait(RedWorker *worker)
+{
+    flush_display_commands(worker);
+    red_flush_surface_pipe(worker);
+    red_display_clear_glz_drawables(worker->display_channel);
+    red_current_clear(worker);
+    red_wait_outgoiong_item((RedChannel *)worker->display_channel);
+    if (worker->display_channel) {
+        ASSERT(!worker->display_channel->base.send_data.item);
+    }
+}
+
+static inline void handle_dev_destroy_surface_wait(RedWorker *worker)
+{
+    RedWorkeMessage message;
+    uint32_t surface_id;
+
+    receive_data(worker->channel, &surface_id, sizeof(uint32_t));
+
+    ASSERT(surface_id == 0);
+
+    if (worker->surface.context.canvas) {
+        destroy_surface_wait(worker);
+    }
+
+    message = RED_WORKER_MESSAGE_READY;
+    write_message(worker->channel, &message);
+}
+
+static inline void handle_dev_destroy_surfaces(RedWorker *worker)
+{
+    RedWorkeMessage message;
+
+    destroy_surface_wait(worker);
+    __red_destroy_surface(worker);
+    ASSERT(ring_is_empty(&worker->streams));
+
+    red_wait_outgoiong_item((RedChannel *)worker->cursor_channel);
+    if (worker->cursor_channel) {
+        red_pipe_add_type(&worker->cursor_channel->base, PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
+        if (!worker->cursor_channel->base.migrate) {
+            red_pipe_add_verb(&worker->cursor_channel->base, RED_CURSOR_RESET);
+        }
+        ASSERT(!worker->cursor_channel->base.send_data.item);
+    }
+
+    if (worker->display_channel) {
+        red_pipe_add_type(&worker->display_channel->base, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
+        red_pipe_add_verb(&worker->display_channel->base, RED_DISPLAY_STREAM_DESTROY_ALL);
+        if (!worker->display_channel->base.migrate) {
+            red_pipe_add_verb(&worker->display_channel->base, RED_DISPLAY_RESET);
+        }
+    }
+
+    ASSERT(!worker->surface.context.canvas);
+
+    worker->cursor_visible = TRUE;
+    worker->cursor_position.x = worker->cursor_position.y = 0;
+    worker->cursor_trail_length = worker->cursor_trail_frequency = 0;
+
+    message = RED_WORKER_MESSAGE_READY;
+    write_message(worker->channel, &message);
+}
+
+static inline void handle_dev_create_primary_surface(RedWorker *worker)
+{
+    RedWorkeMessage message;
+    uint32_t surface_id;
+    QXLDevSurfaceCreate surface;
+    uint8_t *line_0;
+
+    receive_data(worker->channel, &surface_id, sizeof(uint32_t));
+    receive_data(worker->channel, &surface, sizeof(QXLDevSurfaceCreate));
+
+    PANIC_ON(surface_id != 0);
+    PANIC_ON(surface.height == 0);
+    PANIC_ON(((uint64_t)abs(surface.stride) * (uint64_t)surface.height) !=
+             abs(surface.stride) * surface.height);
+
+    line_0 = (uint8_t*)get_virt(worker, surface.mem, surface.height * abs(surface.stride),
+                                surface.group_id);
+    if (surface.stride < 0) {
+        line_0 -= (int32_t)(surface.stride * (surface.height -1));
+    }
+
+    red_create_surface(worker, surface.width, surface.height, surface.stride, surface.depth,
+                       line_0);
+
+    if (worker->display_channel) {
+        red_pipe_add_type(&worker->display_channel->base, PIPE_ITEM_TYPE_MODE);
+        red_pipe_add_verb(&worker->display_channel->base, RED_DISPLAY_MARK);
+        display_channel_push(worker);
+    }
+
+    if (worker->cursor_channel) {
+        red_pipe_add_type(&worker->cursor_channel->base, PIPE_ITEM_TYPE_CURSOR_INIT);
+    }
+
+    message = RED_WORKER_MESSAGE_READY;
+    write_message(worker->channel, &message);
+}
+
+static inline void handle_dev_destroy_primary_surface(RedWorker *worker)
+{
+    RedWorkeMessage message;
+    uint32_t surface_id;
+
+    receive_data(worker->channel, &surface_id, sizeof(uint32_t));
+
+    PANIC_ON(surface_id != 0);
+
+    if (worker->cursor) {
+        red_release_cursor(worker, worker->cursor);
+        worker->cursor = NULL;
+    }
+
+    red_wait_outgoiong_item((RedChannel *)worker->cursor_channel);
+    if (worker->cursor_channel) {
+        red_pipe_add_type(&worker->cursor_channel->base, PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
+        if (!worker->cursor_channel->base.migrate) {
+            red_pipe_add_verb(&worker->cursor_channel->base, RED_CURSOR_RESET);
+        }
+        ASSERT(!worker->cursor_channel->base.send_data.item);
+    }
+
+
+    destroy_surface_wait(worker);
+    red_destroy_surface(worker);
+    ASSERT(ring_is_empty(&worker->streams));
+
+    ASSERT(!worker->surface.context.canvas);
+
+    worker->cursor_visible = TRUE;
+    worker->cursor_position.x = worker->cursor_position.y = 0;
+    worker->cursor_trail_length = worker->cursor_trail_frequency = 0;
+
+    message = RED_WORKER_MESSAGE_READY;
+    write_message(worker->channel, &message);
 }
 
 static void inline red_create_mem_slots(RedWorker *worker)
 {
+    uint32_t i;
+
     ASSERT(worker->num_memslots > 0);
-    worker->mem_slots = (MemSlot *)malloc(sizeof(MemSlot) * worker->num_memslots);
-    if (!worker->mem_slots) {
-        PANIC("malloc failed");
+    ASSERT(worker->num_memslots_groups > 0);
+    worker->mem_slots = (MemSlot **)malloc(sizeof(MemSlot *) * worker->num_memslots_groups);
+    PANIC_ON(!worker->mem_slots);
+
+    for (i = 0; i <  worker->num_memslots_groups; ++i) {
+        worker->mem_slots[i] = malloc(sizeof(MemSlot) * worker->num_memslots);
+        PANIC_ON(!worker->mem_slots[i]);
+        memset(worker->mem_slots[i], 0, sizeof(MemSlot) * worker->num_memslots);
     }
-    memset(worker->mem_slots, 0, sizeof(MemSlot) * worker->num_memslots);
 
     worker->memslot_id_shift = 64 - worker->mem_slot_bits;
     worker->memslot_gen_shift = 64 - (worker->mem_slot_bits + worker->generation_bits);
@@ -8394,7 +8823,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         stat_inc_counter(worker->wakeup_counter, 1);
         break;
     case RED_WORKER_MESSAGE_OOM:
-        ASSERT(worker->attached && worker->running);
+        ASSERT(worker->running);
         while (red_process_commands(worker, MAX_PIPE_SIZE)) {
             display_channel_push(worker);
         }
@@ -8405,32 +8834,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         }
         clear_bit(RED_WORKER_PENDING_OOM, worker->pending);
         break;
-    case RED_WORKER_MESSAGE_ATTACH:
-        ASSERT(!worker->attached);
-        red_printf("attach");
-        receive_data(worker->channel, &worker->dev_info, sizeof(QXLDevInfo));
-        worker->attached = TRUE;
-        worker->repoll_cmd_ring = worker->repoll_cursor_ring = 0;
-        red_create_draw_context(worker);
-        ASSERT(ring_is_empty(&worker->current));
-        if (worker->display_channel && !worker->display_channel->base.migrate) {
-            red_pipe_add_type(&worker->display_channel->base, PIPE_ITEM_TYPE_MODE);
-            red_pipe_add_verb(&worker->display_channel->base, RED_DISPLAY_MARK);
-            display_channel_push(worker);
-        }
-        if (worker->cursor_channel && !worker->cursor_channel->base.migrate) {
-            red_pipe_add_type(&worker->cursor_channel->base, PIPE_ITEM_TYPE_CURSOR_INIT);
-        }
-        message = RED_WORKER_MESSAGE_READY;
-        write_message(worker->channel, &message);
-        break;
-    case RED_WORKER_MESSAGE_DETACH:
-        red_printf("detach");
-        red_display_clear_glz_drawables(worker->display_channel);
-        red_current_clear(worker);
-#ifdef STREAM_TRACE
-        red_reset_stream_trace(worker);
-#endif
+    case RED_WORKER_MESSAGE_RESET_CURSOR:
         if (worker->cursor) {
             red_release_cursor(worker, worker->cursor);
             worker->cursor = NULL;
@@ -8443,27 +8847,31 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
                 red_pipe_add_verb(&worker->cursor_channel->base, RED_CURSOR_RESET);
             }
             ASSERT(!worker->cursor_channel->base.send_data.item);
+
+            worker->cursor_visible = TRUE;
+            worker->cursor_position.x = worker->cursor_position.y = 0;
+            worker->cursor_trail_length = worker->cursor_trail_frequency = 0;
         }
 
-        red_wait_outgoiong_item((RedChannel *)worker->display_channel);
-        ASSERT(ring_is_empty(&worker->streams));
-        if (worker->display_channel) {
-            red_pipe_add_type(&worker->display_channel->base, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
-            red_pipe_add_verb(&worker->display_channel->base, RED_DISPLAY_STREAM_DESTROY_ALL);
-            if (!worker->display_channel->base.migrate) {
-                red_pipe_add_verb(&worker->display_channel->base, RED_DISPLAY_RESET);
-            }
-            ASSERT(!worker->display_channel->base.send_data.item);
-        }
-
-        worker->attached = FALSE;
-        worker->cursor_visible = TRUE;
-        worker->cursor_position.x = worker->cursor_position.y = 0;
-        worker->cursor_trail_length = worker->cursor_trail_frequency = 0;
-
+        message = RED_WORKER_MESSAGE_READY;
+        write_message(worker->channel, &message);
+        break;
+    case RED_WORKER_MESSAGE_RESET_IMAGE_CACHE:
         image_cache_reset(&worker->image_cache);
         message = RED_WORKER_MESSAGE_READY;
         write_message(worker->channel, &message);
+        break;
+    case RED_WORKER_MESSAGE_DESTROY_SURFACE_WAIT:
+        handle_dev_destroy_surface_wait(worker);
+        break;
+    case RED_WORKER_MESSAGE_DESTROY_SURFACES:
+        handle_dev_destroy_surfaces(worker);
+        break;
+    case RED_WORKER_MESSAGE_CREATE_PRIMARY_SURFACE:
+        handle_dev_create_primary_surface(worker);
+        break;
+    case RED_WORKER_MESSAGE_DESTROY_PRIMARY_SURFACE:
+        handle_dev_destroy_primary_surface(worker);
         break;
     case RED_WORKER_MESSAGE_DISPLAY_CONNECT: {
         RedsStreamContext *peer;
@@ -8600,16 +9008,16 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
     case RED_WORKER_MESSAGE_DEL_MEMSLOT:
         handle_dev_del_memslot(worker);
         break;
-    case RED_WORKER_MESSAGE_RESET_MEMSLOTS:
-        memset(worker->mem_slots, 0, sizeof(MemSlot) * worker->num_memslots);
+    case RED_WORKER_MESSAGE_RESET_MEMSLOTS: {
+        uint32_t i;
+        for (i = 0; i <  worker->num_memslots_groups; ++i) {
+            memset(worker->mem_slots[i], 0, sizeof(MemSlot) * worker->num_memslots);
+        }
         break;
+    }
     default:
         red_error("message error");
     }
-}
-
-static void default_draw_context_destroy(void *canvas)
-{
 }
 
 static void red_init(RedWorker *worker, WorkerInitData *init_data)
@@ -8628,10 +9036,10 @@ static void red_init(RedWorker *worker, WorkerInitData *init_data)
     worker->dev_listener.refs = 1;
     worker->dev_listener.action = handle_dev_input;
     worker->cursor_visible = TRUE;
-    worker->draw_context.destroy = default_draw_context_destroy;
     ASSERT(init_data->num_renderers > 0);
     worker->num_renderers = init_data->num_renderers;
     memcpy(worker->renderers, init_data->renderers, sizeof(worker->renderers));
+    worker->renderer = RED_RENDERER_INVALID;
     worker->mouse_mode = RED_MOUSE_MODE_SERVER;
     worker->image_compression = init_data->image_compression;
     worker->streaming_video = init_data->streaming_video;
@@ -8639,6 +9047,7 @@ static void red_init(RedWorker *worker, WorkerInitData *init_data)
     ring_init(&worker->current);
     image_cache_init(&worker->image_cache);
     drawables_init(worker);
+    cursor_items_init(worker);
     red_init_streams(worker);
     stat_init(&worker->add_stat, add_stat_name);
     stat_init(&worker->exclude_stat, exclude_stat_name);
@@ -8662,9 +9071,11 @@ static void red_init(RedWorker *worker, WorkerInitData *init_data)
         red_error("add channel failed, %s", strerror(errno));
     }
 
+    worker->num_memslots_groups = init_data->num_memslots_groups;
     worker->num_memslots = init_data->num_memslots;
     worker->generation_bits = init_data->memslot_gen_bits;
     worker->mem_slot_bits = init_data->memslot_id_bits;
+    worker->internal_groupslot_id = init_data->internal_groupslot_id;
     red_create_mem_slots(worker);
 
     message = RED_WORKER_MESSAGE_READY;
@@ -8701,12 +9112,14 @@ void *red_worker_main(void *arg)
         worker.epoll_timeout = MIN(red_get_streams_timout(&worker), worker.epoll_timeout);
         num_events = epoll_wait(worker.epoll, events, MAX_EPOLL_SOURCES, worker.epoll_timeout);
         red_handle_streams_timout(&worker);
+
         if (worker.display_channel && worker.display_channel->glz_dict) {
             /* during migration, in the dest, the display channel can be initialized
                while the global lz data not since migrate data msg hasn't been
                recieved yet */
             red_display_handle_glz_drawables_to_free(worker.display_channel);
         }
+
         worker.epoll_timeout = INF_EPOLL_WAIT;
         if (num_events == -1) {
             if (errno != EINTR) {
@@ -8732,7 +9145,7 @@ void *red_worker_main(void *arg)
             free(evt_listener);
         }
 
-        if (worker.attached && worker.running) {
+        if (worker.running) {
             red_process_cursor(&worker, MAX_PIPE_SIZE);
             red_process_commands(&worker, MAX_PIPE_SIZE);
         }
@@ -8768,7 +9181,7 @@ static void dump_line(FILE *f, uint8_t* line, uint16_t n_pixel_bits, int width, 
 
 #define RAM_PATH "/tmp/tmpfs"
 
-static void dump_bitmap(RedWorker *worker, Bitmap *bitmap)
+static void dump_bitmap(RedWorker *worker, Bitmap *bitmap, uint32_t group_id)
 {
     static uint32_t file_id = 0;
 
@@ -8823,7 +9236,7 @@ static void dump_bitmap(RedWorker *worker, Bitmap *bitmap)
         if (!bitmap->palette) {
             return; // dont dump masks.
         }
-        plt = (Palette *)get_virt(worker, bitmap->palette, sizeof(Palette));
+        plt = (Palette *)get_virt(worker, bitmap->palette, sizeof(Palette), group_id);
     }
     row_size = (((bitmap->x * n_pixel_bits) + 31) / 32) * 4;
     bitmap_data_offset = header_size;
@@ -8879,7 +9292,8 @@ static void dump_bitmap(RedWorker *worker, Bitmap *bitmap)
     }
     /* writing the data */
     if ((bitmap->flags & QXL_BITMAP_DIRECT)) {
-        uint8_t *lines = (uint8_t*)get_virt(worker, bitmap->data, bitmap->stride * bitmap->y);
+        uint8_t *lines = (uint8_t*)get_virt(worker, bitmap->data, bitmap->stride * bitmap->y,
+                                            group_id);
         int i;
         for (i = 0; i < bitmap->y; i++) {
             dump_line(f, lines + (i * bitmap->stride), n_pixel_bits, bitmap->x, row_size);
@@ -8891,9 +9305,10 @@ static void dump_bitmap(RedWorker *worker, Bitmap *bitmap)
 
         while (relative_address) {
             int i;
-            chunk = (QXLDataChunk *)get_virt(worker, relative_address, sizeof(QXLDataChunk));
+            chunk = (QXLDataChunk *)get_virt(worker, relative_address, sizeof(QXLDataChunk),
+                                             group_id);
             validate_virt(worker, chunk->data, get_memslot_id(worker, relative_address),
-                          chunk->data_size);
+                          chunk->data_size, group_id);
             num_lines = chunk->data_size / bitmap->stride;
             for (i = 0; i < num_lines; i++) {
                 dump_line(f, chunk->data + (i * bitmap->stride), n_pixel_bits, bitmap->x, row_size);

@@ -52,7 +52,7 @@
 
 #define REDHAT_PCI_VENDOR_ID 0x1b36
 #define QXL_DEVICE_ID 0x0100 /* 0x100-0x11f reserved for spice */
-#define QXL_REVISION 0x02
+#define QXL_REVISION 0x03
 
 #define QXL_ROM_MAGIC (*(UINT32*)"QXRO")
 #define QXL_RAM_MAGIC (*(UINT32*)"QXRA")
@@ -73,10 +73,14 @@ enum {
     QXL_IO_UPDATE_IRQ,
     QXL_IO_NOTIFY_OOM,
     QXL_IO_RESET,
-    QXL_IO_SET_MODE,
     QXL_IO_LOG,
     QXL_IO_MEMSLOT_ADD,
     QXL_IO_MEMSLOT_DEL,
+    QXL_IO_DETACH_PRIMARY,
+    QXL_IO_ATTACH_PRIMARY,
+    QXL_IO_CREATE_PRIMARY,
+    QXL_IO_DESTROY_PRIMARY,
+    QXL_IO_DESTROY_SURFACE_WAIT,
 
     QXL_IO_RANGE_SIZE
 };
@@ -87,12 +91,9 @@ typedef struct ATTR_PACKED QXLRom {
     UINT32 update_id;
     UINT32 compression_level;
     UINT32 log_level;
-    UINT32 mode;
     UINT32 modes_offset;
-    UINT32 num_io_pages;
-    UINT32 pages_offset;
-    UINT32 draw_area_offset;
-    UINT32 draw_area_size;
+    UINT32 num_pages;
+    UINT32 surface0_area_size;
     UINT32 ram_header_offset;
     UINT32 mm_clock;
     UINT64 flags;
@@ -136,11 +137,29 @@ typedef struct ATTR_PACKED QXLCommand {
     UINT32 ped;
 } QXLCommand;
 
+typedef struct ATTR_PACKED QXLCommandExt {
+    QXLCommand cmd;
+    UINT32 group_id;
+} QXLCommandExt;
 
 typedef struct ATTR_PACKED QXLMemSlot {
     UINT64 mem_start;
     UINT64 mem_end;
 } QXLMemSlot;
+
+#define QXL_SURF_TYPE_PRIMARY 0
+
+typedef struct ATTR_PACKED QXLSurfaceCreate {
+    UINT32 width;
+    UINT32 height;
+    INT32 stride;
+    UINT32 depth;
+    UINT32 position;
+    UINT32 mouse_mode;
+    UINT32 flags;
+    UINT32 type;
+    PHYSICAL mem;
+} QXLSurfaceCreate;
 
 RING_DECLARE(QXLCommandRing, QXLCommand, 32);
 RING_DECLARE(QXLCursorRing, QXLCommand, 32);
@@ -162,6 +181,7 @@ typedef struct ATTR_PACKED QXLRam {
     QXLReleaseRing release_ring;
     Rect update_area;
     QXLMemSlot mem_slot;
+    QXLSurfaceCreate create_surface;
     UINT64 flags;
 } QXLRam;
 
@@ -169,6 +189,11 @@ typedef union QXLReleaseInfo {
     UINT64 id;      // in
     UINT64 next;    // out
 } QXLReleaseInfo;
+
+typedef struct QXLReleaseInfoExt {
+    QXLReleaseInfo *info;
+    UINT32 group_id;
+} QXLReleaseInfoExt;
 
 typedef struct  ATTR_PACKED QXLDataChunk {
     UINT32 data_size;
@@ -262,8 +287,8 @@ typedef struct ATTR_PACKED QXLDrawable {
     QXLReleaseInfo release_info;
     UINT8 effect;
     UINT8 type;
-    UINT16 bitmap_offset;
-    Rect bitmap_area;
+    UINT8 self_bitmap;
+    Rect self_bitmap_area;
     Rect bbox;
     Clip clip;
     UINT32 mm_time;

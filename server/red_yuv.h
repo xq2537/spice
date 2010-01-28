@@ -86,7 +86,7 @@ static inline void FUNC_NAME(red_rgb_to_yuv420_line)(const uint8_t* line0, const
 static inline int FUNC_NAME(red_rgb_to_yuv420)(RedWorker *worker, const Rect *src,
                                                const Bitmap *image, AVFrame *frame,
                                                long phys_delta, int memslot_id, int id,
-                                               Stream *stream)
+                                               Stream *stream, uint32_t group_id)
 {
     QXLDataChunk *chunk;
     uint32_t image_stride;
@@ -108,16 +108,17 @@ static inline int FUNC_NAME(red_rgb_to_yuv420)(RedWorker *worker, const Rect *sr
 
     const int skip_lines = stream->top_down ? src->top : image->y - (src->bottom - 0);
     for (i = 0; i < skip_lines; i++) {
-        red_get_image_line(worker, &chunk, &offset, image_stride, phys_delta, memslot_id);
+        red_get_image_line(worker, &chunk, &offset, image_stride, phys_delta, memslot_id,
+                           group_id);
     }
 
     const int image_hight = src->bottom - src->top;
     const int image_width = src->right - src->left;
     for (i = 0; i < image_hight / 2; i++) {
         uint8_t* line0 = red_get_image_line(worker, &chunk, &offset, image_stride, phys_delta,
-                                            memslot_id);
+                                            memslot_id, group_id);
         uint8_t* line1 = red_get_image_line(worker, &chunk, &offset, image_stride, phys_delta,
-                                            memslot_id);
+                                            memslot_id, group_id);
 
         if (!line0 || !line1) {
             return FALSE;
@@ -135,7 +136,7 @@ static inline int FUNC_NAME(red_rgb_to_yuv420)(RedWorker *worker, const Rect *sr
 
     if ((image_hight & 1)) {
         uint8_t* line = red_get_image_line(worker, &chunk, &offset, image_stride, phys_delta,
-                                           memslot_id);
+                                           memslot_id, group_id);
         if (!line) {
             return FALSE;
         }

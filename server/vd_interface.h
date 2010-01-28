@@ -93,19 +93,20 @@ struct CoreInterface {
 };
 
 #define VD_INTERFACE_QXL "qxl"
-#define VD_INTERFACE_QXL_MAJOR 2
+#define VD_INTERFACE_QXL_MAJOR 3
 #define VD_INTERFACE_QXL_MINOR 0
 typedef struct QXLInterface QXLInterface;
 typedef void (*qxl_mode_change_notifier_t)(void *opaque);
 typedef struct QXLWorker QXLWorker;
 typedef struct QXLDevMemSlot QXLDevMemSlot;
+typedef struct QXLDevSurfaceCreate QXLDevSurfaceCreate;
 union QXLReleaseInfo;
+struct QXLReleaseInfoExt;
 struct QXLCommand;
+struct QXLCommandExt;
 struct QXLWorker {
     uint32_t minor_version;
     uint32_t major_version;
-    void (*attach)(QXLWorker *worker);
-    void (*detach)(QXLWorker *worker);
     void (*wakeup)(QXLWorker *worker);
     void (*oom)(QXLWorker *worker);
     void (*save)(QXLWorker *worker);
@@ -114,8 +115,15 @@ struct QXLWorker {
     void (*stop)(QXLWorker *worker);
     void (*update_area)(QXLWorker *worker);
     void (*add_memslot)(QXLWorker *worker, QXLDevMemSlot *slot);
-    void (*del_memslot)(QXLWorker *worker, uint32_t slot_id);
+    void (*del_memslot)(QXLWorker *worker, uint32_t slot_group_id, uint32_t slot_id);
     void (*reset_memslots)(QXLWorker *worker);
+    void (*destroy_surfaces)(QXLWorker *worker);
+    void (*destroy_primary_surface)(QXLWorker *worker, uint32_t surface_id);
+    void (*create_primary_surface)(QXLWorker *worker, uint32_t surface_id,
+                                   QXLDevSurfaceCreate *surface);
+    void (*reset_image_cache)(QXLWorker *worker);
+    void (*reset_cursor)(QXLWorker *worker);
+    void (*destroy_surface_wait)(QXLWorker *worker, uint32_t surface_id);
 };
 
 typedef struct DrawArea {
@@ -139,17 +147,35 @@ typedef struct QXLDevInfo {
 } QXLDevInfo;
 
 typedef struct QXLDevInitInfo {
+    uint32_t num_memslots_groups;
     uint32_t num_memslots;
     uint8_t memslot_gen_bits;
     uint8_t memslot_id_bits;
+    uint32_t qxl_ram_size;
+    uint8_t internal_groupslot_id;
 } QXLDevInitInfo;
 
 struct QXLDevMemSlot {
+    uint32_t slot_group_id;
     uint32_t slot_id;
     uint32_t generation;
     unsigned long virt_start;
     unsigned long virt_end;
     uint64_t addr_delta;
+    uint32_t qxl_ram_size;
+};
+
+struct QXLDevSurfaceCreate {
+    uint32_t width;
+    uint32_t height;
+    int32_t stride;
+    uint32_t depth;
+    uint32_t position;
+    uint32_t mouse_mode;
+    uint32_t flags;
+    uint32_t type;
+    uint64_t mem;
+    uint32_t group_id;
 };
 
 struct QXLInterface {
@@ -162,17 +188,13 @@ struct QXLInterface {
     void (*attache_worker)(QXLInterface *qxl, QXLWorker *qxl_worker);
     void (*set_compression_level)(QXLInterface *qxl, int level);
     void (*set_mm_time)(QXLInterface *qxl, uint32_t mm_time);
-    VDObjectRef (*register_mode_change)(QXLInterface *qxl, qxl_mode_change_notifier_t,
-                                        void *opaque);
-    void (*unregister_mode_change)(QXLInterface *qxl, VDObjectRef notifier);
 
     void (*get_init_info)(QXLInterface *qxl, QXLDevInitInfo *info);
-    void (*get_info)(QXLInterface *qxl, QXLDevInfo *info);
-    int (*get_command)(QXLInterface *qxl, struct QXLCommand *cmd);
+    int (*get_command)(QXLInterface *qxl, struct QXLCommandExt *cmd);
     int (*req_cmd_notification)(QXLInterface *qxl);
     int (*has_command)(QXLInterface *qxl);
-    void (*release_resource)(QXLInterface *qxl, union QXLReleaseInfo *release_info);
-    int (*get_cursor_command)(QXLInterface *qxl, struct QXLCommand *cmd);
+    void (*release_resource)(QXLInterface *qxl, struct QXLReleaseInfoExt release_info);
+    int (*get_cursor_command)(QXLInterface *qxl, struct QXLCommandExt *cmd);
     int (*req_cursor_notification)(QXLInterface *qxl);
     const struct Rect *(*get_update_area)(QXLInterface *qxl);
     void (*notify_update)(QXLInterface *qxl, uint32_t update_id);

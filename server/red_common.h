@@ -48,6 +48,11 @@
     abort();                                        \
 }
 
+#define PANIC_ON(x) if ((x)) {                             \
+    printf("%s: panic %s\n", __FUNCTION__, #x);             \
+    abort();                                                \
+}
+
 #define TRUE 1
 #define FALSE 0
 
