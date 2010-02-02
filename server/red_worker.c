@@ -76,6 +76,7 @@
 #define RED_STREAM_FRAMES_START_CONDITION 20
 #define RED_STREAM_GRADUAL_FRAMES_START_CONDITION 0.2
 #define RED_STREAM_FRAMES_RESET_CONDITION 100
+#define RED_STREAM_MIN_SIZE (96 * 96)
 
 #define FPS_TEST_INTERVAL 1
 #define MAX_FPS 30
@@ -3458,6 +3459,17 @@ static inline void red_update_streamable(RedWorker *worker, Drawable *drawable,
                                      drawable->group_id);
     if (qxl_image->descriptor.type != SPICE_IMAGE_TYPE_BITMAP) {
         return;
+    }
+
+    if (worker->streaming_video == STREAM_VIDEO_FILTER) {
+        SpiceRect* rect;
+        int size;
+
+        rect = &drawable->qxl_drawable->u.copy.src_area;
+        size = (rect->right - rect->left) * (rect->bottom - rect->top);
+        if (size < RED_STREAM_MIN_SIZE) {
+            return;
+        }
     }
 
     drawable->streamable = TRUE;
