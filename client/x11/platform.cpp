@@ -176,6 +176,10 @@ void XEventHandler::on_event()
             continue;
         }
 
+	if (XFilterEvent(&event, None)) {
+	    continue;
+	}
+
         if (XFindContext(&_x_display, event.xany.window, _win_proc_context, &proc_pointer)) {
             THROW("no window proc");
         }
