@@ -5,9 +5,9 @@
 
 class CEGUIResourceProvider: public CEGUI::ResourceProvider {
 public:
-    virtual void loadRawDataContainer(const CEGUI::SpiceString &filename,
+    virtual void loadRawDataContainer(const CEGUI::String &filename,
                                       CEGUI::RawDataContainer &output,
-                                      const CEGUI::SpiceString &resourceGroup);
+                                      const CEGUI::String &resourceGroup);
 
     virtual void unloadRawDataContainer(CEGUI::RawDataContainer& data);
 };

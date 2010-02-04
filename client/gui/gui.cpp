@@ -81,7 +81,7 @@ public:
 
     class MyListItem : public CEGUI::ListboxTextItem {
     public:
-        MyListItem (const CEGUI::SpiceString& text)
+        MyListItem (const CEGUI::String& text)
             : CEGUI::ListboxTextItem(text)
         {
             setSelectionBrushImage("TaharezLook", "MultiListSelectionBrush");
@@ -257,7 +257,7 @@ private:
 
     class UndimInfo {
     public:
-        UndimInfo(const CEGUI::SpiceString& name, float alpha, bool inherits)
+        UndimInfo(const CEGUI::String& name, float alpha, bool inherits)
             : _name (name)
             , _alpha (alpha)
             , _inherits (inherits)
@@ -275,7 +275,7 @@ private:
         }
 
     private:
-        CEGUI::SpiceString _name;
+        CEGUI::String _name;
         float _alpha;
         bool _inherits;
 
@@ -736,7 +736,7 @@ ConnectingDialog::ConnectingDialog(GUI& gui)
         int y_pos = (MAIN_GUI_HEIGHT - CONNECTING_DIALOG_HEIGHT) / 2;
         set_win_pos(wnd, x_pos, y_pos);
         set_win_size(wnd, CONNECTING_DIALOG_WIDTH, CONNECTING_DIALOG_HEIGHT);
-        CEGUI::SpiceString text(res_get_string(STR_MESG_CONNECTING));
+        CEGUI::String text(res_get_string(STR_MESG_CONNECTING));
         wnd->setText(text + " " + application().get_host());
         wnd->setProperty("HorzFormatting", "LeftAligned");
         wnd->setProperty("VertFormatting", "TopAligned");
@@ -924,7 +924,7 @@ void GUI::init_cegui()
     _gui_system->setDefaultMouseCursor("TaharezLook", "MouseArrow");
     _gui_system->setDefaultTooltip("TaharezLook/Tooltip");
 
-    CEGUI::SpiceString font_name("DejaVuSans-10");
+    CEGUI::String font_name("DejaVuSans-10");
     CEGUI::Font* font;
 
     if (!CEGUI::FontManager::getSingleton().isFontPresent(font_name)) {
@@ -1010,7 +1010,7 @@ void GUI::update_layer_area()
             continue;
         }
 
-        CEGUI::SpiceRect area = child->getPixelRect();
+        CEGUI::Rect area = child->getPixelRect();
         SpiceRect r;
         r.left = (int)area.d_left + dx;
         r.right = (int)area.d_right + dx;
