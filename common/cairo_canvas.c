@@ -146,7 +146,7 @@ static void canvas_set_line_attr_no_dash(CairoCanvas *canvas, SpiceLineAttr *att
     cairo_set_dash(cairo, NULL, 0, 0);
 }
 
-static void canvas_set_dash(CairoCanvas *canvas, UINT8 nseg, SPICE_ADDRESS addr, int start_is_gap)
+static void canvas_set_dash(CairoCanvas *canvas, uint8_t nseg, SPICE_ADDRESS addr, int start_is_gap)
 {
     SPICE_FIXED28_4* style = (SPICE_FIXED28_4*)SPICE_GET_ADDRESS(addr);
     double offset = 0;
@@ -1136,8 +1136,8 @@ void canvas_draw_rop3(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, Spi
     x_pos = bbox->left;
     y_pos = bbox->top;
     cairo_user_to_device(cairo, &x_pos, &y_pos);
-    pos.x = (INT32)x_pos;
-    pos.y = (INT32)y_pos;
+    pos.x = (int32_t)x_pos;
+    pos.y = (int32_t)y_pos;
     d = canvas_surface_from_self(canvas, &pos, width, heigth);
     s = canvas_get_image(&canvas->base, rop3->src_bitmap);
 

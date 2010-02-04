@@ -18,9 +18,10 @@
 #ifndef __QUIC_CONFIG_H
 #define __QUIC_CONFIG_H
 
+#include <spice/types.h>
+
 #ifdef __GNUC__
 
-#include <stdint.h>
 #include <string.h>
 
 #define INLINE inline
@@ -36,16 +37,12 @@
 #define MEMCLEAR(ptr, size) RtlZeroMemory(ptr, size)
 #else
 #include <stddef.h>
-#include <basetsd.h>
 #include <string.h>
 
 #define INLINE inline
 #define MEMCLEAR(ptr, size) memset(ptr, 0, size)
 #endif
 
-typedef UINT32 uint32_t;
-typedef UINT16 uint16_t;
-typedef UINT8 uint8_t;
 
 #endif
 

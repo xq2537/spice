@@ -22,7 +22,7 @@
 #include <errno.h>
 #endif
 
-#include <stdint.h>
+#include <spice/types.h>
 #include <stdio.h>
 #include <string>
 #include <vector>
@@ -35,7 +35,6 @@
 #ifdef WIN32
 #include <winsock2.h>
 #include <windows.h>
-#include <basetsd.h>
 
 #pragma warning(disable:4355)
 #pragma warning(disable:4996)

@@ -20,6 +20,8 @@
 #ifndef __LZ_CONFIG_H
 #define __LZ_CONFIG_H
 
+#include <spice/types.h>
+
 #ifndef FALSE
 #define FALSE 0
 #endif
@@ -31,7 +33,6 @@
 
 #ifdef __GNUC__
 
-#include <stdint.h>
 #include <string.h>
 
 #define INLINE inline
@@ -45,15 +46,10 @@
 
 #else
 #include <stddef.h>
-#include <basetsd.h>
 #include <string.h>
 
 #define INLINE inline
 #endif  // QXLDD
-
-typedef UINT32 uint32_t;
-typedef UINT16 uint16_t;
-typedef UINT8 uint8_t;
 
 #endif  //__GNUC__
 #endif  //__LZ_CONFIG_H

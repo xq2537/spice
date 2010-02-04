@@ -199,10 +199,10 @@ typedef struct CanvasBase {
 #endif
 
 typedef struct ATTR_PACKED DataChunk {
-    UINT32 size;
+    uint32_t size;
     SPICE_ADDRESS prev;
     SPICE_ADDRESS next;
-    UINT8 data[0];
+    uint8_t data[0];
 } DataChunk;
 
 #undef ATTR_PACKED
@@ -217,8 +217,8 @@ typedef struct ATTR_PACKED DataChunk {
 static inline void canvas_localize_palette(CanvasBase *canvas, SpicePalette *palette)
 {
     if (canvas->color_shift == 5) {
-        UINT32 *now = palette->ents;
-        UINT32 *end = now + palette->num_ents;
+        uint32_t *now = palette->ents;
+        uint32_t *end = now + palette->num_ents;
         for (; now < end; now++) {
             *now = canvas_16bpp_to_32bpp(*now);
         }

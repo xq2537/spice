@@ -282,7 +282,7 @@ static void set_brush(GLCanvas *canvas, SpiceBrush *brush)
     }
 }
 
-static void set_op(GLCanvas *canvas, UINT16 rop_decriptor)
+static void set_op(GLCanvas *canvas, uint16_t rop_decriptor)
 {
     GLCOp op;
 

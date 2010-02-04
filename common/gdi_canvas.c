@@ -1477,7 +1477,7 @@ static int get_cap(int end_style)
     }
 }
 
-static uint32_t *gdi_get_userstyle(GdiCanvas *canvas, UINT8 nseg, SPICE_ADDRESS addr, int start_is_gap)
+static uint32_t *gdi_get_userstyle(GdiCanvas *canvas, uint8_t nseg, SPICE_ADDRESS addr, int start_is_gap)
 {
     SPICE_FIXED28_4* style = (SPICE_FIXED28_4*)SPICE_GET_ADDRESS(addr);
     double offset = 0;

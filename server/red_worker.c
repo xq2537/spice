@@ -1229,7 +1229,7 @@ static void cb_validate_virt_preload_group(void *opaque, unsigned long virt,
                   ((RedWorker *)opaque)->preload_group_id);
 }
 
-char *draw_type_to_str(UINT8 type)
+char *draw_type_to_str(uint8_t type)
 {
     switch (type) {
     case QXL_DRAW_FILL:
@@ -3724,11 +3724,11 @@ static void localize_path(RedWorker *worker, QXLPHYSICAL *in_path, uint32_t grou
 
     ASSERT(in_path && *in_path);
     path = (QXLPath *)get_virt(worker, *in_path, sizeof(QXLPath), group_id);
-    data = malloc(sizeof(UINT32) + path->data_size);
+    data = malloc(sizeof(uint32_t) + path->data_size);
     ASSERT(data);
     *in_path = (QXLPHYSICAL)data;
-    *(UINT32 *)data = path->data_size;
-    data += sizeof(UINT32);
+    *(uint32_t *)data = path->data_size;
+    data += sizeof(uint32_t);
     chunk = &path->chunk;
     do {
         data_size = chunk->data_size;
@@ -3757,7 +3757,7 @@ static void localize_str(RedWorker *worker, QXLPHYSICAL *in_str, uint32_t group_
     int memslot_id = get_memslot_id(worker, *in_str);
 
     ASSERT(in_str);
-    str = malloc(sizeof(UINT32) + qxl_str->data_size);
+    str = malloc(sizeof(uint32_t) + qxl_str->data_size);
     ASSERT(str);
     *in_str = (QXLPHYSICAL)str;
     str->length = qxl_str->length;
@@ -3801,11 +3801,11 @@ static void localize_clip(RedWorker *worker, SpiceClip *clip, uint32_t group_id)
         clip_rects = (QXLClipRects *)get_virt(worker, clip->data, sizeof(QXLClipRects), group_id);
         chunk = &clip_rects->chunk;
         ASSERT(clip->data);
-        data = malloc(sizeof(UINT32) + clip_rects->num_rects * sizeof(SpiceRect));
+        data = malloc(sizeof(uint32_t) + clip_rects->num_rects * sizeof(SpiceRect));
         ASSERT(data);
         clip->data = (QXLPHYSICAL)data;
-        *(UINT32 *)(data) = clip_rects->num_rects;
-        data += sizeof(UINT32);
+        *(uint32_t *)(data) = clip_rects->num_rects;
+        data += sizeof(uint32_t);
         do {
             data_size = chunk->data_size;
             validate_virt(worker, (unsigned long)chunk->data, memslot_id, data_size, group_id);
@@ -3848,7 +3848,7 @@ static LocalImage *alloc_local_image(RedWorker *worker)
     return &worker->local_images[worker->local_images_pos++];
 }
 
-static ImageCacheItem *image_cache_find(ImageCache *cache, UINT64 id)
+static ImageCacheItem *image_cache_find(ImageCache *cache, uint64_t id)
 {
     ImageCacheItem *item = cache->hash_table[id % IMAGE_CACHE_HASH_SIZE];
 
@@ -3861,7 +3861,7 @@ static ImageCacheItem *image_cache_find(ImageCache *cache, UINT64 id)
     return NULL;
 }
 
-static int image_cache_hit(ImageCache *cache, UINT64 id)
+static int image_cache_hit(ImageCache *cache, uint64_t id)
 {
     ImageCacheItem *item;
     if (!(item = image_cache_find(cache, id))) {
@@ -4744,7 +4744,7 @@ static void fill_path(DisplayChannel *display_channel, QXLPHYSICAL *in_path, uin
     memslot_id  = get_memslot_id(worker, *in_path);
     QXLPath *path = (QXLPath *)get_virt(worker, *in_path, sizeof(QXLPath), group_id);
     *in_path = channel->send_data.header.size;
-    add_buf(channel, BUF_TYPE_RAW, &path->data_size, sizeof(UINT32), 0, 0);
+    add_buf(channel, BUF_TYPE_RAW, &path->data_size, sizeof(uint32_t), 0, 0);
     add_buf(channel, BUF_TYPE_CHUNK, &path->chunk, path->data_size, memslot_id, group_id);
 }
 
@@ -4758,7 +4758,7 @@ static void fill_str(DisplayChannel *display_channel, QXLPHYSICAL *in_str, uint3
     memslot_id  = get_memslot_id(worker, *in_str);
     QXLString *str = (QXLString *)get_virt(worker, *in_str, sizeof(QXLString), group_id);
     *in_str = channel->send_data.header.size;
-    add_buf(channel, BUF_TYPE_RAW, &str->length, sizeof(UINT32), 0, 0);
+    add_buf(channel, BUF_TYPE_RAW, &str->length, sizeof(uint32_t), 0, 0);
     add_buf(channel, BUF_TYPE_CHUNK, &str->chunk, str->data_size, memslot_id, group_id);
 }
 
@@ -4771,7 +4771,7 @@ static inline void fill_rects_clip(RedChannel *channel, QXLPHYSICAL *in_clip, ui
     ASSERT(in_clip && *in_clip);
     clip = (QXLClipRects *)get_virt(worker, *in_clip, sizeof(QXLClipRects), group_id);
     *in_clip = channel->send_data.header.size;
-    add_buf(channel, BUF_TYPE_RAW, &clip->num_rects, sizeof(UINT32), 0, 0);
+    add_buf(channel, BUF_TYPE_RAW, &clip->num_rects, sizeof(uint32_t), 0, 0);
     add_buf(channel, BUF_TYPE_CHUNK, &clip->chunk, clip->num_rects * sizeof(SpiceRect), memslot_id,
             group_id);
 }
@@ -4798,7 +4798,7 @@ static inline RedImage *alloc_image(DisplayChannel *display_channel)
 }
 
 /* io_palette is relative address of the palette*/
-static inline void fill_palette(DisplayChannel *display_channel, SPICE_ADDRESS *io_palette, UINT8 *flags,
+static inline void fill_palette(DisplayChannel *display_channel, SPICE_ADDRESS *io_palette, uint8_t *flags,
                                 uint32_t group_id)
 {
     RedChannel *channel = &display_channel->base;
@@ -4821,7 +4821,7 @@ static inline void fill_palette(DisplayChannel *display_channel, SPICE_ADDRESS *
     }
     *io_palette = channel->send_data.header.size;
     add_buf(channel, BUF_TYPE_RAW, palette,
-            sizeof(SpicePalette) + palette->num_ents * sizeof(UINT32), 0, 0);
+            sizeof(SpicePalette) + palette->num_ents * sizeof(uint32_t), 0, 0);
 }
 
 static inline RedCompressBuf *red_display_alloc_compress_buf(DisplayChannel *display_channel)
@@ -5559,7 +5559,7 @@ typedef struct compress_send_data_t {
     void*    comp_buf;
     uint32_t comp_buf_size;
     SPICE_ADDRESS  *plt_ptr;
-    UINT8    *flags_ptr;
+    uint8_t    *flags_ptr;
 } compress_send_data_t;
 
 

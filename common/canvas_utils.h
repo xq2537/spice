@@ -18,13 +18,7 @@
 #ifndef _H_CANVAS_UTILS
 #define _H_CANVAS_UTILS
 
-#ifdef __GNUC__
-#include <stdint.h>
-#else
-#include <stddef.h>
-#include <basetsd.h>
-typedef UINT8 uint8_t;
-#endif  //__GNUC__
+#include <spice/types.h>
 
 #include "cairo.h"
 #include "lz.h"
