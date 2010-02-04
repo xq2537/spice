@@ -81,7 +81,7 @@ public:
 
     class MyListItem : public CEGUI::ListboxTextItem {
     public:
-        MyListItem (const CEGUI::String& text)
+        MyListItem (const CEGUI::SpiceString& text)
             : CEGUI::ListboxTextItem(text)
         {
             setSelectionBrushImage("TaharezLook", "MultiListSelectionBrush");
@@ -257,7 +257,7 @@ private:
 
     class UndimInfo {
     public:
-        UndimInfo(const CEGUI::String& name, float alpha, bool inherits)
+        UndimInfo(const CEGUI::SpiceString& name, float alpha, bool inherits)
             : _name (name)
             , _alpha (alpha)
             , _inherits (inherits)
@@ -275,7 +275,7 @@ private:
         }
 
     private:
-        CEGUI::String _name;
+        CEGUI::SpiceString _name;
         float _alpha;
         bool _inherits;
 
@@ -736,7 +736,7 @@ ConnectingDialog::ConnectingDialog(GUI& gui)
         int y_pos = (MAIN_GUI_HEIGHT - CONNECTING_DIALOG_HEIGHT) / 2;
         set_win_pos(wnd, x_pos, y_pos);
         set_win_size(wnd, CONNECTING_DIALOG_WIDTH, CONNECTING_DIALOG_HEIGHT);
-        CEGUI::String text(res_get_string(STR_MESG_CONNECTING));
+        CEGUI::SpiceString text(res_get_string(STR_MESG_CONNECTING));
         wnd->setText(text + " " + application().get_host());
         wnd->setProperty("HorzFormatting", "LeftAligned");
         wnd->setProperty("VertFormatting", "TopAligned");
@@ -924,7 +924,7 @@ void GUI::init_cegui()
     _gui_system->setDefaultMouseCursor("TaharezLook", "MouseArrow");
     _gui_system->setDefaultTooltip("TaharezLook/Tooltip");
 
-    CEGUI::String font_name("DejaVuSans-10");
+    CEGUI::SpiceString font_name("DejaVuSans-10");
     CEGUI::Font* font;
 
     if (!CEGUI::FontManager::getSingleton().isFontPresent(font_name)) {
@@ -991,7 +991,7 @@ void GUI::update_layer_area()
         clear_area();
         return;
     }
-    Point screen_size = screen()->get_size();
+    SpicePoint screen_size = screen()->get_size();
 
     int dx = (screen_size.x - MAIN_GUI_WIDTH) / 2;
     int dy = (screen_size.y - MAIN_GUI_HEIGHT) / 2;
@@ -1010,8 +1010,8 @@ void GUI::update_layer_area()
             continue;
         }
 
-        CEGUI::Rect area = child->getPixelRect();
-        Rect r;
+        CEGUI::SpiceRect area = child->getPixelRect();
+        SpiceRect r;
         r.left = (int)area.d_left + dx;
         r.right = (int)area.d_right + dx;
         r.top = (int)area.d_top + dy;
@@ -1030,13 +1030,13 @@ void GUI::copy_pixels(const QRegion& dest_region, RedDrawable& dest)
     }
 
     for (int i = 0; i < (int)dest_region.num_rects; i++) {
-        Rect* r = &dest_region.rects[i];
+        SpiceRect* r = &dest_region.rects[i];
         _pixmap->copy_pixels(dest, r->left, r->top, *r);
     }
 
     _gui_system->renderGUI();
     for (int i = 0; i < (int)dest_region.num_rects; i++) {
-        Rect* r = &dest_region.rects[i];
+        SpiceRect* r = &dest_region.rects[i];
         dest.copy_pixels(*_pixmap, r->left, r->top, *r);
     }
 }
@@ -1145,23 +1145,23 @@ void GUI::on_mouse_button_press(int button, int buttons_state)
 {
     _app.set_key_handler(*this);
     switch (button) {
-    case REDC_MOUSE_LBUTTON:
+    case SPICE_MOUSE_BUTTON_LEFT:
         _gui_system->injectMouseButtonDown(CEGUI::LeftButton);
         break;
-    case REDC_MOUSE_MBUTTON:
+    case SPICE_MOUSE_BUTTON_MIDDLE:
         _gui_system->injectMouseButtonDown(CEGUI::MiddleButton);
         break;
-    case REDC_MOUSE_RBUTTON:
+    case SPICE_MOUSE_BUTTON_RIGHT:
         _gui_system->injectMouseButtonDown(CEGUI::RightButton);
         break;
-    case REDC_MOUSE_UBUTTON:
+    case SPICE_MOUSE_BUTTON_UP:
         _gui_system->injectMouseWheelChange(-1);
         break;
-    case REDC_MOUSE_DBUTTON:
+    case SPICE_MOUSE_BUTTON_DOWN:
         _gui_system->injectMouseWheelChange(1);
         break;
     default:
-        THROW("invalid RedButton %d", button);
+        THROW("invalid SpiceMouseButton %d", button);
     }
     conditional_update();
 }
@@ -1169,20 +1169,20 @@ void GUI::on_mouse_button_press(int button, int buttons_state)
 void GUI::on_mouse_button_release(int button, int buttons_state)
 {
     switch (button) {
-    case REDC_MOUSE_LBUTTON:
+    case SPICE_MOUSE_BUTTON_LEFT:
         _gui_system->injectMouseButtonUp(CEGUI::LeftButton);
         break;
-    case REDC_MOUSE_MBUTTON:
+    case SPICE_MOUSE_BUTTON_MIDDLE:
         _gui_system->injectMouseButtonUp(CEGUI::MiddleButton);
         break;
-    case REDC_MOUSE_RBUTTON:
+    case SPICE_MOUSE_BUTTON_RIGHT:
         _gui_system->injectMouseButtonUp(CEGUI::RightButton);
         break;
-    case REDC_MOUSE_UBUTTON:
-    case REDC_MOUSE_DBUTTON:
+    case SPICE_MOUSE_BUTTON_UP:
+    case SPICE_MOUSE_BUTTON_DOWN:
         break;
     default:
-        THROW("invalid RedButton %d", button);
+        THROW("invalid SpiceMouseButton %d", button);
     }
     conditional_update();
 }

@@ -69,7 +69,7 @@ void CCanvas::create_pixmap(int width, int height, RedWindow *win)
 void CCanvas::copy_pixels(const QRegion& region, RedDrawable& dest_dc)
 {
     for (int i = 0; i < (int)region.num_rects; i++) {
-        Rect* r = &region.rects[i];
+        SpiceRect* r = &region.rects[i];
         dest_dc.copy_pixels(*_pixmap, r->left, r->top, *r);
     }
 }
@@ -113,80 +113,80 @@ void CCanvas::set_access_params(unsigned long base, unsigned long max)
     canvas_set_access_params(_canvas, base, max);
 }
 
-void CCanvas::draw_fill(Rect *bbox, Clip *clip, Fill *fill)
+void CCanvas::draw_fill(SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill)
 {
     canvas_draw_fill(_canvas, bbox, clip, fill);
 }
 
-void CCanvas::draw_text(Rect *bbox, Clip *clip, Text *text)
+void CCanvas::draw_text(SpiceRect *bbox, SpiceClip *clip, SpiceText *text)
 {
     canvas_draw_text(_canvas, bbox, clip, text);
 }
 
-void CCanvas::draw_opaque(Rect *bbox, Clip *clip, Opaque *opaque)
+void CCanvas::draw_opaque(SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque)
 {
     canvas_draw_opaque(_canvas, bbox, clip, opaque);
 }
 
-void CCanvas::draw_copy(Rect *bbox, Clip *clip, Copy *copy)
+void CCanvas::draw_copy(SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy)
 {
     canvas_draw_copy(_canvas, bbox, clip, copy);
 }
 
-void CCanvas::draw_transparent(Rect *bbox, Clip *clip, Transparent* transparent)
+void CCanvas::draw_transparent(SpiceRect *bbox, SpiceClip *clip, SpiceTransparent* transparent)
 {
     canvas_draw_transparent(_canvas, bbox, clip, transparent);
 }
 
-void CCanvas::draw_alpha_blend(Rect *bbox, Clip *clip, AlphaBlnd* alpha_blend)
+void CCanvas::draw_alpha_blend(SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend)
 {
     canvas_draw_alpha_blend(_canvas, bbox, clip, alpha_blend);
 }
 
-void CCanvas::copy_bits(Rect *bbox, Clip *clip, Point *src_pos)
+void CCanvas::copy_bits(SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos)
 {
     canvas_copy_bits(_canvas, bbox, clip, src_pos);
 }
 
-void CCanvas::draw_blend(Rect *bbox, Clip *clip, Blend *blend)
+void CCanvas::draw_blend(SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend)
 {
     canvas_draw_blend(_canvas, bbox, clip, blend);
 }
 
-void CCanvas::draw_blackness(Rect *bbox, Clip *clip, Blackness *blackness)
+void CCanvas::draw_blackness(SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness)
 {
     canvas_draw_blackness(_canvas, bbox, clip, blackness);
 }
 
-void CCanvas::draw_whiteness(Rect *bbox, Clip *clip, Whiteness *whiteness)
+void CCanvas::draw_whiteness(SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness)
 {
     canvas_draw_whiteness(_canvas, bbox, clip, whiteness);
 }
 
-void CCanvas::draw_invers(Rect *bbox, Clip *clip, Invers *invers)
+void CCanvas::draw_invers(SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers)
 {
     canvas_draw_invers(_canvas, bbox, clip, invers);
 }
 
-void CCanvas::draw_rop3(Rect *bbox, Clip *clip, Rop3 *rop3)
+void CCanvas::draw_rop3(SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3)
 {
     canvas_draw_rop3(_canvas, bbox, clip, rop3);
 }
 
-void CCanvas::draw_stroke(Rect *bbox, Clip *clip, Stroke *stroke)
+void CCanvas::draw_stroke(SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke)
 {
     canvas_draw_stroke(_canvas, bbox, clip, stroke);
 }
 
 #ifdef WIN32
-void CCanvas::put_image(HDC dc, const PixmapHeader& image, const Rect& dest, const QRegion* clip)
+void CCanvas::put_image(HDC dc, const PixmapHeader& image, const SpiceRect& dest, const QRegion* clip)
 {
     canvas_put_image(_canvas, dc, &dest, image.data, image.width, image.height, image.stride,
                      clip);
 }
 
 #else
-void CCanvas::put_image(const PixmapHeader& image, const Rect& dest, const QRegion* clip)
+void CCanvas::put_image(const PixmapHeader& image, const SpiceRect& dest, const QRegion* clip)
 {
     canvas_put_image(_canvas, &dest, image.data, image.width, image.height, image.stride,
                      clip);

@@ -43,9 +43,9 @@ RedChannelBase::~RedChannelBase()
 
 void RedChannelBase::link(uint32_t connection_id, const std::string& password)
 {
-    RedLinkHeader header;
-    RedLinkMess link_mess;
-    RedLinkReply* reply;
+    SpiceLinkHeader header;
+    SpiceLinkMess link_mess;
+    SpiceLinkReply* reply;
     uint32_t link_res;
     uint32_t i;
 
@@ -54,10 +54,10 @@ void RedChannelBase::link(uint32_t connection_id, const std::string& password)
     BIO *bioKey;
     RSA *rsa;
 
-    header.magic = RED_MAGIC;
+    header.magic = SPICE_MAGIC;
     header.size = sizeof(link_mess);
-    header.major_version = RED_VERSION_MAJOR;
-    header.minor_version = RED_VERSION_MINOR;
+    header.major_version = SPICE_VERSION_MAJOR;
+    header.minor_version = SPICE_VERSION_MINOR;
     link_mess.connection_id = connection_id;
     link_mess.channel_type = _type;
     link_mess.channel_id = _id;
@@ -78,14 +78,14 @@ void RedChannelBase::link(uint32_t connection_id, const std::string& password)
 
     recive((uint8_t*)&header, sizeof(header));
 
-    if (header.magic != RED_MAGIC) {
+    if (header.magic != SPICE_MAGIC) {
         THROW_ERR(SPICEC_ERROR_CODE_CONNECT_FAILED, "bad magic");
     }
 
-    if (header.major_version != RED_VERSION_MAJOR) {
+    if (header.major_version != SPICE_VERSION_MAJOR) {
         THROW_ERR(SPICEC_ERROR_CODE_VERSION_MISMATCH,
                   "version mismatch: expect %u got %u",
-                  RED_VERSION_MAJOR,
+                  SPICE_VERSION_MAJOR,
                   header.major_version);
     }
 
@@ -94,9 +94,9 @@ void RedChannelBase::link(uint32_t connection_id, const std::string& password)
     AutoArray<uint8_t> reply_buf(new uint8_t[header.size]);
     recive(reply_buf.get(), header.size);
 
-    reply = (RedLinkReply *)reply_buf.get();
+    reply = (SpiceLinkReply *)reply_buf.get();
 
-    if (reply->error != RED_ERR_OK) {
+    if (reply->error != SPICE_LINK_ERR_OK) {
         THROW_ERR(SPICEC_ERROR_CODE_CONNECT_FAILED, "connect error %u", reply->error);
     }
 
@@ -123,7 +123,7 @@ void RedChannelBase::link(uint32_t connection_id, const std::string& password)
 
     bioKey = BIO_new(BIO_s_mem());
     if (bioKey != NULL) {
-        BIO_write(bioKey, reply->pub_key, RED_TICKET_PUBKEY_BYTES);
+        BIO_write(bioKey, reply->pub_key, SPICE_TICKET_PUBKEY_BYTES);
         pubkey = d2i_PUBKEY_bio(bioKey, NULL);
         rsa = pubkey->pkey.rsa;
         nRSASize = RSA_size(rsa);
@@ -149,8 +149,8 @@ void RedChannelBase::link(uint32_t connection_id, const std::string& password)
     BIO_free(bioKey);
 
     recive((uint8_t*)&link_res, sizeof(link_res));
-    if (link_res != RED_ERR_OK) {
-        int error_code = (link_res == RED_ERR_PERMISSION_DENIED) ?
+    if (link_res != SPICE_LINK_ERR_OK) {
+        int error_code = (link_res == SPICE_LINK_ERR_PERMISSION_DENIED) ?
                                 SPICEC_ERROR_CODE_CONNECT_FAILED : SPICEC_ERROR_CODE_CONNECT_FAILED;
         THROW_ERR(error_code, "connect failed %u", link_res);
     }
@@ -253,7 +253,7 @@ RedChannel::RedChannel(RedClient& client, uint8_t type, uint8_t id,
     , _loop (this)
     , _send_trigger (*this)
     , _disconnect_stamp (0)
-    , _disconnect_reason (RED_ERR_OK)
+    , _disconnect_reason (SPICE_LINK_ERR_OK)
 {
     _loop.add_trigger(_send_trigger);
     _loop.add_trigger(_abort_trigger);
@@ -506,7 +506,7 @@ void RedChannel::on_send_trigger()
 void RedChannel::on_message_recived()
 {
     if (_message_ack_count && !--_message_ack_count) {
-        post_message(new Message(REDC_ACK, 0));
+        post_message(new Message(SPICE_MSGC_ACK, 0));
         _message_ack_count = _message_ack_window;
     }
 }
@@ -521,8 +521,8 @@ void RedChannel::on_message_complition(uint64_t serial)
 void RedChannel::recive_messages()
 {
     for (;;) {
-        uint32_t n = RedPeer::recive((uint8_t*)&_incomming_header, sizeof(RedDataHeader));
-        if (n != sizeof(RedDataHeader)) {
+        uint32_t n = RedPeer::recive((uint8_t*)&_incomming_header, sizeof(SpiceDataHeader));
+        if (n != sizeof(SpiceDataHeader)) {
             _incomming_header_pos = n;
             return;
         }
@@ -558,8 +558,8 @@ void RedChannel::on_event()
     if (_incomming_header_pos) {
         _incomming_header_pos += RedPeer::recive(((uint8_t*)&_incomming_header) +
                                                  _incomming_header_pos,
-                                                 sizeof(RedDataHeader) - _incomming_header_pos);
-        if (_incomming_header_pos != sizeof(RedDataHeader)) {
+                                                 sizeof(SpiceDataHeader) - _incomming_header_pos);
+        if (_incomming_header_pos != sizeof(SpiceDataHeader)) {
             return;
         }
         _incomming_header_pos = 0;
@@ -604,7 +604,7 @@ void RedChannel::send_migrate_flush_mark()
         send(message.get()->peer_message());
     }
     lock.unlock();
-    std::auto_ptr<RedPeer::OutMessage> message(new RedPeer::OutMessage(REDC_MIGRATE_FLUSH_MARK, 0));
+    std::auto_ptr<RedPeer::OutMessage> message(new RedPeer::OutMessage(SPICE_MSGC_MIGRATE_FLUSH_MARK, 0));
     send(*message);
 }
 
@@ -613,20 +613,20 @@ void RedChannel::handle_migrate(RedPeer::InMessage* message)
     DBG(0, "channel type %u id %u", get_type(), get_id());
     _socket_in_loop = false;
     _loop.remove_socket(*this);
-    RedMigrate* migrate = (RedMigrate*)message->data();
-    if (migrate->flags & RED_MIGRATE_NEED_FLUSH) {
+    SpiceMsgMigrate* migrate = (SpiceMsgMigrate*)message->data();
+    if (migrate->flags & SPICE_MIGRATE_NEED_FLUSH) {
         send_migrate_flush_mark();
     }
     AutoRef<CompundInMessage> data_message;
-    if (migrate->flags & RED_MIGRATE_NEED_DATA_TRANSFER) {
+    if (migrate->flags & SPICE_MIGRATE_NEED_DATA_TRANSFER) {
         data_message.reset(recive());
     }
     _client.migrate_channel(*this);
-    if (migrate->flags & RED_MIGRATE_NEED_DATA_TRANSFER) {
-        if ((*data_message)->type() != RED_MIGRATE_DATA) {
-            THROW("expect RED_MIGRATE_DATA");
+    if (migrate->flags & SPICE_MIGRATE_NEED_DATA_TRANSFER) {
+        if ((*data_message)->type() != SPICE_MSG_MIGRATE_DATA) {
+            THROW("expect SPICE_MSG_MIGRATE_DATA");
         }
-        std::auto_ptr<RedPeer::OutMessage> message(new RedPeer::OutMessage(REDC_MIGRATE_DATA,
+        std::auto_ptr<RedPeer::OutMessage> message(new RedPeer::OutMessage(SPICE_MSGC_MIGRATE_DATA,
                                                                           (*data_message)->size()));
         memcpy(message->data(), (*data_message)->data(), (*data_message)->size());
         send(*message);
@@ -640,31 +640,31 @@ void RedChannel::handle_migrate(RedPeer::InMessage* message)
 
 void RedChannel::handle_set_ack(RedPeer::InMessage* message)
 {
-    RedSetAck* ack = (RedSetAck*)message->data();
+    SpiceMsgSetAck* ack = (SpiceMsgSetAck*)message->data();
     _message_ack_window = _message_ack_count = ack->window;
-    Message *responce = new Message(REDC_ACK_SYNC, sizeof(uint32_t));
+    Message *responce = new Message(SPICE_MSGC_ACK_SYNC, sizeof(uint32_t));
     *(uint32_t *)responce->data() = ack->generation;
     post_message(responce);
 }
 
 void RedChannel::handle_ping(RedPeer::InMessage* message)
 {
-    RedPing *ping = (RedPing *)message->data();
-    Message *pong = new Message(REDC_PONG, sizeof(RedPing));
-    *(RedPing *)pong->data() = *ping;
+    SpiceMsgPing *ping = (SpiceMsgPing *)message->data();
+    Message *pong = new Message(SPICE_MSGC_PONG, sizeof(SpiceMsgPing));
+    *(SpiceMsgPing *)pong->data() = *ping;
     post_message(pong);
 }
 
 void RedChannel::handle_disconnect(RedPeer::InMessage* message)
 {
-    RedDisconnect *disconnect = (RedDisconnect *)message->data();
+    SpiceMsgDisconnect *disconnect = (SpiceMsgDisconnect *)message->data();
     _disconnect_stamp = disconnect->time_stamp;
     _disconnect_reason = disconnect->reason;
 }
 
 void RedChannel::handle_notify(RedPeer::InMessage* message)
 {
-    RedNotify *notify = (RedNotify *)message->data();
+    SpiceMsgNotify *notify = (SpiceMsgNotify *)message->data();
     const char *sevirity;
     const char *visibility;
     const char *message_str = "";
@@ -674,12 +674,12 @@ void RedChannel::handle_notify(RedPeer::InMessage* message)
     static const char* visibility_strings[] = {"!", "!!", "!!!"};
 
 
-    if (notify->severty > RED_NOTIFY_SEVERITY_ERROR) {
+    if (notify->severty > SPICE_NOTIFY_SEVERITY_ERROR) {
         THROW("bad sevirity");
     }
     sevirity = sevirity_strings[notify->severty];
 
-    if (notify->visibilty > RED_NOTIFY_VISIBILITY_HIGH) {
+    if (notify->visibilty > SPICE_NOTIFY_VISIBILITY_HIGH) {
         THROW("bad visibilty");
     }
     visibility = visibility_strings[notify->visibilty];
@@ -706,7 +706,7 @@ void RedChannel::handle_notify(RedPeer::InMessage* message)
 
 void RedChannel::handle_wait_for_channels(RedPeer::InMessage* message)
 {
-    RedWaitForChannels *wait = (RedWaitForChannels *)message->data();
+    SpiceMsgWaitForChannels *wait = (SpiceMsgWaitForChannels *)message->data();
     if (message->size() < sizeof(*wait) + wait->wait_count * sizeof(wait->wait_list[0])) {
         THROW("access violation");
     }

@@ -295,9 +295,9 @@ typedef struct CursorItem {
 
 typedef struct LocalCursor {
     CursorItem base;
-    Point16 position;
+    SpicePoint16 position;
     uint32_t data_size;
-    RedCursor red_cursor;
+    SpiceCursor red_cursor;
 } LocalCursor;
 
 #define MAX_SEND_BUFS 20
@@ -331,7 +331,7 @@ typedef struct RedChannel RedChannel;
 typedef void (*disconnect_channel_proc)(RedChannel *channel);
 typedef void (*hold_item_proc)(void *item);
 typedef void (*release_item_proc)(RedChannel *channel, void *item);
-typedef int (*handle_message_proc)(RedChannel *channel, RedDataHeader *message);
+typedef int (*handle_message_proc)(RedChannel *channel, SpiceDataHeader *message);
 
 struct RedChannel {
     EventListener listener;
@@ -350,9 +350,9 @@ struct RedChannel {
 
     struct {
         int blocked;
-        RedDataHeader header;
+        SpiceDataHeader header;
         union {
-            RedSetAck ack;
+            SpiceMsgSetAck ack;
         } u;
         uint32_t n_bufs;
         BufDescriptor bufs[MAX_SEND_BUFS];
@@ -363,7 +363,7 @@ struct RedChannel {
 
     struct {
         uint8_t buf[RECIVE_BUF_SIZE];
-        RedDataHeader *message;
+        SpiceDataHeader *message;
         uint8_t *now;
         uint8_t *end;
     } recive_data;
@@ -380,7 +380,7 @@ struct RedChannel {
 typedef struct ImageItem {
     PipeItem link;
     int refs;
-    Point pos;
+    SpicePoint pos;
     int width;
     int height;
     int stride;
@@ -398,7 +398,7 @@ struct Stream {
     red_time_t last_time;
     int width;
     int height;
-    Rect dest_area;
+    SpiceRect dest_area;
 #endif
     int top_down;
     Stream *next;
@@ -442,12 +442,12 @@ static const int BITMAP_FMT_IS_RGB[] = {0, 0, 0, 0, 0, 0, 1, 1, 1, 1};
 static const int BITMAP_FMP_BYTES_PER_PIXEL[] = {0, 0, 0, 0, 0, 1, 2, 3, 4, 4};
 
 typedef struct  __attribute__ ((__packed__)) RedImage {
-    ImageDescriptor descriptor;
+    SpiceImageDescriptor descriptor;
     union { // variable length
-        Bitmap bitmap;
-        QUICData quic;
-        LZ_RGBData lz_rgb;
-        LZ_PLTData lz_plt;
+        SpiceBitmap bitmap;
+        SpiceQUICData quic;
+        SpiceLZRGBData lz_rgb;
+        SpiceLZPLTData lz_plt;
     };
 } RedImage;
 
@@ -499,13 +499,13 @@ typedef struct __attribute__ ((__packed__)) DisplayChannelMigrateData {
 } DisplayChannelMigrateData;
 
 typedef struct WaitForChannels {
-    RedWaitForChannels header;
-    RedWaitForChannel buf[MAX_CACHE_CLIENTS];
+    SpiceMsgWaitForChannels header;
+    SpiceWaitForChannel buf[MAX_CACHE_CLIENTS];
 } WaitForChannels;
 
 typedef struct FreeList {
     int res_size;
-    RedResorceList *res;
+    SpiceResorceList *res;
     uint64_t sync[MAX_CACHE_CLIENTS];
     WaitForChannels wait;
 } FreeList;
@@ -524,7 +524,7 @@ typedef struct  {
     jmp_buf jmp_env;
     union {
         struct {
-            ADDRESS next;
+            SPICE_ADDRESS next;
             uint32_t stride;
             uint32_t group_id;
 
@@ -629,30 +629,30 @@ struct DisplayChannel {
 
     struct {
         union {
-            RedFill fill;
-            RedOpaque opaque;
-            RedCopy copy;
-            RedTransparent transparent;
-            RedAlphaBlend alpha_blend;
-            RedCopyBits copy_bits;
-            RedBlend blend;
-            RedRop3 rop3;
-            RedBlackness blackness;
-            RedWhiteness whiteness;
-            RedInvers invers;
-            RedStroke stroke;
-            RedText text;
-            RedMode mode;
-            RedInvalOne inval_one;
+            SpiceMsgDisplayDrawFill fill;
+            SpiceMsgDisplayDrawOpaque opaque;
+            SpiceMsgDisplayDrawCopy copy;
+            SpiceMsgDisplayDrawTransparent transparent;
+            SpiceMsgDisplayDrawAlphaBlend alpha_blend;
+            SpiceMsgDisplayCopyBits copy_bits;
+            SpiceMsgDisplayDrawBlend blend;
+            SpiceMsgDisplayDrawRop3 rop3;
+            SpiceMsgDisplayDrawBlackness blackness;
+            SpiceMsgDisplayDrawWhiteness whiteness;
+            SpiceMsgDisplayDrawInvers invers;
+            SpiceMsgDisplayDrawStroke stroke;
+            SpiceMsgDisplayDrawText text;
+            SpiceMsgDisplayMode mode;
+            SpiceMsgDisplayInvalOne inval_one;
             WaitForChannels wait;
             struct {
-                RedStreamCreate message;
+                SpiceMsgDisplayStreamCreate message;
                 uint32_t num_rects;
             } stream_create;
-            RedStreamClip stream_clip;
-            RedStreamData stream_data;
-            RedStreamDestroy stream_destroy;
-            RedMigrate migrate;
+            SpiceMsgDisplayStreamClip stream_clip;
+            SpiceMsgDisplayStreamData stream_data;
+            SpiceMsgDisplayStreamDestroy stream_destroy;
+            SpiceMsgMigrate migrate;
             DisplayChannelMigrateData migrate_data;
         } u;
 
@@ -666,10 +666,10 @@ struct DisplayChannel {
         RedCompressBuf *used_compress_bufs;
 
         struct {
-            RedSubMessageList sub_list;
+            SpiceSubMessageList sub_list;
             uint32_t sub_messages[DISPLAY_MAX_SUB_MESSAGES];
         } sub_list;
-        RedSubMessage sub_header[DISPLAY_MAX_SUB_MESSAGES];
+        SpicedSubMessage sub_header[DISPLAY_MAX_SUB_MESSAGES];
 
         FreeList free_list;
     } send_data;
@@ -697,12 +697,12 @@ typedef struct CursorChannel {
 
     struct {
         union {
-            RedCursorInit cursor_init;
-            RedCursorSet cursor_set;
-            RedCursorMove cursor_move;
-            RedCursorTrail cursor_trail;
-            RedInvalOne inval_one;
-            RedMigrate migrate;
+            SpiceMsgCursorInit cursor_init;
+            SpiceMsgCursorSet cursor_set;
+            SpiceMsgCursorMove cursor_move;
+            SpiceMsgCursorTrail cursor_trail;
+            SpiceMsgDisplayInvalOne inval_one;
+            SpiceMsgMigrate migrate;
         } u;
     } send_data;
 #ifdef RED_STATISTICS
@@ -828,23 +828,23 @@ typedef struct UpgradeItem {
     QRegion region;
 } UpgradeItem;
 
-typedef void (*draw_fill_t)(void *canvas, Rect *bbox, Clip *clip, Fill *fill);
-typedef void (*draw_copy_t)(void *canvas, Rect *bbox, Clip *clip, Copy *copy);
-typedef void (*draw_opaque_t)(void *canvas, Rect *bbox, Clip *clip, Opaque *opaque);
-typedef void (*copy_bits_t)(void *canvas, Rect *bbox, Clip *clip, Point *src_pos);
-typedef void (*draw_text_t)(void *canvas, Rect *bbox, Clip *clip, Text *text);
-typedef void (*draw_stroke_t)(void *canvas, Rect *bbox, Clip *clip, Stroke *stroke);
-typedef void (*draw_rop3_t)(void *canvas, Rect *bbox, Clip *clip, Rop3 *rop3);
-typedef void (*draw_blend_t)(void *canvas, Rect *bbox, Clip *clip, Blend *blend);
-typedef void (*draw_blackness_t)(void *canvas, Rect *bbox, Clip *clip, Blackness *blackness);
-typedef void (*draw_whiteness_t)(void *canvas, Rect *bbox, Clip *clip, Whiteness *whiteness);
-typedef void (*draw_invers_t)(void *canvas, Rect *bbox, Clip *clip, Invers *invers);
-typedef void (*draw_transparent_t)(void *canvas, Rect *bbox, Clip *clip, Transparent* transparent);
-typedef void (*draw_alpha_blend_t)(void *canvas, Rect *bbox, Clip *clip, AlphaBlnd* alpha_blend);
-typedef void (*read_pixels_t)(void *canvas, uint8_t *dest, int dest_stride, const Rect *area);
-typedef void (*set_top_mask_t)(void *canvas, int num_rect, const Rect *rects);
+typedef void (*draw_fill_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill);
+typedef void (*draw_copy_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy);
+typedef void (*draw_opaque_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque);
+typedef void (*copy_bits_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos);
+typedef void (*draw_text_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceText *text);
+typedef void (*draw_stroke_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke);
+typedef void (*draw_rop3_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3);
+typedef void (*draw_blend_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend);
+typedef void (*draw_blackness_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness);
+typedef void (*draw_whiteness_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness);
+typedef void (*draw_invers_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers);
+typedef void (*draw_transparent_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceTransparent* transparent);
+typedef void (*draw_alpha_blend_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend);
+typedef void (*read_pixels_t)(void *canvas, uint8_t *dest, int dest_stride, const SpiceRect *area);
+typedef void (*set_top_mask_t)(void *canvas, int num_rect, const SpiceRect *rects);
 typedef void (*clear_top_mask_t)(void *canvas);
-typedef void (*validate_area_t)(void *canvas, int32_t stride, uint8_t *line_0, const Rect *area);
+typedef void (*validate_area_t)(void *canvas, int32_t stride, uint8_t *line_0, const SpiceRect *area);
 typedef void (*destroy_t)(void *canvas);
 
 typedef struct DrawFuncs {
@@ -891,7 +891,7 @@ typedef struct ItemTrace {
     int last_gradual_frame;
     int width;
     int height;
-    Rect dest_area;
+    SpiceRect dest_area;
 } ItemTrace;
 
 #define TRACE_ITEMS_SHIFT 3
@@ -943,7 +943,7 @@ typedef struct RedWorker {
 
     CursorItem *cursor;
     int cursor_visible;
-    Point16 cursor_position;
+    SpicePoint16 cursor_position;
     uint16_t cursor_trail_length;
     uint16_t cursor_trail_frequency;
 
@@ -1017,7 +1017,7 @@ static void display_channel_push(RedWorker *worker);
 #define red_draw_drawable(worker, item)
 #else
 static void red_draw_drawable(RedWorker *worker, Drawable *item);
-static void red_update_area(RedWorker *worker, const Rect *area);
+static void red_update_area(RedWorker *worker, const SpiceRect *area);
 #endif
 static void red_release_cursor(RedWorker *worker, CursorItem *cursor);
 static inline void release_drawable(RedWorker *worker, Drawable *item);
@@ -1039,11 +1039,11 @@ static void red_display_release_stream_clip(DisplayChannel* channel, StreamClipI
 static int red_display_free_some_independent_glz_drawables(DisplayChannel *channel);
 static void red_display_free_glz_drawable(DisplayChannel *channel, RedGlzDrawable *drawable);
 static void reset_rate(StreamAgent *stream_agent);
-static int _bitmap_is_gradual(RedWorker *worker, Bitmap *bitmap, uint32_t group_id);
-static inline int _stride_is_extra(Bitmap *bitmap);
+static int _bitmap_is_gradual(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_id);
+static inline int _stride_is_extra(SpiceBitmap *bitmap);
 
 #ifdef DUMP_BITMAP
-static void dump_bitmap(RedWorker *worker, Bitmap *bitmap, uint32_t group_id);
+static void dump_bitmap(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_id);
 #endif
 
 #ifdef COMPRESS_STAT
@@ -1644,7 +1644,7 @@ static inline void red_add_item_trace(RedWorker *worker, Drawable *item)
     trace->frames_count = item->frames_count;
     trace->gradual_frames_count = item->gradual_frames_count;
     trace->last_gradual_frame = item->last_gradual_frame;
-    Rect* src_area = &item->qxl_drawable->u.copy.src_area;
+    SpiceRect* src_area = &item->qxl_drawable->u.copy.src_area;
     trace->width = src_area->right - src_area->left;
     trace->height = src_area->bottom - src_area->top;
     trace->dest_area = item->qxl_drawable->bbox;
@@ -2118,7 +2118,7 @@ static inline void __current_add_drawable(RedWorker *worker, Drawable *drawable,
 
 #ifdef USE_EXCLUDE_RGN
 
-static int is_equal_path(RedWorker *worker, ADDRESS p1, ADDRESS p2, uint32_t group_id1,
+static int is_equal_path(RedWorker *worker, SPICE_ADDRESS p1, SPICE_ADDRESS p2, uint32_t group_id1,
                          uint32_t group_id2)
 {
     QXLPath *path1;
@@ -2181,13 +2181,13 @@ static int is_equal_path(RedWorker *worker, ADDRESS p1, ADDRESS p2, uint32_t gro
 }
 
 // partial imp
-static int is_equal_brush(Brush *b1, Brush *b2)
+static int is_equal_brush(SpiceBrush *b1, SpiceBrush *b2)
 {
-    return b1->type == b2->type && b1->type == BRUSH_TYPE_SOLID && b1->u.color == b1->u.color;
+    return b1->type == b2->type && b1->type == SPICE_BRUSH_TYPE_SOLID && b1->u.color == b1->u.color;
 }
 
 // partial imp
-static int is_equal_line_attr(LineAttr *a1, LineAttr *a2)
+static int is_equal_line_attr(SpiceLineAttr *a1, SpiceLineAttr *a2)
 {
     return a1->flags == a2->flags && a1->join_style == a2->join_style &&
            a1->end_style == a2->end_style && a1->style_nseg == a2->style_nseg &&
@@ -2195,7 +2195,7 @@ static int is_equal_line_attr(LineAttr *a1, LineAttr *a2)
            a1->style_nseg == 0;
 }
 
-static inline int rect_is_equal(const Rect *r1, const Rect *r2)
+static inline int rect_is_equal(const SpiceRect *r1, const SpiceRect *r2)
 {
     return r1->top == r2->top && r1->left == r2->left &&
            r1->bottom == r2->bottom && r1->right == r2->right;
@@ -2293,11 +2293,11 @@ static void push_stream_clip_by_drawable(DisplayChannel* channel, StreamAgent *a
         PANIC("alloc failed");
     }
 
-    if (drawable->qxl_drawable->clip.type == CLIP_TYPE_NONE) {
+    if (drawable->qxl_drawable->clip.type == SPICE_CLIP_TYPE_NONE) {
         region_init(&item->region);
-        item->clip_type = CLIP_TYPE_NONE;
+        item->clip_type = SPICE_CLIP_TYPE_NONE;
     } else {
-        item->clip_type = CLIP_TYPE_RECTS;
+        item->clip_type = SPICE_CLIP_TYPE_RECTS;
         region_clone(&item->region, &drawable->tree_item.base.rgn);
     }
     red_pipe_add((RedChannel*)channel, (PipeItem *)item);
@@ -2309,7 +2309,7 @@ static void push_stream_clip(DisplayChannel* channel, StreamAgent *agent)
     if (!item) {
         PANIC("alloc failed");
     }
-    item->clip_type = CLIP_TYPE_RECTS;
+    item->clip_type = SPICE_CLIP_TYPE_RECTS;
     region_clone(&item->region, &agent->vis_region);
     red_pipe_add((RedChannel*)channel, (PipeItem *)item);
 }
@@ -2641,7 +2641,7 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
     Stream *stream;
     AVFrame *frame;
     uint8_t* frame_buf;
-    Rect* src_rect;
+    SpiceRect* src_rect;
     int stream_width;
     int stream_height;
     int pict_size;
@@ -2694,7 +2694,7 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
     stream->frame_buf_end = frame_buf + pict_size;
     QXLImage *qxl_image = (QXLImage *)get_virt(worker, drawable->qxl_drawable->u.copy.src_bitmap,
                                                sizeof(QXLImage), drawable->group_id);
-    stream->top_down = !!(qxl_image->bitmap.flags & BITMAP_TOP_DOWN);
+    stream->top_down = !!(qxl_image->bitmap.flags & SPICE_BITMAP_FLAGS_TOP_DOWN);
     drawable->stream = stream;
 
     if (worker->display_channel) {
@@ -2770,7 +2770,7 @@ static inline int __red_is_next_stream_frame(RedWorker *worker,
                                              const Drawable *candidate,
                                              const int other_src_width,
                                              const int other_src_height,
-                                             const Rect *other_dest,
+                                             const SpiceRect *other_dest,
                                              const red_time_t other_time,
                                              const Stream *stream)
 {
@@ -2787,7 +2787,7 @@ static inline int __red_is_next_stream_frame(RedWorker *worker,
         return FALSE;
     }
 
-    Rect* candidate_src = &qxl_drawable->u.copy.src_area;
+    SpiceRect* candidate_src = &qxl_drawable->u.copy.src_area;
     if (candidate_src->right - candidate_src->left != other_src_width ||
         candidate_src->bottom - candidate_src->top != other_src_height) {
         return FALSE;
@@ -2796,7 +2796,7 @@ static inline int __red_is_next_stream_frame(RedWorker *worker,
     if (stream) {
         QXLImage *qxl_image = (QXLImage *)get_virt(worker, qxl_drawable->u.copy.src_bitmap,
                                                    sizeof(QXLImage), candidate->group_id);
-        if (stream->top_down != !!(qxl_image->bitmap.flags & BITMAP_TOP_DOWN)) {
+        if (stream->top_down != !!(qxl_image->bitmap.flags & SPICE_BITMAP_FLAGS_TOP_DOWN)) {
             return FALSE;
         }
     }
@@ -2810,7 +2810,7 @@ static inline int red_is_next_stream_frame(RedWorker *worker, const Drawable *ca
         return FALSE;
     }
 
-    Rect* prev_src = &prev->qxl_drawable->u.copy.src_area;
+    SpiceRect* prev_src = &prev->qxl_drawable->u.copy.src_area;
     return __red_is_next_stream_frame(worker, candidate, prev_src->right - prev_src->left,
                                       prev_src->bottom - prev_src->top,
                                       &prev->qxl_drawable->bbox, prev->creation_time,
@@ -2844,19 +2844,19 @@ static inline int red_is_next_stream_frame(RedWorker *worker, Drawable *candidat
         return FALSE;
     }
 
-    if (qxl_drawable->u.copy.rop_decriptor != ROPD_OP_PUT ||
-                                    prev_qxl_drawable->u.copy.rop_decriptor != ROPD_OP_PUT) {
+    if (qxl_drawable->u.copy.rop_decriptor != SPICE_ROPD_OP_PUT ||
+                                    prev_qxl_drawable->u.copy.rop_decriptor != SPICE_ROPD_OP_PUT) {
         return FALSE;
     }
 
     qxl_image = (QXLImage *)get_virt(worker, qxl_drawable->u.copy.src_bitmap, sizeof(QXLImage),
                                      candidate->group_id);
 
-    if (qxl_image->descriptor.type != IMAGE_TYPE_BITMAP) {
+    if (qxl_image->descriptor.type != SPICE_IMAGE_TYPE_BITMAP) {
         return FALSE;
     }
 
-    if (prev->stream && prev->stream->top_down != !!(qxl_image->bitmap.flags & BITMAP_TOP_DOWN)) {
+    if (prev->stream && prev->stream->top_down != !!(qxl_image->bitmap.flags & SPICE_BITMAP_FLAGS_TOP_DOWN)) {
         return FALSE;
     }
 
@@ -3382,22 +3382,22 @@ static inline int red_current_add(RedWorker *worker, Drawable *drawable)
 
 #endif
 
-static void add_clip_rects(RedWorker *worker, QRegion *rgn, PHYSICAL data, uint32_t group_id)
+static void add_clip_rects(RedWorker *worker, QRegion *rgn, QXLPHYSICAL data, uint32_t group_id)
 {
     while (data) {
         QXLDataChunk *chunk;
-        Rect *now;
-        Rect *end;
+        SpiceRect *now;
+        SpiceRect *end;
         uint32_t data_size;
         chunk = (QXLDataChunk *)get_virt(worker, data, sizeof(QXLDataChunk), group_id);
         data_size = chunk->data_size;
         validate_virt(worker, (unsigned long)chunk->data, get_memslot_id(worker, data), data_size,
                       group_id);
-        now = (Rect *)chunk->data;
-        end = now + data_size / sizeof(Rect);
+        now = (SpiceRect *)chunk->data;
+        end = now + data_size / sizeof(SpiceRect);
 
         for (; now < end; now++) {
-            Rect* r = (Rect *)now;
+            SpiceRect* r = (SpiceRect *)now;
 
             ASSERT(now->top == r->top && now->left == r->left &&
                    now->bottom == r->bottom && now->right == r->right);
@@ -3410,7 +3410,7 @@ static void add_clip_rects(RedWorker *worker, QRegion *rgn, PHYSICAL data, uint3
     }
 }
 
-static inline Shadow *__new_shadow(RedWorker *worker, Drawable *item, Point *delta)
+static inline Shadow *__new_shadow(RedWorker *worker, Drawable *item, SpicePoint *delta)
 {
     if (!delta->x && !delta->y) {
         return NULL;
@@ -3435,7 +3435,7 @@ static inline Shadow *__new_shadow(RedWorker *worker, Drawable *item, Point *del
     return shadow;
 }
 
-static inline int red_current_add_with_shadow(RedWorker *worker, Drawable *item, Point *delta)
+static inline int red_current_add_with_shadow(RedWorker *worker, Drawable *item, SpicePoint *delta)
 {
 #ifdef RED_WORKER_STAT
     stat_time_t start_time = stat_now();
@@ -3497,13 +3497,13 @@ static inline void red_update_streamable(RedWorker *worker, Drawable *drawable,
 
     if (drawable->tree_item.effect != QXL_EFFECT_OPAQUE ||
                                         qxl_drawable->type != QXL_DRAW_COPY ||
-                                        qxl_drawable->u.copy.rop_decriptor != ROPD_OP_PUT) {
+                                        qxl_drawable->u.copy.rop_decriptor != SPICE_ROPD_OP_PUT) {
         return;
     }
 
     qxl_image = (QXLImage *)get_virt(worker, qxl_drawable->u.copy.src_bitmap, sizeof(QXLImage),
                                      drawable->group_id);
-    if (qxl_image->descriptor.type != IMAGE_TYPE_BITMAP) {
+    if (qxl_image->descriptor.type != SPICE_IMAGE_TYPE_BITMAP) {
         return;
     }
 
@@ -3518,7 +3518,7 @@ static inline int red_current_add_qxl(RedWorker *worker, Drawable *drawable,
     int ret;
 
     if (has_shadow(qxl_drawable)) {
-        Point delta;
+        SpicePoint delta;
 
 #ifdef RED_WORKER_STAT
         ++worker->add_with_shadow_count;
@@ -3559,7 +3559,7 @@ static inline int red_current_add_qxl(RedWorker *worker, Drawable *drawable,
     return ret;
 }
 
-static void red_get_area(RedWorker *worker, const Rect *area, uint8_t *dest, int dest_stride,
+static void red_get_area(RedWorker *worker, const SpiceRect *area, uint8_t *dest, int dest_stride,
                          int update)
 {
     if (update) {
@@ -3591,17 +3591,17 @@ static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
     }
     dest = (uint8_t *)(image + 1);
 
-    image->descriptor.type = IMAGE_TYPE_BITMAP;
+    image->descriptor.type = SPICE_IMAGE_TYPE_BITMAP;
     image->descriptor.flags = 0;
 
     QXL_SET_IMAGE_ID(image, QXL_IMAGE_GROUP_RED, ++worker->bits_unique);
     image->bitmap.flags = QXL_BITMAP_DIRECT | (worker->surface.context.top_down ?
                                                QXL_BITMAP_TOP_DOWN : 0);
-    image->bitmap.format = BITMAP_FMT_32BIT;
+    image->bitmap.format = SPICE_BITMAP_FMT_32BIT;
     image->bitmap.stride = dest_stride;
     image->descriptor.width = image->bitmap.x = width;
     image->descriptor.height = image->bitmap.y = height;
-    image->bitmap.data = (PHYSICAL)dest;
+    image->bitmap.data = (QXLPHYSICAL)dest;
     image->bitmap.palette = 0;
 
     red_get_area(worker, &drawable->qxl_drawable->self_bitmap_area, dest, dest_stride, TRUE);
@@ -3677,14 +3677,14 @@ static inline void red_process_drawable(RedWorker *worker, QXLDrawable *drawable
            drawable->bbox.top, drawable->bbox.left, drawable->bbox.bottom, drawable->bbox.right);
 #endif
 
-    if (drawable->clip.type == CLIP_TYPE_RECTS) {
+    if (drawable->clip.type == SPICE_CLIP_TYPE_RECTS) {
         QRegion rgn;
 
         region_init(&rgn);
         add_clip_rects(worker, &rgn, drawable->clip.data + OFFSETOF(QXLClipRects, chunk), group_id);
         region_and(&item->tree_item.base.rgn, &rgn);
         region_destroy(&rgn);
-    } else if (drawable->clip.type == CLIP_TYPE_PATH) {
+    } else if (drawable->clip.type == SPICE_CLIP_TYPE_PATH) {
         item->tree_item.effect = QXL_EFFECT_BLEND;
 #ifdef PIPE_DEBUG
         printf("TEST: DRAWABLE: QXL_CLIP_TYPE_PATH\n");
@@ -3714,7 +3714,7 @@ static inline void red_process_drawable(RedWorker *worker, QXLDrawable *drawable
     release_drawable(worker, item);
 }
 
-static void localize_path(RedWorker *worker, PHYSICAL *in_path, uint32_t group_id)
+static void localize_path(RedWorker *worker, QXLPHYSICAL *in_path, uint32_t group_id)
 {
     QXLPath *path;
     uint8_t *data;
@@ -3726,7 +3726,7 @@ static void localize_path(RedWorker *worker, PHYSICAL *in_path, uint32_t group_i
     path = (QXLPath *)get_virt(worker, *in_path, sizeof(QXLPath), group_id);
     data = malloc(sizeof(UINT32) + path->data_size);
     ASSERT(data);
-    *in_path = (PHYSICAL)data;
+    *in_path = (QXLPHYSICAL)data;
     *(UINT32 *)data = path->data_size;
     data += sizeof(UINT32);
     chunk = &path->chunk;
@@ -3740,18 +3740,18 @@ static void localize_path(RedWorker *worker, PHYSICAL *in_path, uint32_t group_i
     } while (chunk);
 }
 
-static void unlocalize_path(PHYSICAL *path)
+static void unlocalize_path(QXLPHYSICAL *path)
 {
     ASSERT(path && *path);
     free((void *)*path);
     *path = 0;
 }
 
-static void localize_str(RedWorker *worker, PHYSICAL *in_str, uint32_t group_id)
+static void localize_str(RedWorker *worker, QXLPHYSICAL *in_str, uint32_t group_id)
 {
     QXLString *qxl_str = (QXLString *)get_virt(worker, *in_str, sizeof(QXLString), group_id);
     QXLDataChunk *chunk;
-    String *str;
+    SpiceString *str;
     uint8_t *dest;
     uint32_t data_size;
     int memslot_id = get_memslot_id(worker, *in_str);
@@ -3759,13 +3759,13 @@ static void localize_str(RedWorker *worker, PHYSICAL *in_str, uint32_t group_id)
     ASSERT(in_str);
     str = malloc(sizeof(UINT32) + qxl_str->data_size);
     ASSERT(str);
-    *in_str = (PHYSICAL)str;
+    *in_str = (QXLPHYSICAL)str;
     str->length = qxl_str->length;
     str->flags = qxl_str->flags;
     dest = str->data;
     chunk = &qxl_str->chunk;
     for (;;) {
-        PHYSICAL next_chunk;
+        QXLPHYSICAL next_chunk;
 
         data_size = chunk->data_size;
         validate_virt(worker, (unsigned long)chunk->data, memslot_id, data_size, group_id);
@@ -3780,19 +3780,19 @@ static void localize_str(RedWorker *worker, PHYSICAL *in_str, uint32_t group_id)
     }
 }
 
-static void unlocalize_str(PHYSICAL *str)
+static void unlocalize_str(QXLPHYSICAL *str)
 {
     ASSERT(str && *str);
     free((void *)*str);
     *str = 0;
 }
 
-static void localize_clip(RedWorker *worker, Clip *clip, uint32_t group_id)
+static void localize_clip(RedWorker *worker, SpiceClip *clip, uint32_t group_id)
 {
     switch (clip->type) {
-    case CLIP_TYPE_NONE:
+    case SPICE_CLIP_TYPE_NONE:
         return;
-    case CLIP_TYPE_RECTS: {
+    case SPICE_CLIP_TYPE_RECTS: {
         QXLClipRects *clip_rects;
         QXLDataChunk *chunk;
         int memslot_id = get_memslot_id(worker, clip->data);
@@ -3801,9 +3801,9 @@ static void localize_clip(RedWorker *worker, Clip *clip, uint32_t group_id)
         clip_rects = (QXLClipRects *)get_virt(worker, clip->data, sizeof(QXLClipRects), group_id);
         chunk = &clip_rects->chunk;
         ASSERT(clip->data);
-        data = malloc(sizeof(UINT32) + clip_rects->num_rects * sizeof(Rect));
+        data = malloc(sizeof(UINT32) + clip_rects->num_rects * sizeof(SpiceRect));
         ASSERT(data);
-        clip->data = (PHYSICAL)data;
+        clip->data = (QXLPHYSICAL)data;
         *(UINT32 *)(data) = clip_rects->num_rects;
         data += sizeof(UINT32);
         do {
@@ -3817,7 +3817,7 @@ static void localize_clip(RedWorker *worker, Clip *clip, uint32_t group_id)
         } while (chunk);
         break;
     }
-    case CLIP_TYPE_PATH:
+    case SPICE_CLIP_TYPE_PATH:
         localize_path(worker, &clip->data, group_id);
         break;
     default:
@@ -3825,16 +3825,16 @@ static void localize_clip(RedWorker *worker, Clip *clip, uint32_t group_id)
     }
 }
 
-static void unlocalize_clip(Clip *clip)
+static void unlocalize_clip(SpiceClip *clip)
 {
     switch (clip->type) {
-    case CLIP_TYPE_NONE:
+    case SPICE_CLIP_TYPE_NONE:
         return;
-    case CLIP_TYPE_RECTS:
+    case SPICE_CLIP_TYPE_RECTS:
         free((void *)clip->data);
         clip->data = 0;
         break;
-    case CLIP_TYPE_PATH:
+    case SPICE_CLIP_TYPE_PATH:
         unlocalize_path(&clip->data);
         break;
     default:
@@ -3978,7 +3978,7 @@ static void image_cache_eaging(ImageCache *cache)
 #endif
 }
 
-static void localize_bitmap(RedWorker *worker, PHYSICAL *in_bitmap, uint32_t group_id)
+static void localize_bitmap(RedWorker *worker, QXLPHYSICAL *in_bitmap, uint32_t group_id)
 {
     QXLImage *image;
     QXLImage *local_image;
@@ -3987,39 +3987,39 @@ static void localize_bitmap(RedWorker *worker, PHYSICAL *in_bitmap, uint32_t gro
     image = (QXLImage *)get_virt(worker, *in_bitmap, sizeof(QXLImage), group_id);
     local_image = (QXLImage *)alloc_local_image(worker);
     *local_image = *image;
-    *in_bitmap = (PHYSICAL)local_image;
+    *in_bitmap = (QXLPHYSICAL)local_image;
     local_image->descriptor.flags = 0;
 
     if (image_cache_hit(&worker->image_cache, local_image->descriptor.id)) {
-        local_image->descriptor.type = IMAGE_TYPE_FROM_CACHE;
+        local_image->descriptor.type = SPICE_IMAGE_TYPE_FROM_CACHE;
         return;
     }
 
     switch (local_image->descriptor.type) {
-    case IMAGE_TYPE_QUIC: {
+    case SPICE_IMAGE_TYPE_QUIC: {
         QXLDataChunk **chanks_head;
 #ifdef IMAGE_CACHE_AGE
-        local_image->descriptor.flags |= IMAGE_CACHE_ME;
+        local_image->descriptor.flags |= SPICE_IMAGE_FLAGS_CACHE_ME;
 #else
         if (local_image->descriptor.width * local_image->descriptor.height >= 640 * 480) {
-            local_image->descriptor.flags |= IMAGE_CACHE_ME;
+            local_image->descriptor.flags |= SPICE_IMAGE_FLAGS_CACHE_ME;
         }
 #endif
         chanks_head = (QXLDataChunk **)local_image->quic.data;
         *chanks_head = (QXLDataChunk *)image->quic.data;
         break;
     }
-    case IMAGE_TYPE_BITMAP:
+    case SPICE_IMAGE_TYPE_BITMAP:
         if (image->bitmap.flags & QXL_BITMAP_DIRECT) {
-            local_image->bitmap.data = (PHYSICAL)get_virt(worker, image->bitmap.data,
+            local_image->bitmap.data = (QXLPHYSICAL)get_virt(worker, image->bitmap.data,
                                                           image->bitmap.stride * image->bitmap.y,
                                                           group_id);
         } else {
-            PHYSICAL src_data;
+            QXLPHYSICAL src_data;
             int size = image->bitmap.y * image->bitmap.stride;
             uint8_t *data = malloc(size);
             ASSERT(data);
-            local_image->bitmap.data = (PHYSICAL)data;
+            local_image->bitmap.data = (QXLPHYSICAL)data;
             src_data = image->bitmap.data;
 
             while (size) {
@@ -4043,12 +4043,12 @@ static void localize_bitmap(RedWorker *worker, PHYSICAL *in_bitmap, uint32_t gro
         if (local_image->bitmap.palette) {
             uint16_t num_ents;
             uint32_t *ents;
-            Palette *tmp_palette;
-            Palette *shadow_palette;
+            SpicePalette *tmp_palette;
+            SpicePalette *shadow_palette;
 
             int slot_id = get_memslot_id(worker, local_image->bitmap.palette);
-            tmp_palette = (Palette *)get_virt(worker, local_image->bitmap.palette,
-                                              sizeof(Palette), group_id);
+            tmp_palette = (SpicePalette *)get_virt(worker, local_image->bitmap.palette,
+                                              sizeof(SpicePalette), group_id);
 
             num_ents = tmp_palette->num_ents;
             ents = tmp_palette->ents;
@@ -4056,17 +4056,17 @@ static void localize_bitmap(RedWorker *worker, PHYSICAL *in_bitmap, uint32_t gro
             validate_virt(worker, (unsigned long)ents, slot_id, (num_ents * sizeof(uint32_t)),
                           group_id);
 
-            shadow_palette = (Palette *)malloc(sizeof(Palette) + num_ents * sizeof(uint32_t) +
-                                               sizeof(PHYSICAL));
+            shadow_palette = (SpicePalette *)malloc(sizeof(SpicePalette) + num_ents * sizeof(uint32_t) +
+                                               sizeof(QXLPHYSICAL));
             if (!shadow_palette) {
-                PANIC("Palette malloc failed");
+                PANIC("SpicePalette malloc failed");
             }
 
             memcpy(shadow_palette->ents, ents, num_ents * sizeof(uint32_t));
             shadow_palette->num_ents = num_ents;
             shadow_palette->unique = tmp_palette->unique;
 
-            local_image->bitmap.palette = (ADDRESS)shadow_palette;
+            local_image->bitmap.palette = (SPICE_ADDRESS)shadow_palette;
         }
         break;
     default:
@@ -4074,7 +4074,7 @@ static void localize_bitmap(RedWorker *worker, PHYSICAL *in_bitmap, uint32_t gro
     }
 }
 
-static void unlocalize_bitmap(PHYSICAL *bitmap)
+static void unlocalize_bitmap(QXLPHYSICAL *bitmap)
 {
     QXLImage *image;
 
@@ -4083,7 +4083,7 @@ static void unlocalize_bitmap(PHYSICAL *bitmap)
     *bitmap = 0;
 
     switch (image->descriptor.type) {
-    case IMAGE_TYPE_BITMAP:
+    case SPICE_IMAGE_TYPE_BITMAP:
         if (!(image->bitmap.flags & QXL_BITMAP_DIRECT)) {
             free((void *)image->bitmap.data);
         }
@@ -4091,8 +4091,8 @@ static void unlocalize_bitmap(PHYSICAL *bitmap)
             free((void *)image->bitmap.palette);
         }
         break;
-    case IMAGE_TYPE_QUIC:
-    case IMAGE_TYPE_FROM_CACHE:
+    case SPICE_IMAGE_TYPE_QUIC:
+    case SPICE_IMAGE_TYPE_FROM_CACHE:
         *bitmap = 0;
         break;
     default:
@@ -4100,35 +4100,35 @@ static void unlocalize_bitmap(PHYSICAL *bitmap)
     }
 }
 
-static void localize_brush(RedWorker *worker, Brush *brush, uint32_t group_id)
+static void localize_brush(RedWorker *worker, SpiceBrush *brush, uint32_t group_id)
 {
-    if (brush->type == BRUSH_TYPE_PATTERN) {
+    if (brush->type == SPICE_BRUSH_TYPE_PATTERN) {
         localize_bitmap(worker, &brush->u.pattern.pat, group_id);
     }
 }
 
-static void unlocalize_brush(Brush *brush)
+static void unlocalize_brush(SpiceBrush *brush)
 {
-    if (brush->type == BRUSH_TYPE_PATTERN) {
+    if (brush->type == SPICE_BRUSH_TYPE_PATTERN) {
         unlocalize_bitmap(&brush->u.pattern.pat);
     }
 }
 
-static void localize_mask(RedWorker *worker, QMask *mask, uint32_t group_id)
+static void localize_mask(RedWorker *worker, SpiceQMask *mask, uint32_t group_id)
 {
     if (mask->bitmap) {
         localize_bitmap(worker, &mask->bitmap, group_id);
     }
 }
 
-static void unlocalize_mask(QMask *mask)
+static void unlocalize_mask(SpiceQMask *mask)
 {
     if (mask->bitmap) {
         unlocalize_bitmap(&mask->bitmap);
     }
 }
 
-static void localize_attr(RedWorker *worker, LineAttr *attr, uint32_t group_id)
+static void localize_attr(RedWorker *worker, SpiceLineAttr *attr, uint32_t group_id)
 {
     if (attr->style_nseg) {
         uint8_t *buf;
@@ -4140,11 +4140,11 @@ static void localize_attr(RedWorker *worker, LineAttr *attr, uint32_t group_id)
         data = malloc(attr->style_nseg * sizeof(uint32_t));
         ASSERT(data);
         memcpy(data, buf, attr->style_nseg * sizeof(uint32_t));
-        attr->style = (PHYSICAL)data;
+        attr->style = (QXLPHYSICAL)data;
     }
 }
 
-static void unlocalize_attr(LineAttr *attr)
+static void unlocalize_attr(SpiceLineAttr *attr)
 {
     if (attr->style_nseg) {
         free((void *)attr->style);
@@ -4154,7 +4154,7 @@ static void unlocalize_attr(LineAttr *attr)
 
 static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
 {
-    Clip clip = drawable->qxl_drawable->clip;
+    SpiceClip clip = drawable->qxl_drawable->clip;
 
     worker->local_images_pos = 0;
     image_cache_eaging(&worker->image_cache);
@@ -4164,7 +4164,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
     localize_clip(worker, &clip, drawable->group_id);
     switch (drawable->qxl_drawable->type) {
     case QXL_DRAW_FILL: {
-        Fill fill = drawable->qxl_drawable->u.fill;
+        SpiceFill fill = drawable->qxl_drawable->u.fill;
         localize_brush(worker, &fill.brush, drawable->group_id);
         localize_mask(worker, &fill.mask, drawable->group_id);
         worker->draw_funcs.draw_fill(worker->surface.context.canvas, &drawable->qxl_drawable->bbox,
@@ -4173,7 +4173,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         break;
     }
     case QXL_DRAW_OPAQUE: {
-        Opaque opaque = drawable->qxl_drawable->u.opaque;
+        SpiceOpaque opaque = drawable->qxl_drawable->u.opaque;
         localize_brush(worker, &opaque.brush, drawable->group_id);
         localize_bitmap(worker, &opaque.src_bitmap, drawable->group_id);
         localize_mask(worker, &opaque.mask, drawable->group_id);
@@ -4185,7 +4185,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         break;
     }
     case QXL_DRAW_COPY: {
-        Copy copy = drawable->qxl_drawable->u.copy;
+        SpiceCopy copy = drawable->qxl_drawable->u.copy;
         localize_bitmap(worker, &copy.src_bitmap, drawable->group_id);
         localize_mask(worker, &copy.mask, drawable->group_id);
         worker->draw_funcs.draw_copy(worker->surface.context.canvas, &drawable->qxl_drawable->bbox,
@@ -4195,7 +4195,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         break;
     }
     case QXL_DRAW_TRANSPARENT: {
-        Transparent transparent = drawable->qxl_drawable->u.transparent;
+        SpiceTransparent transparent = drawable->qxl_drawable->u.transparent;
         localize_bitmap(worker, &transparent.src_bitmap, drawable->group_id);
         worker->draw_funcs.draw_transparent(worker->surface.context.canvas,
                                             &drawable->qxl_drawable->bbox, &clip, &transparent);
@@ -4203,7 +4203,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         break;
     }
     case QXL_DRAW_ALPHA_BLEND: {
-        AlphaBlnd alpha_blend = drawable->qxl_drawable->u.alpha_blend;
+        SpiceAlphaBlnd alpha_blend = drawable->qxl_drawable->u.alpha_blend;
         localize_bitmap(worker, &alpha_blend.src_bitmap, drawable->group_id);
         worker->draw_funcs.draw_alpha_blend(worker->surface.context.canvas,
                                             &drawable->qxl_drawable->bbox, &clip, &alpha_blend);
@@ -4216,7 +4216,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         break;
     }
     case QXL_DRAW_BLEND: {
-        Blend blend = drawable->qxl_drawable->u.blend;
+        SpiceBlend blend = drawable->qxl_drawable->u.blend;
         localize_bitmap(worker, &blend.src_bitmap, drawable->group_id);
         localize_mask(worker, &blend.mask, drawable->group_id);
         worker->draw_funcs.draw_blend(worker->surface.context.canvas, &drawable->qxl_drawable->bbox,
@@ -4226,7 +4226,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         break;
     }
     case QXL_DRAW_BLACKNESS: {
-        Blackness blackness = drawable->qxl_drawable->u.blackness;
+        SpiceBlackness blackness = drawable->qxl_drawable->u.blackness;
         localize_mask(worker, &blackness.mask, drawable->group_id);
         worker->draw_funcs.draw_blackness(worker->surface.context.canvas,
                                           &drawable->qxl_drawable->bbox, &clip, &blackness);
@@ -4234,7 +4234,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         break;
     }
     case QXL_DRAW_WHITENESS: {
-        Whiteness whiteness = drawable->qxl_drawable->u.whiteness;
+        SpiceWhiteness whiteness = drawable->qxl_drawable->u.whiteness;
         localize_mask(worker, &whiteness.mask, drawable->group_id);
         worker->draw_funcs.draw_whiteness(worker->surface.context.canvas,
                                           &drawable->qxl_drawable->bbox, &clip, &whiteness);
@@ -4242,7 +4242,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         break;
     }
     case QXL_DRAW_INVERS: {
-        Invers invers = drawable->qxl_drawable->u.invers;
+        SpiceInvers invers = drawable->qxl_drawable->u.invers;
         localize_mask(worker, &invers.mask, drawable->group_id);
         worker->draw_funcs.draw_invers(worker->surface.context.canvas,
                                        &drawable->qxl_drawable->bbox, &clip, &invers);
@@ -4250,7 +4250,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         break;
     }
     case QXL_DRAW_ROP3: {
-        Rop3 rop3 = drawable->qxl_drawable->u.rop3;
+        SpiceRop3 rop3 = drawable->qxl_drawable->u.rop3;
         localize_brush(worker, &rop3.brush, drawable->group_id);
         localize_bitmap(worker, &rop3.src_bitmap, drawable->group_id);
         localize_mask(worker, &rop3.mask, drawable->group_id);
@@ -4261,7 +4261,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         break;
     }
     case QXL_DRAW_STROKE: {
-        Stroke stroke = drawable->qxl_drawable->u.stroke;
+        SpiceStroke stroke = drawable->qxl_drawable->u.stroke;
         localize_brush(worker, &stroke.brush, drawable->group_id);
         localize_path(worker, &stroke.path, drawable->group_id);
         localize_attr(worker, &stroke.attr, drawable->group_id);
@@ -4273,7 +4273,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         break;
     }
     case QXL_DRAW_TEXT: {
-        Text text = drawable->qxl_drawable->u.text;
+        SpiceText text = drawable->qxl_drawable->u.text;
         localize_brush(worker, &text.fore_brush, drawable->group_id);
         localize_brush(worker, &text.back_brush, drawable->group_id);
         localize_str(worker, &text.str, drawable->group_id);
@@ -4355,7 +4355,7 @@ static inline void __red_collect_for_update(RedWorker *worker, Ring *ring, RingI
     }
 }
 
-static void red_update_area(RedWorker *worker, const Rect *area)
+static void red_update_area(RedWorker *worker, const SpiceRect *area)
 {
     Ring *ring = &worker->current;
     RingItem *ring_item;
@@ -4390,7 +4390,7 @@ static void red_update_area(RedWorker *worker, const Rect *area)
 
 #else
 
-static void red_update_area(RedWorker *worker, const Rect *area)
+static void red_update_area(RedWorker *worker, const SpiceRect *area)
 {
     Ring *ring = &worker->current_list;
     RingItem *ring_item = ring;
@@ -4533,7 +4533,7 @@ void qxl_process_cursor(RedWorker *worker, QXLCursorCmd *cursor_cmd, uint32_t gr
         red_error("invalid cursor command %u", cursor_cmd->type);
     }
 
-    if (worker->cursor_channel && (worker->mouse_mode == RED_MOUSE_MODE_SERVER ||
+    if (worker->cursor_channel && (worker->mouse_mode == SPICE_MOUSE_MODE_SERVER ||
                                    cursor_cmd->type != QXL_CURSOR_MOVE || cursor_show)) {
         red_pipe_add(&worker->cursor_channel->base, &item->pipe_data);
     } else {
@@ -4684,7 +4684,7 @@ static void red_add_screen_image(RedWorker *worker)
 {
     ImageItem *item;
     int stride;
-    Rect area;
+    SpiceRect area;
 
     if (!worker->display_channel || !worker->surface.context.canvas) {
         return;
@@ -4734,7 +4734,7 @@ static void add_buf(RedChannel *channel, uint32_t type, void *data, uint32_t siz
     channel->send_data.header.size += size;
 }
 
-static void fill_path(DisplayChannel *display_channel, PHYSICAL *in_path, uint32_t group_id)
+static void fill_path(DisplayChannel *display_channel, QXLPHYSICAL *in_path, uint32_t group_id)
 {
     RedWorker *worker;
     RedChannel *channel = &display_channel->base;
@@ -4748,7 +4748,7 @@ static void fill_path(DisplayChannel *display_channel, PHYSICAL *in_path, uint32
     add_buf(channel, BUF_TYPE_CHUNK, &path->chunk, path->data_size, memslot_id, group_id);
 }
 
-static void fill_str(DisplayChannel *display_channel, PHYSICAL *in_str, uint32_t group_id)
+static void fill_str(DisplayChannel *display_channel, QXLPHYSICAL *in_str, uint32_t group_id)
 {
     RedWorker *worker;
     RedChannel *channel = &display_channel->base;
@@ -4762,7 +4762,7 @@ static void fill_str(DisplayChannel *display_channel, PHYSICAL *in_str, uint32_t
     add_buf(channel, BUF_TYPE_CHUNK, &str->chunk, str->data_size, memslot_id, group_id);
 }
 
-static inline void fill_rects_clip(RedChannel *channel, PHYSICAL *in_clip, uint32_t group_id)
+static inline void fill_rects_clip(RedChannel *channel, QXLPHYSICAL *in_clip, uint32_t group_id)
 {
     RedWorker *worker = channel->worker;
     QXLClipRects *clip;
@@ -4772,11 +4772,11 @@ static inline void fill_rects_clip(RedChannel *channel, PHYSICAL *in_clip, uint3
     clip = (QXLClipRects *)get_virt(worker, *in_clip, sizeof(QXLClipRects), group_id);
     *in_clip = channel->send_data.header.size;
     add_buf(channel, BUF_TYPE_RAW, &clip->num_rects, sizeof(UINT32), 0, 0);
-    add_buf(channel, BUF_TYPE_CHUNK, &clip->chunk, clip->num_rects * sizeof(Rect), memslot_id,
+    add_buf(channel, BUF_TYPE_CHUNK, &clip->chunk, clip->num_rects * sizeof(SpiceRect), memslot_id,
             group_id);
 }
 
-static void fill_base(DisplayChannel *display_channel, RedDrawBase *base, Drawable *drawable,
+static void fill_base(DisplayChannel *display_channel, SpiceMsgDisplayBase *base, Drawable *drawable,
                       uint32_t size)
 {
     RedChannel *channel = &display_channel->base;
@@ -4784,9 +4784,9 @@ static void fill_base(DisplayChannel *display_channel, RedDrawBase *base, Drawab
     base->box = drawable->qxl_drawable->bbox;
     base->clip = drawable->qxl_drawable->clip;
 
-    if (base->clip.type == CLIP_TYPE_RECTS) {
+    if (base->clip.type == SPICE_CLIP_TYPE_RECTS) {
         fill_rects_clip(channel, &base->clip.data, drawable->group_id);
-    } else if (base->clip.type == CLIP_TYPE_PATH) {
+    } else if (base->clip.type == SPICE_CLIP_TYPE_PATH) {
         fill_path(display_channel, &base->clip.data, drawable->group_id);
     }
 }
@@ -4798,30 +4798,30 @@ static inline RedImage *alloc_image(DisplayChannel *display_channel)
 }
 
 /* io_palette is relative address of the palette*/
-static inline void fill_palette(DisplayChannel *display_channel, ADDRESS *io_palette, UINT8 *flags,
+static inline void fill_palette(DisplayChannel *display_channel, SPICE_ADDRESS *io_palette, UINT8 *flags,
                                 uint32_t group_id)
 {
     RedChannel *channel = &display_channel->base;
     RedWorker *worker = channel->worker;
-    Palette *palette;
+    SpicePalette *palette;
 
     if (!(*io_palette)) {
         return;
     }
-    palette = (Palette *)get_virt(worker, *io_palette, sizeof(Palette), group_id);
+    palette = (SpicePalette *)get_virt(worker, *io_palette, sizeof(SpicePalette), group_id);
     if (palette->unique) {
         if (red_palette_cache_find(display_channel, palette->unique)) {
-            *flags |= BITMAP_PAL_FROM_CACHE;
+            *flags |= SPICE_BITMAP_FLAGS_PAL_FROM_CACHE;
             *io_palette = palette->unique;
             return;
         }
         if (red_palette_cache_add(display_channel, palette->unique, 1)) {
-            *flags |= BITMAP_PAL_CACHE_ME;
+            *flags |= SPICE_BITMAP_FLAGS_PAL_CACHE_ME;
         }
     }
     *io_palette = channel->send_data.header.size;
     add_buf(channel, BUF_TYPE_RAW, palette,
-            sizeof(Palette) + palette->num_ents * sizeof(UINT32), 0, 0);
+            sizeof(SpicePalette) + palette->num_ents * sizeof(UINT32), 0, 0);
 }
 
 static inline RedCompressBuf *red_display_alloc_compress_buf(DisplayChannel *display_channel)
@@ -5425,7 +5425,7 @@ typedef uint16_t rgb16_pixel_t;
 #define GRADUAL_SCORE_RGB16_TH 0
 
 // assumes that stride doesn't overflow
-static int _bitmap_is_gradual(RedWorker *worker, Bitmap *bitmap, uint32_t group_id)
+static int _bitmap_is_gradual(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_id)
 {
     double score = 0.0;
     int num_samples = 0;
@@ -5437,20 +5437,20 @@ static int _bitmap_is_gradual(RedWorker *worker, Bitmap *bitmap, uint32_t group_
         x = bitmap->x;
         y = bitmap->y;
         switch (bitmap->format) {
-        case BITMAP_FMT_16BIT: {
+        case SPICE_BITMAP_FMT_16BIT: {
             uint8_t *lines = (uint8_t*)get_virt(worker, bitmap->data, x * y *
                                                 sizeof(rgb16_pixel_t), group_id);
             compute_lines_gradual_score_rgb16((rgb16_pixel_t*)lines, x, y, &score, &num_samples);
             break;
         }
-        case BITMAP_FMT_24BIT: {
+        case SPICE_BITMAP_FMT_24BIT: {
             uint8_t *lines = (uint8_t*)get_virt(worker, bitmap->data, x * y *
                                                 sizeof(rgb24_pixel_t), group_id);
             compute_lines_gradual_score_rgb24((rgb24_pixel_t*)lines, x, y, &score, &num_samples);
             break;
         }
-        case BITMAP_FMT_32BIT:
-        case BITMAP_FMT_RGBA: {
+        case SPICE_BITMAP_FMT_32BIT:
+        case SPICE_BITMAP_FMT_RGBA: {
             uint8_t *lines = (uint8_t*)get_virt(worker, bitmap->data, x * y *
                                                 sizeof(rgb32_pixel_t), group_id);
             compute_lines_gradual_score_rgb32((rgb32_pixel_t*)lines, x, y, &score, &num_samples);
@@ -5465,7 +5465,7 @@ static int _bitmap_is_gradual(RedWorker *worker, Bitmap *bitmap, uint32_t group_
         double chunk_score = 0.0;
         int chunk_num_samples = 0;
         uint32_t x;
-        ADDRESS relative_address = bitmap->data;
+        SPICE_ADDRESS relative_address = bitmap->data;
 
         while (relative_address) {
             chunk = (QXLDataChunk *)get_virt(worker, relative_address, sizeof(QXLDataChunk),
@@ -5473,22 +5473,22 @@ static int _bitmap_is_gradual(RedWorker *worker, Bitmap *bitmap, uint32_t group_
             num_lines = chunk->data_size / bitmap->stride;
             x = bitmap->x;
             switch (bitmap->format) {
-            case BITMAP_FMT_16BIT:
+            case SPICE_BITMAP_FMT_16BIT:
                 validate_virt(worker, (unsigned long)chunk->data,
                               get_memslot_id(worker, relative_address),
                               sizeof(rgb16_pixel_t) * x * num_lines, group_id);
                 compute_lines_gradual_score_rgb16((rgb16_pixel_t*)chunk->data, x, num_lines,
                                                   &chunk_score, &chunk_num_samples);
                 break;
-            case BITMAP_FMT_24BIT:
+            case SPICE_BITMAP_FMT_24BIT:
                 validate_virt(worker, (unsigned long)chunk->data,
                               get_memslot_id(worker, relative_address),
                               sizeof(rgb24_pixel_t) * x * num_lines, group_id);
                 compute_lines_gradual_score_rgb24((rgb24_pixel_t*)chunk->data, x, num_lines,
                                                   &chunk_score, &chunk_num_samples);
                 break;
-            case BITMAP_FMT_32BIT:
-            case BITMAP_FMT_RGBA:
+            case SPICE_BITMAP_FMT_32BIT:
+            case SPICE_BITMAP_FMT_RGBA:
                 validate_virt(worker, (unsigned long)chunk->data,
                               get_memslot_id(worker, relative_address),
                               sizeof(rgb32_pixel_t) *  x * num_lines, group_id);
@@ -5509,29 +5509,29 @@ static int _bitmap_is_gradual(RedWorker *worker, Bitmap *bitmap, uint32_t group_
     ASSERT(num_samples);
     score /= num_samples;
 
-    if (bitmap->format == BITMAP_FMT_16BIT) {
+    if (bitmap->format == SPICE_BITMAP_FMT_16BIT) {
         return (score < GRADUAL_SCORE_RGB16_TH);
     } else {
         return (score < GRADUAL_SCORE_RGB24_TH);
     }
 }
 
-static inline int _stride_is_extra(Bitmap *bitmap)
+static inline int _stride_is_extra(SpiceBitmap *bitmap)
 {
     ASSERT(bitmap);
     if (BITMAP_FMT_IS_RGB[bitmap->format]) {
         return ((bitmap->x * BITMAP_FMP_BYTES_PER_PIXEL[bitmap->format]) < bitmap->stride);
     } else {
         switch (bitmap->format) {
-        case BITMAP_FMT_8BIT:
+        case SPICE_BITMAP_FMT_8BIT:
             return (bitmap->x < bitmap->stride);
-        case BITMAP_FMT_4BIT_BE:
-        case BITMAP_FMT_4BIT_LE: {
+        case SPICE_BITMAP_FMT_4BIT_BE:
+        case SPICE_BITMAP_FMT_4BIT_LE: {
             int bytes_width = ALIGN(bitmap->x, 2) >> 1;
             return bytes_width < bitmap->stride;
         }
-        case BITMAP_FMT_1BIT_BE:
-        case BITMAP_FMT_1BIT_LE: {
+        case SPICE_BITMAP_FMT_1BIT_BE:
+        case SPICE_BITMAP_FMT_1BIT_LE: {
             int bytes_width = ALIGN(bitmap->x, 8) >> 3;
             return bytes_width < bitmap->stride;
         }
@@ -5558,13 +5558,13 @@ typedef struct compress_send_data_t {
     uint32_t raw_size;
     void*    comp_buf;
     uint32_t comp_buf_size;
-    ADDRESS  *plt_ptr;
+    SPICE_ADDRESS  *plt_ptr;
     UINT8    *flags_ptr;
 } compress_send_data_t;
 
 
 static inline int red_glz_compress_image(DisplayChannel *display_channel,
-                                         RedImage *dest, Bitmap *src, Drawable *drawable,
+                                         RedImage *dest, SpiceBitmap *src, Drawable *drawable,
                                          compress_send_data_t* o_comp_data)
 {
     RedWorker *worker = (RedWorker *)display_channel->base.worker;
@@ -5617,10 +5617,10 @@ static inline int red_glz_compress_image(DisplayChannel *display_channel,
                       glz_drawable_instance,
                       &glz_drawable_instance->glz_instance);
 
-    dest->descriptor.type = IMAGE_TYPE_GLZ_RGB;
+    dest->descriptor.type = SPICE_IMAGE_TYPE_GLZ_RGB;
     dest->lz_rgb.data_size = size;
 
-    o_comp_data->raw_size = sizeof(LZ_RGBImage);
+    o_comp_data->raw_size = sizeof(SpiceLZRGBImage);
     o_comp_data->comp_buf = glz_data->data.bufs_head;
     o_comp_data->comp_buf_size = size;
     o_comp_data->plt_ptr = NULL;
@@ -5632,7 +5632,7 @@ static inline int red_glz_compress_image(DisplayChannel *display_channel,
 }
 
 static inline int red_lz_compress_image(DisplayChannel *display_channel,
-                                        RedImage *dest, Bitmap *src,
+                                        RedImage *dest, SpiceBitmap *src,
                                         compress_send_data_t* o_comp_data, uint32_t group_id)
 {
     RedWorker *worker = display_channel->base.worker;
@@ -5692,21 +5692,21 @@ static inline int red_lz_compress_image(DisplayChannel *display_channel,
     }
 
     if (BITMAP_FMT_IS_RGB[src->format]) {
-        dest->descriptor.type = IMAGE_TYPE_LZ_RGB;
+        dest->descriptor.type = SPICE_IMAGE_TYPE_LZ_RGB;
         dest->lz_rgb.data_size = size;
 
-        o_comp_data->raw_size = sizeof(LZ_RGBImage);
+        o_comp_data->raw_size = sizeof(SpiceLZRGBImage);
         o_comp_data->comp_buf = lz_data->data.bufs_head;
         o_comp_data->comp_buf_size = size;
         o_comp_data->plt_ptr = NULL;
         o_comp_data->flags_ptr = NULL;
     } else {
-        dest->descriptor.type = IMAGE_TYPE_LZ_PLT;
+        dest->descriptor.type = SPICE_IMAGE_TYPE_LZ_PLT;
         dest->lz_plt.data_size = size;
-        dest->lz_plt.flags = src->flags & BITMAP_TOP_DOWN;
+        dest->lz_plt.flags = src->flags & SPICE_BITMAP_FLAGS_TOP_DOWN;
         dest->lz_plt.palette = src->palette;
 
-        o_comp_data->raw_size = sizeof(LZ_PLTImage);
+        o_comp_data->raw_size = sizeof(SpiceLZPLTImage);
         o_comp_data->comp_buf = lz_data->data.bufs_head;
         o_comp_data->comp_buf_size = size;
         o_comp_data->plt_ptr = &(dest->lz_plt.palette);
@@ -5718,7 +5718,7 @@ static inline int red_lz_compress_image(DisplayChannel *display_channel,
 }
 
 static inline int red_quic_compress_image(DisplayChannel *display_channel, RedImage *dest,
-                                          Bitmap *src, compress_send_data_t* o_comp_data,
+                                          SpiceBitmap *src, compress_send_data_t* o_comp_data,
                                           uint32_t group_id)
 {
     RedWorker *worker = display_channel->base.worker;
@@ -5732,16 +5732,16 @@ static inline int red_quic_compress_image(DisplayChannel *display_channel, RedIm
 #endif
 
     switch (src->format) {
-    case BITMAP_FMT_32BIT:
+    case SPICE_BITMAP_FMT_32BIT:
         type = QUIC_IMAGE_TYPE_RGB32;
         break;
-    case BITMAP_FMT_RGBA:
+    case SPICE_BITMAP_FMT_RGBA:
         type = QUIC_IMAGE_TYPE_RGBA;
         break;
-    case BITMAP_FMT_16BIT:
+    case SPICE_BITMAP_FMT_16BIT:
         type = QUIC_IMAGE_TYPE_RGB16;
         break;
-    case BITMAP_FMT_24BIT:
+    case SPICE_BITMAP_FMT_24BIT:
         type = QUIC_IMAGE_TYPE_RGB24;
         break;
     default:
@@ -5824,7 +5824,7 @@ static inline int red_quic_compress_image(DisplayChannel *display_channel, RedIm
             quic_data->usr.more_lines = quic_usr_more_lines;
             stride = src->stride;
         } else {
-            ADDRESS prev_addr = src->data;
+            SPICE_ADDRESS prev_addr = src->data;
             QXLDataChunk *chunk = (QXLDataChunk *)get_virt(worker, src->data,
                                                            sizeof(QXLDataChunk), group_id);
             while (chunk->next_chunk) {
@@ -5833,7 +5833,7 @@ static inline int red_quic_compress_image(DisplayChannel *display_channel, RedIm
                                                  group_id);
                 ASSERT(chunk->prev_chunk);
             }
-            quic_data->data.u.lines_data.next = (ADDRESS)prev_addr -
+            quic_data->data.u.lines_data.next = (SPICE_ADDRESS)prev_addr -
                                                 get_virt_delta(worker,
                                                                get_memslot_id(worker, src->data),
                                                                group_id);
@@ -5850,10 +5850,10 @@ static inline int red_quic_compress_image(DisplayChannel *display_channel, RedIm
         longjmp(quic_data->data.jmp_env, 1);
     }
 
-    dest->descriptor.type = IMAGE_TYPE_QUIC;
+    dest->descriptor.type = SPICE_IMAGE_TYPE_QUIC;
     dest->quic.data_size = size << 2;
 
-    o_comp_data->raw_size = sizeof(QUICImage);
+    o_comp_data->raw_size = sizeof(SpiceQUICImage);
     o_comp_data->comp_buf = quic_data->data.bufs_head;
     o_comp_data->comp_buf_size = size << 2;
     o_comp_data->plt_ptr = NULL;
@@ -5867,7 +5867,7 @@ static inline int red_quic_compress_image(DisplayChannel *display_channel, RedIm
 #define MIN_SIZE_TO_COMPRESS 54
 #define MIN_DIMENSION_TO_QUIC 3
 static inline int red_compress_image(DisplayChannel *display_channel,
-                                     RedImage *dest, Bitmap *src, Drawable *drawable,
+                                     RedImage *dest, SpiceBitmap *src, Drawable *drawable,
                                      compress_send_data_t* o_comp_data)
 {
     image_compression_t image_compression = display_channel->base.worker->image_compression;
@@ -5971,19 +5971,19 @@ static inline void red_display_add_image_to_pixmap_cache(DisplayChannel *display
         if (pixmap_cache_add(display_channel->pixmap_cache, qxl_image->descriptor.id,
                              qxl_image->descriptor.width * qxl_image->descriptor.height,
                              display_channel)) {
-            io_image->descriptor.flags |= IMAGE_CACHE_ME;
+            io_image->descriptor.flags |= SPICE_IMAGE_FLAGS_CACHE_ME;
             stat_inc_counter(display_channel->add_to_cache_counter, 1);
         }
     }
 
-    if (!(io_image->descriptor.flags & IMAGE_CACHE_ME)) {
+    if (!(io_image->descriptor.flags & SPICE_IMAGE_FLAGS_CACHE_ME)) {
         stat_inc_counter(display_channel->non_cache_counter, 1);
     }
 }
 
 /* if the number of times fill_bits can be called per one qxl_drawable increases -
    MAX_LZ_DRAWABLE_INSTANCES must be increased as well */
-static void fill_bits(DisplayChannel *display_channel, PHYSICAL *in_bitmap, Drawable *drawable)
+static void fill_bits(DisplayChannel *display_channel, QXLPHYSICAL *in_bitmap, Drawable *drawable)
 {
     RedChannel *channel = &display_channel->base;
     RedWorker *worker = channel->worker;
@@ -6009,15 +6009,15 @@ static void fill_bits(DisplayChannel *display_channel, PHYSICAL *in_bitmap, Draw
     if ((qxl_image->descriptor.flags & QXL_IMAGE_CACHE)) {
         if (pixmap_cache_hit(display_channel->pixmap_cache, image->descriptor.id,
                              display_channel)) {
-            image->descriptor.type = IMAGE_TYPE_FROM_CACHE;
-            add_buf(channel, BUF_TYPE_RAW, image, sizeof(ImageDescriptor), 0, 0);
+            image->descriptor.type = SPICE_IMAGE_TYPE_FROM_CACHE;
+            add_buf(channel, BUF_TYPE_RAW, image, sizeof(SpiceImageDescriptor), 0, 0);
             stat_inc_counter(display_channel->cache_hits_counter, 1);
             return;
         }
     }
 
     switch (qxl_image->descriptor.type) {
-    case IMAGE_TYPE_BITMAP:
+    case SPICE_IMAGE_TYPE_BITMAP:
 #ifdef DUMP_BITMAP
         dump_bitmap(display_channel->base.worker, &qxl_image->bitmap, drawable->group_id);
 #endif
@@ -6028,7 +6028,7 @@ static void fill_bits(DisplayChannel *display_channel, PHYSICAL *in_bitmap, Draw
                                 drawable, &comp_send_data)) {
             uint32_t y;
             uint32_t stride;
-            ADDRESS image_data;
+            SPICE_ADDRESS image_data;
 
             red_display_add_image_to_pixmap_cache(display_channel, qxl_image, image);
 
@@ -6036,9 +6036,9 @@ static void fill_bits(DisplayChannel *display_channel, PHYSICAL *in_bitmap, Draw
             y = image->bitmap.y;
             stride = image->bitmap.stride;
             image_data = image->bitmap.data;
-            image->bitmap.flags = image->bitmap.flags & BITMAP_TOP_DOWN;
+            image->bitmap.flags = image->bitmap.flags & SPICE_BITMAP_FLAGS_TOP_DOWN;
 
-            add_buf(channel, BUF_TYPE_RAW, image, sizeof(BitmapImage), 0, 0);
+            add_buf(channel, BUF_TYPE_RAW, image, sizeof(SpiceBitmapImage), 0, 0);
             fill_palette(display_channel, &(image->bitmap.palette), &(image->bitmap.flags),
                          drawable->group_id);
             image->bitmap.data = channel->send_data.header.size;
@@ -6064,10 +6064,10 @@ static void fill_bits(DisplayChannel *display_channel, PHYSICAL *in_bitmap, Draw
             }
         }
         break;
-    case IMAGE_TYPE_QUIC:
+    case SPICE_IMAGE_TYPE_QUIC:
         red_display_add_image_to_pixmap_cache(display_channel, qxl_image, image);
         image->quic = qxl_image->quic;
-        add_buf(channel, BUF_TYPE_RAW, image, sizeof(QUICImage), 0, 0);
+        add_buf(channel, BUF_TYPE_RAW, image, sizeof(SpiceQUICImage), 0, 0);
         add_buf(channel, BUF_TYPE_CHUNK, qxl_image->quic.data, qxl_image->quic.data_size,
                 memslot_id, drawable->group_id);
         break;
@@ -6076,14 +6076,14 @@ static void fill_bits(DisplayChannel *display_channel, PHYSICAL *in_bitmap, Draw
     }
 }
 
-static void fill_brush(DisplayChannel *display_channel, Brush *brush, Drawable *drawable)
+static void fill_brush(DisplayChannel *display_channel, SpiceBrush *brush, Drawable *drawable)
 {
-    if (brush->type == BRUSH_TYPE_PATTERN) {
+    if (brush->type == SPICE_BRUSH_TYPE_PATTERN) {
         fill_bits(display_channel, &brush->u.pattern.pat, drawable);
     }
 }
 
-static void fill_mask(DisplayChannel *display_channel, QMask *mask, Drawable *drawable)
+static void fill_mask(DisplayChannel *display_channel, SpiceQMask *mask, Drawable *drawable)
 {
     if (mask->bitmap) {
         if (display_channel->base.worker->image_compression != IMAGE_COMPRESS_OFF) {
@@ -6097,7 +6097,7 @@ static void fill_mask(DisplayChannel *display_channel, QMask *mask, Drawable *dr
     }
 }
 
-static void fill_attr(DisplayChannel *display_channel, LineAttr *attr, uint32_t group_id)
+static void fill_attr(DisplayChannel *display_channel, SpiceLineAttr *attr, uint32_t group_id)
 {
     if (attr->style_nseg) {
         RedChannel *channel = &display_channel->base;
@@ -6109,12 +6109,12 @@ static void fill_attr(DisplayChannel *display_channel, LineAttr *attr, uint32_t 
     }
 }
 
-static void fill_cursor(CursorChannel *cursor_channel, RedCursor *red_cursor, CursorItem *cursor)
+static void fill_cursor(CursorChannel *cursor_channel, SpiceCursor *red_cursor, CursorItem *cursor)
 {
     RedChannel *channel = &cursor_channel->base;
 
     if (!cursor) {
-        red_cursor->flags = RED_CURSOR_NONE;
+        red_cursor->flags = SPICE_CURSOR_FLAGS_NONE;
         return;
     }
 
@@ -6130,11 +6130,11 @@ static void fill_cursor(CursorChannel *cursor_channel, RedCursor *red_cursor, Cu
 
         if (red_cursor->header.unique) {
             if (red_cursor_cache_find(cursor_channel, red_cursor->header.unique)) {
-                red_cursor->flags |= RED_CURSOR_FROM_CACHE;
+                red_cursor->flags |= SPICE_CURSOR_FLAGS_FROM_CACHE;
                 return;
             }
             if (red_cursor_cache_add(cursor_channel, red_cursor->header.unique, 1)) {
-                red_cursor->flags |= RED_CURSOR_CACHE_ME;
+                red_cursor->flags |= SPICE_CURSOR_FLAGS_CACHE_ME;
             }
         }
 
@@ -6160,7 +6160,7 @@ static inline void red_channel_reset_send_data(RedChannel *channel)
     channel->send_data.header.sub_list = 0;
     ++channel->send_data.header.serial;
     channel->send_data.bufs[0].type = BUF_TYPE_RAW;
-    channel->send_data.bufs[0].size = sizeof(RedDataHeader);
+    channel->send_data.bufs[0].size = sizeof(SpiceDataHeader);
     channel->send_data.bufs[0].data = (void *)&channel->send_data.header;
 }
 
@@ -6181,99 +6181,99 @@ static inline void red_send_qxl_drawable(RedWorker *worker, DisplayChannel *disp
     RedChannel *channel = &display_channel->base;
     switch (drawable->type) {
     case QXL_DRAW_FILL:
-        channel->send_data.header.type = RED_DISPLAY_DRAW_FILL;
+        channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_FILL;
         fill_base(display_channel, &display_channel->send_data.u.fill.base, item,
-                  sizeof(RedFill));
+                  sizeof(SpiceMsgDisplayDrawFill));
         display_channel->send_data.u.fill.data = drawable->u.fill;
         fill_brush(display_channel, &display_channel->send_data.u.fill.data.brush, item);
         fill_mask(display_channel, &display_channel->send_data.u.fill.data.mask, item);
         break;
     case QXL_DRAW_OPAQUE:
-        channel->send_data.header.type = RED_DISPLAY_DRAW_OPAQUE;
+        channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_OPAQUE;
         fill_base(display_channel, &display_channel->send_data.u.opaque.base, item,
-                  sizeof(RedOpaque));
+                  sizeof(SpiceMsgDisplayDrawOpaque));
         display_channel->send_data.u.opaque.data = drawable->u.opaque;
         fill_bits(display_channel, &display_channel->send_data.u.opaque.data.src_bitmap, item);
         fill_brush(display_channel, &display_channel->send_data.u.opaque.data.brush, item);
         fill_mask(display_channel, &display_channel->send_data.u.opaque.data.mask, item);
         break;
     case QXL_DRAW_COPY:
-        channel->send_data.header.type = RED_DISPLAY_DRAW_COPY;
-        fill_base(display_channel, &display_channel->send_data.u.copy.base, item, sizeof(RedCopy));
+        channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_COPY;
+        fill_base(display_channel, &display_channel->send_data.u.copy.base, item, sizeof(SpiceMsgDisplayDrawCopy));
         display_channel->send_data.u.copy.data = drawable->u.copy;
         fill_bits(display_channel, &display_channel->send_data.u.copy.data.src_bitmap, item);
         fill_mask(display_channel, &display_channel->send_data.u.copy.data.mask, item);
         break;
     case QXL_DRAW_TRANSPARENT:
-        channel->send_data.header.type = RED_DISPLAY_DRAW_TRANSPARENT;
+        channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_TRANSPARENT;
         fill_base(display_channel, &display_channel->send_data.u.transparent.base, item,
-                  sizeof(RedTransparent));
+                  sizeof(SpiceMsgDisplayDrawTransparent));
         display_channel->send_data.u.transparent.data = drawable->u.transparent;
         fill_bits(display_channel, &display_channel->send_data.u.transparent.data.src_bitmap, item);
         break;
     case QXL_DRAW_ALPHA_BLEND:
-        channel->send_data.header.type = RED_DISPLAY_DRAW_ALPHA_BLEND;
+        channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_ALPHA_BLEND;
         fill_base(display_channel, &display_channel->send_data.u.alpha_blend.base, item,
-                  sizeof(RedAlphaBlend));
+                  sizeof(SpiceMsgDisplayDrawAlphaBlend));
         display_channel->send_data.u.alpha_blend.data = drawable->u.alpha_blend;
         fill_bits(display_channel, &display_channel->send_data.u.alpha_blend.data.src_bitmap, item);
         break;
     case QXL_COPY_BITS:
-        channel->send_data.header.type = RED_DISPLAY_COPY_BITS;
+        channel->send_data.header.type = SPICE_MSG_DISPLAY_COPY_BITS;
         fill_base(display_channel, &display_channel->send_data.u.copy_bits.base, item,
-                  sizeof(RedCopyBits));
+                  sizeof(SpiceMsgDisplayCopyBits));
         display_channel->send_data.u.copy_bits.src_pos = drawable->u.copy_bits.src_pos;
         break;
     case QXL_DRAW_BLEND:
-        channel->send_data.header.type = RED_DISPLAY_DRAW_BLEND;
+        channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_BLEND;
         fill_base(display_channel, &display_channel->send_data.u.blend.base, item,
-                  sizeof(RedBlend));
+                  sizeof(SpiceMsgDisplayDrawBlend));
         display_channel->send_data.u.blend.data = drawable->u.blend;
         fill_bits(display_channel, &display_channel->send_data.u.blend.data.src_bitmap, item);
         fill_mask(display_channel, &display_channel->send_data.u.blend.data.mask, item);
         break;
     case QXL_DRAW_BLACKNESS:
-        channel->send_data.header.type = RED_DISPLAY_DRAW_BLACKNESS;
+        channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_BLACKNESS;
         fill_base(display_channel, &display_channel->send_data.u.blackness.base, item,
-                  sizeof(RedBlackness));
+                  sizeof(SpiceMsgDisplayDrawBlackness));
         display_channel->send_data.u.blackness.data = drawable->u.blackness;
         fill_mask(display_channel, &display_channel->send_data.u.blackness.data.mask, item);
         break;
     case QXL_DRAW_WHITENESS:
-        channel->send_data.header.type = RED_DISPLAY_DRAW_WHITENESS;
+        channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_WHITENESS;
         fill_base(display_channel, &display_channel->send_data.u.whiteness.base, item,
-                  sizeof(RedWhiteness));
+                  sizeof(SpiceMsgDisplayDrawWhiteness));
         display_channel->send_data.u.whiteness.data = drawable->u.whiteness;
         fill_mask(display_channel, &display_channel->send_data.u.whiteness.data.mask, item);
         break;
     case QXL_DRAW_INVERS:
-        channel->send_data.header.type = RED_DISPLAY_DRAW_INVERS;
+        channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_INVERS;
         fill_base(display_channel, &display_channel->send_data.u.invers.base, item,
-                  sizeof(RedInvers));
+                  sizeof(SpiceMsgDisplayDrawInvers));
         display_channel->send_data.u.invers.data = drawable->u.invers;
         fill_mask(display_channel, &display_channel->send_data.u.invers.data.mask, item);
         break;
     case QXL_DRAW_ROP3:
-        channel->send_data.header.type = RED_DISPLAY_DRAW_ROP3;
+        channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_ROP3;
         fill_base(display_channel, &display_channel->send_data.u.rop3.base, item,
-                  sizeof(RedRop3));
+                  sizeof(SpiceMsgDisplayDrawRop3));
         display_channel->send_data.u.rop3.data = drawable->u.rop3;
         fill_bits(display_channel, &display_channel->send_data.u.rop3.data.src_bitmap, item);
         fill_brush(display_channel, &display_channel->send_data.u.rop3.data.brush, item);
         fill_mask(display_channel, &display_channel->send_data.u.rop3.data.mask, item);
         break;
     case QXL_DRAW_STROKE:
-        channel->send_data.header.type = RED_DISPLAY_DRAW_STROKE;
+        channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_STROKE;
         fill_base(display_channel, &display_channel->send_data.u.stroke.base, item,
-                  sizeof(RedStroke));
+                  sizeof(SpiceMsgDisplayDrawStroke));
         display_channel->send_data.u.stroke.data = drawable->u.stroke;
         fill_path(display_channel, &display_channel->send_data.u.stroke.data.path, item->group_id);
         fill_attr(display_channel, &display_channel->send_data.u.stroke.data.attr, item->group_id);
         fill_brush(display_channel, &display_channel->send_data.u.stroke.data.brush, item);
         break;
     case QXL_DRAW_TEXT:
-        channel->send_data.header.type = RED_DISPLAY_DRAW_TEXT;
-        fill_base(display_channel, &display_channel->send_data.u.text.base, item, sizeof(RedText));
+        channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_TEXT;
+        fill_base(display_channel, &display_channel->send_data.u.text.base, item, sizeof(SpiceMsgDisplayDrawText));
         display_channel->send_data.u.text.data = drawable->u.text;
         fill_brush(display_channel, &display_channel->send_data.u.text.data.fore_brush, item);
         fill_brush(display_channel, &display_channel->send_data.u.text.data.back_brush, item);
@@ -6443,14 +6443,14 @@ static void display_channel_push_release(DisplayChannel *channel, uint8_t type, 
     }
 
     if (free_list->res->count == free_list->res_size) {
-        RedResorceList *new_list;
-        new_list = malloc(sizeof(*new_list) + free_list->res_size * sizeof(RedResorceID) * 2);
+        SpiceResorceList *new_list;
+        new_list = malloc(sizeof(*new_list) + free_list->res_size * sizeof(SpiceResorceID) * 2);
         if (!new_list) {
             PANIC("malloc failed");
         }
         new_list->count = free_list->res->count;
         memcpy(new_list->resorces, free_list->res->resorces,
-               new_list->count * sizeof(RedResorceID));
+               new_list->count * sizeof(SpiceResorceID));
         free(free_list->res);
         free_list->res = new_list;
         free_list->res_size *= 2;
@@ -6461,7 +6461,7 @@ static void display_channel_push_release(DisplayChannel *channel, uint8_t type, 
 
 static inline void red_begin_send_massage(RedChannel *channel, void *item)
 {
-    channel->send_data.size = channel->send_data.header.size + sizeof(RedDataHeader);
+    channel->send_data.size = channel->send_data.header.size + sizeof(SpiceDataHeader);
     channel->messages_window++;
     red_send_data(channel, item);
 }
@@ -6478,19 +6478,19 @@ static inline void display_begin_send_massage(DisplayChannel *channel, void *ite
         channel->base.send_data.header.sub_list = channel->base.send_data.header.size;
         for (i = 0; i < MAX_CACHE_CLIENTS; i++) {
             if (i != channel->base.id && free_list->sync[i] != 0) {
-                free_list->wait.header.wait_list[sync_count].channel_type = RED_CHANNEL_DISPLAY;
+                free_list->wait.header.wait_list[sync_count].channel_type = SPICE_CHANNEL_DISPLAY;
                 free_list->wait.header.wait_list[sync_count].channel_id = i;
                 free_list->wait.header.wait_list[sync_count++].message_serial = free_list->sync[i];
             }
         }
-        RedSubMessageList *sub_list = &channel->send_data.sub_list.sub_list;
-        RedSubMessage *sub_header = channel->send_data.sub_header;
+        SpiceSubMessageList *sub_list = &channel->send_data.sub_list.sub_list;
+        SpicedSubMessage *sub_header = channel->send_data.sub_header;
         if (sync_count) {
             sub_list->size = 2;
             add_buf((RedChannel*)channel, BUF_TYPE_RAW, sub_list,
                     sizeof(*sub_list) + 2 * sizeof(sub_list->sub_messages[0]), 0, 0);
             sub_list->sub_messages[0] = channel->base.send_data.header.size;
-            sub_header[0].type = RED_WAIT_FOR_CHANNELS;
+            sub_header[0].type = SPICE_MSG_WAIT_FOR_CHANNELS;
             sub_header[0].size = sizeof(free_list->wait.header) +
                                  sync_count * sizeof(free_list->wait.buf[0]);
             add_buf((RedChannel*)channel, BUF_TYPE_RAW, sub_header, sizeof(*sub_header), 0, 0);
@@ -6506,7 +6506,7 @@ static inline void display_begin_send_massage(DisplayChannel *channel, void *ite
             sub_list->sub_messages[0] = channel->base.send_data.header.size;
             sub_index = 0;
         }
-        sub_header[sub_index].type = RED_DISPLAY_INVAL_LIST;
+        sub_header[sub_index].type = SPICE_MSG_DISPLAY_INVAL_LIST;
         sub_header[sub_index].size = sizeof(*free_list->res) + free_list->res->count *
                                      sizeof(free_list->res->resorces[0]);
         add_buf((RedChannel*)channel, BUF_TYPE_RAW, &sub_header[sub_index], sizeof(*sub_header), 0,
@@ -6600,7 +6600,7 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
     qxl_image = (QXLImage *)get_virt(worker,  drawable->qxl_drawable->u.copy.src_bitmap,
                                      sizeof(QXLImage), drawable->group_id);
 
-    if (qxl_image->descriptor.type != IMAGE_TYPE_BITMAP ||
+    if (qxl_image->descriptor.type != SPICE_IMAGE_TYPE_BITMAP ||
                                             (qxl_image->bitmap.flags & QXL_BITMAP_DIRECT)) {
         return FALSE;
     }
@@ -6615,7 +6615,7 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
     data = qxl_image->bitmap.data;
 
     switch (qxl_image->bitmap.format) {
-    case BITMAP_FMT_32BIT:
+    case SPICE_BITMAP_FMT_32BIT:
         if (!red_rgb_to_yuv420_32bpp(worker, &drawable->qxl_drawable->u.copy.src_area,
                                      &qxl_image->bitmap, stream->av_frame,
                                      get_virt_delta(worker, data, drawable->group_id),
@@ -6624,7 +6624,7 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
             return FALSE;
         }
         break;
-    case BITMAP_FMT_16BIT:
+    case SPICE_BITMAP_FMT_16BIT:
         if (!red_rgb_to_yuv420_16bpp(worker, &drawable->qxl_drawable->u.copy.src_area,
                                      &qxl_image->bitmap, stream->av_frame,
                                      get_virt_delta(worker, data, drawable->group_id),
@@ -6633,7 +6633,7 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
             return FALSE;
         }
         break;
-    case BITMAP_FMT_24BIT:
+    case SPICE_BITMAP_FMT_24BIT:
         if (!red_rgb_to_yuv420_24bpp(worker, &drawable->qxl_drawable->u.copy.src_area,
                                      &qxl_image->bitmap, stream->av_frame,
                                      get_virt_delta(worker, data, drawable->group_id),
@@ -6709,9 +6709,9 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
         break;
     }
  #endif
-    channel->send_data.header.type = RED_DISPLAY_STREAM_DATA;
-    RedStreamData* stream_data = &display_channel->send_data.u.stream_data;
-    add_buf(channel, BUF_TYPE_RAW, stream_data, sizeof(RedStreamData), 0, 0);
+    channel->send_data.header.type = SPICE_MSG_DISPLAY_STREAM_DATA;
+    SpiceMsgDisplayStreamData* stream_data = &display_channel->send_data.u.stream_data;
+    add_buf(channel, BUF_TYPE_RAW, stream_data, sizeof(SpiceMsgDisplayStreamData), 0, 0);
     add_buf(channel, BUF_TYPE_RAW, display_channel->send_data.stream_outbuf,
             n + FF_INPUT_BUFFER_PADDING_SIZE, 0, 0);
 
@@ -6750,12 +6750,12 @@ static void red_send_mode(DisplayChannel *display_channel)
     }
 
     channel = &display_channel->base;
-    channel->send_data.header.type = RED_DISPLAY_MODE;
+    channel->send_data.header.type = SPICE_MSG_DISPLAY_MODE;
     display_channel->send_data.u.mode.x_res = worker->surface.context.width;
     display_channel->send_data.u.mode.y_res = worker->surface.context.height;
     display_channel->send_data.u.mode.bits = worker->surface.context.depth;
 
-    add_buf(channel, BUF_TYPE_RAW, &display_channel->send_data.u.mode, sizeof(RedMode), 0, 0);
+    add_buf(channel, BUF_TYPE_RAW, &display_channel->send_data.u.mode, sizeof(SpiceMsgDisplayMode), 0, 0);
 
     display_begin_send_massage(display_channel, NULL);
 }
@@ -6763,12 +6763,12 @@ static void red_send_mode(DisplayChannel *display_channel)
 static void red_send_set_ack(RedChannel *channel)
 {
     ASSERT(channel);
-    channel->send_data.header.type = RED_SET_ACK;
+    channel->send_data.header.type = SPICE_MSG_SET_ACK;
     channel->send_data.u.ack.generation = ++channel->ack_generation;
     channel->send_data.u.ack.window = channel->client_ack_window;
     channel->messages_window = 0;
 
-    add_buf(channel, BUF_TYPE_RAW, &channel->send_data.u.ack, sizeof(RedSetAck), 0, 0);
+    add_buf(channel, BUF_TYPE_RAW, &channel->send_data.u.ack, sizeof(SpiceMsgSetAck), 0, 0);
     red_begin_send_massage(channel, NULL);
 }
 
@@ -6787,14 +6787,14 @@ static inline void display_send_verb(DisplayChannel *channel, uint16_t verb)
 }
 
 static inline void __red_send_inval(RedChannel *channel, CacheItem *cach_item,
-                                    RedInvalOne *inval_one)
+                                    SpiceMsgDisplayInvalOne *inval_one)
 {
     channel->send_data.header.type = cach_item->inval_type;
     inval_one->id = *(uint64_t *)&cach_item->id;
     add_buf(channel, BUF_TYPE_RAW, inval_one, sizeof(*inval_one), 0, 0);
 }
 
-static void red_send_inval(RedChannel *channel, CacheItem *cach_item, RedInvalOne *inval_one)
+static void red_send_inval(RedChannel *channel, CacheItem *cach_item, SpiceMsgDisplayInvalOne *inval_one)
 {
     __red_send_inval(channel, cach_item, inval_one);
     red_begin_send_massage(channel, NULL);
@@ -6809,9 +6809,9 @@ static void red_display_send_inval(DisplayChannel *display_channel, CacheItem *c
 
 static void display_channel_send_migrate(DisplayChannel *display_channel)
 {
-    display_channel->base.send_data.header.type = RED_MIGRATE;
-    display_channel->send_data.u.migrate.flags = RED_MIGRATE_NEED_FLUSH |
-                                                 RED_MIGRATE_NEED_DATA_TRANSFER;
+    display_channel->base.send_data.header.type = SPICE_MSG_MIGRATE;
+    display_channel->send_data.u.migrate.flags = SPICE_MIGRATE_NEED_FLUSH |
+                                                 SPICE_MIGRATE_NEED_DATA_TRANSFER;
     add_buf((RedChannel*)display_channel, BUF_TYPE_RAW, &display_channel->send_data.u.migrate,
             sizeof(display_channel->send_data.u.migrate), 0, 0);
     display_channel->expect_migrate_mark = TRUE;
@@ -6822,7 +6822,7 @@ static void display_channel_send_migrate_data(DisplayChannel *display_channel)
 {
     DisplayChannelMigrateData* display_data;
 
-    display_channel->base.send_data.header.type = RED_MIGRATE_DATA;
+    display_channel->base.send_data.header.type = SPICE_MSG_MIGRATE_DATA;
     ASSERT(display_channel->pixmap_cache);
     display_data = &display_channel->send_data.u.migrate_data;
     display_data->magic = DISPLAY_MIGRATE_DATA_MAGIC;
@@ -6851,11 +6851,11 @@ static void display_channel_send_migrate_data(DisplayChannel *display_channel)
 
 static void display_channel_pixmap_sync(DisplayChannel *display_channel)
 {
-    RedWaitForChannels *wait;
+    SpiceMsgWaitForChannels *wait;
     PixmapCache *pixmap_cache;
 
 
-    display_channel->base.send_data.header.type = RED_WAIT_FOR_CHANNELS;
+    display_channel->base.send_data.header.type = SPICE_MSG_WAIT_FOR_CHANNELS;
     wait = &display_channel->send_data.u.wait.header;
     pixmap_cache = display_channel->pixmap_cache;
 
@@ -6863,7 +6863,7 @@ static void display_channel_pixmap_sync(DisplayChannel *display_channel)
     pthread_mutex_lock(&pixmap_cache->lock);
 
     wait->wait_count = 1;
-    wait->wait_list[0].channel_type = RED_CHANNEL_DISPLAY;
+    wait->wait_list[0].channel_type = SPICE_CHANNEL_DISPLAY;
     wait->wait_list[0].channel_id = pixmap_cache->generation_initiator.client;
     wait->wait_list[0].message_serial = pixmap_cache->generation_initiator.message;
     display_channel->pixmap_cache_generation = pixmap_cache->generation;
@@ -6878,9 +6878,9 @@ static void display_channel_pixmap_sync(DisplayChannel *display_channel)
 
 static void display_channel_reset_cache(DisplayChannel *display_channel)
 {
-    RedWaitForChannels *wait = &display_channel->send_data.u.wait.header;
+    SpiceMsgWaitForChannels *wait = &display_channel->send_data.u.wait.header;
 
-    display_channel->base.send_data.header.type = RED_DISPLAY_INVAL_ALL_PIXMAPS;
+    display_channel->base.send_data.header.type = SPICE_MSG_DISPLAY_INVAL_ALL_PIXMAPS;
     pixmap_cache_reset(display_channel->pixmap_cache, display_channel, wait);
 
     add_buf((RedChannel *)display_channel, BUF_TYPE_RAW, wait,
@@ -6893,7 +6893,7 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
     RedChannel *channel;
     RedImage *red_image;
     RedWorker *worker;
-    Bitmap bitmap;
+    SpiceBitmap bitmap;
 
     ASSERT(display_channel && item);
     channel = &display_channel->base;
@@ -6903,30 +6903,30 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
     ASSERT(red_image);
 
     QXL_SET_IMAGE_ID(red_image, QXL_IMAGE_GROUP_RED, ++worker->bits_unique);
-    red_image->descriptor.type = IMAGE_TYPE_BITMAP;
+    red_image->descriptor.type = SPICE_IMAGE_TYPE_BITMAP;
     red_image->descriptor.flags = 0;
     red_image->descriptor.width = item->width;
     red_image->descriptor.height = item->height;
 
-    bitmap.format = BITMAP_FMT_32BIT;
+    bitmap.format = SPICE_BITMAP_FMT_32BIT;
     bitmap.flags = QXL_BITMAP_DIRECT;
     bitmap.flags |= item->top_down ? QXL_BITMAP_TOP_DOWN : 0;
     bitmap.x = item->width;
     bitmap.y = item->height;
     bitmap.stride = item->stride;
     bitmap.palette = 0;
-    bitmap.data = (ADDRESS)item->data;
+    bitmap.data = (SPICE_ADDRESS)item->data;
 
-    channel->send_data.header.type = RED_DISPLAY_DRAW_COPY;
+    channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_COPY;
 
-    add_buf(channel, BUF_TYPE_RAW, &display_channel->send_data.u.copy, sizeof(RedCopy), 0, 0);
+    add_buf(channel, BUF_TYPE_RAW, &display_channel->send_data.u.copy, sizeof(SpiceMsgDisplayDrawCopy), 0, 0);
     display_channel->send_data.u.copy.base.box.left = item->pos.x;
     display_channel->send_data.u.copy.base.box.top = item->pos.y;
     display_channel->send_data.u.copy.base.box.right = item->pos.x + bitmap.x;
     display_channel->send_data.u.copy.base.box.bottom = item->pos.y + bitmap.y;
-    display_channel->send_data.u.copy.base.clip.type = CLIP_TYPE_NONE;
+    display_channel->send_data.u.copy.base.clip.type = SPICE_CLIP_TYPE_NONE;
     display_channel->send_data.u.copy.base.clip.data = 0;
-    display_channel->send_data.u.copy.data.rop_decriptor = ROPD_OP_PUT;
+    display_channel->send_data.u.copy.data.rop_decriptor = SPICE_ROPD_OP_PUT;
     display_channel->send_data.u.copy.data.src_area.left = 0;
     display_channel->send_data.u.copy.data.src_area.top = 0;
     display_channel->send_data.u.copy.data.src_area.right = bitmap.x;
@@ -6943,10 +6943,10 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
         add_buf(channel, BUF_TYPE_COMPRESS_BUF, comp_send_data.comp_buf,
                 comp_send_data.comp_buf_size, 0, 0);
     } else {
-        red_image->descriptor.type = IMAGE_TYPE_BITMAP;
+        red_image->descriptor.type = SPICE_IMAGE_TYPE_BITMAP;
         red_image->bitmap = bitmap;
         red_image->bitmap.flags &= ~QXL_BITMAP_DIRECT;
-        add_buf(channel, BUF_TYPE_RAW, red_image, sizeof(BitmapImage), 0, 0);
+        add_buf(channel, BUF_TYPE_RAW, red_image, sizeof(SpiceBitmapImage), 0, 0);
         red_image->bitmap.data = channel->send_data.header.size;
         add_buf(channel, BUF_TYPE_RAW, item->data, bitmap.y * bitmap.stride, 0, 0);
     }
@@ -6957,24 +6957,24 @@ static void red_display_send_upgrade(DisplayChannel *display_channel, UpgradeIte
 {
     RedChannel *channel;
     QXLDrawable *qxl_drawable;
-    RedCopy *copy = &display_channel->send_data.u.copy;
+    SpiceMsgDisplayDrawCopy *copy = &display_channel->send_data.u.copy;
 
     ASSERT(display_channel && item && item->drawable);
     channel = &display_channel->base;
 
-    channel->send_data.header.type = RED_DISPLAY_DRAW_COPY;
+    channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_COPY;
 
     qxl_drawable = item->drawable->qxl_drawable;
     ASSERT(qxl_drawable->type == QXL_DRAW_COPY);
-    ASSERT(qxl_drawable->u.copy.rop_decriptor == ROPD_OP_PUT);
+    ASSERT(qxl_drawable->u.copy.rop_decriptor == SPICE_ROPD_OP_PUT);
     ASSERT(qxl_drawable->u.copy.mask.bitmap == 0);
 
-    add_buf(channel, BUF_TYPE_RAW, copy, sizeof(RedCopy), 0, 0);
+    add_buf(channel, BUF_TYPE_RAW, copy, sizeof(SpiceMsgDisplayDrawCopy), 0, 0);
     copy->base.box = qxl_drawable->bbox;
-    copy->base.clip.type = CLIP_TYPE_RECTS;
+    copy->base.clip.type = SPICE_CLIP_TYPE_RECTS;
     copy->base.clip.data = channel->send_data.header.size;
     add_buf(channel, BUF_TYPE_RAW, &item->region.num_rects, sizeof(uint32_t), 0, 0);
-    add_buf(channel, BUF_TYPE_RAW, item->region.rects, sizeof(Rect) * item->region.num_rects, 0, 0);
+    add_buf(channel, BUF_TYPE_RAW, item->region.rects, sizeof(SpiceRect) * item->region.num_rects, 0, 0);
     copy->data = qxl_drawable->u.copy;
     fill_bits(display_channel, &copy->data.src_bitmap, item->drawable);
 
@@ -6988,11 +6988,11 @@ static void red_display_send_stream_start(DisplayChannel *display_channel, Strea
 
     agent->lats_send_time = 0;
     ASSERT(stream);
-    channel->send_data.header.type = RED_DISPLAY_STREAM_CREATE;
-    RedStreamCreate *stream_create = &display_channel->send_data.u.stream_create.message;
+    channel->send_data.header.type = SPICE_MSG_DISPLAY_STREAM_CREATE;
+    SpiceMsgDisplayStreamCreate *stream_create = &display_channel->send_data.u.stream_create.message;
     stream_create->id = agent - display_channel->stream_agents;
-    stream_create->flags = stream->top_down ? STREAM_TOP_DOWN : 0;
-    stream_create->codec_type = RED_VIDEO_CODEC_TYPE_MJPEG;
+    stream_create->flags = stream->top_down ? SPICE_STREAM_FLAGS_TOP_DOWN : 0;
+    stream_create->codec_type = SPICE_VIDEO_CODEC_TYPE_MJPEG;
 
     stream_create->src_width = stream->width;
     stream_create->src_height = stream->height;
@@ -7004,14 +7004,14 @@ static void red_display_send_stream_start(DisplayChannel *display_channel, Strea
     if (stream->current) {
         QXLDrawable *qxl_drawable = stream->current->qxl_drawable;
         stream_create->clip = qxl_drawable->clip;
-        if (qxl_drawable->clip.type == CLIP_TYPE_RECTS) {
+        if (qxl_drawable->clip.type == SPICE_CLIP_TYPE_RECTS) {
             fill_rects_clip(channel, &stream_create->clip.data, stream->current->group_id);
         } else {
-            ASSERT(qxl_drawable->clip.type == CLIP_TYPE_NONE);
+            ASSERT(qxl_drawable->clip.type == SPICE_CLIP_TYPE_NONE);
         }
         display_begin_send_massage(display_channel, &stream->current->pipe_item);
     } else {
-        stream_create->clip.type = CLIP_TYPE_RECTS;
+        stream_create->clip.type = SPICE_CLIP_TYPE_RECTS;
         stream_create->clip.data = channel->send_data.header.size;
         display_channel->send_data.u.stream_create.num_rects = 0;
         add_buf(channel, BUF_TYPE_RAW, &display_channel->send_data.u.stream_create.num_rects,
@@ -7030,18 +7030,18 @@ static void red_display_send_stream_clip(DisplayChannel *display_channel,
 
     ASSERT(stream);
 
-    channel->send_data.header.type = RED_DISPLAY_STREAM_CLIP;
-    RedStreamClip *stream_clip = &display_channel->send_data.u.stream_clip;
+    channel->send_data.header.type = SPICE_MSG_DISPLAY_STREAM_CLIP;
+    SpiceMsgDisplayStreamClip *stream_clip = &display_channel->send_data.u.stream_clip;
     add_buf(channel, BUF_TYPE_RAW, stream_clip, sizeof(*stream_clip), 0, 0);
     stream_clip->id = agent - display_channel->stream_agents;
-    if ((stream_clip->clip.type = item->clip_type) == CLIP_TYPE_NONE) {
+    if ((stream_clip->clip.type = item->clip_type) == SPICE_CLIP_TYPE_NONE) {
         stream_clip->clip.data = 0;
     } else {
-        ASSERT(stream_clip->clip.type == CLIP_TYPE_RECTS);
+        ASSERT(stream_clip->clip.type == SPICE_CLIP_TYPE_RECTS);
         stream_clip->clip.data = channel->send_data.header.size;
         add_buf(channel, BUF_TYPE_RAW, &item->region.num_rects, sizeof(uint32_t), 0, 0);
         add_buf(channel, BUF_TYPE_RAW, item->region.rects,
-                item->region.num_rects * sizeof(Rect), 0, 0);
+                item->region.num_rects * sizeof(SpiceRect), 0, 0);
     }
     display_begin_send_massage(display_channel, item);
 }
@@ -7049,10 +7049,10 @@ static void red_display_send_stream_clip(DisplayChannel *display_channel,
 static void red_display_send_stream_end(DisplayChannel *display_channel, StreamAgent* agent)
 {
     RedChannel *channel = &display_channel->base;
-    channel->send_data.header.type = RED_DISPLAY_STREAM_DESTROY;
+    channel->send_data.header.type = SPICE_MSG_DISPLAY_STREAM_DESTROY;
     display_channel->send_data.u.stream_destroy.id = agent - display_channel->stream_agents;
     add_buf(channel, BUF_TYPE_RAW, &display_channel->send_data.u.stream_destroy,
-            sizeof(RedStreamDestroy), 0, 0);
+            sizeof(SpiceMsgDisplayStreamDestroy), 0, 0);
     display_begin_send_massage(display_channel, NULL);
 }
 
@@ -7069,12 +7069,12 @@ static void red_send_cursor_init(CursorChannel *channel)
 
     worker = channel->base.worker;
 
-    channel->base.send_data.header.type = RED_CURSOR_INIT;
+    channel->base.send_data.header.type = SPICE_MSG_CURSOR_INIT;
     channel->send_data.u.cursor_init.visible = worker->cursor_visible;
     channel->send_data.u.cursor_init.position = worker->cursor_position;
     channel->send_data.u.cursor_init.trail_length = worker->cursor_trail_length;
     channel->send_data.u.cursor_init.trail_frequency = worker->cursor_trail_frequency;
-    add_buf(&channel->base, BUF_TYPE_RAW, &channel->send_data.u.cursor_init, sizeof(RedCursorInit),
+    add_buf(&channel->base, BUF_TYPE_RAW, &channel->send_data.u.cursor_init, sizeof(SpiceMsgCursorInit),
             0, 0);
 
     fill_cursor(channel, &channel->send_data.u.cursor_init.cursor, worker->cursor);
@@ -7089,11 +7089,11 @@ static void red_send_local_cursor(CursorChannel *cursor_channel, LocalCursor *cu
     ASSERT(cursor_channel);
 
     channel = &cursor_channel->base;
-    channel->send_data.header.type = RED_CURSOR_SET;
+    channel->send_data.header.type = SPICE_MSG_CURSOR_SET;
     cursor_channel->send_data.u.cursor_set.postition = cursor->position;
     cursor_channel->send_data.u.cursor_set.visible = channel->worker->cursor_visible;
     add_buf(channel, BUF_TYPE_RAW, &cursor_channel->send_data.u.cursor_set,
-            sizeof(RedCursorSet), 0, 0);
+            sizeof(SpiceMsgCursorSet), 0, 0);
     fill_cursor(cursor_channel, &cursor_channel->send_data.u.cursor_set.cursor, &cursor->base);
 
     red_begin_send_massage(channel, cursor);
@@ -7103,7 +7103,7 @@ static void red_send_local_cursor(CursorChannel *cursor_channel, LocalCursor *cu
 
 static void cursor_channel_send_migrate(CursorChannel *cursor_channel)
 {
-    cursor_channel->base.send_data.header.type = RED_MIGRATE;
+    cursor_channel->base.send_data.header.type = SPICE_MSG_MIGRATE;
     cursor_channel->send_data.u.migrate.flags = 0;
     add_buf((RedChannel*)cursor_channel, BUF_TYPE_RAW, &cursor_channel->send_data.u.migrate,
             sizeof(cursor_channel->send_data.u.migrate), 0, 0);
@@ -7122,28 +7122,28 @@ static void red_send_cursor(CursorChannel *cursor_channel, CursorItem *cursor)
     cmd = cursor->qxl_cursor;
     switch (cmd->type) {
     case QXL_CURSOR_MOVE:
-        channel->send_data.header.type = RED_CURSOR_MOVE;
+        channel->send_data.header.type = SPICE_MSG_CURSOR_MOVE;
         cursor_channel->send_data.u.cursor_move.postition = cmd->u.position;
         add_buf(channel, BUF_TYPE_RAW, &cursor_channel->send_data.u.cursor_move,
-                sizeof(RedCursorMove), 0, 0);
+                sizeof(SpiceMsgCursorMove), 0, 0);
         break;
     case QXL_CURSOR_SET:
-        channel->send_data.header.type = RED_CURSOR_SET;
+        channel->send_data.header.type = SPICE_MSG_CURSOR_SET;
         cursor_channel->send_data.u.cursor_set.postition = cmd->u.set.position;
         cursor_channel->send_data.u.cursor_set.visible = channel->worker->cursor_visible;
         add_buf(channel, BUF_TYPE_RAW, &cursor_channel->send_data.u.cursor_set,
-                sizeof(RedCursorSet), 0, 0);
+                sizeof(SpiceMsgCursorSet), 0, 0);
         fill_cursor(cursor_channel, &cursor_channel->send_data.u.cursor_set.cursor, cursor);
         break;
     case QXL_CURSOR_HIDE:
-        channel->send_data.header.type = RED_CURSOR_HIDE;
+        channel->send_data.header.type = SPICE_MSG_CURSOR_HIDE;
         break;
     case QXL_CURSOR_TRAIL:
-        channel->send_data.header.type = RED_CURSOR_TRAIL;
+        channel->send_data.header.type = SPICE_MSG_CURSOR_TRAIL;
         cursor_channel->send_data.u.cursor_trail.length = cmd->u.trail.length;
         cursor_channel->send_data.u.cursor_trail.frequency = cmd->u.trail.frequency;
         add_buf(channel, BUF_TYPE_RAW, &cursor_channel->send_data.u.cursor_trail,
-                sizeof(RedCursorTrail), 0, 0);
+                sizeof(SpiceMsgCursorTrail), 0, 0);
         break;
     default:
         red_error("bad cursor command %d", cmd->type);
@@ -7248,7 +7248,7 @@ static void display_channel_push(RedWorker *worker)
             break;
         case PIPE_ITEM_TYPE_INVAL_PALLET_CACHE:
             red_reset_palette_cache(display_channel);
-            red_send_verb((RedChannel *)display_channel, RED_DISPLAY_INVAL_ALL_PALETTES);
+            red_send_verb((RedChannel *)display_channel, SPICE_MSG_DISPLAY_INVAL_ALL_PALETTES);
             free(pipe_item);
             break;
         default:
@@ -7297,7 +7297,7 @@ static void cursor_channel_push(RedWorker *worker)
             break;
         case PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE:
             red_reset_cursor_cache(cursor_channel);
-            red_send_verb((RedChannel *)cursor_channel, RED_CURSOR_INVAL_ALL);
+            red_send_verb((RedChannel *)cursor_channel, SPICE_MSG_CURSOR_INVAL_ALL);
             free(pipe_item);
             break;
         default:
@@ -7424,7 +7424,7 @@ static void red_disconnect_display(RedChannel *channel)
 static void red_migrate_display(RedWorker *worker)
 {
     if (worker->display_channel) {
-        red_pipe_add_verb(&worker->display_channel->base, RED_DISPLAY_STREAM_DESTROY_ALL);
+        red_pipe_add_verb(&worker->display_channel->base, SPICE_MSG_DISPLAY_STREAM_DESTROY_ALL);
         red_pipe_add_type(&worker->display_channel->base, PIPE_ITEM_TYPE_MIGRATE);
     }
 }
@@ -7442,7 +7442,7 @@ static void destroy_cairo_canvas(CairoCanvas *canvas)
     cairo_destroy(cairo);
 }
 
-static void validate_area_nop(void *canvas, int32_t stride, uint8_t *line_0, const Rect *area)
+static void validate_area_nop(void *canvas, int32_t stride, uint8_t *line_0, const SpiceRect *area)
 {
 }
 
@@ -7507,7 +7507,7 @@ static void destroy_gl_canvas(GLCanvas *canvas)
     oglctx_destroy(ctx);
 }
 
-static void gl_validate_area(GLCanvas *canvas, int32_t stride, uint8_t *line_0, const Rect *area)
+static void gl_validate_area(GLCanvas *canvas, int32_t stride, uint8_t *line_0, const SpiceRect *area)
 {
     int h;
 
@@ -7791,28 +7791,28 @@ static void on_new_display_channel(RedWorker *worker)
         push_new_mode(worker);
         red_add_screen_image(worker);
         if (channel_is_connected(&display_channel->base)) {
-            red_pipe_add_verb(&display_channel->base, RED_DISPLAY_MARK);
+            red_pipe_add_verb(&display_channel->base, SPICE_MSG_DISPLAY_MARK);
             red_disply_start_streams(display_channel);
         }
     }
 }
 
-static int channel_handle_message(RedChannel *channel, RedDataHeader *message)
+static int channel_handle_message(RedChannel *channel, SpiceDataHeader *message)
 {
     switch (message->type) {
-    case REDC_ACK_SYNC:
+    case SPICE_MSGC_ACK_SYNC:
         if (message->size != sizeof(uint32_t)) {
             red_printf("bad message size");
             return FALSE;
         }
         channel->client_ack_generation = *(uint32_t *)(message + 1);
         break;
-    case REDC_ACK:
+    case SPICE_MSGC_ACK:
         if (channel->client_ack_generation == channel->ack_generation) {
             channel->messages_window -= channel->client_ack_window;
         }
         break;
-    case REDC_DISCONNECTING:
+    case SPICE_MSGC_DISCONNECTING:
         break;
     default:
         red_printf("invalid message type %u", message->type);
@@ -8017,14 +8017,14 @@ static void red_release_pixmap_cache(DisplayChannel *channel)
     free(cache);
 }
 
-static int display_channel_init_cache(DisplayChannel *channel, RedcDisplayInit *init_info)
+static int display_channel_init_cache(DisplayChannel *channel, SpiceMsgcDisplayInit *init_info)
 {
     ASSERT(!channel->pixmap_cache);
     return !!(channel->pixmap_cache = red_get_pixmap_cache(init_info->pixmap_cache_id,
                                                            init_info->pixmap_cache_size));
 }
 
-static int display_channel_init_glz_dictionary(DisplayChannel *channel, RedcDisplayInit *init_info)
+static int display_channel_init_glz_dictionary(DisplayChannel *channel, SpiceMsgcDisplayInit *init_info)
 {
     ASSERT(!channel->glz_dict);
     ring_init(&channel->glz_drawables);
@@ -8035,7 +8035,7 @@ static int display_channel_init_glz_dictionary(DisplayChannel *channel, RedcDisp
                                                          init_info->glz_dictionary_window_size));
 }
 
-static int display_channel_init(DisplayChannel *channel, RedcDisplayInit *init_info)
+static int display_channel_init(DisplayChannel *channel, SpiceMsgcDisplayInit *init_info)
 {
     return (display_channel_init_cache(channel, init_info) &&
             display_channel_init_glz_dictionary(channel, init_info));
@@ -8064,7 +8064,7 @@ static int display_channel_handle_migrate_mark(DisplayChannel *channel)
     return TRUE;
 }
 
-static int display_channel_handle_migrate_data(DisplayChannel *channel, RedDataHeader *message)
+static int display_channel_handle_migrate_data(DisplayChannel *channel, SpiceDataHeader *message)
 {
     DisplayChannelMigrateData *migrate_data;
     int i;
@@ -8115,23 +8115,23 @@ static int display_channel_handle_migrate_data(DisplayChannel *channel, RedDataH
     return TRUE;
 }
 
-static int display_channel_handle_message(RedChannel *channel, RedDataHeader *message)
+static int display_channel_handle_message(RedChannel *channel, SpiceDataHeader *message)
 {
     switch (message->type) {
-    case REDC_DISPLAY_INIT:
-        if (message->size != sizeof(RedcDisplayInit)) {
+    case SPICE_MSGC_DISPLAY_INIT:
+        if (message->size != sizeof(SpiceMsgcDisplayInit)) {
             red_printf("bad message size");
             return FALSE;
         }
         if (!((DisplayChannel *)channel)->expect_init) {
-            red_printf("unexpected REDC_DISPLAY_INIT");
+            red_printf("unexpected SPICE_MSGC_DISPLAY_INIT");
             return FALSE;
         }
         ((DisplayChannel *)channel)->expect_init = FALSE;
-        return display_channel_init((DisplayChannel *)channel, (RedcDisplayInit *)(message + 1));
-    case REDC_MIGRATE_FLUSH_MARK:
+        return display_channel_init((DisplayChannel *)channel, (SpiceMsgcDisplayInit *)(message + 1));
+    case SPICE_MSGC_MIGRATE_FLUSH_MARK:
         return display_channel_handle_migrate_mark((DisplayChannel *)channel);
-    case REDC_MIGRATE_DATA:
+    case SPICE_MSGC_MIGRATE_DATA:
         return display_channel_handle_migrate_data((DisplayChannel *)channel, message);
     default:
         return channel_handle_message(channel, message);
@@ -8167,28 +8167,28 @@ static void red_receive(RedChannel *channel)
         } else {
             channel->recive_data.now += n;
             for (;;) {
-                RedDataHeader *message = channel->recive_data.message;
+                SpiceDataHeader *message = channel->recive_data.message;
                 n = channel->recive_data.now - (uint8_t *)message;
-                if (n < sizeof(RedDataHeader) ||
-                    n < sizeof(RedDataHeader) + message->size) {
+                if (n < sizeof(SpiceDataHeader) ||
+                    n < sizeof(SpiceDataHeader) + message->size) {
                     break;
                 }
                 if (!channel->handle_message(channel, message)) {
                     channel->disconnect(channel);
                     return;
                 }
-                channel->recive_data.message = (RedDataHeader *)((uint8_t *)message +
-                                                                 sizeof(RedDataHeader) +
+                channel->recive_data.message = (SpiceDataHeader *)((uint8_t *)message +
+                                                                 sizeof(SpiceDataHeader) +
                                                                  message->size);
             }
 
             if (channel->recive_data.now == (uint8_t *)channel->recive_data.message) {
                 channel->recive_data.now = channel->recive_data.buf;
-                channel->recive_data.message = (RedDataHeader *)channel->recive_data.buf;
+                channel->recive_data.message = (SpiceDataHeader *)channel->recive_data.buf;
             } else if (channel->recive_data.now == channel->recive_data.end) {
                 memcpy(channel->recive_data.buf, channel->recive_data.message, n);
                 channel->recive_data.now = channel->recive_data.buf + n;
-                channel->recive_data.message = (RedDataHeader *)channel->recive_data.buf;
+                channel->recive_data.message = (SpiceDataHeader *)channel->recive_data.buf;
             }
         }
     }
@@ -8241,7 +8241,7 @@ static RedChannel *__new_channel(RedWorker *worker, int size, RedsStreamContext 
     channel->client_ack_window = IS_LOW_BANDWIDTH() ? WIDE_CLIENT_ACK_WINDOW :
                                                       NARROW_CLIENT_ACK_WINDOW;
     channel->client_ack_generation = ~0;
-    channel->recive_data.message = (RedDataHeader *)channel->recive_data.buf;
+    channel->recive_data.message = (SpiceDataHeader *)channel->recive_data.buf;
     channel->recive_data.now = channel->recive_data.buf;
     channel->recive_data.end = channel->recive_data.buf + sizeof(channel->recive_data.buf);
     ring_init(&channel->pipe);
@@ -8361,9 +8361,9 @@ static void handle_new_display_channel(RedWorker *worker, RedsStreamContext *pee
     worker->display_channel = display_channel;
 
 
-    if (!(display_channel->send_data.free_list.res = malloc(sizeof(RedResorceList) +
+    if (!(display_channel->send_data.free_list.res = malloc(sizeof(SpiceResorceList) +
                                                             DISPLAY_FREE_LIST_DEFAULT_SIZE *
-                                                            sizeof(RedResorceID)))) {
+                                                            sizeof(SpiceResorceID)))) {
         PANIC("free list alloc failed");
     }
     display_channel->send_data.free_list.res_size = DISPLAY_FREE_LIST_DEFAULT_SIZE;
@@ -8447,11 +8447,11 @@ static void red_connect_cursor(RedWorker *worker, RedsStreamContext *peer, int m
 
 typedef struct __attribute__ ((__packed__)) CursorData {
     uint32_t visible;
-    Point16 position;
+    SpicePoint16 position;
     uint16_t trail_length;
     uint16_t trail_frequency;
     uint32_t data_size;
-    RedCursor _cursor;
+    SpiceCursor _cursor;
 } CursorData;
 
 static void red_save_cursor(RedWorker *worker)
@@ -8464,7 +8464,7 @@ static void red_save_cursor(RedWorker *worker)
     ASSERT(worker->cursor->type == CURSOR_TYPE_LOCAL);
 
     local = (LocalCursor *)worker->cursor;
-    size = sizeof(CursorData) + sizeof(RedCursor) + local->data_size;
+    size = sizeof(CursorData) + sizeof(SpiceCursor) + local->data_size;
     cursor_data = malloc(size);
     ASSERT(cursor_data);
 
@@ -8478,7 +8478,7 @@ static void red_save_cursor(RedWorker *worker)
     worker->qxl->set_save_data(worker->qxl, cursor_data, size);
 }
 
-static LocalCursor *_new_local_cursor(CursorHeader *header, int data_size, Point16 position)
+static LocalCursor *_new_local_cursor(SpiceCursorHeader *header, int data_size, SpicePoint16 position)
 {
     LocalCursor *local;
 
@@ -8686,16 +8686,16 @@ static inline void handle_dev_destroy_surfaces(RedWorker *worker)
     if (worker->cursor_channel) {
         red_pipe_add_type(&worker->cursor_channel->base, PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
         if (!worker->cursor_channel->base.migrate) {
-            red_pipe_add_verb(&worker->cursor_channel->base, RED_CURSOR_RESET);
+            red_pipe_add_verb(&worker->cursor_channel->base, SPICE_MSG_CURSOR_RESET);
         }
         ASSERT(!worker->cursor_channel->base.send_data.item);
     }
 
     if (worker->display_channel) {
         red_pipe_add_type(&worker->display_channel->base, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
-        red_pipe_add_verb(&worker->display_channel->base, RED_DISPLAY_STREAM_DESTROY_ALL);
+        red_pipe_add_verb(&worker->display_channel->base, SPICE_MSG_DISPLAY_STREAM_DESTROY_ALL);
         if (!worker->display_channel->base.migrate) {
-            red_pipe_add_verb(&worker->display_channel->base, RED_DISPLAY_RESET);
+            red_pipe_add_verb(&worker->display_channel->base, SPICE_MSG_DISPLAY_RESET);
         }
     }
 
@@ -8735,7 +8735,7 @@ static inline void handle_dev_create_primary_surface(RedWorker *worker)
 
     if (worker->display_channel) {
         red_pipe_add_type(&worker->display_channel->base, PIPE_ITEM_TYPE_MODE);
-        red_pipe_add_verb(&worker->display_channel->base, RED_DISPLAY_MARK);
+        red_pipe_add_verb(&worker->display_channel->base, SPICE_MSG_DISPLAY_MARK);
         display_channel_push(worker);
     }
 
@@ -8765,7 +8765,7 @@ static inline void handle_dev_destroy_primary_surface(RedWorker *worker)
     if (worker->cursor_channel) {
         red_pipe_add_type(&worker->cursor_channel->base, PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
         if (!worker->cursor_channel->base.migrate) {
-            red_pipe_add_verb(&worker->cursor_channel->base, RED_CURSOR_RESET);
+            red_pipe_add_verb(&worker->cursor_channel->base, SPICE_MSG_CURSOR_RESET);
         }
         ASSERT(!worker->cursor_channel->base.send_data.item);
     }
@@ -8844,7 +8844,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         if (worker->cursor_channel) {
             red_pipe_add_type(&worker->cursor_channel->base, PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
             if (!worker->cursor_channel->base.migrate) {
-                red_pipe_add_verb(&worker->cursor_channel->base, RED_CURSOR_RESET);
+                red_pipe_add_verb(&worker->cursor_channel->base, SPICE_MSG_CURSOR_RESET);
             }
             ASSERT(!worker->cursor_channel->base.send_data.item);
 
@@ -9040,7 +9040,7 @@ static void red_init(RedWorker *worker, WorkerInitData *init_data)
     worker->num_renderers = init_data->num_renderers;
     memcpy(worker->renderers, init_data->renderers, sizeof(worker->renderers));
     worker->renderer = RED_RENDERER_INVALID;
-    worker->mouse_mode = RED_MOUSE_MODE_SERVER;
+    worker->mouse_mode = SPICE_MOUSE_MODE_SERVER;
     worker->image_compression = init_data->image_compression;
     worker->streaming_video = init_data->streaming_video;
     ring_init(&worker->current_list);
@@ -9089,7 +9089,7 @@ void *red_worker_main(void *arg)
     red_printf("begin");
     ASSERT(MAX_PIPE_SIZE > WIDE_CLIENT_ACK_WINDOW &&
            MAX_PIPE_SIZE > NARROW_CLIENT_ACK_WINDOW); //ensure wakeup by ack message
-    ASSERT(QXL_BITMAP_TOP_DOWN == BITMAP_TOP_DOWN);
+    ASSERT(QXL_BITMAP_TOP_DOWN == SPICE_BITMAP_FLAGS_TOP_DOWN);
 
 #if  defined(RED_WORKER_STAT) || defined(COMPRESS_STAT)
     if (pthread_getcpuclockid(pthread_self(), &clock_id)) {
@@ -9157,7 +9157,7 @@ void *red_worker_main(void *arg)
 
 #ifdef DUMP_BITMAP
 #include <stdio.h>
-static void dump_palette(FILE *f, Palette* plt)
+static void dump_palette(FILE *f, SpicePalette* plt)
 {
     int i;
     for (i = 0; i < plt->num_ents; i++) {
@@ -9181,14 +9181,14 @@ static void dump_line(FILE *f, uint8_t* line, uint16_t n_pixel_bits, int width, 
 
 #define RAM_PATH "/tmp/tmpfs"
 
-static void dump_bitmap(RedWorker *worker, Bitmap *bitmap, uint32_t group_id)
+static void dump_bitmap(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_id)
 {
     static uint32_t file_id = 0;
 
     char file_str[200];
     int rgb = TRUE;
     uint16_t n_pixel_bits;
-    Palette *plt = NULL;
+    SpicePalette *plt = NULL;
     uint32_t id;
     int row_size;
     uint32_t file_size;
@@ -9201,30 +9201,30 @@ static void dump_bitmap(RedWorker *worker, Bitmap *bitmap, uint32_t group_id)
     FILE *f;
 
     switch (bitmap->format) {
-    case BITMAP_FMT_1BIT_BE:
-    case BITMAP_FMT_1BIT_LE:
+    case SPICE_BITMAP_FMT_1BIT_BE:
+    case SPICE_BITMAP_FMT_1BIT_LE:
         rgb = FALSE;
         n_pixel_bits = 1;
         break;
-    case BITMAP_FMT_4BIT_BE:
-    case BITMAP_FMT_4BIT_LE:
+    case SPICE_BITMAP_FMT_4BIT_BE:
+    case SPICE_BITMAP_FMT_4BIT_LE:
         rgb = FALSE;
         n_pixel_bits = 4;
         break;
-    case BITMAP_FMT_8BIT:
+    case SPICE_BITMAP_FMT_8BIT:
         rgb = FALSE;
         n_pixel_bits = 8;
         break;
-    case BITMAP_FMT_16BIT:
+    case SPICE_BITMAP_FMT_16BIT:
         n_pixel_bits = 16;
         break;
-    case BITMAP_FMT_24BIT:
+    case SPICE_BITMAP_FMT_24BIT:
         n_pixel_bits = 24;
         break;
-    case BITMAP_FMT_32BIT:
+    case SPICE_BITMAP_FMT_32BIT:
         n_pixel_bits = 32;
         break;
-    case BITMAP_FMT_RGBA:
+    case SPICE_BITMAP_FMT_RGBA:
         n_pixel_bits = 32;
         alpha = 1;
         break;
@@ -9236,7 +9236,7 @@ static void dump_bitmap(RedWorker *worker, Bitmap *bitmap, uint32_t group_id)
         if (!bitmap->palette) {
             return; // dont dump masks.
         }
-        plt = (Palette *)get_virt(worker, bitmap->palette, sizeof(Palette), group_id);
+        plt = (SpicePalette *)get_virt(worker, bitmap->palette, sizeof(SpicePalette), group_id);
     }
     row_size = (((bitmap->x * n_pixel_bits) + 31) / 32) * 4;
     bitmap_data_offset = header_size;
@@ -9301,7 +9301,7 @@ static void dump_bitmap(RedWorker *worker, Bitmap *bitmap, uint32_t group_id)
     } else {
         QXLDataChunk *chunk = NULL;
         int num_lines;
-        ADDRESS relative_address = bitmap->data;
+        SPICE_ADDRESS relative_address = bitmap->data;
 
         while (relative_address) {
             int i;

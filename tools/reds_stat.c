@@ -29,17 +29,17 @@
 #define VALUE_TABS 7
 #define INVALID_STAT_REF (~(uint32_t)0)
 
-static RedsStat *reds_stat = NULL;
+static SpiceStat *reds_stat = NULL;
 static uint64_t *values = NULL;
 
 void print_stat_tree(int32_t node_index, int depth)
 {
-    StatNode *node = &reds_stat->nodes[node_index];
+    SpiceStatNode *node = &reds_stat->nodes[node_index];
     int i;
 
-    if ((node->flags & STAT_NODE_MASK_SHOW) == STAT_NODE_MASK_SHOW) {
+    if ((node->flags & SPICE_STAT_NODE_MASK_SHOW) == SPICE_STAT_NODE_MASK_SHOW) {
         printf("%*s%s", depth * TAB_LEN, "", node->name);
-        if (node->flags & STAT_NODE_FLAG_VALUE) {
+        if (node->flags & SPICE_STAT_NODE_FLAG_VALUE) {
             printf(":%*s%llu (%llu)\n", (VALUE_TABS - depth) * TAB_LEN - strlen(node->name) - 1, "",
                    node->value, node->value - values[node_index]);
             values[node_index] = node->value;
@@ -71,28 +71,28 @@ int main(int argc, char **argv)
         printf("usage: reds_stat [qemu_pid] (e.g. `pgrep qemu`)\n");
         return -1;
     }
-    shm_name_len = strlen(REDS_STAT_SHM_NAME) + strlen(argv[1]);
+    shm_name_len = strlen(SPICE_STAT_SHM_NAME) + strlen(argv[1]);
     if (!(shm_name = (char *)malloc(shm_name_len))) {
         perror("malloc");
         return -1;
     }
-    snprintf(shm_name, shm_name_len, REDS_STAT_SHM_NAME, kvm_pid);
+    snprintf(shm_name, shm_name_len, SPICE_STAT_SHM_NAME, kvm_pid);
     if ((fd = shm_open(shm_name, O_RDONLY, 0444)) == -1) {
         perror("shm_open");
         free(shm_name);
         return -1;
     }
-    shm_size = sizeof(RedsStat);
+    shm_size = sizeof(SpiceStat);
     reds_stat = mmap(NULL, shm_size, PROT_READ, MAP_SHARED, fd, 0);
-    if (reds_stat == (RedsStat *)MAP_FAILED) {
+    if (reds_stat == (SpiceStat *)MAP_FAILED) {
         perror("mmap");
         goto error1;
     }
-    if (reds_stat->magic != REDS_STAT_MAGIC) {
+    if (reds_stat->magic != SPICE_STAT_MAGIC) {
         printf("bad magic %u\n", reds_stat->magic);
         goto error2;
     }
-    if (reds_stat->version != REDS_STAT_VERSION) {
+    if (reds_stat->version != SPICE_STAT_VERSION) {
         printf("bad version %u\n", reds_stat->version);
         goto error2;
     }
@@ -102,9 +102,9 @@ int main(int argc, char **argv)
         if (num_of_nodes != reds_stat->num_of_nodes) {
             num_of_nodes = reds_stat->num_of_nodes;
             shm_old_size = shm_size;
-            shm_size = sizeof(RedsStat) + num_of_nodes * sizeof(StatNode);
+            shm_size = sizeof(SpiceStat) + num_of_nodes * sizeof(SpiceStatNode);
             reds_stat = mremap(reds_stat, shm_old_size, shm_size, MREMAP_MAYMOVE);
-            if (reds_stat == (RedsStat *)MAP_FAILED) {
+            if (reds_stat == (SpiceStat *)MAP_FAILED) {
                 perror("mremap");
                 goto error3;
             }

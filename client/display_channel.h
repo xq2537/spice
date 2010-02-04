@@ -166,7 +166,7 @@ private:
     void activate_streams_timer();
     void stream_update_request(uint32_t update_time);
 
-    static void set_clip_rects(const Clip& clip, uint32_t& num_clip_rects, Rect*& clip_rects,
+    static void set_clip_rects(const SpiceClip& clip, uint32_t& num_clip_rects, SpiceRect*& clip_rects,
                                unsigned long addr_offset, uint8_t *min, uint8_t *max);
 private:
     std::auto_ptr<Canvas> _canvas;
@@ -197,7 +197,7 @@ private:
     bool _capture_mouse_mode;
     InputsChannel* _inputs_channel;
 
-    Point _pointer_pos;
+    SpicePoint _pointer_pos;
     int _buttons_state;
 
     std::vector<VideoStream*> _streams;

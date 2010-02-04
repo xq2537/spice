@@ -33,7 +33,7 @@ public:
 
     void textures_lost();
     void touch_context();
-    void update_texture(const Rect *bbox);
+    void update_texture(const SpiceRect *bbox);
     void pre_copy();
     void past_copy();
     ~RedPixmapGL();

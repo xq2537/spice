@@ -20,7 +20,7 @@
 #define CACHE_NAME cursor_cache
 #define CACHE_HASH_KEY CURSOR_CACHE_HASH_KEY
 #define CACHE_HASH_SIZE CURSOR_CACHE_HASH_SIZE
-#define CACHE_INVAL_TYPE RED_CURSOR_INVAL_ONE
+#define CACHE_INVAL_TYPE SPICE_MSG_CURSOR_INVAL_ONE
 #define FUNC_NAME(name) red_cursor_cache_##name
 #define VAR_NAME(name) cursor_cache_##name
 #define CHANNEL CursorChannel
@@ -30,7 +30,7 @@
 #define CACHE_NAME palette_cache
 #define CACHE_HASH_KEY PALETTE_CACHE_HASH_KEY
 #define CACHE_HASH_SIZE PALETTE_CACHE_HASH_SIZE
-#define CACHE_INVAL_TYPE RED_DISPLAY_INVAL_PALETTE
+#define CACHE_INVAL_TYPE SPICE_MSG_DISPLAY_INVAL_PALETTE
 #define FUNC_NAME(name) red_palette_cache_##name
 #define VAR_NAME(name) palette_cache_##name
 #define CHANNEL DisplayChannel

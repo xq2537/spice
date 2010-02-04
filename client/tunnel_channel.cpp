@@ -46,7 +46,7 @@ protected:
 private:
     int _refs;
     RedChannel::CompundInMessage& _full_msg;
-    RedTunnelSocketData* _sckt_msg;
+    SpiceMsgTunnelSocketData* _sckt_msg;
     uint32_t _buf_size;
 };
 
@@ -54,10 +54,10 @@ InSocketMessage::InSocketMessage(RedChannel::CompundInMessage& full_msg)
     : _refs (1)
     , _full_msg (full_msg)
 {
-    ASSERT(full_msg.type() == RED_TUNNEL_SOCKET_DATA);
+    ASSERT(full_msg.type() == SPICE_MSG_TUNNEL_SOCKET_DATA);
     _full_msg.ref();
-    _sckt_msg = (RedTunnelSocketData*)(_full_msg.data());
-    _buf_size = _full_msg.size() - sizeof(RedTunnelSocketData);
+    _sckt_msg = (SpiceMsgTunnelSocketData*)(_full_msg.data());
+    _buf_size = _full_msg.size() - sizeof(SpiceMsgTunnelSocketData);
 }
 
 const uint8_t* InSocketMessage::data()
@@ -115,7 +115,7 @@ std::list<OutSocketMessage*> OutSocketMessage::_free_messages;
 uint32_t OutSocketMessage::_max_data_size;
 
 OutSocketMessage::OutSocketMessage()
-    : RedPeer::OutMessage(REDC_TUNNEL_SOCKET_DATA, sizeof(RedcTunnelSocketData) + _max_data_size)
+    : RedPeer::OutMessage(SPICE_MSGC_TUNNEL_SOCKET_DATA, sizeof(SpiceMsgcTunnelSocketData) + _max_data_size)
     , RedChannel::OutMessage()
     , ClientNetSocket::ReceiveBuffer()
 {
@@ -123,12 +123,12 @@ OutSocketMessage::OutSocketMessage()
 
 uint8_t* OutSocketMessage::buf()
 {
-    return ((RedcTunnelSocketData*)RedPeer::OutMessage::data())->data;
+    return ((SpiceMsgcTunnelSocketData*)RedPeer::OutMessage::data())->data;
 }
 
 void OutSocketMessage::set_buf_size(uint32_t size)
 {
-    RedPeer::OutMessage::header().size = size + sizeof(RedcTunnelSocketData);
+    RedPeer::OutMessage::header().size = size + sizeof(SpiceMsgcTunnelSocketData);
 }
 
 void OutSocketMessage::release()
@@ -219,14 +219,14 @@ TunnelChannel::TunnelSocket::TunnelSocket(uint16_t id, TunnelService& dst_servic
 {
 }
 
-class TunnelHandler: public MessageHandlerImp<TunnelChannel, RED_TUNNEL_MESSAGES_END> {
+class TunnelHandler: public MessageHandlerImp<TunnelChannel, SPICE_MSG_END_TUNNEL> {
 public:
     TunnelHandler(TunnelChannel& channel)
-        : MessageHandlerImp<TunnelChannel, RED_TUNNEL_MESSAGES_END>(channel) {}
+        : MessageHandlerImp<TunnelChannel, SPICE_MSG_END_TUNNEL>(channel) {}
 };
 
 TunnelChannel::TunnelChannel(RedClient& client, uint32_t id)
-    : RedChannel(client, RED_CHANNEL_TUNNEL, id, new TunnelHandler(*this))
+    : RedChannel(client, SPICE_CHANNEL_TUNNEL, id, new TunnelHandler(*this))
     , _max_socket_data_size(0)
     , _service_id(0)
     , _service_group(0)
@@ -236,29 +236,29 @@ TunnelChannel::TunnelChannel(RedClient& client, uint32_t id)
 {
     TunnelHandler* handler = static_cast<TunnelHandler*>(get_message_handler());
 
-    handler->set_handler(RED_MIGRATE, &TunnelChannel::handle_migrate, 0);
-    handler->set_handler(RED_SET_ACK, &TunnelChannel::handle_set_ack, sizeof(RedSetAck));
-    handler->set_handler(RED_PING, &TunnelChannel::handle_ping, sizeof(RedPing));
-    handler->set_handler(RED_WAIT_FOR_CHANNELS, &TunnelChannel::handle_wait_for_channels,
-                         sizeof(RedWaitForChannels));
+    handler->set_handler(SPICE_MSG_MIGRATE, &TunnelChannel::handle_migrate, 0);
+    handler->set_handler(SPICE_MSG_SET_ACK, &TunnelChannel::handle_set_ack, sizeof(SpiceMsgSetAck));
+    handler->set_handler(SPICE_MSG_PING, &TunnelChannel::handle_ping, sizeof(SpiceMsgPing));
+    handler->set_handler(SPICE_MSG_WAIT_FOR_CHANNELS, &TunnelChannel::handle_wait_for_channels,
+                         sizeof(SpiceMsgWaitForChannels));
 
-    handler->set_handler(RED_TUNNEL_INIT,
-                         &TunnelChannel::handle_init, sizeof(RedTunnelInit));
-    handler->set_handler(RED_TUNNEL_SERVICE_IP_MAP,
-                         &TunnelChannel::handle_service_ip_map, sizeof(RedTunnelServiceIpMap));
-    handler->set_handler(RED_TUNNEL_SOCKET_OPEN,
-                         &TunnelChannel::handle_socket_open, sizeof(RedTunnelSocketOpen));
-    handler->set_handler(RED_TUNNEL_SOCKET_CLOSE,
-                         &TunnelChannel::handle_socket_close, sizeof(RedTunnelSocketClose));
-    handler->set_handler(RED_TUNNEL_SOCKET_FIN,
-                         &TunnelChannel::handle_socket_fin, sizeof(RedTunnelSocketFin));
-    handler->set_handler(RED_TUNNEL_SOCKET_TOKEN,
-                         &TunnelChannel::handle_socket_token, sizeof(RedTunnelSocketTokens));
-    handler->set_handler(RED_TUNNEL_SOCKET_CLOSED_ACK,
+    handler->set_handler(SPICE_MSG_TUNNEL_INIT,
+                         &TunnelChannel::handle_init, sizeof(SpiceMsgTunnelInit));
+    handler->set_handler(SPICE_MSG_TUNNEL_SERVICE_IP_MAP,
+                         &TunnelChannel::handle_service_ip_map, sizeof(SpiceMsgTunnelServiceIpMap));
+    handler->set_handler(SPICE_MSG_TUNNEL_SOCKET_OPEN,
+                         &TunnelChannel::handle_socket_open, sizeof(SpiceMsgTunnelSocketOpen));
+    handler->set_handler(SPICE_MSG_TUNNEL_SOCKET_CLOSE,
+                         &TunnelChannel::handle_socket_close, sizeof(SpiceMsgTunnelSocketClose));
+    handler->set_handler(SPICE_MSG_TUNNEL_SOCKET_FIN,
+                         &TunnelChannel::handle_socket_fin, sizeof(SpiceMsgTunnelSocketFin));
+    handler->set_handler(SPICE_MSG_TUNNEL_SOCKET_TOKEN,
+                         &TunnelChannel::handle_socket_token, sizeof(SpiceMsgTunnelSocketTokens));
+    handler->set_handler(SPICE_MSG_TUNNEL_SOCKET_CLOSED_ACK,
                          &TunnelChannel::handle_socket_closed_ack,
-                         sizeof(RedTunnelSocketClosedAck));
-    handler->set_handler(RED_TUNNEL_SOCKET_DATA,
-                         &TunnelChannel::handle_socket_data, sizeof(RedTunnelSocketData));
+                         sizeof(SpiceMsgTunnelSocketClosedAck));
+    handler->set_handler(SPICE_MSG_TUNNEL_SOCKET_DATA,
+                         &TunnelChannel::handle_socket_data, sizeof(SpiceMsgTunnelSocketData));
 }
 
 TunnelChannel::~TunnelChannel()
@@ -269,7 +269,7 @@ TunnelChannel::~TunnelChannel()
 
 void TunnelChannel::handle_init(RedPeer::InMessage* message)
 {
-    RedTunnelInit* init_msg = (RedTunnelInit*)message->data();
+    SpiceMsgTunnelInit* init_msg = (SpiceMsgTunnelInit*)message->data();
     _max_socket_data_size = init_msg->max_socket_data_size;
     OutSocketMessage::init(_max_socket_data_size);
     _sockets.resize(init_msg->max_num_of_sockets);
@@ -281,29 +281,29 @@ void TunnelChannel::send_service(TunnelService& service)
     msg_size += service.name.length() + 1;
     msg_size += service.description.length() + 1;
 
-    if (service.type == RED_TUNNEL_SERVICE_TYPE_IPP) {
-        msg_size += sizeof(RedcTunnelAddPrintService) + sizeof(RedTunnelIPv4);
-    } else if (service.type == RED_TUNNEL_SERVICE_TYPE_GENERIC) {
-        msg_size += sizeof(RedcTunnelAddGenericService);
+    if (service.type == SPICE_TUNNEL_SERVICE_TYPE_IPP) {
+        msg_size += sizeof(SpiceMsgcTunnelAddPrintService) + sizeof(SpiceTunnelIPv4);
+    } else if (service.type == SPICE_TUNNEL_SERVICE_TYPE_GENERIC) {
+        msg_size += sizeof(SpiceMsgcTunnelAddGenericService);
     } else {
         THROW("%s: invalid service type", __FUNCTION__);
     }
-    Message* service_msg = new Message(REDC_TUNNEL_SERVICE_ADD, msg_size);
-    RedcTunnelAddGenericService* out_service = (RedcTunnelAddGenericService*)service_msg->data();
+    Message* service_msg = new Message(SPICE_MSGC_TUNNEL_SERVICE_ADD, msg_size);
+    SpiceMsgcTunnelAddGenericService* out_service = (SpiceMsgcTunnelAddGenericService*)service_msg->data();
     out_service->id = service.id;
     out_service->group = service.group;
     out_service->type = service.type;
     out_service->port = service.port;
 
     int cur_offset;
-    if (service.type == RED_TUNNEL_SERVICE_TYPE_IPP) {
-        cur_offset = sizeof(RedcTunnelAddPrintService);
-        ((RedcTunnelAddPrintService*)out_service)->ip.type = RED_TUNNEL_IP_TYPE_IPv4;
-        memcpy(((RedcTunnelAddPrintService*)out_service)->ip.data, &(service.ip.s_addr),
-               sizeof(RedTunnelIPv4));
-        cur_offset += sizeof(RedTunnelIPv4);
+    if (service.type == SPICE_TUNNEL_SERVICE_TYPE_IPP) {
+        cur_offset = sizeof(SpiceMsgcTunnelAddPrintService);
+        ((SpiceMsgcTunnelAddPrintService*)out_service)->ip.type = SPICE_TUNNEL_IP_TYPE_IPv4;
+        memcpy(((SpiceMsgcTunnelAddPrintService*)out_service)->ip.data, &(service.ip.s_addr),
+               sizeof(SpiceTunnelIPv4));
+        cur_offset += sizeof(SpiceTunnelIPv4);
     } else {
-        cur_offset = sizeof(RedcTunnelAddGenericService);
+        cur_offset = sizeof(SpiceMsgcTunnelAddGenericService);
     }
 
     out_service->name = cur_offset;
@@ -322,16 +322,16 @@ void TunnelChannel::send_service(TunnelService& service)
 
 void TunnelChannel::handle_service_ip_map(RedPeer::InMessage* message)
 {
-    RedTunnelServiceIpMap* service_ip_msg = (RedTunnelServiceIpMap*)message->data();
+    SpiceMsgTunnelServiceIpMap* service_ip_msg = (SpiceMsgTunnelServiceIpMap*)message->data();
     TunnelService* service = find_service(service_ip_msg->service_id);
     if (!service) {
         THROW("%s: attempt to map non-existing service id=%d", __FUNCTION__,
               service_ip_msg->service_id);
     }
 
-    if (service_ip_msg->virtual_ip.type == RED_TUNNEL_IP_TYPE_IPv4) {
+    if (service_ip_msg->virtual_ip.type == SPICE_TUNNEL_IP_TYPE_IPv4) {
         memcpy(&service->virtual_ip.s_addr, service_ip_msg->virtual_ip.data,
-               sizeof(RedTunnelIPv4));
+               sizeof(SpiceTunnelIPv4));
     } else {
         THROW("unexpected ip type %d", service_ip_msg->virtual_ip.type);
     }
@@ -344,7 +344,7 @@ void TunnelChannel::handle_service_ip_map(RedPeer::InMessage* message)
 
 void TunnelChannel::handle_socket_open(RedPeer::InMessage* message)
 {
-    RedTunnelSocketOpen* open_msg = (RedTunnelSocketOpen*)message->data();
+    SpiceMsgTunnelSocketOpen* open_msg = (SpiceMsgTunnelSocketOpen*)message->data();
     TunnelSocket* sckt;
     Message* out_msg;
 
@@ -363,15 +363,15 @@ void TunnelChannel::handle_socket_open(RedPeer::InMessage* message)
 
     if (sckt->connect(open_msg->tokens)) {
         _sockets[open_msg->connection_id] = sckt;
-        out_msg = new Message(REDC_TUNNEL_SOCKET_OPEN_ACK, sizeof(RedcTunnelSocketOpenAck));
+        out_msg = new Message(SPICE_MSGC_TUNNEL_SOCKET_OPEN_ACK, sizeof(SpiceMsgcTunnelSocketOpenAck));
         sckt->set_num_tokens(0);
         sckt->set_server_num_tokens(SOCKET_WINDOW_SIZE);
 
-        ((RedcTunnelSocketOpenAck*)out_msg->data())->connection_id = open_msg->connection_id;
-        ((RedcTunnelSocketOpenAck*)out_msg->data())->tokens = SOCKET_WINDOW_SIZE;
+        ((SpiceMsgcTunnelSocketOpenAck*)out_msg->data())->connection_id = open_msg->connection_id;
+        ((SpiceMsgcTunnelSocketOpenAck*)out_msg->data())->tokens = SOCKET_WINDOW_SIZE;
     } else {
-        out_msg = new Message(REDC_TUNNEL_SOCKET_OPEN_NACK, sizeof(RedcTunnelSocketOpenNack));
-        ((RedcTunnelSocketOpenNack*)out_msg->data())->connection_id = open_msg->connection_id;
+        out_msg = new Message(SPICE_MSGC_TUNNEL_SOCKET_OPEN_NACK, sizeof(SpiceMsgcTunnelSocketOpenNack));
+        ((SpiceMsgcTunnelSocketOpenNack*)out_msg->data())->connection_id = open_msg->connection_id;
         delete sckt;
     }
 
@@ -380,7 +380,7 @@ void TunnelChannel::handle_socket_open(RedPeer::InMessage* message)
 
 void TunnelChannel::handle_socket_fin(RedPeer::InMessage* message)
 {
-    RedTunnelSocketFin* fin_msg = (RedTunnelSocketFin*)message->data();
+    SpiceMsgTunnelSocketFin* fin_msg = (SpiceMsgTunnelSocketFin*)message->data();
     TunnelSocket* sckt = _sockets[fin_msg->connection_id];
 
     if (!sckt) {
@@ -395,7 +395,7 @@ void TunnelChannel::handle_socket_fin(RedPeer::InMessage* message)
 
 void TunnelChannel::handle_socket_close(RedPeer::InMessage* message)
 {
-    RedTunnelSocketClose* close_msg = (RedTunnelSocketClose*)message->data();
+    SpiceMsgTunnelSocketClose* close_msg = (SpiceMsgTunnelSocketClose*)message->data();
     TunnelSocket* sckt = _sockets[close_msg->connection_id];
 
     if (!sckt) {
@@ -417,7 +417,7 @@ void TunnelChannel::handle_socket_close(RedPeer::InMessage* message)
 
 void TunnelChannel::handle_socket_closed_ack(RedPeer::InMessage* message)
 {
-    RedTunnelSocketClosedAck* close_ack_msg = (RedTunnelSocketClosedAck*)message->data();
+    SpiceMsgTunnelSocketClosedAck* close_ack_msg = (SpiceMsgTunnelSocketClosedAck*)message->data();
     TunnelSocket* sckt = _sockets[close_ack_msg->connection_id];
     if (!sckt) {
         THROW("%s: close ack to connection that doesn't exist id=%d", __FUNCTION__,
@@ -435,7 +435,7 @@ void TunnelChannel::handle_socket_closed_ack(RedPeer::InMessage* message)
 
 void TunnelChannel::handle_socket_data(RedPeer::InMessage* message)
 {
-    RedTunnelSocketData* send_msg = (RedTunnelSocketData*)message->data();
+    SpiceMsgTunnelSocketData* send_msg = (SpiceMsgTunnelSocketData*)message->data();
     TunnelSocket* sckt = _sockets[send_msg->connection_id];
 
     if (!sckt) {
@@ -466,7 +466,7 @@ void TunnelChannel::handle_socket_data(RedPeer::InMessage* message)
 
 void TunnelChannel::handle_socket_token(RedPeer::InMessage* message)
 {
-    RedTunnelSocketTokens* token_msg = (RedTunnelSocketTokens*)message->data();
+    SpiceMsgTunnelSocketTokens* token_msg = (SpiceMsgTunnelSocketTokens*)message->data();
     TunnelSocket* sckt = _sockets[token_msg->connection_id];
 
     if (!sckt) {
@@ -485,16 +485,16 @@ void TunnelChannel::on_socket_message_recv_done(ClientNetSocket& sckt,
     TunnelChannel::TunnelSocket* tunnel_sckt = static_cast<TunnelChannel::TunnelSocket*>(&sckt);
     OutSocketMessage* out_msg = static_cast<OutSocketMessage*>(&buf);
 
-    ((RedcTunnelSocketData*)(out_msg->data()))->connection_id = tunnel_sckt->id();
+    ((SpiceMsgcTunnelSocketData*)(out_msg->data()))->connection_id = tunnel_sckt->id();
     post_message(out_msg);
 }
 
 void TunnelChannel::on_socket_fin_recv(ClientNetSocket& sckt)
 {
     TunnelChannel::TunnelSocket* tunnel_sckt = static_cast<TunnelChannel::TunnelSocket*>(&sckt);
-    Message* out_msg = new Message(REDC_TUNNEL_SOCKET_FIN, sizeof(RedcTunnelSocketFin));
+    Message* out_msg = new Message(SPICE_MSGC_TUNNEL_SOCKET_FIN, sizeof(SpiceMsgcTunnelSocketFin));
     DBG(0, "FIN from client coonection id=%d", tunnel_sckt->id());
-    ((RedcTunnelSocketFin*)out_msg->data())->connection_id = tunnel_sckt->id();
+    ((SpiceMsgcTunnelSocketFin*)out_msg->data())->connection_id = tunnel_sckt->id();
     post_message(out_msg);
 }
 
@@ -505,14 +505,14 @@ void TunnelChannel::on_socket_disconnect(ClientNetSocket& sckt)
     // close intiated by server -> needs ack
     if (tunnel_sckt->get_guest_closed()) {
         DBG(0, "send close ack connection_id=%d", tunnel_sckt->id());
-        out_msg = new Message(REDC_TUNNEL_SOCKET_CLOSED_ACK, sizeof(RedcTunnelSocketClosedAck));
-        ((RedcTunnelSocketClosedAck*)out_msg->data())->connection_id = tunnel_sckt->id();
+        out_msg = new Message(SPICE_MSGC_TUNNEL_SOCKET_CLOSED_ACK, sizeof(SpiceMsgcTunnelSocketClosedAck));
+        ((SpiceMsgcTunnelSocketClosedAck*)out_msg->data())->connection_id = tunnel_sckt->id();
         _sockets[tunnel_sckt->id()] = NULL;
         delete &sckt;
     } else { // close initiated by client
         DBG(0, "send close coonection_id=%d", tunnel_sckt->id());
-        out_msg = new Message(REDC_TUNNEL_SOCKET_CLOSED, sizeof(RedcTunnelSocketClosed));
-        ((RedcTunnelSocketClosed*)out_msg->data())->connection_id = tunnel_sckt->id();
+        out_msg = new Message(SPICE_MSGC_TUNNEL_SOCKET_CLOSED, sizeof(SpiceMsgcTunnelSocketClosed));
+        ((SpiceMsgcTunnelSocketClosed*)out_msg->data())->connection_id = tunnel_sckt->id();
     }
 
     post_message(out_msg);
@@ -525,8 +525,8 @@ void TunnelChannel::on_socket_message_send_done(ClientNetSocket& sckt)
     num_tokens++;
 
     if (num_tokens == SOCKET_TOKENS_TO_SEND) {
-        Message* out_msg = new Message(REDC_TUNNEL_SOCKET_TOKEN, sizeof(RedcTunnelSocketTokens));
-        RedcTunnelSocketTokens* tokens_msg = (RedcTunnelSocketTokens*)out_msg->data();
+        Message* out_msg = new Message(SPICE_MSGC_TUNNEL_SOCKET_TOKEN, sizeof(SpiceMsgcTunnelSocketTokens));
+        SpiceMsgcTunnelSocketTokens* tokens_msg = (SpiceMsgcTunnelSocketTokens*)out_msg->data();
         tokens_msg->connection_id = tunnel_sckt->id();
         tokens_msg->num_tokens = num_tokens;
         post_message(out_msg);
@@ -641,7 +641,7 @@ void TunnelChannel::add_service(TunnelConfigConnectionIfc& source,
 
 class TunnelFactory: public ChannelFactory {
 public:
-    TunnelFactory() : ChannelFactory(RED_CHANNEL_TUNNEL) {}
+    TunnelFactory() : ChannelFactory(SPICE_CHANNEL_TUNNEL) {}
     virtual RedChannel* construct(RedClient& client, uint32_t id)
     {
         return new TunnelChannel(client, id);
@@ -823,9 +823,9 @@ void TunnelConfigConnectionIfc::handle_msg()
         THROW("unexpected service type length");
     }
     if (msg[start_token] == '0') {
-        service_type = RED_TUNNEL_SERVICE_TYPE_GENERIC;
+        service_type = SPICE_TUNNEL_SERVICE_TYPE_GENERIC;
     } else if (msg[start_token] == '1') {
-        service_type = RED_TUNNEL_SERVICE_TYPE_IPP;
+        service_type = SPICE_TUNNEL_SERVICE_TYPE_IPP;
     } else {
         THROW("unexpected service type");
     }

@@ -77,7 +77,7 @@ typedef struct Encoder {
     LzUsrContext    *usr;
 
     LzImageType type;
-    const Palette    *palette;    // for decoding images with palettes to rgb
+    const SpicePalette    *palette;    // for decoding images with palettes to rgb
     int stride;                       // stride is in bytes. For rgb must be equal to
                                       // width*bytes_per_pix.
     // For palettes stride can be bigger than width/pixels_per_byte by 1 only if
@@ -577,7 +577,7 @@ int lz_encode(LzContext *lz, LzImageType type, int width, int height, int top_do
 */
 void lz_decode_begin(LzContext *lz, uint8_t *io_ptr, unsigned int num_io_bytes,
                      LzImageType *out_type, int *out_width, int *out_height,
-                     int *out_n_pixels, int *out_top_down, const Palette *palette)
+                     int *out_n_pixels, int *out_top_down, const SpicePalette *palette)
 {
     Encoder *encoder = (Encoder *)lz;
     uint8_t *io_ptr_end = io_ptr + num_io_bytes;

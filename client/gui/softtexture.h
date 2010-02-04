@@ -13,14 +13,14 @@ namespace CEGUI
     public:
         SoftTexture(Renderer* owner);
         SoftTexture(Renderer* owner, uint size);
-        SoftTexture(Renderer* owner, const String& filename,
-                    const String& resourceGroup);
+        SoftTexture(Renderer* owner, const SpiceString& filename,
+                    const SpiceString& resourceGroup);
         virtual ~SoftTexture();
 
         virtual ushort getWidth(void) const { return _width;}
         virtual ushort getHeight(void) const { return _height;}
 
-        virtual void loadFromFile(const String& filename, const String& resourceGroup);
+        virtual void loadFromFile(const SpiceString& filename, const SpiceString& resourceGroup);
         virtual void loadFromMemory(const void* buffPtr, uint buffWidth, uint buffHeight,
                                     PixelFormat pixelFormat);
 

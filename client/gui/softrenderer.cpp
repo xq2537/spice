@@ -62,11 +62,11 @@ void SoftRenderer::setupImageCodec()
     _destroy_image_codec = destroyImageCodec;
     _image_codec = createImageCodec();
 #else
-    String _default_codec_name(STRINGIZE(TGAImageCodec/*CEGUI_DEFAULT_IMAGE_CODEC*/));
+    SpiceString _default_codec_name(STRINGIZE(TGAImageCodec/*CEGUI_DEFAULT_IMAGE_CODEC*/));
     DynamicModule* module = NULL;
 
     try {
-        DynamicModule* module = new DynamicModule(String("CEGUI") + _default_codec_name);
+        DynamicModule* module = new DynamicModule(SpiceString("CEGUI") + _default_codec_name);
 
         _destroy_image_codec = (void(*)(ImageCodec*))module->getSymbolAddress("destroyImageCodec");
 
@@ -228,8 +228,8 @@ inline void SoftRenderer::setRGB(ColourI& dest, const colour& src)
     dest.a = uint8_t(src.getAlpha() * 255);
 }
 
-void SoftRenderer::addQuad(const Rect& dest_rect, float z, const Texture* texture,
-                   const Rect& texture_rect, const ColourRect& colours,
+void SoftRenderer::addQuad(const SpiceRect& dest_rect, float z, const Texture* texture,
+                   const SpiceRect& texture_rect, const ColourRect& colours,
                    QuadSplitMode quad_split_mode)
 {
     if (dest_rect.d_right <= dest_rect.d_left || dest_rect.d_bottom <= dest_rect.d_top) {
@@ -300,8 +300,8 @@ Texture* SoftRenderer::createTexture()
     return texture;
 }
 
-Texture* SoftRenderer::createTexture(const String& filename,
-                                     const String& resourceGroup)
+Texture* SoftRenderer::createTexture(const SpiceString& filename,
+                                     const SpiceString& resourceGroup)
 {
     SoftTexture* texture = new SoftTexture(this, filename, resourceGroup);
     _textures.push_back(texture);
@@ -354,9 +354,9 @@ Size SoftRenderer::getSize() const
     return Size((float)_width, (float)_height);
 }
 
-Rect SoftRenderer::getRect() const
+SpiceRect SoftRenderer::getRect() const
 {
-    return Rect(0, 0, (float)_width, (float)_height);
+    return SpiceRect(0, 0, (float)_width, (float)_height);
 }
 
 uint SoftRenderer::getHorzScreenDPI() const

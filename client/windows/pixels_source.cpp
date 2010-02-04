@@ -23,10 +23,10 @@
 #include "debug.h"
 
 
-static Point get_bitmap_size(HDC dc)
+static SpicePoint get_bitmap_size(HDC dc)
 {
     BITMAP bitmap_info;
-    Point size;
+    SpicePoint size;
 
     GetObject(GetCurrentObject(dc, OBJ_BITMAP), sizeof(bitmap_info), &bitmap_info);
 
@@ -74,7 +74,7 @@ ImageFromRes::~ImageFromRes()
     }
 }
 
-Point ImageFromRes::get_size()
+SpicePoint ImageFromRes::get_size()
 {
     ResImage_p* p_data = (ResImage_p*)get_opaque();
     Lock lock(*p_data->source_p._mutex);
@@ -99,7 +99,7 @@ AlphaImageFromRes::~AlphaImageFromRes()
     }
 }
 
-Point AlphaImageFromRes::get_size()
+SpicePoint AlphaImageFromRes::get_size()
 {
     ResImage_p* p_data = (ResImage_p*)get_opaque();
     Lock lock(*p_data->source_p._mutex);

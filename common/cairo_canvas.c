@@ -35,26 +35,26 @@ static void canvas_set_path(CairoCanvas *canvas, void *addr)
     access_test(&canvas->base, data_size, sizeof(uint32_t));
     uint32_t more = *data_size;
 
-    PathSeg* seg = (PathSeg*)(data_size + 1);
+    SpicePathSeg* seg = (SpicePathSeg*)(data_size + 1);
 
     do {
-        access_test(&canvas->base, seg, sizeof(PathSeg));
+        access_test(&canvas->base, seg, sizeof(SpicePathSeg));
 
         uint32_t flags = seg->flags;
-        PointFix* point = (PointFix*)seg->data;
-        PointFix* end_point = point + seg->count;
+        SpicePointFix* point = (SpicePointFix*)seg->data;
+        SpicePointFix* end_point = point + seg->count;
         access_test(&canvas->base, point, (unsigned long)end_point - (unsigned long)point);
         ASSERT(point < end_point);
         more -= ((unsigned long)end_point - (unsigned long)seg);
-        seg = (PathSeg*)end_point;
+        seg = (SpicePathSeg*)end_point;
 
-        if (flags & PATH_BEGIN) {
+        if (flags & SPICE_PATH_BEGIN) {
             cairo_new_sub_path(cairo);
             cairo_move_to(cairo, fix_to_double(point->x), fix_to_double(point->y));
             point++;
         }
 
-        if (flags & PATH_BEZIER) {
+        if (flags & SPICE_PATH_BEZIER) {
             ASSERT((point - end_point) % 3 == 0);
             for (; point + 2 < end_point; point += 3) {
                 cairo_curve_to(cairo,
@@ -67,8 +67,8 @@ static void canvas_set_path(CairoCanvas *canvas, void *addr)
                 cairo_line_to(cairo, fix_to_double(point->x), fix_to_double(point->y));
             }
         }
-        if (flags & PATH_END) {
-            if (flags & PATH_CLOSE) {
+        if (flags & SPICE_PATH_END) {
+            if (flags & SPICE_PATH_CLOSE) {
                 cairo_close_path(cairo);
             }
             cairo_new_sub_path(cairo);
@@ -76,19 +76,19 @@ static void canvas_set_path(CairoCanvas *canvas, void *addr)
     } while (more);
 }
 
-static void canvas_clip(CairoCanvas *canvas, Clip *clip)
+static void canvas_clip(CairoCanvas *canvas, SpiceClip *clip)
 {
     cairo_t *cairo = canvas->cairo;
 
     switch (clip->type) {
-    case CLIP_TYPE_NONE:
+    case SPICE_CLIP_TYPE_NONE:
         break;
-    case CLIP_TYPE_RECTS: {
-        uint32_t *n = (uint32_t *)GET_ADDRESS(clip->data);
+    case SPICE_CLIP_TYPE_RECTS: {
+        uint32_t *n = (uint32_t *)SPICE_GET_ADDRESS(clip->data);
         access_test(&canvas->base, n, sizeof(uint32_t));
 
-        Rect *now = (Rect *)(n + 1);
-        Rect *end = now + *n;
+        SpiceRect *now = (SpiceRect *)(n + 1);
+        SpiceRect *end = now + *n;
         access_test(&canvas->base, now, (unsigned long)end - (unsigned long)now);
 
         for (; now < end; now++) {
@@ -98,8 +98,8 @@ static void canvas_clip(CairoCanvas *canvas, Clip *clip)
         cairo_clip(cairo);
         break;
     }
-    case CLIP_TYPE_PATH:
-        canvas_set_path(canvas, GET_ADDRESS(clip->data));
+    case SPICE_CLIP_TYPE_PATH:
+        canvas_set_path(canvas, SPICE_GET_ADDRESS(clip->data));
         cairo_clip(cairo);
         break;
     default:
@@ -110,11 +110,11 @@ static void canvas_clip(CairoCanvas *canvas, Clip *clip)
 static inline cairo_line_cap_t canvas_line_cap_to_cairo(int end_style)
 {
     switch (end_style) {
-    case LINE_CAP_ROUND:
+    case SPICE_LINE_CAP_ROUND:
         return CAIRO_LINE_CAP_ROUND;
-    case LINE_CAP_SQUARE:
+    case SPICE_LINE_CAP_SQUARE:
         return CAIRO_LINE_CAP_SQUARE;
-    case LINE_CAP_BUTT:
+    case SPICE_LINE_CAP_BUTT:
         return CAIRO_LINE_CAP_BUTT;
     default:
         CANVAS_ERROR("bad end style %d", end_style);
@@ -124,18 +124,18 @@ static inline cairo_line_cap_t canvas_line_cap_to_cairo(int end_style)
 static inline cairo_line_join_t canvas_line_join_to_cairo(int join_style)
 {
     switch (join_style) {
-    case LINE_JOIN_ROUND:
+    case SPICE_LINE_JOIN_ROUND:
         return CAIRO_LINE_JOIN_ROUND;
-    case LINE_JOIN_BEVEL:
+    case SPICE_LINE_JOIN_BEVEL:
         return CAIRO_LINE_JOIN_BEVEL;
-    case LINE_JOIN_MITER:
+    case SPICE_LINE_JOIN_MITER:
         return CAIRO_LINE_JOIN_MITER;
     default:
         CANVAS_ERROR("bad join style %d", join_style);
     }
 }
 
-static void canvas_set_line_attr_no_dash(CairoCanvas *canvas, LineAttr *attr)
+static void canvas_set_line_attr_no_dash(CairoCanvas *canvas, SpiceLineAttr *attr)
 {
     cairo_t *cairo = canvas->cairo;
 
@@ -146,9 +146,9 @@ static void canvas_set_line_attr_no_dash(CairoCanvas *canvas, LineAttr *attr)
     cairo_set_dash(cairo, NULL, 0, 0);
 }
 
-static void canvas_set_dash(CairoCanvas *canvas, UINT8 nseg, ADDRESS addr, int start_is_gap)
+static void canvas_set_dash(CairoCanvas *canvas, UINT8 nseg, SPICE_ADDRESS addr, int start_is_gap)
 {
-    FIXED28_4* style = (FIXED28_4*)GET_ADDRESS(addr);
+    SPICE_FIXED28_4* style = (SPICE_FIXED28_4*)SPICE_GET_ADDRESS(addr);
     double offset = 0;
     double *local_style;
     int i;
@@ -222,7 +222,7 @@ static inline void canvas_invers_16bpp(uint8_t *dest, int dest_stride, uint8_t *
 }
 
 static inline void canvas_invers_8bpp(uint8_t *dest, int dest_stride, uint8_t *src, int src_stride,
-                                      int width, uint8_t *end, Palette *palette)
+                                      int width, uint8_t *end, SpicePalette *palette)
 {
     if (!palette) {
         CANVAS_ERROR("no palette");
@@ -242,7 +242,7 @@ static inline void canvas_invers_8bpp(uint8_t *dest, int dest_stride, uint8_t *s
 
 static inline void canvas_invers_4bpp_be(uint8_t* dest, int dest_stride, uint8_t* src,
                                          int src_stride, int width, uint8_t* end,
-                                         Palette *palette)
+                                         SpicePalette *palette)
 {
     if (!palette) {
         CANVAS_ERROR("no palette");
@@ -267,7 +267,7 @@ static inline void canvas_invers_4bpp_be(uint8_t* dest, int dest_stride, uint8_t
 
 static inline void canvas_invers_1bpp_be(uint8_t* dest, int dest_stride, uint8_t* src,
                                          int src_stride, int width, uint8_t* end,
-                                         Palette *palette)
+                                         SpicePalette *palette)
 {
     uint32_t fore_color;
     uint32_t back_color;
@@ -293,10 +293,10 @@ static inline void canvas_invers_1bpp_be(uint8_t* dest, int dest_stride, uint8_t
     }
 }
 
-static cairo_surface_t *canvas_bitmap_to_invers_surface(CairoCanvas *canvas, Bitmap* bitmap,
-                                                        Palette *palette)
+static cairo_surface_t *canvas_bitmap_to_invers_surface(CairoCanvas *canvas, SpiceBitmap* bitmap,
+                                                        SpicePalette *palette)
 {
-    uint8_t* src = (uint8_t *)GET_ADDRESS(bitmap->data);
+    uint8_t* src = (uint8_t *)SPICE_GET_ADDRESS(bitmap->data);
     int src_stride;
     uint8_t* end;
     uint8_t* dest;
@@ -307,7 +307,7 @@ static cairo_surface_t *canvas_bitmap_to_invers_surface(CairoCanvas *canvas, Bit
     end = src + (bitmap->y * src_stride);
     access_test(&canvas->base, src, bitmap->y * src_stride);
 
-    cairo_surface = cairo_image_surface_create((bitmap->format == BITMAP_FMT_RGBA) ?
+    cairo_surface = cairo_image_surface_create((bitmap->format == SPICE_BITMAP_FMT_RGBA) ?
                                                CAIRO_FORMAT_ARGB32 : CAIRO_FORMAT_RGB24,
                                                bitmap->x, bitmap->y);
     if (cairo_surface_status(cairo_surface) != CAIRO_STATUS_SUCCESS) {
@@ -317,29 +317,29 @@ static cairo_surface_t *canvas_bitmap_to_invers_surface(CairoCanvas *canvas, Bit
     dest = cairo_image_surface_get_data(cairo_surface);
     dest_stride = cairo_image_surface_get_stride(cairo_surface);
 
-    if (!(bitmap->flags & BITMAP_TOP_DOWN)) {
+    if (!(bitmap->flags & SPICE_BITMAP_FLAGS_TOP_DOWN)) {
         ASSERT(bitmap->y > 0);
         dest += dest_stride * (bitmap->y - 1);
         dest_stride = -dest_stride;
     }
     switch (bitmap->format) {
-    case BITMAP_FMT_32BIT:
-    case BITMAP_FMT_RGBA:
+    case SPICE_BITMAP_FMT_32BIT:
+    case SPICE_BITMAP_FMT_RGBA:
         canvas_invers_32bpp(dest, dest_stride, src, src_stride, bitmap->x, end);
         break;
-    case BITMAP_FMT_24BIT:
+    case SPICE_BITMAP_FMT_24BIT:
         canvas_invers_24bpp(dest, dest_stride, src, src_stride, bitmap->x, end);
         break;
-    case BITMAP_FMT_16BIT:
+    case SPICE_BITMAP_FMT_16BIT:
         canvas_invers_16bpp(dest, dest_stride, src, src_stride, bitmap->x, end);
         break;
-    case BITMAP_FMT_8BIT:
+    case SPICE_BITMAP_FMT_8BIT:
         canvas_invers_8bpp(dest, dest_stride, src, src_stride, bitmap->x, end, palette);
         break;
-    case BITMAP_FMT_4BIT_BE:
+    case SPICE_BITMAP_FMT_4BIT_BE:
         canvas_invers_4bpp_be(dest, dest_stride, src, src_stride, bitmap->x, end, palette);
         break;
-    case BITMAP_FMT_1BIT_BE:
+    case SPICE_BITMAP_FMT_1BIT_BE:
         canvas_invers_1bpp_be(dest, dest_stride, src, src_stride, bitmap->x, end, palette);
         break;
     }
@@ -349,22 +349,22 @@ static cairo_surface_t *canvas_bitmap_to_invers_surface(CairoCanvas *canvas, Bit
 #if defined(CAIRO_CANVAS_CACHE) || defined(CAIRO_CANVAS_IMAGE_CACHE)
 
 #ifndef CAIRO_CANVAS_CACHE
-static Palette *canvas_get_palette(CairoCanvas *canvas, Bitmap *bitmap)
+static SpicePalette *canvas_get_palette(CairoCanvas *canvas, SpiceBitmap *bitmap)
 {
-    Palette *local_palette;
-    Palette *palette;
+    SpicePalette *local_palette;
+    SpicePalette *palette;
     int size;
 
     if (!bitmap->palette) {
         return NULL;
     }
 
-    palette = (Palette *)GET_ADDRESS(bitmap->palette);
+    palette = (SpicePalette *)SPICE_GET_ADDRESS(bitmap->palette);
     if (canvas->base.color_shift != 5) {
         return palette;
     }
 
-    size = sizeof(Palette) + (palette->num_ents << 2);
+    size = sizeof(SpicePalette) + (palette->num_ents << 2);
     local_palette = malloc(size);
     memcpy(local_palette, palette, size);
     canvas_localize_palette(&canvas->base, palette);
@@ -372,9 +372,9 @@ static Palette *canvas_get_palette(CairoCanvas *canvas, Bitmap *bitmap)
     return local_palette;
 }
 
-static void free_palette(Bitmap *bitmap, Palette *palette)
+static void free_palette(SpiceBitmap *bitmap, SpicePalette *palette)
 {
-    if (!palette || palette == GET_ADDRESS(bitmap->palette)) {
+    if (!palette || palette == SPICE_GET_ADDRESS(bitmap->palette)) {
         return;
     }
     free(palette);
@@ -382,20 +382,20 @@ static void free_palette(Bitmap *bitmap, Palette *palette)
 
 #endif
 
-static cairo_surface_t *canvas_get_invers_image(CairoCanvas *canvas, ADDRESS addr)
+static cairo_surface_t *canvas_get_invers_image(CairoCanvas *canvas, SPICE_ADDRESS addr)
 {
-    ImageDescriptor *descriptor = (ImageDescriptor *)GET_ADDRESS(addr);
+    SpiceImageDescriptor *descriptor = (SpiceImageDescriptor *)SPICE_GET_ADDRESS(addr);
     cairo_surface_t *surface;
     cairo_surface_t *invers = NULL;
 
-    access_test(&canvas->base, descriptor, sizeof(ImageDescriptor));
+    access_test(&canvas->base, descriptor, sizeof(SpiceImageDescriptor));
 
-    int cache_me = descriptor->flags & IMAGE_CACHE_ME;
+    int cache_me = descriptor->flags & SPICE_IMAGE_FLAGS_CACHE_ME;
 
     switch (descriptor->type) {
-    case IMAGE_TYPE_QUIC: {
-        QUICImage *image = (QUICImage *)descriptor;
-        access_test(&canvas->base, descriptor, sizeof(QUICImage));
+    case SPICE_IMAGE_TYPE_QUIC: {
+        SpiceQUICImage *image = (SpiceQUICImage *)descriptor;
+        access_test(&canvas->base, descriptor, sizeof(SpiceQUICImage));
         if (cache_me) {
             surface = canvas_get_quic(&canvas->base, image, 0);
         } else {
@@ -404,8 +404,8 @@ static cairo_surface_t *canvas_get_invers_image(CairoCanvas *canvas, ADDRESS add
         break;
     }
 #ifdef CAIRO_CANVAS_NO_CHUNKS
-    case IMAGE_TYPE_LZ_PLT: {
-        access_test(&canvas->base, descriptor, sizeof(LZ_PLTImage));
+    case SPICE_IMAGE_TYPE_LZ_PLT: {
+        access_test(&canvas->base, descriptor, sizeof(SpiceLZPLTImage));
         LZImage *image = (LZImage *)descriptor;
         if (cache_me) {
             surface = canvas_get_lz(&canvas->base, image, 0);
@@ -414,8 +414,8 @@ static cairo_surface_t *canvas_get_invers_image(CairoCanvas *canvas, ADDRESS add
         }
         break;
     }
-    case IMAGE_TYPE_LZ_RGB: {
-        access_test(&canvas->base, descriptor, sizeof(LZ_RGBImage));
+    case SPICE_IMAGE_TYPE_LZ_RGB: {
+        access_test(&canvas->base, descriptor, sizeof(SpiceLZRGBImage));
         LZImage *image = (LZImage *)descriptor;
         if (cache_me) {
             surface = canvas_get_lz(&canvas->base, image, 0);
@@ -426,19 +426,19 @@ static cairo_surface_t *canvas_get_invers_image(CairoCanvas *canvas, ADDRESS add
     }
 #endif
 #ifdef USE_GLZ
-    case IMAGE_TYPE_GLZ_RGB: {
-        access_test(&canvas->base, descriptor, sizeof(LZ_RGBImage));
+    case SPICE_IMAGE_TYPE_GLZ_RGB: {
+        access_test(&canvas->base, descriptor, sizeof(SpiceLZRGBImage));
         LZImage *image = (LZImage *)descriptor;
         surface = canvas_get_glz(&canvas->base, image);
         break;
     }
 #endif
-    case IMAGE_TYPE_FROM_CACHE:
+    case SPICE_IMAGE_TYPE_FROM_CACHE:
         surface = canvas->base.bits_cache_get(canvas->base.bits_cache_opaque, descriptor->id);
         break;
-    case IMAGE_TYPE_BITMAP: {
-        BitmapImage *bitmap = (BitmapImage *)descriptor;
-        access_test(&canvas->base, descriptor, sizeof(BitmapImage));
+    case SPICE_IMAGE_TYPE_BITMAP: {
+        SpiceBitmapImage *bitmap = (SpiceBitmapImage *)descriptor;
+        access_test(&canvas->base, descriptor, sizeof(SpiceBitmapImage));
         if (cache_me) {
             surface = canvas_get_bits(&canvas->base, &bitmap->bitmap);
         } else {
@@ -448,7 +448,7 @@ static cairo_surface_t *canvas_get_invers_image(CairoCanvas *canvas, ADDRESS add
                                                                      bitmap->bitmap.palette,
                                                                      bitmap->bitmap.flags));
 #else
-            Palette *palette = canvas_get_palette(canvas, &bitmap->bitmap);
+            SpicePalette *palette = canvas_get_palette(canvas, &bitmap->bitmap);
             surface = canvas_bitmap_to_invers_surface(canvas, &bitmap->bitmap, palette);
             free_palette(&bitmap->bitmap, palette);
             return surface;
@@ -471,17 +471,17 @@ static cairo_surface_t *canvas_get_invers_image(CairoCanvas *canvas, ADDRESS add
 
 #else
 
-static cairo_surface_t *canvas_get_invers(CairoCanvas *canvas, Bitmap *bitmap)
+static cairo_surface_t *canvas_get_invers(CairoCanvas *canvas, SpiceBitmap *bitmap)
 {
-    Palette *palette;
+    SpicePalette *palette;
 
     if (!bitmap->palette) {
         return canvas_bitmap_to_invers_surface(canvas, bitmap, NULL);
     }
-    palette = (Palette *)GET_ADDRESS(bitmap->palette);
+    palette = (SpicePalette *)SPICE_GET_ADDRESS(bitmap->palette);
     if (canvas->color_shift == 5) {
-        int size = sizeof(Palette) + (palette->num_ents << 2);
-        Palette *local_palette = malloc(size);
+        int size = sizeof(SpicePalette) + (palette->num_ents << 2);
+        SpicePalette *local_palette = malloc(size);
         cairo_surface_t* surface;
 
         memcpy(local_palette, palette, size);
@@ -494,21 +494,21 @@ static cairo_surface_t *canvas_get_invers(CairoCanvas *canvas, Bitmap *bitmap)
     }
 }
 
-static cairo_surface_t *canvas_get_invers_image(CairoCanvas *canvas, ADDRESS addr)
+static cairo_surface_t *canvas_get_invers_image(CairoCanvas *canvas, SPICE_ADDRESS addr)
 {
-    ImageDescriptor *descriptor = (ImageDescriptor *)GET_ADDRESS(addr);
+    SpiceImageDescriptor *descriptor = (SpiceImageDescriptor *)SPICE_GET_ADDRESS(addr);
 
-    access_test(canvas, descriptor, sizeof(ImageDescriptor));
+    access_test(canvas, descriptor, sizeof(SpiceImageDescriptor));
 
     switch (descriptor->type) {
-    case IMAGE_TYPE_QUIC: {
-        QUICImage *image = (QUICImage *)descriptor;
-        access_test(canvas, descriptor, sizeof(QUICImage));
+    case SPICE_IMAGE_TYPE_QUIC: {
+        SpiceQUICImage *image = (SpiceQUICImage *)descriptor;
+        access_test(canvas, descriptor, sizeof(SpiceQUICImage));
         return canvas_get_quic(canvas, image, 1);
     }
-    case IMAGE_TYPE_BITMAP: {
-        BitmapImage *bitmap = (BitmapImage *)descriptor;
-        access_test(canvas, descriptor, sizeof(BitmapImage));
+    case SPICE_IMAGE_TYPE_BITMAP: {
+        SpiceBitmapImage *bitmap = (SpiceBitmapImage *)descriptor;
+        access_test(canvas, descriptor, sizeof(SpiceBitmapImage));
         return canvas_get_invers(canvas, &bitmap->bitmap);
     }
     default:
@@ -518,7 +518,7 @@ static cairo_surface_t *canvas_get_invers_image(CairoCanvas *canvas, ADDRESS add
 
 #endif
 
-static cairo_surface_t* canvas_surface_from_self(CairoCanvas *canvas, Point *pos,
+static cairo_surface_t* canvas_surface_from_self(CairoCanvas *canvas, SpicePoint *pos,
                                                  int32_t width, int32_t heigth)
 {
     cairo_surface_t *surface;
@@ -547,10 +547,10 @@ static cairo_surface_t* canvas_surface_from_self(CairoCanvas *canvas, Point *pos
     return surface;
 }
 
-static cairo_pattern_t *canvas_get_brush(CairoCanvas *canvas, Brush *brush, uint32_t invers)
+static cairo_pattern_t *canvas_get_brush(CairoCanvas *canvas, SpiceBrush *brush, uint32_t invers)
 {
     switch (brush->type) {
-    case BRUSH_TYPE_SOLID: {
+    case SPICE_BRUSH_TYPE_SOLID: {
         uint32_t color = (invers) ? ~brush->u.color : brush->u.color;
         double r, g, b;
 
@@ -561,7 +561,7 @@ static cairo_pattern_t *canvas_get_brush(CairoCanvas *canvas, Brush *brush, uint
         r = (double)(color & canvas->base.color_mask) / canvas->base.color_mask;
         return cairo_pattern_create_rgb(r, g, b);
     }
-    case BRUSH_TYPE_PATTERN: {
+    case SPICE_BRUSH_TYPE_PATTERN: {
         cairo_surface_t* surface;
         cairo_pattern_t *pattern;
         cairo_matrix_t matrix;
@@ -583,7 +583,7 @@ static cairo_pattern_t *canvas_get_brush(CairoCanvas *canvas, Brush *brush, uint
         cairo_pattern_set_extend(pattern, CAIRO_EXTEND_REPEAT);
         return pattern;
     }
-    case BRUSH_TYPE_NONE:
+    case SPICE_BRUSH_TYPE_NONE:
         return NULL;
     default:
         CANVAS_ERROR("invalid brush type");
@@ -604,13 +604,13 @@ static inline int canvas_set_ropd_operator(cairo_t *cairo, uint16_t rop_decripto
 {
     cairo_operator_t cairo_op;
 
-    if (rop_decriptor & ROPD_OP_PUT) {
+    if (rop_decriptor & SPICE_ROPD_OP_PUT) {
         cairo_op = CAIRO_OPERATOR_RASTER_COPY;
-    } else if (rop_decriptor & ROPD_OP_XOR) {
+    } else if (rop_decriptor & SPICE_ROPD_OP_XOR) {
         cairo_op = CAIRO_OPERATOR_RASTER_XOR;
-    } else if (rop_decriptor & ROPD_OP_OR) {
+    } else if (rop_decriptor & SPICE_ROPD_OP_OR) {
         cairo_op = CAIRO_OPERATOR_RASTER_OR;
-    } else if (rop_decriptor & ROPD_OP_AND) {
+    } else if (rop_decriptor & SPICE_ROPD_OP_AND) {
         cairo_op = CAIRO_OPERATOR_RASTER_AND;
     } else {
         return 0;
@@ -625,16 +625,16 @@ static void canvas_draw_with_pattern(CairoCanvas *canvas, cairo_pattern_t *patte
 {
     cairo_t *cairo = canvas->cairo;
 
-    if (rop_decriptor & ROPD_OP_BLACKNESS) {
+    if (rop_decriptor & SPICE_ROPD_OP_BLACKNESS) {
         cairo_set_source_rgb(cairo, 0, 0, 0);
         draw_method(data);
-    } else if (rop_decriptor & ROPD_OP_WHITENESS) {
+    } else if (rop_decriptor & SPICE_ROPD_OP_WHITENESS) {
         cairo_set_source_rgb(cairo, 1, 1, 1);
         draw_method(data);
-    } else if (rop_decriptor & ROPD_OP_INVERS) {
+    } else if (rop_decriptor & SPICE_ROPD_OP_INVERS) {
         __canvas_draw_invers(canvas, draw_method, data);
     } else {
-        if (rop_decriptor & ROPD_INVERS_DEST) {
+        if (rop_decriptor & SPICE_ROPD_INVERS_DEST) {
             __canvas_draw_invers(canvas, draw_method, data);
         }
 
@@ -644,23 +644,23 @@ static void canvas_draw_with_pattern(CairoCanvas *canvas, cairo_pattern_t *patte
             draw_method(data);
         }
 
-        if (rop_decriptor & ROPD_INVERS_RES) {
+        if (rop_decriptor & SPICE_ROPD_INVERS_RES) {
             __canvas_draw_invers(canvas, draw_method, data);
         }
     }
 }
 
-static inline void canvas_draw(CairoCanvas *canvas, Brush *brush, uint16_t rop_decriptor,
+static inline void canvas_draw(CairoCanvas *canvas, SpiceBrush *brush, uint16_t rop_decriptor,
                                DrawMethod draw_method, void *data)
 {
-    cairo_pattern_t *pattern = canvas_get_brush(canvas, brush, rop_decriptor & ROPD_INVERS_BRUSH);
+    cairo_pattern_t *pattern = canvas_get_brush(canvas, brush, rop_decriptor & SPICE_ROPD_INVERS_BRUSH);
     canvas_draw_with_pattern(canvas, pattern, rop_decriptor, draw_method, data);
     if (pattern) {
         cairo_pattern_destroy(pattern);
     }
 }
 
-static cairo_pattern_t *canvas_get_mask_pattern(CairoCanvas *canvas, QMask *mask, int x, int y)
+static cairo_pattern_t *canvas_get_mask_pattern(CairoCanvas *canvas, SpiceQMask *mask, int x, int y)
 {
     cairo_surface_t *surface;
     cairo_pattern_t *pattern;
@@ -692,7 +692,7 @@ static void __draw_mask(void *data)
     cairo_mask(((DrawMaskData *)data)->cairo, ((DrawMaskData *)data)->mask);
 }
 
-void canvas_draw_fill(CairoCanvas *canvas, Rect *bbox, Clip *clip, Fill *fill)
+void canvas_draw_fill(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill)
 {
     DrawMaskData draw_data;
     draw_data.cairo = canvas->cairo;
@@ -715,8 +715,8 @@ void canvas_draw_fill(CairoCanvas *canvas, Rect *bbox, Clip *clip, Fill *fill)
     cairo_restore(draw_data.cairo);
 }
 
-static cairo_pattern_t *canvas_src_image_to_pat(CairoCanvas *canvas, ADDRESS src_bitmap,
-                                                const Rect *src, const Rect *dest, int invers,
+static cairo_pattern_t *canvas_src_image_to_pat(CairoCanvas *canvas, SPICE_ADDRESS src_bitmap,
+                                                const SpiceRect *src, const SpiceRect *dest, int invers,
                                                 int scale_mode)
 {
     cairo_pattern_t *pattern;
@@ -724,7 +724,7 @@ static cairo_pattern_t *canvas_src_image_to_pat(CairoCanvas *canvas, ADDRESS src
     cairo_matrix_t matrix;
 
     ASSERT(src_bitmap);
-    ASSERT(scale_mode == IMAGE_SCALE_INTERPOLATE || scale_mode == IMAGE_SCALE_NEAREST);
+    ASSERT(scale_mode == SPICE_IMAGE_SCALE_MODE_INTERPOLATE || scale_mode == SPICE_IMAGE_SCALE_MODE_NEAREST);
     if (invers) {
         surface = canvas_get_invers_image(canvas, src_bitmap);
     } else {
@@ -745,7 +745,7 @@ static cairo_pattern_t *canvas_src_image_to_pat(CairoCanvas *canvas, ADDRESS src
         sy = (double)(src->bottom - src->top) / (dest->bottom - dest->top);
 
         cairo_matrix_init_scale(&matrix, sx, sy);
-        cairo_pattern_set_filter(pattern, (scale_mode == IMAGE_SCALE_NEAREST) ?
+        cairo_pattern_set_filter(pattern, (scale_mode == SPICE_IMAGE_SCALE_MODE_NEAREST) ?
                                  CAIRO_FILTER_NEAREST : CAIRO_FILTER_GOOD);
 
         cairo_matrix_translate(&matrix, src->left / sx - dest->left, src->top / sy - dest->top);
@@ -757,7 +757,7 @@ static cairo_pattern_t *canvas_src_image_to_pat(CairoCanvas *canvas, ADDRESS src
     return pattern;
 }
 
-void canvas_draw_copy(CairoCanvas *canvas, Rect *bbox, Clip *clip, Copy *copy)
+void canvas_draw_copy(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy)
 {
     cairo_t *cairo = canvas->cairo;
     cairo_pattern_t *pattern;
@@ -767,7 +767,7 @@ void canvas_draw_copy(CairoCanvas *canvas, Rect *bbox, Clip *clip, Copy *copy)
     canvas_clip(canvas, clip);
 
     pattern = canvas_src_image_to_pat(canvas, copy->src_bitmap, &copy->src_area, bbox,
-                                      copy->rop_decriptor & ROPD_INVERS_SRC, copy->scale_mode);
+                                      copy->rop_decriptor & SPICE_ROPD_INVERS_SRC, copy->scale_mode);
     cairo_set_source(cairo, pattern);
     cairo_pattern_destroy(pattern);
     cairo_set_operator(cairo, CAIRO_OPERATOR_RASTER_COPY);
@@ -787,11 +787,11 @@ void canvas_draw_copy(CairoCanvas *canvas, Rect *bbox, Clip *clip, Copy *copy)
 }
 
 #ifdef WIN32
-void canvas_put_image(CairoCanvas *canvas, HDC dc, const Rect *dest, const uint8_t *_src_data,
+void canvas_put_image(CairoCanvas *canvas, HDC dc, const SpiceRect *dest, const uint8_t *_src_data,
                       uint32_t src_width, uint32_t src_height, int src_stride,
                       const QRegion *clip)
 #else
-void canvas_put_image(CairoCanvas *canvas, const Rect *dest, const uint8_t *_src_data,
+void canvas_put_image(CairoCanvas *canvas, const SpiceRect *dest, const uint8_t *_src_data,
                       uint32_t src_width, uint32_t src_height, int src_stride,
                       const QRegion *clip)
 #endif
@@ -807,8 +807,8 @@ void canvas_put_image(CairoCanvas *canvas, const Rect *dest, const uint8_t *_src
     cairo_save(cairo);
 
     if (clip) {
-        const Rect *now = clip->rects;
-        const Rect *end = clip->rects + clip->num_rects;
+        const SpiceRect *now = clip->rects;
+        const SpiceRect *end = clip->rects + clip->num_rects;
         for (; now < end; now++) {
             cairo_rectangle(cairo, now->left, now->top, now->right - now->left,
                             now->bottom - now->top);
@@ -927,7 +927,7 @@ static cairo_surface_t *canvas_surf_to_color_maks_invers(cairo_surface_t *surfac
     return mask;
 }
 
-void canvas_draw_transparent(CairoCanvas *canvas, Rect *bbox, Clip *clip, Transparent* transparent)
+void canvas_draw_transparent(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceTransparent* transparent)
 {
     cairo_t *cairo = canvas->cairo;
     cairo_pattern_t *pattern;
@@ -946,7 +946,7 @@ void canvas_draw_transparent(CairoCanvas *canvas, Rect *bbox, Clip *clip, Transp
     canvas_clip(canvas, clip);
 
     pattern = canvas_src_image_to_pat(canvas, transparent->src_bitmap, &transparent->src_area, bbox,
-                                      0, IMAGE_SCALE_NEAREST);
+                                      0, SPICE_IMAGE_SCALE_MODE_NEAREST);
     if (cairo_pattern_get_surface(pattern, &surface) != CAIRO_STATUS_SUCCESS) {
         CANVAS_ERROR("surfase from pattern pattern failed");
     }
@@ -970,7 +970,7 @@ void canvas_draw_transparent(CairoCanvas *canvas, Rect *bbox, Clip *clip, Transp
     cairo_restore(cairo);
 }
 
-void canvas_draw_alpha_blend(CairoCanvas *canvas, Rect *bbox, Clip *clip, AlphaBlnd* alpha_blend)
+void canvas_draw_alpha_blend(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend)
 {
     cairo_t *cairo = canvas->cairo;
     cairo_pattern_t *pattern;
@@ -985,7 +985,7 @@ void canvas_draw_alpha_blend(CairoCanvas *canvas, Rect *bbox, Clip *clip, AlphaB
     canvas_clip(canvas, clip);
 
     pattern = canvas_src_image_to_pat(canvas, alpha_blend->src_bitmap, &alpha_blend->src_area, bbox,
-                                      0, IMAGE_SCALE_INTERPOLATE);
+                                      0, SPICE_IMAGE_SCALE_MODE_INTERPOLATE);
     cairo_set_source(cairo, pattern);
     cairo_pattern_destroy(pattern);
     cairo_set_operator(cairo, CAIRO_OPERATOR_ATOP);
@@ -994,7 +994,7 @@ void canvas_draw_alpha_blend(CairoCanvas *canvas, Rect *bbox, Clip *clip, AlphaB
     cairo_restore(cairo);
 }
 
-void canvas_draw_opaque(CairoCanvas *canvas, Rect *bbox, Clip *clip, Opaque *opaque)
+void canvas_draw_opaque(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque)
 {
     cairo_pattern_t *pattern;
     DrawMaskData draw_data;
@@ -1005,7 +1005,7 @@ void canvas_draw_opaque(CairoCanvas *canvas, Rect *bbox, Clip *clip, Opaque *opa
     canvas_clip(canvas, clip);
 
     pattern = canvas_src_image_to_pat(canvas, opaque->src_bitmap, &opaque->src_area, bbox,
-                                      opaque->rop_decriptor & ROPD_INVERS_SRC, opaque->scale_mode);
+                                      opaque->rop_decriptor & SPICE_ROPD_INVERS_SRC, opaque->scale_mode);
     cairo_set_source(draw_data.cairo, pattern);
     cairo_pattern_destroy(pattern);
     cairo_set_operator(draw_data.cairo, CAIRO_OPERATOR_RASTER_COPY);
@@ -1031,7 +1031,7 @@ void canvas_draw_opaque(CairoCanvas *canvas, Rect *bbox, Clip *clip, Opaque *opa
     cairo_restore(draw_data.cairo);
 }
 
-void canvas_draw_blend(CairoCanvas *canvas, Rect *bbox, Clip *clip, Blend *blend)
+void canvas_draw_blend(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend)
 {
     cairo_pattern_t *pattern;
     DrawMaskData mask_data;
@@ -1042,7 +1042,7 @@ void canvas_draw_blend(CairoCanvas *canvas, Rect *bbox, Clip *clip, Blend *blend
     canvas_clip(canvas, clip);
 
     pattern = canvas_src_image_to_pat(canvas, blend->src_bitmap, &blend->src_area, bbox,
-                                      blend->rop_decriptor & ROPD_INVERS_SRC, blend->scale_mode);
+                                      blend->rop_decriptor & SPICE_ROPD_INVERS_SRC, blend->scale_mode);
 
     if ((mask_data.mask = canvas_get_mask_pattern(canvas, &blend->mask, bbox->left, bbox->top))) {
         cairo_rectangle(mask_data.cairo,
@@ -1065,8 +1065,8 @@ void canvas_draw_blend(CairoCanvas *canvas, Rect *bbox, Clip *clip, Blend *blend
     cairo_restore(mask_data.cairo);
 }
 
-static inline void canvas_fill_common(CairoCanvas *canvas, Rect *bbox, Clip *clip,
-                                      QMask *qxl_mask)
+static inline void canvas_fill_common(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip,
+                                      SpiceQMask *qxl_mask)
 {
     cairo_t *cairo = canvas->cairo;
     cairo_pattern_t *mask;
@@ -1088,7 +1088,7 @@ static inline void canvas_fill_common(CairoCanvas *canvas, Rect *bbox, Clip *cli
     }
 }
 
-void canvas_draw_blackness(CairoCanvas *canvas, Rect *bbox, Clip *clip, Blackness *blackness)
+void canvas_draw_blackness(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness)
 {
     cairo_t *cairo = canvas->cairo;
     cairo_save(cairo);
@@ -1097,7 +1097,7 @@ void canvas_draw_blackness(CairoCanvas *canvas, Rect *bbox, Clip *clip, Blacknes
     cairo_restore(cairo);
 }
 
-void canvas_draw_whiteness(CairoCanvas *canvas, Rect *bbox, Clip *clip, Whiteness *whiteness)
+void canvas_draw_whiteness(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness)
 {
     cairo_t *cairo = canvas->cairo;
     cairo_save(cairo);
@@ -1106,7 +1106,7 @@ void canvas_draw_whiteness(CairoCanvas *canvas, Rect *bbox, Clip *clip, Whitenes
     cairo_restore(cairo);
 }
 
-void canvas_draw_invers(CairoCanvas *canvas, Rect *bbox, Clip *clip, Invers *invers)
+void canvas_draw_invers(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers)
 {
     cairo_t *cairo = canvas->cairo;
     cairo_save(cairo);
@@ -1116,18 +1116,18 @@ void canvas_draw_invers(CairoCanvas *canvas, Rect *bbox, Clip *clip, Invers *inv
     cairo_restore(cairo);
 }
 
-void canvas_draw_rop3(CairoCanvas *canvas, Rect *bbox, Clip *clip, Rop3 *rop3)
+void canvas_draw_rop3(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3)
 {
     cairo_t *cairo = canvas->cairo;
     cairo_pattern_t *mask;
     cairo_surface_t *d;
     cairo_surface_t *s;
-    Point pos;
+    SpicePoint pos;
     int width;
     int heigth;
     double x_pos;
     double y_pos;
-    Point src_pos;
+    SpicePoint src_pos;
 
     cairo_save(cairo);
     canvas_clip(canvas, clip);
@@ -1156,9 +1156,9 @@ void canvas_draw_rop3(CairoCanvas *canvas, Rect *bbox, Clip *clip, Rop3 *rop3)
         cairo_image_surface_get_height(s) - src_pos.y < heigth) {
         CANVAS_ERROR("bad src bitmap size");
     }
-    if (rop3->brush.type == BRUSH_TYPE_PATTERN) {
+    if (rop3->brush.type == SPICE_BRUSH_TYPE_PATTERN) {
         cairo_surface_t *p = canvas_get_image(&canvas->base, rop3->brush.u.pattern.pat);
-        Point pat_pos;
+        SpicePoint pat_pos;
 
         pat_pos.x = (bbox->left - rop3->brush.u.pattern.pos.x) % cairo_image_surface_get_width(p);
         pat_pos.y = (bbox->top - rop3->brush.u.pattern.pos.y) % cairo_image_surface_get_height(p);
@@ -1239,8 +1239,8 @@ static inline void __canvas_copy_bits_right(uint8_t *data, const int stride,
     }
 }
 
-static inline void __canvas_copy_rect_bits(uint8_t *data, const int stride, Rect *dest_rect,
-                                           Point *src_pos)
+static inline void __canvas_copy_rect_bits(uint8_t *data, const int stride, SpiceRect *dest_rect,
+                                           SpicePoint *src_pos)
 {
     if (dest_rect->top > src_pos->y) {
         __canvas_copy_bits_down(data, stride, src_pos->x, src_pos->y,
@@ -1260,11 +1260,11 @@ static inline void __canvas_copy_rect_bits(uint8_t *data, const int stride, Rect
     }
 }
 
-static inline void canvas_copy_fix_clip_area(const Rect *dest,
-                                             const Point *src_pos,
-                                             const Rect *now,
-                                             Point *ret_pos,
-                                             Rect *ret_dest)
+static inline void canvas_copy_fix_clip_area(const SpiceRect *dest,
+                                             const SpicePoint *src_pos,
+                                             const SpiceRect *now,
+                                             SpicePoint *ret_pos,
+                                             SpiceRect *ret_dest)
 {
     *ret_dest = *now;
     rect_sect(ret_dest, dest);
@@ -1272,21 +1272,21 @@ static inline void canvas_copy_fix_clip_area(const Rect *dest,
     ret_pos->y = src_pos->y + (ret_dest->top - dest->top);
 }
 
-static inline void __canvas_copy_region_bits(uint8_t *data, int stride, Rect *dest_rect,
-                                             Point *src_pos, QRegion *region)
+static inline void __canvas_copy_region_bits(uint8_t *data, int stride, SpiceRect *dest_rect,
+                                             SpicePoint *src_pos, QRegion *region)
 {
-    Rect curr_area;
-    Point curr_pos;
-    Rect *now;
-    Rect *end;
+    SpiceRect curr_area;
+    SpicePoint curr_pos;
+    SpiceRect *now;
+    SpiceRect *end;
 
     if (dest_rect->top > src_pos->y) {
         end = region->rects - 1;
         now = end + region->num_rects;
         if (dest_rect->left < src_pos->x) {
             for (; now > end; now--) {
-                Rect *line_end = now;
-                Rect *line_pos;
+                SpiceRect *line_end = now;
+                SpiceRect *line_pos;
 
                 while (now - 1 > end && now->top == now[-1].top) {
                     now--;
@@ -1314,8 +1314,8 @@ static inline void __canvas_copy_region_bits(uint8_t *data, int stride, Rect *de
         end = now + region->num_rects;
         if (dest_rect->left > src_pos->x) {
             for (; now < end; now++) {
-                Rect *line_end = now;
-                Rect *line_pos;
+                SpiceRect *line_end = now;
+                SpiceRect *line_pos;
 
                 while (now + 1 < end && now->top == now[1].top) {
                     now++;
@@ -1353,7 +1353,7 @@ static inline void __canvas_copy_region_bits(uint8_t *data, int stride, Rect *de
 
 #endif
 
-void canvas_copy_bits(CairoCanvas *canvas, Rect *bbox, Clip *clip, Point *src_pos)
+void canvas_copy_bits(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos)
 {
     cairo_t *cairo = canvas->cairo;
     cairo_surface_t *surface;
@@ -1363,20 +1363,20 @@ void canvas_copy_bits(CairoCanvas *canvas, Rect *bbox, Clip *clip, Point *src_po
     cairo_save(cairo);
 #ifdef FAST_COPY_BITS
     switch (clip->type) {
-    case CLIP_TYPE_NONE: {
+    case SPICE_CLIP_TYPE_NONE: {
         surface = cairo_get_target(cairo);
         __canvas_copy_rect_bits(cairo_image_surface_get_data(surface),
                                 cairo_image_surface_get_stride(surface),
                                 bbox, src_pos);
         break;
     }
-    case CLIP_TYPE_RECTS: {
+    case SPICE_CLIP_TYPE_RECTS: {
         surface = cairo_get_target(cairo);
-        uint32_t *n = (uint32_t *)GET_ADDRESS(clip->data);
+        uint32_t *n = (uint32_t *)SPICE_GET_ADDRESS(clip->data);
         access_test(&canvas->base, n, sizeof(uint32_t));
 
-        Rect *now = (Rect *)(n + 1);
-        Rect *end = now + *n;
+        SpiceRect *now = (SpiceRect *)(n + 1);
+        SpiceRect *end = now + *n;
         access_test(&canvas->base, now, (unsigned long)end - (unsigned long)now);
         uint8_t *data = cairo_image_surface_get_data(surface);
         int stride = cairo_image_surface_get_stride(surface);
@@ -1410,13 +1410,13 @@ void canvas_copy_bits(CairoCanvas *canvas, Rect *bbox, Clip *clip, Point *src_po
     cairo_restore(cairo);
 }
 
-static void canvas_draw_raster_str(CairoCanvas *canvas, String *str, int bpp,
-                                   Brush *brush, uint16_t rop_decriptor)
+static void canvas_draw_raster_str(CairoCanvas *canvas, SpiceString *str, int bpp,
+                                   SpiceBrush *brush, uint16_t rop_decriptor)
 {
     cairo_surface_t *str_mask;
     DrawMaskData draw_data;
     cairo_matrix_t matrix;
-    Point pos;
+    SpicePoint pos;
 
     str_mask = canvas_get_str_mask(&canvas->base, str, bpp, &pos);
     draw_data.cairo = canvas->cairo;
@@ -1433,14 +1433,14 @@ static void canvas_draw_raster_str(CairoCanvas *canvas, String *str, int bpp,
     cairo_surface_destroy(str_mask);
 }
 
-static void canvas_draw_vector_str(CairoCanvas *canvas, String *str, Brush *brush,
+static void canvas_draw_vector_str(CairoCanvas *canvas, SpiceString *str, SpiceBrush *brush,
                                    uint16_t rop_decriptor)
 {
-    VectotGlyph *glyph = (VectotGlyph *)str->data;
+    SpiceVectorGlyph *glyph = (SpiceVectorGlyph *)str->data;
     int i;
 
     for (i = 0; i < str->length; i++) {
-        VectotGlyph *next_glyph = canvas_next_vector_glyph(glyph);
+        SpiceVectorGlyph *next_glyph = canvas_next_vector_glyph(glyph);
         access_test(&canvas->base, glyph, (uint8_t *)next_glyph - (uint8_t *)glyph);
         canvas_set_path(canvas, glyph->data);
         glyph = next_glyph;
@@ -1449,10 +1449,10 @@ static void canvas_draw_vector_str(CairoCanvas *canvas, String *str, Brush *brus
     cairo_new_path(canvas->cairo);
 }
 
-void canvas_draw_text(CairoCanvas *canvas, Rect *bbox, Clip *clip, Text *text)
+void canvas_draw_text(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceText *text)
 {
     cairo_t *cairo = canvas->cairo;
-    String *str;
+    SpiceString *str;
 
     cairo_save(cairo);
     canvas_clip(canvas, clip);
@@ -1466,13 +1466,13 @@ void canvas_draw_text(CairoCanvas *canvas, Rect *bbox, Clip *clip, Text *text)
                     (DrawMethod)cairo_fill_preserve, cairo);
         cairo_new_path(cairo);
     }
-    str = (String *)GET_ADDRESS(text->str);
+    str = (SpiceString *)SPICE_GET_ADDRESS(text->str);
 
-    if (str->flags & STRING_RASTER_A1) {
+    if (str->flags & SPICE_STRING_FLAGS_RASTER_A1) {
         canvas_draw_raster_str(canvas, str, 1, &text->fore_brush, text->fore_mode);
-    } else if (str->flags & STRING_RASTER_A4) {
+    } else if (str->flags & SPICE_STRING_FLAGS_RASTER_A4) {
         canvas_draw_raster_str(canvas, str, 4, &text->fore_brush, text->fore_mode);
-    } else if (str->flags & STRING_RASTER_A8) {
+    } else if (str->flags & SPICE_STRING_FLAGS_RASTER_A8) {
         WARN("untested path A8 glyphs, doing nothing");
         if (0) {
             canvas_draw_raster_str(canvas, str, 8, &text->fore_brush, text->fore_mode);
@@ -1486,7 +1486,7 @@ void canvas_draw_text(CairoCanvas *canvas, Rect *bbox, Clip *clip, Text *text)
     cairo_restore(cairo);
 }
 
-void canvas_draw_stroke(CairoCanvas *canvas, Rect *bbox, Clip *clip, Stroke *stroke)
+void canvas_draw_stroke(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke)
 {
     cairo_t *cairo = canvas->cairo;
 
@@ -1494,12 +1494,12 @@ void canvas_draw_stroke(CairoCanvas *canvas, Rect *bbox, Clip *clip, Stroke *str
     canvas_clip(canvas, clip);
 
     canvas_set_line_attr_no_dash(canvas, &stroke->attr);
-    canvas_set_path(canvas, GET_ADDRESS(stroke->path));
-    if (stroke->attr.flags & LINE_ATTR_STYLED) {
+    canvas_set_path(canvas, SPICE_GET_ADDRESS(stroke->path));
+    if (stroke->attr.flags & SPICE_LINE_ATTR_STYLED) {
         canvas_draw(canvas, &stroke->brush, stroke->back_mode,
                     (DrawMethod)cairo_stroke_preserve, cairo);
         canvas_set_dash(canvas, stroke->attr.style_nseg, stroke->attr.style,
-                        !!(stroke->attr.flags & LINE_ATTR_STARTGAP));
+                        !!(stroke->attr.flags & SPICE_LINE_ATTR_STARTGAP));
     }
     canvas_draw(canvas, &stroke->brush, stroke->fore_mode, (DrawMethod)cairo_stroke_preserve,
                 cairo);
@@ -1507,7 +1507,7 @@ void canvas_draw_stroke(CairoCanvas *canvas, Rect *bbox, Clip *clip, Stroke *str
     cairo_restore(cairo);
 }
 
-void canvas_read_bits(CairoCanvas *canvas, uint8_t *dest, int dest_stride, const Rect *area)
+void canvas_read_bits(CairoCanvas *canvas, uint8_t *dest, int dest_stride, const SpiceRect *area)
 {
     cairo_t *cairo = canvas->cairo;
     cairo_surface_t* surface;
@@ -1527,14 +1527,14 @@ void canvas_read_bits(CairoCanvas *canvas, uint8_t *dest, int dest_stride, const
     }
 }
 
-void canvas_group_start(CairoCanvas *canvas, int n_clip_rects, Rect *clip_rects)
+void canvas_group_start(CairoCanvas *canvas, int n_clip_rects, SpiceRect *clip_rects)
 {
     cairo_t *cairo = canvas->cairo;
 
     cairo_save(cairo);
 
     if (n_clip_rects) {
-        Rect *end = clip_rects + n_clip_rects;
+        SpiceRect *end = clip_rects + n_clip_rects;
         for (; clip_rects < end; clip_rects++) {
             cairo_rectangle(cairo,
                             clip_rects->left,

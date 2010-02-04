@@ -44,9 +44,9 @@ static LRESULT CALLBACK MessageFilterProc(int nCode, WPARAM wParam, LPARAM lPara
 
 static inline int to_red_mouse_state(WPARAM wParam)
 {
-    return ((wParam & MK_LBUTTON) ? REDC_LBUTTON_MASK : 0) |
-           ((wParam & MK_MBUTTON) ? REDC_MBUTTON_MASK : 0) |
-           ((wParam & MK_RBUTTON) ? REDC_RBUTTON_MASK : 0);
+    return ((wParam & MK_LBUTTON) ? SPICE_MOUSE_BUTTON_MASK_LEFT : 0) |
+           ((wParam & MK_MBUTTON) ? SPICE_MOUSE_BUTTON_MASK_MIDDLE : 0) |
+           ((wParam & MK_RBUTTON) ? SPICE_MOUSE_BUTTON_MASK_RIGHT : 0);
 }
 
 static inline RedKey translate_key(int virtual_key, uint32_t scan, bool escape)
@@ -146,8 +146,8 @@ LRESULT CALLBACK RedWindow_p::WindowProc(HWND hWnd, UINT message, WPARAM wParam,
         HDC hdc;
 
         hdc = BeginPaint(hWnd, &ps);
-        Point origin = window->get_origin();
-        Rect r;
+        SpicePoint origin = window->get_origin();
+        SpiceRect r;
         r.left = ps.rcPaint.left - origin.x;
         r.top = ps.rcPaint.top - origin.y;
         r.right = ps.rcPaint.right - origin.x;
@@ -157,7 +157,7 @@ LRESULT CALLBACK RedWindow_p::WindowProc(HWND hWnd, UINT message, WPARAM wParam,
         break;
     }
     case WM_MOUSEMOVE: {
-        Point origin = window->get_origin();
+        SpicePoint origin = window->get_origin();
         int x = LOWORD(lParam) - origin.x;
         int y = HIWORD(lParam) - origin.y;
         unsigned int buttons_state = to_red_mouse_state(wParam);
@@ -178,39 +178,39 @@ LRESULT CALLBACK RedWindow_p::WindowProc(HWND hWnd, UINT message, WPARAM wParam,
         window->on_focus_out();
         break;
     case WM_LBUTTONDOWN:
-        window->get_listener().on_mouse_button_press(REDC_MOUSE_LBUTTON,
+        window->get_listener().on_mouse_button_press(SPICE_MOUSE_BUTTON_LEFT,
                                                      to_red_mouse_state(wParam));
         break;
     case WM_LBUTTONUP:
-        window->get_listener().on_mouse_button_release(REDC_MOUSE_LBUTTON,
+        window->get_listener().on_mouse_button_release(SPICE_MOUSE_BUTTON_LEFT,
                                                        to_red_mouse_state(wParam));
         break;
     case WM_RBUTTONDOWN:
-        window->get_listener().on_mouse_button_press(REDC_MOUSE_RBUTTON,
+        window->get_listener().on_mouse_button_press(SPICE_MOUSE_BUTTON_RIGHT,
                                                      to_red_mouse_state(wParam));
         break;
     case WM_RBUTTONUP:
-        window->get_listener().on_mouse_button_release(REDC_MOUSE_RBUTTON,
+        window->get_listener().on_mouse_button_release(SPICE_MOUSE_BUTTON_RIGHT,
                                                        to_red_mouse_state(wParam));
         break;
     case WM_MBUTTONDOWN:
-        window->get_listener().on_mouse_button_press(REDC_MOUSE_MBUTTON,
+        window->get_listener().on_mouse_button_press(SPICE_MOUSE_BUTTON_MIDDLE,
                                                      to_red_mouse_state(wParam));
         break;
     case WM_MBUTTONUP:
-        window->get_listener().on_mouse_button_release(REDC_MOUSE_MBUTTON,
+        window->get_listener().on_mouse_button_release(SPICE_MOUSE_BUTTON_MIDDLE,
                                                        to_red_mouse_state(wParam));
         break;
     case WM_MOUSEWHEEL:
         if (HIWORD(wParam) & 0x8000) {
-            window->get_listener().on_mouse_button_press(REDC_MOUSE_DBUTTON,
+            window->get_listener().on_mouse_button_press(SPICE_MOUSE_BUTTON_DOWN,
                                                          to_red_mouse_state(wParam));
-            window->get_listener().on_mouse_button_release(REDC_MOUSE_DBUTTON,
+            window->get_listener().on_mouse_button_release(SPICE_MOUSE_BUTTON_DOWN,
                                                            to_red_mouse_state(wParam));
         } else {
-            window->get_listener().on_mouse_button_press(REDC_MOUSE_UBUTTON,
+            window->get_listener().on_mouse_button_press(SPICE_MOUSE_BUTTON_UP,
                                                          to_red_mouse_state(wParam));
-            window->get_listener().on_mouse_button_release(REDC_MOUSE_UBUTTON,
+            window->get_listener().on_mouse_button_release(SPICE_MOUSE_BUTTON_UP,
                                                            to_red_mouse_state(wParam));
         }
         break;
@@ -369,7 +369,7 @@ void RedWindow_p::on_pos_changing(RedWindow& red_window)
     if (_minimized || IsIconic(_win)) {
         return;
     }
-    Point pos = red_window.get_position();
+    SpicePoint pos = red_window.get_position();
     _x = pos.x;
     _y = pos.y;
     _valid_pos = true;
@@ -529,7 +529,7 @@ void RedWindow::hide()
     ShowWindow(_win, SW_HIDE);
 }
 
-static void client_to_window_size(HWND win, int width, int height, Point& win_size,
+static void client_to_window_size(HWND win, int width, int height, SpicePoint& win_size,
                                   RedWindow::Type type)
 {
     RECT area;
@@ -593,7 +593,7 @@ public:
     Region_p(HRGN region) : _region (region) {}
     ~Region_p() {}
 
-    void get_bbox(Rect& bbox) const
+    void get_bbox(SpiceRect& bbox) const
     {
         RECT box;
 
@@ -615,13 +615,13 @@ private:
     HRGN _region;
 };
 
-bool RedWindow::get_mouse_anchor_point(Point& pt)
+bool RedWindow::get_mouse_anchor_point(SpicePoint& pt)
 {
     AutoGDIObject region(CreateRectRgn(0, 0, 0, 0));
     WindowDC win_dc(_win);
 
     GetRandomRgn(*win_dc, (HRGN)region.get(), SYSRGN);
-    Point anchor;
+    SpicePoint anchor;
     Region_p region_p((HRGN)region.get());
     if (!find_anchor_point(region_p, anchor)) {
         return false;
@@ -686,9 +686,9 @@ void RedWindow::show_cursor()
     }
 }
 
-Point RedWindow::get_position()
+SpicePoint RedWindow::get_position()
 {
-    Point position;
+    SpicePoint position;
     if (_minimized || IsIconic(_win)) {
         if (_valid_pos) {
             position.x = _x;
@@ -705,11 +705,11 @@ Point RedWindow::get_position()
     return position;
 }
 
-Point RedWindow::get_size()
+SpicePoint RedWindow::get_size()
 {
     RECT client_rect;
     GetClientRect(_win, &client_rect);
-    Point pt = {client_rect.right - client_rect.left, client_rect.bottom - client_rect.top};
+    SpicePoint pt = {client_rect.right - client_rect.left, client_rect.bottom - client_rect.top};
     return pt;
 }
 

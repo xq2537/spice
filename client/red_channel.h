@@ -181,7 +181,7 @@ private:
     RedChannel::OutMessage* _outgoing_message;
     uint32_t _outgoing_pos;
 
-    RedDataHeader _incomming_header;
+    SpiceDataHeader _incomming_header;
     uint32_t _incomming_header_pos;
     RedPeer::CompundInMessage* _incomming_message;
     uint32_t _incomming_message_pos;
@@ -270,10 +270,10 @@ void MessageHandlerImp<HandlerClass, end_message>::handle_message(RedPeer::Compu
               _handlers[message.type()].mess_size);
     }
     if (message.sub_list()) {
-        RedSubMessageList *sub_list;
-        sub_list = (RedSubMessageList *)(message.data() + message.sub_list());
+        SpiceSubMessageList *sub_list;
+        sub_list = (SpiceSubMessageList *)(message.data() + message.sub_list());
         for (int i = 0; i < sub_list->size; i++) {
-            RedSubMessage *sub = (RedSubMessage *)(message.data() + sub_list->sub_messages[i]);
+            SpicedSubMessage *sub = (SpicedSubMessage *)(message.data() + sub_list->sub_messages[i]);
             //todo: test size
             RedPeer::InMessage sub_message(sub->type, sub->size, (uint8_t *)(sub + 1));
             (_obj.*_handlers[sub_message.type()].handler)(&sub_message);

@@ -36,15 +36,15 @@
    At the final stage, this interface shouldn't be exposed. Only RedChannel will use it. */
 
 typedef int (*handle_message_proc)(void *opaque,
-                                   RedDataHeader *header, uint8_t *msg);
-typedef uint8_t *(*alloc_msg_recv_buf_proc)(void *opaque, RedDataHeader *msg_header);
+                                   SpiceDataHeader *header, uint8_t *msg);
+typedef uint8_t *(*alloc_msg_recv_buf_proc)(void *opaque, SpiceDataHeader *msg_header);
 typedef void (*release_msg_recv_buf_proc)(void *opaque,
-                                          RedDataHeader *msg_header, uint8_t *msg);
+                                          SpiceDataHeader *msg_header, uint8_t *msg);
 typedef void (*on_incoming_error_proc)(void *opaque);
 
 typedef struct IncomingHandler {
     void *opaque;
-    RedDataHeader header;
+    SpiceDataHeader header;
     uint32_t header_pos;
     uint8_t *msg; // data of the msg following the header. allocated by alloc_msg_buf.
     uint32_t msg_pos;
@@ -88,11 +88,11 @@ typedef struct PipeItem {
 typedef struct RedChannel RedChannel;
 
 typedef uint8_t *(*channel_alloc_msg_recv_buf_proc)(RedChannel *channel,
-                                                    RedDataHeader *msg_header);
+                                                    SpiceDataHeader *msg_header);
 typedef int (*channel_handle_message_proc)(RedChannel *channel,
-                                           RedDataHeader *header, uint8_t *msg);
+                                           SpiceDataHeader *header, uint8_t *msg);
 typedef void (*channel_release_msg_recv_buf_proc)(RedChannel *channel,
-                                                  RedDataHeader *msg_header, uint8_t *msg);
+                                                  SpiceDataHeader *msg_header, uint8_t *msg);
 typedef void (*channel_disconnect_proc)(RedChannel *channel);
 typedef int (*channel_configure_socket_proc)(RedChannel *channel);
 typedef void (*channel_send_pipe_item_proc)(RedChannel *channel, PipeItem *item);
@@ -115,10 +115,10 @@ struct RedChannel {
     uint32_t pipe_size;
 
     struct {
-        RedDataHeader header;
+        SpiceDataHeader header;
         union {
-            RedSetAck ack;
-            RedMigrate migrate;
+            SpiceMsgSetAck ack;
+            SpiceMsgMigrate migrate;
         } u;
         uint32_t n_bufs;
         BufDescriptor bufs[MAX_SEND_BUFS];
@@ -158,7 +158,7 @@ void red_channel_shutdown(RedChannel *channel);
 void red_channel_init_outgoing_messages_window(RedChannel *channel);
 
 /* handles general channel msgs from the client */
-int red_channel_handle_message(RedChannel *channel, RedDataHeader *header, uint8_t *msg);
+int red_channel_handle_message(RedChannel *channel, SpiceDataHeader *header, uint8_t *msg);
 
 /* when preparing send_data: should call reset, then init and then add_buf per buffer that is
    being sent */

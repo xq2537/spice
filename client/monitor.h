@@ -32,8 +32,8 @@ public:
     void set_mode(int width, int height);
     void restore();
     virtual int get_depth() = 0;
-    virtual Point get_position() = 0;
-    virtual Point get_size() const = 0;
+    virtual SpicePoint get_position() = 0;
+    virtual SpicePoint get_size() const = 0;
     virtual bool is_out_of_sync() = 0;
     virtual int get_screen_id() = 0;
 

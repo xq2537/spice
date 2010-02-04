@@ -137,17 +137,17 @@ static void end_wave()
 
 #endif
 
-class PlaybackHandler: public MessageHandlerImp<PlaybackChannel, RED_PLAYBACK_MESSAGES_END> {
+class PlaybackHandler: public MessageHandlerImp<PlaybackChannel, SPICE_MSG_END_PLAYBACK> {
 public:
     PlaybackHandler(PlaybackChannel& channel)
-        : MessageHandlerImp<PlaybackChannel, RED_PLAYBACK_MESSAGES_END>(channel) {}
+        : MessageHandlerImp<PlaybackChannel, SPICE_MSG_END_PLAYBACK>(channel) {}
 };
 
 PlaybackChannel::PlaybackChannel(RedClient& client, uint32_t id)
-    : RedChannel(client, RED_CHANNEL_PLAYBACK, id, new PlaybackHandler(*this),
+    : RedChannel(client, SPICE_CHANNEL_PLAYBACK, id, new PlaybackHandler(*this),
                  Platform::PRIORITY_HIGH)
     , _wave_player (NULL)
-    , _mode (RED_AUDIO_DATA_MODE_INVALD)
+    , _mode (SPICE_AUDIO_DATA_MODE_INVALD)
     , _celt_mode (NULL)
     , _celt_decoder (NULL)
     , _playing (false)
@@ -157,19 +157,19 @@ PlaybackChannel::PlaybackChannel(RedClient& client, uint32_t id)
 #endif
     PlaybackHandler* handler = static_cast<PlaybackHandler*>(get_message_handler());
 
-    handler->set_handler(RED_MIGRATE, &PlaybackChannel::handle_migrate, 0);
-    handler->set_handler(RED_SET_ACK, &PlaybackChannel::handle_set_ack, sizeof(RedSetAck));
-    handler->set_handler(RED_PING, &PlaybackChannel::handle_ping, sizeof(RedPing));
-    handler->set_handler(RED_WAIT_FOR_CHANNELS, &PlaybackChannel::handle_wait_for_channels,
-                         sizeof(RedWaitForChannels));
-    handler->set_handler(RED_DISCONNECTING, &PlaybackChannel::handle_disconnect,
-                         sizeof(RedDisconnect));
-    handler->set_handler(RED_NOTIFY, &PlaybackChannel::handle_notify, sizeof(RedNotify));
+    handler->set_handler(SPICE_MSG_MIGRATE, &PlaybackChannel::handle_migrate, 0);
+    handler->set_handler(SPICE_MSG_SET_ACK, &PlaybackChannel::handle_set_ack, sizeof(SpiceMsgSetAck));
+    handler->set_handler(SPICE_MSG_PING, &PlaybackChannel::handle_ping, sizeof(SpiceMsgPing));
+    handler->set_handler(SPICE_MSG_WAIT_FOR_CHANNELS, &PlaybackChannel::handle_wait_for_channels,
+                         sizeof(SpiceMsgWaitForChannels));
+    handler->set_handler(SPICE_MSG_DISCONNECTING, &PlaybackChannel::handle_disconnect,
+                         sizeof(SpiceMsgDisconnect));
+    handler->set_handler(SPICE_MSG_NOTIFY, &PlaybackChannel::handle_notify, sizeof(SpiceMsgNotify));
 
-    handler->set_handler(RED_PLAYBACK_MODE, &PlaybackChannel::handle_mode,
-                         sizeof(RedPlaybackMode));
+    handler->set_handler(SPICE_MSG_PLAYBACK_MODE, &PlaybackChannel::handle_mode,
+                         sizeof(SpiceMsgPlaybackMode));
 
-    set_capability(RED_PLAYBACK_CAP_CELT_0_5_1);
+    set_capability(SPICE_PLAYBACK_CAP_CELT_0_5_1);
 }
 
 PlaybackChannel::~PlaybackChannel(void)
@@ -194,10 +194,10 @@ void PlaybackChannel::set_data_handler()
 {
     PlaybackHandler* handler = static_cast<PlaybackHandler*>(get_message_handler());
 
-    if (_mode == RED_AUDIO_DATA_MODE_RAW) {
-        handler->set_handler(RED_PLAYBACK_DATA, &PlaybackChannel::handle_raw_data, 0);
-    } else if (_mode == RED_AUDIO_DATA_MODE_CELT_0_5_1) {
-        handler->set_handler(RED_PLAYBACK_DATA, &PlaybackChannel::handle_celt_data, 0);
+    if (_mode == SPICE_AUDIO_DATA_MODE_RAW) {
+        handler->set_handler(SPICE_MSG_PLAYBACK_DATA, &PlaybackChannel::handle_raw_data, 0);
+    } else if (_mode == SPICE_AUDIO_DATA_MODE_CELT_0_5_1) {
+        handler->set_handler(SPICE_MSG_PLAYBACK_DATA, &PlaybackChannel::handle_celt_data, 0);
     } else {
         THROW("invalid mode");
     }
@@ -205,9 +205,9 @@ void PlaybackChannel::set_data_handler()
 
 void PlaybackChannel::handle_mode(RedPeer::InMessage* message)
 {
-    RedPlaybackMode* playbacke_mode = (RedPlaybackMode*)message->data();
-    if (playbacke_mode->mode != RED_AUDIO_DATA_MODE_RAW &&
-        playbacke_mode->mode != RED_AUDIO_DATA_MODE_CELT_0_5_1) {
+    SpiceMsgPlaybackMode* playbacke_mode = (SpiceMsgPlaybackMode*)message->data();
+    if (playbacke_mode->mode != SPICE_AUDIO_DATA_MODE_RAW &&
+        playbacke_mode->mode != SPICE_AUDIO_DATA_MODE_CELT_0_5_1) {
         THROW("invalid mode");
     }
 
@@ -218,8 +218,8 @@ void PlaybackChannel::handle_mode(RedPeer::InMessage* message)
     }
 
     PlaybackHandler* handler = static_cast<PlaybackHandler*>(get_message_handler());
-    handler->set_handler(RED_PLAYBACK_START, &PlaybackChannel::handle_start,
-                         sizeof(RedPlaybackStart));
+    handler->set_handler(SPICE_MSG_PLAYBACK_START, &PlaybackChannel::handle_start,
+                         sizeof(SpiceMsgPlaybackStart));
 }
 
 void PlaybackChannel::null_handler(RedPeer::InMessage* message)
@@ -230,19 +230,19 @@ void PlaybackChannel::disable()
 {
     PlaybackHandler* handler = static_cast<PlaybackHandler*>(get_message_handler());
 
-    handler->set_handler(RED_PLAYBACK_START, &PlaybackChannel::null_handler, 0);
-    handler->set_handler(RED_PLAYBACK_STOP, &PlaybackChannel::null_handler, 0);
-    handler->set_handler(RED_PLAYBACK_MODE, &PlaybackChannel::null_handler, 0);
-    handler->set_handler(RED_PLAYBACK_DATA, &PlaybackChannel::null_handler, 0);
+    handler->set_handler(SPICE_MSG_PLAYBACK_START, &PlaybackChannel::null_handler, 0);
+    handler->set_handler(SPICE_MSG_PLAYBACK_STOP, &PlaybackChannel::null_handler, 0);
+    handler->set_handler(SPICE_MSG_PLAYBACK_MODE, &PlaybackChannel::null_handler, 0);
+    handler->set_handler(SPICE_MSG_PLAYBACK_DATA, &PlaybackChannel::null_handler, 0);
 }
 
 void PlaybackChannel::handle_start(RedPeer::InMessage* message)
 {
     PlaybackHandler* handler = static_cast<PlaybackHandler*>(get_message_handler());
-    RedPlaybackStart* start = (RedPlaybackStart*)message->data();
+    SpiceMsgPlaybackStart* start = (SpiceMsgPlaybackStart*)message->data();
 
-    handler->set_handler(RED_PLAYBACK_START, NULL, 0);
-    handler->set_handler(RED_PLAYBACK_STOP, &PlaybackChannel::handle_stop, 0);
+    handler->set_handler(SPICE_MSG_PLAYBACK_START, NULL, 0);
+    handler->set_handler(SPICE_MSG_PLAYBACK_STOP, &PlaybackChannel::handle_stop, 0);
 
 #ifdef WAVE_CAPTURE
     start_wave();
@@ -251,7 +251,7 @@ void PlaybackChannel::handle_start(RedPeer::InMessage* message)
         // for now support only one setting
         int celt_mode_err;
 
-        if (start->format != RED_AUDIO_FMT_S16) {
+        if (start->format != SPICE_AUDIO_FMT_S16) {
             THROW("unexpected format");
         }
         int bits_per_sample = 16;
@@ -285,10 +285,10 @@ void PlaybackChannel::handle_stop(RedPeer::InMessage* message)
 {
     PlaybackHandler* handler = static_cast<PlaybackHandler*>(get_message_handler());
 
-    handler->set_handler(RED_PLAYBACK_STOP, NULL, 0);
-    handler->set_handler(RED_PLAYBACK_DATA, NULL, 0);
-    handler->set_handler(RED_PLAYBACK_START, &PlaybackChannel::handle_start,
-                         sizeof(RedPlaybackStart));
+    handler->set_handler(SPICE_MSG_PLAYBACK_STOP, NULL, 0);
+    handler->set_handler(SPICE_MSG_PLAYBACK_DATA, NULL, 0);
+    handler->set_handler(SPICE_MSG_PLAYBACK_START, &PlaybackChannel::handle_start,
+                         sizeof(SpiceMsgPlaybackStart));
 
 #ifdef WAVE_CAPTURE
     end_wave();
@@ -299,7 +299,7 @@ void PlaybackChannel::handle_stop(RedPeer::InMessage* message)
 
 void PlaybackChannel::handle_raw_data(RedPeer::InMessage* message)
 {
-    RedPlaybackPacket* packet = (RedPlaybackPacket*)message->data();
+    SpiceMsgPlaybackPacket* packet = (SpiceMsgPlaybackPacket*)message->data();
     uint8_t* data = (uint8_t*)(packet + 1);
     uint32_t size = message->size() - sizeof(*packet);
 #ifdef WAVE_CAPTURE
@@ -319,7 +319,7 @@ void PlaybackChannel::handle_raw_data(RedPeer::InMessage* message)
 
 void PlaybackChannel::handle_celt_data(RedPeer::InMessage* message)
 {
-    RedPlaybackPacket* packet = (RedPlaybackPacket*)message->data();
+    SpiceMsgPlaybackPacket* packet = (SpiceMsgPlaybackPacket*)message->data();
     uint8_t* data = (uint8_t*)(packet + 1);
     uint32_t size = message->size() - sizeof(*packet);
     celt_int16_t pcm[256 * 2];
@@ -339,7 +339,7 @@ void PlaybackChannel::handle_celt_data(RedPeer::InMessage* message)
 
 class PlaybackFactory: public ChannelFactory {
 public:
-    PlaybackFactory() : ChannelFactory(RED_CHANNEL_PLAYBACK) {}
+    PlaybackFactory() : ChannelFactory(SPICE_CHANNEL_PLAYBACK) {}
     virtual RedChannel* construct(RedClient& client, uint32_t id)
     {
         return new PlaybackChannel(client, id);

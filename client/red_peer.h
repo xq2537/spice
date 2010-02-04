@@ -196,12 +196,12 @@ public:
     OutMessage(uint32_t type, uint32_t size);
     virtual ~OutMessage();
 
-    RedDataHeader& header() { return *(RedDataHeader *)_data;}
-    uint8_t* data() { return _data + sizeof(RedDataHeader);}
+    SpiceDataHeader& header() { return *(SpiceDataHeader *)_data;}
+    uint8_t* data() { return _data + sizeof(SpiceDataHeader);}
     void resize(uint32_t size);
 
 private:
-    uint32_t message_size() { return header().size + sizeof(RedDataHeader);}
+    uint32_t message_size() { return header().size + sizeof(SpiceDataHeader);}
     uint8_t* base() { return _data;}
 
 private:

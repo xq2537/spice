@@ -27,10 +27,10 @@
 
 typedef struct QRegion {
     uint32_t num_rects;
-    Rect bbox;
-    Rect *rects;
+    SpiceRect bbox;
+    SpiceRect *rects;
     uint32_t rects_size;
-    Rect buf[RECTS_BUF_SIZE];
+    SpiceRect buf[RECTS_BUF_SIZE];
 } QRegion;
 
 #ifdef REGION_USE_IMPROVED
@@ -64,8 +64,8 @@ void region_and(QRegion *rgn, const QRegion *other_rgn);
 void region_xor(QRegion *rgn, const QRegion *other_rgn);
 void region_exclude(QRegion *rgn, const QRegion *other_rgn);
 
-void region_add(QRegion *rgn, const Rect *r);
-void region_remove(QRegion *rgn, const Rect *r);
+void region_add(QRegion *rgn, const SpiceRect *r);
+void region_remove(QRegion *rgn, const SpiceRect *r);
 
 void region_offset(QRegion *rgn, int32_t dx, int32_t dy);
 

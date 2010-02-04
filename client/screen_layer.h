@@ -38,12 +38,12 @@ public:
     void set_area(const QRegion& area);
     void offset_area(int dx, int dy);
     void clear_area();
-    void set_rect_area(const Rect& r);
-    void add_rect_area(const Rect& r);
-    void remove_rect_area(const Rect& r);
+    void set_rect_area(const SpiceRect& r);
+    void add_rect_area(const SpiceRect& r);
+    void remove_rect_area(const SpiceRect& r);
     void begin_update(QRegion& direct_rgn, QRegion& composit_rgn);
     void invalidate();
-    uint64_t invalidate(const Rect& r, bool urgent = false);
+    uint64_t invalidate(const SpiceRect& r, bool urgent = false);
     void invalidate(const QRegion& r);
     bool contains_point(int x, int y);
 
@@ -70,7 +70,7 @@ public:
     virtual void on_mouse_button_release(int button, int buttons_state) {}
 
 private:
-    uint64_t invalidate_rect(const Rect& r, bool urgent);
+    uint64_t invalidate_rect(const SpiceRect& r, bool urgent);
     void notify_changed();
 
 private:

@@ -83,8 +83,8 @@ static inline void FUNC_NAME(red_rgb_to_yuv420_line)(const uint8_t* line0, const
     }
 }
 
-static inline int FUNC_NAME(red_rgb_to_yuv420)(RedWorker *worker, const Rect *src,
-                                               const Bitmap *image, AVFrame *frame,
+static inline int FUNC_NAME(red_rgb_to_yuv420)(RedWorker *worker, const SpiceRect *src,
+                                               const SpiceBitmap *image, AVFrame *frame,
                                                long phys_delta, int memslot_id, int id,
                                                Stream *stream, uint32_t group_id)
 {

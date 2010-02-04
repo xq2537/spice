@@ -28,13 +28,13 @@ typedef void (*bits_cache_put_fn_t)(void *bits_cache_opaque, uint64_t id, cairo_
 typedef cairo_surface_t *(*bits_cache_get_fn_t)(void *bits_cache_opaque, uint64_t id);
 #endif
 #ifdef CAIRO_CANVAS_CACHE
-typedef void (*palette_cache_put_fn_t)(void *palette_cache_opaque, Palette *palette);
-typedef Palette *(*palette_cache_get_fn_t)(void *palette_cache_opaque, uint64_t id);
-typedef void (*palette_cache_release_fn_t)(Palette *palette);
+typedef void (*palette_cache_put_fn_t)(void *palette_cache_opaque, SpicePalette *palette);
+typedef SpicePalette *(*palette_cache_get_fn_t)(void *palette_cache_opaque, uint64_t id);
+typedef void (*palette_cache_release_fn_t)(SpicePalette *palette);
 #endif
 
 typedef void (*glz_decode_fn_t)(void *glz_decoder_opaque, uint8_t *data,
-                                Palette *plt, void *usr_data);
+                                SpicePalette *plt, void *usr_data);
 #ifndef CAIRO_CANVAS_NO_CHUNKS
 typedef void *(*get_virt_fn_t)(void *get_virt_opaque, unsigned long addr, uint32_t add_size);
 typedef void (*validate_virt_fn_t)(void *validate_virt_opaque, unsigned long virt,

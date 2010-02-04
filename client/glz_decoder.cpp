@@ -188,7 +188,7 @@ typedef uint16_t rgb16_pixel_t;
 
 typedef size_t (*decode_function)(GlzDecoderWindow &window, uint8_t* in_buf,
                                   uint8_t *out_buf, int size,
-                                  DecodedImageWinId image_win_id, Palette *plt,
+                                  DecodedImageWinId image_win_id, SpicePalette *plt,
                                   GlzDecoderDebug  &debug_calls);
 
 // ordered according to LZ_IMAGE_TYPE
@@ -218,7 +218,7 @@ const decode_function DECODE_TO_SAME[] = {
     glz_rgb32_decode
 };
 
-void GlzDecoder::decode(uint8_t *data, Palette *palette, void *opaque_usr_info)
+void GlzDecoder::decode(uint8_t *data, SpicePalette *palette, void *opaque_usr_info)
 {
     int out_size;
     DecodedImageWinId image_window_id;

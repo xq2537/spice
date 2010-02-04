@@ -27,7 +27,7 @@
 #define PRIVATE_FUNC_NAME(name) __pixmap_cache_##name
 #define CHANNEL DisplayChannel
 #define CACH_GENERATION pixmap_cache_generation
-#define INVAL_ALL_VERB RED_DISPLAY_INVAL_ALL_PIXMAPS
+#define INVAL_ALL_VERB SPICE_MSG_DISPLAY_INVAL_ALL_PIXMAPS
 #else
 
 #error "no cache type."
@@ -112,7 +112,7 @@ static int FUNC_NAME(add)(CACHE *cache, uint64_t id, uint32_t size, CHANNEL *cha
         cache->items--;
         cache->available += tail->size;
         cache->sync[channel->base.id] = serial;
-        display_channel_push_release(channel, RED_RES_TYPE_PIXMAP, tail->id, tail->sync);
+        display_channel_push_release(channel, SPICE_RES_TYPE_PIXMAP, tail->id, tail->sync);
         free(tail);
     }
     ++cache->items;
@@ -149,7 +149,7 @@ static void PRIVATE_FUNC_NAME(clear)(CACHE *cache)
     cache->items = 0;
 }
 
-static void FUNC_NAME(reset)(CACHE *cache, CHANNEL *channel, RedWaitForChannels* sync_data)
+static void FUNC_NAME(reset)(CACHE *cache, CHANNEL *channel, SpiceMsgWaitForChannels* sync_data)
 {
     uint8_t wait_count;
     uint64_t serial;
@@ -167,7 +167,7 @@ static void FUNC_NAME(reset)(CACHE *cache, CHANNEL *channel, RedWaitForChannels*
     wait_count = 0;
     for (i = 0; i < MAX_CACHE_CLIENTS; i++) {
         if (cache->sync[i] && i != channel->base.id) {
-            sync_data->wait_list[wait_count].channel_type = RED_CHANNEL_DISPLAY;
+            sync_data->wait_list[wait_count].channel_type = SPICE_CHANNEL_DISPLAY;
             sync_data->wait_list[wait_count].channel_id = i;
             sync_data->wait_list[wait_count++].message_serial = cache->sync[i];
         }

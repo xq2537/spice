@@ -115,8 +115,8 @@ typedef struct RedSocketRawSndBuf {
 /* data received from the client */
 typedef struct RedSocketRawRcvBuf {
     RawTunneledBuffer base;
-    uint8_t buf[MAX_SOCKET_DATA_SIZE + sizeof(RedcTunnelSocketData)];
-    RedcTunnelSocketData *msg_info;
+    uint8_t buf[MAX_SOCKET_DATA_SIZE + sizeof(SpiceMsgcTunnelSocketData)];
+    SpiceMsgcTunnelSocketData *msg_info;
 } RedSocketRawRcvBuf;
 
 typedef struct ReadyTunneledChunk ReadyTunneledChunk;
@@ -276,7 +276,7 @@ struct RedSocket {
     uint32_t mig_client_status_msg;         // the last status change msg that was received from
                                             //the client during migration, and thus was unhandled.
                                             // It is 0 if the status didn't change during migration
-    uint32_t mig_open_ack_tokens;           // if REDC_TUNNEL_SOCKET_OPEN_ACK was received during
+    uint32_t mig_open_ack_tokens;           // if SPICE_MSGC_TUNNEL_SOCKET_OPEN_ACK was received during
                                             // migration, we store the tokens we received in the
                                             // msg.
 };
@@ -492,14 +492,14 @@ struct TunnelChannel {
 
     struct {
         union {
-            RedTunnelInit init;
-            RedTunnelServiceIpMap service_ip;
-            RedTunnelSocketOpen socket_open;
-            RedTunnelSocketFin socket_fin;
-            RedTunnelSocketClose socket_close;
-            RedTunnelSocketClosedAck socket_close_ack;
-            RedTunnelSocketData socket_data;
-            RedTunnelSocketTokens socket_token;
+            SpiceMsgTunnelInit init;
+            SpiceMsgTunnelServiceIpMap service_ip;
+            SpiceMsgTunnelSocketOpen socket_open;
+            SpiceMsgTunnelSocketFin socket_fin;
+            SpiceMsgTunnelSocketClose socket_close;
+            SpiceMsgTunnelSocketClosedAck socket_close_ack;
+            SpiceMsgTunnelSocketData socket_data;
+            SpiceMsgTunnelSocketTokens socket_token;
             TunnelMigrateData migrate_data;
         } u;
     } send_data;
@@ -712,7 +712,7 @@ static inline RedSocketRawRcvBuf *__tunnel_worker_alloc_socket_rcv_buf(TunnelWor
             red_error("malloc of send buf failed");
         }
     }
-    ret->msg_info = (RedcTunnelSocketData *)ret->buf;
+    ret->msg_info = (SpiceMsgcTunnelSocketData *)ret->buf;
     ret->base.usr_opaque = NULL;
     ret->base.data = ret->msg_info->data;
     ret->base.size = 0;
@@ -953,7 +953,7 @@ static TunneledBufferProcessQueue *tunnel_socket_alloc_simple_print_request_proc
                                                                                  RedSocket *sckt)
 {
     return __tunnel_socket_alloc_simple_process_queue(sckt,
-                                                      RED_TUNNEL_SERVICE_TYPE_IPP,
+                                                      SPICE_TUNNEL_SERVICE_TYPE_IPP,
                                                       PROCESS_DIRECTION_TYPE_REQUEST);
 }
 
@@ -961,7 +961,7 @@ static TunneledBufferProcessQueue *tunnel_socket_alloc_simple_print_reply_proces
                                                                                   RedSocket *sckt)
 {
     return __tunnel_socket_alloc_simple_process_queue(sckt,
-                                                      RED_TUNNEL_SERVICE_TYPE_IPP,
+                                                      SPICE_TUNNEL_SERVICE_TYPE_IPP,
                                                       PROCESS_DIRECTION_TYPE_REPLY);
 }
 
@@ -1015,7 +1015,7 @@ void *red_tunnel_attach(CoreInterface *core_interface, NetWireInterface *vlan_in
 
     worker->null_interface.worker = worker;
 
-    worker->channel_interface.type = RED_CHANNEL_TUNNEL;
+    worker->channel_interface.type = SPICE_CHANNEL_TUNNEL;
     worker->channel_interface.id = 0;
     worker->channel_interface.link = handle_tunnel_channel_link;
     worker->channel_interface.shutdown = handle_tunnel_channel_shutdown;
@@ -1110,7 +1110,7 @@ static inline TunnelService *__tunnel_worker_add_service(TunnelWorker *worker, u
 }
 
 static TunnelService *tunnel_worker_add_service(TunnelWorker *worker, uint32_t size,
-                                                RedcTunnelAddGenericService *redc_service)
+                                                SpiceMsgcTunnelAddGenericService *redc_service)
 {
     return __tunnel_worker_add_service(worker, size, redc_service->type,
                                        redc_service->id, redc_service->group,
@@ -1136,7 +1136,7 @@ static void tunnel_worker_free_print_service(TunnelWorker *worker, TunnelPrintSe
 }
 
 static TunnelPrintService *tunnel_worker_add_print_service(TunnelWorker *worker,
-                                                           RedcTunnelAddPrintService *redc_service)
+                                                           SpiceMsgcTunnelAddPrintService *redc_service)
 {
     TunnelPrintService *service;
 
@@ -1147,8 +1147,8 @@ static TunnelPrintService *tunnel_worker_add_print_service(TunnelWorker *worker,
         return NULL;
     }
 
-    if (redc_service->ip.type == RED_TUNNEL_IP_TYPE_IPv4) {
-        memcpy(service->ip, redc_service->ip.data, sizeof(RedTunnelIPv4));
+    if (redc_service->ip.type == SPICE_TUNNEL_IP_TYPE_IPv4) {
+        memcpy(service->ip, redc_service->ip.data, sizeof(SpiceTunnelIPv4));
     } else {
         red_printf("unexpected ip type=%d", redc_service->ip.type);
         tunnel_worker_free_print_service(worker, service);
@@ -1162,14 +1162,14 @@ static TunnelPrintService *tunnel_worker_add_print_service(TunnelWorker *worker,
 }
 
 static int tunnel_channel_handle_service_add(TunnelChannel *channel,
-                                             RedcTunnelAddGenericService *service_msg)
+                                             SpiceMsgcTunnelAddGenericService *service_msg)
 {
     TunnelService *out_service = NULL;
-    if (service_msg->type == RED_TUNNEL_SERVICE_TYPE_IPP) {
+    if (service_msg->type == SPICE_TUNNEL_SERVICE_TYPE_IPP) {
         out_service = &tunnel_worker_add_print_service(channel->worker,
-                                                       (RedcTunnelAddPrintService *)
+                                                       (SpiceMsgcTunnelAddPrintService *)
                                                        service_msg)->base;
-    } else if (service_msg->type == RED_TUNNEL_SERVICE_TYPE_GENERIC) {
+    } else if (service_msg->type == SPICE_TUNNEL_SERVICE_TYPE_GENERIC) {
         out_service = tunnel_worker_add_service(channel->worker, sizeof(TunnelService),
                                                 service_msg);
     } else {
@@ -1214,9 +1214,9 @@ static inline void tunnel_worker_clear_routed_network(TunnelWorker *worker)
 {
     while (!ring_is_empty(&worker->services)) {
         TunnelService *service = (TunnelService *)ring_get_head(&worker->services);
-        if (service->type == RED_TUNNEL_SERVICE_TYPE_GENERIC) {
+        if (service->type == SPICE_TUNNEL_SERVICE_TYPE_GENERIC) {
             tunnel_worker_free_service(worker, service);
-        } else if (service->type == RED_TUNNEL_SERVICE_TYPE_IPP) {
+        } else if (service->type == SPICE_TUNNEL_SERVICE_TYPE_IPP) {
             tunnel_worker_free_print_service(worker, (TunnelPrintService *)service);
         } else {
             red_error("unexpected service type");
@@ -1429,13 +1429,13 @@ static int tunnel_channel_handle_socket_connect_ack(TunnelChannel *channel, RedS
     red_printf("TUNNEL_DBG");
 #endif
     if (channel->mig_inprogress || channel->base.migrate) {
-        sckt->mig_client_status_msg = REDC_TUNNEL_SOCKET_OPEN_ACK;
+        sckt->mig_client_status_msg = SPICE_MSGC_TUNNEL_SOCKET_OPEN_ACK;
         sckt->mig_open_ack_tokens = tokens;
         return TRUE;
     }
 
     if (sckt->client_status != CLIENT_SCKT_STATUS_WAIT_OPEN) {
-        red_printf("unexpected REDC_TUNNEL_SOCKET_OPEN_ACK status=%d", sckt->client_status);
+        red_printf("unexpected SPICE_MSGC_TUNNEL_SOCKET_OPEN_ACK status=%d", sckt->client_status);
         return FALSE;
     }
     sckt->client_status = CLIENT_SCKT_STATUS_OPEN;
@@ -1462,12 +1462,12 @@ static int tunnel_channel_handle_socket_connect_nack(TunnelChannel *channel, Red
     PRINT_SCKT(sckt);
 #endif
     if (channel->mig_inprogress || channel->base.migrate) {
-        sckt->mig_client_status_msg = REDC_TUNNEL_SOCKET_OPEN_NACK;
+        sckt->mig_client_status_msg = SPICE_MSGC_TUNNEL_SOCKET_OPEN_NACK;
         return TRUE;
     }
 
     if (sckt->client_status != CLIENT_SCKT_STATUS_WAIT_OPEN) {
-        red_printf("unexpected REDC_TUNNEL_SOCKET_OPEN_NACK status=%d", sckt->client_status);
+        red_printf("unexpected SPICE_MSGC_TUNNEL_SOCKET_OPEN_NACK status=%d", sckt->client_status);
         return FALSE;
     }
     sckt->client_status = CLIENT_SCKT_STATUS_CLOSED;
@@ -1487,12 +1487,12 @@ static int tunnel_channel_handle_socket_fin(TunnelChannel *channel, RedSocket *s
     PRINT_SCKT(sckt);
 #endif
     if (channel->mig_inprogress || channel->base.migrate) {
-        sckt->mig_client_status_msg = REDC_TUNNEL_SOCKET_FIN;
+        sckt->mig_client_status_msg = SPICE_MSGC_TUNNEL_SOCKET_FIN;
         return TRUE;
     }
 
     if (sckt->client_status != CLIENT_SCKT_STATUS_OPEN) {
-        red_printf("unexpected REDC_TUNNEL_SOCKET_FIN status=%d", sckt->client_status);
+        red_printf("unexpected SPICE_MSGC_TUNNEL_SOCKET_FIN status=%d", sckt->client_status);
         return FALSE;
     }
     sckt->client_status = CLIENT_SCKT_STATUS_SHUTDOWN_SEND;
@@ -1525,7 +1525,7 @@ static int tunnel_channel_handle_socket_closed(TunnelChannel *channel, RedSocket
 #endif
 
     if (channel->mig_inprogress || channel->base.migrate) {
-        sckt->mig_client_status_msg = REDC_TUNNEL_SOCKET_CLOSED;
+        sckt->mig_client_status_msg = SPICE_MSGC_TUNNEL_SOCKET_CLOSED;
         return TRUE;
     }
 
@@ -1571,7 +1571,7 @@ static int tunnel_channel_handle_socket_closed_ack(TunnelChannel *channel, RedSo
     PRINT_SCKT(sckt);
 #endif
     if (channel->mig_inprogress || channel->base.migrate) {
-        sckt->mig_client_status_msg = REDC_TUNNEL_SOCKET_CLOSED_ACK;
+        sckt->mig_client_status_msg = SPICE_MSGC_TUNNEL_SOCKET_CLOSED_ACK;
         return TRUE;
     }
 
@@ -1583,7 +1583,7 @@ static int tunnel_channel_handle_socket_closed_ack(TunnelChannel *channel, RedSo
     }
 
     if (sckt->slirp_status != SLIRP_SCKT_STATUS_CLOSED) {
-        red_printf("unexcpected REDC_TUNNEL_SOCKET_CLOSED_ACK slirp_status=%d",
+        red_printf("unexcpected SPICE_MSGC_TUNNEL_SOCKET_CLOSED_ACK slirp_status=%d",
                    sckt->slirp_status);
         return FALSE;
     }
@@ -1597,7 +1597,7 @@ static int tunnel_channel_handle_socket_receive_data(TunnelChannel *channel, Red
 {
     if ((sckt->client_status == CLIENT_SCKT_STATUS_SHUTDOWN_SEND) ||
         (sckt->client_status == CLIENT_SCKT_STATUS_CLOSED)) {
-        red_printf("unexcpected REDC_TUNNEL_SOCKET_DATA clinet_status=%d",
+        red_printf("unexcpected SPICE_MSGC_TUNNEL_SOCKET_DATA clinet_status=%d",
                    sckt->client_status);
         return FALSE;
     }
@@ -1641,7 +1641,7 @@ static inline int __client_socket_can_receive(RedSocket *sckt)
 }
 
 static int tunnel_channel_handle_socket_token(TunnelChannel *channel, RedSocket *sckt,
-                                              RedcTunnelSocketTokens *message)
+                                              SpiceMsgcTunnelSocketTokens *message)
 {
     sckt->out_data.num_tokens += message->num_tokens;
 
@@ -1655,13 +1655,13 @@ static int tunnel_channel_handle_socket_token(TunnelChannel *channel, RedSocket 
     return TRUE;
 }
 
-static uint8_t *tunnel_channel_alloc_msg_rcv_buf(RedChannel *channel, RedDataHeader *msg_header)
+static uint8_t *tunnel_channel_alloc_msg_rcv_buf(RedChannel *channel, SpiceDataHeader *msg_header)
 {
     TunnelChannel *tunnel_channel = (TunnelChannel *)channel;
-    if (msg_header->type == REDC_TUNNEL_SOCKET_DATA) {
+    if (msg_header->type == SPICE_MSGC_TUNNEL_SOCKET_DATA) {
         return (__tunnel_worker_alloc_socket_rcv_buf(tunnel_channel->worker)->buf);
-    } else if ((msg_header->type == REDC_MIGRATE_DATA) ||
-               (msg_header->type == REDC_TUNNEL_SERVICE_ADD)) {
+    } else if ((msg_header->type == SPICE_MSGC_MIGRATE_DATA) ||
+               (msg_header->type == SPICE_MSGC_TUNNEL_SERVICE_ADD)) {
         uint8_t *ret = malloc(msg_header->size);
         if (!ret) {
             red_error("failed allocating");
@@ -1673,11 +1673,11 @@ static uint8_t *tunnel_channel_alloc_msg_rcv_buf(RedChannel *channel, RedDataHea
 }
 
 // called by the receive routine of the channel, before the buffer was assigned to a socket
-static void tunnel_channel_release_msg_rcv_buf(RedChannel *channel, RedDataHeader *msg_header,
+static void tunnel_channel_release_msg_rcv_buf(RedChannel *channel, SpiceDataHeader *msg_header,
                                                uint8_t *msg)
 {
     TunnelChannel *tunnel_channel = (TunnelChannel *)channel;
-    if (msg_header->type == REDC_TUNNEL_SOCKET_DATA) {
+    if (msg_header->type == SPICE_MSGC_TUNNEL_SOCKET_DATA) {
         ASSERT(!(CONTAINEROF(msg, RedSocketRawRcvBuf, buf)->base.usr_opaque));
         __tunnel_worker_free_socket_rcv_buf(tunnel_channel->worker,
                                             CONTAINEROF(msg, RedSocketRawRcvBuf, buf));
@@ -1690,9 +1690,9 @@ static void __tunnel_channel_fill_service_migrate_item(TunnelChannel *channel,
 {
     migrate_item->service = service;
     TunnelMigrateService *general_data;
-    if (service->type == RED_TUNNEL_SERVICE_TYPE_GENERIC) {
+    if (service->type == SPICE_TUNNEL_SERVICE_TYPE_GENERIC) {
         general_data = &migrate_item->u.generic_service;
-    } else if (service->type == RED_TUNNEL_SERVICE_TYPE_IPP) {
+    } else if (service->type == SPICE_TUNNEL_SERVICE_TYPE_IPP) {
         general_data = &migrate_item->u.print_service.base;
         memcpy(migrate_item->u.print_service.ip, ((TunnelPrintService *)service)->ip, 4);
     } else {
@@ -1728,8 +1728,8 @@ static void __tunnel_channel_fill_socket_migrate_item(TunnelChannel *channel, Re
 
     // checking if there is a need to save the queues
     if ((sckt->client_status != CLIENT_SCKT_STATUS_CLOSED) &&
-        (sckt->mig_client_status_msg != REDC_TUNNEL_SOCKET_CLOSED) &&
-        (sckt->mig_client_status_msg != REDC_TUNNEL_SOCKET_CLOSED_ACK)) {
+        (sckt->mig_client_status_msg != SPICE_MSGC_TUNNEL_SOCKET_CLOSED) &&
+        (sckt->mig_client_status_msg != SPICE_MSGC_TUNNEL_SOCKET_CLOSED_ACK)) {
         mig_sckt->out_data.process_queue_size =
             sckt->out_data.process_queue->get_migrate_data_proc(sckt->out_data.process_queue,
                                                                 &migrate_item->out_process_queue);
@@ -1976,9 +1976,9 @@ static void tunnel_channel_restore_migrated_service(TunnelChannel *channel,
     int service_size;
     TunnelService *service;
     struct in_addr virt_ip;
-    if (mig_service->type == RED_TUNNEL_SERVICE_TYPE_GENERIC) {
+    if (mig_service->type == SPICE_TUNNEL_SERVICE_TYPE_GENERIC) {
         service_size = sizeof(TunnelService);
-    } else if (mig_service->type == RED_TUNNEL_SERVICE_TYPE_IPP) {
+    } else if (mig_service->type == SPICE_TUNNEL_SERVICE_TYPE_IPP) {
         service_size = sizeof(TunnelPrintService);
     } else {
         SET_TUNNEL_ERROR(channel, "unexpected service type");
@@ -1996,7 +1996,7 @@ static void tunnel_channel_restore_migrated_service(TunnelChannel *channel,
         return;
     }
 
-    if (service->type == RED_TUNNEL_SERVICE_TYPE_IPP) {
+    if (service->type == SPICE_TUNNEL_SERVICE_TYPE_IPP) {
         TunnelMigratePrintService *mig_print_service = (TunnelMigratePrintService *)mig_service;
         TunnelPrintService *print_service = (TunnelPrintService *)service;
 
@@ -2098,14 +2098,14 @@ static void tunnel_channel_restore_socket_state(TunnelChannel *channel, RedSocke
     switch (sckt->mig_client_status_msg) {
     case 0:
         break;
-    case REDC_TUNNEL_SOCKET_OPEN_ACK:
+    case SPICE_MSGC_TUNNEL_SOCKET_OPEN_ACK:
         ret = tunnel_channel_handle_socket_connect_ack(channel, sckt,
                                                        sckt->mig_open_ack_tokens);
         break;
-    case REDC_TUNNEL_SOCKET_OPEN_NACK:
+    case SPICE_MSGC_TUNNEL_SOCKET_OPEN_NACK:
         ret = tunnel_channel_handle_socket_connect_nack(channel, sckt);
         break;
-    case REDC_TUNNEL_SOCKET_FIN:
+    case SPICE_MSGC_TUNNEL_SOCKET_FIN:
         if (sckt->client_status == CLIENT_SCKT_STATUS_WAIT_OPEN) {
             ret = tunnel_channel_handle_socket_connect_ack(channel, sckt,
                                                            sckt->mig_open_ack_tokens);
@@ -2114,7 +2114,7 @@ static void tunnel_channel_restore_socket_state(TunnelChannel *channel, RedSocke
             ret = tunnel_channel_handle_socket_fin(channel, sckt);
         }
         break;
-    case REDC_TUNNEL_SOCKET_CLOSED:
+    case SPICE_MSGC_TUNNEL_SOCKET_CLOSED:
         // can't just send nack since we need to send close ack to client
         if (sckt->client_status == CLIENT_SCKT_STATUS_WAIT_OPEN) {
             ret = tunnel_channel_handle_socket_connect_ack(channel, sckt,
@@ -2123,7 +2123,7 @@ static void tunnel_channel_restore_socket_state(TunnelChannel *channel, RedSocke
         ret = ret & tunnel_channel_handle_socket_closed(channel, sckt);
 
         break;
-    case REDC_TUNNEL_SOCKET_CLOSED_ACK:
+    case SPICE_MSGC_TUNNEL_SOCKET_CLOSED_ACK:
         ret = tunnel_channel_handle_socket_closed_ack(channel, sckt);
         break;
     default:
@@ -2259,24 +2259,24 @@ error:
 }
 
 //  msg was allocated by tunnel_channel_alloc_msg_rcv_buf
-static int tunnel_channel_handle_message(RedChannel *channel, RedDataHeader *header, uint8_t *msg)
+static int tunnel_channel_handle_message(RedChannel *channel, SpiceDataHeader *header, uint8_t *msg)
 {
     TunnelChannel *tunnel_channel = (TunnelChannel *)channel;
     RedSocket *sckt = NULL;
     // retrieve the sckt
     switch (header->type) {
-    case REDC_MIGRATE_FLUSH_MARK:
-    case REDC_MIGRATE_DATA:
-    case REDC_TUNNEL_SERVICE_ADD:
-    case REDC_TUNNEL_SERVICE_REMOVE:
+    case SPICE_MSGC_MIGRATE_FLUSH_MARK:
+    case SPICE_MSGC_MIGRATE_DATA:
+    case SPICE_MSGC_TUNNEL_SERVICE_ADD:
+    case SPICE_MSGC_TUNNEL_SERVICE_REMOVE:
         break;
-    case REDC_TUNNEL_SOCKET_OPEN_ACK:
-    case REDC_TUNNEL_SOCKET_OPEN_NACK:
-    case REDC_TUNNEL_SOCKET_DATA:
-    case REDC_TUNNEL_SOCKET_FIN:
-    case REDC_TUNNEL_SOCKET_CLOSED:
-    case REDC_TUNNEL_SOCKET_CLOSED_ACK:
-    case REDC_TUNNEL_SOCKET_TOKEN:
+    case SPICE_MSGC_TUNNEL_SOCKET_OPEN_ACK:
+    case SPICE_MSGC_TUNNEL_SOCKET_OPEN_NACK:
+    case SPICE_MSGC_TUNNEL_SOCKET_DATA:
+    case SPICE_MSGC_TUNNEL_SOCKET_FIN:
+    case SPICE_MSGC_TUNNEL_SOCKET_CLOSED:
+    case SPICE_MSGC_TUNNEL_SOCKET_CLOSED_ACK:
+    case SPICE_MSGC_TUNNEL_SOCKET_TOKEN:
         // the first field in these messages is connection id
         sckt = tunnel_channel->worker->sockets + (*((uint16_t *)msg));
         if (!sckt->allocated) {
@@ -2289,73 +2289,73 @@ static int tunnel_channel_handle_message(RedChannel *channel, RedDataHeader *hea
     }
 
     switch (header->type) {
-    case REDC_TUNNEL_SERVICE_ADD:
-        if (header->size < sizeof(RedcTunnelAddGenericService)) {
+    case SPICE_MSGC_TUNNEL_SERVICE_ADD:
+        if (header->size < sizeof(SpiceMsgcTunnelAddGenericService)) {
             red_printf("bad message size");
             free(msg);
             return FALSE;
         }
         return tunnel_channel_handle_service_add(tunnel_channel,
-                                                 (RedcTunnelAddGenericService *)msg);
-    case REDC_TUNNEL_SERVICE_REMOVE:
+                                                 (SpiceMsgcTunnelAddGenericService *)msg);
+    case SPICE_MSGC_TUNNEL_SERVICE_REMOVE:
         red_printf("REDC_TUNNEL_REMOVE_SERVICE not supported yet");
         return FALSE;
-    case REDC_TUNNEL_SOCKET_OPEN_ACK:
-        if (header->size != sizeof(RedcTunnelSocketOpenAck)) {
+    case SPICE_MSGC_TUNNEL_SOCKET_OPEN_ACK:
+        if (header->size != sizeof(SpiceMsgcTunnelSocketOpenAck)) {
             red_printf("bad message size");
             return FALSE;
         }
 
         return tunnel_channel_handle_socket_connect_ack(tunnel_channel, sckt,
-                                                        ((RedcTunnelSocketOpenAck *)msg)->tokens);
+                                                        ((SpiceMsgcTunnelSocketOpenAck *)msg)->tokens);
 
-    case REDC_TUNNEL_SOCKET_OPEN_NACK:
-        if (header->size != sizeof(RedcTunnelSocketOpenNack)) {
+    case SPICE_MSGC_TUNNEL_SOCKET_OPEN_NACK:
+        if (header->size != sizeof(SpiceMsgcTunnelSocketOpenNack)) {
             red_printf("bad message size");
             return FALSE;
         }
 
         return tunnel_channel_handle_socket_connect_nack(tunnel_channel, sckt);
-    case REDC_TUNNEL_SOCKET_DATA:
+    case SPICE_MSGC_TUNNEL_SOCKET_DATA:
     {
-        if (header->size < sizeof(RedcTunnelSocketData)) {
+        if (header->size < sizeof(SpiceMsgcTunnelSocketData)) {
             red_printf("bad message size");
             return FALSE;
         }
 
         return tunnel_channel_handle_socket_receive_data(tunnel_channel, sckt,
                                                     CONTAINEROF(msg, RedSocketRawRcvBuf, buf),
-                                                    header->size - sizeof(RedcTunnelSocketData));
+                                                    header->size - sizeof(SpiceMsgcTunnelSocketData));
     }
-    case REDC_TUNNEL_SOCKET_FIN:
-        if (header->size != sizeof(RedcTunnelSocketFin)) {
+    case SPICE_MSGC_TUNNEL_SOCKET_FIN:
+        if (header->size != sizeof(SpiceMsgcTunnelSocketFin)) {
             red_printf("bad message size");
             return FALSE;
         }
         return tunnel_channel_handle_socket_fin(tunnel_channel, sckt);
-    case REDC_TUNNEL_SOCKET_CLOSED:
-        if (header->size != sizeof(RedcTunnelSocketClosed)) {
+    case SPICE_MSGC_TUNNEL_SOCKET_CLOSED:
+        if (header->size != sizeof(SpiceMsgcTunnelSocketClosed)) {
             red_printf("bad message size");
             return FALSE;
         }
         return tunnel_channel_handle_socket_closed(tunnel_channel, sckt);
-    case REDC_TUNNEL_SOCKET_CLOSED_ACK:
-        if (header->size != sizeof(RedcTunnelSocketClosedAck)) {
+    case SPICE_MSGC_TUNNEL_SOCKET_CLOSED_ACK:
+        if (header->size != sizeof(SpiceMsgcTunnelSocketClosedAck)) {
             red_printf("bad message size");
             return FALSE;
         }
         return tunnel_channel_handle_socket_closed_ack(tunnel_channel, sckt);
-    case REDC_TUNNEL_SOCKET_TOKEN:
-        if (header->size != sizeof(RedcTunnelSocketTokens)) {
+    case SPICE_MSGC_TUNNEL_SOCKET_TOKEN:
+        if (header->size != sizeof(SpiceMsgcTunnelSocketTokens)) {
             red_printf("bad message size");
             return FALSE;
         }
 
         return tunnel_channel_handle_socket_token(tunnel_channel, sckt,
-                                                  (RedcTunnelSocketTokens *)msg);
-    case REDC_MIGRATE_FLUSH_MARK:
+                                                  (SpiceMsgcTunnelSocketTokens *)msg);
+    case SPICE_MSGC_MIGRATE_FLUSH_MARK:
         return tunnel_channel_handle_migrate_mark(tunnel_channel);
-    case REDC_MIGRATE_DATA:
+    case SPICE_MSGC_MIGRATE_DATA:
         if (header->size < sizeof(TunnelMigrateData)) {
             red_printf("bad message size");
             free(msg);
@@ -2379,8 +2379,8 @@ static void tunnel_channel_send_set_ack(TunnelChannel *channel, PipeItem *item)
     channel->base.send_data.u.ack.generation = ++channel->base.ack_data.generation;
     channel->base.send_data.u.ack.window = CLIENT_ACK_WINDOW;
 
-    red_channel_init_send_data(&channel->base, RED_SET_ACK, item);
-    red_channel_add_buf(&channel->base, &channel->base.send_data.u.ack, sizeof(RedSetAck));
+    red_channel_init_send_data(&channel->base, SPICE_MSG_SET_ACK, item);
+    red_channel_add_buf(&channel->base, &channel->base.send_data.u.ack, sizeof(SpiceMsgSetAck));
 
     red_channel_begin_send_massage(&channel->base);
 }
@@ -2388,11 +2388,11 @@ static void tunnel_channel_send_set_ack(TunnelChannel *channel, PipeItem *item)
 static void tunnel_channel_send_migrate(TunnelChannel *channel, PipeItem *item)
 {
     ASSERT(channel);
-    channel->base.send_data.u.migrate.flags = RED_MIGRATE_NEED_FLUSH |
-        RED_MIGRATE_NEED_DATA_TRANSFER;
+    channel->base.send_data.u.migrate.flags = SPICE_MIGRATE_NEED_FLUSH |
+        SPICE_MIGRATE_NEED_DATA_TRANSFER;
     channel->expect_migrate_mark = TRUE;
-    red_channel_init_send_data(&channel->base, RED_MIGRATE, item);
-    red_channel_add_buf(&channel->base, &channel->base.send_data.u.migrate, sizeof(RedMigrate));
+    red_channel_init_send_data(&channel->base, SPICE_MSG_MIGRATE, item);
+    red_channel_add_buf(&channel->base, &channel->base.send_data.u.migrate, sizeof(SpiceMsgMigrate));
     red_channel_begin_send_massage(&channel->base);
 }
 
@@ -2438,12 +2438,12 @@ static int __tunnel_channel_send_service_migrate_data(TunnelChannel *channel,
     int cur_offset = offset;
     TunnelMigrateService *generic_data;
 
-    if (service->type == RED_TUNNEL_SERVICE_TYPE_GENERIC) {
+    if (service->type == SPICE_TUNNEL_SERVICE_TYPE_GENERIC) {
         generic_data = &item->u.generic_service;
         red_channel_add_buf(&channel->base, &item->u.generic_service,
                             sizeof(item->u.generic_service));
         cur_offset += sizeof(item->u.generic_service);
-    } else if (service->type == RED_TUNNEL_SERVICE_TYPE_IPP) {
+    } else if (service->type == SPICE_TUNNEL_SERVICE_TYPE_IPP) {
         generic_data = &item->u.print_service.base;
         red_channel_add_buf(&channel->base, &item->u.print_service,
                             sizeof(item->u.print_service));
@@ -2474,8 +2474,8 @@ static int __tunnel_channel_send_socket_migrate_data(TunnelChannel *channel,
     cur_offset += sizeof(*mig_sckt);
 
     if ((sckt->client_status != CLIENT_SCKT_STATUS_CLOSED) &&
-        (sckt->mig_client_status_msg != REDC_TUNNEL_SOCKET_CLOSED) &&
-        (sckt->mig_client_status_msg != REDC_TUNNEL_SOCKET_CLOSED_ACK)) {
+        (sckt->mig_client_status_msg != SPICE_MSGC_TUNNEL_SOCKET_CLOSED) &&
+        (sckt->mig_client_status_msg != SPICE_MSGC_TUNNEL_SOCKET_CLOSED_ACK)) {
         mig_sckt->out_data.process_buf = cur_offset;
         mig_sckt->out_data.process_buf_size =
             __tunnel_channel_send_process_bufs_migrate_data(channel,
@@ -2541,7 +2541,7 @@ static void tunnel_channel_send_migrate_data(TunnelChannel *channel, PipeItem *i
     migrate_data->magic = TUNNEL_MIGRATE_DATA_MAGIC;
     migrate_data->version = TUNNEL_MIGRATE_DATA_VERSION;
     migrate_data->message_serial = red_channel_get_message_serial(&channel->base);
-    red_channel_init_send_data(&channel->base, RED_MIGRATE_DATA, item);
+    red_channel_init_send_data(&channel->base, SPICE_MSG_MIGRATE_DATA, item);
     red_channel_add_buf(&channel->base, migrate_data, sizeof(*migrate_data));
 
     migrate_data->slirp_state = data_buf_offset;
@@ -2583,8 +2583,8 @@ static void tunnel_channel_send_init(TunnelChannel *channel, PipeItem *item)
     channel->send_data.u.init.max_socket_data_size = MAX_SOCKET_DATA_SIZE;
     channel->send_data.u.init.max_num_of_sockets = MAX_SOCKETS_NUM;
 
-    red_channel_init_send_data(&channel->base, RED_TUNNEL_INIT, item);
-    red_channel_add_buf(&channel->base, &channel->send_data.u.init, sizeof(RedTunnelInit));
+    red_channel_init_send_data(&channel->base, SPICE_MSG_TUNNEL_INIT, item);
+    red_channel_add_buf(&channel->base, &channel->send_data.u.init, sizeof(SpiceMsgTunnelInit));
 
     red_channel_begin_send_massage(&channel->base);
 }
@@ -2594,12 +2594,12 @@ static void tunnel_channel_send_service_ip_map(TunnelChannel *channel, PipeItem 
     TunnelService *service = CONTAINEROF(item, TunnelService, pipe_item);
 
     channel->send_data.u.service_ip.service_id = service->id;
-    channel->send_data.u.service_ip.virtual_ip.type = RED_TUNNEL_IP_TYPE_IPv4;
+    channel->send_data.u.service_ip.virtual_ip.type = SPICE_TUNNEL_IP_TYPE_IPv4;
 
-    red_channel_init_send_data(&channel->base, RED_TUNNEL_SERVICE_IP_MAP, item);
+    red_channel_init_send_data(&channel->base, SPICE_MSG_TUNNEL_SERVICE_IP_MAP, item);
     red_channel_add_buf(&channel->base, &channel->send_data.u.service_ip,
-                        sizeof(RedTunnelServiceIpMap));
-    red_channel_add_buf(&channel->base, &service->virt_ip.s_addr, sizeof(RedTunnelIPv4));
+                        sizeof(SpiceMsgTunnelServiceIpMap));
+    red_channel_add_buf(&channel->base, &service->virt_ip.s_addr, sizeof(SpiceTunnelIPv4));
     red_channel_begin_send_massage(&channel->base);
 }
 
@@ -2614,7 +2614,7 @@ static void tunnel_channel_send_socket_open(TunnelChannel *channel, PipeItem *it
 
     sckt->in_data.client_total_num_tokens = SOCKET_WINDOW_SIZE;
     sckt->in_data.num_tokens = 0;
-    red_channel_init_send_data(&channel->base, RED_TUNNEL_SOCKET_OPEN, item);
+    red_channel_init_send_data(&channel->base, SPICE_MSG_TUNNEL_SOCKET_OPEN, item);
     red_channel_add_buf(&channel->base, &channel->send_data.u.socket_open,
                         sizeof(channel->send_data.u.socket_open));
 
@@ -2639,7 +2639,7 @@ static void tunnel_channel_send_socket_fin(TunnelChannel *channel, PipeItem *ite
 
     channel->send_data.u.socket_fin.connection_id = sckt->connection_id;
 
-    red_channel_init_send_data(&channel->base, RED_TUNNEL_SOCKET_FIN, item);
+    red_channel_init_send_data(&channel->base, SPICE_MSG_TUNNEL_SOCKET_FIN, item);
     red_channel_add_buf(&channel->base, &channel->send_data.u.socket_fin,
                         sizeof(channel->send_data.u.socket_fin));
 
@@ -2671,7 +2671,7 @@ static void tunnel_channel_send_socket_close(TunnelChannel *channel, PipeItem *i
 
     channel->send_data.u.socket_close.connection_id = sckt->connection_id;
 
-    red_channel_init_send_data(&channel->base, RED_TUNNEL_SOCKET_CLOSE, item);
+    red_channel_init_send_data(&channel->base, SPICE_MSG_TUNNEL_SOCKET_CLOSE, item);
     red_channel_add_buf(&channel->base, &channel->send_data.u.socket_close,
                         sizeof(channel->send_data.u.socket_close));
 
@@ -2690,7 +2690,7 @@ static void tunnel_channel_send_socket_closed_ack(TunnelChannel *channel, PipeIt
     channel->send_data.u.socket_close_ack.connection_id = sckt->connection_id;
 
     // pipe item is null because we free the sckt.
-    red_channel_init_send_data(&channel->base, RED_TUNNEL_SOCKET_CLOSED_ACK, NULL);
+    red_channel_init_send_data(&channel->base, SPICE_MSG_TUNNEL_SOCKET_CLOSED_ACK, NULL);
     red_channel_add_buf(&channel->base, &channel->send_data.u.socket_close_ack,
                         sizeof(channel->send_data.u.socket_close_ack));
 
@@ -2727,7 +2727,7 @@ static void tunnel_channel_send_socket_token(TunnelChannel *channel, PipeItem *i
     sckt->in_data.client_total_num_tokens += channel->send_data.u.socket_token.num_tokens;
     ASSERT(sckt->in_data.client_total_num_tokens <= SOCKET_WINDOW_SIZE);
 
-    red_channel_init_send_data(&channel->base, RED_TUNNEL_SOCKET_TOKEN, item);
+    red_channel_init_send_data(&channel->base, SPICE_MSG_TUNNEL_SOCKET_TOKEN, item);
     red_channel_add_buf(&channel->base, &channel->send_data.u.socket_token,
                         sizeof(channel->send_data.u.socket_token));
 
@@ -2757,7 +2757,7 @@ static void tunnel_channel_send_socket_out_data(TunnelChannel *channel, PipeItem
 
     channel->send_data.u.socket_data.connection_id = sckt->connection_id;
 
-    red_channel_init_send_data(&channel->base, RED_TUNNEL_SOCKET_DATA, item);
+    red_channel_init_send_data(&channel->base, SPICE_MSG_TUNNEL_SOCKET_DATA, item);
     red_channel_add_buf(&channel->base, &channel->send_data.u.socket_data,
                         sizeof(channel->send_data.u.socket_data));
     pushed_bufs_num++;

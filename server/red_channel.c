@@ -72,17 +72,17 @@ static void red_peer_handle_incoming(RedsStreamContext *peer, IncomingHandler *h
 
     for (;;) {
         int ret_handle;
-        if (handler->header_pos < sizeof(RedDataHeader)) {
+        if (handler->header_pos < sizeof(SpiceDataHeader)) {
             bytes_read = red_peer_receive(peer,
                                           ((uint8_t *)&handler->header) + handler->header_pos,
-                                          sizeof(RedDataHeader) - handler->header_pos);
+                                          sizeof(SpiceDataHeader) - handler->header_pos);
             if (bytes_read == -1) {
                 handler->on_error(handler->opaque);
                 return;
             }
             handler->header_pos += bytes_read;
 
-            if (handler->header_pos != sizeof(RedDataHeader)) {
+            if (handler->header_pos != sizeof(SpiceDataHeader)) {
                 return;
             }
         }
@@ -328,17 +328,17 @@ void red_channel_init_outgoing_messages_window(RedChannel *channel)
     red_channel_push(channel);
 }
 
-int red_channel_handle_message(RedChannel *channel, RedDataHeader *header, uint8_t *msg)
+int red_channel_handle_message(RedChannel *channel, SpiceDataHeader *header, uint8_t *msg)
 {
     switch (header->type) {
-    case REDC_ACK_SYNC:
+    case SPICE_MSGC_ACK_SYNC:
         if (header->size != sizeof(uint32_t)) {
             red_printf("bad message size");
             return FALSE;
         }
         channel->ack_data.client_generation = *(uint32_t *)(msg);
         break;
-    case REDC_ACK:
+    case SPICE_MSGC_ACK:
         if (channel->ack_data.client_generation == channel->ack_data.generation) {
             channel->ack_data.messages_window -= CLIENT_ACK_WINDOW;
             red_channel_push(channel);
@@ -377,7 +377,7 @@ void red_channel_reset_send_data(RedChannel *channel)
     channel->send_data.header.size = 0;
     channel->send_data.header.sub_list = 0;
     ++channel->send_data.header.serial;
-    __red_channel_add_buf(channel, (void *)&channel->send_data.header, sizeof(RedDataHeader));
+    __red_channel_add_buf(channel, (void *)&channel->send_data.header, sizeof(SpiceDataHeader));
 }
 
 void red_channel_init_send_data(RedChannel *channel, uint16_t msg_type, PipeItem *item)
@@ -408,7 +408,7 @@ static void red_channel_send(RedChannel *channel)
 
 void red_channel_begin_send_massage(RedChannel *channel)
 {
-    channel->send_data.size = channel->send_data.header.size + sizeof(RedDataHeader);
+    channel->send_data.size = channel->send_data.header.size + sizeof(SpiceDataHeader);
     channel->ack_data.messages_window++;
     red_channel_send(channel);
 }

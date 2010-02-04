@@ -543,7 +543,7 @@ RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface)
         red_error("reds channel malloc failed");
     }
     memset(reds_channel, 0, sizeof(Channel));
-    reds_channel->type = RED_CHANNEL_DISPLAY;
+    reds_channel->type = SPICE_CHANNEL_DISPLAY;
     reds_channel->id = qxl_interface->base.id;
     reds_channel->link = red_dispatcher_set_peer;
     reds_channel->shutdown = red_dispatcher_shutdown_peer;
@@ -555,7 +555,7 @@ RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface)
         red_error("reds channel malloc failed");
     }
     memset(cursor_channel, 0, sizeof(Channel));
-    cursor_channel->type = RED_CHANNEL_CURSOR;
+    cursor_channel->type = SPICE_CHANNEL_CURSOR;
     cursor_channel->id = qxl_interface->base.id;
     cursor_channel->link = red_dispatcher_set_cursor_peer;
     cursor_channel->shutdown = red_dispatcher_shutdown_cursor_peer;

@@ -42,14 +42,14 @@ static inline uint8_t revers_bits(uint8_t byte)
 
 class NaitivCursor: public CursorOpaque {
 public:
-    virtual void draw(RedDrawable& dest, int x, int y, const Rect& area) = 0;
+    virtual void draw(RedDrawable& dest, int x, int y, const SpiceRect& area) = 0;
 };
 
 class AlphaCursor: public NaitivCursor {
 public:
-    AlphaCursor(const CursorHeader& header, const uint8_t* data);
+    AlphaCursor(const SpiceCursorHeader& header, const uint8_t* data);
 
-    virtual void draw(RedDrawable& dest, int x, int y, const Rect& area);
+    virtual void draw(RedDrawable& dest, int x, int y, const SpiceRect& area);
 
 private:
     std::auto_ptr<RedPixmap> _pixmap;
@@ -57,9 +57,9 @@ private:
 
 class MonoCursor: public NaitivCursor {
 public:
-    MonoCursor(const CursorHeader& header, const uint8_t* data);
+    MonoCursor(const SpiceCursorHeader& header, const uint8_t* data);
 
-    virtual void draw(RedDrawable& dest, int x, int y, const Rect& area);
+    virtual void draw(RedDrawable& dest, int x, int y, const SpiceRect& area);
 
 private:
     std::auto_ptr<RedPixmap> _pixmap;
@@ -68,25 +68,25 @@ private:
 
 class UnsupportedCursor: public NaitivCursor {
 public:
-    UnsupportedCursor(const CursorHeader& header);
-    virtual void draw(RedDrawable& dest, int x, int y, const Rect& area);
+    UnsupportedCursor(const SpiceCursorHeader& header);
+    virtual void draw(RedDrawable& dest, int x, int y, const SpiceRect& area);
 
 private:
     int _hot_x;
     int _hot_y;
 };
 
-UnsupportedCursor::UnsupportedCursor(const CursorHeader& header)
+UnsupportedCursor::UnsupportedCursor(const SpiceCursorHeader& header)
     : _hot_x (header.hot_spot_x)
     , _hot_y (header.hot_spot_y)
 {
     LOG_WARN("Unsupported cursor %hu", header.type);
 }
 
-void UnsupportedCursor::draw(RedDrawable& dest, int x, int y, const Rect& area)
+void UnsupportedCursor::draw(RedDrawable& dest, int x, int y, const SpiceRect& area)
 {
-    Rect dest_area;
-    Rect rect;
+    SpiceRect dest_area;
+    SpiceRect rect;
 
     dest_area.left = area.left;
     dest_area.right = area.right;
@@ -110,7 +110,7 @@ void UnsupportedCursor::draw(RedDrawable& dest, int x, int y, const Rect& area)
     dest.frame_rect(rect, rgb32_make(0, 0, 0));
 }
 
-AlphaCursor::AlphaCursor(const CursorHeader& header, const uint8_t* data)
+AlphaCursor::AlphaCursor(const SpiceCursorHeader& header, const uint8_t* data)
     : _pixmap (new RedPixmapCairo(header.width, header.height,
                                   RedPixmap::ARGB32, true, NULL, NULL))
 {
@@ -122,12 +122,12 @@ AlphaCursor::AlphaCursor(const CursorHeader& header, const uint8_t* data)
     }
 }
 
-void AlphaCursor::draw(RedDrawable& dest, int x, int y, const Rect& area)
+void AlphaCursor::draw(RedDrawable& dest, int x, int y, const SpiceRect& area)
 {
     dest.blend_pixels(*_pixmap, area.left - x, area.top - y, area);
 }
 
-MonoCursor::MonoCursor(const CursorHeader& header, const uint8_t* data)
+MonoCursor::MonoCursor(const SpiceCursorHeader& header, const uint8_t* data)
     : _pixmap (NULL)
     , _height (header.height)
 {
@@ -154,7 +154,7 @@ MonoCursor::MonoCursor(const CursorHeader& header, const uint8_t* data)
     }
 }
 
-void MonoCursor::draw(RedDrawable& dest, int x, int y, const Rect& area)
+void MonoCursor::draw(RedDrawable& dest, int x, int y, const SpiceRect& area)
 {
     dest.combine_pixels(*_pixmap, area.left - x, area.top - y, area, RedDrawable::OP_AND);
     dest.combine_pixels(*_pixmap, area.left - x, area.top - y + _height, area, RedDrawable::OP_XOR);
@@ -162,12 +162,12 @@ void MonoCursor::draw(RedDrawable& dest, int x, int y, const Rect& area)
 
 class ColorCursor: public NaitivCursor {
 public:
-    ColorCursor(const CursorHeader& header);
+    ColorCursor(const SpiceCursorHeader& header);
 
-    virtual void draw(RedDrawable& dest, int x, int y, const Rect& area);
+    virtual void draw(RedDrawable& dest, int x, int y, const SpiceRect& area);
 
 protected:
-    void init_pixels(const CursorHeader& header, const uint8_t* _pixels, const uint8_t *and_mask);
+    void init_pixels(const SpiceCursorHeader& header, const uint8_t* _pixels, const uint8_t *and_mask);
     virtual uint32_t get_pixel_color(const uint8_t *data, int row, int col) = 0;
 
 private:
@@ -175,7 +175,7 @@ private:
     std::auto_ptr<RedPixmap> _invers;
 };
 
-ColorCursor::ColorCursor(const CursorHeader& header)
+ColorCursor::ColorCursor(const SpiceCursorHeader& header)
     : _pixmap (new RedPixmapCairo(header.width, header.height,
                                   RedPixmap::ARGB32, true, NULL, NULL))
     , _invers (NULL)
@@ -185,7 +185,7 @@ ColorCursor::ColorCursor(const CursorHeader& header)
                                      true, pallete, NULL));
 }
 
-void ColorCursor::init_pixels(const CursorHeader& header, const uint8_t* pixels,
+void ColorCursor::init_pixels(const SpiceCursorHeader& header, const uint8_t* pixels,
                               const uint8_t *and_mask)
 {
     int mask_stride = ALIGN(header.width, 8) / 8;
@@ -217,7 +217,7 @@ void ColorCursor::init_pixels(const CursorHeader& header, const uint8_t* pixels,
     }
 }
 
-void ColorCursor::draw(RedDrawable& dest, int x, int y, const Rect& area)
+void ColorCursor::draw(RedDrawable& dest, int x, int y, const SpiceRect& area)
 {
     dest.blend_pixels(*_pixmap, area.left - x, area.top - y, area);
     dest.combine_pixels(*_invers, area.left - x, area.top - y, area, RedDrawable::OP_XOR);
@@ -225,7 +225,7 @@ void ColorCursor::draw(RedDrawable& dest, int x, int y, const Rect& area)
 
 class ColorCursor32: public ColorCursor {
 public:
-    ColorCursor32(const CursorHeader& header, const uint8_t* data)
+    ColorCursor32(const SpiceCursorHeader& header, const uint8_t* data)
         : ColorCursor(header)
         , _src_stride (header.width * sizeof(uint32_t))
     {
@@ -244,7 +244,7 @@ private:
 
 class ColorCursor16: public ColorCursor {
 public:
-    ColorCursor16(const CursorHeader& header, const uint8_t* data)
+    ColorCursor16(const SpiceCursorHeader& header, const uint8_t* data)
         : ColorCursor(header)
         , _src_stride (header.width * sizeof(uint16_t))
     {
@@ -264,7 +264,7 @@ private:
 
 class ColorCursor4: public ColorCursor {
 public:
-    ColorCursor4(const CursorHeader& header, const uint8_t* data)
+    ColorCursor4(const SpiceCursorHeader& header, const uint8_t* data)
         : ColorCursor(header)
         , _src_stride (ALIGN(header.width, 2) >> 1)
         , _palette ((uint32_t*)(data + _src_stride * header.height))
@@ -300,7 +300,7 @@ public:
 
         virtual bool operator() (RedChannel& channel)
         {
-            if (channel.get_type() != RED_CHANNEL_DISPLAY ||
+            if (channel.get_type() != SPICE_CHANNEL_DISPLAY ||
                                                       channel.get_id() != _channel.get_id()) {
                 return true;
             }
@@ -350,14 +350,14 @@ private:
     CursorChannel& _channel;
 };
 
-class CursorHandler: public MessageHandlerImp<CursorChannel, RED_CURSOR_MESSAGES_END> {
+class CursorHandler: public MessageHandlerImp<CursorChannel, SPICE_MSG_END_CURSOR> {
 public:
     CursorHandler(CursorChannel& channel)
-        : MessageHandlerImp<CursorChannel, RED_CURSOR_MESSAGES_END>(channel) {}
+        : MessageHandlerImp<CursorChannel, SPICE_MSG_END_CURSOR>(channel) {}
 };
 
 CursorChannel::CursorChannel(RedClient& client, uint32_t id)
-    : RedChannel(client, RED_CHANNEL_CURSOR, id, new CursorHandler(*this))
+    : RedChannel(client, SPICE_CHANNEL_CURSOR, id, new CursorHandler(*this))
     , ScreenLayer(SCREEN_LAYER_CURSOR, false)
     , _cursor (NULL)
     , _cursor_visible (false)
@@ -365,27 +365,27 @@ CursorChannel::CursorChannel(RedClient& client, uint32_t id)
 {
     CursorHandler* handler = static_cast<CursorHandler*>(get_message_handler());
 
-    handler->set_handler(RED_MIGRATE, &CursorChannel::handle_migrate, 0);
-    handler->set_handler(RED_SET_ACK, &CursorChannel::handle_set_ack, sizeof(RedSetAck));
-    handler->set_handler(RED_PING, &CursorChannel::handle_ping, sizeof(RedPing));
-    handler->set_handler(RED_WAIT_FOR_CHANNELS, &CursorChannel::handle_wait_for_channels,
-                         sizeof(RedWaitForChannels));
-    handler->set_handler(RED_DISCONNECTING, &CursorChannel::handle_disconnect,
-                         sizeof(RedDisconnect));
-    handler->set_handler(RED_NOTIFY, &CursorChannel::handle_notify, sizeof(RedNotify));
+    handler->set_handler(SPICE_MSG_MIGRATE, &CursorChannel::handle_migrate, 0);
+    handler->set_handler(SPICE_MSG_SET_ACK, &CursorChannel::handle_set_ack, sizeof(SpiceMsgSetAck));
+    handler->set_handler(SPICE_MSG_PING, &CursorChannel::handle_ping, sizeof(SpiceMsgPing));
+    handler->set_handler(SPICE_MSG_WAIT_FOR_CHANNELS, &CursorChannel::handle_wait_for_channels,
+                         sizeof(SpiceMsgWaitForChannels));
+    handler->set_handler(SPICE_MSG_DISCONNECTING, &CursorChannel::handle_disconnect,
+                         sizeof(SpiceMsgDisconnect));
+    handler->set_handler(SPICE_MSG_NOTIFY, &CursorChannel::handle_notify, sizeof(SpiceMsgNotify));
 
-    handler->set_handler(RED_CURSOR_INIT, &CursorChannel::handle_init, sizeof(RedCursorInit));
-    handler->set_handler(RED_CURSOR_RESET, &CursorChannel::handle_reset, 0);
-    handler->set_handler(RED_CURSOR_SET, &CursorChannel::handle_cursor_set,
-                         sizeof(RedCursorSet));
-    handler->set_handler(RED_CURSOR_MOVE, &CursorChannel::handle_cursor_move,
-                         sizeof(RedCursorMove));
-    handler->set_handler(RED_CURSOR_HIDE, &CursorChannel::handle_cursor_hide, 0);
-    handler->set_handler(RED_CURSOR_TRAIL, &CursorChannel::handle_cursor_trail,
-                         sizeof(RedCursorTrail));
-    handler->set_handler(RED_CURSOR_INVAL_ONE, &CursorChannel::handle_inval_one,
-                         sizeof(RedInvalOne));
-    handler->set_handler(RED_CURSOR_INVAL_ALL, &CursorChannel::handle_inval_all, 0);
+    handler->set_handler(SPICE_MSG_CURSOR_INIT, &CursorChannel::handle_init, sizeof(SpiceMsgCursorInit));
+    handler->set_handler(SPICE_MSG_CURSOR_RESET, &CursorChannel::handle_reset, 0);
+    handler->set_handler(SPICE_MSG_CURSOR_SET, &CursorChannel::handle_cursor_set,
+                         sizeof(SpiceMsgCursorSet));
+    handler->set_handler(SPICE_MSG_CURSOR_MOVE, &CursorChannel::handle_cursor_move,
+                         sizeof(SpiceMsgCursorMove));
+    handler->set_handler(SPICE_MSG_CURSOR_HIDE, &CursorChannel::handle_cursor_hide, 0);
+    handler->set_handler(SPICE_MSG_CURSOR_TRAIL, &CursorChannel::handle_cursor_trail,
+                         sizeof(SpiceMsgCursorTrail));
+    handler->set_handler(SPICE_MSG_CURSOR_INVAL_ONE, &CursorChannel::handle_inval_one,
+                         sizeof(SpiceMsgDisplayInvalOne));
+    handler->set_handler(SPICE_MSG_CURSOR_INVAL_ALL, &CursorChannel::handle_inval_all, 0);
 }
 
 CursorChannel::~CursorChannel()
@@ -456,25 +456,25 @@ void CursorChannel::create_native_cursor(CursorData* cursor)
     }
 
     switch (cursor->header().type) {
-    case CURSOR_TYPE_ALPHA:
+    case SPICE_CURSOR_TYPE_ALPHA:
         native_cursor = new AlphaCursor(cursor->header(), cursor->data());
         break;
-    case CURSOR_TYPE_COLOR32:
+    case SPICE_CURSOR_TYPE_COLOR32:
         native_cursor = new ColorCursor32(cursor->header(), cursor->data());
         break;
-    case CURSOR_TYPE_MONO:
+    case SPICE_CURSOR_TYPE_MONO:
         native_cursor = new MonoCursor(cursor->header(), cursor->data());
         break;
-    case CURSOR_TYPE_COLOR4:
+    case SPICE_CURSOR_TYPE_COLOR4:
         native_cursor = new ColorCursor4(cursor->header(), cursor->data());
         break;
-    case CURSOR_TYPE_COLOR8:
+    case SPICE_CURSOR_TYPE_COLOR8:
         native_cursor = new UnsupportedCursor(cursor->header());
         break;
-    case CURSOR_TYPE_COLOR16:
+    case SPICE_CURSOR_TYPE_COLOR16:
         native_cursor = new ColorCursor16(cursor->header(), cursor->data());
         break;
-    case CURSOR_TYPE_COLOR24:
+    case SPICE_CURSOR_TYPE_COLOR24:
         native_cursor = new UnsupportedCursor(cursor->header());
         break;
     default:
@@ -483,20 +483,20 @@ void CursorChannel::create_native_cursor(CursorData* cursor)
     cursor->set_opaque(native_cursor);
 }
 
-void CursorChannel::set_cursor(RedCursor& red_cursor, int data_size, int x, int y, bool visible)
+void CursorChannel::set_cursor(SpiceCursor& red_cursor, int data_size, int x, int y, bool visible)
 {
     CursorData *cursor;
 
-    if (red_cursor.flags & RED_CURSOR_NONE) {
+    if (red_cursor.flags & SPICE_CURSOR_FLAGS_NONE) {
         remove_cursor();
         return;
     }
 
-    if (red_cursor.flags & RED_CURSOR_FROM_CACHE) {
+    if (red_cursor.flags & SPICE_CURSOR_FLAGS_FROM_CACHE) {
         cursor = _cursor_cache.get(red_cursor.header.unique);
     } else {
         cursor = new CursorData(red_cursor, data_size);
-        if (red_cursor.flags & RED_CURSOR_CACHE_ME) {
+        if (red_cursor.flags & SPICE_CURSOR_FLAGS_CACHE_ME) {
             ASSERT(red_cursor.header.unique);
             _cursor_cache.add(red_cursor.header.unique, cursor);
         }
@@ -522,7 +522,7 @@ void CursorChannel::set_cursor(RedCursor& red_cursor, int data_size, int x, int 
 
     update_display_cursor();
 
-    if (get_client().get_mouse_mode() == RED_MOUSE_MODE_SERVER) {
+    if (get_client().get_mouse_mode() == SPICE_MOUSE_MODE_SERVER) {
         if (_cursor_visible) {
             set_rect_area(_cursor_rect);
         } else {
@@ -554,11 +554,11 @@ void CursorChannel::detach_display()
 
 void CursorChannel::handle_init(RedPeer::InMessage *message)
 {
-    RedCursorInit *init = (RedCursorInit*)message->data();
+    SpiceMsgCursorInit *init = (SpiceMsgCursorInit*)message->data();
     attach_to_screen(get_client().get_application(), get_id());
     remove_cursor();
     _cursor_cache.clear();
-    set_cursor(init->cursor, message->size() - sizeof(RedCursorInit), init->position.x,
+    set_cursor(init->cursor, message->size() - sizeof(SpiceMsgCursorInit), init->position.x,
                init->position.y, init->visible != 0);
 }
 
@@ -571,14 +571,14 @@ void CursorChannel::handle_reset(RedPeer::InMessage *message)
 
 void CursorChannel::handle_cursor_set(RedPeer::InMessage* message)
 {
-    RedCursorSet* set = (RedCursorSet*)message->data();
-    set_cursor(set->cursor, message->size() - sizeof(RedCursorSet), set->postition.x,
+    SpiceMsgCursorSet* set = (SpiceMsgCursorSet*)message->data();
+    set_cursor(set->cursor, message->size() - sizeof(SpiceMsgCursorSet), set->postition.x,
                set->postition.y, set->visible != 0);
 }
 
 void CursorChannel::handle_cursor_move(RedPeer::InMessage* message)
 {
-    RedCursorMove* move = (RedCursorMove*)message->data();
+    SpiceMsgCursorMove* move = (SpiceMsgCursorMove*)message->data();
 
     if (!_cursor) {
         return;
@@ -596,7 +596,7 @@ void CursorChannel::handle_cursor_move(RedPeer::InMessage* message)
     _cursor_rect.bottom += dy;
     lock.unlock();
 
-    if (get_client().get_mouse_mode() == RED_MOUSE_MODE_SERVER) {
+    if (get_client().get_mouse_mode() == SPICE_MOUSE_MODE_SERVER) {
         set_rect_area(_cursor_rect);
         return;
     }
@@ -611,20 +611,20 @@ void CursorChannel::handle_cursor_hide(RedPeer::InMessage* message)
     _cursor_visible = false;
     update_display_cursor();
 
-    if (get_client().get_mouse_mode() == RED_MOUSE_MODE_SERVER) {
+    if (get_client().get_mouse_mode() == SPICE_MOUSE_MODE_SERVER) {
         clear_area();
     }
 }
 
 void CursorChannel::handle_cursor_trail(RedPeer::InMessage* message)
 {
-    RedCursorTrail* trail = (RedCursorTrail*)message->data();
+    SpiceMsgCursorTrail* trail = (SpiceMsgCursorTrail*)message->data();
     DBG(0, "length %u frequency %u", trail->length, trail->frequency)
 }
 
 void CursorChannel::handle_inval_one(RedPeer::InMessage* message)
 {
-    RedInvalOne* inval = (RedInvalOne*)message->data();
+    SpiceMsgDisplayInvalOne* inval = (SpiceMsgDisplayInvalOne*)message->data();
     _cursor_cache.remove(inval->id);
 }
 
@@ -637,7 +637,7 @@ void CursorChannel::on_mouse_mode_change()
 {
     Lock lock(_update_lock);
 
-    if (get_client().get_mouse_mode() == RED_MOUSE_MODE_CLIENT) {
+    if (get_client().get_mouse_mode() == SPICE_MOUSE_MODE_CLIENT) {
         clear_area();
         return;
     }
@@ -649,7 +649,7 @@ void CursorChannel::on_mouse_mode_change()
 
 class CursorFactory: public ChannelFactory {
 public:
-    CursorFactory() : ChannelFactory(RED_CHANNEL_CURSOR) {}
+    CursorFactory() : ChannelFactory(SPICE_CHANNEL_CURSOR) {}
     virtual RedChannel* construct(RedClient& client, uint32_t id)
     {
         return new CursorChannel(client, id);

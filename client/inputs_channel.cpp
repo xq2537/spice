@@ -38,7 +38,7 @@ public:
 
         virtual bool operator() (RedChannel& channel)
         {
-            if (channel.get_type() == RED_CHANNEL_DISPLAY) {
+            if (channel.get_type() == SPICE_CHANNEL_DISPLAY) {
                 static_cast<DisplayChannel&>(channel).attach_inputs(&_channel);
             }
             return true;
@@ -83,7 +83,7 @@ public:
     public:
         virtual bool operator() (RedChannel& channel)
         {
-            if (channel.get_type() == RED_CHANNEL_DISPLAY) {
+            if (channel.get_type() == SPICE_CHANNEL_DISPLAY) {
                 static_cast<DisplayChannel&>(channel).detach_inputs();
             }
             return true;
@@ -114,7 +114,7 @@ private:
 
 MotionMessage::MotionMessage(InputsChannel& channel)
     : RedChannel::OutMessage()
-    , RedPeer::OutMessage(REDC_INPUTS_MOUSE_MOTION, sizeof(RedcMouseMotion))
+    , RedPeer::OutMessage(SPICE_MSGC_INPUTS_MOUSE_MOTION, sizeof(SpiceMsgcMouseMotion))
     , _channel (channel)
 {
 }
@@ -126,7 +126,7 @@ void MotionMessage::release()
 
 RedPeer::OutMessage& MotionMessage::peer_message()
 {
-    _channel.set_motion_event(*(RedcMouseMotion*)data());
+    _channel.set_motion_event(*(SpiceMsgcMouseMotion*)data());
     return *this;
 }
 
@@ -142,7 +142,7 @@ private:
 
 PositionMessage::PositionMessage(InputsChannel& channel)
     : RedChannel::OutMessage()
-    , RedPeer::OutMessage(REDC_INPUTS_MOUSE_POSITION, sizeof(RedcMousePosition))
+    , RedPeer::OutMessage(SPICE_MSGC_INPUTS_MOUSE_POSITION, sizeof(SpiceMsgcMousePosition))
     , _channel (channel)
 {
 }
@@ -154,18 +154,18 @@ void PositionMessage::release()
 
 RedPeer::OutMessage& PositionMessage::peer_message()
 {
-    _channel.set_position_event(*(RedcMousePosition*)data());
+    _channel.set_position_event(*(SpiceMsgcMousePosition*)data());
     return *this;
 }
 
-class InputsMessHandler: public MessageHandlerImp<InputsChannel, RED_INPUTS_MESSAGES_END> {
+class InputsMessHandler: public MessageHandlerImp<InputsChannel, SPICE_MSG_END_INPUTS> {
 public:
     InputsMessHandler(InputsChannel& channel)
-        : MessageHandlerImp<InputsChannel, RED_INPUTS_MESSAGES_END>(channel) {}
+        : MessageHandlerImp<InputsChannel, SPICE_MSG_END_INPUTS>(channel) {}
 };
 
 InputsChannel::InputsChannel(RedClient& client, uint32_t id)
-    : RedChannel(client, RED_CHANNEL_INPUTS, id, new InputsMessHandler(*this))
+    : RedChannel(client, SPICE_CHANNEL_INPUTS, id, new InputsMessHandler(*this))
     , _mouse_buttons_state (0)
     , _mouse_dx (0)
     , _mouse_dy (0)
@@ -177,19 +177,19 @@ InputsChannel::InputsChannel(RedClient& client, uint32_t id)
     , _active_modifiers_event (false)
 {
     InputsMessHandler* handler = static_cast<InputsMessHandler*>(get_message_handler());
-    handler->set_handler(RED_MIGRATE, &InputsChannel::handle_migrate, 0);
-    handler->set_handler(RED_SET_ACK, &InputsChannel::handle_set_ack, sizeof(RedSetAck));
-    handler->set_handler(RED_PING, &InputsChannel::handle_ping, sizeof(RedPing));
-    handler->set_handler(RED_WAIT_FOR_CHANNELS, &InputsChannel::handle_wait_for_channels,
-                         sizeof(RedWaitForChannels));
-    handler->set_handler(RED_DISCONNECTING, &InputsChannel::handle_disconnect,
-                         sizeof(RedDisconnect));
-    handler->set_handler(RED_NOTIFY, &InputsChannel::handle_notify, sizeof(RedNotify));
+    handler->set_handler(SPICE_MSG_MIGRATE, &InputsChannel::handle_migrate, 0);
+    handler->set_handler(SPICE_MSG_SET_ACK, &InputsChannel::handle_set_ack, sizeof(SpiceMsgSetAck));
+    handler->set_handler(SPICE_MSG_PING, &InputsChannel::handle_ping, sizeof(SpiceMsgPing));
+    handler->set_handler(SPICE_MSG_WAIT_FOR_CHANNELS, &InputsChannel::handle_wait_for_channels,
+                         sizeof(SpiceMsgWaitForChannels));
+    handler->set_handler(SPICE_MSG_DISCONNECTING, &InputsChannel::handle_disconnect,
+                         sizeof(SpiceMsgDisconnect));
+    handler->set_handler(SPICE_MSG_NOTIFY, &InputsChannel::handle_notify, sizeof(SpiceMsgNotify));
 
-    handler->set_handler(RED_INPUTS_INIT, &InputsChannel::handle_init, sizeof(RedInputsInit));
-    handler->set_handler(RED_INPUTS_KEY_MODIFAIERS, &InputsChannel::handle_modifaiers,
-                         sizeof(RedKeyModifiers));
-    handler->set_handler(RED_INPUTS_MOUSE_MOTION_ACK, &InputsChannel::handle_motion_ack, 0);
+    handler->set_handler(SPICE_MSG_INPUTS_INIT, &InputsChannel::handle_init, sizeof(SpiceMsgInputsInit));
+    handler->set_handler(SPICE_MSG_INPUTS_KEY_MODIFIERS, &InputsChannel::handle_modifaiers,
+                         sizeof(SpiceMsgInputsKeyModifiers));
+    handler->set_handler(SPICE_MSG_INPUTS_MOUSE_MOTION_ACK, &InputsChannel::handle_motion_ack, 0);
 }
 
 InputsChannel::~InputsChannel()
@@ -212,7 +212,7 @@ void InputsChannel::on_disconnect()
 
 void InputsChannel::handle_init(RedPeer::InMessage* message)
 {
-    RedInputsInit* init = (RedInputsInit*)message->data();
+    SpiceMsgInputsInit* init = (SpiceMsgInputsInit*)message->data();
     _modifiers = init->keyboard_modifiers;
     AutoRef<SetInputsHandlerEvent> set_handler_event(new SetInputsHandlerEvent(*this));
     get_client().push_event(*set_handler_event);
@@ -220,7 +220,7 @@ void InputsChannel::handle_init(RedPeer::InMessage* message)
 
 void InputsChannel::handle_modifaiers(RedPeer::InMessage* message)
 {
-    RedKeyModifiers* init = (RedKeyModifiers*)message->data();
+    SpiceMsgInputsKeyModifiers* init = (SpiceMsgInputsKeyModifiers*)message->data();
     _modifiers = init->modifiers;
     Lock lock(_update_modifiers_lock);
     if (_active_modifiers_event) {
@@ -234,20 +234,20 @@ void InputsChannel::handle_modifaiers(RedPeer::InMessage* message)
 void InputsChannel::handle_motion_ack(RedPeer::InMessage* message)
 {
     Lock lock(_motion_lock);
-    if (_motion_count < RED_MOTION_ACK_BUNCH) {
+    if (_motion_count < SPICE_INPUT_MOTION_ACK_BUNCH) {
         LOG_WARN("invalid motion count");
         _motion_count = 0;
     } else {
-        _motion_count -= RED_MOTION_ACK_BUNCH;
+        _motion_count -= SPICE_INPUT_MOTION_ACK_BUNCH;
     }
     if (!_active_motion && (_mouse_dx || _mouse_dy || _display_id != -1)) {
         _active_motion = true;
         _motion_count++;
         switch (get_client().get_mouse_mode()) {
-        case RED_MOUSE_MODE_CLIENT:
+        case SPICE_MOUSE_MODE_CLIENT:
             post_message(new PositionMessage(*this));
             break;
-        case RED_MOUSE_MODE_SERVER:
+        case SPICE_MOUSE_MODE_SERVER:
             post_message(new MotionMessage(*this));
             break;
         default:
@@ -256,7 +256,7 @@ void InputsChannel::handle_motion_ack(RedPeer::InMessage* message)
     }
 }
 
-void InputsChannel::set_motion_event(RedcMouseMotion& motion)
+void InputsChannel::set_motion_event(SpiceMsgcMouseMotion& motion)
 {
     Lock lock(_motion_lock);
     motion.buttons_state = _mouse_buttons_state;
@@ -266,7 +266,7 @@ void InputsChannel::set_motion_event(RedcMouseMotion& motion)
     _active_motion = false;
 }
 
-void InputsChannel::set_position_event(RedcMousePosition& position)
+void InputsChannel::set_position_event(SpiceMsgcMousePosition& position)
 {
     Lock lock(_motion_lock);
     position.buttons_state = _mouse_buttons_state;
@@ -284,7 +284,7 @@ void InputsChannel::on_mouse_motion(int dx, int dy, int buttons_state)
     _mouse_buttons_state = buttons_state;
     _mouse_dx += dx;
     _mouse_dy += dy;
-    if (!_active_motion && _motion_count < RED_MOTION_ACK_BUNCH * 2) {
+    if (!_active_motion && _motion_count < SPICE_INPUT_MOTION_ACK_BUNCH * 2) {
         _active_motion = true;
         _motion_count++;
         post_message(new MotionMessage(*this));
@@ -298,7 +298,7 @@ void InputsChannel::on_mouse_position(int x, int y, int buttons_state, int displ
     _mouse_x = x;
     _mouse_y = y;
     _display_id = display_id;
-    if (!_active_motion && _motion_count < RED_MOTION_ACK_BUNCH * 2) {
+    if (!_active_motion && _motion_count < SPICE_INPUT_MOTION_ACK_BUNCH * 2) {
         _active_motion = true;
         _motion_count++;
         post_message(new PositionMessage(*this));
@@ -314,8 +314,8 @@ void InputsChannel::on_mouse_down(int button, int buttons_state)
 {
     Message* message;
 
-    message = new Message(REDC_INPUTS_MOUSE_PRESS, sizeof(RedcMouseRelease));
-    RedcMousePress* event = (RedcMousePress*)message->data();
+    message = new Message(SPICE_MSGC_INPUTS_MOUSE_PRESS, sizeof(SpiceMsgcMouseRelease));
+    SpiceMsgcMousePress* event = (SpiceMsgcMousePress*)message->data();
     event->button = button;
     event->buttons_state = buttons_state;
     post_message(message);
@@ -325,8 +325,8 @@ void InputsChannel::on_mouse_up(int button, int buttons_state)
 {
     Message* message;
 
-    message = new Message(REDC_INPUTS_MOUSE_RELEASE, sizeof(RedcMouseRelease));
-    RedcMouseRelease* event = (RedcMouseRelease*)message->data();
+    message = new Message(SPICE_MSGC_INPUTS_MOUSE_RELEASE, sizeof(SpiceMsgcMouseRelease));
+    SpiceMsgcMouseRelease* event = (SpiceMsgcMouseRelease*)message->data();
     event->button = button;
     event->buttons_state = buttons_state;
     post_message(message);
@@ -352,8 +352,8 @@ void InputsChannel::on_key_down(RedKey key)
         return;
     }
 
-    Message* message = new Message(REDC_INPUTS_KEY_DOWN, sizeof(RedcKeyDown));
-    RedcKeyDown* event = (RedcKeyDown*)message->data();
+    Message* message = new Message(SPICE_MSGC_INPUTS_KEY_DOWN, sizeof(SpiceMsgcKeyDown));
+    SpiceMsgcKeyDown* event = (SpiceMsgcKeyDown*)message->data();
     event->code = scan_code;
     post_message(message);
 }
@@ -366,8 +366,8 @@ void InputsChannel::on_key_up(RedKey key)
         return;
     }
 
-    Message* message = new Message(REDC_INPUTS_KEY_UP, sizeof(RedcKeyUp));
-    RedcKeyUp* event = (RedcKeyUp*)message->data();
+    Message* message = new Message(SPICE_MSGC_INPUTS_KEY_UP, sizeof(SpiceMsgcKeyUp));
+    SpiceMsgcKeyUp* event = (SpiceMsgcKeyUp*)message->data();
     event->code = scan_code;
     post_message(message);
 }
@@ -376,15 +376,15 @@ void InputsChannel::set_local_modifiers()
 {
     unsigned int modifiers = 0;
 
-    if (_modifiers & RED_SCROLL_LOCK_MODIFIER) {
+    if (_modifiers & SPICE_SCROLL_LOCK_MODIFIER) {
         modifiers |= Platform::SCROLL_LOCK_MODIFIER;
     }
 
-    if (_modifiers & RED_NUM_LOCK_MODIFIER) {
+    if (_modifiers & SPICE_NUM_LOCK_MODIFIER) {
         modifiers |= Platform::NUM_LOCK_MODIFIER;
     }
 
-    if (_modifiers & RED_CAPS_LOCK_MODIFIER) {
+    if (_modifiers & SPICE_CAPS_LOCK_MODIFIER) {
         modifiers |= Platform::CAPS_LOCK_MODIFIER;
     }
 
@@ -394,8 +394,8 @@ void InputsChannel::set_local_modifiers()
 void InputsChannel::on_focus_in()
 {
 #ifdef SYNC_REMOTH_MODIFIRES
-    Message* message = new Message(REDC_INPUTS_KEY_MODIFAIERS, sizeof(RedcKeyDown));
-    RedcKeyModifiers* modifiers = (RedcKeyModifiers*)message->data();
+    Message* message = new Message(SPICE_MSGC_INPUTS_KEY_MODIFIERS, sizeof(SpiceMsgcKeyDown));
+    SpiceMsgcKeyModifiers* modifiers = (SpiceMsgcKeyModifiers*)message->data();
     modifiers->modifiers = Platform::get_keyboard_lock_modifiers();
     post_message(message);
 #else
@@ -567,7 +567,7 @@ static InitGlobals init_globals;
 
 class InputsFactory: public ChannelFactory {
 public:
-    InputsFactory() : ChannelFactory(RED_CHANNEL_INPUTS) {}
+    InputsFactory() : ChannelFactory(SPICE_CHANNEL_INPUTS) {}
     virtual RedChannel* construct(RedClient& client, uint32_t id)
     {
         return new InputsChannel(client, id);

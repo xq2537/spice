@@ -79,10 +79,10 @@ typedef struct  __declspec (align(1)) LZImage {
 #else
 typedef struct __attribute__ ((__packed__)) LZImage {
 #endif
-    ImageDescriptor descriptor;
+    SpiceImageDescriptor descriptor;
     union {
-        LZ_RGBData lz_rgb;
-        LZ_PLTData lz_plt;
+        SpiceLZRGBData lz_rgb;
+        SpiceLZPLTData lz_plt;
     };
 } LZImage;
 
@@ -93,7 +93,7 @@ static const cairo_user_data_key_t invers_data_type = {0};
 extern mutex_t cairo_surface_user_data_mutex;
 #endif
 
-static inline double fix_to_double(FIXED28_4 fixed)
+static inline double fix_to_double(SPICE_FIXED28_4 fixed)
 {
     return (double)(fixed & 0x0f) / 0x0f + (fixed >> 4);
 }
@@ -150,7 +150,7 @@ typedef struct QuicData {
     QuicContext *quic;
     jmp_buf jmp_env;
 #ifndef CAIRO_CANVAS_NO_CHUNKS
-    ADDRESS next;
+    SPICE_ADDRESS next;
     get_virt_fn_t get_virt;
     void *get_virt_opaque;
     validate_virt_fn_t validate_virt;
@@ -200,8 +200,8 @@ typedef struct CanvasBase {
 
 typedef struct ATTR_PACKED DataChunk {
     UINT32 size;
-    ADDRESS prev;
-    ADDRESS next;
+    SPICE_ADDRESS prev;
+    SPICE_ADDRESS next;
     UINT8 data[0];
 } DataChunk;
 
@@ -214,7 +214,7 @@ typedef struct ATTR_PACKED DataChunk {
 #endif
 
 
-static inline void canvas_localize_palette(CanvasBase *canvas, Palette *palette)
+static inline void canvas_localize_palette(CanvasBase *canvas, SpicePalette *palette)
 {
     if (canvas->color_shift == 5) {
         UINT32 *now = palette->ents;
@@ -229,7 +229,7 @@ static inline void canvas_localize_palette(CanvasBase *canvas, Palette *palette)
 #ifdef DEBUG_DUMP_COMPRESS
 static void dump_surface(cairo_surface_t *surface, int cache);
 #endif
-static cairo_surface_t *canvas_get_quic(CanvasBase *canvas, QUICImage *image, int invers)
+static cairo_surface_t *canvas_get_quic(CanvasBase *canvas, SpiceQUICImage *image, int invers)
 {
     cairo_surface_t *surface = NULL;
     QuicData *quic_data = &canvas->quic_data;
@@ -360,7 +360,7 @@ static inline void canvas_copy_16bpp(uint8_t* dest, int dest_stride, uint8_t* sr
 }
 
 static inline void canvas_copy_8bpp(uint8_t *dest, int dest_stride, uint8_t *src, int src_stride,
-                                    int width, uint8_t *end, Palette *palette)
+                                    int width, uint8_t *end, SpicePalette *palette)
 {
     if (!palette) {
         CANVAS_ERROR("no palette");
@@ -379,7 +379,7 @@ static inline void canvas_copy_8bpp(uint8_t *dest, int dest_stride, uint8_t *src
 }
 
 static inline void canvas_copy_4bpp_be(uint8_t* dest, int dest_stride, uint8_t* src, int src_stride,
-                                       int width, uint8_t* end, Palette *palette)
+                                       int width, uint8_t* end, SpicePalette *palette)
 {
     if (!palette) {
         CANVAS_ERROR("no palette");
@@ -403,7 +403,7 @@ static inline void canvas_copy_4bpp_be(uint8_t* dest, int dest_stride, uint8_t* 
 }
 
 static inline void canvas_copy_1bpp_be(uint8_t* dest, int dest_stride, uint8_t* src, int src_stride,
-                                       int width, uint8_t* end, Palette *palette)
+                                       int width, uint8_t* end, SpicePalette *palette)
 {
     uint32_t fore_color;
     uint32_t back_color;
@@ -429,10 +429,10 @@ static inline void canvas_copy_1bpp_be(uint8_t* dest, int dest_stride, uint8_t* 
     }
 }
 
-static cairo_surface_t *canvas_bitmap_to_surface(CanvasBase *canvas, Bitmap* bitmap,
-                                                 Palette *palette)
+static cairo_surface_t *canvas_bitmap_to_surface(CanvasBase *canvas, SpiceBitmap* bitmap,
+                                                 SpicePalette *palette)
 {
-    uint8_t* src = (uint8_t *)GET_ADDRESS(bitmap->data);
+    uint8_t* src = (uint8_t *)SPICE_GET_ADDRESS(bitmap->data);
     int src_stride;
     uint8_t* end;
     uint8_t* dest;
@@ -447,7 +447,7 @@ static cairo_surface_t *canvas_bitmap_to_surface(CanvasBase *canvas, Bitmap* bit
 #ifdef WIN32
                                    canvas->dc,
 #endif
-                                   (bitmap->format == BITMAP_FMT_RGBA) ? CAIRO_FORMAT_ARGB32 :
+                                   (bitmap->format == SPICE_BITMAP_FMT_RGBA) ? CAIRO_FORMAT_ARGB32 :
                                                                          CAIRO_FORMAT_RGB24,
                                    bitmap->x, bitmap->y, FALSE);
     if (cairo_surface_status(cairo_surface) != CAIRO_STATUS_SUCCESS) {
@@ -456,30 +456,30 @@ static cairo_surface_t *canvas_bitmap_to_surface(CanvasBase *canvas, Bitmap* bit
     }
     dest = cairo_image_surface_get_data(cairo_surface);
     dest_stride = cairo_image_surface_get_stride(cairo_surface);
-    if (!(bitmap->flags & BITMAP_TOP_DOWN)) {
+    if (!(bitmap->flags & SPICE_BITMAP_FLAGS_TOP_DOWN)) {
         ASSERT(bitmap->y > 0);
         dest += dest_stride * ((int)bitmap->y - 1);
         dest_stride = -dest_stride;
     }
 
     switch (bitmap->format) {
-    case BITMAP_FMT_32BIT:
-    case BITMAP_FMT_RGBA:
+    case SPICE_BITMAP_FMT_32BIT:
+    case SPICE_BITMAP_FMT_RGBA:
         canvas_copy_32bpp(dest, dest_stride, src, src_stride, bitmap->x, end);
         break;
-    case BITMAP_FMT_24BIT:
+    case SPICE_BITMAP_FMT_24BIT:
         canvas_copy_24bpp(dest, dest_stride, src, src_stride, bitmap->x, end);
         break;
-    case BITMAP_FMT_16BIT:
+    case SPICE_BITMAP_FMT_16BIT:
         canvas_copy_16bpp(dest, dest_stride, src, src_stride, bitmap->x, end);
         break;
-    case BITMAP_FMT_8BIT:
+    case SPICE_BITMAP_FMT_8BIT:
         canvas_copy_8bpp(dest, dest_stride, src, src_stride, bitmap->x, end, palette);
         break;
-    case BITMAP_FMT_4BIT_BE:
+    case SPICE_BITMAP_FMT_4BIT_BE:
         canvas_copy_4bpp_be(dest, dest_stride, src, src_stride, bitmap->x, end, palette);
         break;
-    case BITMAP_FMT_1BIT_BE:
+    case SPICE_BITMAP_FMT_1BIT_BE:
         canvas_copy_1bpp_be(dest, dest_stride, src, src_stride, bitmap->x, end, palette);
         break;
     }
@@ -488,23 +488,23 @@ static cairo_surface_t *canvas_bitmap_to_surface(CanvasBase *canvas, Bitmap* bit
 
 #ifdef CAIRO_CANVAS_CACHE
 
-static inline Palette *canvas_get_palett(CanvasBase *canvas, ADDRESS base_palette, uint8_t flags)
+static inline SpicePalette *canvas_get_palett(CanvasBase *canvas, SPICE_ADDRESS base_palette, uint8_t flags)
 {
-    Palette *palette;
+    SpicePalette *palette;
     if (!base_palette) {
         return NULL;
     }
 
-    if (flags & BITMAP_PAL_FROM_CACHE) {
+    if (flags & SPICE_BITMAP_FLAGS_PAL_FROM_CACHE) {
         palette = canvas->palette_cache_get(canvas->palette_cache_opaque, base_palette);
-    } else if (flags & BITMAP_PAL_CACHE_ME) {
-        palette = (Palette *)GET_ADDRESS(base_palette);
-        access_test(canvas, palette, sizeof(Palette));
-        access_test(canvas, palette, sizeof(Palette) + palette->num_ents * sizeof(uint32_t));
+    } else if (flags & SPICE_BITMAP_FLAGS_PAL_CACHE_ME) {
+        palette = (SpicePalette *)SPICE_GET_ADDRESS(base_palette);
+        access_test(canvas, palette, sizeof(SpicePalette));
+        access_test(canvas, palette, sizeof(SpicePalette) + palette->num_ents * sizeof(uint32_t));
         canvas_localize_palette(canvas, palette);
         canvas->palette_cache_put(canvas->palette_cache_opaque, palette);
     } else {
-        palette = (Palette *)GET_ADDRESS(base_palette);
+        palette = (SpicePalette *)SPICE_GET_ADDRESS(base_palette);
         canvas_localize_palette(canvas, palette);
     }
     return palette;
@@ -518,7 +518,7 @@ static cairo_surface_t *canvas_get_lz(CanvasBase *canvas, LZImage *image, int in
     uint8_t    *decomp_buf = NULL;
     uint8_t    *src;
     LzImageType type;
-    Palette *palette;
+    SpicePalette *palette;
     int alpha;
     int n_comp_pixels;
     int width;
@@ -533,11 +533,11 @@ static cairo_surface_t *canvas_get_lz(CanvasBase *canvas, LZImage *image, int in
         CANVAS_ERROR("lz error, %s", lz_data->message_buf);
     }
 
-    if (image->descriptor.type == IMAGE_TYPE_LZ_RGB) {
+    if (image->descriptor.type == SPICE_IMAGE_TYPE_LZ_RGB) {
         comp_buf = image->lz_rgb.data;
         comp_size = image->lz_rgb.data_size;
         palette = NULL;
-    } else if (image->descriptor.type == IMAGE_TYPE_LZ_PLT) {
+    } else if (image->descriptor.type == SPICE_IMAGE_TYPE_LZ_PLT) {
         comp_buf = image->lz_plt.data;
         comp_size = image->lz_plt.data_size;
         palette = canvas_get_palett(canvas, image->lz_plt.palette, image->lz_plt.flags);
@@ -569,7 +569,7 @@ static cairo_surface_t *canvas_get_lz(CanvasBase *canvas, LZImage *image, int in
     ASSERT(width == image->descriptor.width);
     ASSERT(height == image->descriptor.height);
 
-    ASSERT((image->descriptor.type == IMAGE_TYPE_LZ_PLT) || (n_comp_pixels == width * height));
+    ASSERT((image->descriptor.type == SPICE_IMAGE_TYPE_LZ_PLT) || (n_comp_pixels == width * height));
 #ifdef WIN32
     lz_data->decode_data.dc = canvas->dc;
 #endif
@@ -612,7 +612,7 @@ static cairo_surface_t *canvas_get_lz(CanvasBase *canvas, LZImage *image, int in
 // same byte sequence can be transformed to different RGB pixels by different plts)
 static cairo_surface_t *canvas_get_glz(CanvasBase *canvas, LZImage *image)
 {
-    ASSERT(image->descriptor.type == IMAGE_TYPE_GLZ_RGB);
+    ASSERT(image->descriptor.type == SPICE_IMAGE_TYPE_GLZ_RGB);
 #ifdef WIN32
     canvas->glz_data.decode_data.dc = canvas->dc;
 #endif
@@ -625,9 +625,9 @@ static cairo_surface_t *canvas_get_glz(CanvasBase *canvas, LZImage *image)
 //#define DEBUG_DUMP_BITMAP
 
 #ifdef DEBUG_DUMP_BITMAP
-static void dump_bitmap(Bitmap *bitmap, Palette *palette)
+static void dump_bitmap(SpiceBitmap *bitmap, SpicePalette *palette)
 {
-    uint8_t* data = (uint8_t *)GET_ADDRESS(bitmap->data);
+    uint8_t* data = (uint8_t *)SPICE_GET_ADDRESS(bitmap->data);
     static uint32_t file_id = 0;
     uint32_t i, j;
     char file_str[200];
@@ -662,10 +662,10 @@ static void dump_bitmap(Bitmap *bitmap, Palette *palette)
 
 #endif
 
-static cairo_surface_t *canvas_get_bits(CanvasBase *canvas, Bitmap *bitmap)
+static cairo_surface_t *canvas_get_bits(CanvasBase *canvas, SpiceBitmap *bitmap)
 {
     cairo_surface_t* surface;
-    Palette *palette;
+    SpicePalette *palette;
 
     palette = canvas_get_palett(canvas, bitmap->palette, bitmap->flags);
 #ifdef DEBUG_DUMP_BITMAP
@@ -676,7 +676,7 @@ static cairo_surface_t *canvas_get_bits(CanvasBase *canvas, Bitmap *bitmap)
 
     surface = canvas_bitmap_to_surface(canvas, bitmap, palette);
 
-    if (palette && (bitmap->flags & BITMAP_PAL_FROM_CACHE)) {
+    if (palette && (bitmap->flags & SPICE_BITMAP_FLAGS_PAL_FROM_CACHE)) {
         canvas->palette_cache_release(palette);
     }
 
@@ -686,17 +686,17 @@ static cairo_surface_t *canvas_get_bits(CanvasBase *canvas, Bitmap *bitmap)
 #else
 
 
-static cairo_surface_t *canvas_get_bits(CanvasBase *canvas, Bitmap *bitmap)
+static cairo_surface_t *canvas_get_bits(CanvasBase *canvas, SpiceBitmap *bitmap)
 {
-    Palette *palette;
+    SpicePalette *palette;
 
     if (!bitmap->palette) {
         return canvas_bitmap_to_surface(canvas, bitmap, NULL);
     }
-    palette = (Palette *)GET_ADDRESS(bitmap->palette);
+    palette = (SpicePalette *)SPICE_GET_ADDRESS(bitmap->palette);
     if (canvas->color_shift == 5) {
-        int size = sizeof(Palette) + (palette->num_ents << 2);
-        Palette *local_palette = malloc(size);
+        int size = sizeof(SpicePalette) + (palette->num_ents << 2);
+        SpicePalette *local_palette = malloc(size);
         cairo_surface_t* surface;
 
         memcpy(local_palette, palette, size);
@@ -773,49 +773,49 @@ static void __release_surface(void *inv_surf)
 
 //#define DEBUG_LZ
 
-static cairo_surface_t *canvas_get_image(CanvasBase *canvas, ADDRESS addr)
+static cairo_surface_t *canvas_get_image(CanvasBase *canvas, SPICE_ADDRESS addr)
 {
-    ImageDescriptor *descriptor = (ImageDescriptor *)GET_ADDRESS(addr);
+    SpiceImageDescriptor *descriptor = (SpiceImageDescriptor *)SPICE_GET_ADDRESS(addr);
     cairo_surface_t *surface;
-    access_test(canvas, descriptor, sizeof(ImageDescriptor));
+    access_test(canvas, descriptor, sizeof(SpiceImageDescriptor));
 #ifdef DEBUG_LZ
     LOG_DEBUG("canvas_get_image image type: " << (int)descriptor->type);
 #endif
 
     switch (descriptor->type) {
-    case IMAGE_TYPE_QUIC: {
-        QUICImage *image = (QUICImage *)descriptor;
-        access_test(canvas, descriptor, sizeof(QUICImage));
+    case SPICE_IMAGE_TYPE_QUIC: {
+        SpiceQUICImage *image = (SpiceQUICImage *)descriptor;
+        access_test(canvas, descriptor, sizeof(SpiceQUICImage));
         surface = canvas_get_quic(canvas, image, 0);
         break;
     }
 #ifdef CAIRO_CANVAS_NO_CHUNKS
-    case IMAGE_TYPE_LZ_PLT: {
-        access_test(canvas, descriptor, sizeof(LZ_PLTImage));
+    case SPICE_IMAGE_TYPE_LZ_PLT: {
+        access_test(canvas, descriptor, sizeof(SpiceLZPLTImage));
         LZImage *image = (LZImage *)descriptor;
         surface = canvas_get_lz(canvas, image, 0);
         break;
     }
-    case IMAGE_TYPE_LZ_RGB: {
-        access_test(canvas, descriptor, sizeof(LZ_RGBImage));
+    case SPICE_IMAGE_TYPE_LZ_RGB: {
+        access_test(canvas, descriptor, sizeof(SpiceLZRGBImage));
         LZImage *image = (LZImage *)descriptor;
         surface = canvas_get_lz(canvas, image, 0);
         break;
     }
 #endif
 #ifdef USE_GLZ
-    case IMAGE_TYPE_GLZ_RGB: {
-        access_test(canvas, descriptor, sizeof(LZ_RGBImage));
+    case SPICE_IMAGE_TYPE_GLZ_RGB: {
+        access_test(canvas, descriptor, sizeof(SpiceLZRGBImage));
         LZImage *image = (LZImage *)descriptor;
         surface = canvas_get_glz(canvas, image);
         break;
     }
 #endif
-    case IMAGE_TYPE_FROM_CACHE:
+    case SPICE_IMAGE_TYPE_FROM_CACHE:
         return canvas->bits_cache_get(canvas->bits_cache_opaque, descriptor->id);
-    case IMAGE_TYPE_BITMAP: {
-        BitmapImage *bitmap = (BitmapImage *)descriptor;
-        access_test(canvas, descriptor, sizeof(BitmapImage));
+    case SPICE_IMAGE_TYPE_BITMAP: {
+        SpiceBitmapImage *bitmap = (SpiceBitmapImage *)descriptor;
+        access_test(canvas, descriptor, sizeof(SpiceBitmapImage));
         surface = canvas_get_bits(canvas, &bitmap->bitmap);
         break;
     }
@@ -823,12 +823,12 @@ static cairo_surface_t *canvas_get_image(CanvasBase *canvas, ADDRESS addr)
         CANVAS_ERROR("invalid image type");
     }
 
-    if (descriptor->flags & IMAGE_CACHE_ME) {
+    if (descriptor->flags & SPICE_IMAGE_FLAGS_CACHE_ME) {
         canvas->bits_cache_put(canvas->bits_cache_opaque, descriptor->id, surface);
 #ifdef DEBUG_DUMP_SURFACE
         dump_surface(surface, 1);
 #endif
-    } else if (descriptor->type != IMAGE_TYPE_FROM_CACHE) {
+    } else if (descriptor->type != SPICE_IMAGE_TYPE_FROM_CACHE) {
 #ifdef DEBUG_DUMP_SURFACE
         dump_surface(surface, 0);
 #endif
@@ -838,21 +838,21 @@ static cairo_surface_t *canvas_get_image(CanvasBase *canvas, ADDRESS addr)
 
 #else
 
-static cairo_surface_t *canvas_get_image(CairoCanvas *canvas, ADDRESS addr)
+static cairo_surface_t *canvas_get_image(CairoCanvas *canvas, SPICE_ADDRESS addr)
 {
-    ImageDescriptor *descriptor = (ImageDescriptor *)GET_ADDRESS(addr);
+    SpiceImageDescriptor *descriptor = (SpiceImageDescriptor *)SPICE_GET_ADDRESS(addr);
 
-    access_test(canvas, descriptor, sizeof(ImageDescriptor));
+    access_test(canvas, descriptor, sizeof(SpiceImageDescriptor));
 
     switch (descriptor->type) {
-    case IMAGE_TYPE_QUIC: {
-        QUICImage *image = (QUICImage *)descriptor;
-        access_test(canvas, descriptor, sizeof(QUICImage));
+    case SPICE_IMAGE_TYPE_QUIC: {
+        SpiceQUICImage *image = (SpiceQUICImage *)descriptor;
+        access_test(canvas, descriptor, sizeof(SpiceQUICImage));
         return canvas_get_quic(canvas, image, 0);
     }
-    case IMAGE_TYPE_BITMAP: {
-        BitmapImage *bitmap = (BitmapImage *)descriptor;
-        access_test(canvas, descriptor, sizeof(BitmapImage));
+    case SPICE_IMAGE_TYPE_BITMAP: {
+        SpiceBitmapImage *bitmap = (SpiceBitmapImage *)descriptor;
+        access_test(canvas, descriptor, sizeof(SpiceBitmapImage));
         return canvas_get_bits(canvas, &bitmap->bitmap);
     }
     default:
@@ -875,7 +875,7 @@ static inline uint8_t revers_bits(uint8_t byte)
     return ret;
 }
 
-static cairo_surface_t *canvas_get_bitmap_mask(CanvasBase *canvas, Bitmap* bitmap, int invers)
+static cairo_surface_t *canvas_get_bitmap_mask(CanvasBase *canvas, SpiceBitmap* bitmap, int invers)
 {
     cairo_surface_t *surface;
     uint8_t *src_line;
@@ -895,7 +895,7 @@ static cairo_surface_t *canvas_get_bitmap_mask(CanvasBase *canvas, Bitmap* bitma
                      cairo_status_to_string(cairo_surface_status(surface)));
     }
 
-    src_line = (uint8_t *)GET_ADDRESS(bitmap->data);
+    src_line = (uint8_t *)SPICE_GET_ADDRESS(bitmap->data);
     src_stride = bitmap->stride;
     end_line = src_line + (bitmap->y * src_stride);
     access_test(canvas, src_line, end_line - src_line);
@@ -904,9 +904,9 @@ static cairo_surface_t *canvas_get_bitmap_mask(CanvasBase *canvas, Bitmap* bitma
     dest_stride = cairo_image_surface_get_stride(surface);
     dest_line = cairo_image_surface_get_data(surface);
 #if defined(GL_CANVAS)
-    if ((bitmap->flags & BITMAP_TOP_DOWN)) {
+    if ((bitmap->flags & SPICE_BITMAP_FLAGS_TOP_DOWN)) {
 #else
-    if (!(bitmap->flags & BITMAP_TOP_DOWN)) {
+    if (!(bitmap->flags & SPICE_BITMAP_FLAGS_TOP_DOWN)) {
 #endif
         ASSERT(bitmap->y > 0);
         dest_line += dest_stride * ((int)bitmap->y - 1);
@@ -916,9 +916,9 @@ static cairo_surface_t *canvas_get_bitmap_mask(CanvasBase *canvas, Bitmap* bitma
     if (invers) {
         switch (bitmap->format) {
 #if defined(GL_CANVAS) || defined(GDI_CANVAS)
-        case BITMAP_FMT_1BIT_BE:
+        case SPICE_BITMAP_FMT_1BIT_BE:
 #else
-        case BITMAP_FMT_1BIT_LE:
+        case SPICE_BITMAP_FMT_1BIT_LE:
 #endif
             for (; src_line != end_line; src_line += src_stride, dest_line += dest_stride) {
                 uint8_t *dest = dest_line;
@@ -930,9 +930,9 @@ static cairo_surface_t *canvas_get_bitmap_mask(CanvasBase *canvas, Bitmap* bitma
             }
             break;
 #if defined(GL_CANVAS) || defined(GDI_CANVAS)
-        case BITMAP_FMT_1BIT_LE:
+        case SPICE_BITMAP_FMT_1BIT_LE:
 #else
-        case BITMAP_FMT_1BIT_BE:
+        case SPICE_BITMAP_FMT_1BIT_BE:
 #endif
             for (; src_line != end_line; src_line += src_stride, dest_line += dest_stride) {
                 uint8_t *dest = dest_line;
@@ -951,18 +951,18 @@ static cairo_surface_t *canvas_get_bitmap_mask(CanvasBase *canvas, Bitmap* bitma
     } else {
         switch (bitmap->format) {
 #if defined(GL_CANVAS) || defined(GDI_CANVAS)
-        case BITMAP_FMT_1BIT_BE:
+        case SPICE_BITMAP_FMT_1BIT_BE:
 #else
-        case BITMAP_FMT_1BIT_LE:
+        case SPICE_BITMAP_FMT_1BIT_LE:
 #endif
             for (; src_line != end_line; src_line += src_stride, dest_line += dest_stride) {
                 memcpy(dest_line, src_line, line_size);
             }
             break;
 #if defined(GL_CANVAS) || defined(GDI_CANVAS)
-        case BITMAP_FMT_1BIT_LE:
+        case SPICE_BITMAP_FMT_1BIT_LE:
 #else
-        case BITMAP_FMT_1BIT_BE:
+        case SPICE_BITMAP_FMT_1BIT_BE:
 #endif
             for (; src_line != end_line; src_line += src_stride, dest_line += dest_stride) {
                 uint8_t *dest = dest_line;
@@ -1092,9 +1092,9 @@ static inline cairo_surface_t* canvas_handle_inverse_user_data(cairo_surface_t* 
     return inv_surf;
 }
 
-static cairo_surface_t *canvas_get_mask(CanvasBase *canvas, QMask *mask)
+static cairo_surface_t *canvas_get_mask(CanvasBase *canvas, SpiceQMask *mask)
 {
-    ImageDescriptor *descriptor;
+    SpiceImageDescriptor *descriptor;
     cairo_surface_t *surface;
     int need_invers;
     int is_invers;
@@ -1104,26 +1104,26 @@ static cairo_surface_t *canvas_get_mask(CanvasBase *canvas, QMask *mask)
         return NULL;
     }
 
-    descriptor = (ImageDescriptor *)GET_ADDRESS(mask->bitmap);
-    access_test(canvas, descriptor, sizeof(ImageDescriptor));
-    need_invers = mask->flags & MASK_INVERS;
+    descriptor = (SpiceImageDescriptor *)SPICE_GET_ADDRESS(mask->bitmap);
+    access_test(canvas, descriptor, sizeof(SpiceImageDescriptor));
+    need_invers = mask->flags & SPICE_MASK_FLAGS_INVERS;
 
 #ifdef CAIRO_CANVAS_CACHE
-    cache_me = descriptor->flags & IMAGE_CACHE_ME;
+    cache_me = descriptor->flags & SPICE_IMAGE_FLAGS_CACHE_ME;
 #else
     cache_me = 0;
 #endif
 
     switch (descriptor->type) {
-    case IMAGE_TYPE_BITMAP: {
-        BitmapImage *bitmap = (BitmapImage *)descriptor;
-        access_test(canvas, descriptor, sizeof(BitmapImage));
+    case SPICE_IMAGE_TYPE_BITMAP: {
+        SpiceBitmapImage *bitmap = (SpiceBitmapImage *)descriptor;
+        access_test(canvas, descriptor, sizeof(SpiceBitmapImage));
         is_invers = need_invers && !cache_me;
         surface = canvas_get_bitmap_mask(canvas, &bitmap->bitmap, is_invers);
         break;
     }
 #if defined(CAIRO_CANVAS_CACHE) || defined(CAIRO_CANVAS_IMAGE_CACHE)
-    case IMAGE_TYPE_FROM_CACHE:
+    case SPICE_IMAGE_TYPE_FROM_CACHE:
         surface = canvas->bits_cache_get(canvas->bits_cache_opaque, descriptor->id);
         is_invers = 0;
         break;
@@ -1149,13 +1149,13 @@ static cairo_surface_t *canvas_get_mask(CanvasBase *canvas, QMask *mask)
     return surface;
 }
 
-static inline RasterGlyph *canvas_next_raster_glyph(const RasterGlyph *glyph, int bpp)
+static inline SpiceRasterGlyph *canvas_next_raster_glyph(const SpiceRasterGlyph *glyph, int bpp)
 {
-    return (RasterGlyph *)((uint8_t *)(glyph + 1) +
+    return (SpiceRasterGlyph *)((uint8_t *)(glyph + 1) +
                                           (ALIGN(glyph->width * bpp, 8) * glyph->height >> 3));
 }
 
-static inline void canvas_raster_glyph_box(const RasterGlyph *glyph, Rect *r)
+static inline void canvas_raster_glyph_box(const SpiceRasterGlyph *glyph, SpiceRect *r)
 {
     ASSERT(r);
     r->top = glyph->render_pos.y + glyph->glyph_origin.y;
@@ -1222,15 +1222,15 @@ static inline void canvas_put_bits(uint8_t *dest, int dest_offset, uint8_t *src,
     }
 }
 
-static void canvas_put_glyph_bits(RasterGlyph *glyph, int bpp, uint8_t *dest, int dest_stride,
-                                  Rect *bounds)
+static void canvas_put_glyph_bits(SpiceRasterGlyph *glyph, int bpp, uint8_t *dest, int dest_stride,
+                                  SpiceRect *bounds)
 {
-    Rect glyph_box;
+    SpiceRect glyph_box;
     uint8_t *src;
     int lines;
     int width;
 
-    //todo: support STRING_RASTER_TOP_DOWN
+    //todo: support SPICE_STRING_FLAGS_RASTER_TOP_DOWN
     canvas_raster_glyph_box(glyph, &glyph_box);
     ASSERT(glyph_box.top >= bounds->top && glyph_box.bottom <= bounds->bottom);
     ASSERT(glyph_box.left >= bounds->left && glyph_box.right <= bounds->right);
@@ -1298,11 +1298,11 @@ static void canvas_put_glyph_bits(RasterGlyph *glyph, int bpp, uint8_t *dest, in
     }
 }
 
-static cairo_surface_t *canvas_get_str_mask(CanvasBase *canvas, String *str, int bpp, Point *pos)
+static cairo_surface_t *canvas_get_str_mask(CanvasBase *canvas, SpiceString *str, int bpp, SpicePoint *pos)
 {
-    RasterGlyph *glyph = (RasterGlyph *)str->data;
-    RasterGlyph *next_glyph;
-    Rect bounds;
+    SpiceRasterGlyph *glyph = (SpiceRasterGlyph *)str->data;
+    SpiceRasterGlyph *next_glyph;
+    SpiceRect bounds;
     cairo_surface_t *str_mask;
     uint8_t *dest;
     int dest_stride;
@@ -1310,16 +1310,16 @@ static cairo_surface_t *canvas_get_str_mask(CanvasBase *canvas, String *str, int
 
     ASSERT(str->length > 0);
 
-    access_test(canvas, glyph, sizeof(RasterGlyph));
+    access_test(canvas, glyph, sizeof(SpiceRasterGlyph));
     next_glyph = canvas_next_raster_glyph(glyph, bpp);
     access_test(canvas, glyph, (uint8_t*)next_glyph - (uint8_t*)glyph);
     canvas_raster_glyph_box(glyph, &bounds);
 
     for (i = 1; i < str->length; i++) {
-        Rect glyph_box;
+        SpiceRect glyph_box;
 
         glyph = next_glyph;
-        access_test(canvas, glyph, sizeof(RasterGlyph));
+        access_test(canvas, glyph, sizeof(SpiceRasterGlyph));
         next_glyph = canvas_next_raster_glyph(glyph, bpp);
         access_test(canvas, glyph, (uint8_t*)next_glyph - (uint8_t*)glyph);
         canvas_raster_glyph_box(glyph, &glyph_box);
@@ -1335,7 +1335,7 @@ static cairo_surface_t *canvas_get_str_mask(CanvasBase *canvas, String *str, int
     }
     dest = cairo_image_surface_get_data(str_mask);
     dest_stride = cairo_image_surface_get_stride(str_mask);
-    glyph = (RasterGlyph *)str->data;
+    glyph = (SpiceRasterGlyph *)str->data;
     for (i = 0; i < str->length; i++) {
 #if defined(GL_CANVAS)
         canvas_put_glyph_bits(glyph, bpp, dest + (bounds.bottom - bounds.top - 1) * dest_stride,
@@ -1351,12 +1351,12 @@ static cairo_surface_t *canvas_get_str_mask(CanvasBase *canvas, String *str, int
     return str_mask;
 }
 
-static inline VectotGlyph *canvas_next_vector_glyph(const VectotGlyph *glyph)
+static inline SpiceVectorGlyph *canvas_next_vector_glyph(const SpiceVectorGlyph *glyph)
 {
-    return (VectotGlyph *)((uint8_t *)(glyph + 1) + glyph->data_size);
+    return (SpiceVectorGlyph *)((uint8_t *)(glyph + 1) + glyph->data_size);
 }
 
-static cairo_surface_t *canvas_scale_surface(cairo_surface_t *src, const Rect *src_area, int width,
+static cairo_surface_t *canvas_scale_surface(cairo_surface_t *src, const SpiceRect *src_area, int width,
                                              int hight, int scale_mode)
 {
     cairo_t *cairo;
@@ -1389,8 +1389,8 @@ static cairo_surface_t *canvas_scale_surface(cairo_surface_t *src, const Rect *s
     cairo_matrix_scale(&matrix, sx, sy);
 
     cairo_pattern_set_matrix(pattern, &matrix);
-    ASSERT(scale_mode == IMAGE_SCALE_INTERPOLATE || scale_mode == IMAGE_SCALE_NEAREST);
-    cairo_pattern_set_filter(pattern, (scale_mode == IMAGE_SCALE_NEAREST) ?
+    ASSERT(scale_mode == SPICE_IMAGE_SCALE_MODE_INTERPOLATE || scale_mode == SPICE_IMAGE_SCALE_MODE_NEAREST);
+    cairo_pattern_set_filter(pattern, (scale_mode == SPICE_IMAGE_SCALE_MODE_NEAREST) ?
                                                           CAIRO_FILTER_NEAREST : CAIRO_FILTER_GOOD);
 
     cairo_set_source(cairo, pattern);

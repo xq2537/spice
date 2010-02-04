@@ -62,13 +62,13 @@ public:
     void on_layer_changed(ScreenLayer& layer);
     void resize(int width, int height);
     void set_name(const std::wstring& name);
-    uint64_t invalidate(const Rect& rect, bool urgent);
+    uint64_t invalidate(const SpiceRect& rect, bool urgent);
     void invalidate(const QRegion &region);
     void capture_mouse();
     void relase_mouse();
     bool is_mouse_captured() { return _mouse_captured;}
     bool intercepts_sys_key() { return _key_interception;}
-    Point get_size() { return _size;}
+    SpicePoint get_size() { return _size;}
     bool has_monitor() { return _monitor != 0;}
     void lock_size();
     void unlock_size();
@@ -82,7 +82,7 @@ public:
     void minimize();
     void show(bool activate, RedScreen* pos);
     void show_full_screen();
-    void position_full_screen(const Point& position);
+    void position_full_screen(const SpicePoint& position);
     void hide();
     void show();
     void activate();
@@ -118,7 +118,7 @@ private:
     bool is_out_of_sync() { return _out_of_sync;}
     void __show_full_screen();
 
-    bool _invalidate(const Rect& rect, bool urgent, uint64_t& update_mark);
+    bool _invalidate(const SpiceRect& rect, bool urgent, uint64_t& update_mark);
     void begin_update(QRegion& direct_rgn, QRegion& composit_rgn, QRegion& frame_rgn);
     void update_composit(QRegion& composit_rgn);
     void draw_direct(RedDrawable& win_dc, QRegion& direct_rgn, QRegion& composit_rgn,
@@ -133,13 +133,13 @@ private:
     ScreenLayer* find_pointer_layer();
     bool update_pointer_layer();
 
-    virtual void on_exposed_rect(const Rect& area);
+    virtual void on_exposed_rect(const SpiceRect& area);
     virtual void on_pointer_enter(int x, int y, unsigned int buttons_state);
     virtual void on_pointer_motion(int x, int y, unsigned int buttons_state);
     virtual void on_pointer_leave();
     void on_mouse_motion(int x, int y, unsigned int buttons_state);
-    virtual void on_mouse_button_press(RedButton button, unsigned int buttons_state);
-    virtual void on_mouse_button_release(RedButton button, unsigned int buttons_state);
+    virtual void on_mouse_button_press(SpiceMouseButton button, unsigned int buttons_state);
+    virtual void on_mouse_button_release(SpiceMouseButton button, unsigned int buttons_state);
 
     virtual void on_key_press(RedKey key);
     virtual void on_key_release(RedKey key);
@@ -178,10 +178,10 @@ private:
     RedDrawable* _composit_area;
     uint64_t _update_mark;
 
-    Point _size;
-    Point _origin;
-    Point _mouse_anchor_point;
-    Point _save_pos;
+    SpicePoint _size;
+    SpicePoint _origin;
+    SpicePoint _mouse_anchor_point;
+    SpicePoint _save_pos;
     Monitor* _monitor;
 
     LocalCursor* _default_cursor;
@@ -195,7 +195,7 @@ private:
     Mutex _layer_changed_lock;
     bool _active_layer_change_event;
     bool _pointer_on_screen;
-    Point _pointer_pos;
+    SpicePoint _pointer_pos;
     unsigned int _mouse_botton_state;
 
     friend class LayerChangedEvent;

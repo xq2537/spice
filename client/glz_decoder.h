@@ -55,7 +55,7 @@ public:
     virtual ~GlzDecoder();
 
     /* Decodes the data and afterwards  calls GlzDecodeHandler::handle_decoded_image */
-    void decode(uint8_t *data, Palette *palette, void *opaque_usr_info);
+    void decode(uint8_t *data, SpicePalette *palette, void *opaque_usr_info);
 
 private:
     void decode_header();

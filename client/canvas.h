@@ -56,13 +56,13 @@ typedef SharedCache<cairo_surface_t, PixmapCacheTreat, 1024> PixmapCache;
 
 class CachedPalette {
 public:
-    CachedPalette(Palette* palette)
+    CachedPalette(SpicePalette* palette)
         : _refs(1)
     {
-        int size = sizeof(Palette) + palette->num_ents * sizeof(uint32_t);
+        int size = sizeof(SpicePalette) + palette->num_ents * sizeof(uint32_t);
         CachedPalette **ptr = (CachedPalette **)new uint8_t[size + sizeof(CachedPalette *)];
         *ptr = this;
-        _palette = (Palette*)(ptr + 1);
+        _palette = (SpicePalette*)(ptr + 1);
         memcpy(_palette, palette, size);
     }
 
@@ -79,13 +79,13 @@ public:
         }
     }
 
-    static void unref(Palette *pal)
+    static void unref(SpicePalette *pal)
     {
         CachedPalette **ptr = (CachedPalette **)pal;
         (*(ptr - 1))->unref();
     }
 
-    Palette* palette() { return _palette;}
+    SpicePalette* palette() { return _palette;}
 
 private:
     ~CachedPalette()
@@ -95,7 +95,7 @@ private:
 
 private:
     int _refs;
-    Palette* _palette;
+    SpicePalette* _palette;
 };
 
 class PaletteCacheTreat {
@@ -188,25 +188,25 @@ public:
 
     virtual void clear() = 0;
 
-    void draw_fill(RedFill& fill, int size);
-    void draw_text(RedText& text, int size);
-    void draw_opaque(RedOpaque& opaque, int size);
-    void draw_copy(RedCopy& copy, int size);
-    void draw_transparent(RedTransparent& transparent, int size);
-    void draw_alpha_blend(RedAlphaBlend& alpha_blend, int size);
-    void copy_bits(RedCopyBits& copy_bits, int size);
-    void draw_blend(RedBlend& blend, int size);
-    void draw_blackness(RedBlackness& blackness, int size);
-    void draw_whiteness(RedWhiteness& whiteness, int size);
-    void draw_invers(RedInvers& invers, int size);
-    void draw_rop3(RedRop3& rop3, int size);
-    void draw_stroke(RedStroke& stroke, int size);
+    void draw_fill(SpiceMsgDisplayDrawFill& fill, int size);
+    void draw_text(SpiceMsgDisplayDrawText& text, int size);
+    void draw_opaque(SpiceMsgDisplayDrawOpaque& opaque, int size);
+    void draw_copy(SpiceMsgDisplayDrawCopy& copy, int size);
+    void draw_transparent(SpiceMsgDisplayDrawTransparent& transparent, int size);
+    void draw_alpha_blend(SpiceMsgDisplayDrawAlphaBlend& alpha_blend, int size);
+    void copy_bits(SpiceMsgDisplayCopyBits& copy_bits, int size);
+    void draw_blend(SpiceMsgDisplayDrawBlend& blend, int size);
+    void draw_blackness(SpiceMsgDisplayDrawBlackness& blackness, int size);
+    void draw_whiteness(SpiceMsgDisplayDrawWhiteness& whiteness, int size);
+    void draw_invers(SpiceMsgDisplayDrawInvers& invers, int size);
+    void draw_rop3(SpiceMsgDisplayDrawRop3& rop3, int size);
+    void draw_stroke(SpiceMsgDisplayDrawStroke& stroke, int size);
 
 #ifdef WIN32
     virtual void put_image(HDC dc, const PixmapHeader& image,
-                           const Rect& dest, const QRegion* clip) = 0;
+                           const SpiceRect& dest, const QRegion* clip) = 0;
 #else
-    virtual void put_image(const PixmapHeader& image, const Rect& dest,
+    virtual void put_image(const PixmapHeader& image, const SpiceRect& dest,
                            const QRegion* clip) = 0;
 #endif
 
@@ -214,39 +214,39 @@ public:
 
 protected:
     virtual void set_access_params(unsigned long base, unsigned long max) = 0;
-    virtual void draw_fill(Rect *bbox, Clip *clip, Fill *fill) = 0;
-    virtual void draw_copy(Rect *bbox, Clip *clip, Copy *copy) = 0;
-    virtual void draw_opaque(Rect *bbox, Clip *clip, Opaque *opaque) = 0;
-    virtual void copy_bits(Rect *bbox, Clip *clip, Point *src_pos) = 0;
-    virtual void draw_text(Rect *bbox, Clip *clip, Text *text) = 0;
-    virtual void draw_stroke(Rect *bbox, Clip *clip, Stroke *stroke) = 0;
-    virtual void draw_rop3(Rect *bbox, Clip *clip, Rop3 *rop3) = 0;
-    virtual void draw_blend(Rect *bbox, Clip *clip, Blend *blend) = 0;
-    virtual void draw_blackness(Rect *bbox, Clip *clip, Blackness *blackness) = 0;
-    virtual void draw_whiteness(Rect *bbox, Clip *clip, Whiteness *whiteness) = 0;
-    virtual void draw_invers(Rect *bbox, Clip *clip, Invers *invers) = 0;
-    virtual void draw_transparent(Rect *bbox, Clip *clip, Transparent* transparent) = 0;
-    virtual void draw_alpha_blend(Rect *bbox, Clip *clip, AlphaBlnd* alpha_blend) = 0;
+    virtual void draw_fill(SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill) = 0;
+    virtual void draw_copy(SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy) = 0;
+    virtual void draw_opaque(SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque) = 0;
+    virtual void copy_bits(SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos) = 0;
+    virtual void draw_text(SpiceRect *bbox, SpiceClip *clip, SpiceText *text) = 0;
+    virtual void draw_stroke(SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke) = 0;
+    virtual void draw_rop3(SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3) = 0;
+    virtual void draw_blend(SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend) = 0;
+    virtual void draw_blackness(SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness) = 0;
+    virtual void draw_whiteness(SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness) = 0;
+    virtual void draw_invers(SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers) = 0;
+    virtual void draw_transparent(SpiceRect *bbox, SpiceClip *clip, SpiceTransparent* transparent) = 0;
+    virtual void draw_alpha_blend(SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend) = 0;
 
     PixmapCache& pixmap_cache() { return _pixmap_cache;}
     PaletteCache& palette_cache() { return _palette_cache;}
     static void bits_cache_put(void *opaque, uint64_t id, cairo_surface_t *surface);
     static cairo_surface_t* bits_cache_get(void *opaque, uint64_t id);
-    static void palette_cache_put(void *opaque, Palette *palette);
-    static Palette* palette_cache_get(void *opaque, uint64_t id);
-    static void palette_cache_release(Palette* palette);
+    static void palette_cache_put(void *opaque, SpicePalette *palette);
+    static SpicePalette* palette_cache_get(void *opaque, uint64_t id);
+    static void palette_cache_release(SpicePalette* palette);
 
     GlzDecoder& glz_decoder() {return _glz_decoder;}
-    static void glz_decode(void *opaque, uint8_t *data, Palette *plt, void *usr_data);
+    static void glz_decode(void *opaque, uint8_t *data, SpicePalette *plt, void *usr_data);
 
 private:
     void access_test(void* ptr, size_t size);
-    void localalize_ptr(ADDRESS* data);
-    void localalize_image(ADDRESS* in_bitmap);
-    void localalize_brush(Brush& brush);
-    void localalize_attr(LineAttr& attr);
-    void localalize_mask(QMask& mask);
-    void begin_draw(RedDrawBase& base, int size, size_t min_size);
+    void localalize_ptr(SPICE_ADDRESS* data);
+    void localalize_image(SPICE_ADDRESS* in_bitmap);
+    void localalize_brush(SpiceBrush& brush);
+    void localalize_attr(SpiceLineAttr& attr);
+    void localalize_mask(SpiceQMask& mask);
+    void begin_draw(SpiceMsgDisplayBase& base, int size, size_t min_size);
 
 private:
     PixmapCache& _pixmap_cache;

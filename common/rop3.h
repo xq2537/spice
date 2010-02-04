@@ -23,9 +23,9 @@
 #include "draw.h"
 #include "cairo.h"
 
-void do_rop3_with_pattern(uint8_t rop3, cairo_surface_t *d, cairo_surface_t *s, Point *src_pos,
-                          cairo_surface_t *p, Point *pat_pos);
-void do_rop3_with_color(uint8_t rop3, cairo_surface_t *d, cairo_surface_t *s, Point *src_pos,
+void do_rop3_with_pattern(uint8_t rop3, cairo_surface_t *d, cairo_surface_t *s, SpicePoint *src_pos,
+                          cairo_surface_t *p, SpicePoint *pat_pos);
+void do_rop3_with_color(uint8_t rop3, cairo_surface_t *d, cairo_surface_t *s, SpicePoint *src_pos,
                         uint32_t rgb);
 
 void rop3_init();

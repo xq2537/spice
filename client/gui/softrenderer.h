@@ -24,8 +24,8 @@ namespace CEGUI
 
         void reset_surface(uint8_t* surface, uint width, uint height, uint stride);
 
-        virtual void addQuad(const Rect& dest_rect, float z, const Texture* tex,
-                            const Rect& texture_rect, const ColourRect& colours,
+        virtual void addQuad(const SpiceRect& dest_rect, float z, const Texture* tex,
+                            const SpiceRect& texture_rect, const ColourRect& colours,
                             QuadSplitMode quad_split_mode);
         virtual void doRender();
         virtual void clearRenderList();
@@ -33,8 +33,8 @@ namespace CEGUI
         virtual bool isQueueingEnabled() const;
 
         virtual Texture* createTexture();
-        virtual Texture* createTexture(const String& filename,
-                                       const String& resourceGroup);
+        virtual Texture* createTexture(const SpiceString& filename,
+                                       const SpiceString& resourceGroup);
         virtual Texture* createTexture(float size);
         virtual void destroyTexture(Texture* texture);
         virtual void destroyAllTextures();
@@ -43,7 +43,7 @@ namespace CEGUI
         virtual float getWidth() const;
         virtual float getHeight() const;
         virtual Size getSize() const;
-        virtual Rect getRect() const;
+        virtual SpiceRect getRect() const;
 
         virtual uint getHorzScreenDPI() const;
         virtual uint getVertScreenDPI() const;

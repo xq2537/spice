@@ -20,7 +20,7 @@
 #include "utils.h"
 #include "debug.h"
 
-CursorData::CursorData(RedCursor& cursor, int data_size)
+CursorData::CursorData(SpiceCursor& cursor, int data_size)
     : _atomic (1)
     , _header (cursor.header)
     , _data (NULL)
@@ -30,31 +30,31 @@ CursorData::CursorData(RedCursor& cursor, int data_size)
     int expected_size = 0;
 
     switch (cursor.header.type) {
-    case CURSOR_TYPE_ALPHA:
+    case SPICE_CURSOR_TYPE_ALPHA:
         expected_size = (_header.width << 2) * _header.height;
         break;
-    case CURSOR_TYPE_MONO:
+    case SPICE_CURSOR_TYPE_MONO:
         expected_size = (ALIGN(_header.width, 8) >> 2) * _header.height;
         break;
-    case CURSOR_TYPE_COLOR4:
+    case SPICE_CURSOR_TYPE_COLOR4:
         expected_size = (ALIGN(_header.width, 2) >> 1) * _header.height;
         expected_size += (ALIGN(_header.width, 8) >> 3) * _header.height;
         expected_size += 16 * sizeof(uint32_t);
         break;
-    case CURSOR_TYPE_COLOR8:
+    case SPICE_CURSOR_TYPE_COLOR8:
         expected_size = _header.width * _header.height;
         expected_size += (ALIGN(_header.width, 8) >> 3) * _header.height;
         expected_size += 256 * sizeof(uint32_t);
         break;
-    case CURSOR_TYPE_COLOR16:
+    case SPICE_CURSOR_TYPE_COLOR16:
         expected_size = (_header.width << 1) * _header.height;
         expected_size += (ALIGN(_header.width, 8) >> 3) * _header.height;
         break;
-    case CURSOR_TYPE_COLOR24:
+    case SPICE_CURSOR_TYPE_COLOR24:
         expected_size = (_header.width * 3) * _header.height;
         expected_size += (ALIGN(_header.width, 8) >> 3) * _header.height;
         break;
-    case CURSOR_TYPE_COLOR32:
+    case SPICE_CURSOR_TYPE_COLOR32:
         expected_size = (_header.width << 2) * _header.height;
         expected_size += (ALIGN(_header.width, 8) >> 3) * _header.height;
         break;
@@ -84,26 +84,26 @@ CursorData::~CursorData()
     delete[] _data;
 }
 
-int LocalCursor::get_size_bits(const CursorHeader& header, int& size)
+int LocalCursor::get_size_bits(const SpiceCursorHeader& header, int& size)
 {
     switch (header.type) {
-    case CURSOR_TYPE_ALPHA:
-    case CURSOR_TYPE_COLOR32:
+    case SPICE_CURSOR_TYPE_ALPHA:
+    case SPICE_CURSOR_TYPE_COLOR32:
         size = (header.width << 2) * header.height;
         return 32;
-    case CURSOR_TYPE_MONO:
+    case SPICE_CURSOR_TYPE_MONO:
         size = (ALIGN(header.width, 8) >> 3) * header.height;
         return 1;
-    case CURSOR_TYPE_COLOR4:
+    case SPICE_CURSOR_TYPE_COLOR4:
         size = (ALIGN(header.width, 2) >> 1) * header.height;
         return 4;
-    case CURSOR_TYPE_COLOR8:
+    case SPICE_CURSOR_TYPE_COLOR8:
         size = header.width * header.height;
         return 8;
-    case CURSOR_TYPE_COLOR16:
+    case SPICE_CURSOR_TYPE_COLOR16:
         size = (header.width << 1) * header.height;
         return 16;
-    case CURSOR_TYPE_COLOR24:
+    case SPICE_CURSOR_TYPE_COLOR24:
         size = (header.width * 3) * header.height;
         return 24;
     default:

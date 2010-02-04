@@ -23,7 +23,7 @@
 #define MIN(x, y) (((x) <= (y)) ? (x) : (y))
 #define MAX(x, y) (((x) >= (y)) ? (x) : (y))
 
-static inline void rect_sect(Rect* r, const Rect* bounds)
+static inline void rect_sect(SpiceRect* r, const SpiceRect* bounds)
 {
     r->left = MAX(r->left, bounds->left);
     r->right = MIN(r->right, bounds->right);
@@ -34,7 +34,7 @@ static inline void rect_sect(Rect* r, const Rect* bounds)
     r->bottom = MAX(r->top, r->bottom);
 }
 
-static inline void rect_offset(Rect* r, int dx, int dy)
+static inline void rect_offset(SpiceRect* r, int dx, int dy)
 {
     r->left += dx;
     r->right += dx;
@@ -42,24 +42,24 @@ static inline void rect_offset(Rect* r, int dx, int dy)
     r->bottom += dy;
 }
 
-static inline int rect_is_empty(const Rect* r)
+static inline int rect_is_empty(const SpiceRect* r)
 {
     return r->top == r->bottom || r->left == r->right;
 }
 
-static inline int rect_intersects(const Rect* r1, const Rect* r2)
+static inline int rect_intersects(const SpiceRect* r1, const SpiceRect* r2)
 {
     return r1->left < r2->right && r1->right > r2->left &&
            r1->top < r2->bottom && r1->bottom > r2->top;
 }
 
-static inline int rect_is_equal(const Rect *r1, const Rect *r2)
+static inline int rect_is_equal(const SpiceRect *r1, const SpiceRect *r2)
 {
     return r1->top == r2->top && r1->left == r2->left &&
            r1->bottom == r2->bottom && r1->right == r2->right;
 }
 
-static inline void rect_union(Rect *dest, const Rect *r)
+static inline void rect_union(SpiceRect *dest, const SpiceRect *r)
 {
     dest->top = MIN(dest->top, r->top);
     dest->left = MIN(dest->left, r->left);
@@ -67,7 +67,7 @@ static inline void rect_union(Rect *dest, const Rect *r)
     dest->right = MAX(dest->right, r->right);
 }
 
-static inline int rect_is_same_size(const Rect *r1, const Rect *r2)
+static inline int rect_is_same_size(const SpiceRect *r1, const SpiceRect *r2)
 {
     return r1->right - r1->left == r2->right - r2->left &&
            r1->bottom - r1->top == r2->bottom - r2->top;
@@ -75,37 +75,37 @@ static inline int rect_is_same_size(const Rect *r1, const Rect *r2)
 
 #ifdef __cplusplus
 
-static inline void rect_sect(Rect& r, const Rect& bounds)
+static inline void rect_sect(SpiceRect& r, const SpiceRect& bounds)
 {
     rect_sect(&r, &bounds);
 }
 
-static inline void rect_offset(Rect& r, int dx, int dy)
+static inline void rect_offset(SpiceRect& r, int dx, int dy)
 {
     rect_offset(&r, dx, dy);
 }
 
-static inline int rect_is_empty(const Rect& r)
+static inline int rect_is_empty(const SpiceRect& r)
 {
     return rect_is_empty(&r);
 }
 
-static inline int rect_intersects(const Rect& r1, const Rect& r2)
+static inline int rect_intersects(const SpiceRect& r1, const SpiceRect& r2)
 {
     return rect_intersects(&r1, &r2);
 }
 
-static inline int rect_is_equal(const Rect& r1, const Rect& r2)
+static inline int rect_is_equal(const SpiceRect& r1, const SpiceRect& r2)
 {
     return rect_is_equal(&r1, &r2);
 }
 
-static inline void rect_union(Rect& dest, const Rect& r)
+static inline void rect_union(SpiceRect& dest, const SpiceRect& r)
 {
     rect_union(&dest, &r);
 }
 
-static inline int rect_is_same_size(const Rect& r1, const Rect& r2)
+static inline int rect_is_same_size(const SpiceRect& r1, const SpiceRect& r2)
 {
     return rect_is_same_size(&r1, &r2);
 }

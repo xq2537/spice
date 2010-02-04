@@ -116,25 +116,25 @@ static GLCPath get_path(GLCanvas *canvas, void *addr)
     access_test(&canvas->base, data_size, sizeof(uint32_t));
     uint32_t more = *data_size;
 
-    PathSeg* seg = (PathSeg*)(data_size + 1);
+    SpicePathSeg* seg = (SpicePathSeg*)(data_size + 1);
 
     do {
-        access_test(&canvas->base, seg, sizeof(PathSeg));
+        access_test(&canvas->base, seg, sizeof(SpicePathSeg));
 
         uint32_t flags = seg->flags;
-        PointFix* point = (PointFix*)seg->data;
-        PointFix* end_point = point + seg->count;
+        SpicePointFix* point = (SpicePointFix*)seg->data;
+        SpicePointFix* end_point = point + seg->count;
         access_test(&canvas->base, point, (unsigned long)end_point - (unsigned long)point);
         ASSERT(point < end_point);
         more -= ((unsigned long)end_point - (unsigned long)seg);
-        seg = (PathSeg*)end_point;
+        seg = (SpicePathSeg*)end_point;
 
-        if (flags & PATH_BEGIN) {
+        if (flags & SPICE_PATH_BEGIN) {
             glc_path_move_to(path, fix_to_double(point->x), fix_to_double(point->y));
             point++;
         }
 
-        if (flags & PATH_BEZIER) {
+        if (flags & SPICE_PATH_BEZIER) {
             ASSERT((point - end_point) % 3 == 0);
             for (; point + 2 < end_point; point += 3) {
                 glc_path_curve_to(path,
@@ -147,8 +147,8 @@ static GLCPath get_path(GLCanvas *canvas, void *addr)
                 glc_path_line_to(path, fix_to_double(point->x), fix_to_double(point->y));
             }
         }
-        if (flags & PATH_END) {
-            if (flags & PATH_CLOSE) {
+        if (flags & SPICE_PATH_END) {
+            if (flags & SPICE_PATH_CLOSE) {
                 glc_path_close(path);
             }
         }
@@ -164,19 +164,19 @@ static GLCPath get_path(GLCanvas *canvas, void *addr)
     (dest)->height = (src)->bottom - (src)->top;    \
 }
 
-static void set_clip(GLCanvas *canvas, Rect *bbox, Clip *clip)
+static void set_clip(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip)
 {
     GLCRect rect;
     glc_clip_reset(canvas->glc);
 
     switch (clip->type) {
-    case CLIP_TYPE_NONE:
+    case SPICE_CLIP_TYPE_NONE:
         break;
-    case CLIP_TYPE_RECTS: {
-        uint32_t *n = (uint32_t *)GET_ADDRESS(clip->data);
+    case SPICE_CLIP_TYPE_RECTS: {
+        uint32_t *n = (uint32_t *)SPICE_GET_ADDRESS(clip->data);
         access_test(&canvas->base, n, sizeof(uint32_t));
-        Rect *now = (Rect *)(n + 1);
-        Rect *end = now + *n;
+        SpiceRect *now = (SpiceRect *)(n + 1);
+        SpiceRect *end = now + *n;
         access_test(&canvas->base, now, (unsigned long)end - (unsigned long)now);
 
         if (*n == 0) {
@@ -195,8 +195,8 @@ static void set_clip(GLCanvas *canvas, Rect *bbox, Clip *clip)
         }
         break;
     }
-    case CLIP_TYPE_PATH: {
-        GLCPath path = get_path(canvas, GET_ADDRESS(clip->data));
+    case SPICE_CLIP_TYPE_PATH: {
+        GLCPath path = get_path(canvas, SPICE_GET_ADDRESS(clip->data));
         glc_clip_path(canvas->glc, path, GLC_CLIP_OP_SET);
         glc_path_destroy(path);
         break;
@@ -206,7 +206,7 @@ static void set_clip(GLCanvas *canvas, Rect *bbox, Clip *clip)
     }
 }
 
-static void set_mask(GLCanvas *canvas, QMask *mask, int x, int y)
+static void set_mask(GLCanvas *canvas, SpiceQMask *mask, int x, int y)
 {
     cairo_surface_t *surface;
 
@@ -246,10 +246,10 @@ static inline void surface_to_image(GLCanvas *canvas, cairo_surface_t *surface, 
     }
 }
 
-static void set_brush(GLCanvas *canvas, Brush *brush)
+static void set_brush(GLCanvas *canvas, SpiceBrush *brush)
 {
     switch (brush->type) {
-    case BRUSH_TYPE_SOLID: {
+    case SPICE_BRUSH_TYPE_SOLID: {
         uint32_t color = brush->u.color;
         double r, g, b;
 
@@ -261,7 +261,7 @@ static void set_brush(GLCanvas *canvas, Brush *brush)
         glc_set_rgb(canvas->glc, r, g, b);
         break;
     }
-    case BRUSH_TYPE_PATTERN: {
+    case SPICE_BRUSH_TYPE_PATTERN: {
         GLCImage image;
         GLCPattern pattern;
         cairo_surface_t *surface;
@@ -275,7 +275,7 @@ static void set_brush(GLCanvas *canvas, Brush *brush)
         glc_set_pattern(canvas->glc, pattern);
         glc_pattern_destroy(pattern);
     }
-    case BRUSH_TYPE_NONE:
+    case SPICE_BRUSH_TYPE_NONE:
         return;
     default:
         CANVAS_ERROR("invalid brush type");
@@ -287,52 +287,52 @@ static void set_op(GLCanvas *canvas, UINT16 rop_decriptor)
     GLCOp op;
 
     switch (rop_decriptor) {
-    case ROPD_OP_PUT:
+    case SPICE_ROPD_OP_PUT:
         op = GLC_OP_COPY;
         break;
-    case ROPD_OP_XOR:
+    case SPICE_ROPD_OP_XOR:
         op = GLC_OP_XOR;
         break;
-    case ROPD_OP_BLACKNESS:
+    case SPICE_ROPD_OP_BLACKNESS:
         op = GLC_OP_CLEAR;
         break;
-    case ROPD_OP_WHITENESS:
+    case SPICE_ROPD_OP_WHITENESS:
         op = GLC_OP_SET;
         break;
-    case ROPD_OP_PUT | ROPD_INVERS_BRUSH:
-    case ROPD_OP_PUT | ROPD_INVERS_SRC:
+    case SPICE_ROPD_OP_PUT | SPICE_ROPD_INVERS_BRUSH:
+    case SPICE_ROPD_OP_PUT | SPICE_ROPD_INVERS_SRC:
         op = GLC_OP_COPY_INVERTED;
         break;
-    case ROPD_OP_INVERS:
+    case SPICE_ROPD_OP_INVERS:
         op = GLC_OP_INVERT;
         break;
-    case ROPD_OP_AND:
+    case SPICE_ROPD_OP_AND:
         op = GLC_OP_AND;
         break;
-    case ROPD_OP_AND | ROPD_INVERS_RES:
+    case SPICE_ROPD_OP_AND | SPICE_ROPD_INVERS_RES:
         op = GLC_OP_NAND;
         break;
-    case ROPD_OP_OR:
+    case SPICE_ROPD_OP_OR:
         op = GLC_OP_OR;
         break;
-    case ROPD_OP_OR | ROPD_INVERS_RES:
+    case SPICE_ROPD_OP_OR | SPICE_ROPD_INVERS_RES:
         op = GLC_OP_NOR;
         break;
-    case ROPD_OP_XOR | ROPD_INVERS_RES:
+    case SPICE_ROPD_OP_XOR | SPICE_ROPD_INVERS_RES:
         op = GLC_OP_EQUIV;
         break;
-    case ROPD_OP_AND | ROPD_INVERS_DEST:
+    case SPICE_ROPD_OP_AND | SPICE_ROPD_INVERS_DEST:
         op = GLC_OP_AND_REVERSE;
         break;
-    case ROPD_OP_AND | ROPD_INVERS_BRUSH:
-    case ROPD_OP_AND | ROPD_INVERS_SRC:
+    case SPICE_ROPD_OP_AND | SPICE_ROPD_INVERS_BRUSH:
+    case SPICE_ROPD_OP_AND | SPICE_ROPD_INVERS_SRC:
         op = GLC_OP_AND_INVERTED;
         break;
-    case ROPD_OP_OR | ROPD_INVERS_DEST:
+    case SPICE_ROPD_OP_OR | SPICE_ROPD_INVERS_DEST:
         op = GLC_OP_OR_REVERSE;
         break;
-    case ROPD_OP_OR | ROPD_INVERS_BRUSH:
-    case ROPD_OP_OR | ROPD_INVERS_SRC:
+    case SPICE_ROPD_OP_OR | SPICE_ROPD_INVERS_BRUSH:
+    case SPICE_ROPD_OP_OR | SPICE_ROPD_INVERS_SRC:
         op = GLC_OP_OR_INVERTED;
         break;
     default:
@@ -342,7 +342,7 @@ static void set_op(GLCanvas *canvas, UINT16 rop_decriptor)
     glc_set_op(canvas->glc, op);
 }
 
-void gl_canvas_draw_fill(GLCanvas *canvas, Rect *bbox, Clip *clip, Fill *fill)
+void gl_canvas_draw_fill(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill)
 {
     GLCRect rect;
     set_clip(canvas, bbox, clip);
@@ -355,7 +355,7 @@ void gl_canvas_draw_fill(GLCanvas *canvas, Rect *bbox, Clip *clip, Fill *fill)
     glc_flush(canvas->glc);
 }
 
-void gl_canvas_draw_copy(GLCanvas *canvas, Rect *bbox, Clip *clip, Copy *copy)
+void gl_canvas_draw_copy(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy)
 {
     cairo_surface_t *surface;
     GLCRecti src;
@@ -377,7 +377,7 @@ void gl_canvas_draw_copy(GLCanvas *canvas, Rect *bbox, Clip *clip, Copy *copy)
     glc_flush(canvas->glc);
 }
 
-void gl_canvas_draw_opaque(GLCanvas *canvas, Rect *bbox, Clip *clip, Opaque *opaque)
+void gl_canvas_draw_opaque(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque)
 {
     cairo_surface_t *surface;
     GLCRecti src;
@@ -388,7 +388,7 @@ void gl_canvas_draw_opaque(GLCanvas *canvas, Rect *bbox, Clip *clip, Opaque *opa
     set_clip(canvas, bbox, clip);
     set_mask(canvas, &opaque->mask, bbox->left, bbox->top);
 
-    glc_set_op(canvas->glc, (opaque->rop_decriptor & ROPD_INVERS_SRC) ? GLC_OP_COPY_INVERTED :
+    glc_set_op(canvas->glc, (opaque->rop_decriptor & SPICE_ROPD_INVERS_SRC) ? GLC_OP_COPY_INVERTED :
                GLC_OP_COPY);
     surface = canvas_get_image(&canvas->base, opaque->src_bitmap);
     surface_to_image(canvas, surface, &image, 0);
@@ -398,14 +398,14 @@ void gl_canvas_draw_opaque(GLCanvas *canvas, Rect *bbox, Clip *clip, Opaque *opa
     cairo_surface_destroy(surface);
 
     set_brush(canvas, &opaque->brush);
-    set_op(canvas, opaque->rop_decriptor & ~ROPD_INVERS_SRC);
+    set_op(canvas, opaque->rop_decriptor & ~SPICE_ROPD_INVERS_SRC);
     SET_GLC_RECT(&fill_rect, bbox);
     glc_fill_rect(canvas->glc, &fill_rect);
 
     glc_flush(canvas->glc);
 }
 
-void gl_canvas_draw_alpha_blend(GLCanvas *canvas, Rect *bbox, Clip *clip, AlphaBlnd *alpha_blend)
+void gl_canvas_draw_alpha_blend(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd *alpha_blend)
 {
     cairo_surface_t *surface;
     GLCRecti src;
@@ -426,7 +426,7 @@ void gl_canvas_draw_alpha_blend(GLCanvas *canvas, Rect *bbox, Clip *clip, AlphaB
     glc_flush(canvas->glc);
 }
 
-void gl_canvas_draw_blend(GLCanvas *canvas, Rect *bbox, Clip *clip, Blend *blend)
+void gl_canvas_draw_blend(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend)
 {
     cairo_surface_t *surface;
     GLCRecti src;
@@ -447,7 +447,7 @@ void gl_canvas_draw_blend(GLCanvas *canvas, Rect *bbox, Clip *clip, Blend *blend
     glc_flush(canvas->glc);
 }
 
-void gl_canvas_draw_transparent(GLCanvas *canvas, Rect *bbox, Clip *clip, Transparent *transparent)
+void gl_canvas_draw_transparent(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceTransparent *transparent)
 {
     cairo_surface_t *surface;
     cairo_surface_t *trans_surf;
@@ -474,7 +474,7 @@ void gl_canvas_draw_transparent(GLCanvas *canvas, Rect *bbox, Clip *clip, Transp
     glc_flush(canvas->glc);
 }
 
-static inline void fill_common(GLCanvas *canvas, Rect *bbox, Clip *clip, QMask * mask, GLCOp op)
+static inline void fill_common(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceQMask * mask, GLCOp op)
 {
     GLCRect rect;
 
@@ -485,27 +485,27 @@ static inline void fill_common(GLCanvas *canvas, Rect *bbox, Clip *clip, QMask *
     glc_fill_rect(canvas->glc, &rect);
 }
 
-void gl_canvas_draw_whiteness(GLCanvas *canvas, Rect *bbox, Clip *clip, Whiteness *whiteness)
+void gl_canvas_draw_whiteness(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness)
 {
     fill_common(canvas, bbox, clip, &whiteness->mask, GLC_OP_SET);
 }
 
-void gl_canvas_draw_blackness(GLCanvas *canvas, Rect *bbox, Clip *clip, Blackness *blackness)
+void gl_canvas_draw_blackness(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness)
 {
     fill_common(canvas, bbox, clip, &blackness->mask, GLC_OP_CLEAR);
 }
 
-void gl_canvas_draw_invers(GLCanvas *canvas, Rect *bbox, Clip *clip, Invers *invers)
+void gl_canvas_draw_invers(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers)
 {
     fill_common(canvas, bbox, clip, &invers->mask, GLC_OP_INVERT);
 }
 
-void gl_canvas_draw_rop3(GLCanvas *canvas, Rect *bbox, Clip *clip, Rop3 *rop3)
+void gl_canvas_draw_rop3(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3)
 {
     cairo_surface_t *d;
     cairo_surface_t *s;
     GLCImage image;
-    Point src_pos;
+    SpicePoint src_pos;
     uint8_t *data_opp;
     int src_stride;
 
@@ -561,9 +561,9 @@ void gl_canvas_draw_rop3(GLCanvas *canvas, Rect *bbox, Clip *clip, Rop3 *rop3)
         CANVAS_ERROR("bad src bitmap size");
     }
 
-    if (rop3->brush.type == BRUSH_TYPE_PATTERN) {
+    if (rop3->brush.type == SPICE_BRUSH_TYPE_PATTERN) {
         cairo_surface_t *p = canvas_get_image(&canvas->base, rop3->brush.u.pattern.pat);
-        Point pat_pos;
+        SpicePoint pat_pos;
 
         pat_pos.x = (bbox->left - rop3->brush.u.pattern.pos.x) % cairo_image_surface_get_width(p);
 
@@ -601,7 +601,7 @@ void gl_canvas_draw_rop3(GLCanvas *canvas, Rect *bbox, Clip *clip, Rop3 *rop3)
     cairo_surface_destroy(d);
 }
 
-void gl_canvas_draw_stroke(GLCanvas *canvas, Rect *bbox, Clip *clip, Stroke *stroke)
+void gl_canvas_draw_stroke(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke)
 {
     GLCPath path;
 
@@ -610,20 +610,20 @@ void gl_canvas_draw_stroke(GLCanvas *canvas, Rect *bbox, Clip *clip, Stroke *str
     set_op(canvas, stroke->fore_mode);
     set_brush(canvas, &stroke->brush);
 
-    if (stroke->attr.flags & LINE_ATTR_STYLED) {
-        WARN("LINE_ATTR_STYLED");
+    if (stroke->attr.flags & SPICE_LINE_ATTR_STYLED) {
+        WARN("SPICE_LINE_ATTR_STYLED");
     }
     glc_set_line_width(canvas->glc, fix_to_double(stroke->attr.width));
 
-    path = get_path(canvas, GET_ADDRESS(stroke->path));
+    path = get_path(canvas, SPICE_GET_ADDRESS(stroke->path));
     glc_stroke_path(canvas->glc, path);
     glc_path_destroy(path);
 }
 
-void gl_canvas_draw_text(GLCanvas *canvas, Rect *bbox, Clip *clip, Text *text)
+void gl_canvas_draw_text(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceText *text)
 {
     GLCRect rect;
-    String *str;
+    SpiceString *str;
 
     set_clip(canvas, bbox, clip);
     glc_clear_mask(canvas->glc, GLC_MASK_A);
@@ -635,11 +635,11 @@ void gl_canvas_draw_text(GLCanvas *canvas, Rect *bbox, Clip *clip, Text *text)
         glc_fill_rect(canvas->glc, &rect);
     }
 
-    str = (String *)GET_ADDRESS(text->str);
+    str = (SpiceString *)SPICE_GET_ADDRESS(text->str);
     set_brush(canvas, &text->fore_brush);
     set_op(canvas, text->fore_mode);
-    if (str->flags & STRING_RASTER_A1) {
-        Point pos;
+    if (str->flags & SPICE_STRING_FLAGS_RASTER_A1) {
+        SpicePoint pos;
         cairo_surface_t *mask = canvas_get_str_mask(&canvas->base, str, 1, &pos);
         _glc_fill_mask(canvas->glc, pos.x, pos.y,
                        cairo_image_surface_get_width(mask),
@@ -647,8 +647,8 @@ void gl_canvas_draw_text(GLCanvas *canvas, Rect *bbox, Clip *clip, Text *text)
                        cairo_image_surface_get_stride(mask),
                        cairo_image_surface_get_data(mask));
         cairo_surface_destroy(mask);
-    } else if (str->flags & STRING_RASTER_A4) {
-        Point pos;
+    } else if (str->flags & SPICE_STRING_FLAGS_RASTER_A4) {
+        SpicePoint pos;
         cairo_surface_t *mask = canvas_get_str_mask(&canvas->base, str, 4, &pos);
         glc_fill_alpha(canvas->glc, pos.x, pos.y,
                        cairo_image_surface_get_width(mask),
@@ -657,10 +657,10 @@ void gl_canvas_draw_text(GLCanvas *canvas, Rect *bbox, Clip *clip, Text *text)
                        cairo_image_surface_get_data(mask));
 
         cairo_surface_destroy(mask);
-    } else if (str->flags & STRING_RASTER_A8) {
+    } else if (str->flags & SPICE_STRING_FLAGS_RASTER_A8) {
         WARN("untested path A8 glyphs, doing nothing");
         if (0) {
-            Point pos;
+            SpicePoint pos;
             cairo_surface_t *mask = canvas_get_str_mask(&canvas->base, str, 8, &pos);
             glc_fill_alpha(canvas->glc, pos.x, pos.y,
                            cairo_image_surface_get_width(mask),
@@ -684,7 +684,7 @@ void gl_canvas_clear(GLCanvas *canvas)
     glc_flush(canvas->glc);
 }
 
-void gl_canvas_copy_pixels(GLCanvas *canvas, Rect *bbox, Clip *clip, Point *src_pos)
+void gl_canvas_copy_pixels(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos)
 {
     set_clip(canvas, bbox, clip);
     glc_clear_mask(canvas->glc, GLC_MASK_A);
@@ -693,7 +693,7 @@ void gl_canvas_copy_pixels(GLCanvas *canvas, Rect *bbox, Clip *clip, Point *src_
                     bbox->right - bbox->left, bbox->bottom - bbox->top);
 }
 
-void gl_canvas_read_pixels(GLCanvas *canvas, uint8_t *dest, int dest_stride, const Rect *area)
+void gl_canvas_read_pixels(GLCanvas *canvas, uint8_t *dest, int dest_stride, const SpiceRect *area)
 {
     GLCImage image;
 
@@ -706,7 +706,7 @@ void gl_canvas_read_pixels(GLCanvas *canvas, uint8_t *dest, int dest_stride, con
     glc_read_pixels(canvas->glc, area->left, area->top, &image);
 }
 
-void gl_canvas_set_top_mask(GLCanvas *canvas, int num_rect, const Rect *rects)
+void gl_canvas_set_top_mask(GLCanvas *canvas, int num_rect, const SpiceRect *rects)
 {
     GLCRect *glc_rects = (GLCRect *)malloc(num_rect * sizeof(GLCRect));
     GLCRect *now = glc_rects;
@@ -720,7 +720,7 @@ void gl_canvas_set_top_mask(GLCanvas *canvas, int num_rect, const Rect *rects)
     free(glc_rects);
 }
 
-void gl_canvas_put_image(GLCanvas *canvas, const Rect *dest, const uint8_t *src_data,
+void gl_canvas_put_image(GLCanvas *canvas, const SpiceRect *dest, const uint8_t *src_data,
                          uint32_t src_width, uint32_t src_height, int src_stride,
                          const QRegion *clip)
 {

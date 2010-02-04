@@ -27,33 +27,33 @@
 
 typedef struct CairoCanvas CairoCanvas;
 
-void canvas_draw_fill(CairoCanvas *canvas, Rect *bbox, Clip *clip, Fill *fill);
-void canvas_draw_copy(CairoCanvas *canvas, Rect *bbox, Clip *clip, Copy *copy);
-void canvas_draw_opaque(CairoCanvas *canvas, Rect *bbox, Clip *clip, Opaque *opaque);
-void canvas_copy_bits(CairoCanvas *canvas, Rect *bbox, Clip *clip, Point *src_pos);
-void canvas_draw_text(CairoCanvas *canvas, Rect *bbox, Clip *clip, Text *text);
-void canvas_draw_stroke(CairoCanvas *canvas, Rect *bbox, Clip *clip, Stroke *stroke);
-void canvas_draw_rop3(CairoCanvas *canvas, Rect *bbox, Clip *clip, Rop3 *rop3);
-void canvas_draw_blend(CairoCanvas *canvas, Rect *bbox, Clip *clip, Blend *blend);
-void canvas_draw_blackness(CairoCanvas *canvas, Rect *bbox, Clip *clip, Blackness *blackness);
-void canvas_draw_whiteness(CairoCanvas *canvas, Rect *bbox, Clip *clip, Whiteness *whiteness);
-void canvas_draw_invers(CairoCanvas *canvas, Rect *bbox, Clip *clip, Invers *invers);
-void canvas_draw_transparent(CairoCanvas *canvas, Rect *bbox, Clip *clip, Transparent* transparent);
-void canvas_draw_alpha_blend(CairoCanvas *canvas, Rect *bbox, Clip *clip, AlphaBlnd* alpha_blend);
+void canvas_draw_fill(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill);
+void canvas_draw_copy(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy);
+void canvas_draw_opaque(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque);
+void canvas_copy_bits(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos);
+void canvas_draw_text(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceText *text);
+void canvas_draw_stroke(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke);
+void canvas_draw_rop3(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3);
+void canvas_draw_blend(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend);
+void canvas_draw_blackness(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness);
+void canvas_draw_whiteness(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness);
+void canvas_draw_invers(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers);
+void canvas_draw_transparent(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceTransparent* transparent);
+void canvas_draw_alpha_blend(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend);
 #ifdef WIN32
-void canvas_put_image(CairoCanvas *canvas, HDC dc, const Rect *dest, const uint8_t *src_data,
+void canvas_put_image(CairoCanvas *canvas, HDC dc, const SpiceRect *dest, const uint8_t *src_data,
                       uint32_t src_width, uint32_t src_height, int src_stride,
                       const QRegion *clip);
 #else
-void canvas_put_image(CairoCanvas *canvas, const Rect *dest, const uint8_t *src_data,
+void canvas_put_image(CairoCanvas *canvas, const SpiceRect *dest, const uint8_t *src_data,
                       uint32_t src_width, uint32_t src_height, int src_stride,
                       const QRegion *clip);
 #endif
 void canvas_clear(CairoCanvas *canvas);
-void canvas_read_bits(CairoCanvas *canvas, uint8_t *dest, int dest_stride, const Rect *area);
-void canvas_group_start(CairoCanvas *canvas, int n_clip_rects, Rect *clip_rects);
+void canvas_read_bits(CairoCanvas *canvas, uint8_t *dest, int dest_stride, const SpiceRect *area);
+void canvas_group_start(CairoCanvas *canvas, int n_clip_rects, SpiceRect *clip_rects);
 void canvas_group_end(CairoCanvas *canvas);
-void canvas_set_addr_delta(CairoCanvas *canvas, ADDRESS delta);
+void canvas_set_addr_delta(CairoCanvas *canvas, SPICE_ADDRESS delta);
 #ifdef CAIRO_CANVAS_ACCESS_TEST
 void canvas_set_access_params(CairoCanvas *canvas, unsigned long base, unsigned long max);
 #endif

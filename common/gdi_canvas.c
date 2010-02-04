@@ -35,7 +35,7 @@ struct GdiCanvas {
 struct BitmapData {
     HBITMAP hbitmap;
     HBITMAP prev_hbitmap;
-    Point pos;
+    SpicePoint pos;
     uint8_t flags;
     HDC dc;
     int cache;
@@ -321,20 +321,20 @@ static void set_path(GdiCanvas *canvas, void *addr)
     access_test(&canvas->base, data_size, sizeof(uint32_t));
     uint32_t more = *data_size;
 
-    PathSeg* seg = (PathSeg*)(data_size + 1);
+    SpicePathSeg* seg = (SpicePathSeg*)(data_size + 1);
 
     do {
-        access_test(&canvas->base, seg, sizeof(PathSeg));
+        access_test(&canvas->base, seg, sizeof(SpicePathSeg));
 
         uint32_t flags = seg->flags;
-        PointFix* point = (PointFix*)seg->data;
-        PointFix* end_point = point + seg->count;
+        SpicePointFix* point = (SpicePointFix*)seg->data;
+        SpicePointFix* end_point = point + seg->count;
         access_test(&canvas->base, point, (unsigned long)end_point - (unsigned long)point);
         ASSERT(point < end_point);
         more -= ((unsigned long)end_point - (unsigned long)seg);
-        seg = (PathSeg*)end_point;
+        seg = (SpicePathSeg*)end_point;
 
-        if (flags & PATH_BEGIN) {
+        if (flags & SPICE_PATH_BEGIN) {
             BeginPath(canvas->dc);
             if (!MoveToEx(canvas->dc, (int)fix_to_double(point->x), (int)fix_to_double(point->y),
                           NULL)) {
@@ -344,7 +344,7 @@ static void set_path(GdiCanvas *canvas, void *addr)
             point++;
         }
 
-        if (flags & PATH_BEZIER) {
+        if (flags & SPICE_PATH_BEZIER) {
             ASSERT((point - end_point) % 3 == 0);
             for (; point + 2 < end_point; point += 3) {
                 POINT points[3];
@@ -369,9 +369,9 @@ static void set_path(GdiCanvas *canvas, void *addr)
             }
         }
 
-        if (flags & PATH_END) {
+        if (flags & SPICE_PATH_END) {
 
-            if (flags & PATH_CLOSE) {
+            if (flags & SPICE_PATH_CLOSE) {
                 if (!CloseFigure(canvas->dc)) {
                     CANVAS_ERROR("CloseFigure failed");
                 }
@@ -387,29 +387,29 @@ static void set_path(GdiCanvas *canvas, void *addr)
 
 static void set_scale_mode(GdiCanvas *canvas, uint8_t scale_mode)
 {
-    if (scale_mode == IMAGE_SCALE_INTERPOLATE) {
+    if (scale_mode == SPICE_IMAGE_SCALE_MODE_INTERPOLATE) {
         SetStretchBltMode(canvas->dc, HALFTONE);
-    } else if (scale_mode == IMAGE_SCALE_NEAREST) {
+    } else if (scale_mode == SPICE_IMAGE_SCALE_MODE_NEAREST) {
         SetStretchBltMode(canvas->dc, COLORONCOLOR);
     } else {
         CANVAS_ERROR("Unknown ScaleMode");
     }
 }
 
-static void set_clip(GdiCanvas *canvas, Clip *clip)
+static void set_clip(GdiCanvas *canvas, SpiceClip *clip)
 {
     switch (clip->type) {
-    case CLIP_TYPE_NONE:
+    case SPICE_CLIP_TYPE_NONE:
         if (SelectClipRgn(canvas->dc, NULL) == ERROR) {
             CANVAS_ERROR("SelectClipRgn failed");
         }
         break;
-    case CLIP_TYPE_RECTS: {
-        uint32_t *n = (uint32_t *)GET_ADDRESS(clip->data);
+    case SPICE_CLIP_TYPE_RECTS: {
+        uint32_t *n = (uint32_t *)SPICE_GET_ADDRESS(clip->data);
         access_test(&canvas->base, n, sizeof(uint32_t));
 
-        Rect *now = (Rect *)(n + 1);
-        Rect *end = now + *n;
+        SpiceRect *now = (SpiceRect *)(n + 1);
+        SpiceRect *end = now + *n;
         access_test(&canvas->base, now, (unsigned long)end - (unsigned long)now);
 
         if (now < end) {
@@ -443,8 +443,8 @@ static void set_clip(GdiCanvas *canvas, Clip *clip)
         }
         break;
     }
-    case CLIP_TYPE_PATH:
-        set_path(canvas, GET_ADDRESS(clip->data));
+    case SPICE_CLIP_TYPE_PATH:
+        set_path(canvas, SPICE_GET_ADDRESS(clip->data));
         if (SelectClipPath(canvas->dc, RGN_COPY) == ERROR) {
             CANVAS_ERROR("Unable to SelectClipPath");
         }
@@ -631,17 +631,17 @@ static inline COLORREF get_color_ref(GdiCanvas *canvas, uint32_t color)
     return RGB(r, g, b);
 }
 
-static HBRUSH get_brush(GdiCanvas *canvas, Brush *brush)
+static HBRUSH get_brush(GdiCanvas *canvas, SpiceBrush *brush)
 {
     HBRUSH hbrush;
 
     switch (brush->type) {
-    case BRUSH_TYPE_SOLID:
+    case SPICE_BRUSH_TYPE_SOLID:
         if (!(hbrush = CreateSolidBrush(get_color_ref(canvas, brush->u.color)))) {
             CANVAS_ERROR("CreateSolidBrush failed");
         }
         return hbrush;
-    case BRUSH_TYPE_PATTERN: {
+    case SPICE_BRUSH_TYPE_PATTERN: {
         GdiImage image;
         HBRUSH hbrush;
         cairo_surface_t *surface;
@@ -666,7 +666,7 @@ static HBRUSH get_brush(GdiCanvas *canvas, Brush *brush)
         cairo_surface_destroy(surface);
         return hbrush;
     }
-    case BRUSH_TYPE_NONE:
+    case SPICE_BRUSH_TYPE_NONE:
         return NULL;
     default:
         CANVAS_ERROR("invalid brush type");
@@ -674,13 +674,13 @@ static HBRUSH get_brush(GdiCanvas *canvas, Brush *brush)
     }
 }
 
-static HBRUSH set_brush(HDC dc, HBRUSH hbrush, Brush *brush)
+static HBRUSH set_brush(HDC dc, HBRUSH hbrush, SpiceBrush *brush)
 {
     switch (brush->type) {
-    case BRUSH_TYPE_SOLID: {
+    case SPICE_BRUSH_TYPE_SOLID: {
         return (HBRUSH)SelectObject(dc, hbrush);
     }
-    case BRUSH_TYPE_PATTERN: {
+    case SPICE_BRUSH_TYPE_PATTERN: {
         HBRUSH prev_hbrush;
         prev_hbrush = (HBRUSH)SelectObject(dc, hbrush);
         if (!SetBrushOrgEx(dc, brush->u.pattern.pos.x, brush->u.pattern.pos.y, NULL)) {
@@ -711,13 +711,13 @@ uint8_t calc_rop3(uint16_t rop3_bits, int brush)
     uint8_t rop3_brush = _rop3_brush;
     uint8_t rop3_src_brush;
 
-    if (rop3_bits & ROPD_INVERS_SRC) {
+    if (rop3_bits & SPICE_ROPD_INVERS_SRC) {
         rop3_src = ~rop3_src;
     }
-    if (rop3_bits & ROPD_INVERS_BRUSH) {
+    if (rop3_bits & SPICE_ROPD_INVERS_BRUSH) {
         rop3_brush = ~rop3_brush;
     }
-    if (rop3_bits & ROPD_INVERS_DEST) {
+    if (rop3_bits & SPICE_ROPD_INVERS_DEST) {
         rop3_dest = ~rop3_dest;
     }
 
@@ -727,24 +727,24 @@ uint8_t calc_rop3(uint16_t rop3_bits, int brush)
         rop3_src_brush = rop3_src;
     }
 
-    if (rop3_bits & ROPD_OP_PUT) {
+    if (rop3_bits & SPICE_ROPD_OP_PUT) {
         rop3 = rop3_src_brush;
     }
-    if (rop3_bits & ROPD_OP_OR) {
+    if (rop3_bits & SPICE_ROPD_OP_OR) {
         rop3 = rop3_src_brush | rop3_dest;
     }
-    if (rop3_bits & ROPD_OP_AND) {
+    if (rop3_bits & SPICE_ROPD_OP_AND) {
         rop3 = rop3_src_brush & rop3_dest;
     }
-    if (rop3_bits & ROPD_OP_XOR) {
+    if (rop3_bits & SPICE_ROPD_OP_XOR) {
         rop3 = rop3_src_brush ^ rop3_dest;
     }
-    if (rop3_bits & ROPD_INVERS_RES) {
+    if (rop3_bits & SPICE_ROPD_INVERS_RES) {
         rop3 = ~rop3_dest;
     }
 
-    if (rop3_bits & ROPD_OP_BLACKNESS || rop3_bits & ROPD_OP_WHITENESS ||
-        rop3_bits & ROPD_OP_INVERS) {
+    if (rop3_bits & SPICE_ROPD_OP_BLACKNESS || rop3_bits & SPICE_ROPD_OP_WHITENESS ||
+        rop3_bits & SPICE_ROPD_OP_INVERS) {
         CANVAS_ERROR("invalid rop3 type");
     }
     return rop3;
@@ -756,27 +756,27 @@ uint8_t calc_rop3_src_brush(uint16_t rop3_bits)
     uint8_t rop3_src = _rop3_src;
     uint8_t rop3_brush = _rop3_brush;
 
-    if (rop3_bits & ROPD_INVERS_SRC) {
+    if (rop3_bits & SPICE_ROPD_INVERS_SRC) {
         rop3_src = ~rop3_src;
     }
-    if (rop3_bits & ROPD_INVERS_BRUSH) {
+    if (rop3_bits & SPICE_ROPD_INVERS_BRUSH) {
         rop3_brush = ~rop3_brush;
     }
 
-    if (rop3_bits & ROPD_OP_OR) {
+    if (rop3_bits & SPICE_ROPD_OP_OR) {
         rop3 = rop3_src | rop3_brush;
     }
-    if (rop3_bits & ROPD_OP_AND) {
+    if (rop3_bits & SPICE_ROPD_OP_AND) {
         rop3 = rop3_src & rop3_brush;
     }
-    if (rop3_bits & ROPD_OP_XOR) {
+    if (rop3_bits & SPICE_ROPD_OP_XOR) {
         rop3 = rop3_src ^ rop3_brush;
     }
 
     return rop3;
 }
 
-static struct BitmapData get_mask_bitmap(struct GdiCanvas *canvas, struct QMask *mask)
+static struct BitmapData get_mask_bitmap(struct GdiCanvas *canvas, struct SpiceQMask *mask)
 {
     cairo_surface_t *surface;
     struct BitmapData bitmap;
@@ -810,7 +810,7 @@ static struct BitmapData get_mask_bitmap(struct GdiCanvas *canvas, struct QMask 
     return bitmap;
 }
 
-static void gdi_draw_bitmap(HDC dest_dc, const Rect *src, const Rect *dest,
+static void gdi_draw_bitmap(HDC dest_dc, const SpiceRect *src, const SpiceRect *dest,
                             HDC src_dc, struct BitmapData *bitmapmask, uint32_t rop3_val)
 {
     uint32_t rast_oper;
@@ -843,7 +843,7 @@ static void gdi_draw_bitmap(HDC dest_dc, const Rect *src, const Rect *dest,
     }
 }
 
-static void gdi_draw_bitmap_redrop(HDC dest_dc, const Rect *src, const Rect *dest,
+static void gdi_draw_bitmap_redrop(HDC dest_dc, const SpiceRect *src, const SpiceRect *dest,
                                    HDC src_dc, struct BitmapData *bitmapmask,
                                    uint16_t rop, int brush)
 {
@@ -861,12 +861,12 @@ static void free_mask(struct BitmapData *bitmap)
 }
 
 static void draw_str_mask_bitmap(struct GdiCanvas *canvas,
-                                 String *str, int n, Rect *dest,
-                                 Rect *src, Brush *brush)
+                                 SpiceString *str, int n, SpiceRect *dest,
+                                 SpiceRect *src, SpiceBrush *brush)
 {
     cairo_surface_t *surface;
     struct BitmapData bitmap;
-    Point pos;
+    SpicePoint pos;
     int dest_stride;
     uint8_t *bitmap_data;
     HBRUSH prev_hbrush;
@@ -941,7 +941,7 @@ static void draw_str_mask_bitmap(struct GdiCanvas *canvas,
     free_mask(&bitmap);
 }
 
-static void gdi_draw_image(HDC dest_dc, const Rect *src, const Rect *dest,
+static void gdi_draw_image(HDC dest_dc, const SpiceRect *src, const SpiceRect *dest,
                            const uint8_t *bitmap_data, int bit_stride, int bit_width,
                            int bit_height, struct BitmapData *bitmapmask, uint16_t rop,
                            int rotate)
@@ -958,7 +958,7 @@ static void gdi_draw_image(HDC dest_dc, const Rect *src, const Rect *dest,
     release_bitmap(dc, bitmap, prev_bitmap, 0);
 }
 
-static void gdi_draw_image_rop3(HDC dest_dc, const Rect *src, const Rect *dest,
+static void gdi_draw_image_rop3(HDC dest_dc, const SpiceRect *src, const SpiceRect *dest,
                                 const uint8_t *bitmap_data, int bit_stride, int bit_width,
                                 int bit_height, struct BitmapData *bitmapmask, uint8_t rop3,
                                 int rotate)
@@ -975,7 +975,7 @@ static void gdi_draw_image_rop3(HDC dest_dc, const Rect *src, const Rect *dest,
     release_bitmap(dc, bitmap, prev_bitmap, 0);
 }
 
-void gdi_canvas_draw_fill(GdiCanvas *canvas, Rect *bbox, Clip *clip, Fill *fill)
+void gdi_canvas_draw_fill(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill)
 {
     HBRUSH prev_hbrush;
     HBRUSH brush;
@@ -991,13 +991,13 @@ void gdi_canvas_draw_fill(GdiCanvas *canvas, Rect *bbox, Clip *clip, Fill *fill)
     set_clip(canvas, clip);
     prev_hbrush = set_brush(canvas->dc, brush, &fill->brush);
     gdi_draw_bitmap_redrop(canvas->dc, bbox, bbox, canvas->dc, &bitmapmask,
-                           fill->rop_decriptor, fill->brush.type != BRUSH_TYPE_NONE);
+                           fill->rop_decriptor, fill->brush.type != SPICE_BRUSH_TYPE_NONE);
 
     free_mask(&bitmapmask);
     unset_brush(canvas->dc, prev_hbrush);
 }
 
-void gdi_canvas_draw_copy(GdiCanvas *canvas, Rect *bbox, Clip *clip, Copy *copy)
+void gdi_canvas_draw_copy(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy)
 {
     cairo_surface_t *surface;
     GdiImage image;
@@ -1035,18 +1035,18 @@ void gdi_canvas_draw_copy(GdiCanvas *canvas, Rect *bbox, Clip *clip, Copy *copy)
     cairo_surface_destroy(surface);
 }
 
-void gdi_canvas_put_image(GdiCanvas *canvas, HDC dc, const Rect *dest, const uint8_t *src_data,
+void gdi_canvas_put_image(GdiCanvas *canvas, HDC dc, const SpiceRect *dest, const uint8_t *src_data,
                           uint32_t src_width, uint32_t src_height, int src_stride,
                           const QRegion *clip)
 {
-    Rect src;
+    SpiceRect src;
     src.top = 0;
     src.bottom = src_height;
     src.left = 0;
     src.right = src_width;
 
     Lock lock(*canvas->lock);
-    set_scale_mode(canvas, IMAGE_SCALE_NEAREST);
+    set_scale_mode(canvas, SPICE_IMAGE_SCALE_MODE_NEAREST);
     if (clip) {
         if (clip->num_rects == 0) {
             return;
@@ -1090,15 +1090,15 @@ void gdi_canvas_put_image(GdiCanvas *canvas, HDC dc, const Rect *dest, const uin
 
     if (dc) {
         gdi_draw_bitmap_redrop(canvas->dc, &src, dest, dc,
-                               NULL, ROPD_OP_PUT, 0);
+                               NULL, SPICE_ROPD_OP_PUT, 0);
     } else {
         gdi_draw_image(canvas->dc, &src, dest, src_data,
-                       src_stride, src_width, src_height, NULL, ROPD_OP_PUT, 0);
+                       src_stride, src_width, src_height, NULL, SPICE_ROPD_OP_PUT, 0);
     }
 }
 
-static void gdi_draw_bitmap_transparent(GdiCanvas *canvas, HDC dest_dc, const Rect *src,
-                                        const Rect *dest, HDC src_dc, uint32_t color)
+static void gdi_draw_bitmap_transparent(GdiCanvas *canvas, HDC dest_dc, const SpiceRect *src,
+                                        const SpiceRect *dest, HDC src_dc, uint32_t color)
 {
     TransparentBlt(dest_dc, dest->left, dest->top, dest->right - dest->left,
                    dest->bottom - dest->top, src_dc, src->left, src->top,
@@ -1106,8 +1106,8 @@ static void gdi_draw_bitmap_transparent(GdiCanvas *canvas, HDC dest_dc, const Re
                    RGB(((uint8_t*)&color)[2], ((uint8_t*)&color)[1], ((uint8_t*)&color)[0]));
 }
 
-static void gdi_draw_image_transparent(GdiCanvas *canvas, HDC dest_dc, const Rect *src,
-                                       const Rect *dest, const uint8_t *bitmap_data,
+static void gdi_draw_image_transparent(GdiCanvas *canvas, HDC dest_dc, const SpiceRect *src,
+                                       const SpiceRect *dest, const uint8_t *bitmap_data,
                                        int bit_stride, int bit_width, int bit_height,
                                        uint32_t color, int rotate)
 {
@@ -1123,8 +1123,8 @@ static void gdi_draw_image_transparent(GdiCanvas *canvas, HDC dest_dc, const Rec
     release_bitmap(dc, bitmap, prev_bitmap, 0);
 }
 
-void gdi_canvas_draw_transparent(GdiCanvas *canvas, Rect *bbox, Clip *clip,
-                                 Transparent* transparent)
+void gdi_canvas_draw_transparent(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip,
+                                 SpiceTransparent* transparent)
 {
     cairo_surface_t *surface;
     GdiImage image;
@@ -1156,7 +1156,7 @@ void gdi_canvas_draw_transparent(GdiCanvas *canvas, Rect *bbox, Clip *clip,
     cairo_surface_destroy(surface);
 }
 
-static void gdi_draw_bitmap_alpha(HDC dest_dc, const Rect *src, const Rect *dest,
+static void gdi_draw_bitmap_alpha(HDC dest_dc, const SpiceRect *src, const SpiceRect *dest,
                                   HDC src_dc, uint8_t alpha, int use_bitmap_alpha)
 {
     BLENDFUNCTION bf;
@@ -1178,7 +1178,7 @@ static void gdi_draw_bitmap_alpha(HDC dest_dc, const Rect *src, const Rect *dest
     }
 }
 
-static void gdi_draw_image_alpha(HDC dest_dc, const Rect *src, const Rect *dest,
+static void gdi_draw_image_alpha(HDC dest_dc, const SpiceRect *src, const SpiceRect *dest,
                                  const uint8_t *bitmap_data, int bit_stride,
                                  int bit_width, int bit_height, uint8_t alpha,
                                  int rotate, int use_bitmap_alpha)
@@ -1195,7 +1195,7 @@ static void gdi_draw_image_alpha(HDC dest_dc, const Rect *src, const Rect *dest,
     release_bitmap(dc, bitmap, prev_bitmap, 0);
 }
 
-void gdi_canvas_draw_alpha_blend(GdiCanvas *canvas, Rect *bbox, Clip *clip, AlphaBlnd* alpha_blend)
+void gdi_canvas_draw_alpha_blend(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend)
 {
     cairo_surface_t *surface;
     GdiImage image;
@@ -1229,7 +1229,7 @@ void gdi_canvas_draw_alpha_blend(GdiCanvas *canvas, Rect *bbox, Clip *clip, Alph
     cairo_surface_destroy(surface);
 }
 
-void gdi_canvas_draw_opaque(GdiCanvas *canvas, Rect *bbox, Clip *clip, Opaque *opaque)
+void gdi_canvas_draw_opaque(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque)
 {
     cairo_surface_t *surface;
     GdiImage image;
@@ -1274,7 +1274,7 @@ void gdi_canvas_draw_opaque(GdiCanvas *canvas, Rect *bbox, Clip *clip, Opaque *o
     cairo_surface_destroy(surface);
 }
 
-void gdi_canvas_draw_blend(GdiCanvas *canvas, Rect *bbox, Clip *clip, Blend *blend)
+void gdi_canvas_draw_blend(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend)
 {
     cairo_surface_t *surface;
     GdiImage image;
@@ -1311,7 +1311,7 @@ void gdi_canvas_draw_blend(GdiCanvas *canvas, Rect *bbox, Clip *clip, Blend *ble
     cairo_surface_destroy(surface);
 }
 
-void gdi_canvas_draw_blackness(GdiCanvas *canvas, Rect *bbox, Clip *clip, Blackness *blackness)
+void gdi_canvas_draw_blackness(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness)
 {
     struct BitmapData bitmapmask;
 
@@ -1324,7 +1324,7 @@ void gdi_canvas_draw_blackness(GdiCanvas *canvas, Rect *bbox, Clip *clip, Blackn
     free_mask(&bitmapmask);
 }
 
-void gdi_canvas_draw_invers(GdiCanvas *canvas, Rect *bbox, Clip *clip, Invers *invers)
+void gdi_canvas_draw_invers(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers)
 {
     struct BitmapData bitmapmask;
 
@@ -1337,7 +1337,7 @@ void gdi_canvas_draw_invers(GdiCanvas *canvas, Rect *bbox, Clip *clip, Invers *i
     free_mask(&bitmapmask);
 }
 
-void gdi_canvas_draw_whiteness(GdiCanvas *canvas, Rect *bbox, Clip *clip, Whiteness *whiteness)
+void gdi_canvas_draw_whiteness(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness)
 {
     struct BitmapData bitmapmask;
 
@@ -1350,7 +1350,7 @@ void gdi_canvas_draw_whiteness(GdiCanvas *canvas, Rect *bbox, Clip *clip, Whiten
     free_mask(&bitmapmask);
 }
 
-void gdi_canvas_draw_rop3(GdiCanvas *canvas, Rect *bbox, Clip *clip, Rop3 *rop3)
+void gdi_canvas_draw_rop3(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3)
 {
     cairo_surface_t *surface;
     GdiImage image;
@@ -1392,7 +1392,7 @@ void gdi_canvas_draw_rop3(GdiCanvas *canvas, Rect *bbox, Clip *clip, Rop3 *rop3)
     cairo_surface_destroy(surface);
 }
 
-void gdi_canvas_copy_bits(GdiCanvas *canvas, Rect *bbox, Clip *clip, Point *src_pos)
+void gdi_canvas_copy_bits(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos)
 {
     Lock lock(*canvas->lock);
 
@@ -1402,9 +1402,9 @@ void gdi_canvas_copy_bits(GdiCanvas *canvas, Rect *bbox, Clip *clip, Point *src_
            bbox->bottom - bbox->top, canvas->dc, src_pos->x, src_pos->y, SRCCOPY);
 }
 
-void gdi_canvas_draw_text(GdiCanvas *canvas, Rect *bbox, Clip *clip, Text *text)
+void gdi_canvas_draw_text(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceText *text)
 {
-    String *str;
+    SpiceString *str;
 
     Lock lock(*canvas->lock);
     set_clip(canvas, clip);
@@ -1422,23 +1422,23 @@ void gdi_canvas_draw_text(GdiCanvas *canvas, Rect *bbox, Clip *clip, Text *text)
         unset_brush(canvas->dc, prev_hbrush);
     }
 
-    str = (String *)GET_ADDRESS(text->str);
+    str = (SpiceString *)SPICE_GET_ADDRESS(text->str);
 
-    if (str->flags & STRING_RASTER_A1) {
-        Rect dest;
-        Rect src;
+    if (str->flags & SPICE_STRING_FLAGS_RASTER_A1) {
+        SpiceRect dest;
+        SpiceRect src;
 
         draw_str_mask_bitmap(canvas, str, 1, &dest, &src, &text->fore_brush);
-    } else if (str->flags & STRING_RASTER_A4) {
-        Rect dest;
-        Rect src;
+    } else if (str->flags & SPICE_STRING_FLAGS_RASTER_A4) {
+        SpiceRect dest;
+        SpiceRect src;
 
         draw_str_mask_bitmap(canvas, str, 4, &dest, &src, &text->fore_brush);
-    } else if (str->flags & STRING_RASTER_A8) {
+    } else if (str->flags & SPICE_STRING_FLAGS_RASTER_A8) {
         WARN("untested path A8 glyphs, doing nothing");
         if (0) {
-            Rect dest;
-            Rect src;
+            SpiceRect dest;
+            SpiceRect src;
 
             draw_str_mask_bitmap(canvas, str, 8, &dest, &src, &text->fore_brush);
         }
@@ -1452,11 +1452,11 @@ void gdi_canvas_draw_text(GdiCanvas *canvas, Rect *bbox, Clip *clip, Text *text)
 static int get_join_style(uint8_t join_style)
 {
     switch (join_style) {
-    case LINE_JOIN_ROUND:
+    case SPICE_LINE_JOIN_ROUND:
         return PS_JOIN_ROUND;
-    case LINE_JOIN_BEVEL:
+    case SPICE_LINE_JOIN_BEVEL:
         return PS_JOIN_BEVEL;
-    case LINE_JOIN_MITER:
+    case SPICE_LINE_JOIN_MITER:
         return PS_JOIN_MITER;
     default:
         CANVAS_ERROR("bad join style %d", join_style);
@@ -1466,20 +1466,20 @@ static int get_join_style(uint8_t join_style)
 static int get_cap(int end_style)
 {
     switch (end_style) {
-    case LINE_CAP_ROUND:
+    case SPICE_LINE_CAP_ROUND:
         return PS_ENDCAP_ROUND;
-    case LINE_CAP_SQUARE:
+    case SPICE_LINE_CAP_SQUARE:
         return PS_ENDCAP_SQUARE;
-    case LINE_CAP_BUTT:
+    case SPICE_LINE_CAP_BUTT:
         return PS_ENDCAP_FLAT;
     default:
         CANVAS_ERROR("bad end style %d", end_style);
     }
 }
 
-static uint32_t *gdi_get_userstyle(GdiCanvas *canvas, UINT8 nseg, ADDRESS addr, int start_is_gap)
+static uint32_t *gdi_get_userstyle(GdiCanvas *canvas, UINT8 nseg, SPICE_ADDRESS addr, int start_is_gap)
 {
-    FIXED28_4* style = (FIXED28_4*)GET_ADDRESS(addr);
+    SPICE_FIXED28_4* style = (SPICE_FIXED28_4*)SPICE_GET_ADDRESS(addr);
     double offset = 0;
     uint32_t *local_style;
     int i;
@@ -1508,7 +1508,7 @@ static uint32_t *gdi_get_userstyle(GdiCanvas *canvas, UINT8 nseg, ADDRESS addr, 
     return local_style;
 }
 
-void gdi_canvas_draw_stroke(GdiCanvas *canvas, Rect *bbox, Clip *clip, Stroke *stroke)
+void gdi_canvas_draw_stroke(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke)
 {
     HPEN hpen;
     HPEN prev_hpen;
@@ -1518,7 +1518,7 @@ void gdi_canvas_draw_stroke(GdiCanvas *canvas, Rect *bbox, Clip *clip, Stroke *s
     uint32_t *user_style = NULL;
     cairo_surface_t *surface = NULL;
 
-    if (stroke->brush.type == BRUSH_TYPE_PATTERN) {
+    if (stroke->brush.type == SPICE_BRUSH_TYPE_PATTERN) {
         surface = canvas_get_image(&canvas->base, stroke->brush.u.pattern.pat);
     }
 
@@ -1526,49 +1526,49 @@ void gdi_canvas_draw_stroke(GdiCanvas *canvas, Rect *bbox, Clip *clip, Stroke *s
     set_clip(canvas, clip);
 
     switch (stroke->fore_mode) {
-    case ROPD_OP_WHITENESS:
+    case SPICE_ROPD_OP_WHITENESS:
         SetROP2(canvas->dc, R2_WHITE);    //0
         break;
-    case ROPD_OP_BLACKNESS:
+    case SPICE_ROPD_OP_BLACKNESS:
         SetROP2(canvas->dc, R2_BLACK);    //1
         break;
-    case ROPD_OP_INVERS:
+    case SPICE_ROPD_OP_INVERS:
         SetROP2(canvas->dc, R2_NOT);    //Dn
         break;
-    case ROPD_OP_PUT:
+    case SPICE_ROPD_OP_PUT:
         SetROP2(canvas->dc, R2_COPYPEN);    //P
         break;
-    case ROPD_OP_OR:
+    case SPICE_ROPD_OP_OR:
         SetROP2(canvas->dc, R2_MERGEPEN);    //DPo
         break;
-    case ROPD_OP_XOR:
+    case SPICE_ROPD_OP_XOR:
         SetROP2(canvas->dc, R2_XORPEN);    //DPx
         break;
-    case ROPD_OP_AND:
+    case SPICE_ROPD_OP_AND:
         SetROP2(canvas->dc, R2_MASKPEN);    //DPa
         break;
-    case ROPD_INVERS_BRUSH | ROPD_OP_PUT:    //Pn
+    case SPICE_ROPD_INVERS_BRUSH | SPICE_ROPD_OP_PUT:    //Pn
         SetROP2(canvas->dc, R2_NOTCOPYPEN);
         break;
-    case ROPD_OP_XOR | ROPD_INVERS_RES:
+    case SPICE_ROPD_OP_XOR | SPICE_ROPD_INVERS_RES:
         SetROP2(canvas->dc, R2_NOTXORPEN);    //DPxn
         break;
-    case ROPD_OP_OR | ROPD_INVERS_RES:
+    case SPICE_ROPD_OP_OR | SPICE_ROPD_INVERS_RES:
         SetROP2(canvas->dc, R2_NOTMERGEPEN);    //DPon
         break;
-    case ROPD_OP_AND | ROPD_INVERS_RES:
+    case SPICE_ROPD_OP_AND | SPICE_ROPD_INVERS_RES:
         SetROP2(canvas->dc, R2_NOTMASKPEN);    //DPan
         break;
-    case ROPD_INVERS_DEST | ROPD_OP_AND:
+    case SPICE_ROPD_INVERS_DEST | SPICE_ROPD_OP_AND:
         SetROP2(canvas->dc, R2_MASKPENNOT);    //PDna
         break;
-    case ROPD_INVERS_BRUSH | ROPD_OP_AND:
+    case SPICE_ROPD_INVERS_BRUSH | SPICE_ROPD_OP_AND:
         SetROP2(canvas->dc, R2_MASKNOTPEN);    //DPna
         break;
-    case ROPD_OP_OR | ROPD_INVERS_BRUSH:
+    case SPICE_ROPD_OP_OR | SPICE_ROPD_INVERS_BRUSH:
         SetROP2(canvas->dc, R2_MERGENOTPEN);    //DPno
         break;
-    case ROPD_OP_OR | ROPD_INVERS_DEST:
+    case SPICE_ROPD_OP_OR | SPICE_ROPD_INVERS_DEST:
         SetROP2(canvas->dc, R2_MERGEPENNOT);    //PDno
         break;
     default:
@@ -1576,11 +1576,11 @@ void gdi_canvas_draw_stroke(GdiCanvas *canvas, Rect *bbox, Clip *clip, Stroke *s
     }
 
 
-    if (stroke->brush.type == BRUSH_TYPE_SOLID) {
+    if (stroke->brush.type == SPICE_BRUSH_TYPE_SOLID) {
         logbrush.lbStyle = BS_SOLID | DIB_RGB_COLORS;
         logbrush.lbHatch = 0;
         logbrush.lbColor = get_color_ref(canvas, stroke->brush.u.color);
-    } else if (stroke->brush.type == BRUSH_TYPE_PATTERN) {
+    } else if (stroke->brush.type == SPICE_BRUSH_TYPE_PATTERN) {
 #if 0
         struct {
             BITMAPINFO inf;
@@ -1639,10 +1639,10 @@ void gdi_canvas_draw_stroke(GdiCanvas *canvas, Rect *bbox, Clip *clip, Stroke *s
     SetMiterLimit(canvas->dc, (FLOAT)fix_to_double(stroke->attr.miter_limit), &old_miter);
 #endif
 
-    if (stroke->attr.flags & LINE_ATTR_STYLED) {
+    if (stroke->attr.flags & SPICE_LINE_ATTR_STYLED) {
         user_style = gdi_get_userstyle(canvas, stroke->attr.style_nseg,
                                        stroke->attr.style,
-                                       !!(stroke->attr.flags & LINE_ATTR_STARTGAP));
+                                       !!(stroke->attr.flags & SPICE_LINE_ATTR_STARTGAP));
         hpen = ExtCreatePen(PS_GEOMETRIC | ps_join | line_cap | PS_USERSTYLE,
                             (uint32_t)fix_to_double(stroke->attr.width),
                             &logbrush, stroke->attr.style_nseg, (DWORD *)user_style);
@@ -1653,7 +1653,7 @@ void gdi_canvas_draw_stroke(GdiCanvas *canvas, Rect *bbox, Clip *clip, Stroke *s
     }
     prev_hpen = (HPEN)SelectObject(canvas->dc, hpen);
 
-    set_path(canvas, GET_ADDRESS(stroke->path));
+    set_path(canvas, SPICE_GET_ADDRESS(stroke->path));
 
     StrokePath(canvas->dc);
 
@@ -1661,7 +1661,7 @@ void gdi_canvas_draw_stroke(GdiCanvas *canvas, Rect *bbox, Clip *clip, Stroke *s
     DeleteObject(hpen);
 
 #if 0
-    if (stroke->brush.type == BRUSH_TYPE_PATTERN) {
+    if (stroke->brush.type == SPICE_BRUSH_TYPE_PATTERN) {
         GlobalFree((HGLOBAL)logbrush.lbHatch);
     }
 #endif

@@ -68,7 +68,7 @@ typedef struct BufDescriptor {
 
 typedef struct SndChannel SndChannel;
 typedef void (*send_messages_proc)(void *in_channel);
-typedef int (*handle_message_proc)(SndChannel *channel, RedDataHeader *message);
+typedef int (*handle_message_proc)(SndChannel *channel, SpiceDataHeader *message);
 typedef void (*on_message_done_proc)(SndChannel *channel);
 typedef void (*cleanup_channel_proc)(SndChannel *channel);
 
@@ -90,7 +90,7 @@ struct SndChannel {
     uint32_t ack_messages;
 
     struct {
-        RedDataHeader header;
+        SpiceDataHeader header;
         uint32_t n_bufs;
         BufDescriptor bufs[MAX_SEND_BUFS];
 
@@ -100,7 +100,7 @@ struct SndChannel {
 
     struct {
         uint8_t buf[RECIVE_BUF_SIZE];
-        RedDataHeader *message;
+        SpiceDataHeader *message;
         uint8_t *now;
         uint8_t *end;
     } recive_data;
@@ -132,9 +132,9 @@ typedef struct PlaybackChannel {
     uint32_t mode;
     struct {
         union {
-            RedPlaybackMode mode;
-            RedPlaybackStart start;
-            RedMigrate migrate;
+            SpiceMsgPlaybackMode mode;
+            SpiceMsgPlaybackStart start;
+            SpiceMsgMigrate migrate;
             uint8_t celt_buf[CELT_COMPRESSED_FRAME_BYTES];
         } u;
     } send_data;
@@ -158,8 +158,8 @@ typedef struct __attribute__ ((__packed__)) RecordMigrateData {
 } RecordMigrateData;
 
 typedef struct __attribute__ ((__packed__)) RecordMigrateMessage {
-    RedMigrate migrate;
-    RedDataHeader header;
+    SpiceMsgMigrate migrate;
+    SpiceDataHeader header;
     RecordMigrateData data;
 } RecordMigrateMessage;
 
@@ -178,14 +178,14 @@ typedef struct RecordChannel {
     uint32_t celt_buf[FRAME_SIZE];
     struct {
         union {
-            RedRecordStart start;
+            SpiceMsgRecordStart start;
             RecordMigrateMessage migrate;
         } u;
     } send_data;
 } RecordChannel;
 
 static SndWorker *workers = NULL;
-static uint32_t playback_compression = RED_AUDIO_DATA_MODE_CELT_0_5_1;
+static uint32_t playback_compression = SPICE_AUDIO_DATA_MODE_CELT_0_5_1;
 
 static void snd_receive(void* data);
 
@@ -323,9 +323,9 @@ static int snd_send_data(SndChannel *channel)
     return TRUE;
 }
 
-static int snd_record_handle_write(RecordChannel *record_channel, RedDataHeader *message)
+static int snd_record_handle_write(RecordChannel *record_channel, SpiceDataHeader *message)
 {
-    RedcRecordPacket *packet;
+    SpiceMsgcRecordPacket *packet;
     uint32_t write_pos;
     uint32_t* data;
     uint32_t size;
@@ -336,10 +336,10 @@ static int snd_record_handle_write(RecordChannel *record_channel, RedDataHeader 
         return FALSE;
     }
 
-    packet = (RedcRecordPacket *)(message + 1);
+    packet = (SpiceMsgcRecordPacket *)(message + 1);
     size = message->size - sizeof(*packet);
 
-    if (record_channel->mode == RED_AUDIO_DATA_MODE_CELT_0_5_1) {
+    if (record_channel->mode == SPICE_AUDIO_DATA_MODE_CELT_0_5_1) {
         int celt_err = celt051_decode(record_channel->celt_decoder, packet->data, size,
                                       (celt_int16_t *)record_channel->celt_buf);
         if (celt_err != CELT_OK) {
@@ -348,7 +348,7 @@ static int snd_record_handle_write(RecordChannel *record_channel, RedDataHeader 
         }
         data = record_channel->celt_buf;
         size = FRAME_SIZE;
-    } else if (record_channel->mode == RED_AUDIO_DATA_MODE_RAW) {
+    } else if (record_channel->mode == SPICE_AUDIO_DATA_MODE_RAW) {
         data = (uint32_t *)packet->data;
         size = size >> 2;
         size = MIN(size, RECORD_SAMPLES_SIZE);
@@ -373,14 +373,14 @@ static int snd_record_handle_write(RecordChannel *record_channel, RedDataHeader 
     return TRUE;
 }
 
-static int snd_playback_handle_message(SndChannel *channel, RedDataHeader *message)
+static int snd_playback_handle_message(SndChannel *channel, SpiceDataHeader *message)
 {
     if (!channel) {
         return FALSE;
     }
 
     switch (message->type) {
-    case REDC_DISCONNECTING:
+    case SPICE_MSGC_DISCONNECTING:
         break;
     default:
         red_printf("invalid message type %u", message->type);
@@ -389,7 +389,7 @@ static int snd_playback_handle_message(SndChannel *channel, RedDataHeader *messa
     return TRUE;
 }
 
-static int snd_record_handle_message(SndChannel *channel, RedDataHeader *message)
+static int snd_record_handle_message(SndChannel *channel, SpiceDataHeader *message)
 {
     RecordChannel *record_channel = (RecordChannel *)channel;
 
@@ -397,26 +397,26 @@ static int snd_record_handle_message(SndChannel *channel, RedDataHeader *message
         return FALSE;
     }
     switch (message->type) {
-    case REDC_RECORD_DATA:
+    case SPICE_MSGC_RECORD_DATA:
         return snd_record_handle_write((RecordChannel *)channel, message);
-    case REDC_RECORD_MODE: {
-        RedcRecordMode *mode = (RedcRecordMode *)(message + 1);
+    case SPICE_MSGC_RECORD_MODE: {
+        SpiceMsgcRecordMode *mode = (SpiceMsgcRecordMode *)(message + 1);
         record_channel->mode = mode->mode;
         record_channel->mode_time = mode->time;
-        if (record_channel->mode != RED_AUDIO_DATA_MODE_CELT_0_5_1 &&
-                                                  record_channel->mode != RED_AUDIO_DATA_MODE_RAW) {
+        if (record_channel->mode != SPICE_AUDIO_DATA_MODE_CELT_0_5_1 &&
+                                                  record_channel->mode != SPICE_AUDIO_DATA_MODE_RAW) {
             red_printf("unsupported mode");
         }
         break;
     }
-    case REDC_RECORD_START_MARK: {
-        RedcRecordStartMark *mark = (RedcRecordStartMark *)(message + 1);
+    case SPICE_MSGC_RECORD_START_MARK: {
+        SpiceMsgcRecordStartMark *mark = (SpiceMsgcRecordStartMark *)(message + 1);
         record_channel->start_time = mark->time;
         break;
     }
-    case REDC_DISCONNECTING:
+    case SPICE_MSGC_DISCONNECTING:
         break;
-    case REDC_MIGRATE_DATA: {
+    case SPICE_MSGC_MIGRATE_DATA: {
         RecordMigrateData* mig_data = (RecordMigrateData *)(message + 1);
         if (mig_data->version != RECORD_MIG_VERSION) {
             red_printf("invalid mig version");
@@ -467,26 +467,26 @@ static void snd_receive(void* data)
         } else {
             channel->recive_data.now += n;
             for (;;) {
-                RedDataHeader *message = channel->recive_data.message;
+                SpiceDataHeader *message = channel->recive_data.message;
                 n = channel->recive_data.now - (uint8_t *)message;
-                if (n < sizeof(RedDataHeader) || n < sizeof(RedDataHeader) + message->size) {
+                if (n < sizeof(SpiceDataHeader) || n < sizeof(SpiceDataHeader) + message->size) {
                     break;
                 }
                 if (!channel->handle_message(channel, message)) {
                     snd_disconnect_channel(channel);
                     return;
                 }
-                channel->recive_data.message = (RedDataHeader *)((uint8_t *)message +
-                                                                 sizeof(RedDataHeader) +
+                channel->recive_data.message = (SpiceDataHeader *)((uint8_t *)message +
+                                                                 sizeof(SpiceDataHeader) +
                                                                  message->size);
             }
             if (channel->recive_data.now == (uint8_t *)channel->recive_data.message) {
                 channel->recive_data.now = channel->recive_data.buf;
-                channel->recive_data.message = (RedDataHeader *)channel->recive_data.buf;
+                channel->recive_data.message = (SpiceDataHeader *)channel->recive_data.buf;
             } else if (channel->recive_data.now == channel->recive_data.end) {
                 memcpy(channel->recive_data.buf, channel->recive_data.message, n);
                 channel->recive_data.now = channel->recive_data.buf + n;
-                channel->recive_data.message = (RedDataHeader *)channel->recive_data.buf;
+                channel->recive_data.message = (SpiceDataHeader *)channel->recive_data.buf;
             }
         }
     }
@@ -518,27 +518,27 @@ static inline int snd_reset_send_data(SndChannel *channel, uint16_t verb)
     channel->send_data.header.size = 0;
     channel->send_data.header.type = verb;
     ++channel->send_data.header.serial;
-    __snd_add_buf(channel, &channel->send_data.header, sizeof(RedDataHeader));
+    __snd_add_buf(channel, &channel->send_data.header, sizeof(SpiceDataHeader));
     return TRUE;
 }
 
 static int snd_playback_send_migrate(PlaybackChannel *channel)
 {
-    if (!snd_reset_send_data((SndChannel *)channel, RED_MIGRATE)) {
+    if (!snd_reset_send_data((SndChannel *)channel, SPICE_MSG_MIGRATE)) {
         return FALSE;
     }
     channel->send_data.u.migrate.flags = 0;
     snd_add_buf((SndChannel *)channel, &channel->send_data.u.migrate,
                 sizeof(channel->send_data.u.migrate));
-    channel->base.send_data.size = channel->base.send_data.header.size + sizeof(RedDataHeader);
+    channel->base.send_data.size = channel->base.send_data.header.size + sizeof(SpiceDataHeader);
     return snd_send_data((SndChannel *)channel);
 }
 
 static int snd_playback_send_start(PlaybackChannel *playback_channel)
 {
     SndChannel *channel = (SndChannel *)playback_channel;
-    RedPlaybackStart *start;
-    if (!snd_reset_send_data(channel, RED_PLAYBACK_START)) {
+    SpiceMsgPlaybackStart *start;
+    if (!snd_reset_send_data(channel, SPICE_MSG_PLAYBACK_START)) {
         return FALSE;
     }
 
@@ -546,21 +546,21 @@ static int snd_playback_send_start(PlaybackChannel *playback_channel)
     start->channels = VD_INTERFACE_PLAYBACK_CHAN;
     start->frequency = VD_INTERFACE_PLAYBACK_FREQ;
     ASSERT(VD_INTERFACE_PLAYBACK_FMT == VD_INTERFACE_AUDIO_FMT_S16);
-    start->format = RED_AUDIO_FMT_S16;
+    start->format = SPICE_AUDIO_FMT_S16;
     start->time = reds_get_mm_time();
     snd_add_buf(channel, start, sizeof(*start));
 
-    channel->send_data.size = sizeof(RedDataHeader) + sizeof(*start);
+    channel->send_data.size = sizeof(SpiceDataHeader) + sizeof(*start);
     return snd_send_data(channel);
 }
 
 static int snd_playback_send_stop(PlaybackChannel *playback_channel)
 {
     SndChannel *channel = (SndChannel *)playback_channel;
-    if (!snd_reset_send_data(channel, RED_PLAYBACK_STOP)) {
+    if (!snd_reset_send_data(channel, SPICE_MSG_PLAYBACK_STOP)) {
         return FALSE;
     }
-    channel->send_data.size = sizeof(RedDataHeader);
+    channel->send_data.size = sizeof(SpiceDataHeader);
     return snd_send_data(channel);
 }
 
@@ -578,8 +578,8 @@ static int snd_playback_send_ctl(PlaybackChannel *playback_channel)
 static int snd_record_send_start(RecordChannel *record_channel)
 {
     SndChannel *channel = (SndChannel *)record_channel;
-    RedRecordStart *start;
-    if (!snd_reset_send_data(channel, RED_RECORD_START)) {
+    SpiceMsgRecordStart *start;
+    if (!snd_reset_send_data(channel, SPICE_MSG_RECORD_START)) {
         return FALSE;
     }
 
@@ -587,20 +587,20 @@ static int snd_record_send_start(RecordChannel *record_channel)
     start->channels = VD_INTERFACE_RECORD_CHAN;
     start->frequency = VD_INTERFACE_RECORD_FREQ;
     ASSERT(VD_INTERFACE_RECORD_FMT == VD_INTERFACE_AUDIO_FMT_S16);
-    start->format = RED_AUDIO_FMT_S16;
+    start->format = SPICE_AUDIO_FMT_S16;
     snd_add_buf(channel, start, sizeof(*start));
 
-    channel->send_data.size = sizeof(RedDataHeader) + sizeof(*start);
+    channel->send_data.size = sizeof(SpiceDataHeader) + sizeof(*start);
     return snd_send_data(channel);
 }
 
 static int snd_record_send_stop(RecordChannel *record_channel)
 {
     SndChannel *channel = (SndChannel *)record_channel;
-    if (!snd_reset_send_data(channel, RED_RECORD_STOP)) {
+    if (!snd_reset_send_data(channel, SPICE_MSG_RECORD_STOP)) {
         return FALSE;
     }
-    channel->send_data.size = sizeof(RedDataHeader);
+    channel->send_data.size = sizeof(SpiceDataHeader);
     return snd_send_data(channel);
 }
 
@@ -620,13 +620,13 @@ static int snd_record_send_migrate(RecordChannel *record_channel)
     SndChannel *channel = (SndChannel *)record_channel;
     RecordMigrateMessage* migrate;
 
-    if (!snd_reset_send_data(channel, RED_MIGRATE)) {
+    if (!snd_reset_send_data(channel, SPICE_MSG_MIGRATE)) {
         return FALSE;
     }
 
     migrate = &record_channel->send_data.u.migrate;
-    migrate->migrate.flags = RED_MIGRATE_NEED_DATA_TRANSFER;
-    migrate->header.type = RED_MIGRATE_DATA;
+    migrate->migrate.flags = SPICE_MIGRATE_NEED_DATA_TRANSFER;
+    migrate->header.type = SPICE_MSG_MIGRATE_DATA;
     migrate->header.size = sizeof(RecordMigrateData);
     migrate->header.serial = ++channel->send_data.header.serial;
     migrate->header.sub_list = 0;
@@ -638,7 +638,7 @@ static int snd_record_send_migrate(RecordChannel *record_channel)
     migrate->data.mode_time = record_channel->mode_time;
 
     snd_add_buf(channel, migrate, sizeof(*migrate));
-    channel->send_data.size = channel->send_data.header.size + sizeof(RedDataHeader);
+    channel->send_data.size = channel->send_data.header.size + sizeof(SpiceDataHeader);
     channel->send_data.header.size -= sizeof(migrate->header);
     channel->send_data.header.size -= sizeof(migrate->data);
     return snd_send_data(channel);
@@ -649,13 +649,13 @@ static int snd_playback_send_write(PlaybackChannel *playback_channel)
     SndChannel *channel = (SndChannel *)playback_channel;
     AudioFrame *frame;
 
-    if (!snd_reset_send_data(channel, RED_PLAYBACK_DATA)) {
+    if (!snd_reset_send_data(channel, SPICE_MSG_PLAYBACK_DATA)) {
         return FALSE;
     }
 
     frame = playback_channel->in_progress;
     snd_add_buf(channel, &frame->time, sizeof(frame->time));
-    if (playback_channel->mode == RED_AUDIO_DATA_MODE_CELT_0_5_1) {
+    if (playback_channel->mode == SPICE_AUDIO_DATA_MODE_CELT_0_5_1) {
         int n = celt051_encode(playback_channel->celt_encoder, (celt_int16_t *)frame->samples, NULL,
                                playback_channel->send_data.u.celt_buf, CELT_COMPRESSED_FRAME_BYTES);
         if (n < 0) {
@@ -668,7 +668,7 @@ static int snd_playback_send_write(PlaybackChannel *playback_channel)
         snd_add_buf(channel, frame->samples, sizeof(frame->samples));
     }
 
-    channel->send_data.size = channel->send_data.header.size + sizeof(RedDataHeader);
+    channel->send_data.size = channel->send_data.header.size + sizeof(SpiceDataHeader);
 
     return snd_send_data(channel);
 }
@@ -676,9 +676,9 @@ static int snd_playback_send_write(PlaybackChannel *playback_channel)
 static int playback_send_mode(PlaybackChannel *playback_channel)
 {
     SndChannel *channel = (SndChannel *)playback_channel;
-    RedPlaybackMode *mode;
+    SpiceMsgPlaybackMode *mode;
 
-    if (!snd_reset_send_data(channel, RED_PLAYBACK_MODE)) {
+    if (!snd_reset_send_data(channel, SPICE_MSG_PLAYBACK_MODE)) {
         return FALSE;
     }
     mode = &playback_channel->send_data.u.mode;
@@ -686,7 +686,7 @@ static int playback_send_mode(PlaybackChannel *playback_channel)
     mode->mode = playback_channel->mode;
     snd_add_buf(channel, mode, sizeof(*mode));
 
-    channel->send_data.size = channel->send_data.header.size + sizeof(RedDataHeader);
+    channel->send_data.size = channel->send_data.header.size + sizeof(SpiceDataHeader);
     return snd_send_data(channel);
 }
 
@@ -802,7 +802,7 @@ static SndChannel *__new_channel(SndWorker *worker, int size, RedsStreamContext 
     memset(channel, 0, size);
     channel->peer = peer;
     channel->worker = worker;
-    channel->recive_data.message = (RedDataHeader *)channel->recive_data.buf;
+    channel->recive_data.message = (SpiceDataHeader *)channel->recive_data.buf;
     channel->recive_data.now = channel->recive_data.buf;
     channel->recive_data.end = channel->recive_data.buf + sizeof(channel->recive_data.buf);
 
@@ -989,9 +989,9 @@ static void snd_set_playback_peer(Channel *channel, RedsStreamContext *peer, int
     playback_channel->plug.put_frame = snd_playback_put_frame;
     playback_channel->celt_mode = celt_mode;
     playback_channel->celt_encoder = celt_encoder;
-    playback_channel->celt_allowed = num_caps > 0 && (caps[0] & (1 << RED_PLAYBACK_CAP_CELT_0_5_1));
+    playback_channel->celt_allowed = num_caps > 0 && (caps[0] & (1 << SPICE_PLAYBACK_CAP_CELT_0_5_1));
     playback_channel->mode = playback_channel->celt_allowed ? playback_compression :
-                                                              RED_AUDIO_DATA_MODE_RAW;
+                                                              SPICE_AUDIO_DATA_MODE_RAW;
 
     on_new_playback_channel(worker);
     snd_playback_send(worker->connection);
@@ -1205,7 +1205,7 @@ void snd_attach_playback(PlaybackInterface *interface)
         red_error("playback channel malloc failed");
     }
     memset(playback_worker, 0, sizeof(*playback_worker));
-    playback_worker->base.type = RED_CHANNEL_PLAYBACK;
+    playback_worker->base.type = SPICE_CHANNEL_PLAYBACK;
     playback_worker->base.link = snd_set_playback_peer;
     playback_worker->base.shutdown = snd_shutdown;
     playback_worker->base.migrate = snd_playback_migrate;
@@ -1216,7 +1216,7 @@ void snd_attach_playback(PlaybackInterface *interface)
     if (!(playback_worker->base.caps = malloc(sizeof(uint32_t)))) {
         PANIC("malloc failed");
     }
-    playback_worker->base.caps[0] = (1 << RED_PLAYBACK_CAP_CELT_0_5_1);
+    playback_worker->base.caps[0] = (1 << SPICE_PLAYBACK_CAP_CELT_0_5_1);
 
     add_worker(playback_worker);
     reds_register_channel(&playback_worker->base);
@@ -1230,7 +1230,7 @@ void snd_attach_record(RecordInterface *interface)
     }
 
     memset(record_worker, 0, sizeof(*record_worker));
-    record_worker->base.type = RED_CHANNEL_RECORD;
+    record_worker->base.type = SPICE_CHANNEL_RECORD;
     record_worker->base.link = snd_set_record_peer;
     record_worker->base.shutdown = snd_shutdown;
     record_worker->base.migrate = snd_record_migrate;
@@ -1242,7 +1242,7 @@ void snd_attach_record(RecordInterface *interface)
     if (!(record_worker->base.caps = malloc(sizeof(uint32_t)))) {
         PANIC("malloc failed");
     }
-    record_worker->base.caps[0] = (1 << RED_RECORD_CAP_CELT_0_5_1);
+    record_worker->base.caps[0] = (1 << SPICE_RECORD_CAP_CELT_0_5_1);
     add_worker(record_worker);
     reds_register_channel(&record_worker->base);
 }
@@ -1277,12 +1277,12 @@ void snd_set_playback_compression(int on)
 {
     SndWorker *now = workers;
 
-    playback_compression = on ? RED_AUDIO_DATA_MODE_CELT_0_5_1 : RED_AUDIO_DATA_MODE_RAW;
+    playback_compression = on ? SPICE_AUDIO_DATA_MODE_CELT_0_5_1 : SPICE_AUDIO_DATA_MODE_RAW;
     for (; now; now = now->next) {
-        if (now->base.type == RED_CHANNEL_PLAYBACK && now->connection) {
+        if (now->base.type == SPICE_CHANNEL_PLAYBACK && now->connection) {
             PlaybackChannel* playback = (PlaybackChannel*)now->connection;
             if (!playback->celt_allowed) {
-                ASSERT(playback->mode == RED_AUDIO_DATA_MODE_RAW);
+                ASSERT(playback->mode == SPICE_AUDIO_DATA_MODE_RAW);
                 continue;
             }
             if (playback->mode != playback_compression) {
@@ -1295,6 +1295,6 @@ void snd_set_playback_compression(int on)
 
 int snd_get_playback_compression()
 {
-    return (playback_compression == RED_AUDIO_DATA_MODE_RAW) ? FALSE : TRUE;
+    return (playback_compression == SPICE_AUDIO_DATA_MODE_RAW) ? FALSE : TRUE;
 }
 

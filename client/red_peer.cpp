@@ -658,10 +658,10 @@ uint32_t RedPeer::recive(uint8_t *buf, uint32_t size)
 
 RedPeer::CompundInMessage* RedPeer::recive()
 {
-    RedDataHeader header;
+    SpiceDataHeader header;
     AutoRef<CompundInMessage> message;
 
-    recive((uint8_t*)&header, sizeof(RedDataHeader));
+    recive((uint8_t*)&header, sizeof(SpiceDataHeader));
     message.reset(new CompundInMessage(header.serial, header.type, header.size, header.sub_list));
     recive((*message)->data(), (*message)->compund_size());
     return message.release();
@@ -729,7 +729,7 @@ uint32_t RedPeer::send(RedPeer::OutMessage& message)
 }
 
 RedPeer::OutMessage::OutMessage(uint32_t type, uint32_t size)
-    : _data (new uint8_t[size + sizeof(RedDataHeader)])
+    : _data (new uint8_t[size + sizeof(SpiceDataHeader)])
     , _size (size)
 {
     header().type = type;
@@ -751,7 +751,7 @@ void RedPeer::OutMessage::resize(uint32_t size)
     delete[] _data;
     _data = NULL;
     _size = 0;
-    _data = new uint8_t[size + sizeof(RedDataHeader)];
+    _data = new uint8_t[size + sizeof(SpiceDataHeader)];
     _size = size;
     header().type = type;
     header().size = size;

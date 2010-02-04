@@ -57,9 +57,9 @@ public:
         TYPE_FULLSCREEN,
     };
     void set_type(Type type) { _type = type;}
-    Point get_position();
-    virtual Point get_size();
-    bool get_mouse_anchor_point(Point& pt);
+    SpicePoint get_position();
+    virtual SpicePoint get_size();
+    bool get_mouse_anchor_point(SpicePoint& pt);
 
     void set_mouse_position(int x, int y);
     void set_cursor(LocalCursor* local_cursor);
@@ -101,7 +101,7 @@ private:
 
 private:
     Listener& _listener;
-    Point _window_size;
+    SpicePoint _window_size;
     Type _type;
     LocalCursor* _local_cursor;
     bool _cursor_visible;
@@ -115,13 +115,13 @@ private:
 class RedWindow::Listener {
 public:
     virtual ~Listener() {}
-    virtual void on_exposed_rect(const Rect& area) = 0;
+    virtual void on_exposed_rect(const SpiceRect& area) = 0;
 
     virtual void on_pointer_enter(int x, int y, unsigned int buttons_state) = 0;
     virtual void on_pointer_motion(int x, int y, unsigned int buttons_state) = 0;
     virtual void on_pointer_leave() = 0;
-    virtual void on_mouse_button_press(RedButton button, unsigned int buttons_state) = 0;
-    virtual void on_mouse_button_release(RedButton button, unsigned int buttons_state) = 0;
+    virtual void on_mouse_button_press(SpiceMouseButton button, unsigned int buttons_state) = 0;
+    virtual void on_mouse_button_release(SpiceMouseButton button, unsigned int buttons_state) = 0;
 
     virtual void on_key_press(RedKey key) = 0;
     virtual void on_key_release(RedKey key) = 0;
@@ -140,18 +140,18 @@ public:
 };
 
 /*class REGION {
-    void get_bbox(Rect& bbox) const;
+    void get_bbox(SpiceRect& bbox) const;
     bool contains_point(int x, int y) const;
 
 };*/
 
 template <class REGION>
-static bool find_anchor_point(const REGION& region, Point& pt)
+static bool find_anchor_point(const REGION& region, SpicePoint& pt)
 {
     static const unsigned int lookup_size = 20;
     unsigned int width;
     unsigned int height;
-    Rect bbox;
+    SpiceRect bbox;
 
     region.get_bbox(bbox);
     width = bbox.right - bbox.left;
@@ -173,7 +173,7 @@ static bool find_anchor_point(const REGION& region, Point& pt)
                     continue;
                 }
 
-                Rect r;
+                SpiceRect r;
                 r.left = bbox.left + x - lookup_size / 2;
                 r.right = r.left + lookup_size;
                 r.top = bbox.top + y - lookup_size / 2;

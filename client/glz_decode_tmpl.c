@@ -175,7 +175,7 @@
    size should be in PIXEL */
 static size_t FNAME(decode)(GlzDecoderWindow &window, uint8_t* in_buf,
                             uint8_t *out_buf, int size,
-                            DecodedImageWinId image_win_id, Palette *plt,
+                            DecodedImageWinId image_win_id, SpicePalette *plt,
                             GlzDecoderDebug &debug_calls)
 {
     uint8_t      *ip = in_buf;

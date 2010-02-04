@@ -50,7 +50,7 @@ public:
     Migrate(RedClient& client);
     ~Migrate();
 
-    void start(const RedMigrationBegin* migrate);
+    void start(const SpiceMsgMainMigrationBegin* migrate);
     bool abort();
     void add_channel(MigChannel* channel);
     void clear_channels();
@@ -156,7 +156,7 @@ public:
     RedPeer::ConnectionOptions::Type get_connection_options(uint32_t channel_type);
     RedPeer::HostAuthOptions& get_host_auth_options() { return _host_auth_opt;}
     void get_sync_info(uint8_t channel_type, uint8_t channel_id, SyncInfo& info);
-    void wait_for_channels(int wait_list_size, RedWaitForChannel* wait_list);
+    void wait_for_channels(int wait_list_size, SpiceWaitForChannel* wait_list);
     PixmapCache& get_pixmap_cache() {return _pixmap_cache;}
     uint64_t get_pixmap_cache_size() { return _pixmap_cache_size;}
     void on_display_mode_change();
@@ -235,7 +235,7 @@ private:
     uint64_t _pixmap_cache_size;
     Mutex _sync_lock;
     Condition _sync_condition;
-    uint64_t _sync_info[RED_CHANNEL_END][256];
+    uint64_t _sync_info[SPICE_END_CHANNEL][256];
 
     GlzDecoderWindowDebug _glz_debug;
     GlzDecoderWindow _glz_window;

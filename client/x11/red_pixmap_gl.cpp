@@ -173,7 +173,7 @@ void RedPixmapGL::touch_context()
     GLC_ERROR_TEST_FLUSH;
 }
 
-void RedPixmapGL::update_texture(const Rect *bbox)
+void RedPixmapGL::update_texture(const SpiceRect *bbox)
 {
     RenderType rendertype;
     GLuint tex;

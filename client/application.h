@@ -71,8 +71,8 @@ private:
 
 struct MonitorInfo {
     int depth;
-    Point size;
-    Point position;
+    SpicePoint size;
+    SpicePoint position;
 };
 
 class MonitorsQuery: public SyncEvent {

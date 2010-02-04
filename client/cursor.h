@@ -32,7 +32,7 @@ class LocalCursor;
 
 class CursorData {
 public:
-    CursorData(RedCursor& cursor, int data_size);
+    CursorData(SpiceCursor& cursor, int data_size);
 
     CursorData *ref() { ++_atomic; return this;}
     void unref() {if (--_atomic == 0) delete this;}
@@ -40,7 +40,7 @@ public:
     CursorOpaque* get_opaque() { return _opaque;}
     void set_local(LocalCursor* local_cursor);
     LocalCursor* get_local() { return _local_cursor;}
-    const CursorHeader& header() const { return _header;}
+    const SpiceCursorHeader& header() const { return _header;}
     const uint8_t* data() const { return _data;}
 
 private:
@@ -48,7 +48,7 @@ private:
 
 private:
     AtomicCount _atomic;
-    CursorHeader _header;
+    SpiceCursorHeader _header;
     uint8_t* _data;
     CursorOpaque* _opaque;
     LocalCursor* _local_cursor;
@@ -63,7 +63,7 @@ public:
     void unref() { if (--_atomic == 0) delete this;}
 
 protected:
-    static int get_size_bits(const CursorHeader& header, int &size);
+    static int get_size_bits(const SpiceCursorHeader& header, int &size);
 
 private:
     AtomicCount _atomic;

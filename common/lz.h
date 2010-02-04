@@ -52,7 +52,7 @@ int lz_encode(LzContext *lz, LzImageType type, int width, int height, int top_do
 */
 void lz_decode_begin(LzContext *lz, uint8_t *io_ptr, unsigned int num_io_bytes,
                      LzImageType *out_type, int *out_width, int *out_height,
-                     int *out_n_pixels, int *out_top_down, const Palette *palette);
+                     int *out_n_pixels, int *out_top_down, const SpicePalette *palette);
 
 /*
         to_type = the image output type.

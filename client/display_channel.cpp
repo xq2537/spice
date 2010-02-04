@@ -177,12 +177,12 @@ public:
     VideoStream(RedClient& client, Canvas& canvas, DisplayChannel& channel,
                 uint32_t codec_type, bool top_down, uint32_t stream_width,
                 uint32_t stream_height, uint32_t src_width, uint32_t src_height,
-                Rect* dest, int clip_type, uint32_t num_clip_rects, Rect* clip_rects);
+                SpiceRect* dest, int clip_type, uint32_t num_clip_rects, SpiceRect* clip_rects);
     ~VideoStream();
 
     void push_data(uint32_t mm_time, uint32_t length, uint8_t* data, uint32_t ped_size);
-    void set_clip(int type, uint32_t num_clip_rects, Rect* clip_rects);
-    const Rect& get_dest() {return _dest;}
+    void set_clip(int type, uint32_t num_clip_rects, SpiceRect* clip_rects);
+    const SpiceRect& get_dest() {return _dest;}
     void handle_update_mark(uint64_t update_mark);
     uint32_t handle_timer_update(uint32_t now);
 
@@ -208,7 +208,7 @@ private:
     int _stream_height;
     int _stride;
     bool _top_down;
-    Rect _dest;
+    SpiceRect _dest;
     QRegion _clip_region;
     QRegion* _clip;
 
@@ -277,8 +277,8 @@ static int create_bitmap(HDC *dc, HBITMAP *prev_bitmap,
 VideoStream::VideoStream(RedClient& client, Canvas& canvas, DisplayChannel& channel,
                          uint32_t codec_type, bool top_down, uint32_t stream_width,
                          uint32_t stream_height, uint32_t src_width, uint32_t src_height,
-                         Rect* dest, int clip_type, uint32_t num_clip_rects,
-                         Rect* clip_rects)
+                         SpiceRect* dest, int clip_type, uint32_t num_clip_rects,
+                         SpiceRect* clip_rects)
     : _client (client)
     , _canvas (canvas)
     , _channel (channel)
@@ -306,7 +306,7 @@ VideoStream::VideoStream(RedClient& client, Canvas& canvas, DisplayChannel& chan
     memset(_frames, 0, sizeof(_frames));
     region_init(&_clip_region);
     switch (codec_type) {
-    case RED_VIDEO_CODEC_TYPE_MJPEG:
+    case SPICE_VIDEO_CODEC_TYPE_MJPEG:
         type = CODEC_ID_MJPEG;
         break;
     default:
@@ -520,14 +520,14 @@ void VideoStream::push_data(uint32_t mm_time, uint32_t length, uint8_t* data, ui
     maintenance();
 }
 
-void VideoStream::set_clip(int type, uint32_t num_clip_rects, Rect* clip_rects)
+void VideoStream::set_clip(int type, uint32_t num_clip_rects, SpiceRect* clip_rects)
 {
-    if (type == CLIP_TYPE_NONE) {
+    if (type == SPICE_CLIP_TYPE_NONE) {
         _clip = NULL;
         return;
     }
 
-    ASSERT(type == CLIP_TYPE_RECTS)
+    ASSERT(type == SPICE_CLIP_TYPE_RECTS)
     region_clear(&_clip_region);
 
     for (unsigned int i = 0; i < num_clip_rects; i++) {
@@ -624,15 +624,15 @@ void ResetTimer::response(AbstractProcessLoop& events_loop)
     _client.deactivate_interval_timer(this);
 }
 
-class DisplayHandler: public MessageHandlerImp<DisplayChannel, RED_DISPLAY_MESSAGES_END> {
+class DisplayHandler: public MessageHandlerImp<DisplayChannel, SPICE_MSG_END_DISPLAY> {
 public:
     DisplayHandler(DisplayChannel& channel)
-        : MessageHandlerImp<DisplayChannel, RED_DISPLAY_MESSAGES_END>(channel) {}
+        : MessageHandlerImp<DisplayChannel, SPICE_MSG_END_DISPLAY>(channel) {}
 };
 
 DisplayChannel::DisplayChannel(RedClient& client, uint32_t id,
                                PixmapCache& pixmap_cache, GlzDecoderWindow& glz_window)
-    : RedChannel(client, RED_CHANNEL_DISPLAY, id, new DisplayHandler(*this),
+    : RedChannel(client, SPICE_CHANNEL_DISPLAY, id, new DisplayHandler(*this),
                  Platform::PRIORITY_LOW)
     , ScreenLayer (SCREEN_LAYER_DISPLAY, true)
     , _canvas (NULL)
@@ -655,37 +655,37 @@ DisplayChannel::DisplayChannel(RedClient& client, uint32_t id,
 {
     DisplayHandler* handler = static_cast<DisplayHandler*>(get_message_handler());
 
-    handler->set_handler(RED_MIGRATE, &DisplayChannel::handle_migrate, 0);
-    handler->set_handler(RED_SET_ACK, &DisplayChannel::handle_set_ack, sizeof(RedSetAck));
-    handler->set_handler(RED_PING, &DisplayChannel::handle_ping, sizeof(RedPing));
-    handler->set_handler(RED_WAIT_FOR_CHANNELS, &DisplayChannel::handle_wait_for_channels,
-                         sizeof(RedWaitForChannels));
-    handler->set_handler(RED_DISCONNECTING, &DisplayChannel::handle_disconnect,
-                         sizeof(RedDisconnect));
-    handler->set_handler(RED_NOTIFY, &DisplayChannel::handle_notify, sizeof(RedNotify));
+    handler->set_handler(SPICE_MSG_MIGRATE, &DisplayChannel::handle_migrate, 0);
+    handler->set_handler(SPICE_MSG_SET_ACK, &DisplayChannel::handle_set_ack, sizeof(SpiceMsgSetAck));
+    handler->set_handler(SPICE_MSG_PING, &DisplayChannel::handle_ping, sizeof(SpiceMsgPing));
+    handler->set_handler(SPICE_MSG_WAIT_FOR_CHANNELS, &DisplayChannel::handle_wait_for_channels,
+                         sizeof(SpiceMsgWaitForChannels));
+    handler->set_handler(SPICE_MSG_DISCONNECTING, &DisplayChannel::handle_disconnect,
+                         sizeof(SpiceMsgDisconnect));
+    handler->set_handler(SPICE_MSG_NOTIFY, &DisplayChannel::handle_notify, sizeof(SpiceMsgNotify));
 
-    handler->set_handler(RED_DISPLAY_MODE, &DisplayChannel::handle_mode, sizeof(RedMode));
-    handler->set_handler(RED_DISPLAY_MARK, &DisplayChannel::handle_mark, 0);
-    handler->set_handler(RED_DISPLAY_RESET, &DisplayChannel::handle_reset, 0);
+    handler->set_handler(SPICE_MSG_DISPLAY_MODE, &DisplayChannel::handle_mode, sizeof(SpiceMsgDisplayMode));
+    handler->set_handler(SPICE_MSG_DISPLAY_MARK, &DisplayChannel::handle_mark, 0);
+    handler->set_handler(SPICE_MSG_DISPLAY_RESET, &DisplayChannel::handle_reset, 0);
 
-    handler->set_handler(RED_DISPLAY_INVAL_LIST,
+    handler->set_handler(SPICE_MSG_DISPLAY_INVAL_LIST,
                          &DisplayChannel::handle_inval_list,
-                         sizeof(RedResorceList));
-    handler->set_handler(RED_DISPLAY_INVAL_ALL_PIXMAPS,
+                         sizeof(SpiceResorceList));
+    handler->set_handler(SPICE_MSG_DISPLAY_INVAL_ALL_PIXMAPS,
                          &DisplayChannel::handle_inval_all_pixmaps,
-                         sizeof(RedWaitForChannels));
-    handler->set_handler(RED_DISPLAY_INVAL_PALETTE,
-                         &DisplayChannel::handle_inval_palette, sizeof(RedInvalOne));
-    handler->set_handler(RED_DISPLAY_INVAL_ALL_PALETTES,
+                         sizeof(SpiceMsgWaitForChannels));
+    handler->set_handler(SPICE_MSG_DISPLAY_INVAL_PALETTE,
+                         &DisplayChannel::handle_inval_palette, sizeof(SpiceMsgDisplayInvalOne));
+    handler->set_handler(SPICE_MSG_DISPLAY_INVAL_ALL_PALETTES,
                          &DisplayChannel::handle_inval_all_palettes, 0);
 
-    handler->set_handler(RED_DISPLAY_STREAM_CREATE, &DisplayChannel::handle_stream_create,
-                         sizeof(RedStreamCreate));
-    handler->set_handler(RED_DISPLAY_STREAM_CLIP, &DisplayChannel::handle_stream_clip,
-                         sizeof(RedStreamClip));
-    handler->set_handler(RED_DISPLAY_STREAM_DESTROY, &DisplayChannel::handle_stream_destroy,
-                         sizeof(RedStreamDestroy));
-    handler->set_handler(RED_DISPLAY_STREAM_DESTROY_ALL,
+    handler->set_handler(SPICE_MSG_DISPLAY_STREAM_CREATE, &DisplayChannel::handle_stream_create,
+                         sizeof(SpiceMsgDisplayStreamCreate));
+    handler->set_handler(SPICE_MSG_DISPLAY_STREAM_CLIP, &DisplayChannel::handle_stream_clip,
+                         sizeof(SpiceMsgDisplayStreamClip));
+    handler->set_handler(SPICE_MSG_DISPLAY_STREAM_DESTROY, &DisplayChannel::handle_stream_destroy,
+                         sizeof(SpiceMsgDisplayStreamDestroy));
+    handler->set_handler(SPICE_MSG_DISPLAY_STREAM_DESTROY_ALL,
                          &DisplayChannel::handle_stream_destroy_all, 0);
 
     get_process_loop().add_trigger(_streams_trigger);
@@ -719,55 +719,55 @@ void DisplayChannel::set_draw_handlers()
 {
     DisplayHandler* handler = static_cast<DisplayHandler*>(get_message_handler());
 
-    handler->set_handler(RED_DISPLAY_COPY_BITS, &DisplayChannel::handle_copy_bits,
-                         sizeof(RedCopyBits));
+    handler->set_handler(SPICE_MSG_DISPLAY_COPY_BITS, &DisplayChannel::handle_copy_bits,
+                         sizeof(SpiceMsgDisplayCopyBits));
 
-    handler->set_handler(RED_DISPLAY_DRAW_FILL, &DisplayChannel::handle_draw_fill,
-                         sizeof(RedFill));
-    handler->set_handler(RED_DISPLAY_DRAW_OPAQUE, &DisplayChannel::handle_draw_opaque,
-                         sizeof(RedOpaque));
-    handler->set_handler(RED_DISPLAY_DRAW_COPY, &DisplayChannel::handle_draw_copy,
-                         sizeof(RedCopy));
-    handler->set_handler(RED_DISPLAY_DRAW_BLEND, &DisplayChannel::handle_draw_blend,
-                         sizeof(RedBlend));
-    handler->set_handler(RED_DISPLAY_DRAW_BLACKNESS, &DisplayChannel::handle_draw_blackness,
-                         sizeof(RedBlackness));
-    handler->set_handler(RED_DISPLAY_DRAW_WHITENESS, &DisplayChannel::handle_draw_whiteness,
-                         sizeof(RedWhiteness));
-    handler->set_handler(RED_DISPLAY_DRAW_INVERS, &DisplayChannel::handle_draw_invers,
-                         sizeof(RedInvers));
-    handler->set_handler(RED_DISPLAY_DRAW_ROP3, &DisplayChannel::handle_draw_rop3,
-                         sizeof(RedRop3));
-    handler->set_handler(RED_DISPLAY_DRAW_STROKE, &DisplayChannel::handle_draw_stroke,
-                         sizeof(RedStroke));
-    handler->set_handler(RED_DISPLAY_DRAW_TEXT, &DisplayChannel::handle_draw_text,
-                         sizeof(RedText));
-    handler->set_handler(RED_DISPLAY_DRAW_TRANSPARENT,
-                         &DisplayChannel::handle_draw_transparent, sizeof(RedTransparent));
-    handler->set_handler(RED_DISPLAY_DRAW_ALPHA_BLEND,
-                         &DisplayChannel::handle_draw_alpha_blend, sizeof(RedAlphaBlend));
-    handler->set_handler(RED_DISPLAY_STREAM_DATA, &DisplayChannel::handle_stream_data,
-                         sizeof(RedStreamData));
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_FILL, &DisplayChannel::handle_draw_fill,
+                         sizeof(SpiceMsgDisplayDrawFill));
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_OPAQUE, &DisplayChannel::handle_draw_opaque,
+                         sizeof(SpiceMsgDisplayDrawOpaque));
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_COPY, &DisplayChannel::handle_draw_copy,
+                         sizeof(SpiceMsgDisplayDrawCopy));
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_BLEND, &DisplayChannel::handle_draw_blend,
+                         sizeof(SpiceMsgDisplayDrawBlend));
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_BLACKNESS, &DisplayChannel::handle_draw_blackness,
+                         sizeof(SpiceMsgDisplayDrawBlackness));
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_WHITENESS, &DisplayChannel::handle_draw_whiteness,
+                         sizeof(SpiceMsgDisplayDrawWhiteness));
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_INVERS, &DisplayChannel::handle_draw_invers,
+                         sizeof(SpiceMsgDisplayDrawInvers));
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_ROP3, &DisplayChannel::handle_draw_rop3,
+                         sizeof(SpiceMsgDisplayDrawRop3));
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_STROKE, &DisplayChannel::handle_draw_stroke,
+                         sizeof(SpiceMsgDisplayDrawStroke));
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_TEXT, &DisplayChannel::handle_draw_text,
+                         sizeof(SpiceMsgDisplayDrawText));
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_TRANSPARENT,
+                         &DisplayChannel::handle_draw_transparent, sizeof(SpiceMsgDisplayDrawTransparent));
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_ALPHA_BLEND,
+                         &DisplayChannel::handle_draw_alpha_blend, sizeof(SpiceMsgDisplayDrawAlphaBlend));
+    handler->set_handler(SPICE_MSG_DISPLAY_STREAM_DATA, &DisplayChannel::handle_stream_data,
+                         sizeof(SpiceMsgDisplayStreamData));
 }
 
 void DisplayChannel::clear_draw_handlers()
 {
     DisplayHandler* handler = static_cast<DisplayHandler*>(get_message_handler());
 
-    handler->set_handler(RED_DISPLAY_COPY_BITS, NULL, 0);
-    handler->set_handler(RED_DISPLAY_DRAW_FILL, NULL, 0);
-    handler->set_handler(RED_DISPLAY_DRAW_OPAQUE, NULL, 0);
-    handler->set_handler(RED_DISPLAY_DRAW_COPY, NULL, 0);
-    handler->set_handler(RED_DISPLAY_DRAW_BLEND, NULL, 0);
-    handler->set_handler(RED_DISPLAY_DRAW_BLACKNESS, NULL, 0);
-    handler->set_handler(RED_DISPLAY_DRAW_WHITENESS, NULL, 0);
-    handler->set_handler(RED_DISPLAY_DRAW_INVERS, NULL, 0);
-    handler->set_handler(RED_DISPLAY_DRAW_ROP3, NULL, 0);
-    handler->set_handler(RED_DISPLAY_DRAW_STROKE, NULL, 0);
-    handler->set_handler(RED_DISPLAY_DRAW_TEXT, NULL, 0);
-    handler->set_handler(RED_DISPLAY_DRAW_TRANSPARENT, NULL, 0);
-    handler->set_handler(RED_DISPLAY_DRAW_ALPHA_BLEND, NULL, 0);
-    handler->set_handler(RED_DISPLAY_STREAM_DATA, NULL, 0);
+    handler->set_handler(SPICE_MSG_DISPLAY_COPY_BITS, NULL, 0);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_FILL, NULL, 0);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_OPAQUE, NULL, 0);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_COPY, NULL, 0);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_BLEND, NULL, 0);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_BLACKNESS, NULL, 0);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_WHITENESS, NULL, 0);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_INVERS, NULL, 0);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_ROP3, NULL, 0);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_STROKE, NULL, 0);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_TEXT, NULL, 0);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_TRANSPARENT, NULL, 0);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_ALPHA_BLEND, NULL, 0);
+    handler->set_handler(SPICE_MSG_DISPLAY_STREAM_DATA, NULL, 0);
 }
 
 void DisplayChannel::copy_pixels(const QRegion& dest_region,
@@ -908,7 +908,7 @@ void DisplayChannel::on_mouse_button_release(int button, int buttons_state)
 {
     _buttons_state = buttons_state;
     if (_capture_mouse_mode) {
-        if (button == REDC_MOUSE_LBUTTON) {
+        if (button == SPICE_MOUSE_BUTTON_LEFT) {
             get_client().on_mouse_capture_trigger(*screen());
         }
         return;
@@ -1009,9 +1009,9 @@ public:
 
         virtual bool operator() (RedChannel& channel)
         {
-            if (channel.get_type() == RED_CHANNEL_CURSOR && channel.get_id() == _channel.get_id()) {
+            if (channel.get_type() == SPICE_CHANNEL_CURSOR && channel.get_id() == _channel.get_id()) {
                 static_cast<CursorChannel&>(channel).attach_display(&_channel);
-            } else if (channel.get_type() == RED_CHANNEL_INPUTS) {
+            } else if (channel.get_type() == SPICE_CHANNEL_INPUTS) {
                 _channel.attach_inputs(&static_cast<InputsChannel&>(channel));
             }
             return false;
@@ -1024,7 +1024,7 @@ public:
     virtual void response(AbstractProcessLoop& events_loop)
     {
         uint32_t mouse_mode = _channel.get_client().get_mouse_mode();
-        _channel._capture_mouse_mode =  (mouse_mode == RED_MOUSE_MODE_SERVER);
+        _channel._capture_mouse_mode =  (mouse_mode == SPICE_MOUSE_MODE_SERVER);
         AttachChannels for_each_func(_channel);
         _channel.get_client().for_each_channel(for_each_func);
     }
@@ -1046,7 +1046,7 @@ public:
 
         virtual bool operator() (RedChannel& channel)
         {
-            if (channel.get_type() == RED_CHANNEL_CURSOR && channel.get_id() == _channel.get_id()) {
+            if (channel.get_type() == SPICE_CHANNEL_CURSOR && channel.get_id() == _channel.get_id()) {
                 static_cast<CursorChannel&>(channel).detach_display();
                 return true;
             }
@@ -1069,8 +1069,8 @@ private:
 
 void DisplayChannel::on_connect()
 {
-    Message* message = new Message(REDC_DISPLAY_INIT, sizeof(RedcDisplayInit));
-    RedcDisplayInit* init = (RedcDisplayInit*)message->data();
+    Message* message = new Message(SPICE_MSGC_DISPLAY_INIT, sizeof(SpiceMsgcDisplayInit));
+    SpiceMsgcDisplayInit* init = (SpiceMsgcDisplayInit*)message->data();
     init->pixmap_cache_id = 1;
     init->pixmap_cache_size = get_client().get_pixmap_cache_size();
     init->glz_dictionary_id = 1;
@@ -1230,7 +1230,7 @@ void DisplayChannel::create_canvas(const std::vector<int>& canvas_types, int wid
 
 void DisplayChannel::handle_mode(RedPeer::InMessage* message)
 {
-    RedMode *mode = (RedMode *)message->data();
+    SpiceMsgDisplayMode *mode = (SpiceMsgDisplayMode *)message->data();
 
     _mark = false;
     attach_to_screen(get_client().get_application(), get_id());
@@ -1269,7 +1269,7 @@ void DisplayChannel::handle_mode(RedPeer::InMessage* message)
 void DisplayChannel::handle_mark(RedPeer::InMessage *message)
 {
     _mark = true;
-    Rect area;
+    SpiceRect area;
     area.top = area.left = 0;
     area.right = _x_res;
     area.bottom = _y_res;
@@ -1300,7 +1300,7 @@ void DisplayChannel::handle_reset(RedPeer::InMessage *message)
 
 void DisplayChannel::handle_inval_list(RedPeer::InMessage* message)
 {
-    RedResorceList *inval_list = (RedResorceList *)message->data();
+    SpiceResorceList *inval_list = (SpiceResorceList *)message->data();
 
     if (message->size() <
                         sizeof(*inval_list) + inval_list->count * sizeof(inval_list->resorces[0])) {
@@ -1308,7 +1308,7 @@ void DisplayChannel::handle_inval_list(RedPeer::InMessage* message)
     }
 
     for (int i = 0; i < inval_list->count; i++) {
-        if (inval_list->resorces[i].type != RED_RES_TYPE_PIXMAP) {
+        if (inval_list->resorces[i].type != SPICE_RES_TYPE_PIXMAP) {
             THROW("invalid res type");
         }
 
@@ -1318,7 +1318,7 @@ void DisplayChannel::handle_inval_list(RedPeer::InMessage* message)
 
 void DisplayChannel::handle_inval_all_pixmaps(RedPeer::InMessage* message)
 {
-    RedWaitForChannels *wait = (RedWaitForChannels *)message->data();
+    SpiceMsgWaitForChannels *wait = (SpiceMsgWaitForChannels *)message->data();
     if (message->size() < sizeof(*wait) + wait->wait_count * sizeof(wait->wait_list[0])) {
         THROW("access violation");
     }
@@ -1328,7 +1328,7 @@ void DisplayChannel::handle_inval_all_pixmaps(RedPeer::InMessage* message)
 
 void DisplayChannel::handle_inval_palette(RedPeer::InMessage* message)
 {
-    RedInvalOne* inval = (RedInvalOne*)message->data();
+    SpiceMsgDisplayInvalOne* inval = (SpiceMsgDisplayInvalOne*)message->data();
     _palette_cache.remove(inval->id);
 }
 
@@ -1337,35 +1337,35 @@ void DisplayChannel::handle_inval_all_palettes(RedPeer::InMessage* message)
     _palette_cache.clear();
 }
 
-void DisplayChannel::set_clip_rects(const Clip& clip, uint32_t& num_clip_rects,
-                                    Rect*& clip_rects, unsigned long addr_offset,
+void DisplayChannel::set_clip_rects(const SpiceClip& clip, uint32_t& num_clip_rects,
+                                    SpiceRect*& clip_rects, unsigned long addr_offset,
                                     uint8_t *min, uint8_t *max)
 {
     switch (clip.type) {
-    case CLIP_TYPE_RECTS: {
-        uint32_t* n = (uint32_t*)GET_ADDRESS(clip.data + addr_offset);
+    case SPICE_CLIP_TYPE_RECTS: {
+        uint32_t* n = (uint32_t*)SPICE_GET_ADDRESS(clip.data + addr_offset);
         if (n < (uint32_t*)min || n + 1 > (uint32_t*)max) {
             THROW("access violation");
         }
         num_clip_rects = *n;
-        clip_rects = (Rect *)(n + 1);
-        if (clip_rects + num_clip_rects > (Rect*)max) {
+        clip_rects = (SpiceRect *)(n + 1);
+        if (clip_rects + num_clip_rects > (SpiceRect*)max) {
             THROW("access violation");
         }
         break;
     }
-    case CLIP_TYPE_NONE:
+    case SPICE_CLIP_TYPE_NONE:
         num_clip_rects = 0;
         clip_rects = NULL;
         break;
-    case CLIP_TYPE_PATH:
+    case SPICE_CLIP_TYPE_PATH:
         THROW("unexpected clip type");
     }
 }
 
 void DisplayChannel::handle_stream_create(RedPeer::InMessage* message)
 {
-    RedStreamCreate* stream_create = (RedStreamCreate*)message->data();
+    SpiceMsgDisplayStreamCreate* stream_create = (SpiceMsgDisplayStreamCreate*)message->data();
 
     Lock lock(_streams_lock);
     if (_streams.size() <= stream_create->id) {
@@ -1377,13 +1377,13 @@ void DisplayChannel::handle_stream_create(RedPeer::InMessage* message)
     }
 
     uint32_t num_clip_rects;
-    Rect* clip_rects;
+    SpiceRect* clip_rects;
     set_clip_rects(stream_create->clip, num_clip_rects, clip_rects,
                    (unsigned long)message->data(), (uint8_t*)(stream_create + 1),
                    message->data() + message->size());
     _streams[stream_create->id] = new VideoStream(get_client(), *_canvas.get(),
                                                   *this, stream_create->codec_type,
-                                                  !!(stream_create->flags & STREAM_TOP_DOWN),
+                                                  !!(stream_create->flags & SPICE_STREAM_FLAGS_TOP_DOWN),
                                                   stream_create->stream_width,
                                                   stream_create->stream_height,
                                                   stream_create->src_width,
@@ -1398,14 +1398,14 @@ void DisplayChannel::handle_stream_create(RedPeer::InMessage* message)
 
 void DisplayChannel::handle_stream_data(RedPeer::InMessage* message)
 {
-    RedStreamData* stream_data = (RedStreamData*)message->data();
+    SpiceMsgDisplayStreamData* stream_data = (SpiceMsgDisplayStreamData*)message->data();
     VideoStream* stream;
 
     if (stream_data->id >= _streams.size() || !(stream = _streams[stream_data->id])) {
         THROW("invalid stream");
     }
 
-    if (message->size() < sizeof(RedStreamData) + stream_data->data_size + stream_data->ped_size) {
+    if (message->size() < sizeof(SpiceMsgDisplayStreamData) + stream_data->data_size + stream_data->ped_size) {
         THROW("access violation");
     }
 
@@ -1415,16 +1415,16 @@ void DisplayChannel::handle_stream_data(RedPeer::InMessage* message)
 
 void DisplayChannel::handle_stream_clip(RedPeer::InMessage* message)
 {
-    RedStreamClip* clip_data = (RedStreamClip*)message->data();
+    SpiceMsgDisplayStreamClip* clip_data = (SpiceMsgDisplayStreamClip*)message->data();
     VideoStream* stream;
     uint32_t num_clip_rects;
-    Rect* clip_rects;
+    SpiceRect* clip_rects;
 
     if (clip_data->id >= _streams.size() || !(stream = _streams[clip_data->id])) {
         THROW("invalid stream");
     }
 
-    if (message->size() < sizeof(RedStreamClip)) {
+    if (message->size() < sizeof(SpiceMsgDisplayStreamClip)) {
         THROW("access violation");
     }
     set_clip_rects(clip_data->clip, num_clip_rects, clip_rects,
@@ -1436,7 +1436,7 @@ void DisplayChannel::handle_stream_clip(RedPeer::InMessage* message)
 
 void DisplayChannel::handle_stream_destroy(RedPeer::InMessage* message)
 {
-    RedStreamDestroy* stream_destroy = (RedStreamDestroy*)message->data();
+    SpiceMsgDisplayStreamDestroy* stream_destroy = (SpiceMsgDisplayStreamDestroy*)message->data();
 
     if (stream_destroy->id >= _streams.size() || !_streams[stream_destroy->id]) {
         THROW("invalid stream");
@@ -1477,7 +1477,7 @@ void DisplayChannel::handle_stream_destroy_all(RedPeer::InMessage* message)
 
 void DisplayChannel::handle_copy_bits(RedPeer::InMessage* message)
 {
-    RedCopyBits* copy_bits = (RedCopyBits*)message->data();
+    SpiceMsgDisplayCopyBits* copy_bits = (SpiceMsgDisplayCopyBits*)message->data();
     PRE_DRAW;
     _canvas->copy_bits(*copy_bits, message->size());
     POST_DRAW;
@@ -1486,73 +1486,73 @@ void DisplayChannel::handle_copy_bits(RedPeer::InMessage* message)
 
 void DisplayChannel::handle_draw_fill(RedPeer::InMessage* message)
 {
-    RedFill* fill = (RedFill*)message->data();
+    SpiceMsgDisplayDrawFill* fill = (SpiceMsgDisplayDrawFill*)message->data();
     DRAW(fill);
 }
 
 void DisplayChannel::handle_draw_opaque(RedPeer::InMessage* message)
 {
-    RedOpaque* opaque = (RedOpaque*)message->data();
+    SpiceMsgDisplayDrawOpaque* opaque = (SpiceMsgDisplayDrawOpaque*)message->data();
     DRAW(opaque);
 }
 
 void DisplayChannel::handle_draw_copy(RedPeer::InMessage* message)
 {
-    RedCopy* copy = (RedCopy*)message->data();
+    SpiceMsgDisplayDrawCopy* copy = (SpiceMsgDisplayDrawCopy*)message->data();
     DRAW(copy);
 }
 
 void DisplayChannel::handle_draw_blend(RedPeer::InMessage* message)
 {
-    RedBlend* blend = (RedBlend*)message->data();
+    SpiceMsgDisplayDrawBlend* blend = (SpiceMsgDisplayDrawBlend*)message->data();
     DRAW(blend);
 }
 
 void DisplayChannel::handle_draw_blackness(RedPeer::InMessage* message)
 {
-    RedBlackness* blackness = (RedBlackness*)message->data();
+    SpiceMsgDisplayDrawBlackness* blackness = (SpiceMsgDisplayDrawBlackness*)message->data();
     DRAW(blackness);
 }
 
 void DisplayChannel::handle_draw_whiteness(RedPeer::InMessage* message)
 {
-    RedWhiteness* whiteness = (RedWhiteness*)message->data();
+    SpiceMsgDisplayDrawWhiteness* whiteness = (SpiceMsgDisplayDrawWhiteness*)message->data();
     DRAW(whiteness);
 }
 
 void DisplayChannel::handle_draw_invers(RedPeer::InMessage* message)
 {
-    RedInvers* invers = (RedInvers*)message->data();
+    SpiceMsgDisplayDrawInvers* invers = (SpiceMsgDisplayDrawInvers*)message->data();
     DRAW(invers);
 }
 
 void DisplayChannel::handle_draw_rop3(RedPeer::InMessage* message)
 {
-    RedRop3* rop3 = (RedRop3*)message->data();
+    SpiceMsgDisplayDrawRop3* rop3 = (SpiceMsgDisplayDrawRop3*)message->data();
     DRAW(rop3);
 }
 
 void DisplayChannel::handle_draw_stroke(RedPeer::InMessage* message)
 {
-    RedStroke* stroke = (RedStroke*)message->data();
+    SpiceMsgDisplayDrawStroke* stroke = (SpiceMsgDisplayDrawStroke*)message->data();
     DRAW(stroke);
 }
 
 void DisplayChannel::handle_draw_text(RedPeer::InMessage* message)
 {
-    RedText* text = (RedText*)message->data();
+    SpiceMsgDisplayDrawText* text = (SpiceMsgDisplayDrawText*)message->data();
     DRAW(text);
 }
 
 void DisplayChannel::handle_draw_transparent(RedPeer::InMessage* message)
 {
-    RedTransparent* transparent = (RedTransparent*)message->data();
+    SpiceMsgDisplayDrawTransparent* transparent = (SpiceMsgDisplayDrawTransparent*)message->data();
     DRAW(transparent);
 }
 
 void DisplayChannel::handle_draw_alpha_blend(RedPeer::InMessage* message)
 {
-    RedAlphaBlend* alpha_blend = (RedAlphaBlend*)message->data();
+    SpiceMsgDisplayDrawAlphaBlend* alpha_blend = (SpiceMsgDisplayDrawAlphaBlend*)message->data();
     DRAW(alpha_blend);
 }
 
@@ -1648,7 +1648,7 @@ void DisplayChannel::on_streams_trigger()
 
 class DisplayFactory: public ChannelFactory {
 public:
-    DisplayFactory() : ChannelFactory(RED_CHANNEL_DISPLAY) {}
+    DisplayFactory() : ChannelFactory(SPICE_CHANNEL_DISPLAY) {}
     virtual RedChannel* construct(RedClient& client, uint32_t id)
     {
         return new DisplayChannel(client, id,

@@ -63,7 +63,7 @@ private:
     static void create_native_cursor(CursorData* cursor);
 
     void update_display_cursor();
-    void set_cursor(RedCursor& red_cursor, int data_size, int x, int y, bool visible);
+    void set_cursor(SpiceCursor& red_cursor, int data_size, int x, int y, bool visible);
     void remove_cursor();
 
     virtual void copy_pixels(const QRegion& dest_region, RedDrawable& dest_dc);
@@ -83,8 +83,8 @@ private:
 private:
     CursorCache _cursor_cache;
     CursorData* _cursor;
-    Point _hot_pos;
-    Rect _cursor_rect;
+    SpicePoint _hot_pos;
+    SpiceRect _cursor_rect;
     Mutex _update_lock;
     bool _cursor_visible;
     DisplayChannel* _display_channel;

@@ -196,7 +196,7 @@ struct QXLInterface {
     void (*release_resource)(QXLInterface *qxl, struct QXLReleaseInfoExt release_info);
     int (*get_cursor_command)(QXLInterface *qxl, struct QXLCommandExt *cmd);
     int (*req_cursor_notification)(QXLInterface *qxl);
-    const struct Rect *(*get_update_area)(QXLInterface *qxl);
+    const struct SpiceRect *(*get_update_area)(QXLInterface *qxl);
     void (*notify_update)(QXLInterface *qxl, uint32_t update_id);
     void (*set_save_data)(QXLInterface *qxl, void *data, int size);
     void *(*get_save_data)(QXLInterface *qxl);

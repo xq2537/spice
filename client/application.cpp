@@ -154,9 +154,9 @@ private:
 private:
     AlphaImageFromRes _info_pixmap;
     AlphaImageFromRes _sticky_pixmap;
-    Point _info_pos;
-    Point _sticky_pos;
-    Rect _sticky_rect;
+    SpicePoint _info_pos;
+    SpicePoint _sticky_pos;
+    SpiceRect _sticky_rect;
     bool _sticky_on;
     RecurciveMutex _update_lock;
 };
@@ -172,7 +172,7 @@ InfoLayer::InfoLayer()
 void InfoLayer::draw_info(const QRegion& dest_region, RedDrawable& dest)
 {
     for (int i = 0; i < (int)dest_region.num_rects; i++) {
-        Rect* r = &dest_region.rects[i];
+        SpiceRect* r = &dest_region.rects[i];
         /* is rect inside sticky region or info region? */
         if (_sticky_on && rect_intersects(*r, _sticky_rect)) {
             dest.blend_pixels(_sticky_pixmap, r->left - _sticky_pos.x, r->top - _sticky_pos.y, *r);
@@ -194,9 +194,9 @@ void InfoLayer::set_info_mode()
 
     ASSERT(screen());
 
-    Point size = _info_pixmap.get_size();
-    Point screen_size = screen()->get_size();
-    Rect r;
+    SpicePoint size = _info_pixmap.get_size();
+    SpicePoint screen_size = screen()->get_size();
+    SpiceRect r;
 
     r.left = (screen_size.x - size.x) / 2;
     r.right = r.left + size.x;
@@ -211,8 +211,8 @@ void InfoLayer::set_info_mode()
 
 void InfoLayer::update_sticky_rect()
 {
-    Point size = _sticky_pixmap.get_size();
-    Point screen_size = screen()->get_size();
+    SpicePoint size = _sticky_pixmap.get_size();
+    SpicePoint screen_size = screen()->get_size();
 
     _sticky_pos.x = (screen_size.x - size.x) / 2;
     _sticky_pos.y = screen_size.y * 2 / 3;
@@ -315,7 +315,7 @@ enum AppCommands {
 Application::Application()
     : ProcessLoop (this)
     , _client (*this)
-    , _enabled_channels (RED_CHANNEL_END, true)
+    , _enabled_channels (SPICE_END_CHANNEL, true)
     , _main_screen (NULL)
     , _active (false)
     , _full_screen (false)
@@ -381,7 +381,7 @@ Application::Application()
     _gui_test_timer.reset(new TestTimer(*this));
     activate_interval_timer(*_gui_test_timer, 1000 * 30);
 #endif
-    for (int i = RED_CHANNEL_MAIN; i < RED_CHANNEL_END; i++) {
+    for (int i = SPICE_CHANNEL_MAIN; i < SPICE_END_CHANNEL; i++) {
         _peer_con_opt[i] = RedPeer::ConnectionOptions::CON_OP_BOTH;
     }
 }
@@ -579,10 +579,10 @@ RedScreen* Application::get_screen(int id)
 
     if (!(screen = _screens[id])) {
         Monitor* mon = find_monitor(id);
-        Point size;
+        SpicePoint size;
 
         if (_full_screen && mon) {
-            Point size = mon->get_size();
+            SpicePoint size = mon->get_size();
         } else {
             size.x = SCREEN_INIT_WIDTH;
             size.y = SCREEN_INIT_HEIGHT;
@@ -1310,10 +1310,10 @@ void Application::prepare_monitors()
         if (_screens[i] && (mon = _screens[i]->get_monitor())) {
 
             if (_screens[i]->is_size_locked()) {
-                Point size = _screens[i]->get_size();
+                SpicePoint size = _screens[i]->get_size();
                 mon->set_mode(size.x, size.y);
             } else {
-                Point size = mon->get_size();
+                SpicePoint size = mon->get_size();
                 _screens[i]->resize(size.x, size.y);
             }
         }
@@ -1644,13 +1644,13 @@ bool Application::set_channels_security(CmdLineParser& parser, bool on, char *va
 
     typedef std::map< std::string, int> ChannelsNamesMap;
     ChannelsNamesMap channels_names;
-    channels_names["main"] = RED_CHANNEL_MAIN;
-    channels_names["display"] = RED_CHANNEL_DISPLAY;
-    channels_names["inputs"] = RED_CHANNEL_INPUTS;
-    channels_names["cursor"] = RED_CHANNEL_CURSOR;
-    channels_names["playback"] = RED_CHANNEL_PLAYBACK;
-    channels_names["record"] = RED_CHANNEL_RECORD;
-    channels_names["tunnel"] = RED_CHANNEL_TUNNEL;
+    channels_names["main"] = SPICE_CHANNEL_MAIN;
+    channels_names["display"] = SPICE_CHANNEL_DISPLAY;
+    channels_names["inputs"] = SPICE_CHANNEL_INPUTS;
+    channels_names["cursor"] = SPICE_CHANNEL_CURSOR;
+    channels_names["playback"] = SPICE_CHANNEL_PLAYBACK;
+    channels_names["record"] = SPICE_CHANNEL_RECORD;
+    channels_names["tunnel"] = SPICE_CHANNEL_TUNNEL;
 
     if (!strcmp(val, "all")) {
         if ((val = parser.next_argument())) {
@@ -1711,12 +1711,12 @@ bool Application::set_enable_channels(CmdLineParser& parser, bool enable, char *
 {
     typedef std::map< std::string, int> ChannelsNamesMap;
     ChannelsNamesMap channels_names;
-    channels_names["display"] = RED_CHANNEL_DISPLAY;
-    channels_names["inputs"] = RED_CHANNEL_INPUTS;
-    channels_names["cursor"] = RED_CHANNEL_CURSOR;
-    channels_names["playback"] = RED_CHANNEL_PLAYBACK;
-    channels_names["record"] = RED_CHANNEL_RECORD;
-    channels_names["tunnel"] = RED_CHANNEL_TUNNEL;
+    channels_names["display"] = SPICE_CHANNEL_DISPLAY;
+    channels_names["inputs"] = SPICE_CHANNEL_INPUTS;
+    channels_names["cursor"] = SPICE_CHANNEL_CURSOR;
+    channels_names["playback"] = SPICE_CHANNEL_PLAYBACK;
+    channels_names["record"] = SPICE_CHANNEL_RECORD;
+    channels_names["tunnel"] = SPICE_CHANNEL_TUNNEL;
 
     if (!strcmp(val, "all")) {
         if ((val = parser.next_argument())) {
@@ -1750,27 +1750,27 @@ void Application::on_cmd_line_invalid_arg(const char* arg0, const char* what, co
 
 void Application::register_channels()
 {
-    if (_enabled_channels[RED_CHANNEL_DISPLAY]) {
+    if (_enabled_channels[SPICE_CHANNEL_DISPLAY]) {
         _client.register_channel_factory(DisplayChannel::Factory());
     }
 
-    if (_enabled_channels[RED_CHANNEL_CURSOR]) {
+    if (_enabled_channels[SPICE_CHANNEL_CURSOR]) {
         _client.register_channel_factory(CursorChannel::Factory());
     }
 
-    if (_enabled_channels[RED_CHANNEL_INPUTS]) {
+    if (_enabled_channels[SPICE_CHANNEL_INPUTS]) {
         _client.register_channel_factory(InputsChannel::Factory());
     }
 
-    if (_enabled_channels[RED_CHANNEL_PLAYBACK]) {
+    if (_enabled_channels[SPICE_CHANNEL_PLAYBACK]) {
         _client.register_channel_factory(PlaybackChannel::Factory());
     }
 
-    if (_enabled_channels[RED_CHANNEL_RECORD]) {
+    if (_enabled_channels[SPICE_CHANNEL_RECORD]) {
         _client.register_channel_factory(RecordChannel::Factory());
     }
 
-    if (_enabled_channels[RED_CHANNEL_TUNNEL]) {
+    if (_enabled_channels[SPICE_CHANNEL_TUNNEL]) {
         _client.register_channel_factory(TunnelChannel::Factory());
     }
 }
@@ -1833,7 +1833,7 @@ bool Application::process_cmd_line(int argc, char** argv)
     parser.add(SPICE_OPT_CANVAS_TYPE, "canvas-type", "set rendering canvas", "canvas_type", true);
     parser.set_multi(SPICE_OPT_CANVAS_TYPE, ',');
 
-    for (int i = RED_CHANNEL_MAIN; i < RED_CHANNEL_END; i++) {
+    for (int i = SPICE_CHANNEL_MAIN; i < SPICE_END_CHANNEL; i++) {
         _peer_con_opt[i] = RedPeer::ConnectionOptions::CON_OP_INVALID;
     }
 

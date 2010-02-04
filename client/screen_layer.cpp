@@ -78,12 +78,12 @@ ScreenLayer::~ScreenLayer()
     region_destroy(&_composit_area);
 }
 
-uint64_t ScreenLayer::invalidate_rect(const Rect& r, bool urgent)
+uint64_t ScreenLayer::invalidate_rect(const SpiceRect& r, bool urgent)
 {
     return _screen->invalidate(r, urgent);
 }
 
-uint64_t ScreenLayer::invalidate(const Rect& r, bool urgent)
+uint64_t ScreenLayer::invalidate(const SpiceRect& r, bool urgent)
 {
     if (!_screen) {
         return 0;
@@ -96,8 +96,8 @@ void ScreenLayer::invalidate(const QRegion& region)
     if (!_screen) {
         return;
     }
-    Rect *r = region.rects;
-    Rect *end = r + region.num_rects;
+    SpiceRect *r = region.rects;
+    SpiceRect *end = r + region.num_rects;
     while (r != end) {
         invalidate_rect(*r++, false);
     }
@@ -133,7 +133,7 @@ void ScreenLayer::clear_area()
     notify_changed();
 }
 
-void ScreenLayer::set_rect_area(const Rect& r)
+void ScreenLayer::set_rect_area(const SpiceRect& r)
 {
     Lock lock(_area_lock);
     invalidate();
@@ -152,14 +152,14 @@ void ScreenLayer::offset_area(int dx, int dy)
     notify_changed();
 }
 
-void ScreenLayer::add_rect_area(const Rect& r)
+void ScreenLayer::add_rect_area(const SpiceRect& r)
 {
     Lock lock(_area_lock);
     region_add(&_area, &r);
     notify_changed();
 }
 
-void ScreenLayer::remove_rect_area(const Rect& r)
+void ScreenLayer::remove_rect_area(const SpiceRect& r)
 {
     Lock lock(_area_lock);
     invalidate();

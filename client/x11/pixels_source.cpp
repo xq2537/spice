@@ -94,10 +94,10 @@ ImageFromRes::~ImageFromRes()
     delete ((PixelsSource_p*)get_opaque())->pixmap.x_image;
 }
 
-Point ImageFromRes::get_size()
+SpicePoint ImageFromRes::get_size()
 {
     XImage *image = ((PixelsSource_p*)get_opaque())->pixmap.x_image;
-    Point pt;
+    SpicePoint pt;
     pt.x = image->width;
     pt.y = image->height;
     return pt;
@@ -118,10 +118,10 @@ AlphaImageFromRes::~AlphaImageFromRes()
     delete ((PixelsSource_p*)get_opaque())->pixmap.x_image;
 }
 
-Point AlphaImageFromRes::get_size()
+SpicePoint AlphaImageFromRes::get_size()
 {
     XImage *image = ((PixelsSource_p*)get_opaque())->pixmap.x_image;
-    Point pt;
+    SpicePoint pt;
     pt.x = image->width;
     pt.y = image->height;
     return pt;

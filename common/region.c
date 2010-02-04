@@ -42,7 +42,7 @@
 #define REGION_IS_VALID(region) TRUE
 #endif
 
-static int rect_is_valid(const Rect *r)
+static int rect_is_valid(const SpiceRect *r)
 {
     if (r->top > r->bottom || r->left > r->right) {
         printf("%s: invalid rect\n", __FUNCTION__);
@@ -52,7 +52,7 @@ static int rect_is_valid(const Rect *r)
 }
 
 #ifdef REGION_TEST
-static void rect_set(Rect *r, int32_t top, int32_t left, int32_t bottom, int32_t right)
+static void rect_set(SpiceRect *r, int32_t top, int32_t left, int32_t bottom, int32_t right)
 {
     r->top = top;
     r->left = left;
@@ -97,10 +97,10 @@ void region_clone(QRegion *dest, const QRegion *src)
         dest->rects = dest->buf;
         dest->rects_size = RECTS_BUF_SIZE;
     } else {
-        dest->rects = (Rect *)malloc(sizeof(Rect) * dest->num_rects);
+        dest->rects = (SpiceRect *)malloc(sizeof(SpiceRect) * dest->num_rects);
         dest->rects_size = dest->num_rects;
     }
-    memcpy(dest->rects, src->rects, dest->num_rects * sizeof(Rect));
+    memcpy(dest->rects, src->rects, dest->num_rects * sizeof(SpiceRect));
     ASSERT(REGION_IS_VALID(src));
     ASSERT(REGION_IS_VALID(dest));
 }
@@ -109,7 +109,7 @@ int region_is_valid(const QRegion *rgn)
 {
     if (rgn->num_rects) {
         uint32_t i;
-        Rect bbox;
+        SpiceRect bbox;
 
         if (!rect_is_valid(&rgn->bbox)) {
             return FALSE;
@@ -119,14 +119,14 @@ int region_is_valid(const QRegion *rgn)
             return FALSE;
         }
         for (i = 1; i < rgn->num_rects; i++) {
-            Rect *r;
+            SpiceRect *r;
 
             r = &rgn->rects[i];
             if (!rect_is_valid(r) || rect_is_empty(r)) {
                 return FALSE;
             }
 
-            Rect *priv = r - 1;
+            SpiceRect *priv = r - 1;
             if (r->top < priv->top) {
                 return FALSE;
             } else if (r->top == priv->top) {
@@ -249,11 +249,11 @@ int region_is_equal(const QRegion *rgn1, const QRegion *rgn2)
 #endif
 
 typedef struct RgnOpCtx {
-    Rect *now;
-    Rect *end;
-    Rect *scan_line;
-    Rect r;
-    Rect split;
+    SpiceRect *now;
+    SpiceRect *end;
+    SpiceRect *scan_line;
+    SpiceRect r;
+    SpiceRect split;
 #ifdef REGION_USE_IMPROVED
     int abort;
 #endif
@@ -266,8 +266,8 @@ static inline int op_ctx_is_valid(RgnOpCtx *ctx)
 
 static void op_context_next(RgnOpCtx *ctx)
 {
-    Rect *now;
-    Rect *next;
+    SpiceRect *now;
+    SpiceRect *next;
 
     ASSERT(op_ctx_is_valid(ctx));
     now = ctx->now;
@@ -298,7 +298,7 @@ static void op_context_next(RgnOpCtx *ctx)
     ctx->now = next;
 }
 
-static void op_context_init(RgnOpCtx *ctx, uint32_t num_rects, Rect *rects)
+static void op_context_init(RgnOpCtx *ctx, uint32_t num_rects, SpiceRect *rects)
 {
     ctx->scan_line = ctx->now = rects;
     ctx->end = ctx->now + num_rects;
@@ -334,17 +334,17 @@ static inline void op_ctx_split(RgnOpCtx *ctx, int32_t h_line)
     ctx->r.bottom = h_line;
 }
 
-static void region_steal_rects(QRegion *rgn, uint32_t *num_rects, Rect **rects)
+static void region_steal_rects(QRegion *rgn, uint32_t *num_rects, SpiceRect **rects)
 {
     ASSERT(REGION_IS_VALID(rgn));
     if ((*num_rects = rgn->num_rects)) {
         if (rgn->rects == rgn->buf) {
-            *rects = (Rect *)malloc(sizeof(Rect) * rgn->num_rects);
-            memcpy(*rects, rgn->rects, sizeof(Rect) * rgn->num_rects);
+            *rects = (SpiceRect *)malloc(sizeof(SpiceRect) * rgn->num_rects);
+            memcpy(*rects, rgn->rects, sizeof(SpiceRect) * rgn->num_rects);
         } else {
             *rects = rgn->rects;
 #ifdef ALLOC_ON_STEAL
-            rgn->rects = (Rect *)malloc(sizeof(Rect) * rgn->num_rects);
+            rgn->rects = (SpiceRect *)malloc(sizeof(SpiceRect) * rgn->num_rects);
             rgn->rects_size = rgn->num_rects;
             rgn->num_rects = 0;
             return;
@@ -359,14 +359,14 @@ static void region_steal_rects(QRegion *rgn, uint32_t *num_rects, Rect **rects)
 
 typedef struct JoinContext {
     QRegion *rgn;
-    Rect *line0;
-    Rect *line1;
-    Rect *end;
+    SpiceRect *line0;
+    SpiceRect *line1;
+    SpiceRect *end;
 } JoinContext;
 
-static inline Rect *__get_line(QRegion *rgn, Rect *pos)
+static inline SpiceRect *__get_line(QRegion *rgn, SpiceRect *pos)
 {
-    Rect *end = rgn->rects + rgn->num_rects;
+    SpiceRect *end = rgn->rects + rgn->num_rects;
 
     if (pos < end) {
         int32_t line_top = pos->top;
@@ -394,8 +394,8 @@ static inline int region_join_next(JoinContext *context)
 
 static inline void region_join_join(JoinContext *context)
 {
-    Rect *pos_0 = context->line0;
-    Rect *pos_1 = context->line1;
+    SpiceRect *pos_0 = context->line0;
+    SpiceRect *pos_1 = context->line1;
     int32_t bottom;
     QRegion *rgn;
 
@@ -441,7 +441,7 @@ static inline void region_join(QRegion *rgn)
     ASSERT(REGION_IS_VALID(rgn));
 }
 
-static void region_push_rect(QRegion *rgn, Rect *r)
+static void region_push_rect(QRegion *rgn, SpiceRect *r)
 {
     ASSERT(REGION_IS_VALID(rgn));
     ASSERT(rect_is_valid(r));
@@ -450,7 +450,7 @@ static void region_push_rect(QRegion *rgn, Rect *r)
         rgn->rects[0] = rgn->bbox = *r;
         return;
     } else {
-        Rect *priv = &rgn->rects[rgn->num_rects - 1];
+        SpiceRect *priv = &rgn->rects[rgn->num_rects - 1];
 
         if (priv->top == r->top && priv->right == r->left) {
             ASSERT(priv->bottom == r->bottom);
@@ -459,10 +459,10 @@ static void region_push_rect(QRegion *rgn, Rect *r)
             return;
         }
         if (rgn->rects_size == rgn->num_rects) {
-            Rect *old = rgn->rects;
+            SpiceRect *old = rgn->rects;
             rgn->rects_size = rgn->rects_size * 2;
-            rgn->rects = (Rect *)malloc(sizeof(Rect) * rgn->rects_size);
-            memcpy(rgn->rects, old, sizeof(Rect) * rgn->num_rects);
+            rgn->rects = (SpiceRect *)malloc(sizeof(SpiceRect) * rgn->rects_size);
+            memcpy(rgn->rects, old, sizeof(SpiceRect) * rgn->num_rects);
             if (old != rgn->buf) {
                 free(old);
             }
@@ -474,10 +474,10 @@ static void region_push_rect(QRegion *rgn, Rect *r)
 
 #ifdef REGION_USE_IMPROVED
 
-static Rect *op_context_find_area_below(RgnOpCtx *ctx, int32_t val)
+static SpiceRect *op_context_find_area_below(RgnOpCtx *ctx, int32_t val)
 {
-    Rect *start = ctx->now;
-    Rect *end = ctx->end;
+    SpiceRect *start = ctx->now;
+    SpiceRect *end = ctx->end;
 
     while (start != end) {
         int pos = (end - start) / 2;
@@ -492,7 +492,7 @@ static Rect *op_context_find_area_below(RgnOpCtx *ctx, int32_t val)
 
 static int op_context_skip_v(RgnOpCtx *ctx, int32_t top)
 {
-    Rect *end = op_context_find_area_below(ctx, top);
+    SpiceRect *end = op_context_find_area_below(ctx, top);
     if (end != ctx->now) {
         ctx->now = ctx->scan_line = end;
         if (ctx->now == ctx->end) {
@@ -505,13 +505,13 @@ static int op_context_skip_v(RgnOpCtx *ctx, int32_t top)
     return FALSE;
 }
 
-typedef void (*op_callback_t)(RgnOpCtx *context, Rect *, Rect *);
+typedef void (*op_callback_t)(RgnOpCtx *context, SpiceRect *, SpiceRect *);
 
 static void op_context_skip(RgnOpCtx *self, RgnOpCtx *other, op_callback_t on_self,
                             op_callback_t on_other)
 {
-    Rect *save1 = self->now;
-    Rect *save2 = other->now;
+    SpiceRect *save1 = self->now;
+    SpiceRect *save2 = other->now;
     int more;
     do {
         op_context_skip_v(self, other->r.top);
@@ -606,7 +606,7 @@ typedef struct SelfOpCtx {
     QRegion *rgn;
 } SelfOpCtx;
 
-static void add_rects(RgnOpCtx *ctx, Rect *now, Rect *end)
+static void add_rects(RgnOpCtx *ctx, SpiceRect *now, SpiceRect *end)
 {
     SelfOpCtx *self_ctx = (SelfOpCtx *)ctx;
     for (; now < end; now++) {
@@ -620,7 +620,7 @@ static void region_op(QRegion *rgn, const QRegion *other_rgn, op_callback_t on_s
     SelfOpCtx self;
     RgnOpCtx other;
     uint32_t num_rects;
-    Rect *rects;
+    SpiceRect *rects;
 
     region_steal_rects(rgn, &num_rects, &rects);
     op_context_init(&self.ctx, num_rects, rects);
@@ -665,7 +665,7 @@ typedef struct TestOpCtx {
 } TestOpCtx;
 
 
-static void region_test_on_self(RgnOpCtx *ctx, Rect *now, Rect *end)
+static void region_test_on_self(RgnOpCtx *ctx, SpiceRect *now, SpiceRect *end)
 {
     TestOpCtx *test_ctx = (TestOpCtx *)ctx;
     test_ctx->result |= REGION_TEST_LEFT_EXCLUSIVE;
@@ -675,7 +675,7 @@ static void region_test_on_self(RgnOpCtx *ctx, Rect *now, Rect *end)
     }
 }
 
-static void region_test_on_other(RgnOpCtx *ctx, Rect *now, Rect *end)
+static void region_test_on_other(RgnOpCtx *ctx, SpiceRect *now, SpiceRect *end)
 {
     TestOpCtx *test_ctx = (TestOpCtx *)ctx;
     test_ctx->result |= REGION_TEST_RIGHT_EXCLUSIVE;
@@ -685,7 +685,7 @@ static void region_test_on_other(RgnOpCtx *ctx, Rect *now, Rect *end)
     }
 }
 
-static void region_test_on_both(RgnOpCtx *ctx, Rect *now, Rect *end)
+static void region_test_on_both(RgnOpCtx *ctx, SpiceRect *now, SpiceRect *end)
 {
     TestOpCtx *test_ctx = (TestOpCtx *)ctx;
     test_ctx->result |= REGION_TEST_SHARED;
@@ -715,7 +715,7 @@ int region_test(const QRegion *rgn, const QRegion *other_rgn, int query)
 #define RIGION_OP_ADD_OTHER (1 << 1)
 #define RIGION_OP_ADD_COMMON (1 << 2)
 
-static inline void region_on_self(QRegion *rgn, Rect *r, uint32_t op)
+static inline void region_on_self(QRegion *rgn, SpiceRect *r, uint32_t op)
 {
     ASSERT(REGION_IS_VALID(rgn));
     if (op & RIGION_OP_ADD_SELF) {
@@ -723,7 +723,7 @@ static inline void region_on_self(QRegion *rgn, Rect *r, uint32_t op)
     }
 }
 
-static inline void region_on_other(QRegion *rgn, Rect *r, uint32_t op)
+static inline void region_on_other(QRegion *rgn, SpiceRect *r, uint32_t op)
 {
     ASSERT(REGION_IS_VALID(rgn));
     if (op & RIGION_OP_ADD_OTHER) {
@@ -731,7 +731,7 @@ static inline void region_on_other(QRegion *rgn, Rect *r, uint32_t op)
     }
 }
 
-static inline void region_on_both(QRegion *rgn, Rect *r, uint32_t op)
+static inline void region_on_both(QRegion *rgn, SpiceRect *r, uint32_t op)
 {
     ASSERT(REGION_IS_VALID(rgn));
     if (op & RIGION_OP_ADD_COMMON) {
@@ -744,7 +744,7 @@ static void region_op(QRegion *rgn, const QRegion *other_rgn, uint32_t op)
     RgnOpCtx self;
     RgnOpCtx other;
     uint32_t num_rects;
-    Rect *rects;
+    SpiceRect *rects;
 
     ASSERT(REGION_IS_VALID(rgn));
     ASSERT(REGION_IS_VALID(other_rgn));
@@ -809,8 +809,8 @@ void region_exclude(QRegion *rgn, const QRegion *other_rgn)
 
 void region_offset(QRegion *rgn, int32_t dx, int32_t dy)
 {
-    Rect *now;
-    Rect *end;
+    SpiceRect *now;
+    SpiceRect *end;
     ASSERT(REGION_IS_VALID(rgn));
     if (region_is_empty(rgn)) {
         return;
@@ -823,7 +823,7 @@ void region_offset(QRegion *rgn, int32_t dx, int32_t dy)
     }
 }
 
-void region_add(QRegion *rgn, const Rect *r)
+void region_add(QRegion *rgn, const SpiceRect *r)
 {
     ASSERT(REGION_IS_VALID(rgn));
     ASSERT(rect_is_valid(r));
@@ -842,7 +842,7 @@ void region_add(QRegion *rgn, const Rect *r)
     }
 }
 
-void region_remove(QRegion *rgn, const Rect *r)
+void region_remove(QRegion *rgn, const SpiceRect *r)
 {
     ASSERT(REGION_IS_VALID(rgn));
     ASSERT(rect_is_valid(r));
@@ -934,7 +934,7 @@ int region_contains_point(const QRegion *rgn, int32_t x, int32_t y)
     if (region_is_empty(rgn)) {
         return FALSE;
     }
-    Rect point;
+    SpiceRect point;
     point.left = x;
     point.right = point.left + 1;
     point.top = y;
@@ -944,8 +944,8 @@ int region_contains_point(const QRegion *rgn, int32_t x, int32_t y)
         return FALSE;
     }
 
-    Rect* now = rgn->rects;
-    Rect* end = now + rgn->num_rects;
+    SpiceRect* now = rgn->rects;
+    SpiceRect* end = now + rgn->num_rects;
 
     for (; now < end; now++) {
         if (rect_intersects(now, &point)) {
@@ -990,8 +990,8 @@ int main(void)
     QRegion *r1 = &_r1;
     QRegion *r2 = &_r2;
     QRegion *r3 = &_r3;
-    Rect _r;
-    Rect *r = &_r;
+    SpiceRect _r;
+    SpiceRect *r = &_r;
     int expected[5];
 
     region_init(r1);

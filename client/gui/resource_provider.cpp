@@ -19,9 +19,9 @@
 //{"; od -txC -v <in file name> | sed -e "s/^[0-9]*//" -e s"/ \([0-9a-f][0-9a-f]\)/0x\1,/g" -e"\$d"
 //| sed -e"\$s/,$/};/") > <out file name>.c
 
-void CEGUIResourceProvider::loadRawDataContainer(const CEGUI::String &filename,
+void CEGUIResourceProvider::loadRawDataContainer(const CEGUI::SpiceString &filename,
                                               CEGUI::RawDataContainer &output,
-                                              const CEGUI::String &resourceGroup)
+                                              const CEGUI::SpiceString &resourceGroup)
 {
     DBG(0, "%s", filename.c_str());
     if (strcmp(filename.c_str(), "TaharezLook.scheme") == 0) {

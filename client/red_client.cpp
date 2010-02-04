@@ -49,7 +49,7 @@ public:
 
         virtual bool operator() (RedChannel& channel)
         {
-            if (channel.get_type() == RED_CHANNEL_DISPLAY) {
+            if (channel.get_type() == SPICE_CHANNEL_DISPLAY) {
                 static_cast<DisplayChannel&>(channel).set_capture_mode(_capture_mode);
             }
             return true;
@@ -61,7 +61,7 @@ public:
 
     virtual void response(AbstractProcessLoop& events_loop)
     {
-        bool capture_mode = _client.get_mouse_mode() == RED_MOUSE_MODE_SERVER;
+        bool capture_mode = _client.get_mouse_mode() == SPICE_MOUSE_MODE_SERVER;
         if (!capture_mode) {
             _client.get_application().release_mouse_capture();
         }
@@ -169,7 +169,7 @@ void Migrate::run()
 
     DBG(0, "");
     try {
-        conn_type = _client.get_connection_options(RED_CHANNEL_MAIN);
+        conn_type = _client.get_connection_options(SPICE_CHANNEL_MAIN);
         RedPeer::ConnectionOptions con_opt(conn_type, _port, _sport, _auth_options);
         MigChannels::iterator iter = _channels.begin();
         connection_id = _client.get_connection_id();
@@ -189,10 +189,10 @@ void Migrate::run()
     Lock lock(_lock);
     _cond.notify_one();
     if (_connected) {
-        Message* message = new Message(REDC_MIGRATE_CONNECTED, 0);
+        Message* message = new Message(SPICE_MSGC_MAIN_MIGRATE_CONNECTED, 0);
         _client.post_message(message);
     } else {
-        Message* message = new Message(REDC_MIGRATE_CONNECT_ERROR, 0);
+        Message* message = new Message(SPICE_MSGC_MAIN_MIGRATE_CONNECT_ERROR, 0);
         _client.post_message(message);
     }
     _running = false;
@@ -205,13 +205,13 @@ void* Migrate::worker_main(void *data)
     return NULL;
 }
 
-void Migrate::start(const RedMigrationBegin* migrate)
+void Migrate::start(const SpiceMsgMainMigrationBegin* migrate)
 {
     DBG(0, "");
     abort();
-    if ((RED_VERSION_MAJOR == 1) && (_client.get_peer_minor() < 2)) {
+    if ((SPICE_VERSION_MAJOR == 1) && (_client.get_peer_minor() < 2)) {
         LOG_INFO("server minor version incompatible for destination authentication"
-                 "(missing dest pubkey in RedMigrationBegin)");
+                 "(missing dest pubkey in SpiceMsgMainMigrationBegin)");
         OldRedMigrationBegin* old_migrate = (OldRedMigrationBegin*)migrate;
         _host.assign(old_migrate->host);
         _port = old_migrate->port ? old_migrate->port : -1;
@@ -291,18 +291,18 @@ void AgentTimer::response(AbstractProcessLoop& events_loop)
     THROW_ERR(SPICEC_ERROR_CODE_AGENT_TIMEOUT, "vdagent timeout");
 }
 
-class MainChannelLoop: public MessageHandlerImp<RedClient, RED_MESSAGES_END> {
+class MainChannelLoop: public MessageHandlerImp<RedClient, SPICE_MSG_END_MAIN> {
 public:
-    MainChannelLoop(RedClient& client): MessageHandlerImp<RedClient, RED_MESSAGES_END>(client) {}
+    MainChannelLoop(RedClient& client): MessageHandlerImp<RedClient, SPICE_MSG_END_MAIN>(client) {}
 };
 
 RedClient::RedClient(Application& application)
-    : RedChannel(*this, RED_CHANNEL_MAIN, 0, new MainChannelLoop(*this))
+    : RedChannel(*this, SPICE_CHANNEL_MAIN, 0, new MainChannelLoop(*this))
     , _application (application)
     , _port (-1)
     , _sport (-1)
     , _connection_id (0)
-    , _mouse_mode (RED_MOUSE_MODE_SERVER)
+    , _mouse_mode (SPICE_MOUSE_MODE_SERVER)
     , _notify_disconnect (false)
     , _auto_display_res (false)
     , _aborting (false)
@@ -318,32 +318,32 @@ RedClient::RedClient(Application& application)
 {
     MainChannelLoop* message_loop = static_cast<MainChannelLoop*>(get_message_handler());
 
-    message_loop->set_handler(RED_MIGRATE, &RedClient::handle_migrate, 0);
-    message_loop->set_handler(RED_SET_ACK, &RedClient::handle_set_ack, sizeof(RedSetAck));
-    message_loop->set_handler(RED_PING, &RedClient::handle_ping, sizeof(RedPing));
-    message_loop->set_handler(RED_WAIT_FOR_CHANNELS, &RedClient::handle_wait_for_channels,
-                              sizeof(RedWaitForChannels));
-    message_loop->set_handler(RED_DISCONNECTING, &RedClient::handle_disconnect,
-                              sizeof(RedDisconnect));
-    message_loop->set_handler(RED_NOTIFY, &RedClient::handle_notify, sizeof(RedNotify));
+    message_loop->set_handler(SPICE_MSG_MIGRATE, &RedClient::handle_migrate, 0);
+    message_loop->set_handler(SPICE_MSG_SET_ACK, &RedClient::handle_set_ack, sizeof(SpiceMsgSetAck));
+    message_loop->set_handler(SPICE_MSG_PING, &RedClient::handle_ping, sizeof(SpiceMsgPing));
+    message_loop->set_handler(SPICE_MSG_WAIT_FOR_CHANNELS, &RedClient::handle_wait_for_channels,
+                              sizeof(SpiceMsgWaitForChannels));
+    message_loop->set_handler(SPICE_MSG_DISCONNECTING, &RedClient::handle_disconnect,
+                              sizeof(SpiceMsgDisconnect));
+    message_loop->set_handler(SPICE_MSG_NOTIFY, &RedClient::handle_notify, sizeof(SpiceMsgNotify));
 
-    message_loop->set_handler(RED_MIGRATE_BEGIN, &RedClient::handle_migrate_begin,
-                              sizeof(RedMigrationBegin));
-    message_loop->set_handler(RED_MIGRATE_CANCEL, &RedClient::handle_migrate_cancel, 0);
-    message_loop->set_handler(RED_INIT, &RedClient::handle_init, sizeof(RedInit));
-    message_loop->set_handler(RED_CHANNELS_LIST, &RedClient::handle_channels,
-                              sizeof(RedChannels));
-    message_loop->set_handler(RED_MOUSE_MODE, &RedClient::handle_mouse_mode,
-                              sizeof(RedMouseMode));
-    message_loop->set_handler(RED_MULTI_MEDIA_TIME, &RedClient::handle_mm_time,
-                              sizeof(RedMultiMediaTime));
+    message_loop->set_handler(SPICE_MSG_MAIN_MIGRATE_BEGIN, &RedClient::handle_migrate_begin,
+                              sizeof(SpiceMsgMainMigrationBegin));
+    message_loop->set_handler(SPICE_MSG_MAIN_MIGRATE_CANCEL, &RedClient::handle_migrate_cancel, 0);
+    message_loop->set_handler(SPICE_MSG_MAIN_INIT, &RedClient::handle_init, sizeof(SpiceMsgMainInit));
+    message_loop->set_handler(SPICE_MSG_MAIN_CHANNELS_LIST, &RedClient::handle_channels,
+                              sizeof(SpiceMsgChannels));
+    message_loop->set_handler(SPICE_MSG_MAIN_MOUSE_MODE, &RedClient::handle_mouse_mode,
+                              sizeof(SpiceMsgMainMouseMode));
+    message_loop->set_handler(SPICE_MSG_MAIN_MULTI_MEDIA_TIME, &RedClient::handle_mm_time,
+                              sizeof(SpiceMsgMainMultiMediaTime));
 
-    message_loop->set_handler(RED_AGENT_CONNECTED, &RedClient::handle_agent_connected, 0);
-    message_loop->set_handler(RED_AGENT_DISCONNECTED, &RedClient::handle_agent_disconnected,
-                              sizeof(RedAgentDisconnect));
-    message_loop->set_handler(RED_AGENT_DATA, &RedClient::handle_agent_data, 0);
-    message_loop->set_handler(RED_AGENT_TOKEN, &RedClient::handle_agent_tokens,
-                              sizeof(RedAgentTokens));
+    message_loop->set_handler(SPICE_MSG_MAIN_AGENT_CONNECTED, &RedClient::handle_agent_connected, 0);
+    message_loop->set_handler(SPICE_MSG_MAIN_AGENT_DISCONNECTED, &RedClient::handle_agent_disconnected,
+                              sizeof(SpiceMsgMainAgentDisconnect));
+    message_loop->set_handler(SPICE_MSG_MAIN_AGENT_DATA, &RedClient::handle_agent_data, 0);
+    message_loop->set_handler(SPICE_MSG_MAIN_AGENT_TOKEN, &RedClient::handle_agent_tokens,
+                              sizeof(SpiceMsgMainAgentTokens));
     start();
 }
 
@@ -385,7 +385,7 @@ void RedClient::on_connect()
 {
     AutoRef<ConnectedEvent> event(new ConnectedEvent());
     push_event(*event);
-    _migrate.add_channel(new MigChannel(RED_CHANNEL_MAIN, 0, get_common_caps(),
+    _migrate.add_channel(new MigChannel(SPICE_CHANNEL_MAIN, 0, get_common_caps(),
                                         get_caps()));
 }
 
@@ -525,7 +525,7 @@ bool RedClient::abort()
 void RedClient::handle_migrate_begin(RedPeer::InMessage* message)
 {
     DBG(0, "");
-    RedMigrationBegin* migrate = (RedMigrationBegin*)message->data();
+    SpiceMsgMainMigrationBegin* migrate = (SpiceMsgMainMigrationBegin*)message->data();
     //add mig channels
     _migrate.start(migrate);
 }
@@ -588,7 +588,7 @@ void RedClient::send_agent_monitors_config()
         }
     }
 
-    Message* message = new Message(REDC_AGENT_DATA,sizeof(VDAgentMessage) +
+    Message* message = new Message(SPICE_MSGC_MAIN_AGENT_DATA,sizeof(VDAgentMessage) +
                                    sizeof(VDAgentMonitorsConfig) +
                                    monitors.size() * sizeof(VDAgentMonConfig));
     VDAgentMessage* msg = (VDAgentMessage*)message->data();
@@ -668,7 +668,7 @@ void RedClient::on_display_mode_change()
     Lock lock(_channels_lock);
     Channels::iterator iter = _channels.begin();
     for (; iter != _channels.end(); ++iter) {
-        if ((*iter)->get_type() == RED_CHANNEL_DISPLAY) {
+        if ((*iter)->get_type() == SPICE_CHANNEL_DISPLAY) {
             ((DisplayChannel *)(*iter))->recreate_ogl_context();
         }
     }
@@ -682,7 +682,7 @@ void RedClient::set_mouse_mode(uint32_t supported_modes, uint32_t current_mode)
         Lock lock(_channels_lock);
         Channels::iterator iter = _channels.begin();
         for (; iter != _channels.end(); ++iter) {
-            if ((*iter)->get_type() == RED_CHANNEL_CURSOR) {
+            if ((*iter)->get_type() == SPICE_CHANNEL_CURSOR) {
                 ((CursorChannel *)(*iter))->on_mouse_mode_change();
             }
         }
@@ -690,17 +690,17 @@ void RedClient::set_mouse_mode(uint32_t supported_modes, uint32_t current_mode)
         push_event(*event);
     }
     // FIXME: use configured mouse mode (currently, use client mouse mode if supported by server)
-    if ((supported_modes & RED_MOUSE_MODE_CLIENT) && (current_mode != RED_MOUSE_MODE_CLIENT)) {
-        Message* message = new Message(REDC_MOUSE_MODE_REQUEST, sizeof(RedcMouseModeRequest));
-        RedcMouseModeRequest* mouse_mode_request = (RedcMouseModeRequest*)message->data();
-        mouse_mode_request->mode = RED_MOUSE_MODE_CLIENT;
+    if ((supported_modes & SPICE_MOUSE_MODE_CLIENT) && (current_mode != SPICE_MOUSE_MODE_CLIENT)) {
+        Message* message = new Message(SPICE_MSGC_MAIN_MOUSE_MODE_REQUEST, sizeof(SpiceMsgcMainMouseModeRequest));
+        SpiceMsgcMainMouseModeRequest* mouse_mode_request = (SpiceMsgcMainMouseModeRequest*)message->data();
+        mouse_mode_request->mode = SPICE_MOUSE_MODE_CLIENT;
         post_message(message);
     }
 }
 
 void RedClient::handle_init(RedPeer::InMessage* message)
 {
-    RedInit *init = (RedInit *)message->data();
+    SpiceMsgMainInit *init = (SpiceMsgMainInit *)message->data();
     _connection_id = init->session_id;
     set_mm_time(init->multi_media_time);
     calc_pixmap_cach_and_glz_window_size(init->display_channels_hint, init->ram_hint);
@@ -709,8 +709,8 @@ void RedClient::handle_init(RedPeer::InMessage* message)
     _agent_tokens = init->agent_tokens;
     _agent_connected = !!init->agent_connected;
     if (_agent_connected) {
-        Message* msg = new Message(REDC_AGENT_START, sizeof(RedcAgentStart));
-        RedcAgentStart* agent_start = (RedcAgentStart *)msg->data();
+        Message* msg = new Message(SPICE_MSGC_MAIN_AGENT_START, sizeof(SpiceMsgcMainAgentStart));
+        SpiceMsgcMainAgentStart* agent_start = (SpiceMsgcMainAgentStart *)msg->data();
         agent_start->num_tokens = ~0;
         post_message(msg);
     }
@@ -720,14 +720,14 @@ void RedClient::handle_init(RedPeer::InMessage* message)
             send_agent_monitors_config();
         }
     } else {
-        post_message(new Message(REDC_ATTACH_CHANNELS, 0));
+        post_message(new Message(SPICE_MSGC_MAIN_ATTACH_CHANNELS, 0));
     }
 }
 
 void RedClient::handle_channels(RedPeer::InMessage* message)
 {
-    RedChannels *init = (RedChannels *)message->data();
-    RedChannelInit* channels = init->channels;
+    SpiceMsgChannels *init = (SpiceMsgChannels *)message->data();
+    SpiceChannelId* channels = init->channels;
     for (unsigned int i = 0; i < init->num_of_channels; i++) {
         create_channel(channels[i].type, channels[i].id);
     }
@@ -735,13 +735,13 @@ void RedClient::handle_channels(RedPeer::InMessage* message)
 
 void RedClient::handle_mouse_mode(RedPeer::InMessage* message)
 {
-    RedMouseMode *mouse_mode = (RedMouseMode *)message->data();
+    SpiceMsgMainMouseMode *mouse_mode = (SpiceMsgMainMouseMode *)message->data();
     set_mouse_mode(mouse_mode->supported_modes, mouse_mode->current_mode);
 }
 
 void RedClient::handle_mm_time(RedPeer::InMessage* message)
 {
-    RedMultiMediaTime *mm_time = (RedMultiMediaTime *)message->data();
+    SpiceMsgMainMultiMediaTime *mm_time = (SpiceMsgMainMultiMediaTime *)message->data();
     set_mm_time(mm_time->time);
 }
 
@@ -749,8 +749,8 @@ void RedClient::handle_agent_connected(RedPeer::InMessage* message)
 {
     DBG(0, "");
     _agent_connected = true;
-    Message* msg = new Message(REDC_AGENT_START, sizeof(RedcAgentStart));
-    RedcAgentStart* agent_start = (RedcAgentStart *)msg->data();
+    Message* msg = new Message(SPICE_MSGC_MAIN_AGENT_START, sizeof(SpiceMsgcMainAgentStart));
+    SpiceMsgcMainAgentStart* agent_start = (SpiceMsgcMainAgentStart *)msg->data();
     agent_start->num_tokens = ~0;
     post_message(msg);
     if (_auto_display_res && !_agent_mon_config_sent) {
@@ -776,7 +776,7 @@ void RedClient::on_agent_reply(VDAgentReply* reply)
     }
     switch (reply->type) {
     case VD_AGENT_MONITORS_CONFIG:
-        post_message(new Message(REDC_ATTACH_CHANNELS, 0));
+        post_message(new Message(SPICE_MSGC_MAIN_ATTACH_CHANNELS, 0));
         _application.deactivate_interval_timer(*_agent_timer);
         break;
     default:
@@ -830,7 +830,7 @@ void RedClient::handle_agent_data(RedPeer::InMessage* message)
 
 void RedClient::handle_agent_tokens(RedPeer::InMessage* message)
 {
-    RedAgentTokens *token = (RedAgentTokens *)message->data();
+    SpiceMsgMainAgentTokens *token = (SpiceMsgMainAgentTokens *)message->data();
     _agent_tokens += token->num_tokens;
 }
 
@@ -847,10 +847,10 @@ void RedClient::get_sync_info(uint8_t channel_type, uint8_t channel_id, SyncInfo
     info.message_serial = &_sync_info[channel_type][channel_id];
 }
 
-void RedClient::wait_for_channels(int wait_list_size, RedWaitForChannel* wait_list)
+void RedClient::wait_for_channels(int wait_list_size, SpiceWaitForChannel* wait_list)
 {
     for (int i = 0; i < wait_list_size; i++) {
-        if (wait_list[i].channel_type >= RED_CHANNEL_END) {
+        if (wait_list[i].channel_type >= SPICE_END_CHANNEL) {
             THROW("invalid channel type %u", wait_list[i].channel_type);
         }
         uint64_t& sync_cell = _sync_info[wait_list[i].channel_type][wait_list[i].channel_id];

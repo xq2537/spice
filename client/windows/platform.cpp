@@ -233,8 +233,8 @@ public:
     WinMonitor(int id, const wchar_t* name, const wchar_t* string);
 
     virtual int get_depth() { return _depth;}
-    virtual Point get_position();
-    virtual Point get_size() const { Point size = {_width, _height}; return size;}
+    virtual SpicePoint get_position();
+    virtual SpicePoint get_size() const { SpicePoint size = {_width, _height}; return size;}
     virtual bool is_out_of_sync() { return _out_of_sync;}
     virtual int get_screen_id() { return 0;}
 
@@ -252,7 +252,7 @@ private:
     std::wstring _dev_name;
     std::wstring _dev_string;
     bool _active;
-    Point _position;
+    SpicePoint _position;
     int _width;
     int _height;
     int _depth;
@@ -287,7 +287,7 @@ void WinMonitor::update_position()
     _depth = mode.dmBitsPerPel;
 }
 
-Point WinMonitor::get_position()
+SpicePoint WinMonitor::get_position()
 {
     update_position();
     return _position;
@@ -546,8 +546,8 @@ void Platform::reset_cursor_pos()
     if (!primary_monitor) {
         return;
     }
-    Point pos =  primary_monitor->get_position();
-    Point size =  primary_monitor->get_size();
+    SpicePoint pos =  primary_monitor->get_position();
+    SpicePoint size =  primary_monitor->get_size();
     SetCursorPos(pos.x + size.x / 2, pos.y + size.y / 2);
 }
 
@@ -572,14 +572,14 @@ private:
 WinLocalCursor::WinLocalCursor(CursorData* cursor_data)
     : _shared (false)
 {
-    const CursorHeader& header = cursor_data->header();
+    const SpiceCursorHeader& header = cursor_data->header();
     const uint8_t* data = cursor_data->data();
     int cur_size;
     int bits = get_size_bits(header, cur_size);
     if (!bits) {
         THROW("invalid curosr type");
     }
-    if (header.type == CURSOR_TYPE_MONO) {
+    if (header.type == SPICE_CURSOR_TYPE_MONO) {
         _handle = CreateCursor(NULL, header.hot_spot_x, header.hot_spot_y,
                                header.width, header.height, data, data + cur_size);
         return;
@@ -592,9 +592,9 @@ WinLocalCursor::WinLocalCursor(CursorData* cursor_data)
     HDC hdc = GetDC(NULL);
 
     switch (header.type) {
-    case CURSOR_TYPE_ALPHA:
-    case CURSOR_TYPE_COLOR32:
-    case CURSOR_TYPE_COLOR16: {
+    case SPICE_CURSOR_TYPE_ALPHA:
+    case SPICE_CURSOR_TYPE_COLOR32:
+    case SPICE_CURSOR_TYPE_COLOR16: {
         BITMAPV5HEADER bmp_hdr;
         ZeroMemory(&bmp_hdr, sizeof(bmp_hdr));
         bmp_hdr.bV5Size = sizeof(bmp_hdr);
@@ -612,7 +612,7 @@ WinLocalCursor::WinLocalCursor(CursorData* cursor_data)
             bmp_hdr.bV5GreenMask = 0x000003E0;
             bmp_hdr.bV5BlueMask  = 0x0000001F;
         }
-        if (header.type == CURSOR_TYPE_ALPHA) {
+        if (header.type == SPICE_CURSOR_TYPE_ALPHA) {
             bmp_hdr.bV5AlphaMask = 0xFF000000;
         }
         void* bmp_pixels = NULL;
@@ -620,11 +620,11 @@ WinLocalCursor::WinLocalCursor(CursorData* cursor_data)
                                          NULL, 0);
         memcpy(bmp_pixels, data, cur_size);
         icon.hbmMask = CreateBitmap(header.width, header.height, 1, 1,
-                                    (header.type == CURSOR_TYPE_ALPHA) ? NULL :
+                                    (header.type == SPICE_CURSOR_TYPE_ALPHA) ? NULL :
                                                                    (CONST VOID *)(data + cur_size));
         break;
     }
-    case CURSOR_TYPE_COLOR4: {
+    case SPICE_CURSOR_TYPE_COLOR4: {
         BITMAPINFO* bmp_info;
         bmp_info = (BITMAPINFO *)new uint8_t[sizeof(BITMAPINFO) + (sizeof(RGBQUAD) << bits)];
         ZeroMemory(bmp_info, sizeof(BITMAPINFO));
@@ -642,8 +642,8 @@ WinLocalCursor::WinLocalCursor(CursorData* cursor_data)
         delete[] (uint8_t *)bmp_info;
         break;
     }
-    case CURSOR_TYPE_COLOR24:
-    case CURSOR_TYPE_COLOR8:
+    case SPICE_CURSOR_TYPE_COLOR24:
+    case SPICE_CURSOR_TYPE_COLOR8:
     default:
         LOG_WARN("unsupported cursor type %d", header.type);
         _handle = LoadCursor(NULL, IDC_ARROW);

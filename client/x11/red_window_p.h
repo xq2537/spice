@@ -58,7 +58,7 @@ protected:
     Cursor _invisible_cursor;
     bool _visibale;
     bool _expect_parent;
-    Point _show_pos;
+    SpicePoint _show_pos;
     GLXContext _glcont_copy;
     Icon* _icon;
     bool _focused;

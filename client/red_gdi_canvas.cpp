@@ -65,7 +65,7 @@ void GDICanvas::create_pixmap(int width, int height)
 void GDICanvas::copy_pixels(const QRegion& region, RedDrawable& dest_dc)
 {
     for (int i = 0; i < (int)region.num_rects; i++) {
-        Rect* r = &region.rects[i];
+        SpiceRect* r = &region.rects[i];
         dest_dc.copy_pixels(*_pixmap, r->left, r->top, *r);
     }
 }
@@ -96,72 +96,72 @@ void GDICanvas::set_access_params(unsigned long base, unsigned long max)
     gdi_canvas_set_access_params(_canvas, base, max);
 }
 
-void GDICanvas::draw_fill(Rect *bbox, Clip *clip, Fill *fill)
+void GDICanvas::draw_fill(SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill)
 {
     gdi_canvas_draw_fill(_canvas, bbox, clip, fill);
 }
 
-void GDICanvas::draw_text(Rect *bbox, Clip *clip, Text *text)
+void GDICanvas::draw_text(SpiceRect *bbox, SpiceClip *clip, SpiceText *text)
 {
     gdi_canvas_draw_text(_canvas, bbox, clip, text);
 }
 
-void GDICanvas::draw_opaque(Rect *bbox, Clip *clip, Opaque *opaque)
+void GDICanvas::draw_opaque(SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque)
 {
     gdi_canvas_draw_opaque(_canvas, bbox, clip, opaque);
 }
 
-void GDICanvas::draw_copy(Rect *bbox, Clip *clip, Copy *copy)
+void GDICanvas::draw_copy(SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy)
 {
     gdi_canvas_draw_copy(_canvas, bbox, clip, copy);
 }
 
-void GDICanvas::draw_transparent(Rect *bbox, Clip *clip, Transparent* transparent)
+void GDICanvas::draw_transparent(SpiceRect *bbox, SpiceClip *clip, SpiceTransparent* transparent)
 {
     gdi_canvas_draw_transparent(_canvas, bbox, clip, transparent);
 }
 
-void GDICanvas::draw_alpha_blend(Rect *bbox, Clip *clip, AlphaBlnd* alpha_blend)
+void GDICanvas::draw_alpha_blend(SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend)
 {
     gdi_canvas_draw_alpha_blend(_canvas, bbox, clip, alpha_blend);
 }
 
-void GDICanvas::copy_bits(Rect *bbox, Clip *clip, Point *src_pos)
+void GDICanvas::copy_bits(SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos)
 {
     gdi_canvas_copy_bits(_canvas, bbox, clip, src_pos);
 }
 
-void GDICanvas::draw_blend(Rect *bbox, Clip *clip, Blend *blend)
+void GDICanvas::draw_blend(SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend)
 {
     gdi_canvas_draw_blend(_canvas, bbox, clip, blend);
 }
 
-void GDICanvas::draw_blackness(Rect *bbox, Clip *clip, Blackness *blackness)
+void GDICanvas::draw_blackness(SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness)
 {
     gdi_canvas_draw_blackness(_canvas, bbox, clip, blackness);
 }
 
-void GDICanvas::draw_whiteness(Rect *bbox, Clip *clip, Whiteness *whiteness)
+void GDICanvas::draw_whiteness(SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness)
 {
     gdi_canvas_draw_whiteness(_canvas, bbox, clip, whiteness);
 }
 
-void GDICanvas::draw_invers(Rect *bbox, Clip *clip, Invers *invers)
+void GDICanvas::draw_invers(SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers)
 {
     gdi_canvas_draw_invers(_canvas, bbox, clip, invers);
 }
 
-void GDICanvas::draw_rop3(Rect *bbox, Clip *clip, Rop3 *rop3)
+void GDICanvas::draw_rop3(SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3)
 {
     gdi_canvas_draw_rop3(_canvas, bbox, clip, rop3);
 }
 
-void GDICanvas::draw_stroke(Rect *bbox, Clip *clip, Stroke *stroke)
+void GDICanvas::draw_stroke(SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke)
 {
     gdi_canvas_draw_stroke(_canvas, bbox, clip, stroke);
 }
 
-void GDICanvas::put_image(HDC dc, const PixmapHeader& image, const Rect& dest, const QRegion* clip)
+void GDICanvas::put_image(HDC dc, const PixmapHeader& image, const SpiceRect& dest, const QRegion* clip)
 {
     gdi_canvas_put_image(_canvas, dc, &dest, image.data, image.width, image.height, image.stride,
                          clip);

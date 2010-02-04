@@ -289,7 +289,7 @@ void RedScreen::detach_layer(ScreenLayer& layer)
 void RedScreen::composit_to_screen(RedDrawable& win_dc, const QRegion& region)
 {
     for (int i = 0; i < (int)region.num_rects; i++) {
-        Rect* r = &region.rects[i];
+        SpiceRect* r = &region.rects[i];
         win_dc.copy_pixels(*_composit_area, r->left, r->top, *r);
     }
 }
@@ -315,7 +315,7 @@ inline void RedScreen::begin_update(QRegion& direct_rgn, QRegion& composit_rgn,
     lock.unlock();
 
     QRegion rect_rgn;
-    Rect r;
+    SpiceRect r;
     r.top = r.left = 0;
     r.right = _size.x;
     r.bottom = _size.y;
@@ -445,7 +445,7 @@ void RedScreen::update()
     }
 }
 
-bool RedScreen::_invalidate(const Rect& rect, bool urgent, uint64_t& update_mark)
+bool RedScreen::_invalidate(const SpiceRect& rect, bool urgent, uint64_t& update_mark)
 {
     RecurciveLock lock(_update_lock);
     bool update_triger = !is_dirty() && (urgent || !_periodic_update);
@@ -454,7 +454,7 @@ bool RedScreen::_invalidate(const Rect& rect, bool urgent, uint64_t& update_mark
     return update_triger;
 }
 
-uint64_t RedScreen::invalidate(const Rect& rect, bool urgent)
+uint64_t RedScreen::invalidate(const SpiceRect& rect, bool urgent)
 {
     uint64_t update_mark;
     if (_invalidate(rect, urgent, update_mark)) {
@@ -474,8 +474,8 @@ uint64_t RedScreen::invalidate(const Rect& rect, bool urgent)
 
 void RedScreen::invalidate(const QRegion &region)
 {
-    Rect *r = region.rects;
-    Rect *end = r + region.num_rects;
+    SpiceRect *r = region.rects;
+    SpiceRect *end = r + region.num_rects;
     while (r != end) {
         invalidate(*r++, false);
     }
@@ -631,7 +631,7 @@ void RedScreen::on_pointer_motion(int x, int y, unsigned int buttons_state)
     _pointer_layer->on_pointer_motion(x, y, buttons_state);
 }
 
-void RedScreen::on_mouse_button_press(RedButton button, unsigned int buttons_state)
+void RedScreen::on_mouse_button_press(SpiceMouseButton button, unsigned int buttons_state)
 {
     if (_mouse_captured) {
         _owner.on_mouse_down(button, buttons_state);
@@ -645,7 +645,7 @@ void RedScreen::on_mouse_button_press(RedButton button, unsigned int buttons_sta
     _pointer_layer->on_mouse_button_press(button, buttons_state);
 }
 
-void RedScreen::on_mouse_button_release(RedButton button, unsigned int buttons_state)
+void RedScreen::on_mouse_button_release(SpiceMouseButton button, unsigned int buttons_state)
 {
     if (_mouse_captured) {
         _owner.on_mouse_up(button, buttons_state);
@@ -770,8 +770,8 @@ void RedScreen::__show_full_screen()
         hide();
         return;
     }
-    Point position = _monitor->get_position();
-    Point monitor_size = _monitor->get_size();
+    SpicePoint position = _monitor->get_position();
+    SpicePoint monitor_size = _monitor->get_size();
     _frame_area = false;
     region_clear(&_dirty_region);
     _window.set_type(RedWindow::TYPE_FULLSCREEN);
@@ -807,7 +807,7 @@ void RedScreen::minimize()
     _window.minimize();
 }
 
-void RedScreen::position_full_screen(const Point& position)
+void RedScreen::position_full_screen(const SpicePoint& position)
 {
     if (!_full_screen) {
         return;
@@ -838,7 +838,7 @@ void RedScreen::external_show()
     _window.external_show();
 }
 
-void RedScreen::on_exposed_rect(const Rect& area)
+void RedScreen::on_exposed_rect(const SpiceRect& area)
 {
     if (is_out_of_sync()) {
         _window.fill_rect(area, rgb32_make(0xff, 0xff, 0xff));

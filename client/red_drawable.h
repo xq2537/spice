@@ -53,13 +53,13 @@ public:
         OP_XOR,
     };
 
-    void copy_pixels(const PixelsSource& src, int src_x, int src_y, const Rect& dest);
-    void blend_pixels(const PixelsSource& src, int src_x, int src_y, const Rect& dest);
-    void combine_pixels(const PixelsSource& src, int src_x, int src_y, const Rect& dest,
+    void copy_pixels(const PixelsSource& src, int src_x, int src_y, const SpiceRect& dest);
+    void blend_pixels(const PixelsSource& src, int src_x, int src_y, const SpiceRect& dest);
+    void combine_pixels(const PixelsSource& src, int src_x, int src_y, const SpiceRect& dest,
                         CombineOP op);
-    void fill_rect(const Rect& rect, rgb32_t color);
-    void frame_rect(const Rect& rect, rgb32_t color);
-    void erase_rect(const Rect& rect, rgb32_t color);
+    void fill_rect(const SpiceRect& rect, rgb32_t color);
+    void frame_rect(const SpiceRect& rect, rgb32_t color);
+    void erase_rect(const SpiceRect& rect, rgb32_t color);
 };
 
 #endif

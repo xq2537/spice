@@ -70,7 +70,7 @@ void GCanvas::create_pixmap(int width, int height, RedWindow *win,
 void GCanvas::copy_pixels(const QRegion& region, RedDrawable& dest_dc)
 {
     for (int i = 0; i < (int)region.num_rects; i++) {
-        Rect* r = &region.rects[i];
+        SpiceRect* r = &region.rects[i];
         dest_dc.copy_pixels(*_pixmap, r->left, r->top, *r);
     }
 }
@@ -105,85 +105,85 @@ void GCanvas::set_access_params(unsigned long base, unsigned long max)
     gl_canvas_set_access_params(_canvas, base, max);
 }
 
-void GCanvas::draw_fill(Rect *bbox, Clip *clip, Fill *fill)
+void GCanvas::draw_fill(SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill)
 {
     gl_canvas_draw_fill(_canvas, bbox, clip, fill);
     _pixmap->update_texture(bbox);
 }
 
-void GCanvas::draw_text(Rect *bbox, Clip *clip, Text *text)
+void GCanvas::draw_text(SpiceRect *bbox, SpiceClip *clip, SpiceText *text)
 {
     gl_canvas_draw_text(_canvas, bbox, clip, text);
     _pixmap->update_texture(bbox);
 }
 
-void GCanvas::draw_opaque(Rect *bbox, Clip *clip, Opaque *opaque)
+void GCanvas::draw_opaque(SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque)
 {
     gl_canvas_draw_opaque(_canvas, bbox, clip, opaque);
     _pixmap->update_texture(bbox);
 }
 
-void GCanvas::draw_copy(Rect *bbox, Clip *clip, Copy *copy)
+void GCanvas::draw_copy(SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy)
 {
     gl_canvas_draw_copy(_canvas, bbox, clip, copy);
     _pixmap->update_texture(bbox);
 }
 
-void GCanvas::draw_transparent(Rect *bbox, Clip *clip, Transparent* transparent)
+void GCanvas::draw_transparent(SpiceRect *bbox, SpiceClip *clip, SpiceTransparent* transparent)
 {
     gl_canvas_draw_transparent(_canvas, bbox, clip, transparent);
     _pixmap->update_texture(bbox);
 }
 
-void GCanvas::draw_alpha_blend(Rect *bbox, Clip *clip, AlphaBlnd* alpha_blend)
+void GCanvas::draw_alpha_blend(SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend)
 {
     gl_canvas_draw_alpha_blend(_canvas, bbox, clip, alpha_blend);
     _pixmap->update_texture(bbox);
 }
 
-void GCanvas::copy_bits(Rect *bbox, Clip *clip, Point *src_pos)
+void GCanvas::copy_bits(SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos)
 {
     gl_canvas_copy_pixels(_canvas, bbox, clip, src_pos);
     _pixmap->update_texture(bbox);
 }
 
-void GCanvas::draw_blend(Rect *bbox, Clip *clip, Blend *blend)
+void GCanvas::draw_blend(SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend)
 {
     gl_canvas_draw_blend(_canvas, bbox, clip, blend);
     _pixmap->update_texture(bbox);
 }
 
-void GCanvas::draw_blackness(Rect *bbox, Clip *clip, Blackness *blackness)
+void GCanvas::draw_blackness(SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness)
 {
     gl_canvas_draw_blackness(_canvas, bbox, clip, blackness);
     _pixmap->update_texture(bbox);
 }
 
-void GCanvas::draw_whiteness(Rect *bbox, Clip *clip, Whiteness *whiteness)
+void GCanvas::draw_whiteness(SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness)
 {
     gl_canvas_draw_whiteness(_canvas, bbox, clip, whiteness);
     _pixmap->update_texture(bbox);
 }
 
-void GCanvas::draw_invers(Rect *bbox, Clip *clip, Invers *invers)
+void GCanvas::draw_invers(SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers)
 {
     gl_canvas_draw_invers(_canvas, bbox, clip, invers);
     _pixmap->update_texture(bbox);
 }
 
-void GCanvas::draw_rop3(Rect *bbox, Clip *clip, Rop3 *rop3)
+void GCanvas::draw_rop3(SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3)
 {
     gl_canvas_draw_rop3(_canvas, bbox, clip, rop3);
     _pixmap->update_texture(bbox);
 }
 
-void GCanvas::draw_stroke(Rect *bbox, Clip *clip, Stroke *stroke)
+void GCanvas::draw_stroke(SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke)
 {
     gl_canvas_draw_stroke(_canvas, bbox, clip, stroke);
     _pixmap->update_texture(bbox);
 }
 
-void GCanvas::put_image(const PixmapHeader& image, const Rect& dest,
+void GCanvas::put_image(const PixmapHeader& image, const SpiceRect& dest,
                         const QRegion* clip)
 {
     gl_canvas_put_image(_canvas, &dest, image.data, image.width, image.height,

@@ -24,11 +24,11 @@
 #endif
 
 typedef void (*rop3_with_pattern_handler_t)(cairo_surface_t *d, cairo_surface_t *s,
-                                            Point *src_pos, cairo_surface_t *p,
-                                            Point *pat_pos);
+                                            SpicePoint *src_pos, cairo_surface_t *p,
+                                            SpicePoint *pat_pos);
 
 typedef void (*rop3_with_color_handler_t)(cairo_surface_t *d, cairo_surface_t *s,
-                                          Point *src_pos, uint32_t rgb);
+                                          SpicePoint *src_pos, uint32_t rgb);
 
 typedef void (*rop3_test_handler_t)();
 
@@ -40,13 +40,13 @@ static rop3_test_handler_t rop3_test_handlers[ROP3_NUM_OPS];
 
 
 static void default_rop3_with_pattern_handler(cairo_surface_t *d, cairo_surface_t *s,
-                                              Point *src_pos, cairo_surface_t *p,
-                                              Point *pat_pos)
+                                              SpicePoint *src_pos, cairo_surface_t *p,
+                                              SpicePoint *pat_pos)
 {
     WARN("not implemented 0x%x");
 }
 
-static void default_rop3_withe_color_handler(cairo_surface_t *d, cairo_surface_t *s, Point *src_pos,
+static void default_rop3_withe_color_handler(cairo_surface_t *d, cairo_surface_t *s, SpicePoint *src_pos,
                                              uint32_t rgb)
 {
     WARN("not implemented 0x%x");
@@ -57,8 +57,8 @@ static void default_rop3_test_handler()
 }
 
 #define ROP3_HANDLERS(name, formula, index)                                                     \
-static void rop3_handle_p_##name(cairo_surface_t *d, cairo_surface_t *s, Point *src_pos,        \
-                                      cairo_surface_t *p, Point *pat_pos)                       \
+static void rop3_handle_p_##name(cairo_surface_t *d, cairo_surface_t *s, SpicePoint *src_pos,        \
+                                      cairo_surface_t *p, SpicePoint *pat_pos)                       \
 {                                                                                               \
     int width = cairo_image_surface_get_width(d);                                               \
     int height = cairo_image_surface_get_height(d);                                             \
@@ -94,7 +94,7 @@ static void rop3_handle_p_##name(cairo_surface_t *d, cairo_surface_t *s, Point *
     }                                                                                           \
 }                                                                                               \
                                                                                                 \
-static void rop3_handle_c_##name(cairo_surface_t *d, cairo_surface_t *s, Point *src_pos,        \
+static void rop3_handle_c_##name(cairo_surface_t *d, cairo_surface_t *s, SpicePoint *src_pos,        \
                                    uint32_t rgb)                                                \
 {                                                                                               \
     int width = cairo_image_surface_get_width(d);                                               \
@@ -599,13 +599,13 @@ void rop3_init()
     }
 }
 
-void do_rop3_with_pattern(uint8_t rop3, cairo_surface_t *d, cairo_surface_t *s, Point *src_pos,
-                          cairo_surface_t *p, Point *pat_pos)
+void do_rop3_with_pattern(uint8_t rop3, cairo_surface_t *d, cairo_surface_t *s, SpicePoint *src_pos,
+                          cairo_surface_t *p, SpicePoint *pat_pos)
 {
     rop3_with_pattern_handlers[rop3](d, s, src_pos, p, pat_pos);
 }
 
-void do_rop3_with_color(uint8_t rop3, cairo_surface_t *d, cairo_surface_t *s, Point *src_pos,
+void do_rop3_with_color(uint8_t rop3, cairo_surface_t *d, cairo_surface_t *s, SpicePoint *src_pos,
                         uint32_t rgb)
 {
     rop3_with_color_handlers[rop3](d, s, src_pos, rgb);

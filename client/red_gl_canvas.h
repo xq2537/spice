@@ -39,23 +39,23 @@ public:
     void copy_pixels(const QRegion& region, RedDrawable* dc,
                      const PixmapHeader* pixmap);
     void copy_pixels(const QRegion& region, RedDrawable& dc);
-    void put_image(const PixmapHeader& image, const Rect& dest,
+    void put_image(const PixmapHeader& image, const SpiceRect& dest,
                    const QRegion* clip);
 
     void set_access_params(unsigned long base, unsigned long max);
-    void draw_fill(Rect *bbox, Clip *clip, Fill *fill);
-    void draw_copy(Rect *bbox, Clip *clip, Copy *copy);
-    void draw_opaque(Rect *bbox, Clip *clip, Opaque *opaque);
-    void copy_bits(Rect *bbox, Clip *clip, Point *src_pos);
-    void draw_text(Rect *bbox, Clip *clip, Text *text);
-    void draw_stroke(Rect *bbox, Clip *clip, Stroke *stroke);
-    void draw_rop3(Rect *bbox, Clip *clip, Rop3 *rop3);
-    void draw_blend(Rect *bbox, Clip *clip, Blend *blend);
-    void draw_blackness(Rect *bbox, Clip *clip, Blackness *blackness);
-    void draw_whiteness(Rect *bbox, Clip *clip, Whiteness *whiteness);
-    void draw_invers(Rect *bbox, Clip *clip, Invers *invers);
-    void draw_transparent(Rect *bbox, Clip *clip, Transparent* transparent);
-    void draw_alpha_blend(Rect *bbox, Clip *clip, AlphaBlnd* alpha_blend);
+    void draw_fill(SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill);
+    void draw_copy(SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy);
+    void draw_opaque(SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque);
+    void copy_bits(SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos);
+    void draw_text(SpiceRect *bbox, SpiceClip *clip, SpiceText *text);
+    void draw_stroke(SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke);
+    void draw_rop3(SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3);
+    void draw_blend(SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend);
+    void draw_blackness(SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness);
+    void draw_whiteness(SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness);
+    void draw_invers(SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers);
+    void draw_transparent(SpiceRect *bbox, SpiceClip *clip, SpiceTransparent* transparent);
+    void draw_alpha_blend(SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend);
 
     virtual void textures_lost();
     virtual CanvasType get_pixmap_type();

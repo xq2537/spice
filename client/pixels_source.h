@@ -27,15 +27,15 @@ public:
     PixelsSource();
     virtual ~PixelsSource();
 
-    virtual Point get_size() = 0;
+    virtual SpicePoint get_size() = 0;
     void set_origin(int x, int y) { _origin.x = x; _origin.y = y;}
-    const Point& get_origin() { return _origin;}
+    const SpicePoint& get_origin() { return _origin;}
 
 protected:
     const uint8_t* get_opaque() const { return _opaque;}
 
 private:
-    Point _origin;
+    SpicePoint _origin;
     uint8_t _opaque[PIXELES_SOURCE_OPAQUE_SIZE];
 
     friend class RedDrawable;
@@ -45,14 +45,14 @@ class ImageFromRes: public PixelsSource {
 public:
     ImageFromRes(int res_id);
     virtual ~ImageFromRes();
-    virtual Point get_size();
+    virtual SpicePoint get_size();
 };
 
 class AlphaImageFromRes: public PixelsSource {
 public:
     AlphaImageFromRes(int res_id);
     virtual ~AlphaImageFromRes();
-    virtual Point get_size();
+    virtual SpicePoint get_size();
 };
 
 #endif

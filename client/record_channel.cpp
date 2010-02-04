@@ -43,7 +43,7 @@ private:
 
 RecordSamplesMessage::RecordSamplesMessage(RecordChannel& channel)
     : _channel (channel)
-    , _massage (new Message(REDC_RECORD_DATA, sizeof(RedcRecordPacket) + 4096))
+    , _massage (new Message(SPICE_MSGC_RECORD_DATA, sizeof(SpiceMsgcRecordPacket) + 4096))
 {
 }
 
@@ -57,18 +57,18 @@ void RecordSamplesMessage::release()
     _channel.release_message(this);
 }
 
-int RecordChannel::data_mode = RED_AUDIO_DATA_MODE_CELT_0_5_1;
+int RecordChannel::data_mode = SPICE_AUDIO_DATA_MODE_CELT_0_5_1;
 
-class RecordHandler: public MessageHandlerImp<RecordChannel, REDC_RECORD_MESSAGES_END> {
+class RecordHandler: public MessageHandlerImp<RecordChannel, SPICE_MSGC_END_RECORD> {
 public:
     RecordHandler(RecordChannel& channel)
-        : MessageHandlerImp<RecordChannel, REDC_RECORD_MESSAGES_END>(channel) {}
+        : MessageHandlerImp<RecordChannel, SPICE_MSGC_END_RECORD>(channel) {}
 };
 
 RecordChannel::RecordChannel(RedClient& client, uint32_t id)
-    : RedChannel(client, RED_CHANNEL_RECORD, id, new RecordHandler(*this))
+    : RedChannel(client, SPICE_CHANNEL_RECORD, id, new RecordHandler(*this))
     , _wave_recorder (NULL)
-    , _mode (RED_AUDIO_DATA_MODE_INVALD)
+    , _mode (SPICE_AUDIO_DATA_MODE_INVALD)
     , _celt_mode (NULL)
     , _celt_encoder (NULL)
 {
@@ -78,18 +78,18 @@ RecordChannel::RecordChannel(RedClient& client, uint32_t id)
 
     RecordHandler* handler = static_cast<RecordHandler*>(get_message_handler());
 
-    handler->set_handler(RED_MIGRATE, &RecordChannel::handle_migrate, 0);
-    handler->set_handler(RED_SET_ACK, &RecordChannel::handle_set_ack, sizeof(RedSetAck));
-    handler->set_handler(RED_PING, &RecordChannel::handle_ping, sizeof(RedPing));
-    handler->set_handler(RED_WAIT_FOR_CHANNELS, &RecordChannel::handle_wait_for_channels,
-                         sizeof(RedWaitForChannels));
-    handler->set_handler(RED_DISCONNECTING, &RecordChannel::handle_disconnect,
-                         sizeof(RedDisconnect));
-    handler->set_handler(RED_NOTIFY, &RecordChannel::handle_notify, sizeof(RedNotify));
+    handler->set_handler(SPICE_MSG_MIGRATE, &RecordChannel::handle_migrate, 0);
+    handler->set_handler(SPICE_MSG_SET_ACK, &RecordChannel::handle_set_ack, sizeof(SpiceMsgSetAck));
+    handler->set_handler(SPICE_MSG_PING, &RecordChannel::handle_ping, sizeof(SpiceMsgPing));
+    handler->set_handler(SPICE_MSG_WAIT_FOR_CHANNELS, &RecordChannel::handle_wait_for_channels,
+                         sizeof(SpiceMsgWaitForChannels));
+    handler->set_handler(SPICE_MSG_DISCONNECTING, &RecordChannel::handle_disconnect,
+                         sizeof(SpiceMsgDisconnect));
+    handler->set_handler(SPICE_MSG_NOTIFY, &RecordChannel::handle_notify, sizeof(SpiceMsgNotify));
 
-    handler->set_handler(RED_RECORD_START, &RecordChannel::handle_start, sizeof(RedRecordStart));
+    handler->set_handler(SPICE_MSG_RECORD_START, &RecordChannel::handle_start, sizeof(SpiceMsgRecordStart));
 
-    set_capability(RED_RECORD_CAP_CELT_0_5_1);
+    set_capability(SPICE_RECORD_CAP_CELT_0_5_1);
 }
 
 RecordChannel::~RecordChannel(void)
@@ -117,18 +117,18 @@ bool RecordChannel::abort(void)
 
 void RecordChannel::on_connect()
 {
-    Message* message = new Message(REDC_RECORD_MODE, sizeof(RedcRecordMode));
-    RedcRecordMode *mode = (RedcRecordMode *)message->data();
+    Message* message = new Message(SPICE_MSGC_RECORD_MODE, sizeof(SpiceMsgcRecordMode));
+    SpiceMsgcRecordMode *mode = (SpiceMsgcRecordMode *)message->data();
     mode->time = get_mm_time();
-    mode->mode = _mode = test_capability(RED_RECORD_CAP_CELT_0_5_1) ? RecordChannel::data_mode :
-                                                                      RED_AUDIO_DATA_MODE_RAW;
+    mode->mode = _mode = test_capability(SPICE_RECORD_CAP_CELT_0_5_1) ? RecordChannel::data_mode :
+                                                                      SPICE_AUDIO_DATA_MODE_RAW;
     post_message(message);
 }
 
 void RecordChannel::send_start_mark()
 {
-    Message* message = new Message(REDC_RECORD_START_MARK, sizeof(RedcRecordStartMark));
-    RedcRecordStartMark *start_mark = (RedcRecordStartMark *)message->data();
+    Message* message = new Message(SPICE_MSGC_RECORD_START_MARK, sizeof(SpiceMsgcRecordStartMark));
+    SpiceMsgcRecordStartMark *start_mark = (SpiceMsgcRecordStartMark *)message->data();
     start_mark->time = get_mm_time();
     post_message(message);
 }
@@ -136,14 +136,14 @@ void RecordChannel::send_start_mark()
 void RecordChannel::handle_start(RedPeer::InMessage* message)
 {
     RecordHandler* handler = static_cast<RecordHandler*>(get_message_handler());
-    RedRecordStart* start = (RedRecordStart*)message->data();
+    SpiceMsgRecordStart* start = (SpiceMsgRecordStart*)message->data();
 
-    handler->set_handler(RED_RECORD_START, NULL, 0);
-    handler->set_handler(RED_RECORD_STOP, &RecordChannel::handle_stop, 0);
+    handler->set_handler(SPICE_MSG_RECORD_START, NULL, 0);
+    handler->set_handler(SPICE_MSG_RECORD_STOP, &RecordChannel::handle_stop, 0);
     ASSERT(!_wave_recorder && !_celt_mode && !_celt_encoder);
 
     // for now support only one setting
-    if (start->format != RED_AUDIO_FMT_S16) {
+    if (start->format != SPICE_AUDIO_FMT_S16) {
         THROW("unexpected format");
     }
 
@@ -176,8 +176,8 @@ void RecordChannel::handle_start(RedPeer::InMessage* message)
 void RecordChannel::handle_stop(RedPeer::InMessage* message)
 {
     RecordHandler* handler = static_cast<RecordHandler*>(get_message_handler());
-    handler->set_handler(RED_RECORD_START, &RecordChannel::handle_start, sizeof(RedRecordStart));
-    handler->set_handler(RED_RECORD_STOP, NULL, 0);
+    handler->set_handler(SPICE_MSG_RECORD_START, &RecordChannel::handle_start, sizeof(SpiceMsgRecordStart));
+    handler->set_handler(SPICE_MSG_RECORD_STOP, NULL, 0);
     if (!_wave_recorder) {
         return;
     }
@@ -244,7 +244,7 @@ void RecordChannel::push_frame(uint8_t *frame)
     uint8_t celt_buf[CELT_COMPRESSED_FRAME_BYTES];
     int n;
 
-    if (_mode == RED_AUDIO_DATA_MODE_CELT_0_5_1) {
+    if (_mode == SPICE_AUDIO_DATA_MODE_CELT_0_5_1) {
         n = celt051_encode(_celt_encoder, (celt_int16_t *)frame, NULL, celt_buf,
                            CELT_COMPRESSED_FRAME_BYTES);
         if (n < 0) {
@@ -255,8 +255,8 @@ void RecordChannel::push_frame(uint8_t *frame)
         n = _frame_bytes;
     }
     RedPeer::OutMessage& peer_message = message->peer_message();
-    peer_message.resize(n + sizeof(RedcRecordPacket));
-    RedcRecordPacket* packet = (RedcRecordPacket*)peer_message.data();
+    peer_message.resize(n + sizeof(SpiceMsgcRecordPacket));
+    SpiceMsgcRecordPacket* packet = (SpiceMsgcRecordPacket*)peer_message.data();
     packet->time = get_mm_time();
     memcpy(packet->data, frame, n);
     post_message(message);
@@ -264,7 +264,7 @@ void RecordChannel::push_frame(uint8_t *frame)
 
 class RecordFactory: public ChannelFactory {
 public:
-    RecordFactory() : ChannelFactory(RED_CHANNEL_RECORD) {}
+    RecordFactory() : ChannelFactory(SPICE_CHANNEL_RECORD) {}
     virtual RedChannel* construct(RedClient& client, uint32_t id)
     {
         return new RecordChannel(client, id);

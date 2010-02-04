@@ -34,8 +34,8 @@ SoftTexture::SoftTexture(Renderer* owner, uint size)
 
 }
 
-SoftTexture::SoftTexture(Renderer* owner, const String& filename,
-                         const String& resourceGroup)
+SoftTexture::SoftTexture(Renderer* owner, const SpiceString& filename,
+                         const SpiceString& resourceGroup)
     : Texture (owner)
     , _surf (NULL)
     , _width (0)
@@ -57,7 +57,7 @@ void SoftTexture::freeSurf()
     _surf = NULL;
 }
 
-void SoftTexture::loadFromFile(const String& filename, const String& resourceGroup)
+void SoftTexture::loadFromFile(const SpiceString& filename, const SpiceString& resourceGroup)
 {
     freeSurf();
     SoftRenderer* renderer = static_cast<SoftRenderer*>(getRenderer());

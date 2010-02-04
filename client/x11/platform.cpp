@@ -478,12 +478,12 @@ public:
     void set_width(int width) {_width = width;}
     int get_height() const { return _height;}
     void set_height(int height) {_height = height;}
-    Point get_position() const {return _position;}
+    SpicePoint get_position() const {return _position;}
 
 private:
     Display* _display;
     int _screen;
-    Point _position;
+    SpicePoint _position;
     int _width;
     int _height;
     bool _broken;
@@ -520,8 +520,8 @@ public:
     }
 
     virtual int get_depth() { return XPlatform::get_vinfo()[0]->depth;}
-    virtual Point get_position() { return XScreen::get_position();}
-    virtual Point get_size() const { Point pt = {get_width(), get_height()}; return pt;}
+    virtual SpicePoint get_position() { return XScreen::get_position();}
+    virtual SpicePoint get_size() const { SpicePoint pt = {get_width(), get_height()}; return pt;}
     virtual bool is_out_of_sync() { return _out_of_sync;}
     virtual int get_screen_id() { return get_screen();}
 
@@ -544,8 +544,8 @@ public:
 
     void publish_monitors(MonitorsList& monitors);
     virtual int get_depth() { return XPlatform::get_vinfo()[0]->depth;}
-    virtual Point get_position() { return XScreen::get_position();}
-    virtual Point get_size() const { Point pt = {get_width(), get_height()}; return pt;}
+    virtual SpicePoint get_position() { return XScreen::get_position();}
+    virtual SpicePoint get_size() const { SpicePoint pt = {get_width(), get_height()}; return pt;}
     virtual bool is_out_of_sync() { return _out_of_sync;}
     virtual int get_screen_id() { return get_screen();}
 
@@ -694,8 +694,8 @@ public:
 private:
     void set_size(int width, int height);
     void get_trans_size(int& width, int& hight);
-    Point get_trans_top_left();
-    Point get_trans_bottom_right();
+    SpicePoint get_trans_top_left();
+    SpicePoint get_trans_bottom_right();
     bool changed();
 
     XMonitor* crtc_overlap_test(int x, int y, int width, int height);
@@ -722,8 +722,8 @@ public:
     virtual ~XMonitor();
 
     virtual int get_depth();
-    virtual Point get_position();
-    virtual Point get_size() const;
+    virtual SpicePoint get_position();
+    virtual SpicePoint get_size() const;
     virtual bool is_out_of_sync();
     virtual int get_screen_id() { return _container.get_screen();}
 
@@ -733,8 +733,8 @@ public:
     void enable();
 
     void set_mode(const XRRModeInfo& mode);
-    const Rect& get_prev_area();
-    Rect& get_trans_area();
+    const SpiceRect& get_prev_area();
+    SpiceRect& get_trans_area();
     void pin() { _pin_count++;}
     void unpin() { ASSERT(_pin_count > 0); _pin_count--;}
     bool is_pinned() {return !!_pin_count;}
@@ -763,15 +763,15 @@ private:
     MultyMonScreen& _container;
     RRCrtc _crtc;
     XMonitorsList _clones;
-    Point _position;
-    Point _size;
+    SpicePoint _position;
+    SpicePoint _size;
     RRMode _mode;
     Rotation _rotation;
     int _noutput;
     RROutput* _outputs;
 
-    Point _saved_position;
-    Point _saved_size;
+    SpicePoint _saved_position;
+    SpicePoint _saved_size;
     RRMode _saved_mode;
     Rotation _saved_rotation;
 
@@ -780,7 +780,7 @@ private:
     RedSubpixelOrder _subpixel_order;
 
     int _trans_depth;
-    Rect _trans_area[MAX_TRANS_DEPTH];
+    SpiceRect _trans_area[MAX_TRANS_DEPTH];
     int _pin_count;
     XMonitor* _pusher;
 };
@@ -852,8 +852,8 @@ XMonitor* MultyMonScreen::crtc_overlap_test(int x, int y, int width, int height)
     for (; iter != _monitors.end(); iter++) {
         XMonitor* mon = *iter;
 
-        Point pos = mon->get_position();
-        Point size = mon->get_size();
+        SpicePoint pos = mon->get_position();
+        SpicePoint size = mon->get_size();
 
         if (x == pos.x && y == pos.y && width == size.x && height == size.y) {
             return mon;
@@ -949,28 +949,28 @@ void MultyMonScreen::restore()
     X_DEBUG_SYNC(get_display());
 }
 
-Point MultyMonScreen::get_trans_top_left()
+SpicePoint MultyMonScreen::get_trans_top_left()
 {
-    Point position;
+    SpicePoint position;
     position.y = position.x = MAXINT;
 
     XMonitorsList::iterator iter = _monitors.begin();
     for (; iter != _monitors.end(); iter++) {
-        Rect& area = (*iter)->get_trans_area();
+        SpiceRect& area = (*iter)->get_trans_area();
         position.x = MIN(position.x, area.left);
         position.y = MIN(position.y, area.top);
     }
     return position;
 }
 
-Point MultyMonScreen::get_trans_bottom_right()
+SpicePoint MultyMonScreen::get_trans_bottom_right()
 {
-    Point position;
+    SpicePoint position;
     position.y = position.x = MININT;
 
     XMonitorsList::iterator iter = _monitors.begin();
     for (; iter != _monitors.end(); iter++) {
-        Rect& area = (*iter)->get_trans_area();
+        SpiceRect& area = (*iter)->get_trans_area();
         position.x = MAX(position.x, area.right);
         position.y = MAX(position.y, area.bottom);
     }
@@ -980,7 +980,7 @@ Point MultyMonScreen::get_trans_bottom_right()
 void MultyMonScreen::get_trans_size(int& width, int& height)
 {
     ASSERT(get_trans_top_left().x == 0 && get_trans_top_left().y == 0);
-    Point bottom_right = get_trans_bottom_right();
+    SpicePoint bottom_right = get_trans_bottom_right();
     ASSERT(bottom_right.x > 0 && bottom_right.y > 0);
     width = bottom_right.x;
     height = bottom_right.y;
@@ -989,17 +989,17 @@ void MultyMonScreen::get_trans_size(int& width, int& height)
 #endif
 
 /*class Variant {
-    static void get_area_in_front(const Rect& base, int size, Rect& area)
-    static int get_push_distance(const Rect& fix_area, const Rect& other)
-    static int get_head(const Rect& area)
-    static int get_tail(const Rect& area)
-    static void move_head(Rect& area, int delta)
-    static int get_pull_distance(const Rect& fix_area, const Rect& other)
-    static void offset(Rect& area, int delta)
-    static void shrink(Rect& area, int delta)
-    static int get_distance(const Rect& area, const Rect& other_area)
-    static bool is_on_tail(const Rect& area, const Rect& other_area)
-    static bool is_on_perpendiculars(const Rect& area, const Rect& other_area)
+    static void get_area_in_front(const SpiceRect& base, int size, SpiceRect& area)
+    static int get_push_distance(const SpiceRect& fix_area, const SpiceRect& other)
+    static int get_head(const SpiceRect& area)
+    static int get_tail(const SpiceRect& area)
+    static void move_head(SpiceRect& area, int delta)
+    static int get_pull_distance(const SpiceRect& fix_area, const SpiceRect& other)
+    static void offset(SpiceRect& area, int delta)
+    static void shrink(SpiceRect& area, int delta)
+    static int get_distance(const SpiceRect& area, const SpiceRect& other_area)
+    static bool is_on_tail(const SpiceRect& area, const SpiceRect& other_area)
+    static bool is_on_perpendiculars(const SpiceRect& area, const SpiceRect& other_area)
 }*/
 
 #ifdef USE_XRANDR_1_2
@@ -1017,7 +1017,7 @@ typedef std::multiset<XMonitor*, SortRightToLeft> PushLeftSet;
 class LeftVariant {
 public:
 
-    static void get_area_in_front(const Rect& base, int size, Rect& area)
+    static void get_area_in_front(const SpiceRect& base, int size, SpiceRect& area)
     {
         area.right = base.left;
         area.left = area.right - size;
@@ -1025,55 +1025,55 @@ public:
         area.top = base.top;
     }
 
-    static int get_push_distance(const Rect& fix_area, const Rect& other)
+    static int get_push_distance(const SpiceRect& fix_area, const SpiceRect& other)
     {
         return other.right - fix_area.left;
     }
 
-    static int get_head(const Rect& area)
+    static int get_head(const SpiceRect& area)
     {
         return area.left;
     }
 
-    static int get_tail(const Rect& area)
+    static int get_tail(const SpiceRect& area)
     {
         return area.right;
     }
 
-    static void move_head(Rect& area, int delta)
+    static void move_head(SpiceRect& area, int delta)
     {
         area.left -= delta;
         ASSERT(area.right >= area.left);
     }
 
-    static int get_pull_distance(const Rect& fix_area, const Rect& other)
+    static int get_pull_distance(const SpiceRect& fix_area, const SpiceRect& other)
     {
         return other.left - fix_area.right;
     }
 
-    static void offset(Rect& area, int delta)
+    static void offset(SpiceRect& area, int delta)
     {
         rect_offset(area, -delta, 0);
     }
 
-    static void shrink(Rect& area, int delta)
+    static void shrink(SpiceRect& area, int delta)
     {
         area.right -= delta;
         ASSERT(area.right > area.left);
     }
 
-    static int get_distance(const Rect& area, const Rect& other_area)
+    static int get_distance(const SpiceRect& area, const SpiceRect& other_area)
     {
         return other_area.left - area.left;
     }
 
-    static bool is_on_tail(const Rect& area, const Rect& other_area)
+    static bool is_on_tail(const SpiceRect& area, const SpiceRect& other_area)
     {
         return area.right == other_area.left && other_area.top < area.bottom &&
                other_area.bottom > area.top;
     }
 
-    static bool is_on_perpendiculars(const Rect& area, const Rect& other_area)
+    static bool is_on_perpendiculars(const SpiceRect& area, const SpiceRect& other_area)
     {
         return (other_area.bottom == area.top || other_area.top == area.bottom) &&
                other_area.left < area.right && other_area.right > area.left;
@@ -1093,7 +1093,7 @@ typedef std::multiset<XMonitor*, SortLeftToRight> PushRightSet;
 class RightVariant {
 public:
 
-    static void get_area_in_front(const Rect& base, int size, Rect& area)
+    static void get_area_in_front(const SpiceRect& base, int size, SpiceRect& area)
     {
         area.left = base.right;
         area.right = area.left + size;
@@ -1101,44 +1101,44 @@ public:
         area.bottom = base.bottom;
     }
 
-    static int get_push_distance(const Rect& fix_area, const Rect& other)
+    static int get_push_distance(const SpiceRect& fix_area, const SpiceRect& other)
     {
         return fix_area.right - other.left;
     }
 
-    static int get_head(const Rect& area)
+    static int get_head(const SpiceRect& area)
     {
         return area.right;
     }
 
-    static int get_tail(const Rect& area)
+    static int get_tail(const SpiceRect& area)
     {
         return area.left;
     }
 
-    static void move_head(Rect& area, int delta)
+    static void move_head(SpiceRect& area, int delta)
     {
         area.right += delta;
         ASSERT(area.right >= area.left);
     }
 
-    static int get_pull_distance(const Rect& fix_area, const Rect& other)
+    static int get_pull_distance(const SpiceRect& fix_area, const SpiceRect& other)
     {
         return fix_area.left - other.right;
     }
 
-    static void offset(Rect& area, int delta)
+    static void offset(SpiceRect& area, int delta)
     {
         rect_offset(area, delta, 0);
     }
 
-    static bool is_on_tail(const Rect& area, const Rect& other_area)
+    static bool is_on_tail(const SpiceRect& area, const SpiceRect& other_area)
     {
         return other_area.right == area.left && other_area.top < area.bottom &&
                other_area.bottom > area.top;
     }
 
-    static bool is_on_perpendiculars(const Rect& area, const Rect& other_area)
+    static bool is_on_perpendiculars(const SpiceRect& area, const SpiceRect& other_area)
     {
         return (other_area.bottom == area.top || other_area.top == area.bottom) &&
                other_area.left < area.right && other_area.right > area.left;
@@ -1157,7 +1157,7 @@ typedef std::multiset<XMonitor*, SortBottomToTop> PushTopSet;
 
 class TopVariant {
 public:
-    static void get_area_in_front(const Rect& base, int size, Rect& area)
+    static void get_area_in_front(const SpiceRect& base, int size, SpiceRect& area)
     {
         area.left = base.left;
         area.right = base.right;
@@ -1165,55 +1165,55 @@ public:
         area.top = area.bottom - size;
     }
 
-    static int get_push_distance(const Rect& fix_area, const Rect& other)
+    static int get_push_distance(const SpiceRect& fix_area, const SpiceRect& other)
     {
         return other.bottom - fix_area.top;
     }
 
-    static int get_head(const Rect& area)
+    static int get_head(const SpiceRect& area)
     {
         return area.top;
     }
 
-    static int get_tail(const Rect& area)
+    static int get_tail(const SpiceRect& area)
     {
         return area.bottom;
     }
 
-    static void move_head(Rect& area, int delta)
+    static void move_head(SpiceRect& area, int delta)
     {
         area.top -= delta;
         ASSERT(area.bottom >= area.top);
     }
 
-    static int get_pull_distance(const Rect& fix_area, const Rect& other)
+    static int get_pull_distance(const SpiceRect& fix_area, const SpiceRect& other)
     {
         return other.top - fix_area.bottom;
     }
 
-    static void offset(Rect& area, int delta)
+    static void offset(SpiceRect& area, int delta)
     {
         rect_offset(area, 0, -delta);
     }
 
-    static void shrink(Rect& area, int delta)
+    static void shrink(SpiceRect& area, int delta)
     {
         area.bottom -= delta;
         ASSERT(area.bottom > area.top);
     }
 
-    static int get_distance(const Rect& area, const Rect& other_area)
+    static int get_distance(const SpiceRect& area, const SpiceRect& other_area)
     {
         return other_area.top - area.top;
     }
 
-    static bool is_on_tail(const Rect& area, const Rect& other_area)
+    static bool is_on_tail(const SpiceRect& area, const SpiceRect& other_area)
     {
         return area.bottom == other_area.top && other_area.left < area.right &&
                other_area.right > area.left;
     }
 
-    static bool is_on_perpendiculars(const Rect& area, const Rect& other_area)
+    static bool is_on_perpendiculars(const SpiceRect& area, const SpiceRect& other_area)
     {
         return (other_area.right == area.left || other_area.left == area.right) &&
                other_area.top < area.bottom && other_area.bottom > area.top;
@@ -1233,7 +1233,7 @@ typedef std::multiset<XMonitor*, SortTopToBottom> PushBottomSet;
 class BottomVariant {
 public:
 
-    static void get_area_in_front(const Rect& base, int size, Rect& area)
+    static void get_area_in_front(const SpiceRect& base, int size, SpiceRect& area)
     {
         area.left = base.left;
         area.right = base.right;
@@ -1241,44 +1241,44 @@ public:
         area.bottom = area.top + size;
     }
 
-    static int get_push_distance(const Rect& fix_area, const Rect& other)
+    static int get_push_distance(const SpiceRect& fix_area, const SpiceRect& other)
     {
         return fix_area.bottom - other.top;
     }
 
-    static int get_head(const Rect& area)
+    static int get_head(const SpiceRect& area)
     {
         return area.bottom;
     }
 
-    static int get_tail(const Rect& area)
+    static int get_tail(const SpiceRect& area)
     {
         return area.top;
     }
 
-    static void move_head(Rect& area, int delta)
+    static void move_head(SpiceRect& area, int delta)
     {
         area.bottom += delta;
         ASSERT(area.bottom >= area.top);
     }
 
-    static int get_pull_distance(const Rect& fix_area, const Rect& other)
+    static int get_pull_distance(const SpiceRect& fix_area, const SpiceRect& other)
     {
         return fix_area.top - other.bottom;
     }
 
-    static void offset(Rect& area, int delta)
+    static void offset(SpiceRect& area, int delta)
     {
         rect_offset(area, 0, delta);
     }
 
-    static bool is_on_tail(const Rect& area, const Rect& other_area)
+    static bool is_on_tail(const SpiceRect& area, const SpiceRect& other_area)
     {
         return other_area.bottom == area.top && other_area.left < area.right &&
                other_area.right > area.left;
     }
 
-    static bool is_on_perpendiculars(const Rect& area, const Rect& other_area)
+    static bool is_on_perpendiculars(const SpiceRect& area, const SpiceRect& other_area)
     {
         return (other_area.right == area.left || other_area.left == area.right) &&
                other_area.top < area.bottom && other_area.bottom > area.top;
@@ -1294,7 +1294,7 @@ static void bounce_back(XMonitor& monitor, const XMonitorsList& monitors, int he
     while (wait_for_me);
 
     for (XMonitorsList::const_iterator iter = monitors.begin(); iter != monitors.end(); iter++) {
-        Rect& area = (*iter)->get_trans_area();
+        SpiceRect& area = (*iter)->get_trans_area();
         if (Variant::get_tail(area) == head && (*iter)->get_pusher() == &monitor) {
             Variant::offset(area, -distance);
             bounce_back<Variant>(**iter, monitors, Variant::get_head(area) + distance, distance);
@@ -1318,13 +1318,13 @@ static int push(XMonitor& pusher, XMonitor& monitor, const XMonitorsList& monito
         sort.insert(*iter);
     }
 
-    Rect area_to_clear;
+    SpiceRect area_to_clear;
     Variant::get_area_in_front(monitor.get_trans_area(), delta, area_to_clear);
 
     SortListIter sort_iter = sort.begin();
 
     for (; sort_iter != sort.end(); sort_iter++) {
-        const Rect& other_area = (*sort_iter)->get_trans_area();
+        const SpiceRect& other_area = (*sort_iter)->get_trans_area();
 
         if (rect_intersects(area_to_clear, other_area)) {
             int distance = Variant::get_push_distance(area_to_clear, other_area);
@@ -1343,13 +1343,13 @@ static int push(XMonitor& pusher, XMonitor& monitor, const XMonitorsList& monito
     }
     Variant::offset(monitor.get_trans_area(), delta);
 
-    const Rect& area = monitor.get_prev_area();
+    const SpiceRect& area = monitor.get_prev_area();
     for (iter = monitors.begin(); iter != monitors.end(); iter++) {
         if ((*iter)->is_pinned()) {
             continue;
         }
 
-        const Rect& other_area = (*iter)->get_prev_area();
+        const SpiceRect& other_area = (*iter)->get_prev_area();
         if (Variant::is_on_perpendiculars(area, other_area)) {
             int current_distance = Variant::get_pull_distance(monitor.get_trans_area(),
                                                               (*iter)->get_trans_area());
@@ -1371,10 +1371,10 @@ static int push(XMonitor& pusher, XMonitor& monitor, const XMonitorsList& monito
 template <class Variant>
 static void pin(XMonitor& monitor, const XMonitorsList& monitors)
 {
-    const Rect& area = monitor.get_trans_area();
+    const SpiceRect& area = monitor.get_trans_area();
 
     for (XMonitorsList::const_iterator iter = monitors.begin(); iter != monitors.end(); iter++) {
-        const Rect& other_area = (*iter)->get_trans_area();
+        const SpiceRect& other_area = (*iter)->get_trans_area();
         if ((*iter)->is_pinned()) {
             continue;
         }
@@ -1402,10 +1402,10 @@ static void shrink(XMonitor& monitor, const XMonitorsList& monitors, int delta)
         sort.insert(*iter);
     }
 
-    const Rect area = monitor.get_trans_area();
+    const SpiceRect area = monitor.get_trans_area();
     Variant::shrink(monitor.get_trans_area(), delta);
     for (SortListIter sort_iter = sort.begin(); sort_iter != sort.end(); sort_iter++) {
-        const Rect& other_area = (*sort_iter)->get_trans_area();
+        const SpiceRect& other_area = (*sort_iter)->get_trans_area();
         if (Variant::is_on_perpendiculars(area, other_area)) {
             int distance = Variant::get_distance(area, other_area);
             if (distance > 0) {
@@ -1433,11 +1433,11 @@ static void expand(XMonitor& monitor, const XMonitorsList& monitors, int delta)
         sort.insert(*iter);
     }
 
-    Rect area_to_clear;
+    SpiceRect area_to_clear;
     Variant::get_area_in_front(monitor.get_trans_area(), delta, area_to_clear);
 
     for (SortListIter sort_iter = sort.begin(); sort_iter != sort.end(); sort_iter++) {
-        const Rect& other_area = (*sort_iter)->get_trans_area();
+        const SpiceRect& other_area = (*sort_iter)->get_trans_area();
 
         if (rect_intersects(area_to_clear, other_area)) {
             int distance = Variant::get_push_distance(area_to_clear, other_area);
@@ -1459,7 +1459,7 @@ bool MultyMonScreen::set_monitor_mode(XMonitor& monitor, const XRRModeInfo& mode
         return false;
     }
 
-    Point size = monitor.get_size();
+    SpicePoint size = monitor.get_size();
     int dx = mode_info.width - size.x;
     int dy = mode_info.height - size.y;
 
@@ -1790,12 +1790,12 @@ int XMonitor::get_depth()
     return XPlatform::get_vinfo()[0]->depth;
 }
 
-Point XMonitor::get_position()
+SpicePoint XMonitor::get_position()
 {
     return _position;
 }
 
-Point XMonitor::get_size() const
+SpicePoint XMonitor::get_size() const
 {
     return _size;
 }
@@ -1810,12 +1810,12 @@ void XMonitor::add_clone(XMonitor *clone)
     _clones.push_back(clone);
 }
 
-const Rect& XMonitor::get_prev_area()
+const SpiceRect& XMonitor::get_prev_area()
 {
     return _trans_area[_trans_depth - 1];
 }
 
-Rect& XMonitor::get_trans_area()
+SpiceRect& XMonitor::get_trans_area()
 {
     return _trans_area[_trans_depth];
 }
@@ -2357,8 +2357,8 @@ void Platform::reset_cursor_pos()
     if (!primary_monitor) {
         return;
     }
-    Point pos =  primary_monitor->get_position();
-    Point size =  primary_monitor->get_size();
+    SpicePoint pos =  primary_monitor->get_position();
+    SpicePoint size =  primary_monitor->get_size();
     Window root_window = RootWindow(x_display, DefaultScreen(x_display));
     XWarpPointer(x_display, None, root_window, 0, 0, 0, 0, pos.x + size.x / 2, pos.y + size.y / 2);
 }
@@ -2434,7 +2434,7 @@ static inline uint32_t get_pix_hack(int pix_index, int width)
 
 XLocalCursor::XLocalCursor(CursorData* cursor_data)
 {
-    const CursorHeader& header = cursor_data->header();
+    const SpiceCursorHeader& header = cursor_data->header();
     const uint8_t* data = cursor_data->data();
     int cur_size = header.width * header.height;
     uint8_t pix_mask;
@@ -2449,9 +2449,9 @@ XLocalCursor::XLocalCursor(CursorData* cursor_data)
     uint32_t* cur_data = new uint32_t[cur_size];
 
     switch (header.type) {
-    case CURSOR_TYPE_ALPHA:
+    case SPICE_CURSOR_TYPE_ALPHA:
         break;
-    case CURSOR_TYPE_COLOR32:
+    case SPICE_CURSOR_TYPE_COLOR32:
         memcpy(cur_data, data, cur_size * sizeof(uint32_t));
         for (i = 0; i < cur_size; i++) {
             pix_mask = get_pix_mask(data, size, i);
@@ -2462,7 +2462,7 @@ XLocalCursor::XLocalCursor(CursorData* cursor_data)
             }
         }
         break;
-    case CURSOR_TYPE_COLOR16:
+    case SPICE_CURSOR_TYPE_COLOR16:
         for (i = 0; i < cur_size; i++) {
             pix_mask = get_pix_mask(data, size, i);
             pix = *((uint16_t*)data + i);
@@ -2474,7 +2474,7 @@ XLocalCursor::XLocalCursor(CursorData* cursor_data)
             }
         }
         break;
-    case CURSOR_TYPE_MONO:
+    case SPICE_CURSOR_TYPE_MONO:
         for (i = 0; i < cur_size; i++) {
             pix_mask = get_pix_mask(data, 0, i);
             pix = get_pix_mask(data, size, i);
@@ -2485,7 +2485,7 @@ XLocalCursor::XLocalCursor(CursorData* cursor_data)
             }
         }
         break;
-    case CURSOR_TYPE_COLOR4:
+    case SPICE_CURSOR_TYPE_COLOR4:
         for (i = 0; i < cur_size; i++) {
             pix_mask = get_pix_mask(data, size + (sizeof(uint32_t) << 4), i);
             int idx = (i & 1) ? (data[i >> 1] & 0x0f) : ((data[i >> 1] & 0xf0) >> 4);
@@ -2497,8 +2497,8 @@ XLocalCursor::XLocalCursor(CursorData* cursor_data)
             }
         }
         break;
-    case CURSOR_TYPE_COLOR24:
-    case CURSOR_TYPE_COLOR8:
+    case SPICE_CURSOR_TYPE_COLOR24:
+    case SPICE_CURSOR_TYPE_COLOR8:
     default:
         LOG_WARN("unsupported cursor type %d", header.type);
         _handle = XCreateFontCursor(x_display, XC_arrow);
@@ -2510,7 +2510,7 @@ XLocalCursor::XLocalCursor(CursorData* cursor_data)
     memset(&image, 0, sizeof(image));
     image.width = header.width;
     image.height = header.height;
-    image.data = (header.type == CURSOR_TYPE_ALPHA ? (char*)data : (char*)cur_data);
+    image.data = (header.type == SPICE_CURSOR_TYPE_ALPHA ? (char*)data : (char*)cur_data);
     image.byte_order = LSBFirst;
     image.bitmap_unit = 32;
     image.bitmap_bit_order = LSBFirst;

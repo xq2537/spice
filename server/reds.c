@@ -97,7 +97,7 @@ static void openssl_init();
 
 // approximate max recive message size
 #define RECIVE_BUF_SIZE \
-    (4096 + (REDS_AGENT_WINDOW_SIZE + REDS_NUM_INTERNAL_AGENT_MESSAGES) * RED_AGENT_MAX_DATA_SIZE)
+    (4096 + (REDS_AGENT_WINDOW_SIZE + REDS_NUM_INTERNAL_AGENT_MESSAGES) * SPICE_AGENT_MAX_DATA_SIZE)
 
 #define SEND_BUF_SIZE 4096
 
@@ -110,7 +110,7 @@ typedef struct IncomingHandler {
     int shut;
     uint8_t buf[RECIVE_BUF_SIZE];
     uint32_t end_pos;
-    void (*handle_message)(void *opaque, RedDataHeader *message);
+    void (*handle_message)(void *opaque, SpiceDataHeader *message);
 } IncomingHandler;
 
 typedef struct OutgoingHandler {
@@ -123,7 +123,7 @@ typedef struct OutgoingHandler {
 } OutgoingHandler;
 
 typedef struct TicketAuthentication {
-    char password[RED_MAX_PASSWORD_LENGTH];
+    char password[SPICE_MAX_PASSWORD_LENGTH];
     time_t expiration_time;
 } TicketAuthentication;
 
@@ -133,7 +133,7 @@ typedef struct TicketInfo {
     RSA *rsa;
     int rsa_size;
     BIGNUM *bn;
-    RedLinkEncryptedTicket encrypted_ticket;
+    SpiceLinkEncryptedTicket encrypted_ticket;
 } TicketInfo;
 
 typedef struct MonitorMode {
@@ -151,8 +151,8 @@ struct RedsOutItem {
 typedef struct VDIReadBuf {
     RedsOutItem out_item;
     int len;
-    RedDataHeader header;
-    uint8_t data[RED_AGENT_MAX_DATA_SIZE];
+    SpiceDataHeader header;
+    uint8_t data[SPICE_AGENT_MAX_DATA_SIZE];
 } VDIReadBuf;
 
 enum {
@@ -226,7 +226,7 @@ enum NetTestStage {
 #ifdef RED_STATISTICS
 
 #define REDS_MAX_STAT_NODES 100
-#define REDS_STAT_SHM_SIZE (sizeof(RedsStat) + REDS_MAX_STAT_NODES * sizeof(StatNode))
+#define REDS_STAT_SHM_SIZE (sizeof(SpiceStat) + REDS_MAX_STAT_NODES * sizeof(SpiceStatNode))
 
 typedef struct RedsStatValue {
     uint32_t value;
@@ -270,7 +270,7 @@ typedef struct RedsState {
 
 #ifdef RED_STATISTICS
     char *stat_shm_name;
-    RedsStat *stat;
+    SpiceStat *stat;
     pthread_mutex_t stat_lock;
     RedsStatValue roundtrip_stat;
     VDObjectRef ping_timer;
@@ -300,8 +300,8 @@ typedef struct AsyncRead {
 typedef struct RedLinkInfo {
     RedsStreamContext *peer;
     AsyncRead asyc_read;
-    RedLinkHeader link_header;
-    RedLinkMess *link_mess;
+    SpiceLinkHeader link_header;
+    SpiceLinkMess *link_mess;
     int mess_pos;
     TicketInfo tiTicketing;
 } RedLinkInfo;
@@ -317,7 +317,7 @@ struct  __attribute__ ((__packed__)) VDIPortBuf {
 
 typedef struct __attribute__ ((__packed__)) VDAgentExtBuf {
     VDIPortBuf base;
-    uint8_t buf[RED_AGENT_MAX_DATA_SIZE];
+    uint8_t buf[SPICE_AGENT_MAX_DATA_SIZE];
     VDIChunkHeader migrate_overflow;
 } VDAgentExtBuf;
 
@@ -352,8 +352,8 @@ struct ChannelSecurityOptions {
 
 typedef struct PingItem {
     RedsOutItem base;
-    RedDataHeader header;
-    RedPing ping;
+    SpiceDataHeader header;
+    SpiceMsgPing ping;
     int size;
 } PingItem;
 
@@ -617,11 +617,11 @@ static struct iovec *reds_iovec_skip(struct iovec vec[], int skip, int *vec_size
 
 static void print_stat_tree(uint32_t node_index, int depth)
 {
-    StatNode *node = &reds->stat->nodes[node_index];
+    SpiceStatNode *node = &reds->stat->nodes[node_index];
 
-    if ((node->flags & STAT_NODE_MASK_SHOW) == STAT_NODE_MASK_SHOW) {
+    if ((node->flags & SPICE_STAT_NODE_MASK_SHOW) == SPICE_STAT_NODE_MASK_SHOW) {
         core->term_printf(core, "%*s%s", depth * STAT_TAB_LEN, "", node->name);
-        if (node->flags & STAT_NODE_FLAG_VALUE) {
+        if (node->flags & SPICE_STAT_NODE_FLAG_VALUE) {
             core->term_printf(core, ":%*s%llu\n",
                               (STAT_VALUE_TABS - depth) * STAT_TAB_LEN - strlen(node->name) - 1, "",
                               node->value);
@@ -645,12 +645,12 @@ static void do_info_statistics()
 
 static void do_reset_statistics()
 {
-    StatNode *node;
+    SpiceStatNode *node;
     int i;
 
     for (i = 0; i <= REDS_MAX_STAT_NODES; i++) {
         node = &reds->stat->nodes[i];
-        if (node->flags & STAT_NODE_FLAG_VALUE) {
+        if (node->flags & SPICE_STAT_NODE_FLAG_VALUE) {
             node->value = 0;
         }
     }
@@ -668,11 +668,11 @@ static void do_reset_statistics_2(const VDICmdArg* args)
 
 void insert_stat_node(StatNodeRef parent, StatNodeRef ref)
 {
-    StatNode *node = &reds->stat->nodes[ref];
+    SpiceStatNode *node = &reds->stat->nodes[ref];
     uint32_t pos = INVALID_STAT_REF;
     uint32_t node_index;
     uint32_t *head;
-    StatNode *n;
+    SpiceStatNode *n;
 
     node->first_child_index = INVALID_STAT_REF;
     head = (parent == INVALID_STAT_REF ? &reds->stat->root_index :
@@ -696,7 +696,7 @@ void insert_stat_node(StatNodeRef parent, StatNodeRef ref)
 StatNodeRef stat_add_node(StatNodeRef parent, const char *name, int visible)
 {
     StatNodeRef ref;
-    StatNode *node;
+    SpiceStatNode *node;
 
     ASSERT(name && strlen(name) > 0);
     if (strlen(name) >= sizeof(node->name)) {
@@ -722,23 +722,23 @@ StatNodeRef stat_add_node(StatNodeRef parent, const char *name, int visible)
     reds->stat->num_of_nodes++;
     for (ref = 0; ref <= REDS_MAX_STAT_NODES; ref++) {
         node = &reds->stat->nodes[ref];
-        if (!(node->flags & STAT_NODE_FLAG_ENABLED)) {
+        if (!(node->flags & SPICE_STAT_NODE_FLAG_ENABLED)) {
             break;
         }
     }
-    ASSERT(!(node->flags & STAT_NODE_FLAG_ENABLED));
+    ASSERT(!(node->flags & SPICE_STAT_NODE_FLAG_ENABLED));
     node->value = 0;
-    node->flags = STAT_NODE_FLAG_ENABLED | (visible ? STAT_NODE_FLAG_VISIBLE : 0);
+    node->flags = SPICE_STAT_NODE_FLAG_ENABLED | (visible ? SPICE_STAT_NODE_FLAG_VISIBLE : 0);
     strncpy(node->name, name, sizeof(node->name));
     insert_stat_node(parent, ref);
     pthread_mutex_unlock(&reds->stat_lock);
     return ref;
 }
 
-void stat_remove(StatNode *node)
+void stat_remove(SpiceStatNode *node)
 {
     pthread_mutex_lock(&reds->stat_lock);
-    node->flags &= ~STAT_NODE_FLAG_ENABLED;
+    node->flags &= ~SPICE_STAT_NODE_FLAG_ENABLED;
     reds->stat->generation++;
     reds->stat->num_of_nodes--;
     pthread_mutex_unlock(&reds->stat_lock);
@@ -752,19 +752,19 @@ void stat_remove_node(StatNodeRef ref)
 uint64_t *stat_add_counter(StatNodeRef parent, const char *name, int visible)
 {
     StatNodeRef ref = stat_add_node(parent, name, visible);
-    StatNode *node;
+    SpiceStatNode *node;
 
     if (ref == INVALID_STAT_REF) {
         return NULL;
     }
     node = &reds->stat->nodes[ref];
-    node->flags |= STAT_NODE_FLAG_VALUE;
+    node->flags |= SPICE_STAT_NODE_FLAG_VALUE;
     return &node->value;
 }
 
 void stat_remove_counter(uint64_t *counter)
 {
-    stat_remove((StatNode *)(counter - offsetof(StatNode, value)));
+    stat_remove((SpiceStatNode *)(counter - offsetof(SpiceStatNode, value)));
 }
 
 static void reds_update_stat_value(RedsStatValue* stat_value, uint32_t value)
@@ -926,7 +926,7 @@ static int handle_incoming(RedsStreamContext *peer, IncomingHandler *handler)
         uint8_t *buf = handler->buf;
         uint32_t pos = handler->end_pos;
         uint8_t *end = buf + pos;
-        RedDataHeader *header;
+        SpiceDataHeader *header;
         int n;
         n = peer->cb_read(peer->ctx, buf + pos, RECIVE_BUF_SIZE - pos);
         if (n <= 0) {
@@ -947,9 +947,9 @@ static int handle_incoming(RedsStreamContext *peer, IncomingHandler *handler)
         } else {
             pos += n;
             end = buf + pos;
-            while (buf + sizeof(RedDataHeader) <= end &&
-                   buf + sizeof(RedDataHeader) + (header = (RedDataHeader *)buf)->size <= end) {
-                buf += sizeof(RedDataHeader) + header->size;
+            while (buf + sizeof(SpiceDataHeader) <= end &&
+                   buf + sizeof(SpiceDataHeader) + (header = (SpiceDataHeader *)buf)->size <= end) {
+                buf += sizeof(SpiceDataHeader) + header->size;
                 handler->handle_message(handler->opaque, header);
 
                 if (handler->shut) {
@@ -1036,7 +1036,7 @@ static int outgoing_write(RedsStreamContext *peer, OutgoingHandler *handler, voi
 
 typedef struct SimpleOutItem {
     RedsOutItem base;
-    RedDataHeader header;
+    SpiceDataHeader header;
     uint8_t data[0];
 } SimpleOutItem;
 
@@ -1087,19 +1087,19 @@ static void reds_push_pipe_item(RedsOutItem *item)
 
 static void reds_send_channels()
 {
-    RedChannels* channels_info;
+    SpiceMsgChannels* channels_info;
     SimpleOutItem *item;
     int message_size;
     Channel *channel;
     int i;
 
-    message_size = sizeof(RedChannels) + reds->num_of_channels * sizeof(RedChannelInit);
-    if (!(item = new_simple_out_item(RED_CHANNELS_LIST, message_size))) {
+    message_size = sizeof(SpiceMsgChannels) + reds->num_of_channels * sizeof(SpiceChannelId);
+    if (!(item = new_simple_out_item(SPICE_MSG_MAIN_CHANNELS_LIST, message_size))) {
         red_printf("alloc item failed");
         reds_disconnect();
         return;
     }
-    channels_info = (RedChannels *)item->data;
+    channels_info = (SpiceMsgChannels *)item->data;
     channels_info->num_of_channels = reds->num_of_channels;
     channel = reds->channels;
 
@@ -1151,7 +1151,7 @@ static int send_ping(int size)
     item->base.release = reds_free_ping_item;
 
     item->header.serial = ++reds->serial;
-    item->header.type = RED_PING;
+    item->header.type = SPICE_MSG_PING;
     item->header.size = sizeof(item->ping) + size;
     item->header.sub_list = 0;
 
@@ -1237,22 +1237,22 @@ static void do_info_rtt_client()
 
 static void reds_send_mouse_mode()
 {
-    RedMouseMode *mouse_mode;
+    SpiceMsgMainMouseMode *mouse_mode;
     SimpleOutItem *item;
 
     if (!reds->peer) {
         return;
     }
 
-    if (!(item = new_simple_out_item(RED_MOUSE_MODE, sizeof(RedMouseMode)))) {
+    if (!(item = new_simple_out_item(SPICE_MSG_MAIN_MOUSE_MODE, sizeof(SpiceMsgMainMouseMode)))) {
         red_printf("alloc item failed");
         reds_disconnect();
         return;
     }
-    mouse_mode = (RedMouseMode *)item->data;
-    mouse_mode->supported_modes = RED_MOUSE_MODE_SERVER;
+    mouse_mode = (SpiceMsgMainMouseMode *)item->data;
+    mouse_mode->supported_modes = SPICE_MOUSE_MODE_SERVER;
     if (reds->is_client_mouse_allowed) {
-        mouse_mode->supported_modes |= RED_MOUSE_MODE_CLIENT;
+        mouse_mode->supported_modes |= SPICE_MOUSE_MODE_CLIENT;
     }
     mouse_mode->current_mode = reds->mouse_mode;
     reds_push_pipe_item(&item->base);
@@ -1280,8 +1280,8 @@ static void reds_update_mouse_mode()
         return;
     }
     reds->is_client_mouse_allowed = allowed;
-    if (reds->mouse_mode == RED_MOUSE_MODE_CLIENT && !allowed) {
-        reds_set_mouse_mode(RED_MOUSE_MODE_SERVER);
+    if (reds->mouse_mode == SPICE_MOUSE_MODE_CLIENT && !allowed) {
+        reds_set_mouse_mode(SPICE_MOUSE_MODE_SERVER);
         return;
     }
     reds_send_mouse_mode();
@@ -1290,7 +1290,7 @@ static void reds_update_mouse_mode()
 static void reds_send_agent_connected()
 {
     SimpleOutItem *item;
-    if (!(item = new_simple_out_item(RED_AGENT_CONNECTED, 0))) {
+    if (!(item = new_simple_out_item(SPICE_MSG_MAIN_AGENT_CONNECTED, 0))) {
         PANIC("alloc item failed");
     }
     reds_push_pipe_item(&item->base);
@@ -1298,14 +1298,14 @@ static void reds_send_agent_connected()
 
 static void reds_send_agent_disconnected()
 {
-    RedAgentDisconnect *disconnect;
+    SpiceMsgMainAgentDisconnect *disconnect;
     SimpleOutItem *item;
 
-    if (!(item = new_simple_out_item(RED_AGENT_DISCONNECTED, sizeof(RedAgentDisconnect)))) {
+    if (!(item = new_simple_out_item(SPICE_MSG_MAIN_AGENT_DISCONNECTED, sizeof(SpiceMsgMainAgentDisconnect)))) {
         PANIC("alloc item failed");
     }
-    disconnect = (RedAgentDisconnect *)item->data;
-    disconnect->error_code = RED_ERR_OK;
+    disconnect = (SpiceMsgMainAgentDisconnect *)item->data;
+    disconnect->error_code = SPICE_LINK_ERR_OK;
     reds_push_pipe_item(&item->base);
 }
 
@@ -1334,19 +1334,19 @@ static void reds_agent_remove()
 
 static void reds_send_tokens()
 {
-    RedAgentTokens *tokens;
+    SpiceMsgMainAgentTokens *tokens;
     SimpleOutItem *item;
 
     if (!reds->peer) {
         return;
     }
 
-    if (!(item = new_simple_out_item(RED_AGENT_TOKEN, sizeof(RedAgentTokens)))) {
+    if (!(item = new_simple_out_item(SPICE_MSG_MAIN_AGENT_TOKEN, sizeof(SpiceMsgMainAgentTokens)))) {
         red_printf("alloc item failed");
         reds_disconnect();
         return;
     }
-    tokens = (RedAgentTokens *)item->data;
+    tokens = (SpiceMsgMainAgentTokens *)item->data;
     tokens->num_tokens = reds->agent_state.num_tokens;
     reds->agent_state.num_client_tokens += tokens->num_tokens;
     ASSERT(reds->agent_state.num_client_tokens <= REDS_AGENT_WINDOW_SIZE);
@@ -1545,7 +1545,7 @@ typedef struct WriteQueueInfo {
 
 typedef struct SendMainMigrateItem {
     RedsOutItem base;
-    RedDataHeader header;
+    SpiceDataHeader header;
     MainMigrateData data;
     WriteQueueInfo queue_info[REDS_AGENT_WINDOW_SIZE + REDS_NUM_INTERNAL_AGENT_MESSAGES];
 } SendMainMigrateItem;
@@ -1562,7 +1562,7 @@ static void main_channel_send_migrate_data_item(RedsOutItem *in_item, struct iov
     vec = vec_start;
 
     item->header.serial = ++reds->serial;
-    item->header.type = RED_MIGRATE_DATA;
+    item->header.type = SPICE_MSG_MIGRATE_DATA;
     item->header.size = sizeof(item->data);
     item->header.sub_list = 0;
 
@@ -1713,7 +1713,7 @@ static int main_channel_restore_vdi_read_state(MainMigrateData *data, uint8_t **
         buff = state->current_read_buf = (VDIReadBuf *)ring_item;
         buff->len = data->read_buf_len;
         n = buff->len - state->recive_len;
-        if (buff->len > RED_AGENT_MAX_DATA_SIZE || n > RED_AGENT_MAX_DATA_SIZE) {
+        if (buff->len > SPICE_AGENT_MAX_DATA_SIZE || n > SPICE_AGENT_MAX_DATA_SIZE) {
             red_printf("bad read position");
             reds_disconnect();
             return FALSE;
@@ -1863,23 +1863,23 @@ static void main_channel_recive_migrate_data(MainMigrateData *data, uint8_t *end
     ASSERT(state->num_client_tokens + state->num_tokens == REDS_AGENT_WINDOW_SIZE);
 }
 
-static void reds_main_handle_message(void *opaque, RedDataHeader *message)
+static void reds_main_handle_message(void *opaque, SpiceDataHeader *message)
 {
     switch (message->type) {
-    case REDC_AGENT_START: {
-        RedcAgentTokens *agent_start;
+    case SPICE_MSGC_MAIN_AGENT_START: {
+        SpiceMsgcMainAgentTokens *agent_start;
 
         red_printf("agent start");
         if (!reds->peer) {
             return;
         }
-        agent_start = (RedcAgentTokens *)(message + 1);
+        agent_start = (SpiceMsgcMainAgentTokens *)(message + 1);
         reds->agent_state.client_agent_started = TRUE;
         reds->agent_state.send_tokens = agent_start->num_tokens;
         read_from_vdi_port();
         break;
     }
-    case REDC_AGENT_DATA: {
+    case SPICE_MSGC_MAIN_AGENT_DATA: {
         RingItem *ring_item;
         VDAgentExtBuf *buf;
 
@@ -1896,12 +1896,12 @@ static void reds_main_handle_message(void *opaque, RedDataHeader *message)
         }
 
         if (!reds->agent_state.client_agent_started) {
-            red_printf("REDC_AGENT_DATA race");
+            red_printf("SPICE_MSGC_MAIN_AGENT_DATA race");
             add_token();
             break;
         }
 
-        if (message->size > RED_AGENT_MAX_DATA_SIZE) {
+        if (message->size > SPICE_AGENT_MAX_DATA_SIZE) {
             red_printf("invalid agent message");
             reds_disconnect();
             break;
@@ -1922,53 +1922,53 @@ static void reds_main_handle_message(void *opaque, RedDataHeader *message)
         write_to_vdi_port();
         break;
     }
-    case REDC_AGENT_TOKEN: {
-        RedcAgentTokens *token;
+    case SPICE_MSGC_MAIN_AGENT_TOKEN: {
+        SpiceMsgcMainAgentTokens *token;
 
         if (!reds->agent_state.client_agent_started) {
-            red_printf("REDC_AGENT_TOKEN race");
+            red_printf("SPICE_MSGC_MAIN_AGENT_TOKEN race");
             break;
         }
 
-        token = (RedcAgentTokens *)(message + 1);
+        token = (SpiceMsgcMainAgentTokens *)(message + 1);
         reds->agent_state.send_tokens += token->num_tokens;
         read_from_vdi_port();
         break;
     }
-    case REDC_ATTACH_CHANNELS:
+    case SPICE_MSGC_MAIN_ATTACH_CHANNELS:
         reds_send_channels();
         break;
-    case REDC_MIGRATE_CONNECTED:
+    case SPICE_MSGC_MAIN_MIGRATE_CONNECTED:
         red_printf("connected");
         if (reds->mig_wait_connect) {
             reds_mig_cleanup();
         }
         break;
-    case REDC_MIGRATE_CONNECT_ERROR:
+    case SPICE_MSGC_MAIN_MIGRATE_CONNECT_ERROR:
         red_printf("mig connect error");
         if (reds->mig_wait_connect) {
             reds_mig_cleanup();
         }
         break;
-    case REDC_MOUSE_MODE_REQUEST: {
-        switch (((RedcMouseModeRequest *)(message + 1))->mode) {
-        case RED_MOUSE_MODE_CLIENT:
+    case SPICE_MSGC_MAIN_MOUSE_MODE_REQUEST: {
+        switch (((SpiceMsgcMainMouseModeRequest *)(message + 1))->mode) {
+        case SPICE_MOUSE_MODE_CLIENT:
             if (reds->is_client_mouse_allowed) {
-                reds_set_mouse_mode(RED_MOUSE_MODE_CLIENT);
+                reds_set_mouse_mode(SPICE_MOUSE_MODE_CLIENT);
             } else {
                 red_printf("client mouse is disabled");
             }
             break;
-        case RED_MOUSE_MODE_SERVER:
-            reds_set_mouse_mode(RED_MOUSE_MODE_SERVER);
+        case SPICE_MOUSE_MODE_SERVER:
+            reds_set_mouse_mode(SPICE_MOUSE_MODE_SERVER);
             break;
         default:
             red_printf("unsupported mouse mode");
         }
         break;
     }
-    case REDC_PONG: {
-        RedPing *ping = (RedPing *)(message + 1);
+    case SPICE_MSGC_PONG: {
+        SpiceMsgPing *ping = (SpiceMsgPing *)(message + 1);
         uint64_t roundtrip;
         struct timespec ts;
 
@@ -2017,16 +2017,16 @@ static void reds_main_handle_message(void *opaque, RedDataHeader *message)
 #endif
         break;
     }
-    case REDC_MIGRATE_FLUSH_MARK:
+    case SPICE_MSGC_MIGRATE_FLUSH_MARK:
         main_channel_push_migrate_data_item();
         break;
-    case REDC_MIGRATE_DATA:
+    case SPICE_MSGC_MIGRATE_DATA:
         main_channel_recive_migrate_data((MainMigrateData *)(message + 1),
                                          (uint8_t *)(message + 1) + message->size);
         reds->mig_target = FALSE;
         while (write_to_vdi_port() || read_from_vdi_port());
         break;
-    case REDC_DISCONNECTING:
+    case SPICE_MSGC_DISCONNECTING:
         break;
     default:
         red_printf("unexpected type %d", message->type);
@@ -2126,19 +2126,19 @@ static int sync_write(RedsStreamContext *peer, void *in_buf, size_t n)
 
 static int reds_send_link_ack(RedLinkInfo *link)
 {
-    RedLinkHeader header;
-    RedLinkReply ack;
+    SpiceLinkHeader header;
+    SpiceLinkReply ack;
     Channel *channel;
     BUF_MEM *bmBuf;
     BIO *bio;
     int ret;
 
-    header.magic = RED_MAGIC;
+    header.magic = SPICE_MAGIC;
     header.size = sizeof(ack);
-    header.major_version = RED_VERSION_MAJOR;
-    header.minor_version = RED_VERSION_MINOR;
+    header.major_version = SPICE_VERSION_MAJOR;
+    header.minor_version = SPICE_VERSION_MINOR;
 
-    ack.error = RED_ERR_OK;
+    ack.error = SPICE_LINK_ERR_OK;
 
     if ((channel = reds_find_channel(link->link_mess->channel_type, 0))) {
         ack.num_common_caps = channel->num_common_caps;
@@ -2148,7 +2148,7 @@ static int reds_send_link_ack(RedLinkInfo *link)
         ack.num_common_caps = 0;
         ack.num_channel_caps = 0;
     }
-    ack.caps_offset = sizeof(RedLinkReply);
+    ack.caps_offset = sizeof(SpiceLinkReply);
 
     if (!(link->tiTicketing.rsa = RSA_new())) {
         red_printf("RSA nes failed");
@@ -2160,7 +2160,7 @@ static int reds_send_link_ack(RedLinkInfo *link)
         return FALSE;
     }
 
-    RSA_generate_key_ex(link->tiTicketing.rsa, RED_TICKET_KEY_PAIR_LENGTH, link->tiTicketing.bn,
+    RSA_generate_key_ex(link->tiTicketing.rsa, SPICE_TICKET_KEY_PAIR_LENGTH, link->tiTicketing.bn,
                         NULL);
     link->tiTicketing.rsa_size = RSA_size(link->tiTicketing.rsa);
 
@@ -2181,13 +2181,13 @@ static int reds_send_link_ack(RedLinkInfo *link)
 
 static int reds_send_link_error(RedLinkInfo *link, uint32_t error)
 {
-    RedLinkHeader header;
-    RedLinkReply reply;
+    SpiceLinkHeader header;
+    SpiceLinkReply reply;
 
-    header.magic = RED_MAGIC;
+    header.magic = SPICE_MAGIC;
     header.size = sizeof(reply);
-    header.major_version = RED_VERSION_MAJOR;
-    header.minor_version = RED_VERSION_MINOR;
+    header.major_version = SPICE_VERSION_MAJOR;
+    header.minor_version = SPICE_VERSION_MINOR;
     memset(&reply, 0, sizeof(reply));
     reply.error = error;
     return sync_write(link->peer, &header, sizeof(header)) && sync_write(link->peer, &reply,
@@ -2228,7 +2228,7 @@ static void reds_handle_main_link(RedLinkInfo *link)
     reds_disconnect();
 
     if (!link->link_mess->connection_id) {
-        reds_send_link_result(link, RED_ERR_OK);
+        reds_send_link_result(link, SPICE_LINK_ERR_OK);
         while((connection_id = rand()) == 0);
         reds->agent_state.num_tokens = 0;
         reds->agent_state.send_tokens = 0;
@@ -2236,11 +2236,11 @@ static void reds_handle_main_link(RedLinkInfo *link)
         reds->mig_target = FALSE;
     } else {
         if (link->link_mess->connection_id != reds->link_id) {
-            reds_send_link_result(link, RED_ERR_BAD_CONNECTION_ID);
+            reds_send_link_result(link, SPICE_LINK_ERR_BAD_CONNECTION_ID);
             reds_release_link(link);
             return;
         }
-        reds_send_link_result(link, RED_ERR_OK);
+        reds_send_link_result(link, SPICE_LINK_ERR_OK);
         connection_id = link->link_mess->connection_id;
         reds->mig_target = TRUE;
     }
@@ -2270,20 +2270,20 @@ static void reds_handle_main_link(RedLinkInfo *link)
 
     if (!reds->mig_target) {
         SimpleOutItem *item;
-        RedInit *init;
+        SpiceMsgMainInit *init;
 
-        if (!(item = new_simple_out_item(RED_INIT, sizeof(RedInit)))) {
+        if (!(item = new_simple_out_item(SPICE_MSG_MAIN_INIT, sizeof(SpiceMsgMainInit)))) {
             red_printf("alloc item failed");
             reds_disconnect();
             return;
         }
-        init = (RedInit *)item->data;
+        init = (SpiceMsgMainInit *)item->data;
         init->session_id = connection_id;
         init->display_channels_hint = red_dispatcher_count();
         init->current_mouse_mode = reds->mouse_mode;
-        init->supported_mouse_modes = RED_MOUSE_MODE_SERVER;
+        init->supported_mouse_modes = SPICE_MOUSE_MODE_SERVER;
         if (reds->is_client_mouse_allowed) {
-            init->supported_mouse_modes |= RED_MOUSE_MODE_CLIENT;
+            init->supported_mouse_modes |= SPICE_MOUSE_MODE_CLIENT;
         }
         init->agent_connected = !!vdagent;
         init->agent_tokens = REDS_AGENT_WINDOW_SIZE;
@@ -2296,14 +2296,14 @@ static void reds_handle_main_link(RedLinkInfo *link)
 }
 
 #define RED_MOUSE_STATE_TO_LOCAL(state)     \
-    ((state & REDC_LBUTTON_MASK) |          \
-     ((state & REDC_MBUTTON_MASK) << 1) |   \
-     ((state & REDC_RBUTTON_MASK) >> 1))
+    ((state & SPICE_MOUSE_BUTTON_MASK_LEFT) |          \
+     ((state & SPICE_MOUSE_BUTTON_MASK_MIDDLE) << 1) |   \
+     ((state & SPICE_MOUSE_BUTTON_MASK_RIGHT) >> 1))
 
 #define RED_MOUSE_BUTTON_STATE_TO_AGENT(state)                      \
-    (((state & REDC_LBUTTON_MASK) ? VD_AGENT_LBUTTON_MASK : 0) |    \
-     ((state & REDC_MBUTTON_MASK) ? VD_AGENT_MBUTTON_MASK : 0) |    \
-     ((state & REDC_RBUTTON_MASK) ? VD_AGENT_RBUTTON_MASK : 0))
+    (((state & SPICE_MOUSE_BUTTON_MASK_LEFT) ? VD_AGENT_LBUTTON_MASK : 0) |    \
+     ((state & SPICE_MOUSE_BUTTON_MASK_MIDDLE) ? VD_AGENT_MBUTTON_MASK : 0) |    \
+     ((state & SPICE_MOUSE_BUTTON_MASK_RIGHT) ? VD_AGENT_RBUTTON_MASK : 0))
 
 static void activate_modifiers_watch()
 {
@@ -2318,21 +2318,21 @@ static void push_key_scan(uint8_t scan)
     keyboard->push_scan_freg(keyboard, scan);
 }
 
-static void inputs_handle_input(void *opaque, RedDataHeader *header)
+static void inputs_handle_input(void *opaque, SpiceDataHeader *header)
 {
     InputsState *state = (InputsState *)opaque;
     uint8_t *buf = (uint8_t *)(header + 1);
 
     switch (header->type) {
-    case REDC_INPUTS_KEY_DOWN: {
-        RedcKeyDown *key_up = (RedcKeyDown *)buf;
+    case SPICE_MSGC_INPUTS_KEY_DOWN: {
+        SpiceMsgcKeyDown *key_up = (SpiceMsgcKeyDown *)buf;
         if (key_up->code == CAPS_LOCK_SCAN_CODE || key_up->code == NUM_LOCK_SCAN_CODE ||
             key_up->code == SCROLL_LOCK_SCAN_CODE) {
             activate_modifiers_watch();
         }
     }
-    case REDC_INPUTS_KEY_UP: {
-        RedcKeyDown *key_down = (RedcKeyDown *)buf;
+    case SPICE_MSGC_INPUTS_KEY_UP: {
+        SpiceMsgcKeyDown *key_down = (SpiceMsgcKeyDown *)buf;
         uint8_t *now = (uint8_t *)&key_down->code;
         uint8_t *end = now + sizeof(key_down->code);
         for (; now < end && *now; now++) {
@@ -2340,45 +2340,45 @@ static void inputs_handle_input(void *opaque, RedDataHeader *header)
         }
         break;
     }
-    case REDC_INPUTS_MOUSE_MOTION: {
-        RedcMouseMotion *mouse_motion = (RedcMouseMotion *)buf;
+    case SPICE_MSGC_INPUTS_MOUSE_MOTION: {
+        SpiceMsgcMouseMotion *mouse_motion = (SpiceMsgcMouseMotion *)buf;
 
-        if (++state->motion_count % RED_MOTION_ACK_BUNCH == 0) {
-            RedDataHeader header;
+        if (++state->motion_count % SPICE_INPUT_MOTION_ACK_BUNCH == 0) {
+            SpiceDataHeader header;
 
             header.serial = ++state->serial;
-            header.type = RED_INPUTS_MOUSE_MOTION_ACK;
+            header.type = SPICE_MSG_INPUTS_MOUSE_MOTION_ACK;
             header.size = 0;
             header.sub_list = 0;
-            if (outgoing_write(state->peer, &state->out_handler, &header, sizeof(RedDataHeader))
+            if (outgoing_write(state->peer, &state->out_handler, &header, sizeof(SpiceDataHeader))
                                                                                 != OUTGOING_OK) {
                 red_printf("motion ack failed");
                 reds_disconnect();
             }
         }
-        if (mouse && reds->mouse_mode == RED_MOUSE_MODE_SERVER) {
+        if (mouse && reds->mouse_mode == SPICE_MOUSE_MODE_SERVER) {
             mouse->moution(mouse, mouse_motion->dx, mouse_motion->dy, 0,
                            RED_MOUSE_STATE_TO_LOCAL(mouse_motion->buttons_state));
         }
         break;
     }
-    case REDC_INPUTS_MOUSE_POSITION: {
-        RedcMousePosition *pos = (RedcMousePosition *)buf;
+    case SPICE_MSGC_INPUTS_MOUSE_POSITION: {
+        SpiceMsgcMousePosition *pos = (SpiceMsgcMousePosition *)buf;
 
-        if (++state->motion_count % RED_MOTION_ACK_BUNCH == 0) {
-            RedDataHeader header;
+        if (++state->motion_count % SPICE_INPUT_MOTION_ACK_BUNCH == 0) {
+            SpiceDataHeader header;
 
             header.serial = ++state->serial;
-            header.type = RED_INPUTS_MOUSE_MOTION_ACK;
+            header.type = SPICE_MSG_INPUTS_MOUSE_MOTION_ACK;
             header.size = 0;
             header.sub_list = 0;
-            if (outgoing_write(state->peer, &state->out_handler, &header, sizeof(RedDataHeader))
+            if (outgoing_write(state->peer, &state->out_handler, &header, sizeof(SpiceDataHeader))
                                                                                 != OUTGOING_OK) {
                 red_printf("position ack failed");
                 reds_disconnect();
             }
         }
-        if (reds->mouse_mode != RED_MOUSE_MODE_CLIENT) {
+        if (reds->mouse_mode != SPICE_MOUSE_MODE_CLIENT) {
             break;
         }
         ASSERT((agent_mouse && vdagent) || tablet);
@@ -2394,15 +2394,15 @@ static void inputs_handle_input(void *opaque, RedDataHeader *header)
         reds_handle_agent_mouse_event();
         break;
     }
-    case REDC_INPUTS_MOUSE_PRESS: {
-        RedcMousePress *mouse_press = (RedcMousePress *)buf;
+    case SPICE_MSGC_INPUTS_MOUSE_PRESS: {
+        SpiceMsgcMousePress *mouse_press = (SpiceMsgcMousePress *)buf;
         int dz = 0;
-        if (mouse_press->button == REDC_MOUSE_UBUTTON) {
+        if (mouse_press->button == SPICE_MOUSE_BUTTON_UP) {
             dz = -1;
-        } else if (mouse_press->button == REDC_MOUSE_DBUTTON) {
+        } else if (mouse_press->button == SPICE_MOUSE_BUTTON_DOWN) {
             dz = 1;
         }
-        if (reds->mouse_mode == RED_MOUSE_MODE_CLIENT) {
+        if (reds->mouse_mode == SPICE_MOUSE_MODE_CLIENT) {
             if (agent_mouse && vdagent) {
                 reds->inputs_state->mouse_state.buttons =
                     RED_MOUSE_BUTTON_STATE_TO_AGENT(mouse_press->buttons_state) |
@@ -2417,9 +2417,9 @@ static void inputs_handle_input(void *opaque, RedDataHeader *header)
         }
         break;
     }
-    case REDC_INPUTS_MOUSE_RELEASE: {
-        RedcMouseRelease *mouse_release = (RedcMouseRelease *)buf;
-        if (reds->mouse_mode == RED_MOUSE_MODE_CLIENT) {
+    case SPICE_MSGC_INPUTS_MOUSE_RELEASE: {
+        SpiceMsgcMouseRelease *mouse_release = (SpiceMsgcMouseRelease *)buf;
+        if (reds->mouse_mode == SPICE_MOUSE_MODE_CLIENT) {
             if (agent_mouse && vdagent) {
                 reds->inputs_state->mouse_state.buttons =
                     RED_MOUSE_BUTTON_STATE_TO_AGENT(mouse_release->buttons_state);
@@ -2432,29 +2432,29 @@ static void inputs_handle_input(void *opaque, RedDataHeader *header)
         }
         break;
     }
-    case REDC_INPUTS_KEY_MODIFAIERS: {
-        RedcKeyModifiers *modifiers = (RedcKeyModifiers *)buf;
+    case SPICE_MSGC_INPUTS_KEY_MODIFIERS: {
+        SpiceMsgcKeyModifiers *modifiers = (SpiceMsgcKeyModifiers *)buf;
         if (!keyboard) {
             break;
         }
         uint8_t leds = keyboard->get_leds(keyboard);
-        if ((modifiers->modifiers & RED_SCROLL_LOCK_MODIFIER) !=
-                                                                (leds & RED_SCROLL_LOCK_MODIFIER)) {
+        if ((modifiers->modifiers & SPICE_SCROLL_LOCK_MODIFIER) !=
+                                                                (leds & SPICE_SCROLL_LOCK_MODIFIER)) {
             push_key_scan(SCROLL_LOCK_SCAN_CODE);
             push_key_scan(SCROLL_LOCK_SCAN_CODE | 0x80);
         }
-        if ((modifiers->modifiers & RED_NUM_LOCK_MODIFIER) != (leds & RED_NUM_LOCK_MODIFIER)) {
+        if ((modifiers->modifiers & SPICE_NUM_LOCK_MODIFIER) != (leds & SPICE_NUM_LOCK_MODIFIER)) {
             push_key_scan(NUM_LOCK_SCAN_CODE);
             push_key_scan(NUM_LOCK_SCAN_CODE | 0x80);
         }
-        if ((modifiers->modifiers & RED_CAPS_LOCK_MODIFIER) != (leds & RED_CAPS_LOCK_MODIFIER)) {
+        if ((modifiers->modifiers & SPICE_CAPS_LOCK_MODIFIER) != (leds & SPICE_CAPS_LOCK_MODIFIER)) {
             push_key_scan(CAPS_LOCK_SCAN_CODE);
             push_key_scan(CAPS_LOCK_SCAN_CODE | 0x80);
         }
         activate_modifiers_watch();
         break;
     }
-    case REDC_DISCONNECTING:
+    case SPICE_MSGC_DISCONNECTING:
         break;
     default:
         red_printf("unexpected type %d", header->type);
@@ -2522,12 +2522,12 @@ static void inputs_shutdown(Channel *channel)
 static void inputs_migrate(Channel *channel)
 {
     InputsState *state = (InputsState *)channel->data;
-    RedDataHeader header;
-    RedMigrate migrate;
+    SpiceDataHeader header;
+    SpiceMsgMigrate migrate;
 
     red_printf("");
     header.serial = ++state->serial;
-    header.type = RED_MIGRATE;
+    header.type = SPICE_MSG_MIGRATE;
     header.size = sizeof(migrate);
     header.sub_list = 0;
     migrate.flags = 0;
@@ -2600,17 +2600,17 @@ static void inputs_link(Channel *channel, RedsStreamContext *peer, int migration
     reds->inputs_state = inputs_state;
     core->set_file_handlers(core, peer->socket, inputs_read, NULL, inputs_state);
 
-    RedDataHeader header;
-    RedInputsInit inputs_init;
+    SpiceDataHeader header;
+    SpiceMsgInputsInit inputs_init;
     header.serial = ++inputs_state->serial;
-    header.type = RED_INPUTS_INIT;
-    header.size = sizeof(RedInputsInit);
+    header.type = SPICE_MSG_INPUTS_INIT;
+    header.size = sizeof(SpiceMsgInputsInit);
     header.sub_list = 0;
     inputs_init.keyboard_modifiers = keyboard ? keyboard->get_leds(keyboard) : 0;
     if (outgoing_write(inputs_state->peer, &inputs_state->out_handler, &header,
-                       sizeof(RedDataHeader)) != OUTGOING_OK ||
+                       sizeof(SpiceDataHeader)) != OUTGOING_OK ||
         outgoing_write(inputs_state->peer, &inputs_state->out_handler, &inputs_init,
-                       sizeof(RedInputsInit)) != OUTGOING_OK) {
+                       sizeof(SpiceMsgInputsInit)) != OUTGOING_OK) {
         red_printf("failed to send modifiers state");
         reds_disconnect();
     }
@@ -2618,24 +2618,24 @@ static void inputs_link(Channel *channel, RedsStreamContext *peer, int migration
 
 static void reds_send_keyborad_modifiers(uint8_t modifiers)
 {
-    Channel *channel = reds_find_channel(RED_CHANNEL_INPUTS, 0);
+    Channel *channel = reds_find_channel(SPICE_CHANNEL_INPUTS, 0);
     InputsState *state;
 
     if (!channel || !(state = (InputsState *)channel->data)) {
         return;
     }
     ASSERT(state->peer);
-    RedDataHeader header;
-    RedKeyModifiers key_modifiers;
+    SpiceDataHeader header;
+    SpiceMsgInputsKeyModifiers key_modifiers;
     header.serial = ++state->serial;
-    header.type = RED_INPUTS_KEY_MODIFAIERS;
-    header.size = sizeof(RedKeyModifiers);
+    header.type = SPICE_MSG_INPUTS_KEY_MODIFIERS;
+    header.size = sizeof(SpiceMsgInputsKeyModifiers);
     header.sub_list = 0;
     key_modifiers.modifiers = modifiers;
 
-    if (outgoing_write(state->peer, &state->out_handler, &header, sizeof(RedDataHeader))
+    if (outgoing_write(state->peer, &state->out_handler, &header, sizeof(SpiceDataHeader))
                                                                                 != OUTGOING_OK ||
-        outgoing_write(state->peer, &state->out_handler, &key_modifiers, sizeof(RedKeyModifiers))
+        outgoing_write(state->peer, &state->out_handler, &key_modifiers, sizeof(SpiceMsgInputsKeyModifiers))
                                                                                 != OUTGOING_OK) {
         red_printf("failed to send modifiers state");
         reds_disconnect();
@@ -2666,7 +2666,7 @@ static void inputs_init()
         red_error("alloc inputs chanel failed");
     }
     memset(channel, 0, sizeof(Channel));
-    channel->type = RED_CHANNEL_INPUTS;
+    channel->type = SPICE_CHANNEL_INPUTS;
     channel->link = inputs_link;
     channel->shutdown = inputs_shutdown;
     channel->migrate = inputs_migrate;
@@ -2677,45 +2677,45 @@ static void reds_handle_other_links(RedLinkInfo *link)
 {
     Channel *channel;
     RedsStreamContext *peer;
-    RedLinkMess *link_mess;
+    SpiceLinkMess *link_mess;
     uint32_t *caps;
 
     link_mess = link->link_mess;
 
     if (!reds->link_id || reds->link_id != link_mess->connection_id) {
-        reds_send_link_result(link, RED_ERR_BAD_CONNECTION_ID);
+        reds_send_link_result(link, SPICE_LINK_ERR_BAD_CONNECTION_ID);
         reds_release_link(link);
         return;
     }
 
     if (!(channel = reds_find_channel(link_mess->channel_type,
                                       link_mess->channel_id))) {
-        reds_send_link_result(link, RED_ERR_CHANNEL_NOT_AVAILABLE);
+        reds_send_link_result(link, SPICE_LINK_ERR_CHANNEL_NOT_AVAILABLE);
         reds_release_link(link);
         return;
     }
 
-    reds_send_link_result(link, RED_ERR_OK);
+    reds_send_link_result(link, SPICE_LINK_ERR_OK);
     reds_show_new_channel(link);
-    if (link_mess->channel_type == RED_CHANNEL_INPUTS && !link->peer->ssl) {
+    if (link_mess->channel_type == SPICE_CHANNEL_INPUTS && !link->peer->ssl) {
         SimpleOutItem *item;
-        RedNotify *notify;
+        SpiceMsgNotify *notify;
         char *mess = "keybord channel is unsecure";
         const int mess_len = strlen(mess);
 
         LOG_MESSAGE(VD_LOG_WARN, "%s", mess);
 
-        if (!(item = new_simple_out_item(RED_NOTIFY, sizeof(RedNotify) + mess_len + 1))) {
+        if (!(item = new_simple_out_item(SPICE_MSG_NOTIFY, sizeof(SpiceMsgNotify) + mess_len + 1))) {
             red_printf("alloc item failed");
             reds_disconnect();
             return;
         }
 
-        notify = (RedNotify *)item->data;
+        notify = (SpiceMsgNotify *)item->data;
         notify->time_stamp = get_time_stamp();
-        notify->severty = RED_NOTIFY_SEVERITY_WARN;
-        notify->visibilty = RED_NOTIFY_VISIBILITY_HIGH;
-        notify->what = RED_WARN_GENERAL;
+        notify->severty = SPICE_NOTIFY_SEVERITY_WARN;
+        notify->visibilty = SPICE_NOTIFY_VISIBILITY_HIGH;
+        notify->what = SPICE_WARN_GENERAL;
         notify->message_len = mess_len;
         memcpy(notify->message, mess, mess_len + 1);
         reds_push_pipe_item(&item->base);
@@ -2733,7 +2733,7 @@ static void reds_handle_other_links(RedLinkInfo *link)
 static void reds_handle_ticket(void *opaque)
 {
     RedLinkInfo *link = (RedLinkInfo *)opaque;
-    char password[RED_MAX_PASSWORD_LENGTH];
+    char password[SPICE_MAX_PASSWORD_LENGTH];
     time_t ltime;
 
     //todo: use monotonic time
@@ -2747,21 +2747,21 @@ static void reds_handle_ticket(void *opaque)
         char *actual_sever_pass = link->link_mess->connection_id ? reds->taTicket.password :
                                                                    taTicket.password;
         if (strlen(actual_sever_pass) == 0) {
-            reds_send_link_result(link, RED_ERR_PERMISSION_DENIED);
+            reds_send_link_result(link, SPICE_LINK_ERR_PERMISSION_DENIED);
             red_printf("Ticketing is enabled, but no password is set. "
                        "please set a ticket first");
             reds_release_link(link);
             return;
         }
 
-        if (expired || strncmp(password, actual_sever_pass, RED_MAX_PASSWORD_LENGTH) != 0) {
-            reds_send_link_result(link, RED_ERR_PERMISSION_DENIED);
+        if (expired || strncmp(password, actual_sever_pass, SPICE_MAX_PASSWORD_LENGTH) != 0) {
+            reds_send_link_result(link, SPICE_LINK_ERR_PERMISSION_DENIED);
             LOG_MESSAGE(VD_LOG_WARN, "bad connection password or time expired");
             reds_release_link(link);
             return;
         }
     }
-    if (link->link_mess->channel_type == RED_CHANNEL_MAIN) {
+    if (link->link_mess->channel_type == SPICE_CHANNEL_MAIN) {
         reds_handle_main_link(link);
     } else {
         reds_handle_other_links(link);
@@ -2829,14 +2829,14 @@ static int reds_security_check(RedLinkInfo *link)
 static void reds_handle_read_link_done(void *opaque)
 {
     RedLinkInfo *link = (RedLinkInfo *)opaque;
-    RedLinkMess *link_mess = link->link_mess;
+    SpiceLinkMess *link_mess = link->link_mess;
     AsyncRead *obj = &link->asyc_read;
     uint32_t num_caps = link_mess->num_common_caps + link_mess->num_channel_caps;
 
     if (num_caps && (num_caps * sizeof(uint32_t) + link_mess->caps_offset >
                                                    link->link_header.size ||
                                                      link_mess->caps_offset < sizeof(*link_mess))) {
-        reds_send_link_error(link, RED_ERR_INVALID_DATA);
+        reds_send_link_error(link, SPICE_LINK_ERR_INVALID_DATA);
         reds_release_link(link);
         return;
     }
@@ -2846,12 +2846,12 @@ static void reds_handle_read_link_done(void *opaque)
             LOG_MESSAGE(VD_LOG_INFO, "channels of type %d should connect only over "
                                      "a non secure link", link_mess->channel_type);
             red_printf("spice channels %d should not be encrypted", link_mess->channel_type);
-            reds_send_link_error(link, RED_ERR_NEED_UNSECURED);
+            reds_send_link_error(link, SPICE_LINK_ERR_NEED_UNSECURED);
         } else {
             LOG_MESSAGE(VD_LOG_INFO, "channels of type %d should connect only over "
                                      "a secure link", link_mess->channel_type);
             red_printf("spice channels %d should be encrypted", link_mess->channel_type);
-            reds_send_link_error(link, RED_ERR_NEED_SECURED);
+            reds_send_link_error(link, SPICE_LINK_ERR_NEED_SECURED);
         }
         reds_release_link(link);
         return;
@@ -2885,25 +2885,25 @@ static void reds_handle_link_error(void *opaque, int err)
 static void reds_handle_read_header_done(void *opaque)
 {
     RedLinkInfo *link = (RedLinkInfo *)opaque;
-    RedLinkHeader *header = &link->link_header;
+    SpiceLinkHeader *header = &link->link_header;
     AsyncRead *obj = &link->asyc_read;
 
-    if (header->magic != RED_MAGIC) {
-        reds_send_link_error(link, RED_ERR_INVALID_MAGIC);
+    if (header->magic != SPICE_MAGIC) {
+        reds_send_link_error(link, SPICE_LINK_ERR_INVALID_MAGIC);
         LOG_MESSAGE(VD_LOG_ERROR, "bad magic %u", header->magic);
         reds_release_link(link);
         return;
     }
 
-    if (header->major_version != RED_VERSION_MAJOR) {
+    if (header->major_version != SPICE_VERSION_MAJOR) {
         if (header->major_version > 0) {
-            reds_send_link_error(link, RED_ERR_VERSION_MISMATCH);
+            reds_send_link_error(link, SPICE_LINK_ERR_VERSION_MISMATCH);
         }
         LOG_MESSAGE(VD_LOG_INFO, "version mismatch client %u.%u server %u.%u",
                     header->major_version,
                     header->minor_version,
-                    RED_VERSION_MAJOR,
-                    RED_VERSION_MINOR);
+                    SPICE_VERSION_MAJOR,
+                    SPICE_VERSION_MINOR);
 
         red_printf("version mismatch");
         reds_release_link(link);
@@ -2912,8 +2912,8 @@ static void reds_handle_read_header_done(void *opaque)
 
     reds->peer_minor_version = header->minor_version;
 
-    if (header->size < sizeof(RedLinkMess)) {
-        reds_send_link_error(link, RED_ERR_INVALID_DATA);
+    if (header->size < sizeof(SpiceLinkMess)) {
+        reds_send_link_error(link, SPICE_LINK_ERR_INVALID_DATA);
         red_printf("bad size %u", header->size);
         reds_release_link(link);
         return;
@@ -2937,7 +2937,7 @@ static void reds_handle_new_link(RedLinkInfo *link)
     obj->opaque = link;
     obj->peer = link->peer;
     obj->now = (uint8_t *)&link->link_header;
-    obj->end = (uint8_t *)((RedLinkHeader *)&link->link_header + 1);
+    obj->end = (uint8_t *)((SpiceLinkHeader *)&link->link_header + 1);
     obj->active_file_handlers = FALSE;
     obj->done = reds_handle_read_header_done;
     obj->error = reds_handle_link_error;
@@ -3853,27 +3853,27 @@ static int set_channels_security(const char *channels, uint32_t security)
             break;
         case CHANNEL_NAME_MAIN:
             specific++;
-            set_one_channel_security(RED_CHANNEL_MAIN, security);
+            set_one_channel_security(SPICE_CHANNEL_MAIN, security);
             break;
         case CHANNEL_NAME_DISPLAY:
             specific++;
-            set_one_channel_security(RED_CHANNEL_DISPLAY, security);
+            set_one_channel_security(SPICE_CHANNEL_DISPLAY, security);
             break;
         case CHANNEL_NAME_INPUTS:
             specific++;
-            set_one_channel_security(RED_CHANNEL_INPUTS, security);
+            set_one_channel_security(SPICE_CHANNEL_INPUTS, security);
             break;
         case CHANNEL_NAME_CURSOR:
             specific++;
-            set_one_channel_security(RED_CHANNEL_CURSOR, security);
+            set_one_channel_security(SPICE_CHANNEL_CURSOR, security);
             break;
         case CHANNEL_NAME_PLAYBACK:
             specific++;
-            set_one_channel_security(RED_CHANNEL_PLAYBACK, security);
+            set_one_channel_security(SPICE_CHANNEL_PLAYBACK, security);
             break;
         case CHANNEL_NAME_RECORD:
             specific++;
-            set_one_channel_security(RED_CHANNEL_RECORD, security);
+            set_one_channel_security(SPICE_CHANNEL_RECORD, security);
             break;
         default:
             goto error;
@@ -4172,7 +4172,7 @@ typedef struct RedsMigSpice {
     RedsMigWrite write;
     RedsMigRead read;
 
-    char pub_key[RED_TICKET_PUBKEY_BYTES];
+    char pub_key[SPICE_TICKET_PUBKEY_BYTES];
     uint32_t mig_key;
 
     char *local_args;
@@ -4294,27 +4294,27 @@ static void reds_mig_read(void *data)
 
 static void reds_mig_continue(RedsMigSpice *s)
 {
-    RedMigrationBegin *migrate;
+    SpiceMsgMainMigrationBegin *migrate;
     SimpleOutItem *item;
     int host_len;
 
     red_printf("");
     core->set_file_handlers(core, s->fd, NULL, NULL, NULL);
     host_len = strlen(s->host) + 1;
-    item = new_simple_out_item(RED_MIGRATE_BEGIN,
-                               sizeof(RedMigrationBegin) + host_len + s->cert_pub_key_len);
+    item = new_simple_out_item(SPICE_MSG_MAIN_MIGRATE_BEGIN,
+                               sizeof(SpiceMsgMainMigrationBegin) + host_len + s->cert_pub_key_len);
     if (!(item)) {
         red_printf("alloc item failed");
         reds_disconnect();
         return;
     }
-    migrate = (RedMigrationBegin *)item->data;
+    migrate = (SpiceMsgMainMigrationBegin *)item->data;
     migrate->port = s->port;
     migrate->sport = s->sport;
-    migrate->host_offset = sizeof(RedMigrationBegin);
+    migrate->host_offset = sizeof(SpiceMsgMainMigrationBegin);
     migrate->host_size = host_len;
     migrate->pub_key_type = s->cert_pub_key_type;
-    migrate->pub_key_offset = sizeof(RedMigrationBegin) + host_len;
+    migrate->pub_key_offset = sizeof(SpiceMsgMainMigrationBegin) + host_len;
     migrate->pub_key_size = s->cert_pub_key_len;
     memcpy((uint8_t*)(migrate) + migrate->host_offset , s->host, host_len);
     memcpy((uint8_t*)(migrate) + migrate->pub_key_offset, s->cert_pub_key, s->cert_pub_key_len);
@@ -4359,7 +4359,7 @@ static void reds_mig_send_ticket(RedsMigSpice *s)
 
     bio_key = BIO_new(BIO_s_mem());
     if (bio_key != NULL) {
-        BIO_write(bio_key, s->read.buf, RED_TICKET_PUBKEY_BYTES);
+        BIO_write(bio_key, s->read.buf, SPICE_TICKET_PUBKEY_BYTES);
         pubkey = d2i_PUBKEY_bio(bio_key, NULL);
         rsa = pubkey->pkey.rsa;
         rsa_size = RSA_size(rsa);
@@ -4393,7 +4393,7 @@ static void reds_mig_receive_cert_public_key(RedsMigSpice *s)
 
     memcpy(s->cert_pub_key, s->read.buf, s->cert_pub_key_len);
 
-    s->read.size = RED_TICKET_PUBKEY_BYTES;
+    s->read.size = SPICE_TICKET_PUBKEY_BYTES;
     s->read.end_pos = 0;
     s->read.handle_data = reds_mig_send_ticket;
 
@@ -4418,7 +4418,7 @@ static void reds_mig_receive_cert_public_key_info(RedsMigSpice *s)
         s->read.handle_data = reds_mig_receive_cert_public_key;
     } else {
         s->cert_pub_key = NULL;
-        s->read.size = RED_TICKET_PUBKEY_BYTES;
+        s->read.size = SPICE_TICKET_PUBKEY_BYTES;
         s->read.end_pos = 0;
         s->read.handle_data = reds_mig_send_ticket;
     }
@@ -4514,9 +4514,9 @@ static void reds_mig_started(void *opaque, const char *in_args)
         goto error;
     }
 
-    if ((RED_VERSION_MAJOR == 1) && (reds->peer_minor_version < 2)) {
+    if ((SPICE_VERSION_MAJOR == 1) && (reds->peer_minor_version < 2)) {
         red_printf("minor version mismatch client %u server %u",
-                   reds->peer_minor_version, RED_VERSION_MINOR);
+                   reds->peer_minor_version, SPICE_VERSION_MINOR);
         goto error;
     }
 
@@ -4633,18 +4633,18 @@ static void reds_mig_finished(void *opaque, int completed)
 
     if (completed) {
         Channel *channel;
-        RedMigrate *migrate;
+        SpiceMsgMigrate *migrate;
 
         reds->mig_wait_disconnect = TRUE;
         core->arm_timer(core, reds->mig_timer, MIGRATE_TIMEOUT);
 
-        if (!(item = new_simple_out_item(RED_MIGRATE, sizeof(RedMigrate)))) {
+        if (!(item = new_simple_out_item(SPICE_MSG_MIGRATE, sizeof(SpiceMsgMigrate)))) {
             red_printf("alloc item failed");
             reds_disconnect();
             return;
         }
-        migrate = (RedMigrate *)item->data;
-        migrate->flags = RED_MIGRATE_NEED_FLUSH | RED_MIGRATE_NEED_DATA_TRANSFER;
+        migrate = (SpiceMsgMigrate *)item->data;
+        migrate->flags = SPICE_MIGRATE_NEED_FLUSH | SPICE_MIGRATE_NEED_DATA_TRANSFER;
         reds_push_pipe_item(&item->base);
         channel = reds->channels;
         while (channel) {
@@ -4652,7 +4652,7 @@ static void reds_mig_finished(void *opaque, int completed)
             channel = channel->next;
         }
     } else {
-        if (!(item = new_simple_out_item(RED_MIGRATE_CANCEL, 0))) {
+        if (!(item = new_simple_out_item(SPICE_MSG_MAIN_MIGRATE_CANCEL, 0))) {
             red_printf("alloc item failed");
             reds_disconnect();
             return;
@@ -4733,7 +4733,7 @@ static void reds_mig_send_cert_public_key(int fd)
     RedsMigCertPubKeyInfo pub_key_info_msg;
 
     if (spice_secure_port == -1) {
-        pub_key_info_msg.type = RED_PUBKEY_TYPE_INVALID;
+        pub_key_info_msg.type = SPICE_PUBKEY_TYPE_INVALID;
         pub_key_info_msg.len = 0;
         reds_mig_write_all(fd, &pub_key_info_msg, sizeof(pub_key_info_msg), "cert public key info");
         return;
@@ -4762,31 +4762,31 @@ static void reds_mig_send_cert_public_key(int fd)
 
     switch(pub_key->type) {
     case EVP_PKEY_RSA:
-        pub_key_info_msg.type = RED_PUBKEY_TYPE_RSA;
+        pub_key_info_msg.type = SPICE_PUBKEY_TYPE_RSA;
         break;
     case EVP_PKEY_RSA2:
-        pub_key_info_msg.type = RED_PUBKEY_TYPE_RSA2;
+        pub_key_info_msg.type = SPICE_PUBKEY_TYPE_RSA2;
         break;
     case EVP_PKEY_DSA:
-        pub_key_info_msg.type = RED_PUBKEY_TYPE_DSA;
+        pub_key_info_msg.type = SPICE_PUBKEY_TYPE_DSA;
         break;
     case EVP_PKEY_DSA1:
-        pub_key_info_msg.type = RED_PUBKEY_TYPE_DSA1;
+        pub_key_info_msg.type = SPICE_PUBKEY_TYPE_DSA1;
         break;
     case EVP_PKEY_DSA2:
-        pub_key_info_msg.type = RED_PUBKEY_TYPE_DSA2;
+        pub_key_info_msg.type = SPICE_PUBKEY_TYPE_DSA2;
         break;
     case EVP_PKEY_DSA3:
-        pub_key_info_msg.type = RED_PUBKEY_TYPE_DSA3;
+        pub_key_info_msg.type = SPICE_PUBKEY_TYPE_DSA3;
         break;
     case EVP_PKEY_DSA4:
-        pub_key_info_msg.type = RED_PUBKEY_TYPE_DSA4;
+        pub_key_info_msg.type = SPICE_PUBKEY_TYPE_DSA4;
         break;
     case EVP_PKEY_DH:
-        pub_key_info_msg.type = RED_PUBKEY_TYPE_DH;
+        pub_key_info_msg.type = SPICE_PUBKEY_TYPE_DH;
         break;
     case EVP_PKEY_EC:
-        pub_key_info_msg.type = RED_PUBKEY_TYPE_EC;
+        pub_key_info_msg.type = SPICE_PUBKEY_TYPE_EC;
         break;
     default:
         red_error("invalid public key type");
@@ -4804,7 +4804,7 @@ static void reds_mig_send_cert_public_key(int fd)
 static void reds_mig_recv(void *opaque, int fd)
 {
     uint32_t ack_message = *(uint32_t *)"ack_";
-    char password[RED_MAX_PASSWORD_LENGTH];
+    char password[SPICE_MAX_PASSWORD_LENGTH];
     RedsMigSpiceMessage mig_message;
     unsigned long f4 = RSA_F4;
     TicketInfo ticketing_info;
@@ -4856,7 +4856,7 @@ static void reds_mig_recv(void *opaque, int fd)
         red_error("OpenSSL RSA alloc failed");
     }
 
-    RSA_generate_key_ex(ticketing_info.rsa, RED_TICKET_KEY_PAIR_LENGTH, ticketing_info.bn, NULL);
+    RSA_generate_key_ex(ticketing_info.rsa, SPICE_TICKET_KEY_PAIR_LENGTH, ticketing_info.bn, NULL);
     ticketing_info.rsa_size = RSA_size(ticketing_info.rsa);
 
     if (!(bio = BIO_new(BIO_s_mem()))) {
@@ -4866,7 +4866,7 @@ static void reds_mig_recv(void *opaque, int fd)
     i2d_RSA_PUBKEY_bio(bio, ticketing_info.rsa);
     BIO_get_mem_ptr(bio, &buff);
 
-    reds_mig_write_all(fd, buff->data, RED_TICKET_PUBKEY_BYTES, "publick key");
+    reds_mig_write_all(fd, buff->data, SPICE_TICKET_PUBKEY_BYTES, "publick key");
     reds_mig_read_all(fd, ticketing_info.encrypted_ticket.encrypted_data, ticketing_info.rsa_size,
                       "ticket");
 
@@ -4910,7 +4910,7 @@ void reds_update_mm_timer(uint32_t mm_time)
 
 void reds_enable_mm_timer()
 {
-    RedMultiMediaTime *time_mes;
+    SpiceMsgMainMultiMediaTime *time_mes;
     SimpleOutItem *item;
 
     core->arm_timer(core, reds->mm_timer, MM_TIMER_GRANULARITY_MS);
@@ -4918,12 +4918,12 @@ void reds_enable_mm_timer()
         return;
     }
 
-    if (!(item = new_simple_out_item(RED_MULTI_MEDIA_TIME, sizeof(RedMultiMediaTime)))) {
+    if (!(item = new_simple_out_item(SPICE_MSG_MAIN_MULTI_MEDIA_TIME, sizeof(SpiceMsgMainMultiMediaTime)))) {
         red_printf("alloc item failed");
         reds_disconnect();
         return;
     }
-    time_mes = (RedMultiMediaTime *)item->data;
+    time_mes = (SpiceMsgMainMultiMediaTime *)item->data;
     time_mes->time = reds_get_mm_time() - MM_TIME_DELTA;
     reds_push_pipe_item(&item->base);
 }
@@ -5375,7 +5375,7 @@ static void init_vd_agent_resources()
         memset(buf, 0, sizeof(*buf));
         buf->out_item.prepare = reds_prepare_read_buf;
         buf->out_item.release = reds_release_read_buf;
-        buf->header.type = RED_AGENT_DATA;
+        buf->header.type = SPICE_MSG_MAIN_AGENT_DATA;
         buf->header.sub_list = 0;
         ring_item_init(&buf->out_item.link);
         ring_add(&reds->agent_state.read_bufs, &buf->out_item.link);
@@ -5431,13 +5431,13 @@ void __attribute__ ((visibility ("default"))) spice_init(CoreInterface *core_int
     core->register_change_notifiers(core, &reds, interface_change_notifier);
 
 #ifdef RED_STATISTICS
-    int shm_name_len = strlen(REDS_STAT_SHM_NAME) + 20;
+    int shm_name_len = strlen(SPICE_STAT_SHM_NAME) + 20;
     int fd;
 
     if (!(reds->stat_shm_name = (char *)malloc(shm_name_len))) {
         red_error("stat_shm_name alloc failed");
     }
-    snprintf(reds->stat_shm_name, shm_name_len, REDS_STAT_SHM_NAME, getpid());
+    snprintf(reds->stat_shm_name, shm_name_len, SPICE_STAT_SHM_NAME, getpid());
     if ((fd = shm_open(reds->stat_shm_name, O_CREAT | O_RDWR, 0444)) == -1) {
         red_error("statistics shm_open failed, %s", strerror(errno));
     }
@@ -5445,12 +5445,12 @@ void __attribute__ ((visibility ("default"))) spice_init(CoreInterface *core_int
         red_error("statistics ftruncate failed, %s", strerror(errno));
     }
     reds->stat = mmap(NULL, REDS_STAT_SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (reds->stat == (RedsStat *)MAP_FAILED) {
+    if (reds->stat == (SpiceStat *)MAP_FAILED) {
         red_error("statistics mmap failed, %s", strerror(errno));
     }
     memset(reds->stat, 0, REDS_STAT_SHM_SIZE);
-    reds->stat->magic = REDS_STAT_MAGIC;
-    reds->stat->version = REDS_STAT_VERSION;
+    reds->stat->magic = SPICE_STAT_MAGIC;
+    reds->stat->version = SPICE_STAT_VERSION;
     reds->stat->root_index = INVALID_STAT_REF;
     if (pthread_mutex_init(&reds->stat_lock, NULL)) {
         red_error("mutex init failed");
@@ -5472,7 +5472,7 @@ void __attribute__ ((visibility ("default"))) spice_init(CoreInterface *core_int
     }
     inputs_init();
 
-    reds->mouse_mode = RED_MOUSE_MODE_SERVER;
+    reds->mouse_mode = SPICE_MOUSE_MODE_SERVER;
     atexit(reds_exit);
 }
 

@@ -32,7 +32,7 @@ public:
               rgb32_t* pallete);
     virtual ~RedPixmap();
 
-    virtual Point get_size() { Point pt = {_width, _height}; return pt;}
+    virtual SpicePoint get_size() { SpicePoint pt = {_width, _height}; return pt;}
 
     int get_width() { return _width;}
     int get_height() { return _height;}

@@ -28,8 +28,8 @@
 #include <GL/glext.h>
 
 static inline void copy_to_gldrawable_from_gltexture(const RedDrawable_p* dest,
-                                                     const Rect& area,
-                                                     const Point& offset,
+                                                     const SpiceRect& area,
+                                                     const SpicePoint& offset,
                                                      const PixelsSource_p* source,
                                                      int src_x, int src_y)
 {
@@ -90,8 +90,8 @@ static inline void copy_to_gldrawable_from_gltexture(const RedDrawable_p* dest,
 }
 
 static inline void copy_to_gldrawable_from_pixmap(const RedDrawable_p* dest,
-                                                  const Rect& area,
-                                                  const Point& offset,
+                                                  const SpiceRect& area,
+                                                  const SpicePoint& offset,
                                                   const PixelsSource_p* source,
                                                   int src_x, int src_y)
 {
@@ -134,8 +134,8 @@ static inline void copy_to_gldrawable_from_pixmap(const RedDrawable_p* dest,
 }
 
 static inline void copy_to_drawable_from_drawable(const RedDrawable_p* dest,
-                                                  const Rect& area,
-                                                  const Point& offset,
+                                                  const SpiceRect& area,
+                                                  const SpicePoint& offset,
                                                   const PixelsSource_p* source,
                                                   int src_x, int src_y)
 {
@@ -151,8 +151,8 @@ static inline void copy_to_drawable_from_drawable(const RedDrawable_p* dest,
 }
 
 static inline void copy_to_drawable_from_pixmap(const RedDrawable_p* dest,
-                                                const Rect& area,
-                                                const Point& offset,
+                                                const SpiceRect& area,
+                                                const SpicePoint& offset,
                                                 const PixelsSource_p* source,
                                                 int src_x, int src_y)
 {
@@ -167,8 +167,8 @@ static inline void copy_to_drawable_from_pixmap(const RedDrawable_p* dest,
 }
 
 static inline void copy_to_drawable_from_shmdrawable(const RedDrawable_p* dest,
-                                                     const Rect& area,
-                                                     const Point& offset,
+                                                     const SpiceRect& area,
+                                                     const SpicePoint& offset,
                                                      const PixelsSource_p* source,
                                                      int src_x, int src_y)
 {
@@ -184,8 +184,8 @@ static inline void copy_to_drawable_from_shmdrawable(const RedDrawable_p* dest,
 }
 
 static inline void copy_to_x_drawable(const RedDrawable_p* dest,
-                                      const Rect& area,
-                                      const Point& offset,
+                                      const SpiceRect& area,
+                                      const SpicePoint& offset,
                                       const PixelsSource_p* source,
                                       int src_x, int src_y)
 {
@@ -205,8 +205,8 @@ static inline void copy_to_x_drawable(const RedDrawable_p* dest,
 }
 
 static inline void copy_to_gl_drawable(const RedDrawable_p* dest,
-                                       const Rect& area,
-                                       const Point& offset,
+                                       const SpiceRect& area,
+                                       const SpicePoint& offset,
                                        const PixelsSource_p* source,
                                        int src_x, int src_y)
 {
@@ -223,8 +223,8 @@ static inline void copy_to_gl_drawable(const RedDrawable_p* dest,
 }
 
 static inline void copy_to_pixmap_from_drawable(const RedDrawable_p* dest,
-                                                const Rect& area,
-                                                const Point& offset,
+                                                const SpiceRect& area,
+                                                const SpicePoint& offset,
                                                 const PixelsSource_p* source,
                                                 int src_x, int src_y)
 {
@@ -232,8 +232,8 @@ static inline void copy_to_pixmap_from_drawable(const RedDrawable_p* dest,
 }
 
 static inline void copy_to_pixmap_from_shmdrawable(const RedDrawable_p* dest,
-                                                   const Rect& area,
-                                                   const Point& offset,
+                                                   const SpiceRect& area,
+                                                   const SpicePoint& offset,
                                                    const PixelsSource_p* source,
                                                    int src_x, int src_y)
 {
@@ -252,8 +252,8 @@ static inline void copy_to_pixmap_from_shmdrawable(const RedDrawable_p* dest,
 }
 
 static inline void copy_to_pixmap_from_pixmap(const RedDrawable_p* dest,
-                                              const Rect& area,
-                                              const Point& offset,
+                                              const SpiceRect& area,
+                                              const SpicePoint& offset,
                                               const PixelsSource_p* source,
                                               int src_x, int src_y)
 {
@@ -272,8 +272,8 @@ static inline void copy_to_pixmap_from_pixmap(const RedDrawable_p* dest,
 }
 
 static inline void copy_to_pixmap_from_gltexture(const RedDrawable_p* dest,
-                                                 const Rect& area,
-                                                 const Point& offset,
+                                                 const SpiceRect& area,
+                                                 const SpicePoint& offset,
                                                  const PixelsSource_p* source,
                                                  int src_x, int src_y)
 {
@@ -316,8 +316,8 @@ static inline void copy_to_pixmap_from_gltexture(const RedDrawable_p* dest,
 }
 
 static inline void copy_to_pixmap(const RedDrawable_p* dest,
-                                  const Rect& area,
-                                  const Point& offset,
+                                  const SpiceRect& area,
+                                  const SpicePoint& offset,
                                   const PixelsSource_p* source,
                                   int src_x, int src_y)
 {
@@ -339,7 +339,7 @@ static inline void copy_to_pixmap(const RedDrawable_p* dest,
     }
 }
 
-void RedDrawable::copy_pixels(const PixelsSource& src, int src_x, int src_y, const Rect& area)
+void RedDrawable::copy_pixels(const PixelsSource& src, int src_x, int src_y, const SpiceRect& area)
 {
     PixelsSource_p* source = (PixelsSource_p*)src.get_opaque();
     RedDrawable_p* dest = (RedDrawable_p*)get_opaque();
@@ -361,8 +361,8 @@ void RedDrawable::copy_pixels(const PixelsSource& src, int src_x, int src_y, con
 }
 
 static inline void blend_to_drawable(const RedDrawable_p* dest,
-                                     const Rect& area,
-                                     const Point& offset,
+                                     const SpiceRect& area,
+                                     const SpicePoint& offset,
                                      const PixelsSource_p* source,
                                      int src_x, int src_y)
 {
@@ -370,8 +370,8 @@ static inline void blend_to_drawable(const RedDrawable_p* dest,
 }
 
 static inline void blend_to_pixmap_from_drawable(const RedDrawable_p* dest,
-                                                 const Rect& area,
-                                                 const Point& offset,
+                                                 const SpiceRect& area,
+                                                 const SpicePoint& offset,
                                                  const PixelsSource_p* source,
                                                  int src_x, int src_y)
 {
@@ -379,8 +379,8 @@ static inline void blend_to_pixmap_from_drawable(const RedDrawable_p* dest,
 }
 
 static inline void blend_to_pixmap_from_pixmap(const RedDrawable_p* dest,
-                                               const Rect& area,
-                                               const Point& offset,
+                                               const SpiceRect& area,
+                                               const SpicePoint& offset,
                                                const PixelsSource_p* source,
                                                int src_x, int src_y)
 {
@@ -399,8 +399,8 @@ static inline void blend_to_pixmap_from_pixmap(const RedDrawable_p* dest,
 }
 
 static inline void blend_to_pixmap(const RedDrawable_p* dest,
-                                   const Rect& area,
-                                   const Point& offset,
+                                   const SpiceRect& area,
+                                   const SpicePoint& offset,
                                    const PixelsSource_p* source,
                                    int src_x, int src_y)
 {
@@ -416,7 +416,7 @@ static inline void blend_to_pixmap(const RedDrawable_p* dest,
     }
 }
 
-void RedDrawable::blend_pixels(const PixelsSource& src, int src_x, int src_y, const Rect& area)
+void RedDrawable::blend_pixels(const PixelsSource& src, int src_x, int src_y, const SpiceRect& area)
 {
     PixelsSource_p* source = (PixelsSource_p*)src.get_opaque();
     RedDrawable_p* dest = (RedDrawable_p*)get_opaque();
@@ -434,8 +434,8 @@ void RedDrawable::blend_pixels(const PixelsSource& src, int src_x, int src_y, co
 }
 
 static inline void combine_to_drawable(const RedDrawable_p* dest,
-                                       const Rect& area,
-                                       const Point& offset,
+                                       const SpiceRect& area,
+                                       const SpicePoint& offset,
                                        const PixelsSource_p* source,
                                        int src_x, int src_y,
                                        RedDrawable::CombineOP op)
@@ -444,8 +444,8 @@ static inline void combine_to_drawable(const RedDrawable_p* dest,
 }
 
 static inline void combine_to_pixmap_from_drawable(const RedDrawable_p* dest,
-                                                   const Rect& area,
-                                                   const Point& offset,
+                                                   const SpiceRect& area,
+                                                   const SpicePoint& offset,
                                                    const PixelsSource_p* source,
                                                    int src_x, int src_y,
                                                    RedDrawable::CombineOP op)
@@ -454,8 +454,8 @@ static inline void combine_to_pixmap_from_drawable(const RedDrawable_p* dest,
 }
 
 static inline void combine_to_pixmap_from_pixmap(const RedDrawable_p* dest,
-                                                 const Rect& area,
-                                                 const Point& offset,
+                                                 const SpiceRect& area,
+                                                 const SpicePoint& offset,
                                                  const PixelsSource_p* source,
                                                  int src_x, int src_y,
                                                  RedDrawable::CombineOP op)
@@ -499,8 +499,8 @@ static inline void combine_to_pixmap_from_pixmap(const RedDrawable_p* dest,
 }
 
 static inline void combine_to_pixmap(const RedDrawable_p* dest,
-                                     const Rect& area,
-                                     const Point& offset,
+                                     const SpiceRect& area,
+                                     const SpicePoint& offset,
                                      const PixelsSource_p* source,
                                      int src_x, int src_y,
                                      RedDrawable::CombineOP op)
@@ -517,7 +517,7 @@ static inline void combine_to_pixmap(const RedDrawable_p* dest,
     }
 }
 
-void RedDrawable::combine_pixels(const PixelsSource& src, int src_x, int src_y, const Rect& area,
+void RedDrawable::combine_pixels(const PixelsSource& src, int src_x, int src_y, const SpiceRect& area,
                                  CombineOP op)
 {
     PixelsSource_p* source = (PixelsSource_p*)src.get_opaque();
@@ -536,13 +536,13 @@ void RedDrawable::combine_pixels(const PixelsSource& src, int src_x, int src_y, 
     }
 }
 
-void RedDrawable::erase_rect(const Rect& area, rgb32_t color)
+void RedDrawable::erase_rect(const SpiceRect& area, rgb32_t color)
 {
     LOG_WARN("not implemented");
 }
 
-static inline void fill_drawable(RedDrawable_p* dest, const Rect& area, rgb32_t color,
-                                 const Point& offset)
+static inline void fill_drawable(RedDrawable_p* dest, const SpiceRect& area, rgb32_t color,
+                                 const SpicePoint& offset)
 {
     Drawable drawable = dest->source.x_drawable.drawable;
     GC gc = dest->source.x_drawable.gc;
@@ -569,8 +569,8 @@ static inline void fill_drawable(RedDrawable_p* dest, const Rect& area, rgb32_t 
                    area.right - area.left, area.bottom - area.top);
 }
 
-static inline void fill_gl_drawable(RedDrawable_p* dest, const Rect& area, rgb32_t color,
-                                    const Point& offset)
+static inline void fill_gl_drawable(RedDrawable_p* dest, const SpiceRect& area, rgb32_t color,
+                                    const SpicePoint& offset)
 {
     int vertex_x1, vertex_x2;
     int vertex_y1, vertex_y2;
@@ -603,8 +603,8 @@ static inline void fill_gl_drawable(RedDrawable_p* dest, const Rect& area, rgb32
     glColor3f(1, 1, 1);
 }
 
-static inline void fill_pixmap(RedDrawable_p* dest, const Rect& area, rgb32_t color,
-                               const Point& offset)
+static inline void fill_pixmap(RedDrawable_p* dest, const SpiceRect& area, rgb32_t color,
+                               const SpicePoint& offset)
 {
     cairo_t* cairo = dest->cairo;
 
@@ -619,7 +619,7 @@ static inline void fill_pixmap(RedDrawable_p* dest, const Rect& area, rgb32_t co
     cairo_fill(cairo);
 }
 
-void RedDrawable::fill_rect(const Rect& area, rgb32_t color)
+void RedDrawable::fill_rect(const SpiceRect& area, rgb32_t color)
 {
     RedDrawable_p* dest = (RedDrawable_p*)get_opaque();
     switch (dest->source.type) {
@@ -637,8 +637,8 @@ void RedDrawable::fill_rect(const Rect& area, rgb32_t color)
     }
 }
 
-static inline void frame_drawable(RedDrawable_p* dest, const Rect& area, rgb32_t color,
-                                  const Point& offset)
+static inline void frame_drawable(RedDrawable_p* dest, const SpiceRect& area, rgb32_t color,
+                                  const SpicePoint& offset)
 {
     Drawable drawable = dest->source.x_drawable.drawable;
     GC gc = dest->source.x_drawable.gc;
@@ -665,8 +665,8 @@ static inline void frame_drawable(RedDrawable_p* dest, const Rect& area, rgb32_t
                    area.right - area.left, area.bottom - area.top);
 }
 
-static inline void frame_pixmap(RedDrawable_p* dest, const Rect& area, rgb32_t color,
-                                const Point& offset)
+static inline void frame_pixmap(RedDrawable_p* dest, const SpiceRect& area, rgb32_t color,
+                                const SpicePoint& offset)
 {
     cairo_t* cairo = dest->cairo;
 
@@ -682,7 +682,7 @@ static inline void frame_pixmap(RedDrawable_p* dest, const Rect& area, rgb32_t c
     cairo_stroke(cairo);
 }
 
-void RedDrawable::frame_rect(const Rect& area, rgb32_t color)
+void RedDrawable::frame_rect(const SpiceRect& area, rgb32_t color)
 {
     RedDrawable_p* dest = (RedDrawable_p*)get_opaque();
     switch (dest->source.type) {

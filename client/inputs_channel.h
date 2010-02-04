@@ -45,8 +45,8 @@ protected:
     virtual void on_migrate();
 
 private:
-    void set_motion_event(RedcMouseMotion& motion_event);
-    void set_position_event(RedcMousePosition& position_event);
+    void set_motion_event(SpiceMsgcMouseMotion& motion_event);
+    void set_position_event(SpiceMsgcMousePosition& position_event);
     void set_local_modifiers();
 
     void handle_init(RedPeer::InMessage* message);

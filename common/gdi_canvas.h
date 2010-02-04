@@ -34,21 +34,21 @@ typedef struct {
     uint8_t *pixels;
 } GdiImage;
 
-void gdi_canvas_draw_fill(GdiCanvas *canvas, Rect *bbox, Clip *clip, Fill *fill);
-void gdi_canvas_draw_copy(GdiCanvas *canvas, Rect *bbox, Clip *clip, Copy *copy);
-void gdi_canvas_draw_opaque(GdiCanvas *canvas, Rect *bbox, Clip *clip, Opaque *opaque);
-void gdi_canvas_copy_bits(GdiCanvas *canvas, Rect *bbox, Clip *clip, Point *src_pos);
-void gdi_canvas_draw_text(GdiCanvas *canvas, Rect *bbox, Clip *clip, Text *text);
-void gdi_canvas_draw_stroke(GdiCanvas *canvas, Rect *bbox, Clip *clip, Stroke *stroke);
-void gdi_canvas_draw_rop3(GdiCanvas *canvas, Rect *bbox, Clip *clip, Rop3 *rop3);
-void gdi_canvas_draw_blend(GdiCanvas *canvas, Rect *bbox, Clip *clip, Blend *blend);
-void gdi_canvas_draw_blackness(GdiCanvas *canvas, Rect *bbox, Clip *clip, Blackness *blackness);
-void gdi_canvas_draw_whiteness(GdiCanvas *canvas, Rect *bbox, Clip *clip, Whiteness *whiteness);
-void gdi_canvas_draw_invers(GdiCanvas *canvas, Rect *bbox, Clip *clip, Invers *invers);
-void gdi_canvas_draw_transparent(GdiCanvas *canvas, Rect *bbox, Clip *clip,
-                                 Transparent* transparent);
-void gdi_canvas_draw_alpha_blend(GdiCanvas *canvas, Rect *bbox, Clip *clip, AlphaBlnd* alpha_blend);
-void gdi_canvas_put_image(GdiCanvas *canvas, HDC dc, const Rect *dest, const uint8_t *src_data,
+void gdi_canvas_draw_fill(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill);
+void gdi_canvas_draw_copy(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy);
+void gdi_canvas_draw_opaque(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque);
+void gdi_canvas_copy_bits(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos);
+void gdi_canvas_draw_text(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceText *text);
+void gdi_canvas_draw_stroke(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke);
+void gdi_canvas_draw_rop3(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3);
+void gdi_canvas_draw_blend(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend);
+void gdi_canvas_draw_blackness(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness);
+void gdi_canvas_draw_whiteness(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness);
+void gdi_canvas_draw_invers(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers);
+void gdi_canvas_draw_transparent(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip,
+                                 SpiceTransparent* transparent);
+void gdi_canvas_draw_alpha_blend(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend);
+void gdi_canvas_put_image(GdiCanvas *canvas, HDC dc, const SpiceRect *dest, const uint8_t *src_data,
                           uint32_t src_width, uint32_t src_height, int src_stride,
                           const QRegion *clip);
 void gdi_canvas_clear(GdiCanvas *canvas);

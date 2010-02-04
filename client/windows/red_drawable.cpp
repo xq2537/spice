@@ -23,7 +23,7 @@
 
 static const uint64_t lock_timout = 1000 * 1000 * 10; /*10ms*/
 
-void RedDrawable::copy_pixels(const PixelsSource& src, int src_x, int src_y, const Rect& dest)
+void RedDrawable::copy_pixels(const PixelsSource& src, int src_x, int src_y, const SpiceRect& dest)
 {
     PixelsSource_p* dest_p_data = (PixelsSource_p*)get_opaque();
     PixelsSource_p* src_p_data = (PixelsSource_p*)src.get_opaque();
@@ -42,7 +42,7 @@ void RedDrawable::copy_pixels(const PixelsSource& src, int src_x, int src_y, con
     }
 }
 
-void RedDrawable::blend_pixels(const PixelsSource& src, int src_x, int src_y, const Rect& dest)
+void RedDrawable::blend_pixels(const PixelsSource& src, int src_x, int src_y, const SpiceRect& dest)
 {
     static BLENDFUNCTION blend_func = { AC_SRC_OVER, 0, 0xff, AC_SRC_ALPHA};
 
@@ -63,7 +63,7 @@ void RedDrawable::blend_pixels(const PixelsSource& src, int src_x, int src_y, co
     }
 }
 
-void RedDrawable::combine_pixels(const PixelsSource& src, int src_x, int src_y, const Rect& dest,
+void RedDrawable::combine_pixels(const PixelsSource& src, int src_x, int src_y, const SpiceRect& dest,
                                  CombineOP op)
 {
     DWORD rop;
@@ -97,7 +97,7 @@ void RedDrawable::combine_pixels(const PixelsSource& src, int src_x, int src_y, 
     }
 }
 
-void RedDrawable::erase_rect(const Rect& rect, rgb32_t color)
+void RedDrawable::erase_rect(const SpiceRect& rect, rgb32_t color)
 {
     RECT r;
     r.left = rect.left + _origin.x;
@@ -110,7 +110,7 @@ void RedDrawable::erase_rect(const Rect& rect, rgb32_t color)
     FillRect(dest_p_data->dc, &r, (HBRUSH)GetStockObject(BLACK_BRUSH));
 }
 
-void RedDrawable::fill_rect(const Rect& rect, rgb32_t color)
+void RedDrawable::fill_rect(const SpiceRect& rect, rgb32_t color)
 {
     RECT r;
     r.left = rect.left + _origin.x;
@@ -130,7 +130,7 @@ void RedDrawable::fill_rect(const Rect& rect, rgb32_t color)
     DeleteObject(brush);
 }
 
-void RedDrawable::frame_rect(const Rect& rect, rgb32_t color)
+void RedDrawable::frame_rect(const SpiceRect& rect, rgb32_t color)
 {
     RECT r;
     r.left = rect.left + _origin.x;

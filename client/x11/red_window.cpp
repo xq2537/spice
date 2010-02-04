@@ -672,37 +672,37 @@ static inline RedKey to_red_key_code(unsigned int keycode)
 
 static inline int to_red_buttons_state(unsigned int state)
 {
-    return ((state & Button1Mask) ? REDC_LBUTTON_MASK : 0) |
-           ((state & Button2Mask) ? REDC_MBUTTON_MASK : 0) |
-           ((state & Button3Mask) ? REDC_RBUTTON_MASK : 0);
+    return ((state & Button1Mask) ? SPICE_MOUSE_BUTTON_MASK_LEFT : 0) |
+           ((state & Button2Mask) ? SPICE_MOUSE_BUTTON_MASK_MIDDLE : 0) |
+           ((state & Button3Mask) ? SPICE_MOUSE_BUTTON_MASK_RIGHT : 0);
 }
 
-static inline RedButton to_red_button(unsigned int botton, unsigned int& state, bool press)
+static inline SpiceMouseButton to_red_button(unsigned int botton, unsigned int& state, bool press)
 {
     unsigned int mask = 0;
-    RedButton ret;
+    SpiceMouseButton ret;
 
     switch (botton) {
     case Button1:
-        mask = REDC_LBUTTON_MASK;
-        ret = REDC_MOUSE_LBUTTON;
+        mask = SPICE_MOUSE_BUTTON_MASK_LEFT;
+        ret = SPICE_MOUSE_BUTTON_LEFT;
         break;
     case Button2:
-        mask = REDC_MBUTTON_MASK;
-        ret = REDC_MOUSE_MBUTTON;
+        mask = SPICE_MOUSE_BUTTON_MASK_MIDDLE;
+        ret = SPICE_MOUSE_BUTTON_MIDDLE;
         break;
     case Button3:
-        mask = REDC_RBUTTON_MASK;
-        ret = REDC_MOUSE_RBUTTON;
+        mask = SPICE_MOUSE_BUTTON_MASK_RIGHT;
+        ret = SPICE_MOUSE_BUTTON_RIGHT;
         break;
     case Button4:
-        ret = REDC_MOUSE_UBUTTON;
+        ret = SPICE_MOUSE_BUTTON_UP;
         break;
     case Button5:
-        ret = REDC_MOUSE_DBUTTON;
+        ret = SPICE_MOUSE_BUTTON_DOWN;
         break;
     default:
-        ret = REDC_MOUSE_INVALID_BUTTON;
+        ret = SPICE_MOUSE_BUTTON_INVALID;
     }
     if (press) {
         state |= mask;
@@ -766,10 +766,10 @@ void RedWindow_p::win_proc(XEvent& event)
     red_window = (RedWindow*)window_pointer;
     switch (event.type) {
     case MotionNotify: {
-        Point size = red_window->get_size();
+        SpicePoint size = red_window->get_size();
         if (event.xmotion.x >= 0 && event.xmotion.y >= 0 &&
             event.xmotion.x < size.x && event.xmotion.y < size.y) {
-            Point origin = red_window->get_origin();
+            SpicePoint origin = red_window->get_origin();
             red_window->get_listener().on_pointer_motion(event.xmotion.x - origin.x,
                                                          event.xmotion.y - origin.y,
                                                          to_red_buttons_state(event.xmotion.state));
@@ -797,8 +797,8 @@ void RedWindow_p::win_proc(XEvent& event)
     }
     case ButtonPress: {
         unsigned int state = to_red_buttons_state(event.xbutton.state);
-        RedButton button = to_red_button(event.xbutton.button, state, true);
-        if (button == REDC_MOUSE_INVALID_BUTTON) {
+        SpiceMouseButton button = to_red_button(event.xbutton.button, state, true);
+        if (button == SPICE_MOUSE_BUTTON_INVALID) {
             DBG(0, "ButtonPress: invalid button %u", event.xbutton.button);
             break;
         }
@@ -807,8 +807,8 @@ void RedWindow_p::win_proc(XEvent& event)
     }
     case ButtonRelease: {
         unsigned int state = to_red_buttons_state(event.xbutton.state);
-        RedButton button = to_red_button(event.xbutton.button, state, false);
-        if (button == REDC_MOUSE_INVALID_BUTTON) {
+        SpiceMouseButton button = to_red_button(event.xbutton.button, state, false);
+        if (button == SPICE_MOUSE_BUTTON_INVALID) {
             DBG(0, "ButtonRelease: invalid button %u", event.xbutton.button);
             break;
         }
@@ -816,8 +816,8 @@ void RedWindow_p::win_proc(XEvent& event)
         break;
     }
     case Expose: {
-        Point origin;
-        Rect area;
+        SpicePoint origin;
+        SpiceRect area;
 
         origin = red_window->get_origin();
         area.left = event.xexpose.x - origin.x;
@@ -887,7 +887,7 @@ void RedWindow_p::win_proc(XEvent& event)
         break;
     case EnterNotify:
         if (!red_window->_ignore_pointer) {
-            Point origin = red_window->get_origin();
+            SpicePoint origin = red_window->get_origin();
             red_window->on_pointer_enter(event.xcrossing.x - origin.x, event.xcrossing.y - origin.y,
                                          to_red_buttons_state(event.xcrossing.state));
         } else {
@@ -1560,7 +1560,7 @@ void RedWindow::minimize()
     sync();
 }
 
-static bool __get_position(Window window, Point& pos)
+static bool __get_position(Window window, SpicePoint& pos)
 {
     pos.x = pos.y = 0;
     for (;;) {
@@ -1592,9 +1592,9 @@ static bool __get_position(Window window, Point& pos)
     return true;
 }
 
-Point RedWindow::get_position()
+SpicePoint RedWindow::get_position()
 {
-    Point pos;
+    SpicePoint pos;
 
     AutoXErrorHandler auto_error_handler;
     int get_position_retries = GET_POSITION_RETRIES;
@@ -1719,17 +1719,17 @@ void RedWindow::set_mouse_position(int x, int y)
     XWarpPointer(x_display, None, _win, 0, 0, 0, 0, x + get_origin().x, y + get_origin().y);
 }
 
-Point RedWindow::get_size()
+SpicePoint RedWindow::get_size()
 {
     XWindowAttributes attrib;
     XGetWindowAttributes(x_display, _win, &attrib);
-    Point size;
+    SpicePoint size;
     size.x = attrib.width;
     size.y = attrib.height;
     return size;
 }
 
-static void window_area_from_attributes(Rect& area, XWindowAttributes& attrib)
+static void window_area_from_attributes(SpiceRect& area, XWindowAttributes& attrib)
 {
     area.left = attrib.x;
     area.right = area.left + attrib.width;
@@ -1760,7 +1760,7 @@ static QRegion *get_visibale_region(Window window)
         return region;
     }
 
-    Rect window_area;
+    SpiceRect window_area;
     window_area_from_attributes(window_area, attrib);
     window_area.right -= window_area.left;
     window_area.bottom -= window_area.top;
@@ -1830,7 +1830,7 @@ public:
     Region_p(QRegion* region) : _region (region) {}
     ~Region_p() { delete _region;}
 
-    void get_bbox(Rect& bbox) const
+    void get_bbox(SpiceRect& bbox) const
     {
         if (region_is_empty(_region)) {
             bbox.left = bbox.right = bbox.top = bbox.bottom = 0;
@@ -1848,7 +1848,7 @@ private:
     QRegion* _region;
 };
 
-bool RedWindow::get_mouse_anchor_point(Point& pt)
+bool RedWindow::get_mouse_anchor_point(SpicePoint& pt)
 {
     QRegion* vis_region;
     int vis_region_retries = GET_VIS_REGION_RETRIES;
@@ -1869,7 +1869,7 @@ bool RedWindow::get_mouse_anchor_point(Point& pt)
     if (!find_anchor_point(region, pt)) {
         return false;
     }
-    Point position = get_position();
+    SpicePoint position = get_position();
     pt.x -= (position.x + get_origin().x);
     pt.y -= (position.y + get_origin().y);
     return true;
