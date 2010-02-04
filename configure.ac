@@ -87,6 +87,11 @@ AM_CONDITIONAL(OS_LINUX, test "$os_linux" = "yes")
 dnl =========================================================================
 dnl Check deps
 
+PKG_CHECK_MODULES(PROTOCOL, spice-protocol)
+AC_SUBST(PROTOCOL_CFLAGS)
+SPICE_REQUIRES+=" log4cpp"
+
+
 AC_CHECK_LIBM
 AC_SUBST(LIBM)
 

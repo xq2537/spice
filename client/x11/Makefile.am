@@ -14,6 +14,7 @@ INCLUDES = \
 	-I$(top_srcdir)/common				\
 	-I$(top_srcdir)/common/linux		\
 	-I$(top_srcdir)/client				\
+	$(PROTOCOL_CFLAGS)				\
 	$(GL_CFLAGS)					\
 	$(ALSA_CFLAGS)					\
 	$(FFMPEG_CFLAGS)				\
