@@ -24,7 +24,7 @@
 #include <sys/socket.h>
 #include <signal.h>
 
-#include "qxl_dev.h"
+#include <spice/qxl_dev.h>
 #include "vd_interface.h"
 #include "red_worker.h"
 #include "quic.h"

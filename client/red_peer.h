@@ -22,7 +22,7 @@
 #include <openssl/err.h>
 
 #include "common.h"
-#include "red.h"
+#include <spice/protocol.h>
 #include "process_loop.h"
 #include "threads.h"
 #include "platform_utils.h"

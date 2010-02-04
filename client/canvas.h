@@ -21,7 +21,7 @@
 #include "common.h"
 #include "debug.h"
 #include "cairo.h"
-#include "red.h"
+#include <spice/protocol.h>
 #include "cache.hpp"
 #include "shared_cache.hpp"
 #include "canvas_utils.h"

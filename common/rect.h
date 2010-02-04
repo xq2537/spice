@@ -18,7 +18,7 @@
 #ifndef _H_RECT
 #define _H_RECT
 
-#include "draw.h"
+#include <spice/draw.h>
 
 #define MIN(x, y) (((x) <= (y)) ? (x) : (y))
 #define MAX(x, y) (((x) >= (y)) ? (x) : (y))

@@ -20,7 +20,7 @@
 #include "pixels_source_p.h"
 #include "utils.h"
 #include "debug.h"
-#include "red.h"
+#include <spice/protocol.h>
 #include "menu.h"
 #include "win_platform.h"
 #include "platform_utils.h"

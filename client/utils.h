@@ -19,7 +19,7 @@
 #define _H_UTILS
 
 #include "common.h"
-#include "red_error_codes.h"
+#include <spice/error_codes.h>
 
 #define MIN(x, y) (((x) <= (y)) ? (x) : (y))
 #define MAX(x, y) (((x) >= (y)) ? (x) : (y))

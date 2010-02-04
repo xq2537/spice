@@ -40,14 +40,14 @@
 
 #include "spice.h"
 #include "reds.h"
-#include "red.h"
-#include "vd_agent.h"
+#include <spice/protocol.h>
+#include <spice/vd_agent.h>
 
 #include "red_common.h"
 #include "red_dispatcher.h"
 #include "snd_worker.h"
 #include "red_tunnel_worker.h"
-#include "reds_stat.h"
+#include <spice/stats.h>
 #include "stat.h"
 #include "ring.h"
 #include "config.h"

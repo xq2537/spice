@@ -21,7 +21,7 @@
 #include <sys/uio.h>
 #include <openssl/ssl.h>
 
-#include "red.h"
+#include <spice/protocol.h>
 
 #ifndef MIN
 #define MIN(x, y) (((x) <= (y)) ? (x) : (y))

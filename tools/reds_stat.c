@@ -23,7 +23,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include "reds_stat.h"
+#include <spice/stats.h>
 
 #define TAB_LEN 4
 #define VALUE_TABS 7

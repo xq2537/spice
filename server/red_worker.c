@@ -30,10 +30,10 @@
 #include <setjmp.h>
 #include <openssl/ssl.h>
 
-#include "qxl_dev.h"
+#include <spice/qxl_dev.h>
 #include "vd_interface.h"
 #include "region.h"
-#include "red.h"
+#include <spice/protocol.h>
 #include "red_worker.h"
 #include "cairo.h"
 #include "cairo_canvas.h"

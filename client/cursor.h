@@ -19,7 +19,7 @@
 #define _H_CURSOR_
 
 #include "threads.h"
-#include "red.h"
+#include <spice/protocol.h>
 #include "red_window_p.h"
 
 class CursorOpaque {

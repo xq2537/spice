@@ -22,7 +22,7 @@
 #include "common.h"
 #include "client_net_socket.h"
 #include "debug.h"
-#include "red_error_codes.h"
+#include <spice/error_codes.h>
 #include "utils.h"
 
 ClientNetSocket::ClientNetSocket(uint16_t id, const struct in_addr& dst_addr, uint16_t dst_port,

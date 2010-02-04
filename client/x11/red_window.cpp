@@ -36,7 +36,7 @@
 #include "platform.h"
 #include "x_platform.h"
 #include "pixels_source_p.h"
-#include "red.h"
+#include <spice/protocol.h>
 #include "region.h"
 #include "red_pixmap_gl.h"
 #include "red_pixmap_gl.h"

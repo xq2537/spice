@@ -30,7 +30,7 @@
 #include <errno.h>
 #include "red_tunnel_worker.h"
 #include "red_common.h"
-#include "red.h"
+#include <spice/protocol.h>
 #include "reds.h"
 #include "net_slirp.h"
 #include "red_channel.h"

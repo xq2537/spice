@@ -20,7 +20,7 @@
 
 #include <stdint.h>
 
-#include "draw.h"
+#include <spice/draw.h>
 #include "cairo.h"
 
 void do_rop3_with_pattern(uint8_t rop3, cairo_surface_t *d, cairo_surface_t *s, SpicePoint *src_pos,

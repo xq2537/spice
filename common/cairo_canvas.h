@@ -20,7 +20,7 @@
 
 #include <stdint.h>
 
-#include "draw.h"
+#include <spice/draw.h>
 #include "cairo.h"
 #include "canvas_base.h"
 #include "region.h"

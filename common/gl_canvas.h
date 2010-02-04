@@ -16,7 +16,7 @@
 */
 
 #include "glc.h"
-#include "draw.h"
+#include <spice/draw.h>
 #include "canvas_base.h"
 #include "region.h"
 

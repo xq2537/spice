@@ -21,7 +21,7 @@
 
 #include "cairo.h"
 #include "lz.h"
-#include "draw.h"
+#include <spice/draw.h>
 
 #if defined(CAIRO_CANVAS_CACHE) || defined(CAIRO_CANVAS_IMAGE_CACHE)
 typedef void (*bits_cache_put_fn_t)(void *bits_cache_opaque, uint64_t id, cairo_surface_t *surface);

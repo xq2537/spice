@@ -19,7 +19,7 @@
 #define _H_REGION
 
 #include <stdint.h>
-#include "draw.h"
+#include <spice/draw.h>
 
 #define REGION_USE_IMPROVED
 

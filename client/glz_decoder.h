@@ -21,7 +21,7 @@
 #include "lz_common.h"
 #include "glz_decoder_config.h"
 #include "glz_decoder_window.h"
-#include "draw.h"
+#include <spice/draw.h>
 
 
 

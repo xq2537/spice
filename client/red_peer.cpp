@@ -18,7 +18,7 @@
 #include "common.h"
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
-#include "red.h"
+#include <spice/protocol.h>
 #include "red_peer.h"
 #include "utils.h"
 #include "debug.h"

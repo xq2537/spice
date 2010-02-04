@@ -19,7 +19,7 @@
 #define _H_RED_WINDOW
 
 #include "red_drawable.h"
-#include "red.h"
+#include <spice/protocol.h>
 #include "red_key.h"
 #include "red_window_p.h"
 #include "cursor.h"

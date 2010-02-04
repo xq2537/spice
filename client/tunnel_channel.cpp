@@ -21,7 +21,7 @@
 
 #include "common.h"
 #include "tunnel_channel.h"
-#include "red.h"
+#include <spice/protocol.h>
 
 #define SOCKET_WINDOW_SIZE 60
 #define SOCKET_TOKENS_TO_SEND 20

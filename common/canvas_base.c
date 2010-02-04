@@ -21,7 +21,7 @@
 #include <setjmp.h>
 #include <stdio.h>
 
-#include "draw.h"
+#include <spice/draw.h>
 #include "quic.h"
 #include "lz.h"
 #include "canvas_base.h"
