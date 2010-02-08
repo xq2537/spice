@@ -438,7 +438,7 @@ static cairo_surface_t *canvas_get_invers_image(CairoCanvas *canvas, SPICE_ADDRE
     }
 #endif
     case SPICE_IMAGE_TYPE_FROM_CACHE:
-        surface = canvas->base.bits_cache_get(canvas->base.bits_cache_opaque, descriptor->id);
+        surface = canvas->base.bits_cache->ops->get(canvas->base.bits_cache, descriptor->id);
         break;
     case SPICE_IMAGE_TYPE_BITMAP: {
         SpiceBitmapImage *bitmap = (SpiceBitmapImage *)descriptor;
@@ -465,7 +465,7 @@ static cairo_surface_t *canvas_get_invers_image(CairoCanvas *canvas, SPICE_ADDRE
     }
 
     if (cache_me) {
-        canvas->base.bits_cache_put(canvas->base.bits_cache_opaque, descriptor->id, surface);
+        canvas->base.bits_cache->ops->put(canvas->base.bits_cache, descriptor->id, surface);
     }
 
     invers = canvas_handle_inverse_user_data(surface);
@@ -1596,15 +1596,11 @@ static int need_init = 1;
 
 #ifdef CAIRO_CANVAS_CACHE
 CairoCanvas *canvas_create(cairo_t *cairo, int bits,
-                           void *bits_cache_opaque,
-                           bits_cache_put_fn_t bits_cache_put, bits_cache_get_fn_t bits_cache_get,
-                           void *palette_cache_opaque, palette_cache_put_fn_t palette_cache_put,
-                           palette_cache_get_fn_t palette_cache_get,
-                           palette_cache_release_fn_t palette_cache_release
+                           SpiceImageCache *bits_cache,
+                           SpicePaletteCache *palette_cache
 #elif defined(CAIRO_CANVAS_IMAGE_CACHE)
 CairoCanvas *canvas_create(cairo_t *cairo, int bits,
-                           void *bits_cache_opaque,
-                           bits_cache_put_fn_t bits_cache_put, bits_cache_get_fn_t bits_cache_get
+                           SpiceImageCache *bits_cache
 #else
 CairoCanvas *canvas_create(cairo_t *cairo, int bits
 #endif
@@ -1626,18 +1622,11 @@ CairoCanvas *canvas_create(cairo_t *cairo, int bits
     memset(canvas, 0, sizeof(CairoCanvas));
 #ifdef CAIRO_CANVAS_CACHE
     init_ok = canvas_base_init(&canvas->base, bits,
-                               bits_cache_opaque,
-                               bits_cache_put,
-                               bits_cache_get,
-                               palette_cache_opaque,
-                               palette_cache_put,
-                               palette_cache_get,
-                               palette_cache_release
+                               bits_cache,
+                               palette_cache
 #elif defined(CAIRO_CANVAS_IMAGE_CACHE)
     init_ok = canvas_base_init(&canvas->base, bits,
-                               bits_cache_opaque,
-                               bits_cache_put,
-                               bits_cache_get
+                               bits_cache
 #else
     init_ok = canvas_base_init(&canvas->base, bits
 #endif

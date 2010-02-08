@@ -60,10 +60,8 @@ void gdi_canvas_set_access_params(GdiCanvas *canvas, unsigned long base, unsigne
 
 
 GdiCanvas *gdi_canvas_create(HDC dc, class Mutex *lock, int bits, void *bits_cache_opaque,
-                             bits_cache_put_fn_t bits_cache_put, bits_cache_get_fn_t bits_cache_get,
-                             void *palette_cache_opaque, palette_cache_put_fn_t palette_cache_put,
-                             palette_cache_get_fn_t palette_cache_get,
-                             palette_cache_release_fn_t palette_cache_release,
+                             SpiceImageCache *bits_cache,
+                             SpicePaletteCache *palette_cache
                              void *glz_decoder_opaque,
                              glz_decode_fn_t glz_decode);
 

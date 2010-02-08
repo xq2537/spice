@@ -1696,14 +1696,11 @@ static int need_init = 1;
 
 #ifdef CAIRO_CANVAS_CACHE
 GdiCanvas *gdi_canvas_create(HDC dc, Mutex* lock, int bits, void *bits_cache_opaque,
-                             bits_cache_put_fn_t bits_cache_put, bits_cache_get_fn_t bits_cache_get,
-                             void *palette_cache_opaque, palette_cache_put_fn_t palette_cache_put,
-                             palette_cache_get_fn_t palette_cache_get,
-                             palette_cache_release_fn_t palette_cache_release
+                             SpiceImageCache *bits_cache,
+                             SpicePaletteCache *palette_cache
 #elif defined(CAIRO_CANVAS_IMAGE_CACHE)
 GdiCanvas *gdi_canvas_create(HDC dc, int bits,
-                             void *bits_cache_opaque,
-                             bits_cache_put_fn_t bits_cache_put, bits_cache_get_fn_t bits_cache_get
+                             SpiceImageCache *bits_cache
 #else
 GdiCanvas *gdi_canvas_create(HDC dc, int bits
 #endif
@@ -1721,18 +1718,11 @@ GdiCanvas *gdi_canvas_create(HDC dc, int bits
     memset(canvas, 0, sizeof(GdiCanvas));
 #ifdef CAIRO_CANVAS_CACHE
     init_ok = canvas_base_init(&canvas->base, bits,
-                               bits_cache_opaque,
-                               bits_cache_put,
-                               bits_cache_get,
-                               palette_cache_opaque,
-                               palette_cache_put,
-                               palette_cache_get,
-                               palette_cache_release
+                               bits_cache,
+                               palette_cache
 #elif defined(CAIRO_CANVAS_IMAGE_CACHE)
     init_ok = gdi_canvas_base_init(&canvas->base, bits,
-                                   bits_cache_opaque,
-                                   bits_cache_put,
-                                   bits_cache_get
+                                   bits_cache
 #else
     init_ok = gdi_canvas_base_init(&canvas->base, bits
 #endif

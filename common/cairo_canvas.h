@@ -62,14 +62,12 @@ void canvas_set_access_params(CairoCanvas *canvas, unsigned long base, unsigned 
 cairo_t *canvas_get_cairo(CairoCanvas *canvas);
 
 #ifdef CAIRO_CANVAS_CACHE
-CairoCanvas *canvas_create(cairo_t *cairo, int bits, void *bits_cache_opaque,
-                           bits_cache_put_fn_t bits_cache_put, bits_cache_get_fn_t bits_cache_get,
-                           void *palette_cache_opaque, palette_cache_put_fn_t palette_cache_put,
-                           palette_cache_get_fn_t palette_cache_get,
-                           palette_cache_release_fn_t palette_cache_release
+CairoCanvas *canvas_create(cairo_t *cairo, int bits,
+                           SpiceImageCache *bits_cache,
+                           SpicePaletteCache *palette_cache
 #elif defined(CAIRO_CANVAS_IMAGE_CACHE)
-CairoCanvas *canvas_create(cairo_t *cairo, int bits, void *bits_cache_opaque,
-                           bits_cache_put_fn_t bits_cache_put, bits_cache_get_fn_t bits_cache_get
+CairoCanvas *canvas_create(cairo_t *cairo, int bits,
+                           SpiceImageCache *bits_cache
 #else
 CairoCanvas *canvas_create(cairo_t *cairo, int bits
 #endif

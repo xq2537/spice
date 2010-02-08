@@ -24,15 +24,33 @@
 #include "lz.h"
 #include <spice/draw.h>
 
-#if defined(CAIRO_CANVAS_CACHE) || defined(CAIRO_CANVAS_IMAGE_CACHE)
-typedef void (*bits_cache_put_fn_t)(void *bits_cache_opaque, uint64_t id, cairo_surface_t *surface);
-typedef cairo_surface_t *(*bits_cache_get_fn_t)(void *bits_cache_opaque, uint64_t id);
-#endif
-#ifdef CAIRO_CANVAS_CACHE
-typedef void (*palette_cache_put_fn_t)(void *palette_cache_opaque, SpicePalette *palette);
-typedef SpicePalette *(*palette_cache_get_fn_t)(void *palette_cache_opaque, uint64_t id);
-typedef void (*palette_cache_release_fn_t)(SpicePalette *palette);
-#endif
+typedef struct _SpiceImageCache SpiceImageCache;
+typedef struct _SpicePaletteCache SpicePaletteCache;
+
+typedef struct {
+    void (*put)(SpiceImageCache *cache,
+                uint64_t id,
+                cairo_surface_t *surface);
+    cairo_surface_t *(*get)(SpiceImageCache *cache,
+                            uint64_t id);
+} SpiceImageCacheOps;
+
+struct _SpiceImageCache {
+  SpiceImageCacheOps *ops;
+};
+
+typedef struct {
+    void (*put)(SpicePaletteCache *cache,
+                SpicePalette *palette);
+    SpicePalette *(*get)(SpicePaletteCache *cache,
+                         uint64_t id);
+    void (*release)(SpicePaletteCache *cache,
+                    SpicePalette *palette);
+} SpicePaletteCacheOps;
+
+struct _SpicePaletteCache {
+  SpicePaletteCacheOps *ops;
+};
 
 typedef void (*glz_decode_fn_t)(void *glz_decoder_opaque, uint8_t *data,
                                 SpicePalette *plt, void *usr_data);

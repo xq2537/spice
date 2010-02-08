@@ -24,6 +24,7 @@
 #include <spice/protocol.h>
 #include "cache.hpp"
 #include "shared_cache.hpp"
+#include "canvas_base.h"
 #include "canvas_utils.h"
 #include "glz_decoded_image.h"
 #include "glz_decoder.h"
@@ -52,7 +53,35 @@ public:
     static const char* name() { return "pixmap";}
 };
 
-typedef SharedCache<cairo_surface_t, PixmapCacheTreat, 1024> PixmapCache;
+class SpiceImageCacheBase;
+
+typedef SharedCache<cairo_surface_t, PixmapCacheTreat, 1024, SpiceImageCacheBase> PixmapCache;
+
+class SpiceImageCacheBase {
+public:
+    SpiceImageCache base;
+
+    static void op_put(SpiceImageCache *c, uint64_t id, cairo_surface_t *surface)
+    {
+        PixmapCache* cache = reinterpret_cast<PixmapCache*>(c);
+        cache->add(id, surface);
+    }
+
+    static cairo_surface_t* op_get(SpiceImageCache *c, uint64_t id)
+    {
+        PixmapCache* cache = reinterpret_cast<PixmapCache*>(c);
+        return cache->get(id);
+    }
+
+    SpiceImageCacheBase()
+    {
+        static SpiceImageCacheOps cache_ops = {
+            op_put,
+            op_get
+        };
+        base.ops = &cache_ops;
+    }
+};
 
 class CachedPalette {
 public:
@@ -113,7 +142,43 @@ public:
     static const char* name() { return "palette";}
 };
 
-typedef Cache<CachedPalette, PaletteCacheTreat, 1024> PaletteCache;
+class SpicePaletteCacheBase;
+typedef Cache<CachedPalette, PaletteCacheTreat, 1024, SpicePaletteCacheBase> PaletteCache;
+
+class SpicePaletteCacheBase {
+public:
+    SpicePaletteCache base;
+
+    static void op_put(SpicePaletteCache *c, SpicePalette *palette)
+    {
+        PaletteCache* cache = reinterpret_cast<PaletteCache*>(c);
+        AutoRef<CachedPalette> cached_palette(new CachedPalette(palette));
+        cache->add(palette->unique, *cached_palette);
+    }
+
+    static SpicePalette* op_get(SpicePaletteCache *c, uint64_t id)
+    {
+        PaletteCache* cache = reinterpret_cast<PaletteCache*>(c);
+        return cache->get(id)->palette();
+    }
+
+    static void op_release (SpicePaletteCache *c,
+                            SpicePalette *palette)
+    {
+        CachedPalette::unref(palette);
+    }
+
+    SpicePaletteCacheBase()
+    {
+        static SpicePaletteCacheOps cache_ops = {
+            op_put,
+            op_get,
+            op_release
+        };
+        base.ops = &cache_ops;
+    }
+};
+
 
 /* Lz decoder related classes */
 
@@ -230,11 +295,6 @@ protected:
 
     PixmapCache& pixmap_cache() { return _pixmap_cache;}
     PaletteCache& palette_cache() { return _palette_cache;}
-    static void bits_cache_put(void *opaque, uint64_t id, cairo_surface_t *surface);
-    static cairo_surface_t* bits_cache_get(void *opaque, uint64_t id);
-    static void palette_cache_put(void *opaque, SpicePalette *palette);
-    static SpicePalette* palette_cache_get(void *opaque, uint64_t id);
-    static void palette_cache_release(SpicePalette* palette);
 
     GlzDecoder& glz_decoder() {return _glz_decoder;}
     static void glz_decode(void *opaque, uint8_t *data, SpicePalette *plt, void *usr_data);

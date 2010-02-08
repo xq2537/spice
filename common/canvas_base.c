@@ -171,15 +171,10 @@ typedef struct CanvasBase {
 #endif
 
 #if defined(CAIRO_CANVAS_CACHE) || defined(CAIRO_CANVAS_IMAGE_CACHE)
-    void *bits_cache_opaque;
-    bits_cache_put_fn_t bits_cache_put;
-    bits_cache_get_fn_t bits_cache_get;
+    SpiceImageCache *bits_cache;
 #endif
 #ifdef CAIRO_CANVAS_CACHE
-    void *palette_cache_opaque;
-    palette_cache_put_fn_t palette_cache_put;
-    palette_cache_get_fn_t palette_cache_get;
-    palette_cache_release_fn_t palette_cache_release;
+    SpicePaletteCache *palette_cache;
 #endif
 #ifdef WIN32
     HDC dc;
@@ -535,13 +530,13 @@ static inline SpicePalette *canvas_get_palett(CanvasBase *canvas, SPICE_ADDRESS 
     }
 
     if (flags & SPICE_BITMAP_FLAGS_PAL_FROM_CACHE) {
-        palette = canvas->palette_cache_get(canvas->palette_cache_opaque, base_palette);
+        palette = canvas->palette_cache->ops->get(canvas->palette_cache, base_palette);
     } else if (flags & SPICE_BITMAP_FLAGS_PAL_CACHE_ME) {
         palette = (SpicePalette *)SPICE_GET_ADDRESS(base_palette);
         access_test(canvas, palette, sizeof(SpicePalette));
         access_test(canvas, palette, sizeof(SpicePalette) + palette->num_ents * sizeof(uint32_t));
         canvas_localize_palette(canvas, palette);
-        canvas->palette_cache_put(canvas->palette_cache_opaque, palette);
+        canvas->palette_cache->ops->put(canvas->palette_cache, palette);
     } else {
         palette = (SpicePalette *)SPICE_GET_ADDRESS(base_palette);
         canvas_localize_palette(canvas, palette);
@@ -716,7 +711,7 @@ static cairo_surface_t *canvas_get_bits(CanvasBase *canvas, SpiceBitmap *bitmap)
     surface = canvas_bitmap_to_surface(canvas, bitmap, palette);
 
     if (palette && (bitmap->flags & SPICE_BITMAP_FLAGS_PAL_FROM_CACHE)) {
-        canvas->palette_cache_release(palette);
+        canvas->palette_cache->ops->release(canvas->palette_cache, palette);
     }
 
     return surface;
@@ -851,7 +846,7 @@ static cairo_surface_t *canvas_get_image(CanvasBase *canvas, SPICE_ADDRESS addr)
     }
 #endif
     case SPICE_IMAGE_TYPE_FROM_CACHE:
-        return canvas->bits_cache_get(canvas->bits_cache_opaque, descriptor->id);
+        return canvas->bits_cache->ops->get(canvas->bits_cache, descriptor->id);
     case SPICE_IMAGE_TYPE_BITMAP: {
         SpiceBitmapImage *bitmap = (SpiceBitmapImage *)descriptor;
         access_test(canvas, descriptor, sizeof(SpiceBitmapImage));
@@ -863,7 +858,7 @@ static cairo_surface_t *canvas_get_image(CanvasBase *canvas, SPICE_ADDRESS addr)
     }
 
     if (descriptor->flags & SPICE_IMAGE_FLAGS_CACHE_ME) {
-        canvas->bits_cache_put(canvas->bits_cache_opaque, descriptor->id, surface);
+        canvas->bits_cache->ops->put(canvas->bits_cache, descriptor->id, surface);
 #ifdef DEBUG_DUMP_SURFACE
         dump_surface(surface, 1);
 #endif
@@ -1163,7 +1158,7 @@ static cairo_surface_t *canvas_get_mask(CanvasBase *canvas, SpiceQMask *mask)
     }
 #if defined(CAIRO_CANVAS_CACHE) || defined(CAIRO_CANVAS_IMAGE_CACHE)
     case SPICE_IMAGE_TYPE_FROM_CACHE:
-        surface = canvas->bits_cache_get(canvas->bits_cache_opaque, descriptor->id);
+        surface = canvas->bits_cache->ops->get(canvas->bits_cache, descriptor->id);
         is_invers = 0;
         break;
 #endif
@@ -1173,7 +1168,7 @@ static cairo_surface_t *canvas_get_mask(CanvasBase *canvas, SpiceQMask *mask)
 
 #if defined(CAIRO_CANVAS_CACHE) || defined(CAIRO_CANVAS_IMAGE_CACHE)
     if (cache_me) {
-        canvas->bits_cache_put(canvas->bits_cache_opaque, descriptor->id, surface);
+        canvas->bits_cache->ops->put(canvas->bits_cache, descriptor->id, surface);
     }
 
     if (need_invers && !is_invers) { // surface is in cache
@@ -1570,18 +1565,11 @@ static void canvas_base_destroy(CanvasBase *canvas)
 
 #ifdef CAIRO_CANVAS_CACHE
 static int canvas_base_init(CanvasBase *canvas, int depth,
-                            void *bits_cache_opaque,
-                            bits_cache_put_fn_t bits_cache_put,
-                            bits_cache_get_fn_t bits_cache_get,
-                            void *palette_cache_opaque,
-                            palette_cache_put_fn_t palette_cache_put,
-                            palette_cache_get_fn_t palette_cache_get,
-                            palette_cache_release_fn_t palette_cache_release
+                            SpiceImageCache *bits_cache,
+                            SpicePaletteCache *palette_cache
 #elif defined(CAIRO_CANVAS_IMAGE_CACHE)
 static int canvas_base_init(CanvasBase *canvas, int depth,
-                            void *bits_cache_opaque,
-                            bits_cache_put_fn_t bits_cache_put,
-                            bits_cache_get_fn_t bits_cache_get
+                            SpiceImageCache *bits_cache
 #else
 static int canvas_base_init(CanvasBase *canvas, int depth
 #endif
@@ -1637,15 +1625,10 @@ static int canvas_base_init(CanvasBase *canvas, int depth
 
 
 #if defined(CAIRO_CANVAS_CACHE) || defined(CAIRO_CANVAS_IMAGE_CACHE)
-    canvas->bits_cache_opaque = bits_cache_opaque;
-    canvas->bits_cache_put = bits_cache_put;
-    canvas->bits_cache_get = bits_cache_get;
+    canvas->bits_cache = bits_cache;
 #endif
 #ifdef CAIRO_CANVAS_CACHE
-    canvas->palette_cache_opaque = palette_cache_opaque;
-    canvas->palette_cache_put = palette_cache_put;
-    canvas->palette_cache_get = palette_cache_get;
-    canvas->palette_cache_release = palette_cache_release;
+    canvas->palette_cache = palette_cache;
 #endif
 
 #ifdef WIN32

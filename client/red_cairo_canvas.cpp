@@ -99,9 +99,8 @@ void CCanvas::set_mode(int width, int height, int depth, RedWindow *win)
         THROW("create cairo failed, %s", cairo_status_to_string(cairo_status(cairo)));
     }
     if (!(_canvas = canvas_create(cairo, depth,
-                                  &pixmap_cache(), bits_cache_put, bits_cache_get,
-                                  &palette_cache(), palette_cache_put, palette_cache_get,
-                                  palette_cache_release,
+                                  &pixmap_cache().base,
+                                  &palette_cache().base,
                                   &glz_decoder(),
                                   glz_decode))) {
         THROW("create canvas failed");

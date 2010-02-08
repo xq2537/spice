@@ -213,36 +213,6 @@ void Canvas::draw_stroke(SpiceMsgDisplayDrawStroke& stroke, int size)
     draw_stroke(&stroke.base.box, &stroke.base.clip, &stroke.data);
 }
 
-void Canvas::bits_cache_put(void *opaque, uint64_t id, cairo_surface_t *surface)
-{
-    PixmapCache* cache = static_cast<PixmapCache*>(opaque);
-    cache->add(id, surface);
-}
-
-cairo_surface_t* Canvas::bits_cache_get(void *opaque, uint64_t id)
-{
-    PixmapCache* cache = static_cast<PixmapCache*>(opaque);
-    return cache->get(id);
-}
-
-void Canvas::palette_cache_put(void *opaque, SpicePalette *palette)
-{
-    PaletteCache* cache = static_cast<PaletteCache*>(opaque);
-    AutoRef<CachedPalette> cached_palette(new CachedPalette(palette));
-    cache->add(palette->unique, *cached_palette);
-}
-
-SpicePalette* Canvas::palette_cache_get(void *opaque, uint64_t id)
-{
-    PaletteCache* cache = static_cast<PaletteCache*>(opaque);
-    return cache->get(id)->palette();
-}
-
-void Canvas::palette_cache_release(SpicePalette* palette)
-{
-    CachedPalette::unref(palette);
-}
-
 void Canvas::glz_decode(void *opaque, uint8_t *data, SpicePalette *plt, void *usr_data)
 {
     GlzDecoder* decoder = static_cast<GlzDecoder*>(opaque);

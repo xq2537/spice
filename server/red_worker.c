@@ -728,6 +728,7 @@ typedef struct ImageCacheItem {
 #define IMAGE_CACHE_HASH_SIZE 1024
 
 typedef struct ImageCache {
+    SpiceImageCache base;
     ImageCacheItem *hash_table[IMAGE_CACHE_HASH_SIZE];
     Ring lru;
 #ifdef IMAGE_CACHE_AGE
@@ -3898,9 +3899,9 @@ static void image_cache_remove(ImageCache *cache, ImageCacheItem *item)
 
 #define IMAGE_CACHE_MAX_ITEMS 2
 
-static void image_cache_put(void *opaque, uint64_t id, cairo_surface_t *surface)
+static void image_cache_put(SpiceImageCache *spice_cache, uint64_t id, cairo_surface_t *surface)
 {
-    ImageCache *cache = (ImageCache *)opaque;
+    ImageCache *cache = (ImageCache *)spice_cache;
     ImageCacheItem *item;
 
 #ifndef IMAGE_CACHE_AGE
@@ -3929,9 +3930,9 @@ static void image_cache_put(void *opaque, uint64_t id, cairo_surface_t *surface)
     ring_add(&cache->lru, &item->lru_link);
 }
 
-static cairo_surface_t *image_cache_get(void *opaque, uint64_t id)
+static cairo_surface_t *image_cache_get(SpiceImageCache *spice_cache, uint64_t id)
 {
-    ImageCache *cache = (ImageCache *)opaque;
+    ImageCache *cache = (ImageCache *)spice_cache;
 
     ImageCacheItem *item = image_cache_find(cache, id);
     if (!item) {
@@ -3942,6 +3943,12 @@ static cairo_surface_t *image_cache_get(void *opaque, uint64_t id)
 
 static void image_cache_init(ImageCache *cache)
 {
+    static SpiceImageCacheOps image_cache_ops = {
+        image_cache_put,
+        image_cache_get,
+    };
+
+    cache->base.ops = &image_cache_ops;
     memset(cache->hash_table, 0, sizeof(cache->hash_table));
     ring_init(&cache->lru);
 #ifdef IMAGE_CACHE_AGE
@@ -7488,7 +7495,7 @@ static CairoCanvas *create_cairo_context(RedWorker *worker, uint32_t width, uint
                   cairo_status_to_string(cairo_status(cairo)));
     }
 
-    return canvas_create(cairo, depth, &worker->image_cache, image_cache_put, image_cache_get,
+    return canvas_create(cairo, depth, &worker->image_cache.base,
                          worker, cb_get_virt_preload_group, worker,
                          cb_validate_virt_preload_group);
 }
@@ -7550,9 +7557,8 @@ static GLCanvas *create_ogl_context_common(RedWorker *worker, OGLCtx *ctx, uint3
     GLCanvas *canvas;
 
     oglctx_make_current(ctx);
-    if (!(canvas = gl_canvas_create(ctx, width, height, depth, &worker->image_cache,
-                                    image_cache_put, image_cache_get, worker,
-                                    cb_get_virt_preload_group,
+    if (!(canvas = gl_canvas_create(ctx, width, height, depth, &worker->image_cache.base,
+                                    worker, cb_get_virt_preload_group,
                                     worker, cb_validate_virt_preload_group))) {
         return NULL;
     }

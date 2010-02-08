@@ -87,13 +87,8 @@ void GCanvas::set_mode(int width, int height, int depth, RedWindow *win,
 
     create_pixmap(width, height, win, rendertype);
     if (!(_canvas = gl_canvas_create(NULL, width, height, depth,
-                                     &pixmap_cache(),
-                                     bits_cache_put,
-                                     bits_cache_get,
-                                     &palette_cache(),
-                                     palette_cache_put,
-                                     palette_cache_get,
-                                     palette_cache_release,
+                                     &pixmap_cache().base,
+                                     &palette_cache().base,
                                      &glz_decoder(),
                                      glz_decode))) {
         THROW("create canvas failed");
