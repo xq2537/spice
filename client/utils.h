@@ -149,5 +149,8 @@ private:
     T* _array;
 };
 
+class EmptyBase {
+};
+
 #endif
 

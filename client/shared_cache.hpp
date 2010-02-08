@@ -27,8 +27,8 @@
     const char* name();
 };*/
 
-template <class T, class Treat, int HASH_SIZE>
-class SharedCache {
+template <class T, class Treat, int HASH_SIZE, class Base = EmptyBase>
+class SharedCache : public Base {
 public:
     SharedCache()
         : _aborting (false)

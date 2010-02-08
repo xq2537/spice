@@ -26,8 +26,8 @@
     const char* name();
 };*/
 
-template <class T, class Treat, int HASH_SIZE>
-class Cache {
+template <class T, class Treat, int HASH_SIZE, class Base = EmptyBase>
+class Cache : public Base {
 public:
     Cache()
     {
