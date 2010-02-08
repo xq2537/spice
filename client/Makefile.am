@@ -10,6 +10,7 @@ RED_COMMON_SRCS =	 		\
 	audio_devices.h			\
 	cache.hpp			\
 	cairo_canvas.cpp		\
+	pixman_utils.cpp		\
 	canvas.cpp			\
 	canvas.h			\
 	canvas_utils.cpp		\

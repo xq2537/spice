@@ -71,6 +71,7 @@ RED_COMMON_SRCS = 					\
 	$(top_srcdir)/client/menu.cpp			\
 	$(top_srcdir)/client/menu.h			\
 	$(top_srcdir)/client/pixels_source.h		\
+	$(top_srcdir)/client/pixman_utils.cpp		\
 	$(top_srcdir)/client/platform.h			\
 	$(top_srcdir)/client/playback_channel.cpp	\
 	$(top_srcdir)/client/process_loop.cpp		\
