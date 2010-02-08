@@ -1,3 +1,4 @@
+/* -*- Mode: C; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 /*
         dictionary compression for images based on fastlz (http://www.fastlz.org/)
         (Distributed under MIT license).

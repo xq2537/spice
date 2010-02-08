@@ -1,3 +1,4 @@
+/* -*- Mode: C; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 /*
 
  Copyright 2009 Red Hat, Inc. and/or its affiliates.
