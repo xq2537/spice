@@ -17,16 +17,19 @@
 */
 
 #include "cairo_canvas.h"
+#define CANVAS_USE_PIXMAN
 #include "canvas_base.c"
 #include "rop3.h"
 #include "rect.h"
 #include "region.h"
+#include "pixman_utils.h"
 
 struct CairoCanvas {
     CanvasBase base;
     cairo_t *cairo;
     uint32_t *private_data;
     int private_data_size;
+    pixman_image_t *image;
 };
 
 static void canvas_set_path(CairoCanvas *canvas, void *addr)
@@ -1581,6 +1584,7 @@ void canvas_destroy(CairoCanvas *canvas)
     if (!canvas) {
         return;
     }
+    pixman_image_unref(canvas->image);
     canvas_base_destroy(&canvas->base);
     if (canvas->private_data) {
         free(canvas->private_data);
@@ -1654,6 +1658,9 @@ CairoCanvas *canvas_create(cairo_t *cairo, int bits
     canvas->private_data = NULL;
     canvas->private_data_size = 0;
     cairo_set_antialias(cairo, CAIRO_ANTIALIAS_NONE);
+
+    canvas->image = pixman_image_from_surface (cairo_get_target (cairo));
+
     return canvas;
 }
 
