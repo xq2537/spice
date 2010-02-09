@@ -673,7 +673,7 @@ static cairo_pattern_t *canvas_get_mask_pattern(CairoCanvas *canvas, SpiceQMask 
     cairo_pattern_t *pattern;
     cairo_matrix_t matrix;
 
-    if (!(surface = canvas_get_mask(&canvas->base, mask))) {
+    if (!(surface = canvas_get_mask(&canvas->base, mask, NULL))) {
         return NULL;
     }
     cairo_surface = surface_from_pixman_image (surface);

@@ -210,7 +210,7 @@ static void set_mask(GLCanvas *canvas, SpiceQMask *mask, int x, int y)
 {
     pixman_image_t *image;
 
-    if (!(image = canvas_get_mask(&canvas->base, mask))) {
+    if (!(image = canvas_get_mask(&canvas->base, mask, NULL))) {
         glc_clear_mask(canvas->glc, GLC_MASK_A);
         return;
     }

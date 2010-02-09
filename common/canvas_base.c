@@ -1134,13 +1134,17 @@ static inline pixman_image_t* canvas_handle_inverse_user_data(pixman_image_t* su
     return inv_surf;
 }
 
-static pixman_image_t *canvas_get_mask(CanvasBase *canvas, SpiceQMask *mask)
+static pixman_image_t *canvas_get_mask(CanvasBase *canvas, SpiceQMask *mask, int *needs_invert_out)
 {
     SpiceImageDescriptor *descriptor;
     pixman_image_t *surface;
     int need_invers;
     int is_invers;
     int cache_me;
+
+    if (needs_invert_out) {
+        *needs_invert_out = 0;
+    }
 
     if (!mask->bitmap) {
         return NULL;
@@ -1180,12 +1184,14 @@ static pixman_image_t *canvas_get_mask(CanvasBase *canvas, SpiceQMask *mask)
     }
 
     if (need_invers && !is_invers) { // surface is in cache
-        pixman_image_t *inv_surf;
-
-        inv_surf = canvas_handle_inverse_user_data(surface);
-
-        pixman_image_unref(surface);
-        surface = inv_surf;
+        if (needs_invert_out != NULL) {
+            *needs_invert_out = TRUE;
+        } else {
+            pixman_image_t *inv_surf;
+            inv_surf = canvas_handle_inverse_user_data(surface);
+            pixman_image_unref(surface);
+            surface = inv_surf;
+        }
     }
 #endif
     return surface;

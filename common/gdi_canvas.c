@@ -784,7 +784,7 @@ static struct BitmapData get_mask_bitmap(struct GdiCanvas *canvas, struct SpiceQ
     PixmanData *pixman_data;
 
     bitmap.hbitmap = NULL;
-    if (!(surface = canvas_get_mask(&canvas->base, mask))) {
+    if (!(surface = canvas_get_mask(&canvas->base, mask, NULL))) {
         return bitmap;
     }
 
