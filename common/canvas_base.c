@@ -841,7 +841,9 @@ static void dump_surface(pixman_image_t *surface, int cache)
 
 //#define DEBUG_LZ
 
-static pixman_image_t *canvas_get_image(CanvasBase *canvas, SPICE_ADDRESS addr)
+/* If real get is FALSE, then only do whatever is needed but don't return an image. For instance,
+   if we need to read it to cache it we do. */
+static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRESS addr, int real_get)
 {
     SpiceImageDescriptor *descriptor = (SpiceImageDescriptor *)SPICE_GET_ADDRESS(addr);
     pixman_image_t *surface;
@@ -849,6 +851,15 @@ static pixman_image_t *canvas_get_image(CanvasBase *canvas, SPICE_ADDRESS addr)
 #ifdef DEBUG_LZ
     LOG_DEBUG("canvas_get_image image type: " << (int)descriptor->type);
 #endif
+
+    /* When touching, only really allocate if we need to cache, or
+     * if we're loading a GLZ stream (since those need inter-thread communication
+     * to happen which breaks if we don't. */
+    if (!real_get &&
+        !(descriptor->flags & SPICE_IMAGE_FLAGS_CACHE_ME) &&
+        (descriptor->type != SPICE_IMAGE_TYPE_GLZ_RGB)) {
+        return NULL;
+    }
 
     switch (descriptor->type) {
     case SPICE_IMAGE_TYPE_QUIC: {
@@ -901,16 +912,27 @@ static pixman_image_t *canvas_get_image(CanvasBase *canvas, SPICE_ADDRESS addr)
         dump_surface(surface, 0);
 #endif
     }
+
+    if (!real_get) {
+        pixman_image_unref(surface);
+        return NULL;
+    }
+
     return surface;
 }
 
 #else
 
-static pixman_image_t *canvas_get_image(CairoCanvas *canvas, SPICE_ADDRESS addr)
+static pixman_image_t *canvas_get_image_internal(CairoCanvas *canvas, SPICE_ADDRESS addr, int real_get)
 {
     SpiceImageDescriptor *descriptor = (SpiceImageDescriptor *)SPICE_GET_ADDRESS(addr);
 
     access_test(canvas, descriptor, sizeof(SpiceImageDescriptor));
+
+    /* When touching, never load image. */
+    if (!real_get) {
+        return NULL;
+    }
 
     switch (descriptor->type) {
     case SPICE_IMAGE_TYPE_QUIC: {
@@ -928,6 +950,18 @@ static pixman_image_t *canvas_get_image(CairoCanvas *canvas, SPICE_ADDRESS addr)
     }
 }
 
+#endif
+
+static pixman_image_t *canvas_get_image(CanvasBase *canvas, SPICE_ADDRESS addr)
+{
+    return canvas_get_image_internal(canvas, addr, TRUE);
+}
+
+#ifdef CANVAS_USE_PIXMAN
+static void canvas_touch_image(CanvasBase *canvas, SPICE_ADDRESS addr)
+{
+    canvas_get_image_internal(canvas, addr, FALSE);
+}
 #endif
 
 static inline uint8_t revers_bits(uint8_t byte)

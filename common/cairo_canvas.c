@@ -30,7 +30,305 @@ struct CairoCanvas {
     uint32_t *private_data;
     int private_data_size;
     pixman_image_t *image;
+    pixman_region32_t canvas_region;
 };
+
+typedef enum {
+    ROP_INPUT_SRC,
+    ROP_INPUT_BRUSH,
+    ROP_INPUT_DEST
+} ROPInput;
+
+SpiceROP ropd_descriptor_to_rop(int desc,
+                                ROPInput src_input,
+                                ROPInput dest_input)
+{
+    int old;
+    int invert_masks[] = {
+        SPICE_ROPD_INVERS_SRC,
+        SPICE_ROPD_INVERS_BRUSH,
+        SPICE_ROPD_INVERS_DEST
+    };
+
+    old = desc;
+
+    desc &= ~(SPICE_ROPD_INVERS_SRC | SPICE_ROPD_INVERS_DEST);
+    if (old & invert_masks[src_input]) {
+        desc |= SPICE_ROPD_INVERS_SRC;
+    }
+
+    if (old & invert_masks[dest_input]) {
+        desc |= SPICE_ROPD_INVERS_DEST;
+    }
+
+    if (desc & SPICE_ROPD_OP_PUT) {
+        if (desc & SPICE_ROPD_INVERS_SRC) {
+            if (desc & SPICE_ROPD_INVERS_RES) {
+                return SPICE_ROP_COPY;
+            }
+            return SPICE_ROP_COPY_INVERTED;
+        } else {
+            if (desc & SPICE_ROPD_INVERS_RES) {
+                return SPICE_ROP_COPY_INVERTED;
+            }
+            return SPICE_ROP_COPY;
+        }
+    } else if (desc & SPICE_ROPD_OP_OR) {
+
+        if (desc & SPICE_ROPD_INVERS_RES) {
+            if (desc & SPICE_ROPD_INVERS_SRC) {
+                if (desc & SPICE_ROPD_INVERS_DEST) {
+                    /* !(!src or !dest) == src and dest*/
+                    return SPICE_ROP_AND;
+                } else {
+                    /* ! (!src or dest) = src and !dest*/
+                    return SPICE_ROP_AND_REVERSE;
+                }
+            } else {
+                if (desc & SPICE_ROPD_INVERS_DEST) {
+                    /* !(src or !dest) == !src and dest */
+                    return SPICE_ROP_AND_INVERTED;
+                } else {
+                    /* !(src or dest) */
+                    return SPICE_ROP_NOR;
+                }
+            }
+        } else {
+            if (desc & SPICE_ROPD_INVERS_SRC) {
+                if (desc & SPICE_ROPD_INVERS_DEST) {
+                    /* !src or !dest == !(src and dest)*/
+                    return SPICE_ROP_NAND;
+                } else {
+                    /* !src or dest */
+                    return SPICE_ROP_OR_INVERTED;
+                }
+            } else {
+                if (desc & SPICE_ROPD_INVERS_DEST) {
+                    /* src or !dest */
+                    return SPICE_ROP_OR_REVERSE;
+                } else {
+                    /* src or dest */
+                    return SPICE_ROP_OR;
+                }
+            }
+        }
+
+    } else if (desc & SPICE_ROPD_OP_AND) {
+
+        if (desc & SPICE_ROPD_INVERS_RES) {
+            if (desc & SPICE_ROPD_INVERS_SRC) {
+                if (desc & SPICE_ROPD_INVERS_DEST) {
+                    /* !(!src and !dest) == src or dest*/
+                    return SPICE_ROP_OR;
+                } else {
+                    /* ! (!src and dest) = src or !dest*/
+                    return SPICE_ROP_OR_REVERSE;
+                }
+            } else {
+                if (desc & SPICE_ROPD_INVERS_DEST) {
+                    /* !(src and !dest) == !src or dest */
+                    return SPICE_ROP_OR_INVERTED;
+                } else {
+                    /* !(src and dest) */
+                    return SPICE_ROP_NAND;
+                }
+            }
+        } else {
+            if (desc & SPICE_ROPD_INVERS_SRC) {
+                if (desc & SPICE_ROPD_INVERS_DEST) {
+                    /* !src and !dest == !(src or dest)*/
+                    return SPICE_ROP_NOR;
+                } else {
+                    /* !src and dest */
+                    return SPICE_ROP_AND_INVERTED;
+                }
+            } else {
+                if (desc & SPICE_ROPD_INVERS_DEST) {
+                    /* src and !dest */
+                    return SPICE_ROP_AND_REVERSE;
+                } else {
+                    /* src and dest */
+                    return SPICE_ROP_AND;
+                }
+            }
+        }
+
+    } else if (desc & SPICE_ROPD_OP_XOR) {
+
+        if (desc & SPICE_ROPD_INVERS_RES) {
+            if (desc & SPICE_ROPD_INVERS_SRC) {
+                if (desc & SPICE_ROPD_INVERS_DEST) {
+                    /* !(!src xor !dest) == !src xor dest */
+                    return SPICE_ROP_EQUIV;
+                } else {
+                    /* ! (!src xor dest) = src xor dest*/
+                    return SPICE_ROP_XOR;
+                }
+            } else {
+                if (desc & SPICE_ROPD_INVERS_DEST) {
+                    /* !(src xor !dest) == src xor dest */
+                    return SPICE_ROP_XOR;
+                } else {
+                    /* !(src xor dest) */
+                    return SPICE_ROP_EQUIV;
+                }
+            }
+        } else {
+            if (desc & SPICE_ROPD_INVERS_SRC) {
+                if (desc & SPICE_ROPD_INVERS_DEST) {
+                    /* !src xor !dest == src xor dest */
+                    return SPICE_ROP_XOR;
+                } else {
+                    /* !src xor dest */
+                    return SPICE_ROP_EQUIV;
+                }
+            } else {
+                if (desc & SPICE_ROPD_INVERS_DEST) {
+                    /* src xor !dest */
+                    return SPICE_ROP_EQUIV;
+                } else {
+                    /* src xor dest */
+                    return SPICE_ROP_XOR;
+                }
+            }
+        }
+
+    } else if (desc & SPICE_ROPD_OP_BLACKNESS) {
+        return SPICE_ROP_CLEAR;
+    } else if (desc & SPICE_ROPD_OP_WHITENESS) {
+        return SPICE_ROP_SET;
+    } else if (desc & SPICE_ROPD_OP_INVERS) {
+        return SPICE_ROP_INVERT;
+    }
+    return SPICE_ROP_COPY;
+}
+
+static void canvas_clip_pixman(CairoCanvas *canvas,
+                               pixman_region32_t *dest_region,
+                               SpiceClip *clip)
+{
+    pixman_region32_intersect(dest_region, dest_region, &canvas->canvas_region);
+
+    switch (clip->type) {
+    case SPICE_CLIP_TYPE_NONE:
+        break;
+    case SPICE_CLIP_TYPE_RECTS: {
+        uint32_t *n = (uint32_t *)SPICE_GET_ADDRESS(clip->data);
+        access_test(&canvas->base, n, sizeof(uint32_t));
+
+        SpiceRect *now = (SpiceRect *)(n + 1);
+        access_test(&canvas->base, now, (unsigned long)(now + *n) - (unsigned long)now);
+
+        pixman_region32_t clip;
+
+        if (spice_pixman_region32_init_rects(&clip, now, *n)) {
+            pixman_region32_intersect(dest_region, dest_region, &clip);
+            pixman_region32_fini(&clip);
+        }
+
+        break;
+    }
+    case SPICE_CLIP_TYPE_PATH:
+        CANVAS_ERROR("clip paths not supported anymore");
+        break;
+    default:
+        CANVAS_ERROR("invalid clip type");
+    }
+}
+
+static void canvas_mask_pixman(CairoCanvas *canvas,
+                               pixman_region32_t *dest_region,
+                               SpiceQMask *mask, int x, int y)
+{
+    pixman_image_t *image, *subimage;
+    int needs_invert;
+    pixman_region32_t mask_region;
+    uint32_t *mask_data;
+    int mask_x, mask_y;
+    int mask_width, mask_height, mask_stride;
+    pixman_box32_t extents;
+
+    needs_invert = FALSE;
+    image = canvas_get_mask(&canvas->base,
+                            mask,
+                            &needs_invert);
+
+    if (image == NULL) {
+        return; /* no mask */
+    }
+
+    mask_data = pixman_image_get_data(image);
+    mask_width = pixman_image_get_width(image);
+    mask_height = pixman_image_get_height(image);
+    mask_stride = pixman_image_get_stride(image);
+
+    mask_x = mask->pos.x;
+    mask_y = mask->pos.y;
+
+    /* We need to subset the area of the mask that we turn into a region,
+       because a cached mask may be much larger than what is used for
+       the clip operation. */
+    extents = *pixman_region32_extents(dest_region);
+
+    /* convert from destination pixels to mask pixels */
+    extents.x1 -= x - mask_x;
+    extents.y1 -= y - mask_y;
+    extents.x2 -= x - mask_x;
+    extents.y2 -= y - mask_y;
+
+    /* clip to mask size */
+    if (extents.x1 < 0) {
+        extents.x1 = 0;
+    }
+    if (extents.x2 >= mask_width) {
+        extents.x2 = mask_width;
+    }
+    if (extents.x2 < extents.x1) {
+        extents.x2 = extents.x1;
+    }
+    if (extents.y1 < 0) {
+        extents.y1 = 0;
+    }
+    if (extents.y2 >= mask_height) {
+        extents.y2 = mask_height;
+    }
+    if (extents.y2 < extents.y1) {
+        extents.y2 = extents.y1;
+    }
+
+    /* round down X to even 32 pixels (i.e. uint32_t) */
+    extents.x1 = extents.x1 & ~(0x1f);
+
+    mask_data = (uint32_t *)((uint8_t *)mask_data + mask_stride * extents.y1 + extents.x1 / 32);
+    mask_x -= extents.x1;
+    mask_y -= extents.y1;
+    mask_width = extents.x2 - extents.x1;
+    mask_height = extents.y2 - extents.y1;
+
+    subimage = pixman_image_create_bits(PIXMAN_a1, mask_width, mask_height,
+                                        mask_data, mask_stride);
+    pixman_region32_init_from_image(&mask_region,
+                                    subimage);
+    pixman_image_unref(subimage);
+
+    if (needs_invert) {
+        pixman_box32_t rect;
+
+        rect.x1 = rect.y1 = 0;
+        rect.x2 = mask_width;
+        rect.y2 = mask_height;
+
+        pixman_region32_inverse(&mask_region, &mask_region, &rect);
+    }
+
+    pixman_region32_translate(&mask_region,
+                              -mask_x + x, -mask_y + y);
+
+    pixman_region32_intersect(dest_region, dest_region, &mask_region);
+    pixman_region32_fini(&mask_region);
+
+    pixman_image_unref(image);
+}
 
 static void canvas_set_path(CairoCanvas *canvas, void *addr)
 {
@@ -701,27 +999,175 @@ static void __draw_mask(void *data)
     cairo_mask(((DrawMaskData *)data)->cairo, ((DrawMaskData *)data)->mask);
 }
 
+static void fill_solid_rects(CairoCanvas *canvas,
+                             pixman_region32_t *region,
+                             uint32_t color)
+{
+    pixman_box32_t *rects;
+    int n_rects;
+    int i;
+
+    rects = pixman_region32_rectangles(region, &n_rects);
+
+    for (i = 0; i < n_rects; i++) {
+        spice_pixman_fill_rect(canvas->image,
+                               rects[i].x1, rects[i].y1,
+                               rects[i].x2 - rects[i].x1,
+                               rects[i].y2 - rects[i].y1,
+                               color);
+    }
+}
+
+static void fill_solid_rects_rop(CairoCanvas *canvas,
+                                 pixman_region32_t *region,
+                                 uint32_t color,
+                                 SpiceROP rop)
+{
+    pixman_box32_t *rects;
+    int n_rects;
+    int i;
+
+    rects = pixman_region32_rectangles(region, &n_rects);
+
+    for (i = 0; i < n_rects; i++) {
+        spice_pixman_fill_rect_rop(canvas->image,
+                                   rects[i].x1, rects[i].y1,
+                                   rects[i].x2 - rects[i].x1,
+                                   rects[i].y2 - rects[i].y1,
+                                   color, rop);
+    }
+}
+
+static void fill_tiled_rects(CairoCanvas *canvas,
+                             pixman_region32_t *region,
+                             SpicePattern *pattern)
+{
+    pixman_image_t *tile;
+    int offset_x, offset_y;
+    pixman_box32_t *rects;
+    int n_rects;
+    int i;
+
+    rects = pixman_region32_rectangles(region, &n_rects);
+
+    tile = canvas_get_image(&canvas->base, pattern->pat);
+    offset_x = pattern->pos.x;
+    offset_y = pattern->pos.y;
+
+    for (i = 0; i < n_rects; i++) {
+        spice_pixman_tile_rect(canvas->image,
+                               rects[i].x1, rects[i].y1,
+                               rects[i].x2 - rects[i].x1,
+                               rects[i].y2 - rects[i].y1,
+                               tile, offset_x, offset_y);
+    }
+
+    pixman_image_unref(tile);
+}
+
+static void fill_tiled_rects_rop(CairoCanvas *canvas,
+                                 pixman_region32_t *region,
+                                 SpicePattern *pattern,
+                                 SpiceROP rop)
+{
+    pixman_image_t *tile;
+    int offset_x, offset_y;
+    pixman_box32_t *rects;
+    int n_rects;
+    int i;
+
+    rects = pixman_region32_rectangles(region, &n_rects);
+
+    tile = canvas_get_image(&canvas->base, pattern->pat);
+    offset_x = pattern->pos.x;
+    offset_y = pattern->pos.y;
+
+    for (i = 0; i < n_rects; i++) {
+        spice_pixman_tile_rect_rop(canvas->image,
+                                   rects[i].x1, rects[i].y1,
+                                   rects[i].x2 - rects[i].x1,
+                                   rects[i].y2 - rects[i].y1,
+                                   tile, offset_x, offset_y,
+                                   rop);
+    }
+
+    pixman_image_unref(tile);
+}
+
+static void draw_brush(CairoCanvas *canvas,
+                       pixman_region32_t *region,
+                       SpiceBrush *brush,
+                       SpiceROP rop)
+{
+    uint32_t color;
+    SpicePattern *pattern;
+
+    switch (brush->type) {
+    case SPICE_BRUSH_TYPE_SOLID:
+        color = brush->u.color;
+        if (rop == SPICE_ROP_COPY) {
+            fill_solid_rects(canvas, region, color);
+        } else {
+            fill_solid_rects_rop(canvas, region, color, rop);
+        }
+        break;
+    case SPICE_BRUSH_TYPE_PATTERN:
+        pattern = &brush->u.pattern;
+
+        if (rop == SPICE_ROP_COPY) {
+            fill_tiled_rects(canvas, region, pattern);
+        } else {
+            fill_tiled_rects_rop(canvas, region, pattern, rop);
+        }
+        break;
+    case SPICE_BRUSH_TYPE_NONE:
+        /* Still need to do *something* here, because rop could be e.g invert dest */
+        fill_solid_rects_rop(canvas, region, 0, rop);
+        break;
+    default:
+        CANVAS_ERROR("invalid brush type");
+    }
+}
+
+/* If we're exiting early we may still have to load an image in case
+   it has to be cached or something */
+static void touch_brush(CairoCanvas *canvas, SpiceBrush *brush)
+{
+    SpicePattern *pattern;
+    if (brush->type == SPICE_BRUSH_TYPE_PATTERN) {
+        pattern = &brush->u.pattern;
+        canvas_touch_image(&canvas->base, pattern->pat);
+    }
+}
+
 void canvas_draw_fill(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill)
 {
-    DrawMaskData draw_data;
-    draw_data.cairo = canvas->cairo;
+    pixman_region32_t dest_region;
+    SpiceROP rop;
 
-    cairo_save(draw_data.cairo);
-    canvas_clip(canvas, clip);
-    if ((draw_data.mask = canvas_get_mask_pattern(canvas, &fill->mask, bbox->left, bbox->top))) {
-        cairo_rectangle(draw_data.cairo, bbox->left, bbox->top, bbox->right - bbox->left,
-                        bbox->bottom - bbox->top);
-        cairo_clip(draw_data.cairo);
-        canvas_draw(canvas, &fill->brush, fill->rop_decriptor, __draw_mask, &draw_data);
-        cairo_pattern_destroy(draw_data.mask);
-    } else {
-        cairo_rectangle(draw_data.cairo, bbox->left, bbox->top, bbox->right - bbox->left,
-                        bbox->bottom - bbox->top);
-        canvas_draw(canvas, &fill->brush, fill->rop_decriptor, (DrawMethod)cairo_fill_preserve,
-                    draw_data.cairo);
-        cairo_new_path(draw_data.cairo);
+    pixman_region32_init_rect(&dest_region,
+                              bbox->left, bbox->top,
+                              bbox->right - bbox->left,
+                              bbox->bottom - bbox->top);
+
+
+    canvas_clip_pixman(canvas, &dest_region, clip);
+    canvas_mask_pixman(canvas, &dest_region, &fill->mask,
+                       bbox->left, bbox->top);
+
+    rop = ropd_descriptor_to_rop(fill->rop_decriptor,
+                                 ROP_INPUT_BRUSH,
+                                 ROP_INPUT_DEST);
+
+    if (rop == SPICE_ROP_NOOP || pixman_region32_n_rects(&dest_region) == 0) {
+        touch_brush(canvas, &fill->brush);
+        pixman_region32_fini(&dest_region);
+        return;
     }
-    cairo_restore(draw_data.cairo);
+
+    draw_brush(canvas, &dest_region, &fill->brush, rop);
+
+    pixman_region32_fini(&dest_region);
 }
 
 static cairo_pattern_t *canvas_src_image_to_pat(CairoCanvas *canvas, SPICE_ADDRESS src_bitmap,
@@ -1664,6 +2110,10 @@ CairoCanvas *canvas_create(cairo_t *cairo, int bits
     cairo_set_antialias(cairo, CAIRO_ANTIALIAS_NONE);
 
     canvas->image = pixman_image_from_surface (cairo_get_target (cairo));
+    pixman_region32_init_rect(&canvas->canvas_region,
+                              0, 0,
+                              pixman_image_get_width (canvas->image),
+                              pixman_image_get_height (canvas->image));
 
     return canvas;
 }
