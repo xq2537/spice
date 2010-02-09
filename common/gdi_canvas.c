@@ -305,15 +305,15 @@ uint32_t raster_ops[] = {
     0x00FF0062 // 1 WHITENESS
 };
 
-static inline void surface_to_image(cairo_surface_t *surface, GdiImage *image)
+static inline void surface_to_image(pixman_image_t *surface, GdiImage *image)
 {
-    cairo_format_t format = cairo_image_surface_get_format(surface);
+    int depth = pixman_image_surface_get_depth(surface);
 
-    ASSERT(format == CAIRO_FORMAT_ARGB32 || format == CAIRO_FORMAT_RGB24);
-    image->width = cairo_image_surface_get_width(surface);
-    image->height = cairo_image_surface_get_height(surface);
-    image->stride = cairo_image_surface_get_stride(surface);
-    image->pixels = cairo_image_surface_get_data(surface);
+    ASSERT(depth == 32 || depth == 24);
+    image->width = pixman_image_get_width(surface);
+    image->height = pixman_image_get_height(surface);
+    image->stride = pixman_image_get_stride(surface);
+    image->pixels = pixman_image_get_data(surface);
 }
 
 static void set_path(GdiCanvas *canvas, void *addr)
@@ -645,7 +645,7 @@ static HBRUSH get_brush(GdiCanvas *canvas, SpiceBrush *brush)
     case SPICE_BRUSH_TYPE_PATTERN: {
         GdiImage image;
         HBRUSH hbrush;
-        cairo_surface_t *surface;
+        pixman_image_t *surface;
         HDC dc;
         HBITMAP bitmap;
         HBITMAP prev_bitmap;
@@ -664,7 +664,7 @@ static HBRUSH get_brush(GdiCanvas *canvas, SpiceBrush *brush)
         }
 
         release_bitmap(dc, bitmap, prev_bitmap, 0);
-        cairo_surface_destroy(surface);
+        pixman_image_unref(surface);
         return hbrush;
     }
     case SPICE_BRUSH_TYPE_NONE:
@@ -779,27 +779,27 @@ uint8_t calc_rop3_src_brush(uint16_t rop3_bits)
 
 static struct BitmapData get_mask_bitmap(struct GdiCanvas *canvas, struct SpiceQMask *mask)
 {
-    cairo_surface_t *surface;
+    pixman_image_t *surface;
     struct BitmapData bitmap;
-    BitmapCache *bitmap_cache;
+    PixmanData *pixman_data;
 
     bitmap.hbitmap = NULL;
     if (!(surface = canvas_get_mask(&canvas->base, mask))) {
         return bitmap;
     }
 
-    bitmap_cache = (BitmapCache *)cairo_surface_get_user_data(surface, &bitmap_data_type);
-    if (bitmap_cache && (WaitForSingleObject(bitmap_cache->mutex, INFINITE) != WAIT_FAILED)) {
+    pixman_data = pixman_image_get_destroy_data (surface);
+    if (pixman_data && (WaitForSingleObject(pixman_data->mutex, INFINITE) != WAIT_FAILED)) {
         bitmap.dc = create_compatible_dc();
-        bitmap.prev_hbitmap = (HBITMAP)SelectObject(bitmap.dc, bitmap_cache->bitmap);
-        bitmap.hbitmap = bitmap_cache->bitmap;
-        ReleaseMutex(bitmap_cache->mutex);
+        bitmap.prev_hbitmap = (HBITMAP)SelectObject(bitmap.dc, pixman_data->bitmap);
+        bitmap.hbitmap = pixman_data->bitmap;
+        ReleaseMutex(pixman_data->mutex);
         bitmap.cache = 1;
     } else if (!create_bitmap(&bitmap.hbitmap, &bitmap.prev_hbitmap, &bitmap.dc,
-                              cairo_image_surface_get_data(surface),
-                              cairo_image_surface_get_width(surface),
-                              cairo_image_surface_get_height(surface),
-                              cairo_image_surface_get_stride(surface), 1, 0)) {
+                              pixman_image_get_data(surface),
+                              pixman_image_get_width(surface),
+                              pixman_image_get_height(surface),
+                              pixman_image_get_stride(surface), 1, 0)) {
         bitmap.hbitmap = NULL;
     } else {
         bitmap.cache = 0;
@@ -865,7 +865,7 @@ static void draw_str_mask_bitmap(struct GdiCanvas *canvas,
                                  SpiceString *str, int n, SpiceRect *dest,
                                  SpiceRect *src, SpiceBrush *brush)
 {
-    cairo_surface_t *surface;
+    pixman_image_t *surface;
     struct BitmapData bitmap;
     SpicePoint pos;
     int dest_stride;
@@ -882,9 +882,9 @@ static void draw_str_mask_bitmap(struct GdiCanvas *canvas,
     bitmap.cache = 0;
     bitmap_data = create_bitmap(&bitmap.hbitmap, &bitmap.prev_hbitmap,
                                 &bitmap.dc, NULL,
-                                cairo_image_surface_get_width(surface),
-                                cairo_image_surface_get_height(surface),
-                                cairo_image_surface_get_stride(surface), 32, 0);
+                                pixman_image_get_width(surface),
+                                pixman_image_get_height(surface),
+                                pixman_image_get_stride(surface), 32, 0);
 
     if (!bitmap_data) {
         return;
@@ -896,14 +896,14 @@ static void draw_str_mask_bitmap(struct GdiCanvas *canvas,
 
     dest->left = pos.x;
     dest->top = pos.y;
-    dest->right = pos.x + cairo_image_surface_get_width(surface);
-    dest->bottom = pos.y + cairo_image_surface_get_height(surface);
+    dest->right = pos.x + pixman_image_get_width(surface);
+    dest->bottom = pos.y + pixman_image_get_height(surface);
     src->left = 0;
     src->top = 0;
-    src->right = cairo_image_surface_get_width(surface);
-    src->bottom = cairo_image_surface_get_height(surface);
+    src->right = pixman_image_get_width(surface);
+    src->bottom = pixman_image_get_height(surface);
 
-    dest_stride = cairo_image_surface_get_width(surface);
+    dest_stride = pixman_image_get_width(surface);
     switch (n) {
     case 1:
         dest_stride = dest_stride / 8;
@@ -926,10 +926,10 @@ static void draw_str_mask_bitmap(struct GdiCanvas *canvas,
 
     unset_brush(bitmap.dc, prev_hbrush);
 
-    copy_bitmap_alpha(cairo_image_surface_get_data(surface),
-                      cairo_image_surface_get_height(surface),
-                      cairo_image_surface_get_width(surface),
-                      cairo_image_surface_get_stride(surface),
+    copy_bitmap_alpha(pixman_image_get_data(surface),
+                      pixman_image_get_height(surface),
+                      pixman_image_get_width(surface),
+                      pixman_image_get_stride(surface),
                       bitmap_data, dest_stride, n);
 
     BLENDFUNCTION bf = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
@@ -1000,30 +1000,30 @@ void gdi_canvas_draw_fill(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, S
 
 void gdi_canvas_draw_copy(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy)
 {
-    cairo_surface_t *surface;
+    pixman_image_t *surface;
     GdiImage image;
     struct BitmapData bitmapmask;
-    BitmapCache *bitmap_cache;
+    PixmanData *pixman_data;
 
     bitmapmask = get_mask_bitmap(canvas, &copy->mask);
     surface = canvas_get_image(&canvas->base, copy->src_bitmap);
-    bitmap_cache = (BitmapCache *)cairo_surface_get_user_data(surface, &bitmap_data_type);
+    pixman_data = (PixmanData *)pixman_image_get_destroy_data(surface);
 
     Lock lock(*canvas->lock);
     set_scale_mode(canvas, copy->scale_mode);
     set_clip(canvas, clip);
 
-    if (bitmap_cache && (WaitForSingleObject(bitmap_cache->mutex, INFINITE) != WAIT_FAILED)) {
+    if (pixman_data && (WaitForSingleObject(pixman_data->mutex, INFINITE) != WAIT_FAILED)) {
         HDC dc;
         HBITMAP prev_bitmap;
 
         dc = create_compatible_dc();
-        prev_bitmap = (HBITMAP)SelectObject(dc, bitmap_cache->bitmap);
+        prev_bitmap = (HBITMAP)SelectObject(dc, pixman_data->bitmap);
         gdi_draw_bitmap_redrop(canvas->dc, &copy->src_area, bbox, dc,
                                &bitmapmask, copy->rop_decriptor, 0);
         SelectObject(dc, prev_bitmap);
         DeleteObject(dc);
-        ReleaseMutex(bitmap_cache->mutex);
+        ReleaseMutex(pixman_data->mutex);
     } else {
         surface_to_image(surface, &image);
         gdi_draw_image(canvas->dc, &copy->src_area, bbox, image.pixels,
@@ -1033,7 +1033,7 @@ void gdi_canvas_draw_copy(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, S
 
     free_mask(&bitmapmask);
 
-    cairo_surface_destroy(surface);
+    pixman_image_unref(surface);
 }
 
 void gdi_canvas_put_image(GdiCanvas *canvas, HDC dc, const SpiceRect *dest, const uint8_t *src_data,
@@ -1127,26 +1127,26 @@ static void gdi_draw_image_transparent(GdiCanvas *canvas, HDC dest_dc, const Spi
 void gdi_canvas_draw_transparent(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip,
                                  SpiceTransparent* transparent)
 {
-    cairo_surface_t *surface;
+    pixman_image_t *surface;
     GdiImage image;
-    BitmapCache *bitmap_cache;
+    PixmanData *pixman_data;
 
     surface = canvas_get_image(&canvas->base, transparent->src_bitmap);
-    bitmap_cache = (BitmapCache *)cairo_surface_get_user_data(surface, &bitmap_data_type);
+    pixman_data = (PixmanData *)pixman_image_get_destroy_data(surface);
     Lock lock(*canvas->lock);
     set_clip(canvas, clip);
-    if (bitmap_cache && (WaitForSingleObject(bitmap_cache->mutex, INFINITE) != WAIT_FAILED)) {
+    if (pixman_data && (WaitForSingleObject(pixman_data->mutex, INFINITE) != WAIT_FAILED)) {
         HDC dc;
         HBITMAP prev_bitmap;
 
         dc = create_compatible_dc();
-        prev_bitmap = (HBITMAP)SelectObject(dc, bitmap_cache->bitmap);
+        prev_bitmap = (HBITMAP)SelectObject(dc, pixman_data->bitmap);
         gdi_draw_bitmap_transparent(canvas, canvas->dc, &transparent->src_area, bbox, dc,
                                     transparent->true_color);
 
         SelectObject(dc, prev_bitmap);
         DeleteObject(dc);
-        ReleaseMutex(bitmap_cache->mutex);
+        ReleaseMutex(pixman_data->mutex);
     } else {
         surface_to_image(surface, &image);
         gdi_draw_image_transparent(canvas, canvas->dc, &transparent->src_area, bbox, image.pixels,
@@ -1154,7 +1154,7 @@ void gdi_canvas_draw_transparent(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *
                                    transparent->true_color, 0);
     }
 
-    cairo_surface_destroy(surface);
+    pixman_image_unref(surface);
 }
 
 static void gdi_draw_bitmap_alpha(HDC dest_dc, const SpiceRect *src, const SpiceRect *dest,
@@ -1198,28 +1198,28 @@ static void gdi_draw_image_alpha(HDC dest_dc, const SpiceRect *src, const SpiceR
 
 void gdi_canvas_draw_alpha_blend(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend)
 {
-    cairo_surface_t *surface;
+    pixman_image_t *surface;
     GdiImage image;
-    BitmapCache *bitmap_cache;
+    PixmanData *pixman_data;
     int use_bitmap_alpha;
 
     surface = canvas_get_image(&canvas->base, alpha_blend->src_bitmap);
-    use_bitmap_alpha = cairo_image_surface_get_format(surface) == CAIRO_FORMAT_ARGB32;
-    bitmap_cache = (BitmapCache *)cairo_surface_get_user_data(surface, &bitmap_data_type);
+    use_bitmap_alpha = pixman_image_get_depth(surface) == 32;
+    pixman_data = (PixmanData *)pixman_image_get_destroy_data(surface);
 
     Lock lock(*canvas->lock);
     set_clip(canvas, clip);
-    if (bitmap_cache && (WaitForSingleObject(bitmap_cache->mutex, INFINITE) != WAIT_FAILED)) {
+    if (pixman_data && (WaitForSingleObject(pixman_data->mutex, INFINITE) != WAIT_FAILED)) {
         HDC dc;
         HBITMAP prev_bitmap;
 
         dc = create_compatible_dc();
-        prev_bitmap = (HBITMAP)SelectObject(dc, bitmap_cache->bitmap);
+        prev_bitmap = (HBITMAP)SelectObject(dc, pixman_data->bitmap);
         gdi_draw_bitmap_alpha(canvas->dc, &alpha_blend->src_area, bbox, dc, alpha_blend->alpha,
                               use_bitmap_alpha);
         SelectObject(dc, prev_bitmap);
         DeleteObject(dc);
-        ReleaseMutex(bitmap_cache->mutex);
+        ReleaseMutex(pixman_data->mutex);
     } else {
         surface_to_image(surface, &image);
         gdi_draw_image_alpha(canvas->dc, &alpha_blend->src_area, bbox, image.pixels,
@@ -1227,21 +1227,21 @@ void gdi_canvas_draw_alpha_blend(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *
                              alpha_blend->alpha, 0, use_bitmap_alpha);
     }
 
-    cairo_surface_destroy(surface);
+    pixman_image_unref(surface);
 }
 
 void gdi_canvas_draw_opaque(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque)
 {
-    cairo_surface_t *surface;
+    pixman_image_t *surface;
     GdiImage image;
     struct BitmapData bitmapmask;
-    BitmapCache *bitmap_cache;
+    PixmanData *pixman_data;
     HBRUSH prev_hbrush;
     HBRUSH hbrush;
     uint8_t rop3;
 
     surface = canvas_get_image(&canvas->base, opaque->src_bitmap);
-    bitmap_cache = (BitmapCache *)cairo_surface_get_user_data(surface, &bitmap_data_type);
+    pixman_data = (PixmanData *)pixman_image_get_destroy_data(surface);
     bitmapmask = get_mask_bitmap(canvas, &opaque->mask);
     rop3 = calc_rop3_src_brush(opaque->rop_decriptor);
     hbrush = get_brush(canvas, &opaque->brush);
@@ -1252,16 +1252,16 @@ void gdi_canvas_draw_opaque(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip,
     set_clip(canvas, clip);
     prev_hbrush = set_brush(canvas->dc, hbrush, &opaque->brush);
 
-    if (bitmap_cache && (WaitForSingleObject(bitmap_cache->mutex, INFINITE) != WAIT_FAILED)) {
+    if (pixman_data && (WaitForSingleObject(pixman_data->mutex, INFINITE) != WAIT_FAILED)) {
         HDC dc;
         HBITMAP prev_bitmap;
 
         dc = create_compatible_dc();
-        prev_bitmap = (HBITMAP)SelectObject(dc, bitmap_cache->bitmap);
+        prev_bitmap = (HBITMAP)SelectObject(dc, pixman_data->bitmap);
         gdi_draw_bitmap(canvas->dc, &opaque->src_area, bbox, dc, &bitmapmask, rop3);
         SelectObject(dc, prev_bitmap);
         DeleteObject(dc);
-        ReleaseMutex(bitmap_cache->mutex);
+        ReleaseMutex(pixman_data->mutex);
     } else {
         surface_to_image(surface, &image);
         gdi_draw_image_rop3(canvas->dc, &opaque->src_area, bbox, image.pixels,
@@ -1272,35 +1272,35 @@ void gdi_canvas_draw_opaque(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip,
 
     free_mask(&bitmapmask);
 
-    cairo_surface_destroy(surface);
+    pixman_image_unref(surface);
 }
 
 void gdi_canvas_draw_blend(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend)
 {
-    cairo_surface_t *surface;
+    pixman_image_t *surface;
     GdiImage image;
     struct BitmapData bitmapmask;
-    BitmapCache *bitmap_cache;
+    PixmanData *pixman_data;
 
     bitmapmask = get_mask_bitmap(canvas, &blend->mask);
     surface = canvas_get_image(&canvas->base, blend->src_bitmap);
-    bitmap_cache = (BitmapCache *)cairo_surface_get_user_data(surface, &bitmap_data_type);
+    pixman_data = (PixmanData *)pixman_image_get_destroy_data(surface);
 
     Lock lock(*canvas->lock);
     set_scale_mode(canvas, blend->scale_mode);
     set_clip(canvas, clip);
 
-    if (bitmap_cache && (WaitForSingleObject(bitmap_cache->mutex, INFINITE) != WAIT_FAILED)) {
+    if (pixman_data && (WaitForSingleObject(pixman_data->mutex, INFINITE) != WAIT_FAILED)) {
         HDC dc;
         HBITMAP prev_bitmap;
 
         dc = create_compatible_dc();
-        prev_bitmap = (HBITMAP)SelectObject(dc, bitmap_cache->bitmap);
+        prev_bitmap = (HBITMAP)SelectObject(dc, pixman_data->bitmap);
         gdi_draw_bitmap_redrop(canvas->dc, &blend->src_area, bbox, dc,
                                &bitmapmask, blend->rop_decriptor, 0);
         SelectObject(dc, prev_bitmap);
         DeleteObject(dc);
-        ReleaseMutex(bitmap_cache->mutex);
+        ReleaseMutex(pixman_data->mutex);
     } else {
         surface_to_image(surface, &image);
         gdi_draw_image(canvas->dc, &blend->src_area, bbox, image.pixels, image.stride, image.width,
@@ -1309,7 +1309,7 @@ void gdi_canvas_draw_blend(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, 
 
     free_mask(&bitmapmask);
 
-    cairo_surface_destroy(surface);
+    pixman_image_unref(surface);
 }
 
 void gdi_canvas_draw_blackness(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness)
@@ -1353,16 +1353,16 @@ void gdi_canvas_draw_whiteness(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *cl
 
 void gdi_canvas_draw_rop3(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3)
 {
-    cairo_surface_t *surface;
+    pixman_image_t *surface;
     GdiImage image;
     struct BitmapData bitmapmask;
     HBRUSH prev_hbrush;
     HBRUSH hbrush;
-    BitmapCache *bitmap_cache;
+    PixmanData *pixman_data;
 
     hbrush = get_brush(canvas, &rop3->brush);
     surface = canvas_get_image(&canvas->base, rop3->src_bitmap);
-    bitmap_cache = (BitmapCache *)cairo_surface_get_user_data(surface, &bitmap_data_type);
+    pixman_data = (PixmanData *)pixman_image_get_destroy_data(surface);
     bitmapmask = get_mask_bitmap(canvas, &rop3->mask);
 
     Lock lock(*canvas->lock);
@@ -1370,17 +1370,17 @@ void gdi_canvas_draw_rop3(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, S
     set_clip(canvas, clip);
     prev_hbrush = set_brush(canvas->dc, hbrush, &rop3->brush);
 
-    if (bitmap_cache && (WaitForSingleObject(bitmap_cache->mutex, INFINITE) != WAIT_FAILED)) {
+    if (pixman_data && (WaitForSingleObject(pixman_data->mutex, INFINITE) != WAIT_FAILED)) {
         HDC dc;
         HBITMAP prev_bitmap;
 
         dc = create_compatible_dc();
-        prev_bitmap = (HBITMAP)SelectObject(dc, bitmap_cache->bitmap);
+        prev_bitmap = (HBITMAP)SelectObject(dc, pixman_data->bitmap);
         gdi_draw_bitmap(canvas->dc, &rop3->src_area, bbox, dc,
                         &bitmapmask, rop3->rop3);
         SelectObject(dc, prev_bitmap);
         DeleteObject(dc);
-        ReleaseMutex(bitmap_cache->mutex);
+        ReleaseMutex(pixman_data->mutex);
     } else {
         surface_to_image(surface, &image);
         gdi_draw_image_rop3(canvas->dc, &rop3->src_area, bbox, image.pixels,
@@ -1390,7 +1390,7 @@ void gdi_canvas_draw_rop3(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, S
     unset_brush(canvas->dc, prev_hbrush);
     free_mask(&bitmapmask);
 
-    cairo_surface_destroy(surface);
+    pixman_image_unref(surface);
 }
 
 void gdi_canvas_copy_bits(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos)
@@ -1517,7 +1517,7 @@ void gdi_canvas_draw_stroke(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip,
     int ps_join = 0;
     int line_cap = 0;
     uint32_t *user_style = NULL;
-    cairo_surface_t *surface = NULL;
+    pixman_image_t *surface = NULL;
 
     if (stroke->brush.type == SPICE_BRUSH_TYPE_PATTERN) {
         surface = canvas_get_image(&canvas->base, stroke->brush.u.pattern.pat);
@@ -1630,7 +1630,7 @@ void gdi_canvas_draw_stroke(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip,
         logbrush.lbStyle = BS_DIBPATTERN | DIB_RGB_COLORS;
         logbrush.lbColor = 0;
 #endif
-        cairo_surface_destroy(surface);
+        pixman_image_unref(surface);
     }
 
 #if 0

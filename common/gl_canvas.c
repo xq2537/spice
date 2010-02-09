@@ -71,8 +71,8 @@ static inline uint8_t *copy_opposite_image(GLCanvas *canvas, void *data, int str
     return (uint8_t *)canvas->private_data;
 }
 
-static cairo_surface_t *canvas_surf_to_trans_surf(GLCImage *image,
-                                                  uint32_t trans_color)
+static pixman_image_t *canvas_surf_to_trans_surf(GLCImage *image,
+                                                 uint32_t trans_color)
 {
     int width = image->width;
     int height = image->height;
@@ -81,21 +81,20 @@ static cairo_surface_t *canvas_surf_to_trans_surf(GLCImage *image,
     int src_stride;
     uint8_t *dest_line;
     int dest_stride;
-    cairo_surface_t *ret;
+    pixman_image_t *ret;
     int i;
 
-    ret = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
-    if (cairo_surface_status(ret) != CAIRO_STATUS_SUCCESS) {
-        CANVAS_ERROR("create surface failed, %s",
-                     cairo_status_to_string(cairo_surface_status(ret)));
+    ret = pixman_image_create_bits(PIXMAN_a8r8g8b8, width, height, NULL, 0);
+    if (ret == NULL) {
+        CANVAS_ERROR("create surface failed");
     }
 
     src_line = image->pixels;
     src_stride = image->stride;
     end_src_line = src_line + src_stride * height;
 
-    dest_line = cairo_image_surface_get_data(ret);
-    dest_stride = cairo_image_surface_get_stride(ret);
+    dest_line = (uint8_t *)pixman_image_get_data(ret);
+    dest_stride = pixman_image_get_stride(ret);
 
     for (; src_line < end_src_line; src_line += src_stride, dest_line += dest_stride) {
         for (i = 0; i < width; i++) {
@@ -209,32 +208,32 @@ static void set_clip(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip)
 
 static void set_mask(GLCanvas *canvas, SpiceQMask *mask, int x, int y)
 {
-    cairo_surface_t *surface;
+    pixman_image_t *image;
 
-    if (!(surface = canvas_get_mask(&canvas->base, mask))) {
+    if (!(image = canvas_get_mask(&canvas->base, mask))) {
         glc_clear_mask(canvas->glc, GLC_MASK_A);
         return;
     }
 
 
     glc_set_mask(canvas->glc, x - mask->pos.x, y - mask->pos.y,
-                 cairo_image_surface_get_width(surface),
-                 cairo_image_surface_get_height(surface),
-                 cairo_image_surface_get_stride(surface),
-                 cairo_image_surface_get_data(surface), GLC_MASK_A);
+                 pixman_image_get_width(image),
+                 pixman_image_get_height(image),
+                 pixman_image_get_stride(image),
+                 (uint8_t *)pixman_image_get_data(image), GLC_MASK_A);
 }
 
-static inline void surface_to_image(GLCanvas *canvas, cairo_surface_t *surface, GLCImage *image,
+static inline void surface_to_image(GLCanvas *canvas, pixman_image_t *surface, GLCImage *image,
                                     int ignore_stride)
 {
-    cairo_format_t format = cairo_image_surface_get_format(surface);
+    int depth = pixman_image_get_depth(surface);
 
-    ASSERT(format == CAIRO_FORMAT_ARGB32 || format == CAIRO_FORMAT_RGB24);
-    image->format = (format == CAIRO_FORMAT_RGB24) ? GLC_IMAGE_RGB32 : GLC_IMAGE_ARGB32;
-    image->width = cairo_image_surface_get_width(surface);
-    image->height = cairo_image_surface_get_height(surface);
-    image->stride = cairo_image_surface_get_stride(surface);
-    image->pixels = cairo_image_surface_get_data(surface);
+    ASSERT(depth == 32 || depth == 24);
+    image->format = (depth == 24) ? GLC_IMAGE_RGB32 : GLC_IMAGE_ARGB32;
+    image->width = pixman_image_get_width(surface);
+    image->height = pixman_image_get_height(surface);
+    image->stride = pixman_image_get_stride(surface);
+    image->pixels = (uint8_t *)pixman_image_get_data(surface);
     image->pallet = NULL;
     if (ignore_stride) {
         return;
@@ -265,7 +264,7 @@ static void set_brush(GLCanvas *canvas, SpiceBrush *brush)
     case SPICE_BRUSH_TYPE_PATTERN: {
         GLCImage image;
         GLCPattern pattern;
-        cairo_surface_t *surface;
+        pixman_image_t *surface;
 
         surface = canvas_get_image(&canvas->base, brush->u.pattern.pat);
         surface_to_image(canvas, surface, &image, 0);
@@ -275,6 +274,7 @@ static void set_brush(GLCanvas *canvas, SpiceBrush *brush)
 
         glc_set_pattern(canvas->glc, pattern);
         glc_pattern_destroy(pattern);
+        pixman_image_unref (surface);
     }
     case SPICE_BRUSH_TYPE_NONE:
         return;
@@ -358,7 +358,7 @@ void gl_canvas_draw_fill(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, Spi
 
 void gl_canvas_draw_copy(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy)
 {
-    cairo_surface_t *surface;
+    pixman_image_t *surface;
     GLCRecti src;
     GLCRecti dest;
     GLCImage image;
@@ -374,13 +374,13 @@ void gl_canvas_draw_copy(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, Spi
     SET_GLC_RECT(&src, &copy->src_area);
     glc_draw_image(canvas->glc, &dest, &src, &image, 0, 1);
 
-    cairo_surface_destroy(surface);
+    pixman_image_unref(surface);
     glc_flush(canvas->glc);
 }
 
 void gl_canvas_draw_opaque(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque)
 {
-    cairo_surface_t *surface;
+    pixman_image_t *surface;
     GLCRecti src;
     GLCRecti dest;
     GLCRect fill_rect;
@@ -396,7 +396,7 @@ void gl_canvas_draw_opaque(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, S
     SET_GLC_RECT(&dest, bbox);
     SET_GLC_RECT(&src, &opaque->src_area);
     glc_draw_image(canvas->glc, &dest, &src, &image, 0, 1);
-    cairo_surface_destroy(surface);
+    pixman_image_unref(surface);
 
     set_brush(canvas, &opaque->brush);
     set_op(canvas, opaque->rop_decriptor & ~SPICE_ROPD_INVERS_SRC);
@@ -408,7 +408,7 @@ void gl_canvas_draw_opaque(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, S
 
 void gl_canvas_draw_alpha_blend(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd *alpha_blend)
 {
-    cairo_surface_t *surface;
+    pixman_image_t *surface;
     GLCRecti src;
     GLCRecti dest;
     GLCImage image;
@@ -423,13 +423,13 @@ void gl_canvas_draw_alpha_blend(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *cl
     SET_GLC_RECT(&src, &alpha_blend->src_area);
     glc_draw_image(canvas->glc, &dest, &src, &image, 0, (double)alpha_blend->alpha / 0xff);
 
-    cairo_surface_destroy(surface);
+    pixman_image_unref(surface);
     glc_flush(canvas->glc);
 }
 
 void gl_canvas_draw_blend(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend)
 {
-    cairo_surface_t *surface;
+    pixman_image_t *surface;
     GLCRecti src;
     GLCRecti dest;
     GLCImage image;
@@ -444,14 +444,14 @@ void gl_canvas_draw_blend(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, Sp
     surface_to_image(canvas, surface, &image, 0);
     glc_draw_image(canvas->glc, &dest, &src, &image, 0, 1);
 
-    cairo_surface_destroy(surface);
+    pixman_image_unref(surface);
     glc_flush(canvas->glc);
 }
 
 void gl_canvas_draw_transparent(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceTransparent *transparent)
 {
-    cairo_surface_t *surface;
-    cairo_surface_t *trans_surf;
+    pixman_image_t *surface;
+    pixman_image_t *trans_surf;
     GLCImage image;
     GLCRecti src;
     GLCRecti dest;
@@ -464,14 +464,14 @@ void gl_canvas_draw_transparent(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *cl
     surface_to_image(canvas, surface, &image, 0);
 
     trans_surf = canvas_surf_to_trans_surf(&image, transparent->true_color);
-    cairo_surface_destroy(surface);
+    pixman_image_unref(surface);
 
     surface_to_image(canvas, trans_surf, &image, 1);
     SET_GLC_RECT(&dest, bbox);
     SET_GLC_RECT(&src, &transparent->src_area);
     glc_draw_image(canvas->glc, &dest, &src, &image, 0, 1);
 
-    cairo_surface_destroy(trans_surf);
+    pixman_image_unref(trans_surf);
     glc_flush(canvas->glc);
 }
 
@@ -503,8 +503,8 @@ void gl_canvas_draw_invers(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, S
 
 void gl_canvas_draw_rop3(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3)
 {
-    cairo_surface_t *d;
-    cairo_surface_t *s;
+    pixman_image_t *d;
+    pixman_image_t *s;
     GLCImage image;
     SpicePoint src_pos;
     uint8_t *data_opp;
@@ -521,34 +521,33 @@ void gl_canvas_draw_rop3(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, Spi
 
     image.pallet = NULL;
 
-    d = cairo_image_surface_create(CAIRO_FORMAT_RGB24, image.width, image.height);
-    if (cairo_surface_status(d) != CAIRO_STATUS_SUCCESS) {
-        CANVAS_ERROR("create surface failed, %s",
-                     cairo_status_to_string(cairo_surface_status(d)));
+    d = pixman_image_create_bits(PIXMAN_x8r8g8b8, image.width, image.height, NULL, 0);
+    if (d == NULL) {
+        CANVAS_ERROR("create surface failed");
     }
-    image.pixels = cairo_image_surface_get_data(d);
-    image.stride = cairo_image_surface_get_stride(d);
+    image.pixels = (uint8_t *)pixman_image_get_data(d);
+    image.stride = pixman_image_get_stride(d);
 
     glc_read_pixels(canvas->glc, bbox->left, bbox->top, &image);
     data_opp = copy_opposite_image(canvas, image.pixels,
-                                   cairo_image_surface_get_stride(d),
-                                   cairo_image_surface_get_height(d));
+                                   image.stride,
+                                   pixman_image_get_height(d));
     memcpy(image.pixels, data_opp,
-           cairo_image_surface_get_stride(d) * cairo_image_surface_get_height(d));
+           image.stride * pixman_image_get_height(d));
 
     s = canvas_get_image(&canvas->base, rop3->src_bitmap);
-    src_stride = cairo_image_surface_get_stride(s);
+    src_stride = pixman_image_get_stride(s);
     if (src_stride > 0) {
-        data_opp = copy_opposite_image(canvas, cairo_image_surface_get_data(s),
-                                       src_stride, cairo_image_surface_get_height(s));
-        memcpy(cairo_image_surface_get_data(s), data_opp,
-               src_stride * cairo_image_surface_get_height(s));
+        data_opp = copy_opposite_image(canvas, (uint8_t *)pixman_image_get_data(s),
+                                       src_stride, pixman_image_get_height(s));
+        memcpy((uint8_t *)pixman_image_get_data(s), data_opp,
+               src_stride * pixman_image_get_height(s));
     }
 
     if (!rect_is_same_size(bbox, &rop3->src_area)) {
-        cairo_surface_t *scaled_s = canvas_scale_surface(s, &rop3->src_area, image.width,
-                                                         image.height, rop3->scale_mode);
-        cairo_surface_destroy(s);
+        pixman_image_t *scaled_s = canvas_scale_surface(s, &rop3->src_area, image.width,
+                                                        image.height, rop3->scale_mode);
+        pixman_image_unref(s);
         s = scaled_s;
         src_pos.x = 0;
         src_pos.y = 0;
@@ -557,49 +556,49 @@ void gl_canvas_draw_rop3(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, Spi
         src_pos.y = rop3->src_area.top;
     }
 
-    if (cairo_image_surface_get_width(s) - src_pos.x < image.width ||
-                                  cairo_image_surface_get_height(s) - src_pos.y < image.height) {
+    if (pixman_image_get_width(s) - src_pos.x < image.width ||
+        pixman_image_get_height(s) - src_pos.y < image.height) {
         CANVAS_ERROR("bad src bitmap size");
     }
 
     if (rop3->brush.type == SPICE_BRUSH_TYPE_PATTERN) {
-        cairo_surface_t *p = canvas_get_image(&canvas->base, rop3->brush.u.pattern.pat);
+        pixman_image_t *p = canvas_get_image(&canvas->base, rop3->brush.u.pattern.pat);
         SpicePoint pat_pos;
 
-        pat_pos.x = (bbox->left - rop3->brush.u.pattern.pos.x) % cairo_image_surface_get_width(p);
+        pat_pos.x = (bbox->left - rop3->brush.u.pattern.pos.x) % pixman_image_get_width(p);
 
-        pat_pos.y = (bbox->top - rop3->brush.u.pattern.pos.y) % cairo_image_surface_get_height(p);
+        pat_pos.y = (bbox->top - rop3->brush.u.pattern.pos.y) % pixman_image_get_height(p);
 
         //for now (bottom-top)
         if (pat_pos.y < 0) {
-            pat_pos.y = cairo_image_surface_get_height(p) + pat_pos.y;
+            pat_pos.y = pixman_image_get_height(p) + pat_pos.y;
         }
-        pat_pos.y = (image.height + pat_pos.y) % cairo_image_surface_get_height(p);
-        pat_pos.y = cairo_image_surface_get_height(p) - pat_pos.y;
+        pat_pos.y = (image.height + pat_pos.y) % pixman_image_get_height(p);
+        pat_pos.y = pixman_image_get_height(p) - pat_pos.y;
 
         do_rop3_with_pattern(rop3->rop3, d, s, &src_pos, p, &pat_pos);
-        cairo_surface_destroy(p);
+        pixman_image_unref(p);
     } else {
         uint32_t color = (canvas->base.color_shift) == 8 ? rop3->brush.u.color :
                                                          canvas_16bpp_to_32bpp(rop3->brush.u.color);
         do_rop3_with_color(rop3->rop3, d, s, &src_pos, color);
     }
 
-    cairo_surface_destroy(s);
+    pixman_image_unref(s);
 
     GLCRecti dest;
     GLCRecti src;
     dest.x = bbox->left;
     dest.y = bbox->top;
 
-    image.pixels = copy_opposite_image(canvas, image.pixels, cairo_image_surface_get_stride(d),
-                                       cairo_image_surface_get_height(d));
+    image.pixels = copy_opposite_image(canvas, image.pixels, pixman_image_get_stride(d),
+                                       pixman_image_get_height(d));
 
     src.x = src.y = 0;
     dest.width = src.width = image.width;
     dest.height = src.height = image.height;
     glc_draw_image(canvas->glc, &dest, &src, &image, 0, 1);
-    cairo_surface_destroy(d);
+    pixman_image_unref(d);
 }
 
 void gl_canvas_draw_stroke(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke)
@@ -641,34 +640,34 @@ void gl_canvas_draw_text(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, Spi
     set_op(canvas, text->fore_mode);
     if (str->flags & SPICE_STRING_FLAGS_RASTER_A1) {
         SpicePoint pos;
-        cairo_surface_t *mask = canvas_get_str_mask(&canvas->base, str, 1, &pos);
+        pixman_image_t *mask = canvas_get_str_mask(&canvas->base, str, 1, &pos);
         _glc_fill_mask(canvas->glc, pos.x, pos.y,
-                       cairo_image_surface_get_width(mask),
-                       cairo_image_surface_get_height(mask),
-                       cairo_image_surface_get_stride(mask),
-                       cairo_image_surface_get_data(mask));
-        cairo_surface_destroy(mask);
+                       pixman_image_get_width(mask),
+                       pixman_image_get_height(mask),
+                       pixman_image_get_stride(mask),
+                       (uint8_t *)pixman_image_get_data(mask));
+        pixman_image_unref(mask);
     } else if (str->flags & SPICE_STRING_FLAGS_RASTER_A4) {
         SpicePoint pos;
-        cairo_surface_t *mask = canvas_get_str_mask(&canvas->base, str, 4, &pos);
+        pixman_image_t *mask = canvas_get_str_mask(&canvas->base, str, 4, &pos);
         glc_fill_alpha(canvas->glc, pos.x, pos.y,
-                       cairo_image_surface_get_width(mask),
-                       cairo_image_surface_get_height(mask),
-                       cairo_image_surface_get_stride(mask),
-                       cairo_image_surface_get_data(mask));
+                       pixman_image_get_width(mask),
+                       pixman_image_get_height(mask),
+                       pixman_image_get_stride(mask),
+                       (uint8_t *)pixman_image_get_data(mask));
 
-        cairo_surface_destroy(mask);
+        pixman_image_unref(mask);
     } else if (str->flags & SPICE_STRING_FLAGS_RASTER_A8) {
         WARN("untested path A8 glyphs, doing nothing");
         if (0) {
             SpicePoint pos;
-            cairo_surface_t *mask = canvas_get_str_mask(&canvas->base, str, 8, &pos);
+            pixman_image_t *mask = canvas_get_str_mask(&canvas->base, str, 8, &pos);
             glc_fill_alpha(canvas->glc, pos.x, pos.y,
-                           cairo_image_surface_get_width(mask),
-                           cairo_image_surface_get_height(mask),
-                           cairo_image_surface_get_stride(mask),
-                           cairo_image_surface_get_data(mask));
-            cairo_surface_destroy(mask);
+                           pixman_image_get_width(mask),
+                           pixman_image_get_height(mask),
+                           pixman_image_get_stride(mask),
+                           (uint8_t *)pixman_image_get_data(mask));
+            pixman_image_unref(mask);
         }
     } else {
         WARN("untested path vector glyphs, doing nothing");

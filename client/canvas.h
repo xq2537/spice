@@ -40,14 +40,14 @@ struct QRegion;
 
 class PixmapCacheTreat {
 public:
-    static inline cairo_surface_t *get(cairo_surface_t *surf)
+    static inline pixman_image_t *get(pixman_image_t *surf)
     {
-        return cairo_surface_reference(surf);
+        return pixman_image_ref(surf);
     }
 
-    static inline void release(cairo_surface_t *surf)
+    static inline void release(pixman_image_t *surf)
     {
-        cairo_surface_destroy(surf);
+        pixman_image_unref(surf);
     }
 
     static const char* name() { return "pixmap";}
@@ -55,19 +55,19 @@ public:
 
 class SpiceImageCacheBase;
 
-typedef SharedCache<cairo_surface_t, PixmapCacheTreat, 1024, SpiceImageCacheBase> PixmapCache;
+typedef SharedCache<pixman_image_t, PixmapCacheTreat, 1024, SpiceImageCacheBase> PixmapCache;
 
 class SpiceImageCacheBase {
 public:
     SpiceImageCache base;
 
-    static void op_put(SpiceImageCache *c, uint64_t id, cairo_surface_t *surface)
+    static void op_put(SpiceImageCache *c, uint64_t id, pixman_image_t *surface)
     {
         PixmapCache* cache = reinterpret_cast<PixmapCache*>(c);
         cache->add(id, surface);
     }
 
-    static cairo_surface_t* op_get(SpiceImageCache *c, uint64_t id)
+    static pixman_image_t* op_get(SpiceImageCache *c, uint64_t id)
     {
         PixmapCache* cache = reinterpret_cast<PixmapCache*>(c);
         return cache->get(id);
@@ -185,20 +185,20 @@ public:
 class GlzDecodedSurface: public GlzDecodedImage {
 public:
     GlzDecodedSurface(uint64_t id, uint64_t win_head_id, uint8_t *data, int size,
-                      int bytes_per_pixel, cairo_surface_t *surface)
+                      int bytes_per_pixel, pixman_image_t *surface)
         : GlzDecodedImage(id, win_head_id, data, size, bytes_per_pixel)
         , _surface (surface)
     {
-        cairo_surface_reference(_surface);
+        pixman_image_ref(_surface);
     }
 
     virtual ~GlzDecodedSurface()
     {
-        cairo_surface_destroy(_surface);
+        pixman_image_unref(_surface);
     }
 
 private:
-    cairo_surface_t *_surface;
+    pixman_image_t *_surface;
 };
 
 class GlzDecodeSurfaceHandler: public GlzDecodeHandler {
@@ -208,10 +208,10 @@ public:
                                          int width, int height, int gross_pixels,
                                          int n_bytes_per_pixel, bool top_down)
     {
-        cairo_surface_t *surface = alloc_lz_image_surface((LzDecodeUsrData *)opaque_usr_info,
-                                                          type, width, height, gross_pixels,
-                                                          top_down);
-        uint8_t *data = cairo_image_surface_get_data(surface);
+        pixman_image_t *surface = alloc_lz_image_surface((LzDecodeUsrData *)opaque_usr_info,
+                                                         type, width, height, gross_pixels,
+                                                         top_down);
+        uint8_t *data = (uint8_t *)pixman_image_get_data(surface);
         if (!top_down) {
             data = data - (gross_pixels / height) * n_bytes_per_pixel * (height - 1);
         }

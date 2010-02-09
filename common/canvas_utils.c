@@ -1,3 +1,4 @@
+/* -*- Mode: C; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 /*
    Copyright (C) 2009 Red Hat, Inc.
 
@@ -45,31 +46,50 @@ extern int gdi_handlers;
 #define ALIGN(a, b) (((a) + ((b) - 1)) & ~((b) - 1))
 #endif
 
-const cairo_user_data_key_t bitmap_data_type = {0};
-const cairo_user_data_key_t bitmap_withstride_data_type = {0};
+static void release_data(pixman_image_t *image, void *release_data)
+{
+    PixmanData *data = (PixmanData *)release_data;
 
 #ifdef WIN32
-static void release_bitmap(void *bitmap_cache)
-{
-    DeleteObject((HBITMAP)((BitmapCache *)bitmap_cache)->bitmap);
-    CloseHandle(((BitmapCache *)bitmap_cache)->mutex);
-    free(bitmap_cache);
-    gdi_handlers--;
-}
-
+    if (data->bitmap) {
+        DeleteObject((HBITMAP)data->bitmap);
+        CloseHandle(data->mutex);
+        gdi_handlers--;
+    }
 #endif
+    if (data->data) {
+        free(data->data);
+    }
 
-static void release_withstride_bitmap(void *data)
-{
     free(data);
 }
 
-static inline cairo_surface_t *__surface_create_stride(cairo_format_t format, int width, int height,
-                                                       int stride)
+static PixmanData *
+pixman_image_add_data(pixman_image_t *image)
+{
+    PixmanData *data;
+
+    data = (PixmanData *)pixman_image_get_destroy_data(image);
+    if (data == NULL) {
+        data = (PixmanData *)calloc(1, sizeof(PixmanData));
+        if (data == NULL) {
+            CANVAS_ERROR("out of memory");
+        }
+        pixman_image_set_destroy_function(image,
+                                          release_data,
+                                          data);
+    }
+
+    return data;
+}
+
+static inline pixman_image_t *__surface_create_stride(pixman_format_code_t format, int width, int height,
+                                                      int stride)
 {
     uint8_t *data;
     uint8_t *stride_data;
-    cairo_surface_t *surface;
+    pixman_image_t *surface;
+    PixmanData *pixman_data;
 
     data = (uint8_t *)malloc(abs(stride) * height);
     if (stride < 0) {
@@ -78,30 +98,24 @@ static inline cairo_surface_t *__surface_create_stride(cairo_format_t format, in
         stride_data = data;
     }
 
-    surface = cairo_image_surface_create_for_data(stride_data, format, width, height, stride);
+    surface = pixman_image_create_bits(format, width, height, (uint32_t *)stride_data, stride);
 
-    if (cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS) {
+    if (surface == NULL) {
         free(data);
-        CANVAS_ERROR("create surface failed, %s",
-                     cairo_status_to_string(cairo_surface_status(surface)));
+        CANVAS_ERROR("create surface failed, out of memory");
     }
 
-    if (cairo_surface_set_user_data(surface, &bitmap_withstride_data_type, data,
-                                    release_withstride_bitmap) != CAIRO_STATUS_SUCCESS) {
-        free(data);
-        cairo_surface_destroy(surface);
-        CANVAS_ERROR("set_user_data surface failed, %s",
-                     cairo_status_to_string(cairo_surface_status(surface)));
-    }
+    pixman_data = pixman_image_add_data(surface);
+    pixman_data->data = data;
 
     return surface;
 }
 
 #ifdef WIN32
-cairo_surface_t *surface_create(HDC dc, cairo_format_t format,
+pixman_image_t *surface_create(HDC dc, pixman_format_code_t format,
                                 int width, int height, int top_down)
 #else
-cairo_surface_t * surface_create(cairo_format_t format, int width, int height, int top_down)
+pixman_image_t * surface_create(pixman_format_code_t format, int width, int height, int top_down)
 #endif
 {
 #ifdef WIN32
@@ -120,8 +134,10 @@ cairo_surface_t * surface_create(cairo_format_t format, int width, int height, i
             RGBQUAD palette[255];
         } bitmap_info;
         int nstride;
-        cairo_surface_t *surface;
-        BitmapCache *bitmap_cache;
+        pixman_image_t *surface;
+        PixmanData *pixman_data;
+        HBITMAP bitmap;
+        HANDLE mutex;
 
         memset(&bitmap_info, 0, sizeof(bitmap_info));
         bitmap_info.inf.bmiHeader.biSize = sizeof(bitmap_info.inf.bmiHeader);
@@ -131,16 +147,16 @@ cairo_surface_t * surface_create(cairo_format_t format, int width, int height, i
 
         bitmap_info.inf.bmiHeader.biPlanes = 1;
         switch (format) {
-        case CAIRO_FORMAT_ARGB32:
-        case CAIRO_FORMAT_RGB24:
+        case PIXMAN_a8r8g8b8:
+        case PIXMAN_x8r8g8b8:
             bitmap_info.inf.bmiHeader.biBitCount = 32;
             nstride = width * 4;
             break;
-        case CAIRO_FORMAT_A8:
+        case PIXMAN_a8:
             bitmap_info.inf.bmiHeader.biBitCount = 8;
             nstride = ALIGN(width, 4);
             break;
-        case CAIRO_FORMAT_A1:
+        case PIXMAN_a1:
             bitmap_info.inf.bmiHeader.biBitCount = 1;
             nstride = ALIGN(width, 32) / 8;
             break;
@@ -150,25 +166,15 @@ cairo_surface_t * surface_create(cairo_format_t format, int width, int height, i
 
         bitmap_info.inf.bmiHeader.biCompression = BI_RGB;
 
-        bitmap_cache = (BitmapCache *)malloc(sizeof(*bitmap_cache));
-        if (!bitmap_cache) {
-            CANVAS_ERROR("malloc failed");
-            return NULL;
-        }
-
-        bitmap_cache->mutex = CreateMutex(NULL, 0, NULL);
-        if (!bitmap_cache->mutex) {
-            free(bitmap_cache);
+        mutex = CreateMutex(NULL, 0, NULL);
+        if (!mutex) {
             CANVAS_ERROR("Unable to CreateMutex");
-            return NULL;
         }
 
-        bitmap_cache->bitmap = CreateDIBSection(dc, &bitmap_info.inf, 0, (VOID **)&data, NULL, 0);
-        if (!bitmap_cache->bitmap) {
+        bitmap = CreateDIBSection(dc, &bitmap_info.inf, 0, (VOID **)&data, NULL, 0);
+        if (!bitmap) {
             CloseHandle(bitmap_cache->mutex);
-            free(bitmap_cache);
             CANVAS_ERROR("Unable to CreateDIBSection");
-            return NULL;
         }
 
         if (top_down) {
@@ -178,41 +184,33 @@ cairo_surface_t * surface_create(cairo_format_t format, int width, int height, i
             nstride = -nstride;
         }
 
-        surface = cairo_image_surface_create_for_data(src, format, width, height, nstride);
-        if (cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS) {
-            CloseHandle(bitmap_cache->mutex);
-            DeleteObject((HBITMAP)bitmap_cache->bitmap);
-            free(bitmap_cache);
-            CANVAS_ERROR("create surface failed, %s",
-                         cairo_status_to_string(cairo_surface_status(surface)));
+        surface = pixman_image_create_bits(format, width, height, (uint32_t *)src, stride);
+        if (surface == NULL) {
+            CloseHandle(mutex);
+            DeleteObject(bitmap);
+            CANVAS_ERROR("create surface failed, out of memory");
         }
-        if (cairo_surface_set_user_data(surface, &bitmap_data_type, bitmap_cache,
-                                        release_bitmap) != CAIRO_STATUS_SUCCESS) {
-            CloseHandle(bitmap_cache->mutex);
-            cairo_surface_destroy(surface);
-            DeleteObject((HBITMAP)bitmap_cache->bitmap);
-            free(bitmap_cache);
-            CANVAS_ERROR("set_user_data surface failed, %s",
-                         cairo_status_to_string(cairo_surface_status(surface)));
-        }
+        pixman_data = pixman_image_add_data(surface);
+        pixman_data.bitmap = bitmap;
+        pixman_data.mutex = mutex;
         gdi_handlers++;
         return surface;
     } else {
 #endif
     if (top_down) {
-        return cairo_image_surface_create(format, width, height);
+        return pixman_image_create_bits(format, width, height, NULL, 0);
     } else {
         // NOTE: we assume here that the lz decoders always decode to RGB32.
         int stride = 0;
         switch (format) {
-        case CAIRO_FORMAT_ARGB32:
-        case CAIRO_FORMAT_RGB24:
+        case PIXMAN_a8r8g8b8:
+        case PIXMAN_x8r8g8b8:
             stride = width * 4;
             break;
-        case CAIRO_FORMAT_A8:
+        case PIXMAN_a8:
             stride = ALIGN(width, 4);
             break;
-        case CAIRO_FORMAT_A1:
+        case PIXMAN_a1:
             stride = ALIGN(width, 32) / 8;
             break;
         default:
@@ -228,11 +226,11 @@ cairo_surface_t * surface_create(cairo_format_t format, int width, int height, i
 }
 
 #ifdef WIN32
-cairo_surface_t *surface_create_stride(HDC dc, cairo_format_t format, int width, int height,
-                                       int stride)
+pixman_image_t *surface_create_stride(HDC dc, pixman_format_code_t format, int width, int height,
+                                      int stride)
 #else
-cairo_surface_t *surface_create_stride(cairo_format_t format, int width, int height,
-                                        int stride)
+pixman_image_t *surface_create_stride(pixman_format_code_t format, int width, int height,
+                                      int stride)
 #endif
 {
 #ifdef WIN32
@@ -246,12 +244,12 @@ cairo_surface_t *surface_create_stride(cairo_format_t format, int width, int hei
     return __surface_create_stride(format, width, height, stride);
 }
 
-cairo_surface_t *alloc_lz_image_surface(LzDecodeUsrData *canvas_data, LzImageType type, int width,
-                                        int height, int gross_pixels, int top_down)
+pixman_image_t *alloc_lz_image_surface(LzDecodeUsrData *canvas_data, LzImageType type, int width,
+                                       int height, int gross_pixels, int top_down)
 {
     int stride;
     int alpha;
-    cairo_surface_t *surface = NULL;
+    pixman_image_t *surface = NULL;
 
     stride = (gross_pixels / height) * 4;
 
@@ -270,7 +268,7 @@ cairo_surface_t *alloc_lz_image_surface(LzDecodeUsrData *canvas_data, LzImageTyp
 #ifdef WIN32
             canvas_data->dc,
 #endif
-            alpha ? CAIRO_FORMAT_ARGB32 : CAIRO_FORMAT_RGB24, width, height, stride);
+            alpha ? PIXMAN_a8r8g8b8 : PIXMAN_x8r8g8b8, width, height, stride);
     canvas_data->out_surface = surface;
     return surface;
 }

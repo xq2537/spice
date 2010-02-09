@@ -24,11 +24,11 @@
 #define WARN(x) printf("warning: %s\n", x)
 #endif
 
-typedef void (*rop3_with_pattern_handler_t)(cairo_surface_t *d, cairo_surface_t *s,
-                                            SpicePoint *src_pos, cairo_surface_t *p,
+typedef void (*rop3_with_pattern_handler_t)(pixman_image_t *d, pixman_image_t *s,
+                                            SpicePoint *src_pos, pixman_image_t *p,
                                             SpicePoint *pat_pos);
 
-typedef void (*rop3_with_color_handler_t)(cairo_surface_t *d, cairo_surface_t *s,
+typedef void (*rop3_with_color_handler_t)(pixman_image_t *d, pixman_image_t *s,
                                           SpicePoint *src_pos, uint32_t rgb);
 
 typedef void (*rop3_test_handler_t)();
@@ -40,14 +40,14 @@ static rop3_with_color_handler_t rop3_with_color_handlers[ROP3_NUM_OPS];
 static rop3_test_handler_t rop3_test_handlers[ROP3_NUM_OPS];
 
 
-static void default_rop3_with_pattern_handler(cairo_surface_t *d, cairo_surface_t *s,
-                                              SpicePoint *src_pos, cairo_surface_t *p,
+static void default_rop3_with_pattern_handler(pixman_image_t *d, pixman_image_t *s,
+                                              SpicePoint *src_pos, pixman_image_t *p,
                                               SpicePoint *pat_pos)
 {
     WARN("not implemented 0x%x");
 }
 
-static void default_rop3_withe_color_handler(cairo_surface_t *d, cairo_surface_t *s, SpicePoint *src_pos,
+static void default_rop3_withe_color_handler(pixman_image_t *d, pixman_image_t *s, SpicePoint *src_pos,
                                              uint32_t rgb)
 {
     WARN("not implemented 0x%x");
@@ -58,24 +58,24 @@ static void default_rop3_test_handler()
 }
 
 #define ROP3_HANDLERS(name, formula, index)                                                     \
-static void rop3_handle_p_##name(cairo_surface_t *d, cairo_surface_t *s, SpicePoint *src_pos,        \
-                                      cairo_surface_t *p, SpicePoint *pat_pos)                       \
+static void rop3_handle_p_##name(pixman_image_t *d, pixman_image_t *s, SpicePoint *src_pos,     \
+                                      pixman_image_t *p, SpicePoint *pat_pos)                   \
 {                                                                                               \
-    int width = cairo_image_surface_get_width(d);                                               \
-    int height = cairo_image_surface_get_height(d);                                             \
-    uint8_t *dest_line = cairo_image_surface_get_data(d);                                       \
-    int dest_stride = cairo_image_surface_get_stride(d);                                        \
+    int width = pixman_image_get_width(d);                                                      \
+    int height = pixman_image_get_height(d);                                                    \
+    uint8_t *dest_line = (uint8_t *)pixman_image_get_data(d);		                        \
+    int dest_stride = pixman_image_get_stride(d);                                               \
     uint8_t *end_line = dest_line + height * dest_stride;                                       \
                                                                                                 \
-    int pat_width = cairo_image_surface_get_width(p);                                           \
-    int pat_height = cairo_image_surface_get_height(p);                                         \
-    uint8_t *pat_base = cairo_image_surface_get_data(p);                                        \
-    int pat_stride = cairo_image_surface_get_stride(p);                                         \
+    int pat_width = pixman_image_get_width(p);                                                  \
+    int pat_height = pixman_image_get_height(p);                                                \
+    uint8_t *pat_base = (uint8_t *)pixman_image_get_data(p);                                    \
+    int pat_stride = pixman_image_get_stride(p);                                                \
     int pat_v_offset = pat_pos->y;                                                              \
                                                                                                 \
-    int src_stride = cairo_image_surface_get_stride(s);                                         \
+    int src_stride = pixman_image_get_stride(s);                                                \
     uint8_t *src_line;                                                                          \
-    src_line = cairo_image_surface_get_data(s) + src_pos->y * src_stride + (src_pos->x << 2);   \
+    src_line = (uint8_t *)pixman_image_get_data(s) + src_pos->y * src_stride + (src_pos->x << 2); \
                                                                                                 \
     for (; dest_line < end_line; dest_line += dest_stride, src_line += src_stride) {            \
         uint32_t *dest = (uint32_t *)dest_line;                                                 \
@@ -95,19 +95,19 @@ static void rop3_handle_p_##name(cairo_surface_t *d, cairo_surface_t *s, SpicePo
     }                                                                                           \
 }                                                                                               \
                                                                                                 \
-static void rop3_handle_c_##name(cairo_surface_t *d, cairo_surface_t *s, SpicePoint *src_pos,        \
+static void rop3_handle_c_##name(pixman_image_t *d, pixman_image_t *s, SpicePoint *src_pos,     \
                                    uint32_t rgb)                                                \
 {                                                                                               \
-    int width = cairo_image_surface_get_width(d);                                               \
-    int height = cairo_image_surface_get_height(d);                                             \
-    uint8_t *dest_line = cairo_image_surface_get_data(d);                                       \
-    int dest_stride = cairo_image_surface_get_stride(d);                                        \
+    int width = pixman_image_get_width(d);                                                      \
+    int height = pixman_image_get_height(d);                                                    \
+    uint8_t *dest_line = (uint8_t *)pixman_image_get_data(d);                                   \
+    int dest_stride = pixman_image_get_stride(d);                                               \
     uint8_t *end_line = dest_line + height * dest_stride;                                       \
     uint32_t *pat = &rgb;                                                                       \
                                                                                                 \
-    int src_stride = cairo_image_surface_get_stride(s);                                         \
+    int src_stride = pixman_image_get_stride(s);                                                \
     uint8_t *src_line;                                                                          \
-    src_line = cairo_image_surface_get_data(s) + src_pos->y * src_stride + (src_pos->x << 2);   \
+    src_line = (uint8_t *)pixman_image_get_data(s) + src_pos->y * src_stride + (src_pos->x << 2); \
                                                                                                 \
     for (; dest_line < end_line; dest_line += dest_stride, src_line += src_stride) {            \
         uint32_t *dest = (uint32_t *)dest_line;                                                 \
@@ -600,13 +600,13 @@ void rop3_init()
     }
 }
 
-void do_rop3_with_pattern(uint8_t rop3, cairo_surface_t *d, cairo_surface_t *s, SpicePoint *src_pos,
-                          cairo_surface_t *p, SpicePoint *pat_pos)
+void do_rop3_with_pattern(uint8_t rop3, pixman_image_t *d, pixman_image_t *s, SpicePoint *src_pos,
+                          pixman_image_t *p, SpicePoint *pat_pos)
 {
     rop3_with_pattern_handlers[rop3](d, s, src_pos, p, pat_pos);
 }
 
-void do_rop3_with_color(uint8_t rop3, cairo_surface_t *d, cairo_surface_t *s, SpicePoint *src_pos,
+void do_rop3_with_color(uint8_t rop3, pixman_image_t *d, pixman_image_t *s, SpicePoint *src_pos,
                         uint32_t rgb)
 {
     rop3_with_color_handlers[rop3](d, s, src_pos, rgb);

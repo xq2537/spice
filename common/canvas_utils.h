@@ -1,3 +1,4 @@
+/* -*- Mode: C; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 /*
    Copyright (C) 2009 Red Hat, Inc.
 
@@ -20,31 +21,30 @@
 
 #include <spice/types.h>
 
-#include "cairo.h"
+#include "pixman_utils.h"
 #include "lz.h"
 
+typedef struct PixmanData {
 #ifdef WIN32
-typedef struct BitmapCache {
     HBITMAP bitmap;
     HANDLE mutex;
-} BitmapCache;
 #endif
-
-extern const cairo_user_data_key_t bitmap_data_type;
+    uint8_t *data;
+} PixmanData;
 
 #ifdef WIN32
-cairo_surface_t *surface_create(HDC dc, cairo_format_t format,
-                                int width, int height, int top_down);
+pixman_image_t *surface_create(HDC dc, pixman_format_code_t format,
+                               int width, int height, int top_down);
 #else
-cairo_surface_t *surface_create(cairo_format_t format, int width, int height, int top_down);
+pixman_image_t *surface_create(pixman_format_code_t format, int width, int height, int top_down);
 #endif
 
 #ifdef WIN32
-cairo_surface_t *surface_create_stride(HDC dc, cairo_format_t format, int width, int height,
-                                       int stride);
+pixman_image_t *surface_create_stride(HDC dc, pixman_format_code_t format, int width, int height,
+                                      int stride);
 #else
-cairo_surface_t *surface_create_stride(cairo_format_t format, int width, int height,
-                                       int stride);
+pixman_image_t *surface_create_stride(pixman_format_code_t format, int width, int height,
+                                      int stride);
 #endif
 
 
@@ -52,10 +52,10 @@ typedef struct LzDecodeUsrData {
 #ifdef WIN32
     HDC dc;
 #endif
-    cairo_surface_t       *out_surface;
+    pixman_image_t       *out_surface;
 } LzDecodeUsrData;
 
 
-cairo_surface_t *alloc_lz_image_surface(LzDecodeUsrData *canvas_data, LzImageType type, int width,
-                                        int height, int gross_pixels, int top_down);
+pixman_image_t *alloc_lz_image_surface(LzDecodeUsrData *canvas_data, LzImageType type, int width,
+                                       int height, int gross_pixels, int top_down);
 #endif

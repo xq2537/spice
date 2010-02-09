@@ -722,7 +722,7 @@ typedef struct ImageCacheItem {
     uint32_t age;
 #endif
     struct ImageCacheItem *next;
-    cairo_surface_t *surf;
+    pixman_image_t *image;
 } ImageCacheItem;
 
 #define IMAGE_CACHE_HASH_SIZE 1024
@@ -3890,7 +3890,7 @@ static void image_cache_remove(ImageCache *cache, ImageCacheItem *item)
         now = &(*now)->next;
     }
     ring_remove(&item->lru_link);
-    cairo_surface_destroy(item->surf);
+    pixman_image_unref(item->image);
     free(item);
 #ifndef IMAGE_CACHE_AGE
     cache->num_items--;
@@ -3899,7 +3899,7 @@ static void image_cache_remove(ImageCache *cache, ImageCacheItem *item)
 
 #define IMAGE_CACHE_MAX_ITEMS 2
 
-static void image_cache_put(SpiceImageCache *spice_cache, uint64_t id, cairo_surface_t *surface)
+static void image_cache_put(SpiceImageCache *spice_cache, uint64_t id, pixman_image_t *image)
 {
     ImageCache *cache = (ImageCache *)spice_cache;
     ImageCacheItem *item;
@@ -3921,7 +3921,7 @@ static void image_cache_put(SpiceImageCache *spice_cache, uint64_t id, cairo_sur
 #else
     cache->num_items++;
 #endif
-    item->surf = cairo_surface_reference(surface);
+    item->image = pixman_image_ref(image);
     ring_item_init(&item->lru_link);
 
     item->next = cache->hash_table[item->id % IMAGE_CACHE_HASH_SIZE];
@@ -3930,7 +3930,7 @@ static void image_cache_put(SpiceImageCache *spice_cache, uint64_t id, cairo_sur
     ring_add(&cache->lru, &item->lru_link);
 }
 
-static cairo_surface_t *image_cache_get(SpiceImageCache *spice_cache, uint64_t id)
+static pixman_image_t *image_cache_get(SpiceImageCache *spice_cache, uint64_t id)
 {
     ImageCache *cache = (ImageCache *)spice_cache;
 
@@ -3938,7 +3938,7 @@ static cairo_surface_t *image_cache_get(SpiceImageCache *spice_cache, uint64_t i
     if (!item) {
         red_error("not found");
     }
-    return cairo_surface_reference(item->surf);
+    return pixman_image_ref(item->image);
 }
 
 static void image_cache_init(ImageCache *cache)

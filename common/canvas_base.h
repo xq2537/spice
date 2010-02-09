@@ -20,7 +20,7 @@
 #define _H_CANVAS_BASE
 
 
-#include "cairo.h"
+#include "pixman_utils.h"
 #include "lz.h"
 #include <spice/draw.h>
 
@@ -30,9 +30,9 @@ typedef struct _SpicePaletteCache SpicePaletteCache;
 typedef struct {
     void (*put)(SpiceImageCache *cache,
                 uint64_t id,
-                cairo_surface_t *surface);
-    cairo_surface_t *(*get)(SpiceImageCache *cache,
-                            uint64_t id);
+                pixman_image_t *surface);
+    pixman_image_t *(*get)(SpiceImageCache *cache,
+                           uint64_t id);
 } SpiceImageCacheOps;
 
 struct _SpiceImageCache {
