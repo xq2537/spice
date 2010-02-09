@@ -181,7 +181,7 @@ RedPixmapCairo::~RedPixmapCairo()
     cairo_destroy(((RedDrawable_p*)get_opaque())->cairo);
     if (((PixelsSource_p*)get_opaque())->type == PIXELS_SOURCE_TYPE_PIXMAP) {
         delete ((PixelsSource_p*)get_opaque())->pixmap.x_image;
-        delete _data;
+        delete[] _data;
     } else {
         XShmSegmentInfo *shminfo = ((PixelsSource_p*)get_opaque())->x_shm_drawable.shminfo;
         XShmDetach(XPlatform::get_display(), shminfo);

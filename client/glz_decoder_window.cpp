@@ -50,7 +50,7 @@ GlzDecoderWindow::GlzDecoderWindow(int pixels_capacity, GlzDecoderDebug &debug_c
 GlzDecoderWindow::~GlzDecoderWindow()
 {
     clear();
-    delete _images;
+    delete[] _images;
 }
 
 DecodedImageWinId GlzDecoderWindow::pre_decode(uint64_t image_id, uint64_t relative_head_id)
@@ -246,7 +246,7 @@ void GlzDecoderWindow::realloc(int size)
     for (int i = 0; i < _n_images; i++) {
         new_images[i] = _images[(i + _head_idx) % _images_capacity];
     }
-    delete _images;
+    delete[] _images;
 
     _images = new_images;
     _head_idx = 0;
