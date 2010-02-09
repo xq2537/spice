@@ -16,6 +16,7 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <math.h>
 #include "cairo_canvas.h"
 #define CANVAS_USE_PIXMAN
 #include "canvas_base.c"
@@ -23,6 +24,8 @@
 #include "rect.h"
 #include "region.h"
 #include "pixman_utils.h"
+
+#define ROUND(_x) floor((_x) + 0.5)
 
 struct CairoCanvas {
     CanvasBase base;
@@ -1094,6 +1097,96 @@ static void fill_tiled_rects_rop(CairoCanvas *canvas,
     pixman_image_unref(tile);
 }
 
+
+static void blit_with_region(CairoCanvas *canvas,
+                             pixman_region32_t *region,
+                             pixman_image_t *src_image,
+                             int offset_x, int offset_y)
+{
+    pixman_box32_t *rects;
+    int n_rects, i;
+
+    rects = pixman_region32_rectangles(region, &n_rects);
+
+    for (i = 0; i < n_rects; i++) {
+        int src_x, src_y, dest_x, dest_y, width, height;
+
+        dest_x = rects[i].x1;
+        dest_y = rects[i].y1;
+        width = rects[i].x2 - rects[i].x1;
+        height = rects[i].y2 - rects[i].y1;
+
+        src_x = rects[i].x1 - offset_x;
+        src_y = rects[i].y1 - offset_y;
+
+        spice_pixman_blit(canvas->image,
+                          src_image,
+                          src_x, src_y,
+                          dest_x, dest_y,
+                          width, height);
+    }
+}
+
+static void blit_image(CairoCanvas *canvas,
+                       pixman_region32_t *region,
+                       SPICE_ADDRESS src_bitmap,
+                       int offset_x, int offset_y)
+{
+    pixman_image_t *src_image;
+
+    src_image = canvas_get_image(&canvas->base, src_bitmap);
+    blit_with_region(canvas, region, src_image,
+                      offset_x, offset_y);
+    pixman_image_unref(src_image);
+}
+
+static void scale_image(CairoCanvas *canvas,
+                        pixman_region32_t *region,
+                        SPICE_ADDRESS src_bitmap,
+                        int src_x, int src_y,
+                        int src_width, int src_height,
+                        int dest_x, int dest_y,
+                        int dest_width, int dest_height,
+                        int scale_mode)
+{
+    pixman_transform_t transform;
+    pixman_image_t *src;
+    double sx, sy;
+
+    sx = (double)(src_width) / (dest_width);
+    sy = (double)(src_height) / (dest_height);
+
+    src = canvas_get_image(&canvas->base, src_bitmap);
+
+    pixman_image_set_clip_region32(canvas->image, region);
+
+    pixman_transform_init_scale(&transform,
+                                pixman_double_to_fixed(sx),
+                                pixman_double_to_fixed(sy));
+
+    pixman_image_set_transform(src, &transform);
+    pixman_image_set_repeat(src, PIXMAN_REPEAT_NONE);
+    ASSERT(scale_mode == SPICE_IMAGE_SCALE_MODE_INTERPOLATE ||
+           scale_mode == SPICE_IMAGE_SCALE_MODE_NEAREST);
+    pixman_image_set_filter(src,
+                            (scale_mode == SPICE_IMAGE_SCALE_MODE_NEAREST) ?
+                            PIXMAN_FILTER_NEAREST : PIXMAN_FILTER_GOOD,
+                            NULL, 0);
+
+    pixman_image_composite32(PIXMAN_OP_SRC,
+                             src, NULL, canvas->image,
+                             ROUND(src_x / sx), ROUND(src_y / sy), /* src */
+                             0, 0, /* mask */
+                             dest_x, dest_y, /* dst */
+                             dest_width, dest_height);
+
+    pixman_transform_init_identity(&transform);
+    pixman_image_set_transform(src, &transform);
+
+    pixman_image_set_clip_region32(canvas->image, NULL);
+    pixman_image_unref(src);
+}
+
 static void draw_brush(CairoCanvas *canvas,
                        pixman_region32_t *region,
                        SpiceBrush *brush,
@@ -1454,40 +1547,53 @@ void canvas_draw_alpha_blend(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *cl
 
 void canvas_draw_opaque(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque)
 {
-    cairo_pattern_t *pattern;
-    DrawMaskData draw_data;
+    pixman_region32_t dest_region;
+    SpiceROP rop;
 
-    draw_data.cairo = canvas->cairo;
+    pixman_region32_init_rect(&dest_region,
+                              bbox->left, bbox->top,
+                              bbox->right - bbox->left,
+                              bbox->bottom - bbox->top);
 
-    cairo_save(draw_data.cairo);
-    canvas_clip(canvas, clip);
+    canvas_clip_pixman(canvas, &dest_region, clip);
+    canvas_mask_pixman(canvas, &dest_region, &opaque->mask,
+                       bbox->left, bbox->top);
 
-    pattern = canvas_src_image_to_pat(canvas, opaque->src_bitmap, &opaque->src_area, bbox,
-                                      opaque->rop_decriptor & SPICE_ROPD_INVERS_SRC, opaque->scale_mode);
-    cairo_set_source(draw_data.cairo, pattern);
-    cairo_pattern_destroy(pattern);
-    cairo_set_operator(draw_data.cairo, CAIRO_OPERATOR_RASTER_COPY);
-    if ((draw_data.mask = canvas_get_mask_pattern(canvas, &opaque->mask, bbox->left, bbox->top))) {
-        cairo_rectangle(draw_data.cairo,
-                        bbox->left,
-                        bbox->top,
-                        bbox->right - bbox->left,
-                        bbox->bottom - bbox->top);
-        cairo_clip(draw_data.cairo);
-        cairo_mask(draw_data.cairo, draw_data.mask);
-        canvas_draw(canvas, &opaque->brush, opaque->rop_decriptor, __draw_mask, &draw_data);
-        cairo_pattern_destroy(draw_data.mask);
-    } else {
-        cairo_rectangle(draw_data.cairo, bbox->left, bbox->top, bbox->right - bbox->left,
-                        bbox->bottom - bbox->top);
-        cairo_fill_preserve(draw_data.cairo);
-        canvas_draw(canvas, &opaque->brush, opaque->rop_decriptor, (DrawMethod)cairo_fill_preserve,
-                    draw_data.cairo);
-        cairo_new_path(draw_data.cairo);
+    rop = ropd_descriptor_to_rop(opaque->rop_decriptor,
+                                 ROP_INPUT_BRUSH,
+                                 ROP_INPUT_SRC);
+
+    if (rop == SPICE_ROP_NOOP || pixman_region32_n_rects(&dest_region) == 0) {
+        canvas_touch_image(&canvas->base, opaque->src_bitmap);
+        touch_brush(canvas, &opaque->brush);
+        pixman_region32_fini(&dest_region);
+        return;
     }
 
-    cairo_restore(draw_data.cairo);
+    if (rect_is_same_size(bbox, &opaque->src_area)) {
+        blit_image(canvas, &dest_region,
+                   opaque->src_bitmap,
+                   bbox->left - opaque->src_area.left,
+                   bbox->top - opaque->src_area.top);
+    } else {
+        scale_image(canvas, &dest_region,
+                    opaque->src_bitmap,
+                    opaque->src_area.left,
+                    opaque->src_area.top,
+                    opaque->src_area.right - opaque->src_area.left,
+                    opaque->src_area.bottom - opaque->src_area.top,
+                    bbox->left,
+                    bbox->top,
+                    bbox->right - bbox->left,
+                    bbox->bottom - bbox->top,
+                    opaque->scale_mode);
+    }
+
+    draw_brush(canvas, &dest_region, &opaque->brush, rop);
+
+    pixman_region32_fini(&dest_region);
 }
+
 
 void canvas_draw_blend(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend)
 {
