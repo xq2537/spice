@@ -1416,31 +1416,71 @@ static cairo_pattern_t *canvas_src_image_to_pat(CairoCanvas *canvas, SPICE_ADDRE
 
 void canvas_draw_copy(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy)
 {
-    cairo_t *cairo = canvas->cairo;
-    cairo_pattern_t *pattern;
-    cairo_pattern_t *mask;
+    pixman_region32_t dest_region;
+    SpiceROP rop;
 
-    cairo_save(cairo);
-    canvas_clip(canvas, clip);
+    pixman_region32_init_rect(&dest_region,
+                              bbox->left, bbox->top,
+                              bbox->right - bbox->left,
+                              bbox->bottom - bbox->top);
 
-    pattern = canvas_src_image_to_pat(canvas, copy->src_bitmap, &copy->src_area, bbox,
-                                      copy->rop_decriptor & SPICE_ROPD_INVERS_SRC, copy->scale_mode);
-    cairo_set_source(cairo, pattern);
-    cairo_pattern_destroy(pattern);
-    cairo_set_operator(cairo, CAIRO_OPERATOR_RASTER_COPY);
-    if ((mask = canvas_get_mask_pattern(canvas, &copy->mask, bbox->left, bbox->top))) {
-        cairo_rectangle(cairo, bbox->left, bbox->top, bbox->right - bbox->left,
-                        bbox->bottom - bbox->top);
-        cairo_clip(cairo);
-        cairo_mask(cairo, mask);
-        cairo_pattern_destroy(mask);
-    } else {
-        cairo_rectangle(cairo, bbox->left, bbox->top, bbox->right - bbox->left,
-                        bbox->bottom - bbox->top);
-        cairo_fill(cairo);
+    canvas_clip_pixman(canvas, &dest_region, clip);
+    canvas_mask_pixman(canvas, &dest_region, &copy->mask,
+                       bbox->left, bbox->top);
+
+    rop = ropd_descriptor_to_rop(copy->rop_decriptor,
+                                 ROP_INPUT_SRC,
+                                 ROP_INPUT_DEST);
+
+    if (rop == SPICE_ROP_NOOP || pixman_region32_n_rects(&dest_region) == 0) {
+        canvas_touch_image(&canvas->base, copy->src_bitmap);
+        pixman_region32_fini(&dest_region);
+        return;
     }
 
-    cairo_restore(cairo);
+    if (rect_is_same_size(bbox, &copy->src_area)) {
+        if (rop == SPICE_ROP_COPY) {
+            blit_image(canvas, &dest_region,
+                       copy->src_bitmap,
+                       bbox->left - copy->src_area.left,
+                       bbox->top - copy->src_area.top);
+        } else {
+            blit_image_rop(canvas, &dest_region,
+                           copy->src_bitmap,
+                           bbox->left - copy->src_area.left,
+                           bbox->top - copy->src_area.top,
+                           rop);
+        }
+    } else {
+        if (rop == SPICE_ROP_COPY) {
+            scale_image(canvas, &dest_region,
+                        copy->src_bitmap,
+                        copy->src_area.left,
+                        copy->src_area.top,
+                        copy->src_area.right - copy->src_area.left,
+                        copy->src_area.bottom - copy->src_area.top,
+                        bbox->left,
+                        bbox->top,
+                        bbox->right - bbox->left,
+                        bbox->bottom - bbox->top,
+                        copy->scale_mode);
+        } else {
+            scale_image_rop(canvas, &dest_region,
+                            copy->src_bitmap,
+                            copy->src_area.left,
+                            copy->src_area.top,
+                            copy->src_area.right - copy->src_area.left,
+                            copy->src_area.bottom - copy->src_area.top,
+                            bbox->left,
+                            bbox->top,
+                            bbox->right - bbox->left,
+                            bbox->bottom - bbox->top,
+                            copy->scale_mode,
+                            rop);
+        }
+    }
+
+    pixman_region32_fini(&dest_region);
 }
 
 #ifdef WIN32
