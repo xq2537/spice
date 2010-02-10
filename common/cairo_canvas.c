@@ -1002,6 +1002,75 @@ static void __draw_mask(void *data)
     cairo_mask(((DrawMaskData *)data)->cairo, ((DrawMaskData *)data)->mask);
 }
 
+static void copy_region(CairoCanvas *canvas,
+                        pixman_region32_t *dest_region,
+                        int dx, int dy)
+{
+    pixman_box32_t *dest_rects;
+    int n_rects;
+    int i, j, end_line;
+
+    dest_rects = pixman_region32_rectangles(dest_region, &n_rects);
+
+    if (dy > 0) {
+        if (dx >= 0) {
+            /* south-east: copy x and y in reverse order */
+            for (i = n_rects - 1; i >= 0; i--) {
+                spice_pixman_copy_rect(canvas->image,
+                                       dest_rects[i].x1 - dx, dest_rects[i].y1 - dy,
+                                       dest_rects[i].x2 - dest_rects[i].x1,
+                                       dest_rects[i].y2 - dest_rects[i].y1,
+                                       dest_rects[i].x1, dest_rects[i].y1);
+            }
+        } else {
+            /* south-west: Copy y in reverse order, but x in forward order */
+            i = n_rects - 1;
+
+            while (i >= 0) {
+                /* Copy all rects with same y in forward order */
+                for (end_line = i - 1; end_line >= 0 && dest_rects[end_line].y1 == dest_rects[i].y1; end_line--) {
+                }
+                for (j = end_line + 1; j <= i; j++) {
+                    spice_pixman_copy_rect(canvas->image,
+                                           dest_rects[j].x1 - dx, dest_rects[j].y1 - dy,
+                                           dest_rects[j].x2 - dest_rects[j].x1,
+                                           dest_rects[j].y2 - dest_rects[j].y1,
+                                           dest_rects[j].x1, dest_rects[j].y1);
+                }
+                i = end_line;
+            }
+        }
+    } else {
+        if (dx > 0) {
+            /* north-east: copy y in forward order, but x in reverse order */
+            i = 0;
+
+            while (i < n_rects) {
+                /* Copy all rects with same y in reverse order */
+                for (end_line = i; end_line < n_rects && dest_rects[end_line].y1 == dest_rects[i].y1; end_line++) {
+                }
+                for (j = end_line - 1; j >= i; j--) {
+                    spice_pixman_copy_rect(canvas->image,
+                                           dest_rects[j].x1 - dx, dest_rects[j].y1 - dy,
+                                           dest_rects[j].x2 - dest_rects[j].x1,
+                                           dest_rects[j].y2 - dest_rects[j].y1,
+                                           dest_rects[j].x1, dest_rects[j].y1);
+                }
+                i = end_line;
+            }
+        } else {
+            /* north-west: Copy x and y in forward order */
+            for (i = 0; i < n_rects; i++) {
+                spice_pixman_copy_rect(canvas->image,
+                                       dest_rects[i].x1 - dx, dest_rects[i].y1 - dy,
+                                       dest_rects[i].x2 - dest_rects[i].x1,
+                                       dest_rects[i].y2 - dest_rects[i].y1,
+                                       dest_rects[i].x1, dest_rects[i].y1);
+            }
+        }
+    }
+}
+
 static void fill_solid_rects(CairoCanvas *canvas,
                              pixman_region32_t *region,
                              uint32_t color)
@@ -1939,226 +2008,36 @@ void canvas_draw_rop3(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, Spi
     cairo_restore(cairo);
 }
 
-#define FAST_COPY_BITS
-
-#ifdef FAST_COPY_BITS
-
-static inline void __canvas_copy_bits_up(uint8_t *data, const int stride,
-                                         const int src_x, const int src_y,
-                                         const int width, const int height,
-                                         const int dest_x, const int dest_y)
-{
-    uint8_t *src = data + src_y * stride + src_x * sizeof(uint32_t);
-    uint8_t *dest = data + dest_y * stride + dest_x * sizeof(uint32_t);
-    uint8_t *end = dest + height * stride;
-    for (; dest != end; dest += stride, src += stride) {
-        memcpy(dest, src, width * sizeof(uint32_t));
-    }
-}
-
-static inline void __canvas_copy_bits_down(uint8_t *data, const int stride,
-                                           const int src_x, const int src_y,
-                                           const int width, const int height,
-                                           const int dest_x, const int dest_y)
-{
-    uint8_t *src = data + (src_y + height - 1) * stride + src_x * sizeof(uint32_t);
-    uint8_t *end = data + (dest_y - 1) * stride + dest_x * sizeof(uint32_t);
-    uint8_t *dest = end + height * stride;
-
-    for (; dest != end; dest -= stride, src -= stride) {
-        memcpy(dest, src, width * sizeof(uint32_t));
-    }
-}
-
-static inline void __canvas_copy_bits_right(uint8_t *data, const int stride,
-                                            const int src_x, const int src_y,
-                                            const int width, const int height,
-                                            const int dest_x, const int dest_y)
-{
-    uint8_t *src = data + src_y * stride + (src_x + width - 1) * sizeof(uint32_t);
-    uint8_t *dest = data + dest_y * stride + (dest_x + width - 1) * sizeof(uint32_t);
-    uint8_t *end = dest + height * stride;
-    for (; dest != end; dest += stride, src += stride) {
-        uint32_t *src_pix = (uint32_t *)src;
-        uint32_t *end_pix = src_pix - width;
-        uint32_t *dest_pix = (uint32_t *)dest;
-
-        for (; src_pix > end_pix; src_pix--, dest_pix--) {
-            *dest_pix = *src_pix;
-        }
-    }
-}
-
-static inline void __canvas_copy_rect_bits(uint8_t *data, const int stride, SpiceRect *dest_rect,
-                                           SpicePoint *src_pos)
-{
-    if (dest_rect->top > src_pos->y) {
-        __canvas_copy_bits_down(data, stride, src_pos->x, src_pos->y,
-                                dest_rect->right - dest_rect->left,
-                                dest_rect->bottom - dest_rect->top,
-                                dest_rect->left, dest_rect->top);
-    } else if (dest_rect->top < src_pos->y || dest_rect->left < src_pos->x) {
-        __canvas_copy_bits_up(data, stride, src_pos->x, src_pos->y,
-                              dest_rect->right - dest_rect->left,
-                              dest_rect->bottom - dest_rect->top,
-                              dest_rect->left, dest_rect->top);
-    } else {
-        __canvas_copy_bits_right(data, stride, src_pos->x, src_pos->y,
-                                 dest_rect->right - dest_rect->left,
-                                 dest_rect->bottom - dest_rect->top,
-                                 dest_rect->left, dest_rect->top);
-    }
-}
-
-static inline void canvas_copy_fix_clip_area(const SpiceRect *dest,
-                                             const SpicePoint *src_pos,
-                                             const SpiceRect *now,
-                                             SpicePoint *ret_pos,
-                                             SpiceRect *ret_dest)
-{
-    *ret_dest = *now;
-    rect_sect(ret_dest, dest);
-    ret_pos->x = src_pos->x + (ret_dest->left - dest->left);
-    ret_pos->y = src_pos->y + (ret_dest->top - dest->top);
-}
-
-static inline void __canvas_copy_region_bits(uint8_t *data, int stride, SpiceRect *dest_rect,
-                                             SpicePoint *src_pos, QRegion *region)
-{
-    SpiceRect curr_area;
-    SpicePoint curr_pos;
-    SpiceRect *now;
-    SpiceRect *end;
-
-    if (dest_rect->top > src_pos->y) {
-        end = region->rects - 1;
-        now = end + region->num_rects;
-        if (dest_rect->left < src_pos->x) {
-            for (; now > end; now--) {
-                SpiceRect *line_end = now;
-                SpiceRect *line_pos;
-
-                while (now - 1 > end && now->top == now[-1].top) {
-                    now--;
-                }
-
-                for (line_pos = now; line_pos <= line_end; line_pos++) {
-                    canvas_copy_fix_clip_area(dest_rect, src_pos, line_pos, &curr_pos, &curr_area);
-                    __canvas_copy_bits_down(data, stride, curr_pos.x, curr_pos.y,
-                                            curr_area.right - curr_area.left,
-                                            curr_area.bottom - curr_area.top,
-                                            curr_area.left, curr_area.top);
-                }
-            }
-        } else {
-            for (; now > end; now--) {
-                canvas_copy_fix_clip_area(dest_rect, src_pos, now, &curr_pos, &curr_area);
-                __canvas_copy_bits_down(data, stride, curr_pos.x, curr_pos.y,
-                                        curr_area.right - curr_area.left,
-                                        curr_area.bottom - curr_area.top,
-                                        curr_area.left, curr_area.top);
-            }
-        }
-    } else if (dest_rect->top < src_pos->y || dest_rect->left < src_pos->x) {
-        now = region->rects;
-        end = now + region->num_rects;
-        if (dest_rect->left > src_pos->x) {
-            for (; now < end; now++) {
-                SpiceRect *line_end = now;
-                SpiceRect *line_pos;
-
-                while (now + 1 < end && now->top == now[1].top) {
-                    now++;
-                }
-
-                for (line_pos = now; line_pos >= line_end; line_pos--) {
-                    canvas_copy_fix_clip_area(dest_rect, src_pos, line_pos, &curr_pos, &curr_area);
-                    __canvas_copy_bits_up(data, stride, curr_pos.x, curr_pos.y,
-                                          curr_area.right - curr_area.left,
-                                          curr_area.bottom - curr_area.top,
-                                          curr_area.left, curr_area.top);
-                }
-            }
-        } else {
-            for (; now < end; now++) {
-                canvas_copy_fix_clip_area(dest_rect, src_pos, now, &curr_pos, &curr_area);
-                __canvas_copy_bits_up(data, stride, curr_pos.x, curr_pos.y,
-                                      curr_area.right - curr_area.left,
-                                      curr_area.bottom - curr_area.top,
-                                      curr_area.left, curr_area.top);
-            }
-        }
-    } else {
-        end = region->rects - 1;
-        now = end + region->num_rects;
-        for (; now > end; now--) {
-            canvas_copy_fix_clip_area(dest_rect, src_pos, now, &curr_pos, &curr_area);
-            __canvas_copy_bits_right(data, stride, curr_pos.x, curr_pos.y,
-                                     curr_area.right - curr_area.left,
-                                     curr_area.bottom - curr_area.top,
-                                     curr_area.left, curr_area.top);
-        }
-    }
-}
-
-#endif
-
 void canvas_copy_bits(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos)
 {
-    cairo_t *cairo = canvas->cairo;
-    cairo_surface_t *cairo_surface;
-    pixman_image_t *surface;
-    int32_t width;
-    int32_t heigth;
+    pixman_region32_t dest_region;
+    int dx, dy;
 
-    cairo_save(cairo);
-#ifdef FAST_COPY_BITS
-    switch (clip->type) {
-    case SPICE_CLIP_TYPE_NONE: {
-        __canvas_copy_rect_bits((uint8_t *)pixman_image_get_data(canvas->image),
-                                pixman_image_get_stride(canvas->image),
-                                bbox, src_pos);
-        break;
-    }
-    case SPICE_CLIP_TYPE_RECTS: {
-        uint32_t *n = (uint32_t *)SPICE_GET_ADDRESS(clip->data);
-        access_test(&canvas->base, n, sizeof(uint32_t));
+    pixman_region32_init_rect(&dest_region,
+                              bbox->left, bbox->top,
+                              bbox->right - bbox->left,
+                              bbox->bottom - bbox->top);
 
-        SpiceRect *now = (SpiceRect *)(n + 1);
-        SpiceRect *end = now + *n;
-        access_test(&canvas->base, now, (unsigned long)end - (unsigned long)now);
-        uint8_t *data = (uint8_t *)pixman_image_get_data(canvas->image);
-        int stride = pixman_image_get_stride(canvas->image);
+    canvas_clip_pixman(canvas, &dest_region, clip);
 
-        //using QRegion in order to sort and remove intersections
-        QRegion region;
-        region_init(&region);
-        for (; now < end; now++) {
-            region_add(&region, now);
-        }
-        __canvas_copy_region_bits(data, stride, bbox, src_pos, &region);
-        region_destroy(&region);
-        break;
-    }
-    default:
-#endif
-        canvas_clip(canvas, clip);
+    dx = bbox->left - src_pos->x;
+    dy = bbox->top - src_pos->y;
 
-        width = bbox->right - bbox->left;
-        heigth = bbox->bottom - bbox->top;
-        surface = canvas_surface_from_self(canvas, src_pos, width, heigth);
-        cairo_surface = surface_from_pixman_image (surface);
-        cairo_set_source_surface(cairo, cairo_surface, bbox->left, bbox->top);
-        cairo_rectangle(cairo, bbox->left, bbox->top, width, heigth);
-        cairo_set_operator(cairo, CAIRO_OPERATOR_RASTER_COPY);
-        cairo_fill(cairo);
-        cairo_surface_destroy(cairo_surface);
-        pixman_image_unref (surface);
-#ifdef FAST_COPY_BITS
+    if (dx != 0 || dy != 0) {
+        pixman_region32_t src_region;
+
+        /* Clip so we don't read outside canvas */
+        pixman_region32_init_rect(&src_region,
+                                  dx, dy,
+                                  pixman_image_get_width (canvas->image),
+                                  pixman_image_get_height (canvas->image));
+        pixman_region32_intersect(&dest_region, &dest_region, &src_region);
+        pixman_region32_fini(&src_region);
+
+        copy_region(canvas, &dest_region, dx, dy);
     }
 
-#endif
-    cairo_restore(cairo);
+    pixman_region32_fini(&dest_region);
 }
 
 static void canvas_draw_raster_str(CairoCanvas *canvas, SpiceString *str, int bpp,
