@@ -851,6 +851,43 @@ static pixman_image_t* canvas_surface_from_self(CairoCanvas *canvas, SpicePoint 
     return surface;
 }
 
+static pixman_image_t *canvas_get_pixman_brush(CairoCanvas *canvas,
+                                               SpiceBrush *brush)
+{
+    switch (brush->type) {
+    case SPICE_BRUSH_TYPE_SOLID: {
+        uint32_t color = brush->u.color;
+        pixman_color_t c;
+
+        c.blue = ((color & canvas->base.color_mask) * 0xffff) / canvas->base.color_mask;
+        color >>= canvas->base.color_shift;
+        c.green = ((color & canvas->base.color_mask) * 0xffff) / canvas->base.color_mask;
+        color >>= canvas->base.color_shift;
+        c.red = ((color & canvas->base.color_mask) * 0xffff) / canvas->base.color_mask;
+        c.alpha = 0xffff;
+
+        return pixman_image_create_solid_fill(&c);
+    }
+    case SPICE_BRUSH_TYPE_PATTERN: {
+        pixman_image_t* surface;
+        pixman_transform_t t;
+
+        surface = canvas_get_image(&canvas->base, brush->u.pattern.pat);
+        pixman_transform_init_translate(&t,
+                                        pixman_int_to_fixed(-brush->u.pattern.pos.x),
+                                        pixman_int_to_fixed(-brush->u.pattern.pos.y));
+        pixman_image_set_transform(surface, &t);
+        pixman_image_set_repeat(surface, PIXMAN_REPEAT_NORMAL);
+        return surface;
+    }
+    case SPICE_BRUSH_TYPE_NONE:
+        return NULL;
+    default:
+        CANVAS_ERROR("invalid brush type");
+    }
+}
+
+
 static cairo_pattern_t *canvas_get_brush(CairoCanvas *canvas, SpiceBrush *brush, uint32_t invers)
 {
     switch (brush->type) {
@@ -990,16 +1027,6 @@ static cairo_pattern_t *canvas_get_mask_pattern(CairoCanvas *canvas, SpiceQMask 
     cairo_matrix_init_translate(&matrix, mask->pos.x - x, mask->pos.y - y);
     cairo_pattern_set_matrix(pattern, &matrix);
     return pattern;
-}
-
-typedef struct DrawMaskData {
-    cairo_t *cairo;
-    cairo_pattern_t *mask;
-} DrawMaskData;
-
-static void __draw_mask(void *data)
-{
-    cairo_mask(((DrawMaskData *)data)->cairo, ((DrawMaskData *)data)->mask);
 }
 
 static void copy_region(CairoCanvas *canvas,
@@ -2040,83 +2067,85 @@ void canvas_copy_bits(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, Spi
     pixman_region32_fini(&dest_region);
 }
 
-static void canvas_draw_raster_str(CairoCanvas *canvas, SpiceString *str, int bpp,
-                                   SpiceBrush *brush, uint16_t rop_decriptor)
-{
-    pixman_image_t *str_mask;
-    cairo_surface_t *cairo_str_mask;
-    DrawMaskData draw_data;
-    cairo_matrix_t matrix;
-    SpicePoint pos;
-
-    str_mask = canvas_get_str_mask(&canvas->base, str, bpp, &pos);
-    cairo_str_mask = surface_from_pixman_image (str_mask);
-    draw_data.cairo = canvas->cairo;
-    draw_data.mask = cairo_pattern_create_for_surface(cairo_str_mask);
-    if (cairo_pattern_status(draw_data.mask) != CAIRO_STATUS_SUCCESS) {
-        cairo_surface_destroy(cairo_str_mask);
-        CANVAS_ERROR("create pattern failed, %s",
-                     cairo_status_to_string(cairo_pattern_status(draw_data.mask)));
-    }
-    cairo_matrix_init_translate(&matrix, -pos.x, -pos.y);
-    cairo_pattern_set_matrix(draw_data.mask, &matrix);
-    canvas_draw(canvas, brush, rop_decriptor, __draw_mask, &draw_data);
-    cairo_pattern_destroy(draw_data.mask);
-    pixman_image_unref(str_mask);
-    cairo_surface_destroy(cairo_str_mask);
-}
-
-static void canvas_draw_vector_str(CairoCanvas *canvas, SpiceString *str, SpiceBrush *brush,
-                                   uint16_t rop_decriptor)
-{
-    SpiceVectorGlyph *glyph = (SpiceVectorGlyph *)str->data;
-    int i;
-
-    for (i = 0; i < str->length; i++) {
-        SpiceVectorGlyph *next_glyph = canvas_next_vector_glyph(glyph);
-        access_test(&canvas->base, glyph, (uint8_t *)next_glyph - (uint8_t *)glyph);
-        canvas_set_path(canvas, glyph->data);
-        glyph = next_glyph;
-    }
-    canvas_draw(canvas, brush, rop_decriptor, (DrawMethod)cairo_fill_preserve, canvas->cairo);
-    cairo_new_path(canvas->cairo);
-}
-
 void canvas_draw_text(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceText *text)
 {
-    cairo_t *cairo = canvas->cairo;
+    pixman_region32_t dest_region;
+    pixman_image_t *str_mask, *brush;
     SpiceString *str;
+    SpicePoint pos;
+    int depth;
 
-    cairo_save(cairo);
-    canvas_clip(canvas, clip);
+    pixman_region32_init_rect(&dest_region,
+                              bbox->left, bbox->top,
+                              bbox->right - bbox->left,
+                              bbox->bottom - bbox->top);
+
+    canvas_clip_pixman(canvas, &dest_region, clip);
+
+    if (pixman_region32_n_rects(&dest_region) == 0) {
+        touch_brush(canvas, &text->fore_brush);
+        touch_brush(canvas, &text->back_brush);
+        pixman_region32_fini(&dest_region);
+        return;
+    }
+
     if (!rect_is_empty(&text->back_area)) {
-        cairo_rectangle(cairo,
-                        text->back_area.left,
-                        text->back_area.top,
-                        text->back_area.right - text->back_area.left,
-                        text->back_area.bottom - text->back_area.top);
-        canvas_draw(canvas, &text->back_brush, text->back_mode,
-                    (DrawMethod)cairo_fill_preserve, cairo);
-        cairo_new_path(cairo);
+        pixman_region32_t back_region;
+
+        /* Nothing else makes sense for text and we should deprecate it
+         * and actually it means OVER really */
+        ASSERT(text->fore_mode == SPICE_ROPD_OP_PUT);
+
+        pixman_region32_init_rect(&back_region,
+                                  text->back_area.left,
+                                  text->back_area.top,
+                                  text->back_area.right - text->back_area.left,
+                                  text->back_area.bottom - text->back_area.top);
+
+        pixman_region32_intersect(&back_region, &back_region, &dest_region);
+
+        if (pixman_region32_not_empty(&back_region)) {
+            draw_brush(canvas, &back_region, &text->back_brush, SPICE_ROP_COPY);
+        }
+
+        pixman_region32_fini(&back_region);
     }
     str = (SpiceString *)SPICE_GET_ADDRESS(text->str);
 
     if (str->flags & SPICE_STRING_FLAGS_RASTER_A1) {
-        canvas_draw_raster_str(canvas, str, 1, &text->fore_brush, text->fore_mode);
+        depth = 1;
     } else if (str->flags & SPICE_STRING_FLAGS_RASTER_A4) {
-        canvas_draw_raster_str(canvas, str, 4, &text->fore_brush, text->fore_mode);
+        depth = 4;
     } else if (str->flags & SPICE_STRING_FLAGS_RASTER_A8) {
-        WARN("untested path A8 glyphs, doing nothing");
-        if (0) {
-            canvas_draw_raster_str(canvas, str, 8, &text->fore_brush, text->fore_mode);
-        }
+        WARN("untested path A8 glyphs");
+        depth = 8;
     } else {
-        WARN("untested path vector glyphs, doing nothing");
-        if (0) {
-            canvas_draw_vector_str(canvas, str, &text->fore_brush, text->fore_mode);
-        }
+        WARN("unsupported path vector glyphs");
+        pixman_region32_fini (&dest_region);
+        return;
     }
-    cairo_restore(cairo);
+
+    brush = canvas_get_pixman_brush(canvas, &text->fore_brush);
+
+    str_mask = canvas_get_str_mask(&canvas->base, str, depth, &pos);
+    if (brush) {
+        pixman_image_set_clip_region32(canvas->image, &dest_region);
+
+        pixman_image_composite32(PIXMAN_OP_OVER,
+                                 brush,
+                                 str_mask,
+                                 canvas->image,
+                                 0, 0,
+                                 0, 0,
+                                 pos.x, pos.y,
+                                 pixman_image_get_width(str_mask),
+                                 pixman_image_get_height(str_mask));
+        pixman_image_unref(brush);
+
+        pixman_image_set_clip_region32(canvas->image, NULL);
+    }
+    pixman_image_unref(str_mask);
+    pixman_region32_fini(&dest_region);
 }
 
 void canvas_draw_stroke(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke)
