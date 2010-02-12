@@ -2053,30 +2053,75 @@ static inline void canvas_fill_common(CairoCanvas *canvas, SpiceRect *bbox, Spic
 
 void canvas_draw_blackness(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness)
 {
-    cairo_t *cairo = canvas->cairo;
-    cairo_save(cairo);
-    cairo_set_source_rgb(cairo, 0, 0, 0);
-    canvas_fill_common(canvas, bbox, clip, &blackness->mask);
-    cairo_restore(cairo);
+    pixman_region32_t dest_region;
+
+    pixman_region32_init_rect(&dest_region,
+                              bbox->left, bbox->top,
+                              bbox->right - bbox->left,
+                              bbox->bottom - bbox->top);
+
+
+    canvas_clip_pixman(canvas, &dest_region, clip);
+    canvas_mask_pixman(canvas, &dest_region, &blackness->mask,
+                       bbox->left, bbox->top);
+
+    if (pixman_region32_n_rects(&dest_region) == 0) {
+        pixman_region32_fini (&dest_region);
+        return;
+    }
+
+    fill_solid_rects(canvas, &dest_region, 0x000000);
+
+    pixman_region32_fini(&dest_region);
 }
 
 void canvas_draw_whiteness(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness)
 {
-    cairo_t *cairo = canvas->cairo;
-    cairo_save(cairo);
-    cairo_set_source_rgb(cairo, 1, 1, 1);
-    canvas_fill_common(canvas, bbox, clip, &whiteness->mask);
-    cairo_restore(cairo);
+    pixman_region32_t dest_region;
+
+    pixman_region32_init_rect(&dest_region,
+                              bbox->left, bbox->top,
+                              bbox->right - bbox->left,
+                              bbox->bottom - bbox->top);
+
+
+    canvas_clip_pixman(canvas, &dest_region, clip);
+    canvas_mask_pixman(canvas, &dest_region, &whiteness->mask,
+                       bbox->left, bbox->top);
+
+    if (pixman_region32_n_rects(&dest_region) == 0) {
+        pixman_region32_fini(&dest_region);
+        return;
+    }
+
+    fill_solid_rects(canvas, &dest_region, 0xffffffff);
+
+    pixman_region32_fini(&dest_region);
 }
 
 void canvas_draw_invers(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers)
 {
-    cairo_t *cairo = canvas->cairo;
-    cairo_save(cairo);
-    cairo_set_source_rgb(cairo, 1, 1, 1);
-    cairo_set_operator(cairo, CAIRO_OPERATOR_RASTER_XOR);
-    canvas_fill_common(canvas, bbox, clip, &invers->mask);
-    cairo_restore(cairo);
+    pixman_region32_t dest_region;
+
+    pixman_region32_init_rect(&dest_region,
+                              bbox->left, bbox->top,
+                              bbox->right - bbox->left,
+                              bbox->bottom - bbox->top);
+
+
+    canvas_clip_pixman(canvas, &dest_region, clip);
+    canvas_mask_pixman(canvas, &dest_region, &invers->mask,
+                       bbox->left, bbox->top);
+
+    if (pixman_region32_n_rects(&dest_region) == 0) {
+        pixman_region32_fini(&dest_region);
+        return;
+    }
+
+    fill_solid_rects_rop(canvas, &dest_region, 0x00000000,
+                         SPICE_ROP_INVERT);
+
+    pixman_region32_fini(&dest_region);
 }
 
 void canvas_draw_rop3(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3)
