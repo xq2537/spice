@@ -1488,6 +1488,110 @@ static void blend_scale_image(CairoCanvas *canvas,
     pixman_image_set_clip_region32(canvas->image, NULL);
 }
 
+static void colorkey_image(CairoCanvas *canvas,
+                           pixman_region32_t *region,
+                           SPICE_ADDRESS src_bitmap,
+                           int offset_x, int offset_y,
+                           uint32_t transparent_color)
+{
+    pixman_image_t *src_image;
+    pixman_box32_t *rects;
+    int n_rects, i;
+
+    rects = pixman_region32_rectangles(region, &n_rects);
+
+    src_image = canvas_get_image(&canvas->base, src_bitmap);
+    for (i = 0; i < n_rects; i++) {
+        int src_x, src_y, dest_x, dest_y, width, height;
+
+        dest_x = rects[i].x1;
+        dest_y = rects[i].y1;
+        width = rects[i].x2 - rects[i].x1;
+        height = rects[i].y2 - rects[i].y1;
+
+        src_x = rects[i].x1 - offset_x;
+        src_y = rects[i].y1 - offset_y;
+
+        spice_pixman_blit_colorkey(canvas->image,
+                                   src_image,
+                                   src_x, src_y,
+                                   dest_x, dest_y,
+                                   width, height,
+                                   transparent_color);
+    }
+    pixman_image_unref(src_image);
+}
+
+static void colorkey_scale_image(CairoCanvas *canvas,
+                                 pixman_region32_t *region,
+                                 SPICE_ADDRESS src_bitmap,
+                                 int src_x, int src_y,
+                                 int src_width, int src_height,
+                                 int dest_x, int dest_y,
+                                 int dest_width, int dest_height,
+                                 uint32_t transparent_color)
+{
+    pixman_transform_t transform;
+    pixman_image_t *src;
+    pixman_image_t *scaled;
+    pixman_box32_t *rects;
+    int n_rects, i;
+    double sx, sy;
+
+    sx = (double)(src_width) / (dest_width);
+    sy = (double)(src_height) / (dest_height);
+
+    src = canvas_get_image(&canvas->base, src_bitmap);
+
+    scaled = pixman_image_create_bits(PIXMAN_x8r8g8b8,
+                                      dest_width,
+                                      dest_height,
+                                      NULL, 0);
+
+    pixman_region32_translate(region, -dest_x, -dest_y);
+    pixman_image_set_clip_region32(scaled, region);
+
+    pixman_transform_init_scale(&transform,
+                                pixman_double_to_fixed(sx),
+                                pixman_double_to_fixed(sy));
+
+    pixman_image_set_transform(src, &transform);
+    pixman_image_set_repeat(src, PIXMAN_REPEAT_NONE);
+    pixman_image_set_filter(src,
+                            PIXMAN_FILTER_NEAREST,
+                            NULL, 0);
+
+    pixman_image_composite32(PIXMAN_OP_SRC,
+                             src, NULL, scaled,
+                             ROUND(src_x / sx), ROUND(src_y / sy), /* src */
+                             0, 0, /* mask */
+                             0, 0, /* dst */
+                             dest_width,
+                             dest_height);
+
+    pixman_transform_init_identity(&transform);
+    pixman_image_set_transform(src, &transform);
+
+    /* Translate back */
+    pixman_region32_translate(region, dest_x, dest_y);
+
+    rects = pixman_region32_rectangles(region, &n_rects);
+
+    for (i = 0; i < n_rects; i++) {
+        spice_pixman_blit_colorkey(canvas->image,
+                                   scaled,
+                                   rects[i].x1 - dest_x,
+                                   rects[i].y1 - dest_y,
+                                   rects[i].x1, rects[i].y1,
+                                   rects[i].x2 - rects[i].x1,
+                                   rects[i].y2 - rects[i].y1,
+                                   transparent_color);
+    }
+
+    pixman_image_unref(scaled);
+    pixman_image_unref(src);
+}
+
 static void draw_brush(CairoCanvas *canvas,
                        pixman_region32_t *region,
                        SpiceBrush *brush,
@@ -1562,51 +1666,6 @@ void canvas_draw_fill(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, Spi
     draw_brush(canvas, &dest_region, &fill->brush, rop);
 
     pixman_region32_fini(&dest_region);
-}
-
-static cairo_pattern_t *canvas_src_image_to_pat(CairoCanvas *canvas, SPICE_ADDRESS src_bitmap,
-                                                const SpiceRect *src, const SpiceRect *dest, int invers,
-                                                int scale_mode)
-{
-    cairo_pattern_t *pattern;
-    pixman_image_t *surface;
-    cairo_surface_t *cairo_surface;
-    cairo_matrix_t matrix;
-
-    ASSERT(src_bitmap);
-    ASSERT(scale_mode == SPICE_IMAGE_SCALE_MODE_INTERPOLATE || scale_mode == SPICE_IMAGE_SCALE_MODE_NEAREST);
-    if (invers) {
-        surface = canvas_get_invers_image(canvas, src_bitmap);
-    } else {
-        surface = canvas_get_image(&canvas->base, src_bitmap);
-    }
-
-    cairo_surface = surface_from_pixman_image (surface);
-    pixman_image_unref (surface);
-    pattern = cairo_pattern_create_for_surface(cairo_surface);
-    cairo_surface_destroy(cairo_surface);
-    if (cairo_pattern_status(pattern) != CAIRO_STATUS_SUCCESS) {
-        CANVAS_ERROR("create pattern failed, %s",
-                     cairo_status_to_string(cairo_pattern_status(pattern)));
-    }
-
-    if (!rect_is_same_size(src, dest)) {
-        double sx, sy;
-
-        sx = (double)(src->right - src->left) / (dest->right - dest->left);
-        sy = (double)(src->bottom - src->top) / (dest->bottom - dest->top);
-
-        cairo_matrix_init_scale(&matrix, sx, sy);
-        cairo_pattern_set_filter(pattern, (scale_mode == SPICE_IMAGE_SCALE_MODE_NEAREST) ?
-                                 CAIRO_FILTER_NEAREST : CAIRO_FILTER_GOOD);
-
-        cairo_matrix_translate(&matrix, src->left / sx - dest->left, src->top / sy - dest->top);
-    } else {
-        cairo_matrix_init_translate(&matrix, src->left - dest->left, src->top - dest->top);
-    }
-
-    cairo_pattern_set_matrix(pattern, &matrix);
-    return pattern;
 }
 
 void canvas_draw_copy(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy)
@@ -1778,88 +1837,44 @@ void canvas_put_image(CairoCanvas *canvas, const SpiceRect *dest, const uint8_t 
     cairo_restore(cairo);
 }
 
-static cairo_surface_t *canvas_surf_to_color_maks_invers(cairo_surface_t *surface,
-                                                         uint32_t trans_color)
-{
-    int width = cairo_image_surface_get_width(surface);
-    int height = cairo_image_surface_get_height(surface);
-    uint8_t *src_line;
-    uint8_t *end_src_line;
-    int src_stride;
-    uint8_t *dest_line;
-    int dest_stride;
-    cairo_surface_t *mask;
-    int i;
-
-    ASSERT(cairo_image_surface_get_format(surface) == CAIRO_FORMAT_ARGB32 ||
-           cairo_image_surface_get_format(surface) == CAIRO_FORMAT_RGB24);
-
-    mask = cairo_image_surface_create(CAIRO_FORMAT_A1, width, height);
-    if (cairo_surface_status(mask) != CAIRO_STATUS_SUCCESS) {
-        CANVAS_ERROR("create surface failed, %s",
-                     cairo_status_to_string(cairo_surface_status(mask)));
-    }
-
-    src_line = cairo_image_surface_get_data(surface);
-    src_stride = cairo_image_surface_get_stride(surface);
-    end_src_line = src_line + src_stride * height;
-
-    dest_line = cairo_image_surface_get_data(mask);
-    dest_stride = cairo_image_surface_get_stride(mask);
-
-    for (; src_line != end_src_line; src_line += src_stride, dest_line += dest_stride) {
-        memset(dest_line, 0xff, dest_stride);
-        for (i = 0; i < width; i++) {
-            if ((((uint32_t*)src_line)[i] & 0x00ffffff) == trans_color) {
-                dest_line[i >> 3] &= ~(1 << (i & 0x07));
-            }
-        }
-    }
-
-    return mask;
-}
-
 void canvas_draw_transparent(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceTransparent* transparent)
 {
-    cairo_t *cairo = canvas->cairo;
-    cairo_pattern_t *pattern;
-    cairo_pattern_t *mask;
-    cairo_surface_t *surface;
-    cairo_surface_t *mask_surf;
-    cairo_matrix_t matrix;
+    pixman_region32_t dest_region;
 
-    cairo_save(cairo);
-    cairo_rectangle(cairo,
-                    bbox->left,
-                    bbox->top,
-                    bbox->right - bbox->left,
-                    bbox->bottom - bbox->top);
-    cairo_clip(cairo);
-    canvas_clip(canvas, clip);
+    pixman_region32_init_rect(&dest_region,
+                              bbox->left, bbox->top,
+                              bbox->right - bbox->left,
+                              bbox->bottom - bbox->top);
 
-    pattern = canvas_src_image_to_pat(canvas, transparent->src_bitmap, &transparent->src_area, bbox,
-                                      0, SPICE_IMAGE_SCALE_MODE_NEAREST);
-    if (cairo_pattern_get_surface(pattern, &surface) != CAIRO_STATUS_SUCCESS) {
-        CANVAS_ERROR("surfase from pattern pattern failed");
+    canvas_clip_pixman(canvas, &dest_region, clip);
+
+    if (pixman_region32_n_rects (&dest_region) == 0) {
+        canvas_touch_image(&canvas->base, transparent->src_bitmap);
+        pixman_region32_fini(&dest_region);
+        return;
     }
 
-    mask_surf = canvas_surf_to_color_maks_invers(surface, transparent->true_color);
-    mask = cairo_pattern_create_for_surface(mask_surf);
-    cairo_surface_destroy(mask_surf);
-    if (cairo_pattern_status(mask) != CAIRO_STATUS_SUCCESS) {
-        CANVAS_ERROR("create pattern failed, %s",
-                     cairo_status_to_string(cairo_pattern_status(pattern)));
+    if (rect_is_same_size(bbox, &transparent->src_area)) {
+        colorkey_image(canvas, &dest_region,
+                       transparent->src_bitmap,
+                       bbox->left - transparent->src_area.left,
+                       bbox->top - transparent->src_area.top,
+                       transparent->true_color);
+    } else {
+        colorkey_scale_image(canvas, &dest_region,
+                             transparent->src_bitmap,
+                             transparent->src_area.left,
+                             transparent->src_area.top,
+                             transparent->src_area.right - transparent->src_area.left,
+                             transparent->src_area.bottom - transparent->src_area.top,
+                             bbox->left,
+                             bbox->top,
+                             bbox->right - bbox->left,
+                             bbox->bottom - bbox->top,
+                             transparent->true_color);
     }
-    cairo_pattern_get_matrix(pattern, &matrix);
-    cairo_pattern_set_matrix(mask, &matrix);
 
-    cairo_set_source(cairo, pattern);
-    cairo_pattern_destroy(pattern);
-    cairo_set_operator(cairo, CAIRO_OPERATOR_RASTER_COPY);
-    cairo_mask(cairo, mask);
-    cairo_pattern_destroy(mask);
-
-    cairo_restore(cairo);
+    pixman_region32_fini(&dest_region);
 }
 
 void canvas_draw_alpha_blend(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend)
