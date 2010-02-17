@@ -2120,18 +2120,17 @@ void canvas_draw_stroke(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, S
 
 void canvas_read_bits(CairoCanvas *canvas, uint8_t *dest, int dest_stride, const SpiceRect *area)
 {
-    cairo_t *cairo = canvas->cairo;
-    cairo_surface_t* surface;
+    pixman_image_t* surface;
     uint8_t *src;
     int src_stride;
     uint8_t *dest_end;
 
     ASSERT(canvas && area);
 
-    surface = cairo_get_target(cairo);
-    src_stride = cairo_image_surface_get_stride(surface);
-    src = cairo_image_surface_get_data(surface) + area->top * src_stride +
-                                                  area->left * sizeof(uint32_t);
+    surface = canvas->image;
+    src_stride = pixman_image_get_stride(surface);
+    src = (uint8_t *)pixman_image_get_data(surface) +
+        area->top * src_stride + area->left * sizeof(uint32_t);
     dest_end = dest + (area->bottom - area->top) * dest_stride;
     for (; dest != dest_end; dest += dest_stride, src += src_stride) {
         memcpy(dest, src, dest_stride);
