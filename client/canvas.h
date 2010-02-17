@@ -20,6 +20,7 @@
 
 #include "common.h"
 #include "debug.h"
+#include "region.h"
 #include "cairo.h"
 #include <spice/protocol.h>
 #include "cache.hpp"
@@ -35,8 +36,6 @@ enum CanvasType {
     CANVAS_TYPE_GL,
     CANVAS_TYPE_GDI,
 };
-
-struct QRegion;
 
 class PixmapCacheTreat {
 public:

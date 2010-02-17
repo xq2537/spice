@@ -164,6 +164,13 @@ static GLCPath get_path(GLCanvas *canvas, void *addr)
     (dest)->height = (src)->bottom - (src)->top;    \
 }
 
+#define SET_GLC_BOX(dest, src) {                    \
+    (dest)->x = (src)->x1;                          \
+    (dest)->y = (src)->y1;                          \
+    (dest)->width = (src)->x2 - (src)->x1;          \
+    (dest)->height = (src)->y2 - (src)->y1;         \
+}
+
 static void set_clip(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip)
 {
     GLCRect rect;
@@ -706,14 +713,21 @@ void gl_canvas_read_pixels(GLCanvas *canvas, uint8_t *dest, int dest_stride, con
     glc_read_pixels(canvas->glc, area->left, area->top, &image);
 }
 
-void gl_canvas_set_top_mask(GLCanvas *canvas, int num_rect, const SpiceRect *rects)
+void gl_canvas_set_top_mask(GLCanvas *canvas, QRegion *region)
 {
-    GLCRect *glc_rects = (GLCRect *)malloc(num_rect * sizeof(GLCRect));
-    GLCRect *now = glc_rects;
-    GLCRect *end = glc_rects + num_rect;
+    GLCRect *glc_rects;
+    GLCRect *now, *end;
+    int num_rect;
+    pixman_box32_t *rects;
+
+    rects = pixman_region32_rectangles(region, &num_rect);
+
+    glc_rects = (GLCRect *)malloc(num_rect * sizeof(GLCRect));
+    now = glc_rects;
+    end = glc_rects + num_rect;
 
     for (; now < end; now++, rects++) {
-        SET_GLC_RECT(now, rects);
+        SET_GLC_BOX(now, rects);
     }
     glc_mask_rects(canvas->glc, num_rect, glc_rects, GLC_MASK_B);
 
@@ -733,15 +747,18 @@ void gl_canvas_put_image(GLCanvas *canvas, const SpiceRect *dest, const uint8_t 
     glc_clip_reset(canvas->glc);
 
     if (clip) {
+        int num_rects;
+        pixman_box32_t *rects = pixman_region32_rectangles((pixman_region32_t *)clip,
+                                                           &num_rects);
         GLCRect rect;
-        if (clip->num_rects == 0) {
+        if (num_rects == 0) {
             rect.x = rect.y = rect.width = rect.height = 0;
             glc_clip_rect(canvas->glc, &rect, GLC_CLIP_OP_SET);
         } else {
-            SET_GLC_RECT(&rect, clip->rects);
+            SET_GLC_BOX(&rect, rects);
             glc_clip_rect(canvas->glc, &rect, GLC_CLIP_OP_SET);
-            for (i = 1; i < clip->num_rects; i++) {
-                SET_GLC_RECT(&rect, clip->rects + i);
+            for (i = 1; i < num_rects; i++) {
+                SET_GLC_BOX(&rect, rects + i);
                 glc_clip_rect(canvas->glc, &rect, GLC_CLIP_OP_OR);
             }
         }

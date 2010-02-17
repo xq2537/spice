@@ -288,9 +288,18 @@ void RedScreen::detach_layer(ScreenLayer& layer)
 
 void RedScreen::composit_to_screen(RedDrawable& win_dc, const QRegion& region)
 {
-    for (int i = 0; i < (int)region.num_rects; i++) {
-        SpiceRect* r = &region.rects[i];
-        win_dc.copy_pixels(*_composit_area, r->left, r->top, *r);
+    pixman_box32_t *rects;
+    int num_rects;
+
+    rects = pixman_region32_rectangles((pixman_region32_t *)&region, &num_rects);
+    for (int i = 0; i < num_rects; i++) {
+        SpiceRect r;
+
+        r.left = rects[i].x1;
+        r.top = rects[i].y1;
+        r.right = rects[i].x2;
+        r.bottom = rects[i].y2;
+        win_dc.copy_pixels(*_composit_area, r.left, r.top, r);
     }
 }
 
@@ -474,17 +483,40 @@ uint64_t RedScreen::invalidate(const SpiceRect& rect, bool urgent)
 
 void RedScreen::invalidate(const QRegion &region)
 {
-    SpiceRect *r = region.rects;
-    SpiceRect *end = r + region.num_rects;
-    while (r != end) {
-        invalidate(*r++, false);
+    pixman_box32_t *rects, *end;
+    int num_rects;
+
+    rects = pixman_region32_rectangles((pixman_region32_t *)&region, &num_rects);
+    end = rects + num_rects;
+
+    while (rects != end) {
+        SpiceRect r;
+
+        r.left = rects->x1;
+        r.top = rects->y1;
+        r.right = rects->x2;
+        r.bottom = rects->y2;
+        rects++;
+
+        invalidate(r, false);
     }
 }
 
 inline void RedScreen::erase_background(RedDrawable& dc, const QRegion& composit_rgn)
 {
-    for (int i = 0; i < (int)composit_rgn.num_rects; i++) {
-        dc.fill_rect(composit_rgn.rects[i], 0);
+    pixman_box32_t *rects;
+    int num_rects;
+
+    rects = pixman_region32_rectangles((pixman_region32_t *)&composit_rgn, &num_rects);
+    for (int i = 0; i < num_rects; i++) {
+        SpiceRect r;
+
+        r.left = rects[i].x1;
+        r.top = rects[i].y1;
+        r.right = rects[i].x2;
+        r.bottom = rects[i].y2;
+
+        dc.fill_rect(r, 0);
     }
 }
 

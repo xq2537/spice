@@ -69,9 +69,19 @@ void GCanvas::create_pixmap(int width, int height, RedWindow *win,
 
 void GCanvas::copy_pixels(const QRegion& region, RedDrawable& dest_dc)
 {
-    for (int i = 0; i < (int)region.num_rects; i++) {
-        SpiceRect* r = &region.rects[i];
-        dest_dc.copy_pixels(*_pixmap, r->left, r->top, *r);
+    pixman_box32_t *rects;
+    int num_rects;
+
+    rects = pixman_region32_rectangles((pixman_region32_t *)&region, &num_rects);
+    for (int i = 0; i < num_rects; i++) {
+        SpiceRect r;
+
+        r.left = rects[i].x1;
+        r.top = rects[i].y1;
+        r.right = rects[i].x2;
+        r.bottom = rects[i].y2;
+
+        dest_dc.copy_pixels(*_pixmap, r.left, r.top, r);
     }
 }
 

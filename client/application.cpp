@@ -171,13 +171,23 @@ InfoLayer::InfoLayer()
 
 void InfoLayer::draw_info(const QRegion& dest_region, RedDrawable& dest)
 {
-    for (int i = 0; i < (int)dest_region.num_rects; i++) {
-        SpiceRect* r = &dest_region.rects[i];
+    pixman_box32_t *rects;
+    int num_rects;
+
+    rects = pixman_region32_rectangles((pixman_region32_t *)&dest_region, &num_rects);
+    for (int i = 0; i < num_rects; i++) {
+        SpiceRect r;
+
+        r.left = rects[i].x1;
+        r.top = rects[i].y1;
+        r.right = rects[i].x2;
+        r.bottom = rects[i].y2;
+
         /* is rect inside sticky region or info region? */
-        if (_sticky_on && rect_intersects(*r, _sticky_rect)) {
-            dest.blend_pixels(_sticky_pixmap, r->left - _sticky_pos.x, r->top - _sticky_pos.y, *r);
+        if (_sticky_on && rect_intersects(r, _sticky_rect)) {
+            dest.blend_pixels(_sticky_pixmap, r.left - _sticky_pos.x, r.top - _sticky_pos.y, r);
         } else {
-            dest.blend_pixels(_info_pixmap, r->left - _info_pos.x, r->top - _info_pos.y, *r);
+            dest.blend_pixels(_info_pixmap, r.left - _info_pos.x, r.top - _info_pos.y, r);
         }
     }
 }

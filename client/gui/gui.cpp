@@ -1025,19 +1025,33 @@ void GUI::update_layer_area()
 
 void GUI::copy_pixels(const QRegion& dest_region, RedDrawable& dest)
 {
+    pixman_box32_t *rects;
+    int num_rects;
+
     if (region_is_empty(&dest_region)) {
         return;
     }
 
-    for (int i = 0; i < (int)dest_region.num_rects; i++) {
-        SpiceRect* r = &dest_region.rects[i];
-        _pixmap->copy_pixels(dest, r->left, r->top, *r);
+    rects = pixman_region32_rectangles((pixman_region32_t *)&dest_region, &num_rects);
+    for (int i = 0; i < num_rects; i++) {
+        SpiceRect r;
+
+        r.left = rects[i].x1;
+        r.top = rects[i].y1;
+        r.right = rects[i].x2;
+        r.bottom = rects[i].y2;
+        _pixmap->copy_pixels(dest, r.left, r.top, r);
     }
 
     _gui_system->renderGUI();
-    for (int i = 0; i < (int)dest_region.num_rects; i++) {
-        SpiceRect* r = &dest_region.rects[i];
-        dest.copy_pixels(*_pixmap, r->left, r->top, *r);
+    for (int i = 0; i < num_rects; i++) {
+        SpiceRect r;
+
+        r.left = rects[i].x1;
+        r.top = rects[i].y1;
+        r.right = rects[i].x2;
+        r.bottom = rects[i].y2;
+        dest.copy_pixels(*_pixmap, r.left, r.top, r);
     }
 }
 

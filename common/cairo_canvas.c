@@ -1130,11 +1130,14 @@ void canvas_put_image(CairoCanvas *canvas, const SpiceRect *dest, const uint8_t 
     cairo_save(cairo);
 
     if (clip) {
-        const SpiceRect *now = clip->rects;
-        const SpiceRect *end = clip->rects + clip->num_rects;
+        int num_rects;
+        pixman_box32_t *rects = pixman_region32_rectangles((pixman_region32_t *)clip,
+                                                           &num_rects);
+        const pixman_box32_t *now = rects;
+        const pixman_box32_t *end = rects + num_rects;
         for (; now < end; now++) {
-            cairo_rectangle(cairo, now->left, now->top, now->right - now->left,
-                            now->bottom - now->top);
+            cairo_rectangle(cairo, now->x1, now->y1, now->x2 - now->x1,
+                            now->y2 - now->y1);
         }
         cairo_clip(cairo);
     }
@@ -2137,23 +2140,16 @@ void canvas_read_bits(CairoCanvas *canvas, uint8_t *dest, int dest_stride, const
     }
 }
 
-void canvas_group_start(CairoCanvas *canvas, int n_clip_rects, SpiceRect *clip_rects)
+void canvas_group_start(CairoCanvas *canvas, QRegion *region)
 {
-    pixman_region32_t dest_region;
-
     pixman_region32_fini(&canvas->canvas_region);
-    spice_pixman_region32_init_rects(&canvas->canvas_region,
-                                     clip_rects, n_clip_rects);
-
-    pixman_region32_init_rect(&dest_region,
-                              0, 0,
-                              pixman_image_get_width(canvas->image),
-                              pixman_image_get_height(canvas->image));
-
     /* Make sure we always clip to canvas size */
-    pixman_region32_intersect(&canvas->canvas_region, &canvas->canvas_region, &dest_region);
+    pixman_region32_init_rect(&canvas->canvas_region,
+                              0, 0,
+                              pixman_image_get_width (canvas->image),
+                              pixman_image_get_height (canvas->image));
 
-    pixman_region32_fini(&dest_region);
+    pixman_region32_intersect(&canvas->canvas_region, &canvas->canvas_region, region);
 }
 
 void canvas_group_end(CairoCanvas *canvas)

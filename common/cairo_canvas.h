@@ -52,7 +52,7 @@ void canvas_put_image(CairoCanvas *canvas, const SpiceRect *dest, const uint8_t 
 #endif
 void canvas_clear(CairoCanvas *canvas);
 void canvas_read_bits(CairoCanvas *canvas, uint8_t *dest, int dest_stride, const SpiceRect *area);
-void canvas_group_start(CairoCanvas *canvas, int n_clip_rects, SpiceRect *clip_rects);
+void canvas_group_start(CairoCanvas *canvas, QRegion *region);
 void canvas_group_end(CairoCanvas *canvas);
 void canvas_set_addr_delta(CairoCanvas *canvas, SPICE_ADDRESS delta);
 #ifdef CAIRO_CANVAS_ACCESS_TEST

@@ -93,13 +93,26 @@ uint64_t ScreenLayer::invalidate(const SpiceRect& r, bool urgent)
 
 void ScreenLayer::invalidate(const QRegion& region)
 {
+    pixman_box32_t *rects, *end;
+    int num_rects;
+
     if (!_screen) {
         return;
     }
-    SpiceRect *r = region.rects;
-    SpiceRect *end = r + region.num_rects;
-    while (r != end) {
-        invalidate_rect(*r++, false);
+
+    rects = pixman_region32_rectangles((pixman_region32_t *)&region, &num_rects);
+    end = rects + num_rects;
+
+    while (rects != end) {
+        SpiceRect r;
+
+        r.left = rects->x1;
+        r.top = rects->y1;
+        r.right = rects->x2;
+        r.bottom = rects->y2;
+        rects++;
+
+        invalidate_rect(r, false);
     }
 }
 

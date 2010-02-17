@@ -434,16 +434,26 @@ void CursorChannel::remove_cursor()
 
 void CursorChannel::copy_pixels(const QRegion& dest_region, RedDrawable& dest_dc)
 {
+    pixman_box32_t *rects;
+    int num_rects;
+
     Lock lock(_update_lock);
 
     if (!_cursor_visible) {
         return;
     }
 
-    for (int i = 0; i < (int)dest_region.num_rects; i++) {
+    rects = pixman_region32_rectangles((pixman_region32_t *)&dest_region, &num_rects);
+    for (int i = 0; i < num_rects; i++) {
+        SpiceRect r;
+
+        r.left = rects[i].x1;
+        r.top = rects[i].y1;
+        r.right = rects[i].x2;
+        r.bottom = rects[i].y2;
         ASSERT(_cursor && _cursor->get_opaque());
         ((NaitivCursor*)_cursor->get_opaque())->draw(dest_dc, _cursor_rect.left, _cursor_rect.top,
-                                                     dest_region.rects[i]);
+                                                     r);
     }
 }
 

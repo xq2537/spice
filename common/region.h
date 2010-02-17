@@ -21,20 +21,9 @@
 
 #include <stdint.h>
 #include <spice/draw.h>
+#include <pixman_utils.h>
 
-#define REGION_USE_IMPROVED
-
-#define RECTS_BUF_SIZE 4
-
-typedef struct QRegion {
-    uint32_t num_rects;
-    SpiceRect bbox;
-    SpiceRect *rects;
-    uint32_t rects_size;
-    SpiceRect buf[RECTS_BUF_SIZE];
-} QRegion;
-
-#ifdef REGION_USE_IMPROVED
+typedef pixman_region32_t QRegion;
 
 #define REGION_TEST_LEFT_EXCLUSIVE (1 << 0)
 #define REGION_TEST_RIGHT_EXCLUSIVE (1 << 1)
@@ -42,16 +31,13 @@ typedef struct QRegion {
 #define REGION_TEST_ALL \
     (REGION_TEST_LEFT_EXCLUSIVE | REGION_TEST_RIGHT_EXCLUSIVE | REGION_TEST_SHARED)
 
-#endif
-
 void region_init(QRegion *rgn);
 void region_clear(QRegion *rgn);
 void region_destroy(QRegion *rgn);
 void region_clone(QRegion *dest, const QRegion *src);
+SpiceRect *region_dup_rects(const QRegion *rgn, uint32_t *num_rects);
 
-#ifdef REGION_USE_IMPROVED
 int region_test(const QRegion *rgn, const QRegion *other_rgn, int query);
-#endif
 int region_is_valid(const QRegion *rgn);
 int region_is_empty(const QRegion *rgn);
 int region_is_equal(const QRegion *rgn1, const QRegion *rgn2);

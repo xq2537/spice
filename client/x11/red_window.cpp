@@ -1835,7 +1835,10 @@ public:
         if (region_is_empty(_region)) {
             bbox.left = bbox.right = bbox.top = bbox.bottom = 0;
         } else {
-            bbox = _region->bbox;
+            bbox.left = _region->extents.x1;
+            bbox.top = _region->extents.y1;
+            bbox.right = _region->extents.x2;
+            bbox.bottom = _region->extents.y2;
         }
     }
 

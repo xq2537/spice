@@ -45,7 +45,7 @@ void gl_canvas_put_image(GLCanvas *canvas, const SpiceRect *dest, const uint8_t 
 
 void gl_canvas_clear(GLCanvas *canvas);
 
-void gl_canvas_set_top_mask(GLCanvas *canvas, int num_rect, const SpiceRect *rects);
+void gl_canvas_set_top_mask(GLCanvas *canvas, QRegion *region);
 void gl_canvas_clear_top_mask(GLCanvas *canvas);
 
 #ifdef CAIRO_CANVAS_ACCESS_TEST

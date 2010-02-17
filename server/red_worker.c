@@ -427,7 +427,8 @@ typedef struct StreamClipItem {
     int refs;
     StreamAgent *stream_agent;
     int clip_type;
-    QRegion region;
+    SpiceRect *rects;
+    uint32_t n_rects;
 } StreamClipItem;
 
 typedef struct RedCompressBuf RedCompressBuf;
@@ -826,7 +827,8 @@ typedef struct UpgradeItem {
     PipeItem base;
     int refs;
     Drawable *drawable;
-    QRegion region;
+    SpiceRect *rects;
+    uint32_t n_rects;
 } UpgradeItem;
 
 typedef void (*draw_fill_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill);
@@ -843,7 +845,7 @@ typedef void (*draw_invers_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, Sp
 typedef void (*draw_transparent_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceTransparent* transparent);
 typedef void (*draw_alpha_blend_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend);
 typedef void (*read_pixels_t)(void *canvas, uint8_t *dest, int dest_stride, const SpiceRect *area);
-typedef void (*set_top_mask_t)(void *canvas, int num_rect, const SpiceRect *rects);
+typedef void (*set_top_mask_t)(void *canvas, QRegion *region);
 typedef void (*clear_top_mask_t)(void *canvas);
 typedef void (*validate_area_t)(void *canvas, int32_t stride, uint8_t *line_0, const SpiceRect *area);
 typedef void (*destroy_t)(void *canvas);
@@ -1306,10 +1308,10 @@ static void show_draw_item(RedWorker *worker, DrawItem *draw_item, const char *p
     }
     printf("effect %d bbox(%d %d %d %d)\n",
            draw_item->effect,
-           draw_item->base.rgn.bbox.top,
-           draw_item->base.rgn.bbox.left,
-           draw_item->base.rgn.bbox.bottom,
-           draw_item->base.rgn.bbox.right);
+           draw_item->base.rgn.extents.x1,
+           draw_item->base.rgn.extents.y1,
+           draw_item->base.rgn.extents.x2,
+           draw_item->base.rgn.extents.y2);
 }
 
 static inline void red_pipe_item_init(PipeItem *item, int type)
@@ -1428,7 +1430,7 @@ static void release_upgrade_item(RedWorker* worker, UpgradeItem *item)
 {
     if (!--item->refs) {
         release_drawable(worker, item->drawable);
-        region_destroy(&item->region);
+        free(item->rects);
         free(item);
     }
 }
@@ -1904,13 +1906,13 @@ static inline void __exclude_region(RedWorker *worker, TreeItem *item, QRegion *
 
             if (draw->shadow) {
                 Shadow *shadow;
-                int32_t x = item->rgn.bbox.left;
-                int32_t y = item->rgn.bbox.top;
+                int32_t x = item->rgn.extents.x1;
+                int32_t y = item->rgn.extents.y1;
 
                 region_exclude(&draw->base.rgn, &and_rgn);
                 shadow = draw->shadow;
-                region_offset(&and_rgn, shadow->base.rgn.bbox.left - x,
-                              shadow->base.rgn.bbox.top - y);
+                region_offset(&and_rgn, shadow->base.rgn.extents.x1 - x,
+                              shadow->base.rgn.extents.y1 - y);
                 region_exclude(&shadow->base.rgn, &and_rgn);
                 region_and(&and_rgn, &shadow->on_hold);
                 if (!region_is_empty(&and_rgn)) {
@@ -2295,11 +2297,13 @@ static void push_stream_clip_by_drawable(DisplayChannel* channel, StreamAgent *a
     }
 
     if (drawable->qxl_drawable->clip.type == SPICE_CLIP_TYPE_NONE) {
-        region_init(&item->region);
+        item->n_rects = 0;
+        item->rects = NULL;
         item->clip_type = SPICE_CLIP_TYPE_NONE;
     } else {
         item->clip_type = SPICE_CLIP_TYPE_RECTS;
-        region_clone(&item->region, &drawable->tree_item.base.rgn);
+        item->rects = region_dup_rects(&drawable->tree_item.base.rgn,
+                                       &item->n_rects);
     }
     red_pipe_add((RedChannel*)channel, (PipeItem *)item);
 }
@@ -2311,7 +2315,8 @@ static void push_stream_clip(DisplayChannel* channel, StreamAgent *agent)
         PANIC("alloc failed");
     }
     item->clip_type = SPICE_CLIP_TYPE_RECTS;
-    region_clone(&item->region, &agent->vis_region);
+    item->rects = region_dup_rects(&agent->vis_region,
+                                   &item->n_rects);
     red_pipe_add((RedChannel*)channel, (PipeItem *)item);
 }
 
@@ -2319,7 +2324,9 @@ static void red_display_release_stream_clip(DisplayChannel* channel, StreamClipI
 {
     if (!--item->refs) {
         red_display_release_stream(channel, item->stream_agent);
-        region_destroy(&item->region);
+        if (item->rects) {
+            free(item->rects);
+        }
         free(item);
     }
 }
@@ -2387,7 +2394,8 @@ static inline void red_detach_stream_gracefully(RedWorker *worker, Stream *strea
         red_pipe_item_init(&upgrade_item->base, PIPE_ITEM_TYPE_UPGRADE);
         upgrade_item->drawable = stream->current;
         upgrade_item->drawable->refs++;
-        region_clone(&upgrade_item->region, &upgrade_item->drawable->tree_item.base.rgn);
+        upgrade_item->rects = region_dup_rects(&upgrade_item->drawable->tree_item.base.rgn,
+                                               &upgrade_item->n_rects);
         red_pipe_add((RedChannel *)channel, &upgrade_item->base);
     }
     red_detach_stream(worker, stream);
@@ -2404,7 +2412,8 @@ static inline void red_stop_stream_gracefully(RedWorker *worker, Stream *stream)
             red_pipe_item_init(&item->base, PIPE_ITEM_TYPE_UPGRADE);
             item->drawable = stream->current;
             item->drawable->refs++;
-            region_clone(&item->region, &item->drawable->tree_item.base.rgn);
+            item->rects = region_dup_rects(&item->drawable->tree_item.base.rgn,
+                                           &item->n_rects);
             red_pipe_add((RedChannel *)worker->display_channel, &item->base);
         }
     }
@@ -4304,8 +4313,7 @@ static void red_draw_drawable(RedWorker *worker, Drawable *drawable)
 #ifdef UPDATE_AREA_BY_TREE
     //todo: add need top mask flag
     worker->draw_funcs.set_top_mask(worker->surface.context.canvas,
-                                    drawable->tree_item.base.rgn.num_rects,
-                                    drawable->tree_item.base.rgn.rects);
+                                    &drawable->tree_item.base.rgn);
 #endif
     red_draw_qxl_drawable(worker, drawable);
 #ifdef UPDATE_AREA_BY_TREE
@@ -6980,8 +6988,8 @@ static void red_display_send_upgrade(DisplayChannel *display_channel, UpgradeIte
     copy->base.box = qxl_drawable->bbox;
     copy->base.clip.type = SPICE_CLIP_TYPE_RECTS;
     copy->base.clip.data = channel->send_data.header.size;
-    add_buf(channel, BUF_TYPE_RAW, &item->region.num_rects, sizeof(uint32_t), 0, 0);
-    add_buf(channel, BUF_TYPE_RAW, item->region.rects, sizeof(SpiceRect) * item->region.num_rects, 0, 0);
+    add_buf(channel, BUF_TYPE_RAW, &item->n_rects, sizeof(uint32_t), 0, 0);
+    add_buf(channel, BUF_TYPE_RAW, item->rects, sizeof(SpiceRect) * item->n_rects, 0, 0);
     copy->data = qxl_drawable->u.copy;
     fill_bits(display_channel, &copy->data.src_bitmap, item->drawable);
 
@@ -7046,9 +7054,8 @@ static void red_display_send_stream_clip(DisplayChannel *display_channel,
     } else {
         ASSERT(stream_clip->clip.type == SPICE_CLIP_TYPE_RECTS);
         stream_clip->clip.data = channel->send_data.header.size;
-        add_buf(channel, BUF_TYPE_RAW, &item->region.num_rects, sizeof(uint32_t), 0, 0);
-        add_buf(channel, BUF_TYPE_RAW, item->region.rects,
-                item->region.num_rects * sizeof(SpiceRect), 0, 0);
+        add_buf(channel, BUF_TYPE_RAW, &item->n_rects, sizeof(uint32_t), 0, 0);
+        add_buf(channel, BUF_TYPE_RAW, item->rects, item->n_rects * sizeof(SpiceRect), 0, 0);
     }
     display_begin_send_massage(display_channel, item);
 }

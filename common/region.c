@@ -1,3 +1,4 @@
+/* -*- Mode: C; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 /*
    Copyright (C) 2009 Red Hat, Inc.
 
@@ -22,9 +23,6 @@
 #include "region.h"
 #include "rect.h"
 
-//#define ALLOC_ON_STEAL
-//#define REGION_DEBUG
-
 #define FALSE 0
 #define TRUE 1
 
@@ -36,11 +34,498 @@
     abort();                                                \
 }
 
-#ifdef REGION_DEBUG
-#define REGION_IS_VALID(region) region_is_valid(region)
-#else
-#define REGION_IS_VALID(region) TRUE
-#endif
+/*  true iff two Boxes overlap */
+#define EXTENTCHECK(r1, r2)        \
+    (!( ((r1)->x2 <= (r2)->x1)  || \
+        ((r1)->x1 >= (r2)->x2)  || \
+        ((r1)->y2 <= (r2)->y1)  || \
+        ((r1)->y1 >= (r2)->y2) ) )
+
+/* true iff Box r1 contains Box r2 */
+#define SUBSUMES(r1, r2)        \
+    ( ((r1)->x1 <= (r2)->x1) && \
+      ((r1)->x2 >= (r2)->x2) && \
+      ((r1)->y1 <= (r2)->y1) && \
+      ((r1)->y2 >= (r2)->y2) )
+
+
+void region_init(QRegion *rgn)
+{
+    pixman_region32_init(rgn);
+}
+
+void region_clear(QRegion *rgn)
+{
+    pixman_region32_fini(rgn);
+    pixman_region32_init(rgn);
+}
+
+void region_destroy(QRegion *rgn)
+{
+    pixman_region32_fini(rgn);
+}
+
+void region_clone(QRegion *dest, const QRegion *src)
+{
+    pixman_region32_init(dest);
+    pixman_region32_copy(dest, (pixman_region32_t *)src);
+}
+
+#define FIND_BAND(r, r_band_end, r_end, ry1)                         \
+    do {                                                             \
+        ry1 = r->y1;                                                 \
+        r_band_end = r + 1;                                          \
+        while ((r_band_end != r_end) && (r_band_end->y1 == ry1)) {   \
+            r_band_end++;                                            \
+        }                                                            \
+    } while (0)
+
+static int test_band(int query,
+                     int res,
+                     pixman_box32_t *r1,
+                     pixman_box32_t *r1_end,
+                     pixman_box32_t *r2,
+                     pixman_box32_t *r2_end)
+{
+    int x1;
+    int x2;
+
+    do {
+        x1 = MAX(r1->x1, r2->x1);
+        x2 = MIN(r1->x2, r2->x2);
+
+        /*
+         * Is there any overlap between the two rectangles?
+         */
+        if (x1 < x2) {
+            res |= REGION_TEST_SHARED;
+
+            if (r1->x1 < r2->x1 || r1->x2 > r2->x2) {
+                res |= REGION_TEST_LEFT_EXCLUSIVE;
+            }
+
+            if (r2->x1 < r1->x1 || r2->x2 > r1->x2) {
+                res |= REGION_TEST_RIGHT_EXCLUSIVE;
+            }
+        } else {
+            /* No overlap at all, the leftmost is exclusive */
+            if (r1->x1 < r2->x1) {
+                res |= REGION_TEST_LEFT_EXCLUSIVE;
+            } else {
+                res |= REGION_TEST_RIGHT_EXCLUSIVE;
+            }
+        }
+
+        if ((res & query) == query) {
+            return res;
+        }
+
+        /*
+         * Advance the pointer(s) with the leftmost right side, since the next
+         * rectangle on that list may still overlap the other region's
+         * current rectangle.
+         */
+        if (r1->x2 == x2) {
+            r1++;
+        }
+        if (r2->x2 == x2) {
+            r2++;
+        }
+    } while ((r1 != r1_end) && (r2 != r2_end));
+
+    /*
+     * Deal with whichever band (if any) still has rectangles left.
+     */
+    if (r1 != r1_end) {
+        res |= REGION_TEST_LEFT_EXCLUSIVE;
+    } else if (r2 != r2_end) {
+        res |= REGION_TEST_RIGHT_EXCLUSIVE;
+    }
+
+    return res;
+}
+
+static int test_generic (pixman_region32_t *reg1,
+                         pixman_region32_t *reg2,
+                         int query)
+{
+    pixman_box32_t *r1;             /* Pointer into first region     */
+    pixman_box32_t *r2;             /* Pointer into 2d region        */
+    pixman_box32_t *r1_end;         /* End of 1st region             */
+    pixman_box32_t *r2_end;         /* End of 2d region              */
+    int ybot;                       /* Bottom of intersection        */
+    int ytop;                       /* Top of intersection           */
+    pixman_box32_t * r1_band_end;   /* End of current band in r1     */
+    pixman_box32_t * r2_band_end;   /* End of current band in r2     */
+    int top;                        /* Top of non-overlapping band   */
+    int bot;                        /* Bottom of non-overlapping band*/
+    int r1y1;                       /* Temps for r1->y1 and r2->y1   */
+    int r2y1;
+    int r1_num_rects;
+    int r2_num_rects;
+    int res;
+
+    r1 = pixman_region32_rectangles(reg1, &r1_num_rects);
+    r1_end = r1 + r1_num_rects;
+
+    r2 = pixman_region32_rectangles(reg2, &r2_num_rects);
+    r2_end = r2 + r2_num_rects;
+
+    res = 0;
+
+    /*
+     * Initialize ybot.
+     * In the upcoming loop, ybot and ytop serve different functions depending
+     * on whether the band being handled is an overlapping or non-overlapping
+     * band.
+     *  In the case of a non-overlapping band (only one of the regions
+     * has points in the band), ybot is the bottom of the most recent
+     * intersection and thus clips the top of the rectangles in that band.
+     * ytop is the top of the next intersection between the two regions and
+     * serves to clip the bottom of the rectangles in the current band.
+     *  For an overlapping band (where the two regions intersect), ytop clips
+     * the top of the rectangles of both regions and ybot clips the bottoms.
+     */
+
+    ybot = MIN(r1->y1, r2->y1);
+
+    do {
+        /*
+         * This algorithm proceeds one source-band (as opposed to a
+         * destination band, which is determined by where the two regions
+         * intersect) at a time. r1_band_end and r2_band_end serve to mark the
+         * rectangle after the last one in the current band for their
+         * respective regions.
+         */
+        FIND_BAND(r1, r1_band_end, r1_end, r1y1);
+        FIND_BAND(r2, r2_band_end, r2_end, r2y1);
+
+        /*
+         * First handle the band that doesn't intersect, if any.
+         *
+         * Note that attention is restricted to one band in the
+         * non-intersecting region at once, so if a region has n
+         * bands between the current position and the next place it overlaps
+         * the other, this entire loop will be passed through n times.
+         */
+        if (r1y1 < r2y1) {
+            top = MAX (r1y1, ybot);
+            bot = MIN (r1->y2, r2y1);
+            if (top != bot) {
+                res |= REGION_TEST_LEFT_EXCLUSIVE;
+
+                if ((res & query) == query) {
+                    return res & query;
+                }
+            }
+
+            ytop = r2y1;
+        } else if (r2y1 < r1y1) {
+            top = MAX (r2y1, ybot);
+            bot = MIN (r2->y2, r1y1);
+
+            if (top != bot) {
+                res |= REGION_TEST_RIGHT_EXCLUSIVE;
+
+                if ((res & query) == query) {
+                    return res & query;
+                }
+            }
+            ytop = r1y1;
+        } else {
+            ytop = r1y1;
+        }
+
+        /*
+         * Now see if we've hit an intersecting band. The two bands only
+         * intersect if ybot > ytop
+         */
+        ybot = MIN (r1->y2, r2->y2);
+        if (ybot > ytop) {
+            res = test_band(query, res,
+                            r1, r1_band_end,
+                            r2, r2_band_end);
+            if ((res & query) == query) {
+                return res & query;
+            }
+        }
+
+        /*
+         * If we've finished with a band (y2 == ybot) we skip forward
+         * in the region to the next band.
+         */
+        if (r1->y2 == ybot) {
+            r1 = r1_band_end;
+        }
+
+        if (r2->y2 == ybot) {
+            r2 = r2_band_end;
+        }
+
+    }
+    while (r1 != r1_end && r2 != r2_end);
+
+    /*
+     * Deal with whichever region (if any) still has rectangles left.
+     */
+
+    if (r1 != r1_end) {
+        res |= REGION_TEST_LEFT_EXCLUSIVE;
+    } else if (r2 != r2_end) {
+        res |= REGION_TEST_RIGHT_EXCLUSIVE;
+    }
+
+    return res & query;
+}
+
+int region_test(const QRegion *_reg1, const QRegion *_reg2, int query)
+{
+    int res;
+    pixman_region32_t *reg1 = (pixman_region32_t *)_reg1;
+    pixman_region32_t *reg2 = (pixman_region32_t *)_reg2;
+
+    query = (query) ? query & REGION_TEST_ALL : REGION_TEST_ALL;
+
+    res = 0;
+
+    if (!pixman_region32_not_empty(reg1) || !pixman_region32_not_empty(reg2) ||
+        !EXTENTCHECK (&reg1->extents, &reg2->extents)) {
+        /* One or more regions are empty or they are disjoint */
+
+        if (pixman_region32_not_empty(reg1)) {
+            res |= REGION_TEST_LEFT_EXCLUSIVE;
+        }
+
+        if (pixman_region32_not_empty(reg2)) {
+            res |= REGION_TEST_RIGHT_EXCLUSIVE;
+        }
+
+        return res & query;
+    } else if (!reg1->data && !reg2->data) {
+        /* Just two rectangles that intersect */
+        res |= REGION_TEST_SHARED;
+
+        if (!SUBSUMES(&reg1->extents, &reg2->extents)) {
+            res |= REGION_TEST_RIGHT_EXCLUSIVE;
+        }
+
+        if (!SUBSUMES(&reg2->extents, &reg1->extents)) {
+            res |= REGION_TEST_LEFT_EXCLUSIVE;
+        }
+
+        return res & query;
+    } else if (!reg2->data && SUBSUMES (&reg2->extents, &reg1->extents)) {
+        /* reg2 is just a rect that contains all of reg1 */
+
+        res |= REGION_TEST_SHARED; /* some piece must be shared, because reg is not empty */
+        res |= REGION_TEST_RIGHT_EXCLUSIVE; /* reg2 contains all of reg1 and then some */
+
+        return res & query;
+    } else if (!reg1->data && SUBSUMES (&reg1->extents, &reg2->extents)) {
+        /* reg1 is just a rect that contains all of reg2 */
+
+        res |= REGION_TEST_SHARED; /* some piece must be shared, because reg is not empty */
+        res |= REGION_TEST_LEFT_EXCLUSIVE; /* reg1 contains all of reg2 and then some */
+
+        return res & query;
+    } else if (reg1 == reg2) {
+        res |= REGION_TEST_SHARED;
+        return res & query;
+    } else {
+        /* General purpose intersection */
+        return test_generic (reg1, reg2, query);
+    }
+}
+
+int region_is_valid(const QRegion *rgn)
+{
+    return pixman_region32_selfcheck((pixman_region32_t *)rgn);
+}
+
+int region_is_empty(const QRegion *rgn)
+{
+    return !pixman_region32_not_empty((pixman_region32_t *)rgn);
+}
+
+SpiceRect *region_dup_rects(const QRegion *rgn, uint32_t *num_rects)
+{
+    pixman_box32_t *boxes;
+    SpiceRect *rects;
+    int n, i;
+
+    boxes = pixman_region32_rectangles((pixman_region32_t *)rgn, &n);
+    if (num_rects) {
+        *num_rects = n;
+    }
+    rects = (SpiceRect *)malloc(sizeof(SpiceRect)*n);
+    for (i = 0; i < n; i++) {
+        rects[i].left = boxes[i].x1;
+        rects[i].top = boxes[i].y1;
+        rects[i].right = boxes[i].x2;
+        rects[i].bottom = boxes[i].y2;
+    }
+    return rects;
+}
+
+
+int region_is_equal(const QRegion *rgn1, const QRegion *rgn2)
+{
+    return pixman_region32_equal((pixman_region32_t *)rgn1, (pixman_region32_t *)rgn2);
+}
+
+int region_intersects(const QRegion *rgn1, const QRegion *rgn2)
+{
+    int test_res;
+
+    if (!region_bounds_intersects(rgn1, rgn2)) {
+        return FALSE;
+    }
+
+    test_res = region_test(rgn1, rgn2, REGION_TEST_SHARED);
+    return !!test_res;
+}
+
+int region_bounds_intersects(const QRegion *rgn1, const QRegion *rgn2)
+{
+    pixman_box32_t *extents1, *extents2;
+
+    extents1 = pixman_region32_extents((pixman_region32_t *)rgn1);
+    extents2 = pixman_region32_extents((pixman_region32_t *)rgn1);
+
+    return EXTENTCHECK(extents1, extents2);
+}
+
+int region_contains(const QRegion *rgn, const QRegion *other)
+{
+    int test_res;
+
+    test_res = region_test(rgn, other, REGION_TEST_RIGHT_EXCLUSIVE);
+    return !test_res;
+}
+
+int region_contains_point(const QRegion *rgn, int32_t x, int32_t y)
+{
+    return pixman_region32_contains_point((pixman_region32_t *)rgn, x, y, NULL);
+}
+
+void region_or(QRegion *rgn, const QRegion *other_rgn)
+{
+    pixman_region32_union(rgn, rgn, (pixman_region32_t *)other_rgn);
+}
+
+void region_and(QRegion *rgn, const QRegion *other_rgn)
+{
+    pixman_region32_intersect(rgn, rgn, (pixman_region32_t *)other_rgn);
+}
+
+void region_xor(QRegion *rgn, const QRegion *other_rgn)
+{
+    pixman_region32_t intersection;
+
+    pixman_region32_copy(&intersection, rgn);
+    pixman_region32_intersect(&intersection,
+                              &intersection,
+                              (pixman_region32_t *)other_rgn);
+    pixman_region32_union(rgn, rgn, (pixman_region32_t *)other_rgn);
+    pixman_region32_subtract(rgn, rgn, &intersection);
+    pixman_region32_fini(&intersection);
+}
+
+void region_exclude(QRegion *rgn, const QRegion *other_rgn)
+{
+    pixman_region32_subtract(rgn, rgn, (pixman_region32_t *)other_rgn);
+}
+
+void region_add(QRegion *rgn, const SpiceRect *r)
+{
+    pixman_region32_union_rect(rgn, rgn, r->left, r->top,
+                               r->right - r->left,
+                               r->bottom - r->top);
+}
+
+void region_remove(QRegion *rgn, const SpiceRect *r)
+{
+    pixman_region32_t rg;
+
+    pixman_region32_init_rect(&rg, r->left, r->top,
+                              r->right - r->left,
+                              r->bottom - r->top);
+    pixman_region32_subtract(rgn, rgn, &rg);
+    pixman_region32_fini(&rg);
+}
+
+
+void region_offset(QRegion *rgn, int32_t dx, int32_t dy)
+{
+    pixman_region32_translate(rgn, dx, dy);
+}
+
+void region_dump(const QRegion *rgn, const char *prefix)
+{
+    pixman_box32_t *rects, *extents;
+    int n_rects, i;
+
+    printf("%sREGION: %p, ", prefix, rgn);
+
+    if (!pixman_region32_not_empty((pixman_region32_t *)rgn)) {
+        printf("EMPTY\n");
+        return;
+    }
+
+    extents = pixman_region32_extents((pixman_region32_t *)rgn);
+    rects = pixman_region32_rectangles((pixman_region32_t *)rgn, &n_rects);
+    printf("num %u bounds (%d, %d, %d, %d)\n",
+           n_rects,
+           extents->x1,
+           extents->y1,
+           extents->x2,
+           extents->y2);
+
+
+    for (i = 0; i < n_rects; i++) {
+        printf("%*s  %12d %12d %12d %12d\n",
+               (int)strlen(prefix), "",
+               rects[i].x1,
+               rects[i].y1,
+               rects[i].x2,
+               rects[i].y2);
+    }
+}
+
+#ifdef REGION_TEST
+
+static int slow_region_test(const QRegion *rgn, const QRegion *other_rgn, int query)
+{
+    pixman_region32_t intersection;
+    int res;
+
+    pixman_region32_init(&intersection);
+    pixman_region32_intersect(&intersection,
+                              (pixman_region32_t *)rgn,
+                              (pixman_region32_t *)other_rgn);
+
+    res = 0;
+
+    if (query & REGION_TEST_SHARED &&
+        pixman_region32_not_empty(&intersection)) {
+        res |= REGION_TEST_SHARED;
+    }
+
+    if (query & REGION_TEST_LEFT_EXCLUSIVE &&
+        !pixman_region32_equal(&intersection, (pixman_region32_t *)rgn)) {
+        res |= REGION_TEST_LEFT_EXCLUSIVE;
+    }
+
+    if (query & REGION_TEST_RIGHT_EXCLUSIVE &&
+        !pixman_region32_equal(&intersection, (pixman_region32_t *)other_rgn)) {
+        res |= REGION_TEST_RIGHT_EXCLUSIVE;
+    }
+
+    pixman_region32_fini(&intersection);
+
+    return res;
+}
+
 
 static int rect_is_valid(const SpiceRect *r)
 {
@@ -51,7 +536,6 @@ static int rect_is_valid(const SpiceRect *r)
     return TRUE;
 }
 
-#ifdef REGION_TEST
 static void rect_set(SpiceRect *r, int32_t top, int32_t left, int32_t bottom, int32_t right)
 {
     r->top = top;
@@ -61,901 +545,28 @@ static void rect_set(SpiceRect *r, int32_t top, int32_t left, int32_t bottom, in
     ASSERT(rect_is_valid(r));
 }
 
-#endif
-
-static inline void __region_init(QRegion *rgn)
+static void random_region(QRegion *reg)
 {
-    rgn->num_rects = 0;
-    rgn->rects = rgn->buf;
-    rgn->rects_size = RECTS_BUF_SIZE;
-}
+    int i;
+    int num_rects;
+    int x, y, w, h;
+    SpiceRect _r;
+    SpiceRect *r = &_r;
 
-void region_init(QRegion *rgn)
-{
-    __region_init(rgn);
-    ASSERT(REGION_IS_VALID(rgn));
-}
+    region_clear(reg);
 
-void region_clear(QRegion *rgn)
-{
-    rgn->num_rects = 0;
-}
-
-void region_destroy(QRegion *rgn)
-{
-    ASSERT(REGION_IS_VALID(rgn));
-    if (rgn->rects != rgn->buf) {
-        free(rgn->rects);
+    num_rects = rand() % 20;
+    for (i = 0; i < num_rects; i++) {
+        x = rand()%100;
+        y = rand()%100;
+        w = rand()%100;
+        h = rand()%100;
+        rect_set(r,
+                 x, y,
+                 x+w, y+h);
+        region_add(reg, r);
     }
 }
-
-void region_clone(QRegion *dest, const QRegion *src)
-{
-    ASSERT(REGION_IS_VALID(src));
-    dest->bbox = src->bbox;
-    if ((dest->num_rects = src->num_rects) <= RECTS_BUF_SIZE) {
-        dest->rects = dest->buf;
-        dest->rects_size = RECTS_BUF_SIZE;
-    } else {
-        dest->rects = (SpiceRect *)malloc(sizeof(SpiceRect) * dest->num_rects);
-        dest->rects_size = dest->num_rects;
-    }
-    memcpy(dest->rects, src->rects, dest->num_rects * sizeof(SpiceRect));
-    ASSERT(REGION_IS_VALID(src));
-    ASSERT(REGION_IS_VALID(dest));
-}
-
-int region_is_valid(const QRegion *rgn)
-{
-    if (rgn->num_rects) {
-        uint32_t i;
-        SpiceRect bbox;
-
-        if (!rect_is_valid(&rgn->bbox)) {
-            return FALSE;
-        }
-        bbox = rgn->rects[0];
-        if (!rect_is_valid(&bbox) || rect_is_empty(&bbox)) {
-            return FALSE;
-        }
-        for (i = 1; i < rgn->num_rects; i++) {
-            SpiceRect *r;
-
-            r = &rgn->rects[i];
-            if (!rect_is_valid(r) || rect_is_empty(r)) {
-                return FALSE;
-            }
-
-            SpiceRect *priv = r - 1;
-            if (r->top < priv->top) {
-                return FALSE;
-            } else if (r->top == priv->top) {
-                if (r->bottom != priv->bottom) {
-                    return FALSE;
-                }
-                if (r->left < priv->right) {
-                    return FALSE;
-                }
-            } else if (priv->bottom > r->top) {
-                return FALSE;
-            }
-            bbox.top = MIN(bbox.top, r->top);
-            bbox.left = MIN(bbox.left, r->left);
-            bbox.bottom = MAX(bbox.bottom, r->bottom);
-            bbox.right = MAX(bbox.right, r->right);
-        }
-        return rect_is_equal(&bbox, &rgn->bbox);
-    }
-    return TRUE;
-}
-
-void region_dump(const QRegion *rgn, const char *prefix)
-{
-    char *indent;
-    int len;
-    uint32_t i;
-
-    len = strlen(prefix);
-    if (!(indent = (char *)malloc(len + 1))) {
-        printf("%s: malloc failed\n", __FUNCTION__);
-        return;
-    }
-    memset(indent, ' ', len);
-    indent[len] = 0;
-
-
-    printf("%sREGION: %p, size %u storage is %s, ",
-           prefix,
-           rgn,
-           rgn->rects_size,
-           (rgn->rects == rgn->buf) ? "BUF" : "MALLOC");
-
-    if (rgn->num_rects == 0) {
-        printf("EMPTY\n");
-        return;
-    }
-
-    printf("num %u bounds (%d, %d, %d, %d)\n",
-           rgn->num_rects,
-           rgn->bbox.top,
-           rgn->bbox.left,
-           rgn->bbox.bottom,
-           rgn->bbox.right);
-
-    for (i = 0; i < rgn->num_rects; i++) {
-        printf("%s  %12d %12d %12d %12d\n",
-               indent,
-               rgn->rects[i].top,
-               rgn->rects[i].left,
-               rgn->rects[i].bottom,
-               rgn->rects[i].right);
-    }
-    free(indent);
-    ASSERT(region_is_valid(rgn));
-}
-
-int region_is_empty(const QRegion *rgn)
-{
-    ASSERT(REGION_IS_VALID(rgn));
-    return !rgn->num_rects;
-}
-
-#ifdef REGION_USE_IMPROVED
-
-int region_is_equal(const QRegion *rgn1, const QRegion *rgn2)
-{
-    int test_res;
-
-    ASSERT(REGION_IS_VALID(rgn1));
-    ASSERT(REGION_IS_VALID(rgn2));
-
-    if (rgn1->num_rects == 0 || rgn2->num_rects == 0) {
-        return rgn1->num_rects == rgn2->num_rects;
-    }
-
-    if (!rect_is_equal(&rgn1->bbox, &rgn2->bbox)) {
-        return FALSE;
-    }
-
-    test_res = region_test(rgn1, rgn2, REGION_TEST_LEFT_EXCLUSIVE | REGION_TEST_RIGHT_EXCLUSIVE);
-    return !test_res;
-}
-
-#else
-
-int region_is_equal(const QRegion *rgn1, const QRegion *rgn2)
-{
-    QRegion tmp_rgn;
-    int ret;
-
-    ASSERT(REGION_IS_VALID(rgn1));
-    ASSERT(REGION_IS_VALID(rgn2));
-
-    if (rgn1->num_rects == 0 || rgn2->num_rects == 0) {
-        return rgn1->num_rects == rgn2->num_rects;
-    }
-
-    if (!rect_is_equal(&rgn1->bbox, &rgn2->bbox)) {
-        return FALSE;
-    }
-
-    region_clone(&tmp_rgn, rgn1);
-    region_xor(&tmp_rgn, rgn2);
-    ret = region_is_empty(&tmp_rgn);
-    region_destroy(&tmp_rgn);
-    return ret;
-}
-
-#endif
-
-typedef struct RgnOpCtx {
-    SpiceRect *now;
-    SpiceRect *end;
-    SpiceRect *scan_line;
-    SpiceRect r;
-    SpiceRect split;
-#ifdef REGION_USE_IMPROVED
-    int abort;
-#endif
-} RgnOpCtx;
-
-static inline int op_ctx_is_valid(RgnOpCtx *ctx)
-{
-    return ctx->now != ctx->end;
-}
-
-static void op_context_next(RgnOpCtx *ctx)
-{
-    SpiceRect *now;
-    SpiceRect *next;
-
-    ASSERT(op_ctx_is_valid(ctx));
-    now = ctx->now;
-    next = now + 1;
-
-    if (next == ctx->end || now->top != next->top) {
-        if (now->bottom != ctx->r.bottom) { //h_split
-            ctx->r.top = ctx->r.bottom;
-            ctx->r.bottom = now->bottom;
-            next = ctx->scan_line;
-        } else {
-            if (next == ctx->end) {
-#ifdef REGION_USE_IMPROVED
-                ctx->scan_line = ++ctx->now;
-#else
-                ++ctx->now;
-#endif
-                ctx->r.top = ctx->r.left = ctx->r.bottom = ctx->r.right = (1U << 31) - 1;
-                return;
-            }
-            ctx->scan_line = next;
-            ctx->r.top = next->top;
-            ctx->r.bottom = next->bottom;
-        }
-    }
-    ctx->r.left = next->left;
-    ctx->r.right = next->right;
-    ctx->now = next;
-}
-
-static void op_context_init(RgnOpCtx *ctx, uint32_t num_rects, SpiceRect *rects)
-{
-    ctx->scan_line = ctx->now = rects;
-    ctx->end = ctx->now + num_rects;
-#ifdef REGION_USE_IMPROVED
-    ctx->abort = FALSE;
-#endif
-    if (!op_ctx_is_valid(ctx)) {
-        ctx->r.top = ctx->r.left = ctx->r.bottom = ctx->r.right = (1U << 31) - 1;
-    } else {
-        ctx->r = *ctx->now;
-    }
-}
-
-static inline void op_ctx_h_split(RgnOpCtx *ctx, int32_t h_line)
-{
-    ctx->r.bottom = h_line;
-    ctx->split = ctx->r;
-    op_context_next(ctx);
-}
-
-static inline void op_ctx_v_split(RgnOpCtx *ctx, int32_t v_line)
-{
-    ctx->split = ctx->r;
-    ctx->r.left = ctx->split.right = v_line;
-    if (rect_is_empty(&ctx->r)) {
-        op_context_next(ctx);
-    }
-}
-
-static inline void op_ctx_split(RgnOpCtx *ctx, int32_t h_line)
-{
-    ASSERT(ctx->now == ctx->scan_line);
-    ctx->r.bottom = h_line;
-}
-
-static void region_steal_rects(QRegion *rgn, uint32_t *num_rects, SpiceRect **rects)
-{
-    ASSERT(REGION_IS_VALID(rgn));
-    if ((*num_rects = rgn->num_rects)) {
-        if (rgn->rects == rgn->buf) {
-            *rects = (SpiceRect *)malloc(sizeof(SpiceRect) * rgn->num_rects);
-            memcpy(*rects, rgn->rects, sizeof(SpiceRect) * rgn->num_rects);
-        } else {
-            *rects = rgn->rects;
-#ifdef ALLOC_ON_STEAL
-            rgn->rects = (SpiceRect *)malloc(sizeof(SpiceRect) * rgn->num_rects);
-            rgn->rects_size = rgn->num_rects;
-            rgn->num_rects = 0;
-            return;
-#endif
-        }
-    } else {
-        *rects = NULL;
-    }
-    __region_init(rgn);
-    ASSERT(REGION_IS_VALID(rgn));
-}
-
-typedef struct JoinContext {
-    QRegion *rgn;
-    SpiceRect *line0;
-    SpiceRect *line1;
-    SpiceRect *end;
-} JoinContext;
-
-static inline SpiceRect *__get_line(QRegion *rgn, SpiceRect *pos)
-{
-    SpiceRect *end = rgn->rects + rgn->num_rects;
-
-    if (pos < end) {
-        int32_t line_top = pos->top;
-        while (++pos < end && pos->top == line_top) {
-            ASSERT((pos - 1)->right < pos->left); //join in region_push_rect
-        }
-    }
-    return pos;
-}
-
-static inline int region_join_init(QRegion *rgn, JoinContext *context)
-{
-    context->rgn = rgn;
-    context->end = __get_line(rgn, (context->line1 = rgn->rects));
-    return context->end != context->line1;
-}
-
-static inline int region_join_next(JoinContext *context)
-{
-    context->line0 = context->line1;
-    context->line1 = context->end;
-    context->end = __get_line(context->rgn, context->line1);
-    return context->end != context->line1;
-}
-
-static inline void region_join_join(JoinContext *context)
-{
-    SpiceRect *pos_0 = context->line0;
-    SpiceRect *pos_1 = context->line1;
-    int32_t bottom;
-    QRegion *rgn;
-
-    if (pos_0->bottom != pos_1->top) {
-        return;
-    }
-
-    if (pos_1 - pos_0 != context->end - pos_1) {
-        return;
-    }
-
-    for (; pos_1 < context->end; pos_0++, pos_1++) {
-        if (pos_0->left != pos_1->left || pos_0->right != pos_1->right) {
-            return;
-        }
-    }
-    bottom = context->line1->bottom;
-    pos_0 = context->line0;
-    for (; pos_0 < context->line1; pos_0++) {
-        pos_0->bottom = bottom;
-    }
-    rgn = context->rgn;
-    memmove(context->line1, context->end,
-            (unsigned long)(rgn->rects + rgn->num_rects) - (unsigned long)context->end);
-    rgn->num_rects -= (context->line1 - context->line0);
-    context->end = context->line1;
-    context->line1 = context->line0;
-}
-
-static inline void region_join(QRegion *rgn)
-{
-    JoinContext context;
-
-    ASSERT(REGION_IS_VALID(rgn));
-
-    if (!region_join_init(rgn, &context)) {
-        return;
-    }
-    while (region_join_next(&context)) {
-        region_join_join(&context);
-    }
-
-    ASSERT(REGION_IS_VALID(rgn));
-}
-
-static void region_push_rect(QRegion *rgn, SpiceRect *r)
-{
-    ASSERT(REGION_IS_VALID(rgn));
-    ASSERT(rect_is_valid(r));
-    if (rgn->num_rects == 0) {
-        rgn->num_rects++;
-        rgn->rects[0] = rgn->bbox = *r;
-        return;
-    } else {
-        SpiceRect *priv = &rgn->rects[rgn->num_rects - 1];
-
-        if (priv->top == r->top && priv->right == r->left) {
-            ASSERT(priv->bottom == r->bottom);
-            priv->right = r->right;
-            rgn->bbox.right = MAX(rgn->bbox.right, priv->right);
-            return;
-        }
-        if (rgn->rects_size == rgn->num_rects) {
-            SpiceRect *old = rgn->rects;
-            rgn->rects_size = rgn->rects_size * 2;
-            rgn->rects = (SpiceRect *)malloc(sizeof(SpiceRect) * rgn->rects_size);
-            memcpy(rgn->rects, old, sizeof(SpiceRect) * rgn->num_rects);
-            if (old != rgn->buf) {
-                free(old);
-            }
-        }
-        rgn->rects[rgn->num_rects++] = *r;
-        rect_union(&rgn->bbox, r);
-    }
-}
-
-#ifdef REGION_USE_IMPROVED
-
-static SpiceRect *op_context_find_area_below(RgnOpCtx *ctx, int32_t val)
-{
-    SpiceRect *start = ctx->now;
-    SpiceRect *end = ctx->end;
-
-    while (start != end) {
-        int pos = (end - start) / 2;
-        if (start[pos].bottom <= val) {
-            start = &start[pos + 1];
-        } else {
-            end = &start[pos];
-        }
-    }
-    return start;
-}
-
-static int op_context_skip_v(RgnOpCtx *ctx, int32_t top)
-{
-    SpiceRect *end = op_context_find_area_below(ctx, top);
-    if (end != ctx->now) {
-        ctx->now = ctx->scan_line = end;
-        if (ctx->now == ctx->end) {
-            ctx->r.top = ctx->r.left = ctx->r.bottom = ctx->r.right = (1U << 31) - 1;
-        } else {
-            ctx->r = *ctx->now;
-        }
-        return TRUE;
-    }
-    return FALSE;
-}
-
-typedef void (*op_callback_t)(RgnOpCtx *context, SpiceRect *, SpiceRect *);
-
-static void op_context_skip(RgnOpCtx *self, RgnOpCtx *other, op_callback_t on_self,
-                            op_callback_t on_other)
-{
-    SpiceRect *save1 = self->now;
-    SpiceRect *save2 = other->now;
-    int more;
-    do {
-        op_context_skip_v(self, other->r.top);
-        if (save1 != self->now) {
-            if (on_self) {
-                on_self(self, save1, self->now);
-            }
-            save1 = self->now;
-        }
-        more = op_context_skip_v(other, self->r.top);
-        if (save2 != other->now) {
-            if (on_other) {
-                on_other(self, save2, other->now);
-            }
-            save2 = other->now;
-        }
-    } while (more && !self->abort);
-}
-
-static inline int op_context_more_overlap(RgnOpCtx *ctx, int32_t *bottom)
-{
-    if (!op_ctx_is_valid(ctx)) {
-        return FALSE;
-    }
-
-    if (ctx->scan_line->bottom > *bottom && ctx->scan_line->top < *bottom) {
-        *bottom = ctx->scan_line->bottom;
-    }
-    return ctx->scan_line->top < *bottom;
-}
-
-static inline void op_context_overlap(RgnOpCtx *self, RgnOpCtx *other, op_callback_t on_self,
-                                      op_callback_t on_other, op_callback_t on_both)
-{
-    int32_t bottom = MAX(self->scan_line->bottom, other->scan_line->bottom);
-
-    do {
-        if (self->r.top < other->r.top) {
-            op_ctx_h_split(self, MIN(other->r.top, self->r.bottom));
-            if (on_self) {
-                on_self(self, &self->split, &self->split + 1);
-            }
-        } else if (self->r.top > other->r.top) {
-            op_ctx_h_split(other, MIN(self->r.top, other->r.bottom));
-            if (on_other) {
-                on_other(self, &other->split, &other->split + 1);
-            }
-        } else {
-            if (self->r.bottom > other->r.bottom) {
-                op_ctx_split(self, other->r.bottom);
-            } else if (other->r.bottom > self->r.bottom) {
-                op_ctx_split(other, self->r.bottom);
-            }
-            if (self->r.left < other->r.left) {
-                op_ctx_v_split(self, MIN(other->r.left, self->r.right));
-                if (on_self) {
-                    on_self(self, &self->split, &self->split + 1);
-                }
-            } else if (self->r.left > other->r.left) {
-                op_ctx_v_split(other, MIN(self->r.left, other->r.right));
-                if (on_other) {
-                    on_other(self, &other->split, &other->split + 1);
-                }
-            } else {
-                int32_t right = MIN(self->r.right, other->r.right);
-                op_ctx_v_split(self, right);
-                op_ctx_v_split(other, right);
-                if (on_both) {
-                    on_both(self, &self->split, &self->split + 1);
-                }
-            }
-        }
-    } while (!self->abort && (op_context_more_overlap(self, &bottom) ||
-                              op_context_more_overlap(other, &bottom)));
-}
-
-static inline void op_context_op(RgnOpCtx *self, RgnOpCtx *other, op_callback_t on_self,
-                                 op_callback_t on_other, op_callback_t on_both)
-{
-    for (;;) {
-        op_context_skip(self, other, on_self, on_other);
-        if (self->abort || !op_ctx_is_valid(self)) {
-            ASSERT(self->abort || !op_ctx_is_valid(other));
-            return;
-        }
-        op_context_overlap(self, other, on_self, on_other, on_both);
-    }
-}
-
-typedef struct SelfOpCtx {
-    RgnOpCtx ctx;
-    QRegion *rgn;
-} SelfOpCtx;
-
-static void add_rects(RgnOpCtx *ctx, SpiceRect *now, SpiceRect *end)
-{
-    SelfOpCtx *self_ctx = (SelfOpCtx *)ctx;
-    for (; now < end; now++) {
-        region_push_rect(self_ctx->rgn, now);
-    }
-}
-
-static void region_op(QRegion *rgn, const QRegion *other_rgn, op_callback_t on_self,
-                      op_callback_t on_other, op_callback_t on_both)
-{
-    SelfOpCtx self;
-    RgnOpCtx other;
-    uint32_t num_rects;
-    SpiceRect *rects;
-
-    region_steal_rects(rgn, &num_rects, &rects);
-    op_context_init(&self.ctx, num_rects, rects);
-    self.rgn = rgn;
-    op_context_init(&other, other_rgn->num_rects, other_rgn->rects);
-    op_context_op(&self.ctx, &other, on_self, on_other, on_both);
-    free(rects);
-    region_join(rgn);
-}
-
-void region_or(QRegion *rgn, const QRegion *other_rgn)
-{
-    region_op(rgn, other_rgn, add_rects, add_rects, add_rects);
-}
-
-void region_and(QRegion *rgn, const QRegion *other_rgn)
-{
-    if (!region_bounds_intersects(rgn, other_rgn)) {
-        region_clear(rgn);
-        return;
-    }
-    region_op(rgn, other_rgn, NULL, NULL, add_rects);
-}
-
-void region_xor(QRegion *rgn, const QRegion *other_rgn)
-{
-    region_op(rgn, other_rgn, add_rects, add_rects, NULL);
-}
-
-void region_exclude(QRegion *rgn, const QRegion *other_rgn)
-{
-    if (!region_bounds_intersects(rgn, other_rgn)) {
-        return;
-    }
-    region_op(rgn, other_rgn, add_rects, NULL, NULL);
-}
-
-typedef struct TestOpCtx {
-    RgnOpCtx ctx;
-    int result;
-    int abort_on;
-} TestOpCtx;
-
-
-static void region_test_on_self(RgnOpCtx *ctx, SpiceRect *now, SpiceRect *end)
-{
-    TestOpCtx *test_ctx = (TestOpCtx *)ctx;
-    test_ctx->result |= REGION_TEST_LEFT_EXCLUSIVE;
-    test_ctx->result &= test_ctx->abort_on;
-    if (test_ctx->result == test_ctx->abort_on) {
-        test_ctx->ctx.abort = TRUE;
-    }
-}
-
-static void region_test_on_other(RgnOpCtx *ctx, SpiceRect *now, SpiceRect *end)
-{
-    TestOpCtx *test_ctx = (TestOpCtx *)ctx;
-    test_ctx->result |= REGION_TEST_RIGHT_EXCLUSIVE;
-    test_ctx->result &= test_ctx->abort_on;
-    if (test_ctx->result == test_ctx->abort_on) {
-        test_ctx->ctx.abort = TRUE;
-    }
-}
-
-static void region_test_on_both(RgnOpCtx *ctx, SpiceRect *now, SpiceRect *end)
-{
-    TestOpCtx *test_ctx = (TestOpCtx *)ctx;
-    test_ctx->result |= REGION_TEST_SHARED;
-    test_ctx->result &= test_ctx->abort_on;
-    if (test_ctx->result == test_ctx->abort_on) {
-        test_ctx->ctx.abort = TRUE;
-    }
-}
-
-int region_test(const QRegion *rgn, const QRegion *other_rgn, int query)
-{
-    TestOpCtx self;
-    RgnOpCtx other;
-
-    op_context_init(&self.ctx, rgn->num_rects, rgn->rects);
-    self.result = 0;
-    self.abort_on = (query) ? query & REGION_TEST_ALL : REGION_TEST_ALL;
-    op_context_init(&other, other_rgn->num_rects, other_rgn->rects);
-    op_context_op(&self.ctx, &other, region_test_on_self, region_test_on_other,
-                  region_test_on_both);
-    return self.result;
-}
-
-#else
-
-#define RIGION_OP_ADD_SELF (1 << 0)
-#define RIGION_OP_ADD_OTHER (1 << 1)
-#define RIGION_OP_ADD_COMMON (1 << 2)
-
-static inline void region_on_self(QRegion *rgn, SpiceRect *r, uint32_t op)
-{
-    ASSERT(REGION_IS_VALID(rgn));
-    if (op & RIGION_OP_ADD_SELF) {
-        region_push_rect(rgn, r);
-    }
-}
-
-static inline void region_on_other(QRegion *rgn, SpiceRect *r, uint32_t op)
-{
-    ASSERT(REGION_IS_VALID(rgn));
-    if (op & RIGION_OP_ADD_OTHER) {
-        region_push_rect(rgn, r);
-    }
-}
-
-static inline void region_on_both(QRegion *rgn, SpiceRect *r, uint32_t op)
-{
-    ASSERT(REGION_IS_VALID(rgn));
-    if (op & RIGION_OP_ADD_COMMON) {
-        region_push_rect(rgn, r);
-    }
-}
-
-static void region_op(QRegion *rgn, const QRegion *other_rgn, uint32_t op)
-{
-    RgnOpCtx self;
-    RgnOpCtx other;
-    uint32_t num_rects;
-    SpiceRect *rects;
-
-    ASSERT(REGION_IS_VALID(rgn));
-    ASSERT(REGION_IS_VALID(other_rgn));
-    region_steal_rects(rgn, &num_rects, &rects);
-
-    op_context_init(&self, num_rects, rects);
-    op_context_init(&other, other_rgn->num_rects, other_rgn->rects);
-
-    while (op_ctx_is_valid(&self) || op_ctx_is_valid(&other)) {
-        if (self.r.top < other.r.top) {
-            op_ctx_h_split(&self, MIN(other.r.top, self.r.bottom));
-            region_on_self(rgn, &self.split, op);
-        } else if (self.r.top > other.r.top) {
-            op_ctx_h_split(&other, MIN(self.r.top, other.r.bottom));
-            region_on_other(rgn, &other.split, op);
-        } else {
-            if (self.r.bottom > other.r.bottom) {
-                op_ctx_split(&self, other.r.bottom);
-            } else if (other.r.bottom > self.r.bottom) {
-                op_ctx_split(&other, self.r.bottom);
-            }
-            if (self.r.left < other.r.left) {
-                op_ctx_v_split(&self, MIN(other.r.left, self.r.right));
-                region_on_self(rgn, &self.split, op);
-            } else if (self.r.left > other.r.left) {
-                op_ctx_v_split(&other, MIN(self.r.left, other.r.right));
-                region_on_other(rgn, &other.split, op);
-            } else {
-                int32_t right = MIN(self.r.right, other.r.right);
-                op_ctx_v_split(&self, right);
-                op_ctx_v_split(&other, right);
-                region_on_both(rgn, &self.split, op);
-            }
-        }
-    }
-    free(rects);
-    region_join(rgn);
-}
-
-void region_or(QRegion *rgn, const QRegion *other_rgn)
-{
-    region_op(rgn, other_rgn, RIGION_OP_ADD_SELF | RIGION_OP_ADD_OTHER | RIGION_OP_ADD_COMMON);
-}
-
-void region_and(QRegion *rgn, const QRegion *other_rgn)
-{
-    region_op(rgn, other_rgn, RIGION_OP_ADD_COMMON);
-}
-
-void region_xor(QRegion *rgn, const QRegion *other_rgn)
-{
-    region_op(rgn, other_rgn, RIGION_OP_ADD_SELF | RIGION_OP_ADD_OTHER);
-}
-
-void region_exclude(QRegion *rgn, const QRegion *other_rgn)
-{
-    region_op(rgn, other_rgn, RIGION_OP_ADD_SELF);
-}
-
-#endif
-
-
-void region_offset(QRegion *rgn, int32_t dx, int32_t dy)
-{
-    SpiceRect *now;
-    SpiceRect *end;
-    ASSERT(REGION_IS_VALID(rgn));
-    if (region_is_empty(rgn)) {
-        return;
-    }
-    rect_offset(&rgn->bbox, dx, dy);
-    now = rgn->rects;
-    end = now + rgn->num_rects;
-    for (; now < end; now++) {
-        rect_offset(now, dx, dy);
-    }
-}
-
-void region_add(QRegion *rgn, const SpiceRect *r)
-{
-    ASSERT(REGION_IS_VALID(rgn));
-    ASSERT(rect_is_valid(r));
-
-    if (!rgn->num_rects) {
-        if (rect_is_empty(r)) {
-            return;
-        }
-        rgn->num_rects++;
-        rgn->rects[0] = rgn->bbox = *r;
-    } else {
-        QRegion rect_rgn;
-        region_init(&rect_rgn);
-        region_add(&rect_rgn, r);
-        region_or(rgn, &rect_rgn);
-    }
-}
-
-void region_remove(QRegion *rgn, const SpiceRect *r)
-{
-    ASSERT(REGION_IS_VALID(rgn));
-    ASSERT(rect_is_valid(r));
-    if (rgn->num_rects) {
-        QRegion rect_rgn;
-
-        region_init(&rect_rgn);
-        region_add(&rect_rgn, r);
-        region_exclude(rgn, &rect_rgn);
-    }
-}
-
-#ifdef REGION_USE_IMPROVED
-
-int region_intersects(const QRegion *rgn1, const QRegion *rgn2)
-{
-    int test_res;
-
-    ASSERT(REGION_IS_VALID(rgn1));
-    ASSERT(REGION_IS_VALID(rgn2));
-
-    if (!region_bounds_intersects(rgn1, rgn2)) {
-        return FALSE;
-    }
-
-    test_res = region_test(rgn1, rgn2, REGION_TEST_SHARED);
-    return !!test_res;
-}
-
-#else
-
-int region_intersects(const QRegion *rgn1, const QRegion *rgn2)
-{
-    QRegion tmp;
-    int ret;
-
-    ASSERT(REGION_IS_VALID(rgn1));
-    ASSERT(REGION_IS_VALID(rgn2));
-
-    region_clone(&tmp, rgn1);
-    region_and(&tmp, rgn2);
-    ret = !region_is_empty(&tmp);
-    region_destroy(&tmp);
-    return ret;
-}
-
-#endif
-
-int region_bounds_intersects(const QRegion *rgn1, const QRegion *rgn2)
-{
-    return !region_is_empty(rgn1) && !region_is_empty(rgn2) &&
-           rect_intersects(&rgn1->bbox, &rgn2->bbox);
-}
-
-#ifdef REGION_USE_IMPROVED
-
-int region_contains(const QRegion *rgn, const QRegion *other)
-{
-    int test_res;
-
-    ASSERT(REGION_IS_VALID(rgn));
-    ASSERT(REGION_IS_VALID(other));
-
-    test_res = region_test(rgn, other, REGION_TEST_RIGHT_EXCLUSIVE);
-    return !test_res;
-}
-
-#else
-
-int region_contains(const QRegion *rgn, const QRegion *other)
-{
-    QRegion tmp;
-    int ret;
-
-    ASSERT(REGION_IS_VALID(rgn));
-    ASSERT(REGION_IS_VALID(other));
-
-    region_clone(&tmp, rgn);
-    region_and(&tmp, other);
-    ret = region_is_equal(&tmp, other);
-    region_destroy(&tmp);
-    return ret;
-}
-
-#endif
-
-int region_contains_point(const QRegion *rgn, int32_t x, int32_t y)
-{
-    if (region_is_empty(rgn)) {
-        return FALSE;
-    }
-    SpiceRect point;
-    point.left = x;
-    point.right = point.left + 1;
-    point.top = y;
-    point.bottom = point.top + 1;
-
-    if (!rect_intersects(&rgn->bbox, &point)) {
-        return FALSE;
-    }
-
-    SpiceRect* now = rgn->rects;
-    SpiceRect* end = now + rgn->num_rects;
-
-    for (; now < end; now++) {
-        if (rect_intersects(now, &point)) {
-            return TRUE;
-        }
-    }
-    return FALSE;
-}
-
-#ifdef REGION_TEST
 
 static void test(const QRegion *r1, const QRegion *r2, int *expected)
 {
@@ -993,6 +604,7 @@ int main(void)
     SpiceRect _r;
     SpiceRect *r = &_r;
     int expected[5];
+    int i, j;
 
     region_init(r1);
     region_init(r2);
@@ -1218,6 +830,36 @@ int main(void)
     test(r1, r3, expected);
     printf("\n");
 
+    j = 0;
+    for (i = 0; i < 1000000; i++) {
+        int res1, res2, test;
+        int tests[] = {
+            REGION_TEST_LEFT_EXCLUSIVE,
+            REGION_TEST_RIGHT_EXCLUSIVE,
+            REGION_TEST_SHARED,
+            REGION_TEST_LEFT_EXCLUSIVE | REGION_TEST_RIGHT_EXCLUSIVE,
+            REGION_TEST_LEFT_EXCLUSIVE | REGION_TEST_SHARED,
+            REGION_TEST_RIGHT_EXCLUSIVE | REGION_TEST_SHARED,
+            REGION_TEST_LEFT_EXCLUSIVE | REGION_TEST_RIGHT_EXCLUSIVE | REGION_TEST_SHARED
+        };
+
+        random_region(r1);
+        random_region(r2);
+
+        for (test = 0; test < 7; test++) {
+            res1 = region_test(r1, r2, tests[test]);
+            res2 = slow_region_test(r1, r2, tests[test]);
+            if (res1 != res2) {
+                printf ("Error in region_test %d, got %d, expected %d, query=%d\n",
+                        j, res1, res2, tests[test]);
+                printf ("r1:\n");
+                region_dump(r1, "");
+                printf ("r2:\n");
+                region_dump(r2, "");
+            }
+            j++;
+        }
+    }
 
     region_destroy(r3);
     region_destroy(r1);
