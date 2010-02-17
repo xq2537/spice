@@ -23,6 +23,7 @@
 #include "rop3.h"
 #include "rect.h"
 #include "region.h"
+#include "lines.h"
 #include "pixman_utils.h"
 
 #define ROUND(_x) floor((_x) + 0.5)
@@ -331,155 +332,6 @@ static void canvas_mask_pixman(CairoCanvas *canvas,
     pixman_region32_fini(&mask_region);
 
     pixman_image_unref(image);
-}
-
-static void canvas_set_path(CairoCanvas *canvas, void *addr)
-{
-    cairo_t *cairo = canvas->cairo;
-    uint32_t* data_size = (uint32_t*)addr;
-    access_test(&canvas->base, data_size, sizeof(uint32_t));
-    uint32_t more = *data_size;
-
-    SpicePathSeg* seg = (SpicePathSeg*)(data_size + 1);
-
-    do {
-        access_test(&canvas->base, seg, sizeof(SpicePathSeg));
-
-        uint32_t flags = seg->flags;
-        SpicePointFix* point = (SpicePointFix*)seg->data;
-        SpicePointFix* end_point = point + seg->count;
-        access_test(&canvas->base, point, (unsigned long)end_point - (unsigned long)point);
-        ASSERT(point < end_point);
-        more -= ((unsigned long)end_point - (unsigned long)seg);
-        seg = (SpicePathSeg*)end_point;
-
-        if (flags & SPICE_PATH_BEGIN) {
-            cairo_new_sub_path(cairo);
-            cairo_move_to(cairo, fix_to_double(point->x), fix_to_double(point->y));
-            point++;
-        }
-
-        if (flags & SPICE_PATH_BEZIER) {
-            ASSERT((point - end_point) % 3 == 0);
-            for (; point + 2 < end_point; point += 3) {
-                cairo_curve_to(cairo,
-                               fix_to_double(point[0].x), fix_to_double(point[0].y),
-                               fix_to_double(point[1].x), fix_to_double(point[1].y),
-                               fix_to_double(point[2].x), fix_to_double(point[2].y));
-            }
-        } else {
-            for (; point < end_point; point++) {
-                cairo_line_to(cairo, fix_to_double(point->x), fix_to_double(point->y));
-            }
-        }
-        if (flags & SPICE_PATH_END) {
-            if (flags & SPICE_PATH_CLOSE) {
-                cairo_close_path(cairo);
-            }
-            cairo_new_sub_path(cairo);
-        }
-    } while (more);
-}
-
-static void canvas_clip(CairoCanvas *canvas, SpiceClip *clip)
-{
-    cairo_t *cairo = canvas->cairo;
-
-    switch (clip->type) {
-    case SPICE_CLIP_TYPE_NONE:
-        break;
-    case SPICE_CLIP_TYPE_RECTS: {
-        uint32_t *n = (uint32_t *)SPICE_GET_ADDRESS(clip->data);
-        access_test(&canvas->base, n, sizeof(uint32_t));
-
-        SpiceRect *now = (SpiceRect *)(n + 1);
-        SpiceRect *end = now + *n;
-        access_test(&canvas->base, now, (unsigned long)end - (unsigned long)now);
-
-        for (; now < end; now++) {
-            cairo_rectangle(cairo, now->left, now->top, now->right - now->left,
-                            now->bottom - now->top);
-        }
-        cairo_clip(cairo);
-        break;
-    }
-    case SPICE_CLIP_TYPE_PATH:
-        canvas_set_path(canvas, SPICE_GET_ADDRESS(clip->data));
-        cairo_clip(cairo);
-        break;
-    default:
-        CANVAS_ERROR("invalid clip type");
-    }
-}
-
-static inline cairo_line_cap_t canvas_line_cap_to_cairo(int end_style)
-{
-    switch (end_style) {
-    case SPICE_LINE_CAP_ROUND:
-        return CAIRO_LINE_CAP_ROUND;
-    case SPICE_LINE_CAP_SQUARE:
-        return CAIRO_LINE_CAP_SQUARE;
-    case SPICE_LINE_CAP_BUTT:
-        return CAIRO_LINE_CAP_BUTT;
-    default:
-        CANVAS_ERROR("bad end style %d", end_style);
-    }
-}
-
-static inline cairo_line_join_t canvas_line_join_to_cairo(int join_style)
-{
-    switch (join_style) {
-    case SPICE_LINE_JOIN_ROUND:
-        return CAIRO_LINE_JOIN_ROUND;
-    case SPICE_LINE_JOIN_BEVEL:
-        return CAIRO_LINE_JOIN_BEVEL;
-    case SPICE_LINE_JOIN_MITER:
-        return CAIRO_LINE_JOIN_MITER;
-    default:
-        CANVAS_ERROR("bad join style %d", join_style);
-    }
-}
-
-static void canvas_set_line_attr_no_dash(CairoCanvas *canvas, SpiceLineAttr *attr)
-{
-    cairo_t *cairo = canvas->cairo;
-
-    cairo_set_line_width(cairo, fix_to_double(attr->width));
-    cairo_set_line_cap(cairo, canvas_line_cap_to_cairo(attr->end_style));
-    cairo_set_line_join(cairo, canvas_line_join_to_cairo(attr->join_style));
-    cairo_set_miter_limit(cairo, fix_to_double(attr->miter_limit));
-    cairo_set_dash(cairo, NULL, 0, 0);
-}
-
-static void canvas_set_dash(CairoCanvas *canvas, uint8_t nseg, SPICE_ADDRESS addr, int start_is_gap)
-{
-    SPICE_FIXED28_4* style = (SPICE_FIXED28_4*)SPICE_GET_ADDRESS(addr);
-    double offset = 0;
-    double *local_style;
-    int i;
-
-    access_test(&canvas->base, style, nseg * sizeof(*style));
-
-    if (nseg == 0) {
-        CANVAS_ERROR("bad nseg");
-    }
-    local_style = (double *)malloc(nseg * sizeof(*local_style));
-
-    if (start_is_gap) {
-        offset = fix_to_double(*style);
-        local_style[nseg - 1] = fix_to_double(*style);
-        style++;
-
-        for (i = 0; i < nseg - 1; i++, style++) {
-            local_style[i] = fix_to_double(*style);
-        }
-    } else {
-        for (i = 0; i < nseg; i++, style++) {
-            local_style[i] = fix_to_double(*style);
-        }
-    }
-    cairo_set_dash(canvas->cairo, local_style, nseg, offset);
-    free(local_style);
 }
 
 static inline void canvas_invers_32bpp(uint8_t *dest, int dest_stride, uint8_t *src, int src_stride,
@@ -1003,31 +855,6 @@ static inline void canvas_draw(CairoCanvas *canvas, SpiceBrush *brush, uint16_t 
     if (pattern) {
         cairo_pattern_destroy(pattern);
     }
-}
-
-static cairo_pattern_t *canvas_get_mask_pattern(CairoCanvas *canvas, SpiceQMask *mask, int x, int y)
-{
-    pixman_image_t *surface;
-    cairo_surface_t *cairo_surface;
-    cairo_pattern_t *pattern;
-    cairo_matrix_t matrix;
-
-    if (!(surface = canvas_get_mask(&canvas->base, mask, NULL))) {
-        return NULL;
-    }
-    cairo_surface = surface_from_pixman_image (surface);
-    pixman_image_unref (surface);
-    pattern = cairo_pattern_create_for_surface(cairo_surface);
-    if (cairo_pattern_status(pattern) != CAIRO_STATUS_SUCCESS) {
-        cairo_surface_destroy(cairo_surface);
-        CANVAS_ERROR("create pattern failed, %s",
-                     cairo_status_to_string(cairo_pattern_status(pattern)));
-    }
-    cairo_surface_destroy(cairo_surface);
-
-    cairo_matrix_init_translate(&matrix, mask->pos.x - x, mask->pos.y - y);
-    cairo_pattern_set_matrix(pattern, &matrix);
-    return pattern;
 }
 
 static void copy_region(CairoCanvas *canvas,
@@ -2044,29 +1871,6 @@ void canvas_draw_blend(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, Sp
     pixman_region32_fini(&dest_region);
 }
 
-static inline void canvas_fill_common(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip,
-                                      SpiceQMask *qxl_mask)
-{
-    cairo_t *cairo = canvas->cairo;
-    cairo_pattern_t *mask;
-
-    canvas_clip(canvas, clip);
-    if ((mask = canvas_get_mask_pattern(canvas, qxl_mask, bbox->left, bbox->top))) {
-        cairo_rectangle(cairo,
-                        bbox->left,
-                        bbox->top,
-                        bbox->right - bbox->left,
-                        bbox->bottom - bbox->top);
-        cairo_clip(cairo);
-        cairo_mask(cairo, mask);
-        cairo_pattern_destroy(mask);
-    } else {
-        cairo_rectangle(cairo, bbox->left, bbox->top, bbox->right - bbox->left,
-                        bbox->bottom - bbox->top);
-        cairo_fill(cairo);
-    }
-}
-
 void canvas_draw_blackness(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness)
 {
     pixman_region32_t dest_region;
@@ -2317,25 +2121,456 @@ void canvas_draw_text(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, Spi
     pixman_region32_fini(&dest_region);
 }
 
+typedef struct {
+    lineGC base;
+    pixman_image_t *dest;
+    pixman_region32_t dest_region;
+    SpiceROP fore_rop;
+    SpiceROP back_rop;
+    int solid;
+    uint32_t color;
+    pixman_image_t *tile;
+    int tile_offset_x;
+    int tile_offset_y;
+} StrokeGC;
+
+static void stroke_fill_spans(lineGC * pGC,
+                              int num_spans,
+                              SpicePoint *points,
+                              int *widths,
+                              int sorted,
+                              int foreground)
+{
+    StrokeGC *strokeGC;
+    int i;
+    pixman_image_t *dest;
+    SpiceROP rop;
+
+    strokeGC = (StrokeGC *)pGC;
+    dest = strokeGC->dest;
+
+    num_spans = spice_canvas_clip_spans(&strokeGC->dest_region,
+                                        points, widths, num_spans,
+                                        points, widths, sorted);
+
+    if (foreground) {
+        rop = strokeGC->fore_rop;
+    } else {
+        rop = strokeGC->back_rop;
+    }
+
+    for (i = 0; i < num_spans; i++) {
+        if (strokeGC->solid) {
+            if (rop == SPICE_ROP_COPY) {
+                spice_pixman_fill_rect(dest, points[i].x, points[i].y, widths[i], 1,
+                                       strokeGC->color);
+            } else {
+                spice_pixman_fill_rect_rop(dest, points[i].x, points[i].y, widths[i], 1,
+                                           strokeGC->color, rop);
+            }
+        } else {
+            if (rop == SPICE_ROP_COPY) {
+                spice_pixman_tile_rect(dest,
+                                       points[i].x, points[i].y,
+                                       widths[i], 1,
+                                       strokeGC->tile,
+                                       strokeGC->tile_offset_x,
+                                       strokeGC->tile_offset_y);
+            } else {
+                spice_pixman_tile_rect_rop(dest,
+                                           points[i].x, points[i].y,
+                                           widths[i], 1,
+                                           strokeGC->tile,
+                                           strokeGC->tile_offset_x,
+                                           strokeGC->tile_offset_y,
+                                           rop);
+            }
+        }
+    }
+}
+
+static void stroke_fill_rects(lineGC * pGC,
+                              int num_rects,
+                              pixman_rectangle32_t *rects,
+                              int foreground)
+{
+    pixman_region32_t area;
+    pixman_box32_t *boxes;
+    StrokeGC *strokeGC;
+    pixman_image_t *dest;
+    SpiceROP rop;
+    int i;
+    pixman_box32_t *area_rects;
+    int n_area_rects;
+
+    strokeGC = (StrokeGC *)pGC;
+    dest = strokeGC->dest;
+
+    if (foreground) {
+        rop = strokeGC->fore_rop;
+    } else {
+        rop = strokeGC->back_rop;
+    }
+
+    /* TODO: We can optimize this for more common cases where
+       dest is one rect */
+
+    boxes = (pixman_box32_t *)malloc(num_rects * sizeof(pixman_box32_t));
+    for (i = 0; i < num_rects; i++) {
+        boxes[i].x1 = rects[i].x;
+        boxes[i].y1 = rects[i].y;
+        boxes[i].x2 = rects[i].x + rects[i].width;
+        boxes[i].y2 = rects[i].y + rects[i].height;
+    }
+    pixman_region32_init_rects(&area, boxes, num_rects);
+    pixman_region32_intersect(&area, &area, &strokeGC->dest_region);
+    free(boxes);
+
+    area_rects = pixman_region32_rectangles(&area, &n_area_rects);
+
+    for (i = 0; i < n_area_rects; i++) {
+        if (strokeGC->solid) {
+            if (rop == SPICE_ROP_COPY) {
+                spice_pixman_fill_rect(dest,
+                                       area_rects[i].x1,
+                                       area_rects[i].y1,
+                                       area_rects[i].x2 - area_rects[i].x1,
+                                       area_rects[i].y2 - area_rects[i].y1,
+                                       strokeGC->color);
+            } else {
+                spice_pixman_fill_rect_rop(dest,
+                                           area_rects[i].x1,
+                                           area_rects[i].y1,
+                                           area_rects[i].x2 - area_rects[i].x1,
+                                           area_rects[i].y2 - area_rects[i].y1,
+                                           strokeGC->color, rop);
+            }
+        } else {
+            if (rop == SPICE_ROP_COPY) {
+                spice_pixman_tile_rect(dest,
+                                       area_rects[i].x1,
+                                       area_rects[i].y1,
+                                       area_rects[i].x2 - area_rects[i].x1,
+                                       area_rects[i].y2 - area_rects[i].y1,
+                                       strokeGC->tile,
+                                       strokeGC->tile_offset_x,
+                                       strokeGC->tile_offset_y);
+            } else {
+                spice_pixman_tile_rect_rop(dest,
+                                           area_rects[i].x1,
+                                           area_rects[i].y1,
+                                           area_rects[i].x2 - area_rects[i].x1,
+                                           area_rects[i].y2 - area_rects[i].y1,
+                                           strokeGC->tile,
+                                           strokeGC->tile_offset_x,
+                                           strokeGC->tile_offset_y,
+                                           rop);
+            }
+        }
+    }
+    pixman_region32_fini(&area);
+}
+
+typedef struct {
+    SpicePoint *points;
+    int num_points;
+    int size;
+} StrokeLines;
+
+static void stroke_lines_init(StrokeLines *lines)
+{
+    lines->points = (SpicePoint *)malloc(10*sizeof(SpicePoint));
+    lines->size = 10;
+    lines->num_points = 0;
+}
+
+static void stroke_lines_free(StrokeLines *lines)
+{
+    free(lines->points);
+}
+
+static void stroke_lines_append(StrokeLines *lines,
+                                int x, int y)
+{
+    if (lines->num_points == lines->size) {
+        lines->size *= 2;
+        lines->points = (SpicePoint *)realloc(lines->points,
+                                              lines->size * sizeof(SpicePoint));
+    }
+    lines->points[lines->num_points].x = x;
+    lines->points[lines->num_points].y = y;
+    lines->num_points++;
+}
+
+static void stroke_lines_append_fix(StrokeLines *lines,
+                                    SpicePointFix *point)
+{
+    stroke_lines_append(lines,
+                        fix_to_int(point->x),
+                        fix_to_int(point->y));
+}
+
+static inline int64_t dot(SPICE_FIXED28_4 x1,
+                          SPICE_FIXED28_4 y1,
+                          SPICE_FIXED28_4 x2,
+                          SPICE_FIXED28_4 y2)
+{
+    return (((int64_t)x1) *((int64_t)x2) +
+            ((int64_t)y1) *((int64_t)y2)) >> 4;
+}
+
+static inline int64_t dot2(SPICE_FIXED28_4 x,
+                           SPICE_FIXED28_4 y)
+{
+    return (((int64_t)x) *((int64_t)x) +
+            ((int64_t)y) *((int64_t)y)) >> 4;
+}
+
+static void subdivide_bezier(StrokeLines *lines,
+                             SpicePointFix point0,
+                             SpicePointFix point1,
+                             SpicePointFix point2,
+                             SpicePointFix point3)
+{
+    int64_t A2, B2, C2, AB, CB, h1, h2;
+
+    A2 = dot2(point1.x - point0.x,
+              point1.y - point0.y);
+    B2 = dot2(point3.x - point0.x,
+              point3.y - point0.y);
+    C2 = dot2(point2.x - point3.x,
+              point2.y - point3.y);
+
+    AB = dot(point1.x - point0.x,
+             point1.y - point0.y,
+             point3.x - point0.x,
+             point3.y - point0.y);
+
+    CB = dot(point2.x - point3.x,
+             point2.y - point3.y,
+             point0.x - point3.x,
+             point0.y - point3.y);
+
+    h1 = (A2*B2 - AB*AB) >> 3;
+    h2 = (C2*B2 - CB*CB) >> 3;
+
+    if (h1 < B2 && h2 < B2) {
+        /* deviation squared less than half a pixel, use straight line */
+        stroke_lines_append_fix(lines, &point3);
+    } else {
+        SpicePointFix point01, point23, point12, point012, point123, point0123;
+
+        point01.x = (point0.x + point1.x) / 2;
+        point01.y = (point0.y + point1.y) / 2;
+        point12.x = (point1.x + point2.x) / 2;
+        point12.y = (point1.y + point2.y) / 2;
+        point23.x = (point2.x + point3.x) / 2;
+        point23.y = (point2.y + point3.y) / 2;
+        point012.x = (point01.x + point12.x) / 2;
+        point012.y = (point01.y + point12.y) / 2;
+        point123.x = (point12.x + point23.x) / 2;
+        point123.y = (point12.y + point23.y) / 2;
+        point0123.x = (point012.x + point123.x) / 2;
+        point0123.y = (point012.y + point123.y) / 2;
+
+        subdivide_bezier(lines, point0, point01, point012, point0123);
+        subdivide_bezier(lines, point0123, point123, point23, point3);
+    }
+}
+
+static void stroke_lines_append_bezier(StrokeLines *lines,
+                                       SpicePointFix *point1,
+                                       SpicePointFix *point2,
+                                       SpicePointFix *point3)
+{
+    SpicePointFix point0;
+
+    point0.x = int_to_fix(lines->points[lines->num_points-1].x);
+    point0.y = int_to_fix(lines->points[lines->num_points-1].y);
+
+    subdivide_bezier(lines, point0, *point1, *point2, *point3);
+}
+
+static void stroke_lines_draw(StrokeLines *lines,
+                              lineGC *gc,
+                              int dashed)
+{
+    if (lines->num_points != 0) {
+        if (dashed) {
+            spice_canvas_zero_dash_line(gc, CoordModeOrigin,
+                                        lines->num_points, lines->points);
+        } else {
+            spice_canvas_zero_line(gc, CoordModeOrigin,
+                                   lines->num_points, lines->points);
+        }
+        lines->num_points = 0;
+    }
+}
+
+
 void canvas_draw_stroke(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke)
 {
-    cairo_t *cairo = canvas->cairo;
+    StrokeGC gc = { {0} };
+    lineGCOps ops = {
+        stroke_fill_spans,
+        stroke_fill_rects
+    };
+    uint32_t *data_size;
+    uint32_t more;
+    SpicePathSeg *seg;
+    StrokeLines lines;
+    int i;
+    int dashed;
 
-    cairo_save(cairo);
-    canvas_clip(canvas, clip);
+    pixman_region32_init_rect(&gc.dest_region,
+                              bbox->left, bbox->top,
+                              bbox->right - bbox->left,
+                              bbox->bottom - bbox->top);
 
-    canvas_set_line_attr_no_dash(canvas, &stroke->attr);
-    canvas_set_path(canvas, SPICE_GET_ADDRESS(stroke->path));
-    if (stroke->attr.flags & SPICE_LINE_ATTR_STYLED) {
-        canvas_draw(canvas, &stroke->brush, stroke->back_mode,
-                    (DrawMethod)cairo_stroke_preserve, cairo);
-        canvas_set_dash(canvas, stroke->attr.style_nseg, stroke->attr.style,
-                        !!(stroke->attr.flags & SPICE_LINE_ATTR_STARTGAP));
+    canvas_clip_pixman(canvas, &gc.dest_region, clip);
+
+    if (pixman_region32_n_rects(&gc.dest_region) == 0) {
+        touch_brush(canvas, &stroke->brush);
+        pixman_region32_fini(&gc.dest_region);
+        return;
     }
-    canvas_draw(canvas, &stroke->brush, stroke->fore_mode, (DrawMethod)cairo_stroke_preserve,
-                cairo);
-    cairo_new_path(cairo);
-    cairo_restore(cairo);
+
+    gc.fore_rop = ropd_descriptor_to_rop(stroke->fore_mode,
+                                         ROP_INPUT_BRUSH,
+                                         ROP_INPUT_DEST);
+    gc.back_rop = ropd_descriptor_to_rop(stroke->back_mode,
+                                         ROP_INPUT_BRUSH,
+                                         ROP_INPUT_DEST);
+
+    gc.dest = canvas->image;
+    gc.base.width = pixman_image_get_width(gc.dest);
+    gc.base.height = pixman_image_get_height(gc.dest);
+    gc.base.alu = gc.fore_rop;
+    gc.base.lineWidth = 0;
+
+    /* dash */
+    gc.base.dashOffset = 0;
+    gc.base.dash = NULL;
+    gc.base.numInDashList = 0;
+    gc.base.lineStyle = LineSolid;
+    /* win32 cosmetic lines are endpoint-exclusive, so use CapNotLast */
+    gc.base.capStyle = CapNotLast;
+    gc.base.joinStyle = JoinMiter;
+    gc.base.ops = &ops;
+
+    dashed = 0;
+    if (stroke->attr.flags & SPICE_LINE_FLAGS_STYLED) {
+        SPICE_FIXED28_4 *style = (SPICE_FIXED28_4*)SPICE_GET_ADDRESS(stroke->attr.style);
+        int nseg;
+
+        dashed = 1;
+
+        nseg = stroke->attr.style_nseg;
+
+        /* To truly handle back_mode we should use LineDoubleDash here
+           and treat !foreground as back_rop using the same brush.
+           However, using the same brush for that seems wrong.
+           The old cairo backend was stroking the non-dashed line with
+           rop_mode before enabling dashes for the foreground which is
+           not right either. The gl an gdi backend don't use back_mode
+           at all */
+        gc.base.lineStyle = LineOnOffDash;
+        gc.base.dash = (unsigned char *)malloc(nseg);
+        gc.base.numInDashList = nseg;
+        access_test(&canvas->base, style, nseg * sizeof(*style));
+
+        if (stroke->attr.flags & SPICE_LINE_FLAGS_START_WITH_GAP) {
+            gc.base.dash[stroke->attr.style_nseg - 1] = fix_to_int(style[0]);
+            for (i = 0; i < stroke->attr.style_nseg - 1; i++) {
+                gc.base.dash[i] = fix_to_int(style[i+1]);
+            }
+            gc.base.dashOffset = gc.base.dash[0];
+        } else {
+            for (i = 0; i < stroke->attr.style_nseg; i++) {
+                gc.base.dash[i] = fix_to_int(style[i]);
+            }
+        }
+    }
+
+    switch (stroke->brush.type) {
+    case SPICE_BRUSH_TYPE_NONE:
+        gc.solid = TRUE;
+        gc.color = 0;
+        break;
+    case SPICE_BRUSH_TYPE_SOLID:
+        gc.solid = TRUE;
+        gc.color = stroke->brush.u.color;
+        break;
+    case SPICE_BRUSH_TYPE_PATTERN:
+        gc.solid = FALSE;
+        gc.tile = canvas_get_image(&canvas->base,
+                                   stroke->brush.u.pattern.pat);
+        gc.tile_offset_x = stroke->brush.u.pattern.pos.x;
+        gc.tile_offset_y = stroke->brush.u.pattern.pos.y;
+        break;
+    default:
+        CANVAS_ERROR("invalid brush type");
+    }
+
+    data_size = (uint32_t*)SPICE_GET_ADDRESS(stroke->path);
+    access_test(&canvas->base, data_size, sizeof(uint32_t));
+    more = *data_size;
+    seg = (SpicePathSeg*)(data_size + 1);
+
+    stroke_lines_init(&lines);
+
+    do {
+        access_test(&canvas->base, seg, sizeof(SpicePathSeg));
+
+        uint32_t flags = seg->flags;
+        SpicePointFix* point = (SpicePointFix*)seg->data;
+        SpicePointFix* end_point = point + seg->count;
+        access_test(&canvas->base, point, (unsigned long)end_point - (unsigned long)point);
+        ASSERT(point < end_point);
+        more -= ((unsigned long)end_point - (unsigned long)seg);
+        seg = (SpicePathSeg*)end_point;
+
+        if (flags & SPICE_PATH_BEGIN) {
+            stroke_lines_draw(&lines, (lineGC *)&gc, dashed);
+            stroke_lines_append_fix(&lines, point);
+            point++;
+        }
+
+        if (flags & SPICE_PATH_BEZIER) {
+            ASSERT((point - end_point) % 3 == 0);
+            for (; point + 2 < end_point; point += 3) {
+                stroke_lines_append_bezier(&lines,
+                                           &point[0],
+                                           &point[1],
+                                           &point[2]);
+            }
+        } else
+            {
+            for (; point < end_point; point++) {
+                stroke_lines_append_fix(&lines, point);
+            }
+        }
+        if (flags & SPICE_PATH_END) {
+            if (flags & SPICE_PATH_CLOSE) {
+                stroke_lines_append(&lines,
+                                    lines.points[0].x, lines.points[0].y);
+            }
+            stroke_lines_draw(&lines, (lineGC *)&gc, dashed);
+        }
+    } while (more);
+
+    stroke_lines_draw(&lines, (lineGC *)&gc, dashed);
+
+    if (gc.base.dash) {
+        free(gc.base.dash);
+    }
+    stroke_lines_free(&lines);
+
+    if (!gc.solid && gc.tile) {
+        pixman_image_unref(gc.tile);
+    }
+
+    pixman_region32_fini(&gc.dest_region);
 }
 
 void canvas_read_bits(CairoCanvas *canvas, uint8_t *dest, int dest_stride, const SpiceRect *area)

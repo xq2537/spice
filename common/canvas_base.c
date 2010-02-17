@@ -93,6 +93,23 @@ typedef struct __attribute__ ((__packed__)) LZImage {
 
 static const cairo_user_data_key_t pixman_data_type = {0};
 
+ static inline int fix_to_int(SPICE_FIXED28_4 fixed)
+{
+    int val, rem;
+
+    rem = fixed & 0x0f;
+    val = fixed >> 4;
+    if (rem > 8) {
+        val++;
+    }
+    return val;
+}
+
+ static inline SPICE_FIXED28_4  int_to_fix(int v)
+{
+    return v << 4;
+}
+
 static inline double fix_to_double(SPICE_FIXED28_4 fixed)
 {
     return (double)(fixed & 0x0f) / 0x0f + (fixed >> 4);
