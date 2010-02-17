@@ -66,6 +66,7 @@ RED_COMMON_SRCS = 					\
 	$(top_srcdir)/client/inputs_channel.h		\
 	$(top_srcdir)/client/inputs_handler.h		\
 	$(top_srcdir)/client/lz.cpp			\
+	$(top_srcdir)/client/lines.cpp			\
 	$(top_srcdir)/client/monitor.cpp		\
 	$(top_srcdir)/client/monitor.h			\
 	$(top_srcdir)/client/menu.cpp			\

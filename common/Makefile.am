@@ -34,6 +34,8 @@ COMMON_SRCS = 				\
 	ring.h				\
 	rop3.h				\
 	rop3.c				\
+	lines.h				\
+	lines.c				\
 	lz.c				\
 	lz_compress_tmpl.c		\
 	lz_config.h			\

@@ -11,6 +11,7 @@ RED_COMMON_SRCS =	 		\
 	cache.hpp			\
 	cairo_canvas.cpp		\
 	pixman_utils.cpp		\
+	lines.cpp			\
 	canvas.cpp			\
 	canvas.h			\
 	canvas_utils.cpp		\

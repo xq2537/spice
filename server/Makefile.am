@@ -21,6 +21,7 @@ INCLUDES = \
 COMMON_SRCS = 						\
 	$(top_srcdir)/common/cairo_canvas.c		\
 	$(top_srcdir)/common/pixman_utils.c		\
+	$(top_srcdir)/common/lines.c			\
 	$(top_srcdir)/common/gl_canvas.c		\
 	$(top_srcdir)/common/region.c			\
 	$(top_srcdir)/common/glc.c			\
