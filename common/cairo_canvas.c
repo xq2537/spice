@@ -2167,14 +2167,11 @@ void canvas_group_end(CairoCanvas *canvas)
 
 void canvas_clear(CairoCanvas *canvas)
 {
-    cairo_t *cairo = canvas->cairo;
-
-    ASSERT(cairo);
-    cairo_save(cairo);
-    cairo_reset_clip(cairo);
-    cairo_set_operator(cairo, CAIRO_OPERATOR_CLEAR);
-    cairo_paint(cairo);
-    cairo_restore(cairo);
+    spice_pixman_fill_rect(canvas->image,
+                           0, 0,
+                           pixman_image_get_width(canvas->image),
+                           pixman_image_get_height(canvas->image),
+                           0);
 }
 
 cairo_t *canvas_get_cairo(CairoCanvas *canvas)
