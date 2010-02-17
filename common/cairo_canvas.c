@@ -2139,26 +2139,30 @@ void canvas_read_bits(CairoCanvas *canvas, uint8_t *dest, int dest_stride, const
 
 void canvas_group_start(CairoCanvas *canvas, int n_clip_rects, SpiceRect *clip_rects)
 {
-    cairo_t *cairo = canvas->cairo;
+    pixman_region32_t dest_region;
 
-    cairo_save(cairo);
+    pixman_region32_fini(&canvas->canvas_region);
+    spice_pixman_region32_init_rects(&canvas->canvas_region,
+                                     clip_rects, n_clip_rects);
 
-    if (n_clip_rects) {
-        SpiceRect *end = clip_rects + n_clip_rects;
-        for (; clip_rects < end; clip_rects++) {
-            cairo_rectangle(cairo,
-                            clip_rects->left,
-                            clip_rects->top,
-                            clip_rects->right - clip_rects->left,
-                            clip_rects->bottom - clip_rects->top);
-        }
-        cairo_clip(cairo);
-    }
+    pixman_region32_init_rect(&dest_region,
+                              0, 0,
+                              pixman_image_get_width(canvas->image),
+                              pixman_image_get_height(canvas->image));
+
+    /* Make sure we always clip to canvas size */
+    pixman_region32_intersect(&canvas->canvas_region, &canvas->canvas_region, &dest_region);
+
+    pixman_region32_fini(&dest_region);
 }
 
 void canvas_group_end(CairoCanvas *canvas)
 {
-    cairo_restore(canvas->cairo);
+    pixman_region32_fini(&canvas->canvas_region);
+    pixman_region32_init_rect(&canvas->canvas_region,
+                              0, 0,
+                              pixman_image_get_width(canvas->image),
+                              pixman_image_get_height(canvas->image));
 }
 
 void canvas_clear(CairoCanvas *canvas)
