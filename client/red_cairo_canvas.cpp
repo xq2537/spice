@@ -40,9 +40,7 @@ CCanvas::~CCanvas()
 void CCanvas::destroy()
 {
     if (_canvas) {
-        cairo_t *cairo = canvas_get_cairo(_canvas);
         canvas_destroy(_canvas);
-        cairo_destroy(cairo);
         _canvas = NULL;
     }
     destroy_pixmap();
@@ -90,30 +88,25 @@ void CCanvas::copy_pixels(const QRegion& region, RedDrawable* dest_dc, const Pix
 
 void CCanvas::set_mode(int width, int height, int depth, RedWindow *win)
 {
-    cairo_surface_t *cairo_surface;
-    cairo_t *cairo;
+    pixman_image_t *surface;
 
     destroy();
     create_pixmap(width, height, win);
-    cairo_surface = cairo_image_surface_create_for_data(_pixmap->get_data(), CAIRO_FORMAT_RGB24,
-                                                        width, height, _pixmap->get_stride());
-    if (cairo_surface_status(cairo_surface) != CAIRO_STATUS_SUCCESS) {
-        THROW("create surface failed, %s",
-              cairo_status_to_string(cairo_surface_status(cairo_surface)));
+    surface = pixman_image_create_bits(PIXMAN_x8r8g8b8, width, height,
+                                       (uint32_t *)_pixmap->get_data(),
+                                       _pixmap->get_stride());
+    if (surface == NULL) {
+        THROW("create surface failed, out of memory");
     }
 
-    cairo = cairo_create(cairo_surface);
-    cairo_surface_destroy(cairo_surface);
-    if (cairo_status(cairo) != CAIRO_STATUS_SUCCESS) {
-        THROW("create cairo failed, %s", cairo_status_to_string(cairo_status(cairo)));
-    }
-    if (!(_canvas = canvas_create(cairo, depth,
+    if (!(_canvas = canvas_create(surface, depth,
                                   &pixmap_cache().base,
                                   &palette_cache().base,
                                   &glz_decoder(),
                                   glz_decode))) {
         THROW("create canvas failed");
     }
+    pixman_image_unref (surface);
 }
 
 void CCanvas::set_access_params(unsigned long base, unsigned long max)

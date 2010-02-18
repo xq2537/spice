@@ -30,7 +30,6 @@
 
 struct CairoCanvas {
     CanvasBase base;
-    cairo_t *cairo;
     uint32_t *private_data;
     int private_data_size;
     pixman_image_t *image;
@@ -2126,11 +2125,6 @@ void canvas_clear(CairoCanvas *canvas)
                            0);
 }
 
-cairo_t *canvas_get_cairo(CairoCanvas *canvas)
-{
-    return canvas->cairo;
-}
-
 #ifdef CAIRO_CANVAS_ACCESS_TEST
 void canvas_set_access_params(CairoCanvas *canvas, unsigned long base, unsigned long max)
 {
@@ -2154,14 +2148,14 @@ void canvas_destroy(CairoCanvas *canvas)
 static int need_init = 1;
 
 #ifdef CAIRO_CANVAS_CACHE
-CairoCanvas *canvas_create(cairo_t *cairo, int bits,
+CairoCanvas *canvas_create(pixman_image_t *image, int bits,
                            SpiceImageCache *bits_cache,
                            SpicePaletteCache *palette_cache
 #elif defined(CAIRO_CANVAS_IMAGE_CACHE)
-CairoCanvas *canvas_create(cairo_t *cairo, int bits,
+CairoCanvas *canvas_create(pixman_image_t *image, int bits,
                            SpiceImageCache *bits_cache
 #else
-CairoCanvas *canvas_create(cairo_t *cairo, int bits
+CairoCanvas *canvas_create(pixman_image_t *image, int bits
 #endif
 #ifdef USE_GLZ
                             , void *glz_decoder_opaque, glz_decode_fn_t glz_decode
@@ -2202,12 +2196,10 @@ CairoCanvas *canvas_create(cairo_t *cairo, int bits
                                validate_virt
 #endif
                                );
-    canvas->cairo = cairo;
     canvas->private_data = NULL;
     canvas->private_data_size = 0;
-    cairo_set_antialias(cairo, CAIRO_ANTIALIAS_NONE);
 
-    canvas->image = pixman_image_from_surface (cairo_get_target (cairo));
+    canvas->image = pixman_image_ref(image);
     pixman_region32_init_rect(&canvas->canvas_region,
                               0, 0,
                               pixman_image_get_width (canvas->image),

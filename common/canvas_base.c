@@ -225,47 +225,6 @@ typedef struct ATTR_PACKED DataChunk {
 
 #endif
 
-#ifdef CANVAS_USE_PIXMAN
-
-static pixman_format_code_t
-pixman_format_from_cairo_format (cairo_format_t format)
-{
-    switch (format) {
-    case CAIRO_FORMAT_A1:
-        return PIXMAN_a1;
-    case CAIRO_FORMAT_A8:
-        return PIXMAN_a8;
-    case CAIRO_FORMAT_RGB24:
-        return PIXMAN_x8r8g8b8;
-    case CAIRO_FORMAT_ARGB32:
-    default:
-        return PIXMAN_a8r8g8b8;
-    }
-}
-
-static pixman_image_t *
-pixman_image_from_surface (cairo_surface_t *surface)
-{
-  pixman_image_t *image;
-  cairo_format_t format;
-
-  format = cairo_image_surface_get_format (surface);
-
-  image = (pixman_image_t *)cairo_surface_get_user_data(surface, &pixman_data_type);
-
-  if (image)
-      return pixman_image_ref (image);
-
-  image = pixman_image_create_bits (pixman_format_from_cairo_format (format),
-                                    cairo_image_surface_get_width (surface),
-                                    cairo_image_surface_get_height (surface),
-                                    (uint32_t *)cairo_image_surface_get_data (surface),
-                                    cairo_image_surface_get_stride (surface));
-
-  return image;
-}
-#endif
-
 static inline void canvas_localize_palette(CanvasBase *canvas, SpicePalette *palette)
 {
     if (canvas->color_shift == 5) {

@@ -22,7 +22,7 @@
 #include <stdint.h>
 
 #include <spice/draw.h>
-#include "cairo.h"
+#include "pixman_utils.h"
 #include "canvas_base.h"
 #include "region.h"
 
@@ -59,17 +59,15 @@ void canvas_set_addr_delta(CairoCanvas *canvas, SPICE_ADDRESS delta);
 void canvas_set_access_params(CairoCanvas *canvas, unsigned long base, unsigned long max);
 #endif
 
-cairo_t *canvas_get_cairo(CairoCanvas *canvas);
-
 #ifdef CAIRO_CANVAS_CACHE
-CairoCanvas *canvas_create(cairo_t *cairo, int bits,
+CairoCanvas *canvas_create(pixman_image_t *image, int bits,
                            SpiceImageCache *bits_cache,
                            SpicePaletteCache *palette_cache
 #elif defined(CAIRO_CANVAS_IMAGE_CACHE)
-CairoCanvas *canvas_create(cairo_t *cairo, int bits,
+CairoCanvas *canvas_create(pixman_image_t *image, int bits,
                            SpiceImageCache *bits_cache
 #else
-CairoCanvas *canvas_create(cairo_t *cairo, int bits
+CairoCanvas *canvas_create(pixman_image_t *image, int bits
 #endif
 #ifdef USE_GLZ
                            , void *glz_decoder_opaque, glz_decode_fn_t glz_decode

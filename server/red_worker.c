@@ -35,7 +35,6 @@
 #include "region.h"
 #include <spice/protocol.h>
 #include "red_worker.h"
-#include "cairo.h"
 #include "cairo_canvas.h"
 #include "gl_canvas.h"
 #include "ogl_ctx.h"
@@ -7445,15 +7444,11 @@ static void red_migrate_display(RedWorker *worker)
 
 static void destroy_cairo_canvas(CairoCanvas *canvas)
 {
-    cairo_t *cairo;
-
     if (!canvas) {
         return;
     }
 
-    cairo = canvas_get_cairo(canvas);
     canvas_destroy(canvas);
-    cairo_destroy(cairo);
 }
 
 static void validate_area_nop(void *canvas, int32_t stride, uint8_t *line_0, const SpiceRect *area)
@@ -7486,25 +7481,20 @@ static void init_cairo_draw_funcs(RedWorker *worker)
 static CairoCanvas *create_cairo_context(RedWorker *worker, uint32_t width, uint32_t height,
                                          int32_t stride, uint8_t depth, void *line_0)
 {
-    cairo_surface_t *cairo_surface;
-    cairo_t *cairo;
+    CairoCanvas *canvas;
+    pixman_image_t *surface;
 
-    cairo_surface = cairo_image_surface_create_for_data(line_0,  CAIRO_FORMAT_RGB24, width, height,
-                                                        stride);
-    if (cairo_surface_status(cairo_surface) != CAIRO_STATUS_SUCCESS) {
-        red_error("create cairo surface failed, %s",
-                  cairo_status_to_string(cairo_surface_status(cairo_surface)));
+    surface = pixman_image_create_bits(PIXMAN_x8r8g8b8, width, height,
+                                       (uint32_t *)line_0,
+                                       stride);
+    if (surface == NULL) {
+        red_error("create cairo surface failed");
     }
-    cairo = cairo_create(cairo_surface);
-    cairo_surface_destroy(cairo_surface);
-    if (cairo_status(cairo) != CAIRO_STATUS_SUCCESS) {
-        red_error("create cairo failed, %s",
-                  cairo_status_to_string(cairo_status(cairo)));
-    }
-
-    return canvas_create(cairo, depth, &worker->image_cache.base,
-                         worker, cb_get_virt_preload_group, worker,
-                         cb_validate_virt_preload_group);
+    canvas = canvas_create(surface, depth, &worker->image_cache.base,
+                           worker, cb_get_virt_preload_group, worker,
+                           cb_validate_virt_preload_group);
+    pixman_image_unref (surface);
+    return canvas;
 }
 
 static void destroy_gl_canvas(GLCanvas *canvas)
