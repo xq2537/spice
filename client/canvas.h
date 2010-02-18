@@ -21,7 +21,6 @@
 #include "common.h"
 #include "debug.h"
 #include "region.h"
-#include "cairo.h"
 #include <spice/protocol.h>
 #include "cache.hpp"
 #include "shared_cache.hpp"

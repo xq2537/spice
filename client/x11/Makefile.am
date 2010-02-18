@@ -17,7 +17,7 @@ INCLUDES = \
 	$(GL_CFLAGS)					\
 	$(ALSA_CFLAGS)					\
 	$(FFMPEG_CFLAGS)				\
-	$(QCAIRO_CFLAGS)				\
+	$(PIXMAN_CFLAGS)				\
 	$(LOG4CPP_CFLAGS)				\
 	$(CELT051_CFLAGS)				\
 	$(SSL_CFLAGS)					\
@@ -155,7 +155,7 @@ spicec_LDFLAGS = \
 	$(CEGUI_LIBS)
 
 spicec_LDADD =						\
-	$(QCAIRO_LIBS)					\
+	$(PIXMAN_LIBS)					\
 	$(FFMPEG_LIBS)					\
 	$(ALSA_LIBS)					\
 	$(GL_LIBS)					\

@@ -22,7 +22,6 @@
 #include "canvas.h"
 #include "region.h"
 #include "red_channel.h"
-#include "cairo.h"
 #include "cache.hpp"
 #include "screen_layer.h"
 #include "process_loop.h"

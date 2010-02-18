@@ -6,7 +6,7 @@ INCLUDES = \
 	-I$(top_srcdir)/common/linux	\
 	$(PROTOCOL_CFLAGS)			\
 	$(FFMPEG_CFLAGS)			\
-	$(QCAIRO_CFLAGS)			\
+	$(PIXMAN_CFLAGS)			\
 	$(GL_CFLAGS)				\
 	$(LOG4CPP_CFLAGS)			\
 	$(SSL_CFLAGS)				\
@@ -42,7 +42,7 @@ libspice_la_LDFLAGS = 				\
 libspice_la_LIBADD = 				\
 	$(GL_LIBS)				\
 	$(FFMPEG_LIBS)				\
-	$(QCAIRO_LIBS)				\
+	$(PIXMAN_LIBS)				\
 	$(SSL_LIBS)				\
 	$(CELT051_LIBS)				\
 	$(SLIRP_LIBS)				\
