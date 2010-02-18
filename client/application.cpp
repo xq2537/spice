@@ -53,10 +53,6 @@
 
 #define CA_FILE_NAME "spice_truststore.pem"
 
-#ifdef CAIRO_CANVAS_CACH_IS_SHARED
-mutex_t cairo_surface_user_data_mutex;
-#endif
-
 static const char* app_name = "spicec";
 
 void ConnectedEvent::response(AbstractProcessLoop& events_loop)
@@ -2015,10 +2011,6 @@ void Application::init_globals()
     quic_init();
 #ifdef WIN32
     gdi_canvas_init();
-#endif
-
-#ifdef CAIRO_CANVAS_CACH_IS_SHARED
-    MUTEX_INIT(cairo_surface_user_data_mutex);
 #endif
 
     Platform::init();
