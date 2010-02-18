@@ -1110,106 +1110,62 @@ void canvas_draw_copy(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, Spi
 }
 
 #ifdef WIN32
-void canvas_put_image(CairoCanvas *canvas, HDC dc, const SpiceRect *dest, const uint8_t *_src_data,
+void canvas_put_image(CairoCanvas *canvas, HDC dc, const SpiceRect *dest, const uint8_t *src_data,
                       uint32_t src_width, uint32_t src_height, int src_stride,
                       const QRegion *clip)
 #else
-void canvas_put_image(CairoCanvas *canvas, const SpiceRect *dest, const uint8_t *_src_data,
+void canvas_put_image(CairoCanvas *canvas, const SpiceRect *dest, const uint8_t *src_data,
                       uint32_t src_width, uint32_t src_height, int src_stride,
                       const QRegion *clip)
 #endif
 {
-    cairo_t *cairo = canvas->cairo;
-    cairo_surface_t* surf = NULL;
+    pixman_image_t *src;
     int dest_width;
     int dest_height;
-    uint8_t *src_data = (uint8_t *)_src_data;
-    uint32_t *data;
-    int nstride;
+    double sx, sy;
+    pixman_transform_t transform;
 
-    cairo_save(cairo);
+    src = pixman_image_create_bits(PIXMAN_x8r8g8b8,
+                                   src_width,
+                                   src_height,
+                                   (uint32_t*)src_data,
+                                   src_stride);
+
 
     if (clip) {
-        int num_rects;
-        pixman_box32_t *rects = pixman_region32_rectangles((pixman_region32_t *)clip,
-                                                           &num_rects);
-        const pixman_box32_t *now = rects;
-        const pixman_box32_t *end = rects + num_rects;
-        for (; now < end; now++) {
-            cairo_rectangle(cairo, now->x1, now->y1, now->x2 - now->x1,
-                            now->y2 - now->y1);
-        }
-        cairo_clip(cairo);
+        pixman_image_set_clip_region32 (canvas->image, (pixman_region32_t *)clip);
     }
-
 
     dest_width = dest->right - dest->left;
     dest_height = dest->bottom - dest->top;
 
     if (dest_width != src_width || dest_height != src_height) {
-        int x, y;
-        int x_mul = (uint32_t)((src_width << 16) / dest_width);
-        int y_mul = (uint32_t)((src_height << 16) / dest_height);
-        int new_y;
-        int set_y;
-        int nsrc_stride;
+        sx = (double)(src_width) / (dest_width);
+        sy = (double)(src_height) / (dest_height);
 
-        if (src_stride < 0) {
-            nsrc_stride = -src_stride;
-            src_data = src_data - (src_height - 1) * nsrc_stride;
-            nsrc_stride = nsrc_stride / 4;
-        } else {
-            nsrc_stride = src_stride / 4;
-        }
-        if ((dest_width * dest_height) > canvas->private_data_size) {
-            if (canvas->private_data) {
-                free(canvas->private_data);
-                canvas->private_data = NULL;
-                canvas->private_data_size = 0;
-            }
-            canvas->private_data = (uint32_t *)malloc(4 * dest_width * dest_height);
-            if (!canvas->private_data) {
-                return;
-            }
-            canvas->private_data_size = dest_width * dest_height;
-        }
-        if (!clip) {
-            surf = cairo_get_target(cairo);
-            data = (uint32_t *)cairo_image_surface_get_data(surf);
-            nstride = cairo_image_surface_get_stride(surf) / 4;
-            data += dest->top * nstride + dest->left + (dest_height - 1) * nstride;
-        } else {
-            data = (uint32_t *)canvas->private_data;
-            nstride = dest_width;
-            data += (dest_height - 1) * nstride;
-        }
-
-        for (y = 0; y < dest_height; ++y) {
-            int y_mul_stride = -y * nstride;
-            new_y = ((y * y_mul) >> 16);
-            set_y = (new_y * nsrc_stride);
-            for (x = 0; x < dest_width; ++x) {
-                data[y_mul_stride + x] = ((uint32_t *)src_data)[set_y + ((x * x_mul) >> 16)];
-            }
-        }
-        if (clip) {
-            surf = cairo_image_surface_create_for_data((uint8_t *)canvas->private_data,
-                                                       CAIRO_FORMAT_RGB24, dest_width,
-                                                       dest_height, 4 * dest_width);
-        }
-    } else {
-        surf = cairo_image_surface_create_for_data((uint8_t *)src_data, CAIRO_FORMAT_RGB24,
-                                                   src_width, src_height, src_stride);
+        pixman_transform_init_scale(&transform,
+                                    pixman_double_to_fixed(sx),
+                                    pixman_double_to_fixed(sy));
+        pixman_image_set_transform(src, &transform);
+        pixman_image_set_filter(src,
+                                PIXMAN_FILTER_NEAREST,
+                                NULL, 0);
     }
 
-    if (clip || !(dest_width != src_width || dest_height != src_height)) {
-        cairo_set_source_surface(cairo, surf, dest->left, dest->top);
-        cairo_surface_destroy(surf);
+    pixman_image_set_repeat(src, PIXMAN_REPEAT_NONE);
 
-        cairo_rectangle(cairo, dest->left, dest->top, dest_width, dest_height);
-        cairo_fill(cairo);
+    pixman_image_composite32(PIXMAN_OP_SRC,
+                             src, NULL, canvas->image,
+                             0, 0, /* src */
+                             0, 0, /* mask */
+                             dest->left, dest->top, /* dst */
+                             dest_width, dest_height);
+
+
+    if (clip) {
+        pixman_image_set_clip_region32(canvas->image, NULL);
     }
-    cairo_restore(cairo);
+    pixman_image_unref(src);
 }
 
 void canvas_draw_transparent(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceTransparent* transparent)
