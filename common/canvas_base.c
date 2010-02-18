@@ -17,7 +17,6 @@
 */
 
 #include <stdarg.h>
-#include <cairo.h>
 #include <stdlib.h>
 #include <setjmp.h>
 #include <stdio.h>
@@ -90,8 +89,6 @@ typedef struct __attribute__ ((__packed__)) LZImage {
         SpiceLZPLTData lz_plt;
     };
 } LZImage;
-
-static const cairo_user_data_key_t pixman_data_type = {0};
 
  static inline int fix_to_int(SPICE_FIXED28_4 fixed)
 {
