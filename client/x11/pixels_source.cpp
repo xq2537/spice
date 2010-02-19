@@ -25,9 +25,9 @@
 
 
 static void create_image(const PixmapHeader* pixmap, PixelsSource_p& pixels_source,
-                         cairo_format_t cairo_format)
+                         pixman_format_code_t format)
 {
-    cairo_surface_t* cairo_surf;
+    pixman_image_t *pixman_image;
     XImage *image = new XImage;
 
     memset(image, 0, sizeof(*image));
@@ -53,10 +53,11 @@ static void create_image(const PixmapHeader* pixmap, PixelsSource_p& pixels_sour
             THROW("init image failed");
         }
 
-        cairo_surf = cairo_image_surface_create_for_data(pixmap->data, cairo_format,
-                                                         pixmap->width, pixmap->height,
-                                                         pixmap->stride);
-        if (cairo_surface_status(cairo_surf) != CAIRO_STATUS_SUCCESS) {
+        pixman_image = pixman_image_create_bits(format,
+                                                pixmap->width, pixmap->height,
+                                                (uint32_t *)pixmap->data,
+                                                pixmap->stride);
+        if (pixman_image == NULL) {
             THROW("surf create failed");
         }
     } catch (...) {
@@ -66,7 +67,7 @@ static void create_image(const PixmapHeader* pixmap, PixelsSource_p& pixels_sour
 
     pixels_source.type = PIXELS_SOURCE_TYPE_PIXMAP;
     pixels_source.pixmap.x_image = image;
-    pixels_source.pixmap.cairo_surf = cairo_surf;
+    pixels_source.pixmap.pixman_image = pixman_image;
 }
 
 PixelsSource::PixelsSource()
@@ -85,12 +86,12 @@ ImageFromRes::ImageFromRes(int res_id)
     if (!pixmap) {
         THROW("no image %d", res_id);
     }
-    create_image(pixmap, *(PixelsSource_p*)get_opaque(), CAIRO_FORMAT_RGB24);
+    create_image(pixmap, *(PixelsSource_p*)get_opaque(), PIXMAN_x8r8g8b8);
 }
 
 ImageFromRes::~ImageFromRes()
 {
-    cairo_surface_destroy(((PixelsSource_p*)get_opaque())->pixmap.cairo_surf);
+    pixman_image_unref(((PixelsSource_p*)get_opaque())->pixmap.pixman_image);
     delete ((PixelsSource_p*)get_opaque())->pixmap.x_image;
 }
 
@@ -109,12 +110,12 @@ AlphaImageFromRes::AlphaImageFromRes(int res_id)
     if (!pixmap) {
         THROW("no image %d", res_id);
     }
-    create_image(pixmap, *(PixelsSource_p*)get_opaque(), CAIRO_FORMAT_ARGB32);
+    create_image(pixmap, *(PixelsSource_p*)get_opaque(), PIXMAN_a8r8g8b8);
 }
 
 AlphaImageFromRes::~AlphaImageFromRes()
 {
-    cairo_surface_destroy(((PixelsSource_p*)get_opaque())->pixmap.cairo_surf);
+    pixman_image_unref(((PixelsSource_p*)get_opaque())->pixmap.pixman_image);
     delete ((PixelsSource_p*)get_opaque())->pixmap.x_image;
 }
 

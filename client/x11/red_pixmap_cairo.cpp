@@ -28,10 +28,9 @@ RedPixmapCairo::RedPixmapCairo(int width, int height, RedPixmap::Format format,
                                bool top_bottom, rgb32_t* pallet, RedWindow *win)
     : RedPixmap(width, height, format, top_bottom, pallet)
 {
-    cairo_surface_t* cairo_surf = NULL;
-    cairo_t* cairo = NULL;
     ASSERT(format == RedPixmap::ARGB32 || format == RedPixmap::RGB32 || format == RedPixmap::A1);
     ASSERT(sizeof(RedDrawable_p) <= PIXELES_SOURCE_OPAQUE_SIZE);
+    pixman_image_t *pixman_image;
     XImage *image = NULL;
     XShmSegmentInfo *shminfo = NULL;
     _data = NULL;
@@ -40,7 +39,7 @@ RedPixmapCairo::RedPixmapCairo(int width, int height, RedPixmap::Format format,
 
 
     try {
-        cairo_format_t cairo_format;
+        pixman_format_code_t pixman_format;
 
         if (win) {
             vinfo = XPlatform::get_vinfo()[win->get_screen_num()];
@@ -55,12 +54,12 @@ RedPixmapCairo::RedPixmapCairo(int width, int height, RedPixmap::Format format,
             case RedPixmap::ARGB32:
             case RedPixmap::RGB32:
                 depth = XPlatform::get_vinfo()[0]->depth;
-                cairo_format = format == RedPixmap::ARGB32 ? CAIRO_FORMAT_ARGB32 :
-                                                             CAIRO_FORMAT_RGB24;
+                pixman_format = format == RedPixmap::ARGB32 ? PIXMAN_a8r8g8b8 :
+                                                             PIXMAN_x8r8g8b8;
                 break;
             case RedPixmap::A1:
                 depth = 1;
-                cairo_format = CAIRO_FORMAT_A1;
+                pixman_format = PIXMAN_a1;
                 break;
             default:
                 THROW("unsupported format %d", format);
@@ -122,13 +121,13 @@ RedPixmapCairo::RedPixmapCairo(int width, int height, RedPixmap::Format format,
                 image->red_mask = 0x00ff0000;
                 image->green_mask = 0x0000ff00;
                 image->blue_mask = 0x000000ff;
-                cairo_format = format == RedPixmap::ARGB32 ? CAIRO_FORMAT_ARGB32 :
-                                                             CAIRO_FORMAT_RGB24;
+                pixman_format = format == RedPixmap::ARGB32 ? PIXMAN_a8r8g8b8 :
+                                                             PIXMAN_x8r8g8b8;
                 break;
             case RedPixmap::A1:
                 image->depth = 1;
                 image->format = XYBitmap;
-                cairo_format = CAIRO_FORMAT_A1;
+                pixman_format = PIXMAN_a1;
                 break;
             default:
                 THROW("unsupported format %d", format);
@@ -138,23 +137,17 @@ RedPixmapCairo::RedPixmapCairo(int width, int height, RedPixmap::Format format,
                 THROW("init image failed");
             }
         }
-        cairo_surf = cairo_image_surface_create_for_data(_data, cairo_format, _width, _height,
-                                                         _stride);
-        if (cairo_surface_status(cairo_surf) != CAIRO_STATUS_SUCCESS) {
+        pixman_image = pixman_image_create_bits(pixman_format, _width, _height,
+                                                (uint32_t *)_data, _stride);
+        if (pixman_image == NULL) {
             THROW("surf create failed");
         }
 
-        cairo = cairo_create(cairo_surf);
-        cairo_surface_destroy(cairo_surf);
-        if (cairo_status(cairo) != CAIRO_STATUS_SUCCESS) {
-            THROW("cairo create failed failed");
-        }
         if (!using_shm) {
-            ((PixelsSource_p*)get_opaque())->pixmap.cairo_surf = cairo_surf;
+            ((PixelsSource_p*)get_opaque())->pixmap.pixman_image = pixman_image;
         } else {
-            ((PixelsSource_p*)get_opaque())->x_shm_drawable.cairo_surf = cairo_surf;
+            ((PixelsSource_p*)get_opaque())->x_shm_drawable.pixman_image = pixman_image;
         }
-        ((RedDrawable_p*)get_opaque())->cairo = cairo;
     } catch (...) {
         if (using_shm) {
             if (image) {
@@ -178,11 +171,12 @@ RedPixmapCairo::RedPixmapCairo(int width, int height, RedPixmap::Format format,
 
 RedPixmapCairo::~RedPixmapCairo()
 {
-    cairo_destroy(((RedDrawable_p*)get_opaque())->cairo);
     if (((PixelsSource_p*)get_opaque())->type == PIXELS_SOURCE_TYPE_PIXMAP) {
+        pixman_image_unref(((PixelsSource_p*)get_opaque())->pixmap.pixman_image);
         delete ((PixelsSource_p*)get_opaque())->pixmap.x_image;
         delete[] _data;
     } else {
+        pixman_image_unref(((PixelsSource_p*)get_opaque())->x_shm_drawable.pixman_image);
         XShmSegmentInfo *shminfo = ((PixelsSource_p*)get_opaque())->x_shm_drawable.shminfo;
         XShmDetach(XPlatform::get_display(), shminfo);
         XDestroyImage(((PixelsSource_p*)get_opaque())->x_shm_drawable.x_image);

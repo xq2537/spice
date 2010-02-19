@@ -24,7 +24,7 @@
 #include <X11/extensions/XShm.h>
 #include "red_window.h"
 #include "red_pixmap_gl.h"
-#include "cairo.h"
+#include "pixman_utils.h"
 
 enum {
     PIXELS_SOURCE_TYPE_INVALID,
@@ -53,12 +53,12 @@ struct PixelsSource_p {
         struct {
             XImage* x_image;
             XShmSegmentInfo *shminfo;
-            cairo_surface_t* cairo_surf;
+            pixman_image_t* pixman_image;
         } x_shm_drawable;
 
         struct {
             XImage* x_image;
-            cairo_surface_t* cairo_surf;
+            pixman_image_t* pixman_image;
         } pixmap;
 
         struct {
@@ -79,9 +79,6 @@ struct PixelsSource_p {
 
 struct RedDrawable_p {
     PixelsSource_p source;
-    union {
-        cairo_t* cairo;
-    };
 };
 
 #endif

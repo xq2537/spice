@@ -237,18 +237,18 @@ static inline void copy_to_pixmap_from_shmdrawable(const RedDrawable_p* dest,
                                                    const PixelsSource_p* source,
                                                    int src_x, int src_y)
 {
-    cairo_t* cairo = dest->cairo;
-    cairo_surface_t* surf = source->x_shm_drawable.cairo_surf;
+    pixman_image_t *dest_surface =  dest->source.pixmap.pixman_image;
+    pixman_image_t *src_surface = source->x_shm_drawable.pixman_image;
 
-    ASSERT(cairo);
-    ASSERT(surf);
-
-    cairo_set_source_surface(cairo, surf, area.left + offset.x - src_x,
-                             area.top + offset.y - src_y);
-    cairo_set_operator(cairo, CAIRO_OPERATOR_RASTER_COPY);
-    cairo_rectangle(cairo, area.left + offset.x, area.top + offset.y, area.right - area.left,
-                    area.bottom - area.top);
-    cairo_fill(cairo);
+    pixman_image_composite32(PIXMAN_OP_SRC,
+                             src_surface, NULL, dest_surface,
+                             src_x + offset.x,
+                             src_y + offset.y,
+                             0, 0,
+                             area.left + offset.x,
+                             area.top + offset.y,
+                             area.right - area.left,
+                             area.bottom - area.top);
 }
 
 static inline void copy_to_pixmap_from_pixmap(const RedDrawable_p* dest,
@@ -257,18 +257,18 @@ static inline void copy_to_pixmap_from_pixmap(const RedDrawable_p* dest,
                                               const PixelsSource_p* source,
                                               int src_x, int src_y)
 {
-    cairo_t* cairo = dest->cairo;
-    cairo_surface_t* surf = source->pixmap.cairo_surf;
+    pixman_image_t *dest_surface =  dest->source.pixmap.pixman_image;
+    pixman_image_t *src_surface = source->pixmap.pixman_image;
 
-    ASSERT(cairo);
-    ASSERT(surf);
-
-    cairo_set_source_surface(cairo, surf, area.left + offset.x - src_x,
-                             area.top + offset.y - src_y);
-    cairo_set_operator(cairo, CAIRO_OPERATOR_RASTER_COPY);
-    cairo_rectangle(cairo, area.left + offset.x, area.top + offset.y, area.right - area.left,
-                    area.bottom - area.top);
-    cairo_fill(cairo);
+    pixman_image_composite32(PIXMAN_OP_SRC,
+                             src_surface, NULL, dest_surface,
+                             src_x + offset.x,
+                             src_y + offset.y,
+                             0, 0,
+                             area.left + offset.x,
+                             area.top + offset.y,
+                             area.right - area.left,
+                             area.bottom - area.top);
 }
 
 static inline void copy_to_pixmap_from_gltexture(const RedDrawable_p* dest,
@@ -384,18 +384,18 @@ static inline void blend_to_pixmap_from_pixmap(const RedDrawable_p* dest,
                                                const PixelsSource_p* source,
                                                int src_x, int src_y)
 {
-    cairo_t* cairo = dest->cairo;
-    cairo_surface_t* surf = source->pixmap.cairo_surf;
+    pixman_image_t *dest_surface =  dest->source.pixmap.pixman_image;
+    pixman_image_t *src_surface = source->pixmap.pixman_image;
 
-    ASSERT(cairo);
-    ASSERT(surf);
-
-    cairo_set_source_surface(cairo, surf, (area.left + offset.x - src_x),
-                             (area.top + offset.y - src_y));
-    cairo_set_operator(cairo, CAIRO_OPERATOR_ATOP);
-    cairo_rectangle(cairo, area.left + offset.x, area.top + offset.y, area.right - area.left,
-                    area.bottom - area.top);
-    cairo_fill(cairo);
+    pixman_image_composite32 (PIXMAN_OP_ATOP,
+                              src_surface, NULL, dest_surface,
+                              src_x + offset.x,
+                              src_y + offset.y,
+                              0, 0,
+                              area.left + offset.x,
+                              area.top + offset.y,
+                              area.right - area.left,
+                              area.bottom - area.top);
 }
 
 static inline void blend_to_pixmap(const RedDrawable_p* dest,
@@ -460,41 +460,74 @@ static inline void combine_to_pixmap_from_pixmap(const RedDrawable_p* dest,
                                                  int src_x, int src_y,
                                                  RedDrawable::CombineOP op)
 {
-    cairo_t* cairo = dest->cairo;
-    cairo_surface_t* surf = source->pixmap.cairo_surf;
+    pixman_image_t *dest_surface =  dest->source.pixmap.pixman_image;
+    pixman_image_t *src_surface = source->pixmap.pixman_image;
 
-    ASSERT(cairo);
-    ASSERT(surf);
-    cairo_operator_t cairo_op;
+    SpiceROP rop;
     switch (op) {
     case RedDrawable::OP_COPY:
-        cairo_op = CAIRO_OPERATOR_RASTER_COPY;
+        rop = SPICE_ROP_COPY;
         break;
     case RedDrawable::OP_AND:
-        cairo_op = CAIRO_OPERATOR_RASTER_AND;
+        rop = SPICE_ROP_AND;
         break;
     case RedDrawable::OP_XOR:
-        cairo_op = CAIRO_OPERATOR_RASTER_XOR;
+        rop = SPICE_ROP_XOR;
         break;
     default:
         THROW("invalid op %d", op);
     }
 
 
-    cairo_set_operator(cairo, cairo_op);
-    if (cairo_image_surface_get_format(surf) == CAIRO_FORMAT_A1) {
-        cairo_rectangle(cairo, area.left + offset.x, area.top + offset.y, area.right - area.left,
-                        area.bottom - area.top);
-        cairo_clip(cairo);
-        cairo_set_source_rgb(cairo, 1, 1, 1);
-        cairo_mask_surface(cairo, surf, area.left + offset.x - src_x, area.top + offset.y - src_y);
-        cairo_reset_clip(cairo);
+    if (pixman_image_get_depth (src_surface) == 1) {
+        pixman_image_t *temp;
+
+        temp = pixman_image_create_bits(pixman_image_get_depth(dest_surface) == 24 ?
+                                        PIXMAN_x8r8g8b8 : PIXMAN_a8r8g8b8,
+                                        area.right - area.left,
+                                        area.bottom - area.top, NULL, 0);
+
+        /* Copy from dest to temp */
+        pixman_image_composite32(PIXMAN_OP_SRC,
+                                 dest_surface, NULL, temp,
+                                 area.left + offset.x,
+                                 area.top + offset.y,
+                                 0, 0,
+                                 0, 0,
+                                 area.right - area.left,
+                                 area.bottom - area.top);
+
+        /* rop white over temp */
+        spice_pixman_fill_rect_rop(temp,
+                                   0, 0,
+                                   area.right - area.left,
+                                   area.bottom - area.top,
+                                   0xffffff,
+                                   rop);
+
+        /* copy back using a1 mask */
+        pixman_image_composite32(PIXMAN_OP_SRC,
+                                 temp, src_surface, dest_surface,
+                                 0, 0,
+                                 src_x + offset.x,
+                                 src_y + offset.y,
+                                 area.left + offset.x,
+                                 area.top + offset.y,
+                                 area.right - area.left,
+                                 area.bottom - area.top);
+
+        pixman_image_unref(temp);
+
     } else {
-        cairo_set_source_surface(cairo, surf, area.left + offset.x - src_x,
-                                 area.top + offset.y - src_y);
-        cairo_rectangle(cairo, area.left + offset.x, area.top + offset.y, area.right - area.left,
-                        area.bottom - area.top);
-        cairo_fill(cairo);
+        spice_pixman_blit_rop(dest_surface,
+                              src_surface,
+                              src_x + offset.x,
+                              src_y + offset.y,
+                              area.left + offset.x,
+                              area.top + offset.y,
+                              area.right - area.left,
+                              area.bottom - area.top,
+                              rop);
     }
 }
 
@@ -606,17 +639,13 @@ static inline void fill_gl_drawable(RedDrawable_p* dest, const SpiceRect& area, 
 static inline void fill_pixmap(RedDrawable_p* dest, const SpiceRect& area, rgb32_t color,
                                const SpicePoint& offset)
 {
-    cairo_t* cairo = dest->cairo;
+    pixman_image_t *dest_surface =  dest->source.pixmap.pixman_image;
 
-    ASSERT(cairo);
-    cairo_set_source_rgb(cairo,
-                         (double)rgb32_get_red(color) / 0xff,
-                         (double)rgb32_get_green(color) / 0xff,
-                         (double)rgb32_get_blue(color) / 0xff);
-    cairo_rectangle(cairo, area.left + offset.x, area.top + offset.y, area.right - area.left,
-                    area.bottom - area.top);
-    cairo_set_operator(cairo, CAIRO_OPERATOR_RASTER_COPY);
-    cairo_fill(cairo);
+    spice_pixman_fill_rect(dest_surface,
+                           area.left + offset.x, area.top + offset.y,
+                           area.right - area.left,
+                           area.bottom - area.top,
+                           color);
 }
 
 void RedDrawable::fill_rect(const SpiceRect& area, rgb32_t color)
@@ -668,18 +697,28 @@ static inline void frame_drawable(RedDrawable_p* dest, const SpiceRect& area, rg
 static inline void frame_pixmap(RedDrawable_p* dest, const SpiceRect& area, rgb32_t color,
                                 const SpicePoint& offset)
 {
-    cairo_t* cairo = dest->cairo;
+    pixman_image_t *dest_surface =  dest->source.pixmap.pixman_image;
 
-    ASSERT(cairo);
-    cairo_set_source_rgb(cairo,
-                         (double)rgb32_get_red(color) / 0xff,
-                         (double)rgb32_get_green(color) / 0xff,
-                         (double)rgb32_get_blue(color) / 0xff);
-    cairo_rectangle(cairo, area.left + offset.x, area.top + offset.y, area.right - area.left,
-                    area.bottom - area.top);
-    cairo_set_line_width(cairo, 1);
-    cairo_set_operator(cairo, CAIRO_OPERATOR_RASTER_COPY);
-    cairo_stroke(cairo);
+    spice_pixman_fill_rect(dest_surface,
+                           area.left + offset.x, area.top + offset.y,
+                           area.right - area.left,
+                           1,
+                           color);
+    spice_pixman_fill_rect(dest_surface,
+                           area.left + offset.x, area.bottom + offset.y,
+                           area.right - area.left,
+                           1,
+                           color);
+    spice_pixman_fill_rect(dest_surface,
+                           area.left + offset.x, area.top + offset.y,
+                           1,
+                           area.bottom - area.top,
+                           color);
+    spice_pixman_fill_rect(dest_surface,
+                           area.right + offset.x, area.top + offset.y,
+                           1,
+                           area.bottom - area.top,
+                           color);
 }
 
 void RedDrawable::frame_rect(const SpiceRect& area, rgb32_t color)
