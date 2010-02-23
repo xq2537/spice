@@ -264,45 +264,6 @@ pixman_image_from_surface (cairo_surface_t *surface)
 
   return image;
 }
-
-static cairo_format_t
-cairo_format_from_depth (int depth)
-{
-    switch (depth) {
-    case 1:
-        return CAIRO_FORMAT_A1;
-    case 8:
-        return CAIRO_FORMAT_A8;
-    case 24:
-        return CAIRO_FORMAT_RGB24;
-    case 32:
-    default:
-        return CAIRO_FORMAT_ARGB32;
-    }
-}
-
-static cairo_surface_t *
-surface_from_pixman_image (pixman_image_t *image)
-{
-  cairo_surface_t *surface;
-  int depth;
-
-  depth = pixman_image_get_depth (image);
-
-  surface = cairo_image_surface_create_for_data ((uint8_t *)pixman_image_get_data (image),
-                                                 cairo_format_from_depth (depth),
-                                                 pixman_image_get_width (image),
-                                                 pixman_image_get_height (image),
-                                                 pixman_image_get_stride (image));
-
-
-  if (cairo_surface_set_user_data (surface, &pixman_data_type,
-                                   image, (cairo_destroy_func_t) pixman_image_unref) == CAIRO_STATUS_SUCCESS)
-      pixman_image_ref (image);
-
-  return surface;
-}
-
 #endif
 
 static inline void canvas_localize_palette(CanvasBase *canvas, SpicePalette *palette)
