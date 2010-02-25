@@ -113,17 +113,23 @@ void RedPeer::cleanup()
 
 uint32_t RedPeer::host_by_name(const char* host)
 {
-    struct addrinfo *result = NULL;
+    struct addrinfo *e, *result = NULL;
     struct sockaddr_in *addr;
     uint32_t return_value;
     int rc;
 
     rc = getaddrinfo(host, NULL, NULL, &result);
-    if (rc != 0 || result == NULL) {
+    for (e = result; e != NULL; e = e->ai_next) {
+        if (e->ai_family == PF_INET)
+            break;
+    }
+    if (rc != 0 || e == NULL) {
+        if (result)
+            freeaddrinfo(result);
         THROW_ERR(SPICEC_ERROR_CODE_GETHOSTBYNAME_FAILED, "cannot resolve host address %s", host);
     }
 
-    addr = (sockaddr_in *)result->ai_addr;
+    addr = (sockaddr_in *)e->ai_addr;
     return_value = addr->sin_addr.s_addr;
 
     freeaddrinfo(result);
