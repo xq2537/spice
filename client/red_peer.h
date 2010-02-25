@@ -113,8 +113,6 @@ public:
     uint32_t recive(uint8_t* buf, uint32_t size);
     uint32_t send(uint8_t* buf, uint32_t size);
 
-    static uint32_t host_by_name(const char *host);
-
 protected:
     virtual void on_event() {}
     virtual int get_socket() { return _peer;}

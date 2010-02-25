@@ -69,64 +69,54 @@ void RedPeer::cleanup()
     }
 }
 
-uint32_t RedPeer::host_by_name(const char* host)
+void RedPeer::connect_unsecure(const char* host, int portnr)
 {
-    struct addrinfo *e, *result = NULL;
-    struct sockaddr_in *addr;
-    uint32_t return_value;
-    int rc;
-
-    rc = getaddrinfo(host, NULL, NULL, &result);
-    for (e = result; e != NULL; e = e->ai_next) {
-        if (e->ai_family == PF_INET)
-            break;
-    }
-    if (rc != 0 || e == NULL) {
-        if (result)
-            freeaddrinfo(result);
-        THROW_ERR(SPICEC_ERROR_CODE_GETHOSTBYNAME_FAILED, "cannot resolve host address %s", host);
-    }
-
-    addr = (sockaddr_in *)e->ai_addr;
-    return_value = addr->sin_addr.s_addr;
-
-    freeaddrinfo(result);
-
-    DBG(0, "%s = %u", host, return_value);
-    return ntohl(return_value);
-}
-
-void RedPeer::connect_unsecure(const char* host, int port)
-{
-    struct sockaddr_in addr;
-    int no_delay;
-    uint32_t ip;
+    struct addrinfo ai, *result = NULL, *e;
+    char uaddr[INET6_ADDRSTRLEN+1];
+    char uport[33], port[33];
+    int err = 0, rc, no_delay = 1;
     ASSERT(_ctx == NULL && _ssl == NULL && _peer == INVALID_SOCKET);
     try {
-        ip = host_by_name(host);
-
-        addr.sin_port = htons(port);
-        addr.sin_family = AF_INET;
-        addr.sin_addr.s_addr = htonl(ip);
-
+        memset(&ai,0, sizeof(ai));
+        ai.ai_flags = AI_CANONNAME | AI_ADDRCONFIG;
+        ai.ai_family = PF_UNSPEC;
+        ai.ai_socktype = SOCK_STREAM;
+        snprintf(port, sizeof(port), "%d", portnr);
+        rc = getaddrinfo(host, port, &ai, &result);
+        if (rc != 0) {
+            THROW_ERR(SPICEC_ERROR_CODE_GETHOSTBYNAME_FAILED, "cannot resolve host address %s", host);
+        }
         Lock lock(_lock);
-        if ((_peer = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) == INVALID_SOCKET) {
-            int err = sock_error();
-            THROW_ERR(SPICEC_ERROR_CODE_SOCKET_FAILED, "failed to create socket: %s (%d)",
-                      sock_err_message(err), err);
-        }
+        _peer = -1;
+        for (e = result; e != NULL; e = e->ai_next) {
+            if ((_peer = socket(e->ai_family, e->ai_socktype, e->ai_protocol)) == INVALID_SOCKET) {
+                int err = sock_error();
+                THROW_ERR(SPICEC_ERROR_CODE_SOCKET_FAILED, "failed to create socket: %s (%d)",
+                          sock_err_message(err), err);
+            }
+            if (setsockopt(_peer, IPPROTO_TCP, TCP_NODELAY, (const char*)&no_delay, sizeof(no_delay)) ==
+                SOCKET_ERROR) {
+                LOG_WARN("set TCP_NODELAY failed");
+            }
 
-        no_delay = 1;
-        if (setsockopt(_peer, IPPROTO_TCP, TCP_NODELAY, (const char*)&no_delay, sizeof(no_delay)) ==
-                                                                                     SOCKET_ERROR) {
-            LOG_WARN("set TCP_NODELAY failed");
+            getnameinfo((struct sockaddr*)e->ai_addr, e->ai_addrlen,
+                        uaddr,INET6_ADDRSTRLEN, uport,32,
+                        NI_NUMERICHOST | NI_NUMERICSERV);
+            LOG_INFO("Trying %s %s", uaddr, uport);
+            if (::connect(_peer, e->ai_addr, e->ai_addrlen) == SOCKET_ERROR) {
+                err = sock_error();
+                LOG_INFO("Connect failed: %s (%d)",
+                         sock_err_message(err), err);
+                closesocket(_peer);
+                _peer = -1;
+                continue;
+            }
+            LOG_INFO("Connected to %s %s", uaddr, uport);
+            break;
         }
-
-        LOG_INFO("Connecting %s %d", inet_ntoa(addr.sin_addr), port);
         lock.unlock();
-        if (::connect(_peer, (struct sockaddr *)&addr, sizeof(sockaddr_in)) == SOCKET_ERROR) {
-            int err = sock_error();
-            closesocket(_peer);
+        freeaddrinfo(result);
+        if (_peer == -1) {
             THROW_ERR(SPICEC_ERROR_CODE_CONNECT_FAILED, "failed to connect: %s (%d)",
                       sock_err_message(err), err);
         }
