@@ -76,7 +76,7 @@
 #define MAX(x, y) (((x) >= (y)) ? (x) : (y))
 #endif
 
-#define ROUND(_x) floor((_x) + 0.5)
+#define ROUND(_x) ((int)floor((_x) + 0.5))
 
 #ifdef WIN32
 typedef struct  __declspec (align(1)) LZImage {

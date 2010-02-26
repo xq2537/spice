@@ -26,8 +26,6 @@
 #include "lines.h"
 #include "pixman_utils.h"
 
-#define ROUND(_x) floor((_x) + 0.5)
-
 struct CairoCanvas {
     CanvasBase base;
     uint32_t *private_data;
