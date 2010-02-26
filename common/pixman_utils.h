@@ -19,6 +19,8 @@
 #ifndef _H__PIXMAN_UTILS
 #define _H__PIXMAN_UTILS
 
+#include <spice/types.h>
+
 #include <pixman.h>
 
 #include <spice/draw.h>
