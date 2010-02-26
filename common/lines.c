@@ -77,7 +77,7 @@ SOFTWARE.
 #define xrealloc(a,b) realloc(a,b)
 #define xfree(i) free(i)
 
-typedef uint32_t CARD32;
+typedef unsigned int CARD32;
 typedef int Boolean;
 typedef pixman_rectangle32_t xRectangle;
 typedef SpicePoint DDXPointRec;
@@ -89,7 +89,7 @@ typedef struct lineGC *GCPtr;
  * a signed type.
  */
 #define MAX_COORDINATE 2147483647
-#define MIN_COORDINATE -2147483648
+#define MIN_COORDINATE -2147483647
 
 #define miZeroLine spice_canvas_zero_line
 #define miZeroDashLine spice_canvas_zero_dash_line
@@ -99,7 +99,7 @@ typedef struct lineGC *GCPtr;
 static int inline
 ICEIL (double x)
 {
-    int _cTmp = x;
+    int _cTmp = (int)x;
     return ((x == _cTmp) || (x < 0.0)) ? _cTmp : _cTmp + 1;
 }
 
@@ -1420,7 +1420,7 @@ miZeroClipLine (int xmin, int ymin, int xmax, int ymax,
                 utmp++;
 
             if (negslope)
-                utmp = -utmp;
+                utmp = (uint32_t)(-(int32_t)utmp);
 
             if (eqn & T_2NDX)   /* We are calculating X steps */
                 x1 = anchorval + utmp;
@@ -2114,8 +2114,8 @@ miLineJoin (GCPtr pGC, Boolean foreground, SpanDataPtr spanData, LineFacePtr pLe
         scale = ady;
         if (adx > ady)
             scale = adx;
-        slopes[2].dx = (dx * 65536) / scale;
-        slopes[2].dy = (dy * 65536) / scale;
+        slopes[2].dx = (int) ((dx * 65536) / scale);
+        slopes[2].dy = (int) ((dy * 65536) / scale);
         slopes[2].k = ((pLeft->xa + pRight->xa) * slopes[2].dy -
                        (pLeft->ya + pRight->ya) * slopes[2].dx) / 2.0;
         edgecount = 3;
@@ -2217,7 +2217,7 @@ miLineArcD (GCPtr pGC,
 
     pts = points;
     wids = widths;
-    xbase = floor (xorg);
+    xbase = (int)floor (xorg);
     x0 = xorg - xbase;
     ybase = ICEIL (yorg);
     y0 = yorg - ybase;
@@ -2225,7 +2225,7 @@ miLineArcD (GCPtr pGC,
     xrk = x0 + x0 - 1.0;
     yk = y0 + y0 - 1.0;
     radius = ((double) pGC->lineWidth) / 2.0;
-    y = floor (radius - y0 + 1.0);
+    y = (int)floor (radius - y0 + 1.0);
     ybase -= y;
     ymin = ybase;
     ymax = 65536;
@@ -2303,7 +2303,7 @@ miLineArcD (GCPtr pGC,
     }
     er = xrk - (xr << 1) - er;
     el = (xl << 1) - xlk - el;
-    boty = floor (-y0 - radius + 1.0);
+    boty = (int)floor (-y0 - radius + 1.0);
     if (ybase + y - boty > ymax)
         boty = ymax - ybase - y;
     while (y > boty) {
@@ -3251,7 +3251,7 @@ miWideDashSegment (GCPtr pGC,
                        &lcapFace, (LineFacePtr) NULL, rcenterx, rcentery, FALSE);
         }
     }
-    dashRemain = ((double) dashRemain) - LRemain;
+    dashRemain = (int)(((double) dashRemain) - LRemain);
     if (dashRemain == 0) {
         dashIndex++;
         if (dashIndex == pGC->numInDashList)

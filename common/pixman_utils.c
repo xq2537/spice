@@ -43,7 +43,7 @@ solid_rop_ ## _name ## _ ## _size (_type *ptr, int len, _type src)  \
 {                                                  \
     while (len--) {                                \
         _type dst = *ptr;                          \
-        if (dst) /* avoid unused warning */;       \
+        if (dst) /* avoid unused warning */{};       \
         *ptr = (_type)(_equation);                 \
         ptr++;                                     \
     }                                              \
@@ -56,8 +56,8 @@ tiled_rop_ ## _name ## _ ## _size (_type *ptr, int len, _type *tile, _type *tile
     while (len--) {                                \
         _type src = *tile;                         \
         _type dst = *ptr;                          \
-        if (src) /* avoid unused warning */;       \
-        if (dst) /* avoid unused warning */;       \
+        if (src) /* avoid unused warning */{};       \
+        if (dst) /* avoid unused warning */{};       \
         *ptr = (_type)(_equation);                 \
         ptr++;                                     \
         tile++;                                    \
@@ -73,8 +73,8 @@ static void                                        \
     while (len--) {                                \
         _type src = *src_line;                     \
         _type dst = *ptr;                          \
-        if (src) /* avoid unused warning */;       \
-        if (dst) /* avoid unused warning */;       \
+        if (src) /* avoid unused warning */ {};       \
+        if (dst) /* avoid unused warning */{};       \
         *ptr = (_type)(_equation);                 \
         ptr++;                                     \
         src_line++;                                \
