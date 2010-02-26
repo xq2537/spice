@@ -307,13 +307,13 @@ uint32_t raster_ops[] = {
 
 static inline void surface_to_image(pixman_image_t *surface, GdiImage *image)
 {
-    int depth = pixman_image_surface_get_depth(surface);
+    int depth = pixman_image_get_depth(surface);
 
     ASSERT(depth == 32 || depth == 24);
     image->width = pixman_image_get_width(surface);
     image->height = pixman_image_get_height(surface);
     image->stride = pixman_image_get_stride(surface);
-    image->pixels = pixman_image_get_data(surface);
+    image->pixels = (uint8_t *)pixman_image_get_data(surface);
 }
 
 static void set_path(GdiCanvas *canvas, void *addr)
@@ -788,7 +788,7 @@ static struct BitmapData get_mask_bitmap(struct GdiCanvas *canvas, struct SpiceQ
         return bitmap;
     }
 
-    pixman_data = pixman_image_get_destroy_data (surface);
+    pixman_data = (PixmanData *)pixman_image_get_destroy_data (surface);
     if (pixman_data && (WaitForSingleObject(pixman_data->mutex, INFINITE) != WAIT_FAILED)) {
         bitmap.dc = create_compatible_dc();
         bitmap.prev_hbitmap = (HBITMAP)SelectObject(bitmap.dc, pixman_data->bitmap);
@@ -796,7 +796,7 @@ static struct BitmapData get_mask_bitmap(struct GdiCanvas *canvas, struct SpiceQ
         ReleaseMutex(pixman_data->mutex);
         bitmap.cache = 1;
     } else if (!create_bitmap(&bitmap.hbitmap, &bitmap.prev_hbitmap, &bitmap.dc,
-                              pixman_image_get_data(surface),
+                              (uint8_t *)pixman_image_get_data(surface),
                               pixman_image_get_width(surface),
                               pixman_image_get_height(surface),
                               pixman_image_get_stride(surface), 1, 0)) {
@@ -926,7 +926,7 @@ static void draw_str_mask_bitmap(struct GdiCanvas *canvas,
 
     unset_brush(bitmap.dc, prev_hbrush);
 
-    copy_bitmap_alpha(pixman_image_get_data(surface),
+    copy_bitmap_alpha((uint8_t *)pixman_image_get_data(surface),
                       pixman_image_get_height(surface),
                       pixman_image_get_width(surface),
                       pixman_image_get_stride(surface),
@@ -1045,28 +1045,31 @@ void gdi_canvas_put_image(GdiCanvas *canvas, HDC dc, const SpiceRect *dest, cons
     src.bottom = src_height;
     src.left = 0;
     src.right = src_width;
+    int num_rects;
+    pixman_box32_t *rects;
 
     Lock lock(*canvas->lock);
     set_scale_mode(canvas, SPICE_IMAGE_SCALE_MODE_NEAREST);
     if (clip) {
-        if (clip->num_rects == 0) {
+        rects = pixman_region32_rectangles((pixman_region32_t*)clip, &num_rects);
+        if (num_rects == 0) {
             return;
         } else {
             HRGN main_hrgn;
-            uint32_t i;
+            int i;
 
-            main_hrgn = CreateRectRgn(clip->rects[0].left, clip->rects[0].top, clip->rects[0].right,
-                                      clip->rects[0].bottom);
+            main_hrgn = CreateRectRgn(rects[0].x1, rects[0].y1, rects[0].x2,
+                                      rects[0].y2);
             if (!main_hrgn) {
                 return;
             }
 
-            for (i = 1; i < clip->num_rects; i++) {
+            for (i = 1; i < num_rects; i++) {
                 HRGN combaine_hrgn;
 
-                combaine_hrgn = CreateRectRgn(clip->rects[i].left, clip->rects[i].top,
-                                              clip->rects[i].right,
-                                              clip->rects[i].bottom);
+                combaine_hrgn = CreateRectRgn(rects[i].x1, rects[i].y1,
+                                              rects[i].x2,
+                                              rects[i].y2);
                 if (!combaine_hrgn) {
                     CANVAS_ERROR("CreateRectRgn failed");
                     DeleteObject(main_hrgn);
@@ -1695,7 +1698,7 @@ void gdi_canvas_destroy(GdiCanvas *canvas)
 static int need_init = 1;
 
 #ifdef CAIRO_CANVAS_CACHE
-GdiCanvas *gdi_canvas_create(HDC dc, Mutex* lock, int bits, void *bits_cache_opaque,
+GdiCanvas *gdi_canvas_create(HDC dc, Mutex* lock, int bits,
                              SpiceImageCache *bits_cache,
                              SpicePaletteCache *palette_cache
 #elif defined(CAIRO_CANVAS_IMAGE_CACHE)

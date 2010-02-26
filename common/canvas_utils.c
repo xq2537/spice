@@ -173,7 +173,7 @@ pixman_image_t * surface_create(pixman_format_code_t format, int width, int heig
 
         bitmap = CreateDIBSection(dc, &bitmap_info.inf, 0, (VOID **)&data, NULL, 0);
         if (!bitmap) {
-            CloseHandle(bitmap_cache->mutex);
+            CloseHandle(mutex);
             CANVAS_ERROR("Unable to CreateDIBSection");
         }
 
@@ -184,15 +184,15 @@ pixman_image_t * surface_create(pixman_format_code_t format, int width, int heig
             nstride = -nstride;
         }
 
-        surface = pixman_image_create_bits(format, width, height, (uint32_t *)src, stride);
+        surface = pixman_image_create_bits(format, width, height, (uint32_t *)src, nstride);
         if (surface == NULL) {
             CloseHandle(mutex);
             DeleteObject(bitmap);
             CANVAS_ERROR("create surface failed, out of memory");
         }
         pixman_data = pixman_image_add_data(surface);
-        pixman_data.bitmap = bitmap;
-        pixman_data.mutex = mutex;
+        pixman_data->bitmap = bitmap;
+        pixman_data->mutex = mutex;
         gdi_handlers++;
         return surface;
     } else {
