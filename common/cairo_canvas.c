@@ -2157,8 +2157,7 @@ CairoCanvas *canvas_create(pixman_image_t *image, int bits
 #endif
                             , SpiceGlzDecoder *glz_decoder
 #ifndef CAIRO_CANVAS_NO_CHUNKS
-                           , void *get_virt_opaque, get_virt_fn_t get_virt,
-                           void *validate_virt_opaque, validate_virt_fn_t validate_virt
+                           , SpiceVirtMapping *virt_mapping
 #endif
                            )
 {
@@ -2181,11 +2180,7 @@ CairoCanvas *canvas_create(pixman_image_t *image, int bits
 #endif
                                , glz_decoder
 #ifndef CAIRO_CANVAS_NO_CHUNKS
-                               ,
-                               get_virt_opaque,
-                               get_virt,
-                               validate_virt_opaque,
-                               validate_virt
+                               , virt_mapping
 #endif
                                );
     canvas->private_data = NULL;

@@ -27,6 +27,7 @@
 typedef struct _SpiceImageCache SpiceImageCache;
 typedef struct _SpicePaletteCache SpicePaletteCache;
 typedef struct _SpiceGlzDecoder SpiceGlzDecoder;
+typedef struct _SpiceVirtMapping SpiceVirtMapping;
 
 typedef struct {
     void (*put)(SpiceImageCache *cache,
@@ -64,11 +65,15 @@ struct _SpiceGlzDecoder {
   SpiceGlzDecoderOps *ops;
 };
 
-#ifndef CAIRO_CANVAS_NO_CHUNKS
-typedef void *(*get_virt_fn_t)(void *get_virt_opaque, unsigned long addr, uint32_t add_size);
-typedef void (*validate_virt_fn_t)(void *validate_virt_opaque, unsigned long virt,
-                                   unsigned long from_addr, uint32_t add_size);
-#endif
+typedef struct {
+    void *(*get_virt)(SpiceVirtMapping *mapping, unsigned long addr, uint32_t add_size);
+    void (*validate_virt)(SpiceVirtMapping *mapping, unsigned long virt,
+                          unsigned long from_addr, uint32_t add_size);
+} SpiceVirtMappingOps;
+
+struct _SpiceVirtMapping {
+  SpiceVirtMappingOps *ops;
+};
 
 #endif
 

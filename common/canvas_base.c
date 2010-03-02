@@ -164,10 +164,7 @@ typedef struct QuicData {
     jmp_buf jmp_env;
 #ifndef CAIRO_CANVAS_NO_CHUNKS
     SPICE_ADDRESS next;
-    get_virt_fn_t get_virt;
-    void *get_virt_opaque;
-    validate_virt_fn_t validate_virt;
-    void *validate_virt_opaque;
+    SpiceVirtMapping *virt_mapping;
 #endif
     char message_buf[512];
 } QuicData;
@@ -1506,11 +1503,11 @@ static int quic_usr_more_space(QuicUsrContext *usr, uint32_t **io_ptr, int rows_
     if (!quic_data->next) {
         return 0;
     }
-    chunk = (DataChunk *)quic_data->get_virt(quic_data->get_virt_opaque, quic_data->next,
-                                             sizeof(DataChunk));
+    chunk = (DataChunk *)quic_data->virt_mapping->ops->get_virt(quic_data->virt_mapping, quic_data->next,
+                                                                sizeof(DataChunk));
     size = chunk->size;
-    quic_data->validate_virt(quic_data->validate_virt_opaque, (unsigned long)chunk->data,
-                             quic_data->next, size);
+    quic_data->virt_mapping->ops->validate_virt(quic_data->virt_mapping, (unsigned long)chunk->data,
+                                                quic_data->next, size);
 
     quic_data->next = chunk->next;
     *io_ptr = (uint32_t *)chunk->data;
@@ -1555,8 +1552,7 @@ static int canvas_base_init(CanvasBase *canvas, int depth
 #endif
                             , SpiceGlzDecoder *glz_decoder
 #ifndef CAIRO_CANVAS_NO_CHUNKS
-                           , void *get_virt_opaque, get_virt_fn_t get_virt,
-                           void *validate_virt_opaque, validate_virt_fn_t validate_virt
+                            , SpiceVirtMapping *virt_mapping
 #endif
                             )
 {
@@ -1568,10 +1564,7 @@ static int canvas_base_init(CanvasBase *canvas, int depth
     canvas->quic_data.usr.more_space = quic_usr_more_space;
     canvas->quic_data.usr.more_lines = quic_usr_more_lines;
 #ifndef CAIRO_CANVAS_NO_CHUNKS
-    canvas->quic_data.get_virt_opaque = get_virt_opaque;
-    canvas->quic_data.get_virt = get_virt;
-    canvas->quic_data.validate_virt_opaque = validate_virt_opaque;
-    canvas->quic_data.validate_virt = validate_virt;
+    canvas->quic_data.virt_mapping = virt_mapping;
 #endif
     if (!(canvas->quic_data.quic = quic_create(&canvas->quic_data.usr))) {
             return 0;

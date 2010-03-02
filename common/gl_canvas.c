@@ -813,8 +813,7 @@ GLCanvas *gl_canvas_create(void *usr_data, int width, int height, int depth
 #endif
                            , SpiceGlzDecoder *glz_decoder
 #ifndef CAIRO_CANVAS_NO_CHUNKS
-                           , void *get_virt_opaque, get_virt_fn_t get_virt,
-                           void *validate_virt_opaque, validate_virt_fn_t validate_virt
+                           , SpiceVirtMapping *virt_mapping
 #endif
                            )
 {
@@ -843,11 +842,7 @@ GLCanvas *gl_canvas_create(void *usr_data, int width, int height, int depth
 #endif
                                , glz_decoder
 #ifndef CAIRO_CANVAS_NO_CHUNKS
-                               ,
-                               get_virt_opaque,
-                               get_virt,
-                               validate_virt_opaque,
-                               validate_virt
+                               , virt_mapping
 #endif
                                );
     if (!init_ok) {

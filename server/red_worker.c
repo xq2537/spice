@@ -1007,6 +1007,7 @@ typedef struct RedWorker {
     uint64_t *wakeup_counter;
     uint64_t *command_counter;
 #endif
+    SpiceVirtMapping preload_group_virt_mapping;
 } RedWorker;
 
 pthread_mutex_t avcodec_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -1217,18 +1218,20 @@ static void cb_validate_virt(void *opaque, unsigned long virt, unsigned long fro
     validate_virt((RedWorker *)opaque, virt, slot_id, add_size, group_id);
 }
 
-static void *cb_get_virt_preload_group(void *opaque, unsigned long addr, uint32_t add_size)
+static void *op_get_virt_preload_group(SpiceVirtMapping *mapping, unsigned long addr, uint32_t add_size)
 {
-    return (void *)get_virt((RedWorker *)opaque, addr, add_size,
-                            ((RedWorker *)opaque)->preload_group_id);
+    RedWorker *worker = CONTAINEROF(mapping, RedWorker, preload_group_virt_mapping);
+    return (void *)get_virt(worker, addr, add_size,
+                            worker->preload_group_id);
 }
 
-static void cb_validate_virt_preload_group(void *opaque, unsigned long virt,
+static void op_validate_virt_preload_group(SpiceVirtMapping *mapping, unsigned long virt,
                                            unsigned long from_addr, uint32_t add_size)
 {
-    int slot_id = get_memslot_id((RedWorker *)opaque, from_addr);
-    validate_virt((RedWorker *)opaque, virt, slot_id, add_size,
-                  ((RedWorker *)opaque)->preload_group_id);
+    RedWorker *worker = CONTAINEROF(mapping, RedWorker, preload_group_virt_mapping);
+    int slot_id = get_memslot_id(worker, from_addr);
+    validate_virt(worker, virt, slot_id, add_size,
+                  worker->preload_group_id);
 }
 
 char *draw_type_to_str(uint8_t type)
@@ -7491,8 +7494,7 @@ static CairoCanvas *create_cairo_context(RedWorker *worker, uint32_t width, uint
         red_error("create cairo surface failed");
     }
     canvas = canvas_create(surface, depth, &worker->image_cache.base, NULL,
-                           worker, cb_get_virt_preload_group, worker,
-                           cb_validate_virt_preload_group);
+                           &worker->preload_group_virt_mapping);
     pixman_image_unref (surface);
     return canvas;
 }
@@ -7555,8 +7557,7 @@ static GLCanvas *create_ogl_context_common(RedWorker *worker, OGLCtx *ctx, uint3
 
     oglctx_make_current(ctx);
     if (!(canvas = gl_canvas_create(ctx, width, height, depth, &worker->image_cache.base, NULL,
-                                    worker, cb_get_virt_preload_group,
-                                    worker, cb_validate_virt_preload_group))) {
+                                    &worker->preload_group_virt_mapping))) {
         return NULL;
     }
 
@@ -9028,6 +9029,10 @@ static void red_init(RedWorker *worker, WorkerInitData *init_data)
     struct epoll_event event;
     RedWorkeMessage message;
     int epoll;
+    static SpiceVirtMappingOps preload_group_virt_mapping_ops = {
+        op_get_virt_preload_group,
+        op_validate_virt_preload_group
+    };
 
     ASSERT(sizeof(CursorItem) <= QXL_CURSUR_DEVICE_DATA_SIZE);
 
@@ -9080,6 +9085,8 @@ static void red_init(RedWorker *worker, WorkerInitData *init_data)
     worker->mem_slot_bits = init_data->memslot_id_bits;
     worker->internal_groupslot_id = init_data->internal_groupslot_id;
     red_create_mem_slots(worker);
+
+    worker->preload_group_virt_mapping.ops = &preload_group_virt_mapping_ops;
 
     message = RED_WORKER_MESSAGE_READY;
     write_message(worker->channel, &message);
