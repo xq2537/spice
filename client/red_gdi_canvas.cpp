@@ -92,8 +92,7 @@ void GDICanvas::set_mode(int width, int height, int depth)
                                       &_pixmap->get_mutex(),
                                       depth, &pixmap_cache().base,
                                       &palette_cache().base,
-                                      &glz_decoder(),
-                                      glz_decode))) {
+                                      &glz_decoder()))) {
         THROW("create canvas failed");
     }
 }

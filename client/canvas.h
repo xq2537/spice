@@ -295,7 +295,6 @@ protected:
     PaletteCache& palette_cache() { return _palette_cache;}
 
     GlzDecoder& glz_decoder() {return _glz_decoder;}
-    static void glz_decode(void *opaque, uint8_t *data, SpicePalette *plt, void *usr_data);
 
 private:
     void access_test(void* ptr, size_t size);

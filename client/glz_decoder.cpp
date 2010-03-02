@@ -1,3 +1,4 @@
+/* -*- Mode: C; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 /*
    Copyright (C) 2009 Red Hat, Inc.
 
@@ -19,12 +20,25 @@
 #include "glz_decoder_config.h"
 #include "glz_decoder.h"
 
+static void op_decode (SpiceGlzDecoder *decoder,
+                       uint8_t *data,
+                       SpicePalette *plt,
+                       void *usr_data)
+{
+    GlzDecoder* _decoder = static_cast<GlzDecoder*>(decoder);
+    _decoder->decode(data, plt, usr_data);
+}
+
 GlzDecoder::GlzDecoder(GlzDecoderWindow &images_window,
                        GlzDecodeHandler &usr_handler, GlzDecoderDebug &debug_calls)
     : _images_window (images_window)
     , _usr_handler (usr_handler)
     , _debug_calls (debug_calls)
 {
+    static SpiceGlzDecoderOps decoder_ops = {
+        op_decode,
+    };
+    ops = &decoder_ops;
 }
 
 GlzDecoder::~GlzDecoder()

@@ -62,8 +62,7 @@ void gdi_canvas_set_access_params(GdiCanvas *canvas, unsigned long base, unsigne
 GdiCanvas *gdi_canvas_create(HDC dc, class Mutex *lock, int bits,
                              SpiceImageCache *bits_cache,
                              SpicePaletteCache *palette_cache,
-                             void *glz_decoder_opaque,
-                             glz_decode_fn_t glz_decode);
+                             SpiceGlzDecoder *glz_decoder);
 
 void gdi_canvas_destroy(GdiCanvas *canvas);
 

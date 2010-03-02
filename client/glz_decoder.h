@@ -1,3 +1,4 @@
+/* -*- Mode: C; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 /*
    Copyright (C) 2009 Red Hat, Inc.
 
@@ -21,6 +22,7 @@
 #include "lz_common.h"
 #include "glz_decoder_config.h"
 #include "glz_decoder_window.h"
+#include "canvas_base.h"
 #include <spice/draw.h>
 
 
@@ -47,9 +49,9 @@ public:
     This class implements the lz decoding algorithm
 */
 
-class GlzDecoder {
+class GlzDecoder : public SpiceGlzDecoder
+{
 public:
-
     GlzDecoder(GlzDecoderWindow &images_window, GlzDecodeHandler &usr_handler,
                GlzDecoderDebug &debug_calls);
     virtual ~GlzDecoder();

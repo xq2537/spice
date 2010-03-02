@@ -65,7 +65,7 @@ GLCanvas *gl_canvas_create(void *usr_data, int width, int height, int depth,
 GLCanvas *gl_canvas_create(void *usr_data, int width, int height, int depth
 #endif
 #ifdef USE_GLZ
-                           , void *glz_decoder_opaque, glz_decode_fn_t glz_decode
+                           , SpiceGlzDecoder *glz_decoder
 #endif
 #ifndef CAIRO_CANVAS_NO_CHUNKS
                            , void *get_virt_opaque, get_virt_fn_t get_virt,

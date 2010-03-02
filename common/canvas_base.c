@@ -154,8 +154,7 @@ typedef struct LzData {
 } LzData;
 
 typedef struct GlzData {
-    void                  *decoder_opaque;
-    glz_decode_fn_t decode;
+    SpiceGlzDecoder *decoder;
     LzDecodeUsrData decode_data;
 } GlzData;
 
@@ -623,8 +622,9 @@ static pixman_image_t *canvas_get_glz(CanvasBase *canvas, LZImage *image)
 #ifdef WIN32
     canvas->glz_data.decode_data.dc = canvas->dc;
 #endif
-    canvas->glz_data.decode(canvas->glz_data.decoder_opaque, image->lz_rgb.data, NULL,
-                            &canvas->glz_data.decode_data);
+    canvas->glz_data.decoder->ops->decode(canvas->glz_data.decoder,
+                                          image->lz_rgb.data, NULL,
+                                          &canvas->glz_data.decode_data);
     /* global_decode calls alloc_lz_image, which sets canvas->glz_data.surface */
     return (canvas->glz_data.decode_data.out_surface);
 }
@@ -1547,7 +1547,7 @@ static int canvas_base_init(CanvasBase *canvas, int depth,
 static int canvas_base_init(CanvasBase *canvas, int depth
 #endif
 #ifdef USE_GLZ
-                            , void *glz_decoder_opaque, glz_decode_fn_t glz_decode
+                            , SpiceGlzDecoder *glz_decoder
 #endif
 #ifndef CAIRO_CANVAS_NO_CHUNKS
                            , void *get_virt_opaque, get_virt_fn_t get_virt,
@@ -1584,8 +1584,7 @@ static int canvas_base_init(CanvasBase *canvas, int depth
     }
 #endif
 #ifdef USE_GLZ
-    canvas->glz_data.decoder_opaque = glz_decoder_opaque;
-    canvas->glz_data.decode = glz_decode;
+    canvas->glz_data.decoder = glz_decoder;
 #endif
 
     if (depth == 16) {

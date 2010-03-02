@@ -212,10 +212,3 @@ void Canvas::draw_stroke(SpiceMsgDisplayDrawStroke& stroke, int size)
     localalize_attr(stroke.data.attr);
     draw_stroke(&stroke.base.box, &stroke.base.clip, &stroke.data);
 }
-
-void Canvas::glz_decode(void *opaque, uint8_t *data, SpicePalette *plt, void *usr_data)
-{
-    GlzDecoder* decoder = static_cast<GlzDecoder*>(opaque);
-    decoder->decode(data, plt, usr_data);
-}
-

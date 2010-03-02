@@ -2156,7 +2156,7 @@ CairoCanvas *canvas_create(pixman_image_t *image, int bits,
 CairoCanvas *canvas_create(pixman_image_t *image, int bits
 #endif
 #ifdef USE_GLZ
-                            , void *glz_decoder_opaque, glz_decode_fn_t glz_decode
+                            , SpiceGlzDecoder *glz_decoder
 #endif
 #ifndef CAIRO_CANVAS_NO_CHUNKS
                            , void *get_virt_opaque, get_virt_fn_t get_virt,
@@ -2183,8 +2183,7 @@ CairoCanvas *canvas_create(pixman_image_t *image, int bits
 #endif
 #ifdef USE_GLZ
                                ,
-                               glz_decoder_opaque,
-                               glz_decode
+                               glz_decoder
 #endif
 #ifndef CAIRO_CANVAS_NO_CHUNKS
                                ,
