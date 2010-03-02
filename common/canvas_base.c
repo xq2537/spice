@@ -622,6 +622,11 @@ static pixman_image_t *canvas_get_glz(CanvasBase *canvas, LZImage *image)
 #ifdef WIN32
     canvas->glz_data.decode_data.dc = canvas->dc;
 #endif
+
+    if (canvas->glz_data.decoder == NULL) {
+        CANVAS_ERROR("glz not supported");
+    }
+
     canvas->glz_data.decoder->ops->decode(canvas->glz_data.decoder,
                                           image->lz_rgb.data, NULL,
                                           &canvas->glz_data.decode_data);
@@ -816,7 +821,8 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
         break;
     }
 #endif
-#ifdef USE_GLZ
+
+#if defined(CAIRO_CANVAS_CACHE)
     case SPICE_IMAGE_TYPE_GLZ_RGB: {
         access_test(canvas, descriptor, sizeof(SpiceLZRGBImage));
         LZImage *image = (LZImage *)descriptor;
@@ -824,6 +830,7 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
         break;
     }
 #endif
+
     case SPICE_IMAGE_TYPE_FROM_CACHE:
         return canvas->bits_cache->ops->get(canvas->bits_cache, descriptor->id);
     case SPICE_IMAGE_TYPE_BITMAP: {
@@ -1546,9 +1553,7 @@ static int canvas_base_init(CanvasBase *canvas, int depth,
 #else
 static int canvas_base_init(CanvasBase *canvas, int depth
 #endif
-#ifdef USE_GLZ
                             , SpiceGlzDecoder *glz_decoder
-#endif
 #ifndef CAIRO_CANVAS_NO_CHUNKS
                            , void *get_virt_opaque, get_virt_fn_t get_virt,
                            void *validate_virt_opaque, validate_virt_fn_t validate_virt
@@ -1583,9 +1588,7 @@ static int canvas_base_init(CanvasBase *canvas, int depth
             return 0;
     }
 #endif
-#ifdef USE_GLZ
     canvas->glz_data.decoder = glz_decoder;
-#endif
 
     if (depth == 16) {
         canvas->color_shift = 5;

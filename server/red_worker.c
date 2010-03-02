@@ -7490,7 +7490,7 @@ static CairoCanvas *create_cairo_context(RedWorker *worker, uint32_t width, uint
     if (surface == NULL) {
         red_error("create cairo surface failed");
     }
-    canvas = canvas_create(surface, depth, &worker->image_cache.base,
+    canvas = canvas_create(surface, depth, &worker->image_cache.base, NULL,
                            worker, cb_get_virt_preload_group, worker,
                            cb_validate_virt_preload_group);
     pixman_image_unref (surface);
@@ -7554,7 +7554,7 @@ static GLCanvas *create_ogl_context_common(RedWorker *worker, OGLCtx *ctx, uint3
     GLCanvas *canvas;
 
     oglctx_make_current(ctx);
-    if (!(canvas = gl_canvas_create(ctx, width, height, depth, &worker->image_cache.base,
+    if (!(canvas = gl_canvas_create(ctx, width, height, depth, &worker->image_cache.base, NULL,
                                     worker, cb_get_virt_preload_group,
                                     worker, cb_validate_virt_preload_group))) {
         return NULL;

@@ -1707,9 +1707,7 @@ GdiCanvas *gdi_canvas_create(HDC dc, int bits,
 #else
 GdiCanvas *gdi_canvas_create(HDC dc, int bits
 #endif
-#ifdef USE_GLZ
                             , SpiceGlzDecoder *glz_decoder
-#endif
                             )
 {
     GdiCanvas *canvas;
@@ -1729,11 +1727,7 @@ GdiCanvas *gdi_canvas_create(HDC dc, int bits
 #else
     init_ok = gdi_canvas_base_init(&canvas->base, bits
 #endif
-#ifdef USE_GLZ
-                               ,
-                               glz_decoder
-#endif
-                               );
+                               , glz_decoder);
     canvas->dc = dc;
     canvas->lock = lock;
     return canvas;
