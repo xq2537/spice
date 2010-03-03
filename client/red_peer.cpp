@@ -78,7 +78,10 @@ void RedPeer::connect_unsecure(const char* host, int portnr)
     ASSERT(_ctx == NULL && _ssl == NULL && _peer == INVALID_SOCKET);
     try {
         memset(&ai,0, sizeof(ai));
-        ai.ai_flags = AI_CANONNAME | AI_ADDRCONFIG;
+        ai.ai_flags = AI_CANONNAME;
+#ifdef AI_ADDRCONFIG
+        ai.ai_flags |= AI_ADDRCONFIG;
+#endif
         ai.ai_family = PF_UNSPEC;
         ai.ai_socktype = SOCK_STREAM;
         snprintf(port, sizeof(port), "%d", portnr);
