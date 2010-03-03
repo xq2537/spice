@@ -34,7 +34,6 @@ struct CairoCanvas {
     uint32_t *private_data;
     int private_data_size;
     pixman_image_t *image;
-    pixman_region32_t canvas_region;
 };
 
 typedef enum {
@@ -211,7 +210,7 @@ static void canvas_clip_pixman(CairoCanvas *canvas,
                                pixman_region32_t *dest_region,
                                SpiceClip *clip)
 {
-    pixman_region32_intersect(dest_region, dest_region, &canvas->canvas_region);
+    pixman_region32_intersect(dest_region, dest_region, &canvas->base.canvas_region);
 
     switch (clip->type) {
     case SPICE_CLIP_TYPE_NONE:
@@ -2109,29 +2108,6 @@ static void canvas_read_bits(SpiceCanvas *spice_canvas, uint8_t *dest, int dest_
     }
 }
 
-static void canvas_group_start(SpiceCanvas *spice_canvas, QRegion *region)
-{
-    CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
-    pixman_region32_fini(&canvas->canvas_region);
-    /* Make sure we always clip to canvas size */
-    pixman_region32_init_rect(&canvas->canvas_region,
-                              0, 0,
-                              pixman_image_get_width (canvas->image),
-                              pixman_image_get_height (canvas->image));
-
-    pixman_region32_intersect(&canvas->canvas_region, &canvas->canvas_region, region);
-}
-
-static void canvas_group_end(SpiceCanvas *spice_canvas)
-{
-    CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
-    pixman_region32_fini(&canvas->canvas_region);
-    pixman_region32_init_rect(&canvas->canvas_region,
-                              0, 0,
-                              pixman_image_get_width(canvas->image),
-                              pixman_image_get_height(canvas->image));
-}
-
 static void canvas_clear(SpiceCanvas *spice_canvas)
 {
     CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
@@ -2187,7 +2163,10 @@ SpiceCanvas *canvas_create(pixman_image_t *image, int bits
         return NULL;
     }
     memset(canvas, 0, sizeof(CairoCanvas));
-    init_ok = canvas_base_init(&canvas->base, &cairo_canvas_ops, bits
+    init_ok = canvas_base_init(&canvas->base, &cairo_canvas_ops,
+                               pixman_image_get_width (image),
+                               pixman_image_get_height (image),
+                               bits
 #ifdef CAIRO_CANVAS_CACHE
                                , bits_cache
                                , palette_cache
@@ -2203,10 +2182,6 @@ SpiceCanvas *canvas_create(pixman_image_t *image, int bits
     canvas->private_data_size = 0;
 
     canvas->image = pixman_image_ref(image);
-    pixman_region32_init_rect(&canvas->canvas_region,
-                              0, 0,
-                              pixman_image_get_width (canvas->image),
-                              pixman_image_get_height (canvas->image));
 
     return (SpiceCanvas *)canvas;
 }
@@ -2235,8 +2210,6 @@ void cairo_canvas_init() //unsafe global function
     cairo_canvas_ops.put_image = canvas_put_image;
     cairo_canvas_ops.clear = canvas_clear;
     cairo_canvas_ops.read_bits = canvas_read_bits;
-    cairo_canvas_ops.group_start = canvas_group_start;
-    cairo_canvas_ops.group_end = canvas_group_end;
     cairo_canvas_ops.set_access_params = canvas_set_access_params;
     cairo_canvas_ops.destroy = canvas_destroy;
 

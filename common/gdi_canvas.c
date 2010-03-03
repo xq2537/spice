@@ -1716,7 +1716,8 @@ static void gdi_canvas_destroy(SpiceCanvas *spice_canvas)
 static int need_init = 1;
 static SpiceCanvasOps gdi_canvas_ops;
 
-SpiceCanvas *gdi_canvas_create(HDC dc, Mutex* lock, int bits
+SpiceCanvas *gdi_canvas_create(int width, int height,
+                               HDC dc, Mutex* lock, int bits
 #ifdef CAIRO_CANVAS_CACHE
                              , SpiceImageCache *bits_cache
                              , SpicePaletteCache *palette_cache
@@ -1733,7 +1734,8 @@ SpiceCanvas *gdi_canvas_create(HDC dc, Mutex* lock, int bits
         return NULL;
     }
     memset(canvas, 0, sizeof(GdiCanvas));
-    init_ok = canvas_base_init(&canvas->base, &gdi_canvas_ops, bits
+    init_ok = canvas_base_init(&canvas->base, &gdi_canvas_ops,
+                               width, height, bits
 #ifdef CAIRO_CANVAS_CACHE
                                ,bits_cache
                                ,palette_cache

@@ -738,6 +738,8 @@ static void gl_canvas_group_start(SpiceCanvas *spice_canvas, QRegion *region)
     int num_rect;
     pixman_box32_t *rects;
 
+    canvas_base_group_start(spice_canvas, region);
+
     rects = pixman_region32_rectangles(region, &num_rect);
 
     glc_rects = (GLCRect *)malloc(num_rect * sizeof(GLCRect));
@@ -803,6 +805,8 @@ static void gl_canvas_put_image(SpiceCanvas *spice_canvas, const SpiceRect *dest
 static void gl_canvas_group_end(SpiceCanvas *spice_canvas)
 {
     GLCanvas *canvas = (GLCanvas *)spice_canvas;
+
+    canvas_base_group_end(spice_canvas);
     glc_clear_mask(canvas->glc, GLC_MASK_B);
 }
 
@@ -842,7 +846,8 @@ SpiceCanvas *gl_canvas_create(int width, int height, int depth
         goto error_1;
     }
     canvas->private_data = NULL;
-    init_ok = canvas_base_init(&canvas->base, &gl_canvas_ops, depth
+    init_ok = canvas_base_init(&canvas->base, &gl_canvas_ops,
+                               width, height, depth
 #ifdef CAIRO_CANVAS_CACHE
                                , bits_cache
                                , palette_cache

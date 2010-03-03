@@ -80,7 +80,7 @@ void GDICanvas::set_mode(int width, int height, int depth)
 {
     destroy();
     create_pixmap(width, height);
-    if (!(_canvas = gdi_canvas_create(_pixmap->get_dc(),
+    if (!(_canvas = gdi_canvas_create(width, height, _pixmap->get_dc(),
                                       &_pixmap->get_mutex(),
                                       depth, &pixmap_cache().base,
                                       &palette_cache().base,

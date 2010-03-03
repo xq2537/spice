@@ -33,7 +33,8 @@ typedef struct {
     uint8_t *pixels;
 } GdiImage;
 
-SpiceCanvas *gdi_canvas_create(HDC dc, class Mutex *lock, int bits,
+SpiceCanvas *gdi_canvas_create(int width, int height,
+                               HDC dc, class Mutex *lock, int bits,
                                SpiceImageCache *bits_cache,
                                SpicePaletteCache *palette_cache,
                                SpiceGlzDecoder *glz_decoder);

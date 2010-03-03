@@ -184,6 +184,10 @@ typedef struct CanvasBase {
     unsigned long max;
 #endif
 
+    int width;
+    int height;
+    pixman_region32_t canvas_region;
+
 #if defined(CAIRO_CANVAS_CACHE) || defined(CAIRO_CANVAS_IMAGE_CACHE)
     SpiceImageCache *bits_cache;
 #endif
@@ -1578,6 +1582,31 @@ void *spice_canvas_get_usr_data(SpiceCanvas *spice_canvas)
 }
 #endif
 
+static void canvas_base_group_start(SpiceCanvas *spice_canvas, QRegion *region)
+{
+    CanvasBase *canvas = (CanvasBase *)spice_canvas;
+    pixman_region32_fini(&canvas->canvas_region);
+
+    /* Make sure we always clip to canvas size */
+    pixman_region32_init_rect(&canvas->canvas_region,
+                              0, 0,
+                              canvas->width,
+                              canvas->height);
+
+    pixman_region32_intersect(&canvas->canvas_region, &canvas->canvas_region, region);
+}
+
+static void canvas_base_group_end(SpiceCanvas *spice_canvas)
+{
+    CanvasBase *canvas = (CanvasBase *)spice_canvas;
+    pixman_region32_fini(&canvas->canvas_region);
+    pixman_region32_init_rect(&canvas->canvas_region,
+                              0, 0,
+                              canvas->width,
+                              canvas->height);
+}
+
+
 static void unimplemented_op(SpiceCanvas *canvas)
 {
     PANIC("unimplemented canvas operation");
@@ -1592,9 +1621,13 @@ inline static void canvas_base_init_ops(SpiceCanvasOps *ops)
     for (i = 0; i < sizeof(SpiceCanvasOps) / sizeof(void *); i++) {
         ops_cast[i] = (void *) unimplemented_op;
     }
+
+    ops->group_start = canvas_base_group_start;
+    ops->group_end = canvas_base_group_end;
 }
 
-static int canvas_base_init(CanvasBase *canvas, SpiceCanvasOps *ops, int depth
+static int canvas_base_init(CanvasBase *canvas, SpiceCanvasOps *ops,
+                            int width, int height, int depth
 #ifdef CAIRO_CANVAS_CACHE
                             , SpiceImageCache *bits_cache
                             , SpicePaletteCache *palette_cache
@@ -1643,6 +1676,12 @@ static int canvas_base_init(CanvasBase *canvas, SpiceCanvasOps *ops, int depth
         canvas->color_mask = 0xff;
     }
 
+    canvas->width = width;
+    canvas->height = height;
+    pixman_region32_init_rect(&canvas->canvas_region,
+                              0, 0,
+                              canvas->width,
+                              canvas->height);
 
 #if defined(CAIRO_CANVAS_CACHE) || defined(CAIRO_CANVAS_IMAGE_CACHE)
     canvas->bits_cache = bits_cache;
