@@ -26,8 +26,6 @@
 #include "canvas_base.h"
 #include "region.h"
 
-typedef struct GdiCanvas GdiCanvas;
-
 typedef struct {
     int width;
     int height;
@@ -35,36 +33,10 @@ typedef struct {
     uint8_t *pixels;
 } GdiImage;
 
-void gdi_canvas_draw_fill(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill);
-void gdi_canvas_draw_copy(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy);
-void gdi_canvas_draw_opaque(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque);
-void gdi_canvas_copy_bits(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos);
-void gdi_canvas_draw_text(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceText *text);
-void gdi_canvas_draw_stroke(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke);
-void gdi_canvas_draw_rop3(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3);
-void gdi_canvas_draw_blend(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend);
-void gdi_canvas_draw_blackness(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness);
-void gdi_canvas_draw_whiteness(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness);
-void gdi_canvas_draw_invers(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers);
-void gdi_canvas_draw_transparent(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip,
-                                 SpiceTransparent* transparent);
-void gdi_canvas_draw_alpha_blend(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend);
-void gdi_canvas_put_image(GdiCanvas *canvas, HDC dc, const SpiceRect *dest, const uint8_t *src_data,
-                          uint32_t src_width, uint32_t src_height, int src_stride,
-                          const QRegion *clip);
-void gdi_canvas_clear(GdiCanvas *canvas);
-
-#ifdef CAIRO_CANVAS_ACCESS_TEST
-void gdi_canvas_set_access_params(GdiCanvas *canvas, unsigned long base, unsigned long max);
-#endif
-
-
-GdiCanvas *gdi_canvas_create(HDC dc, class Mutex *lock, int bits,
-                             SpiceImageCache *bits_cache,
-                             SpicePaletteCache *palette_cache,
-                             SpiceGlzDecoder *glz_decoder);
-
-void gdi_canvas_destroy(GdiCanvas *canvas);
+SpiceCanvas *gdi_canvas_create(HDC dc, class Mutex *lock, int bits,
+                               SpiceImageCache *bits_cache,
+                               SpicePaletteCache *palette_cache,
+                               SpiceGlzDecoder *glz_decoder);
 
 void gdi_canvas_init();
 

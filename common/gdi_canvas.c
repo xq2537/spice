@@ -26,6 +26,8 @@
 #include "region.h"
 #include "threads.h"
 
+typedef struct GdiCanvas GdiCanvas;
+
 struct GdiCanvas {
     CanvasBase base;
     HDC dc;
@@ -976,8 +978,9 @@ static void gdi_draw_image_rop3(HDC dest_dc, const SpiceRect *src, const SpiceRe
     release_bitmap(dc, bitmap, prev_bitmap, 0);
 }
 
-void gdi_canvas_draw_fill(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill)
+static void gdi_canvas_draw_fill(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill)
 {
+    GdiCanvas *canvas = (GdiCanvas *)spice_canvas;
     HBRUSH prev_hbrush;
     HBRUSH brush;
     struct BitmapData bitmapmask;
@@ -998,8 +1001,9 @@ void gdi_canvas_draw_fill(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, S
     unset_brush(canvas->dc, prev_hbrush);
 }
 
-void gdi_canvas_draw_copy(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy)
+static void gdi_canvas_draw_copy(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy)
 {
+    GdiCanvas *canvas = (GdiCanvas *)spice_canvas;
     pixman_image_t *surface;
     GdiImage image;
     struct BitmapData bitmapmask;
@@ -1036,10 +1040,11 @@ void gdi_canvas_draw_copy(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, S
     pixman_image_unref(surface);
 }
 
-void gdi_canvas_put_image(GdiCanvas *canvas, HDC dc, const SpiceRect *dest, const uint8_t *src_data,
-                          uint32_t src_width, uint32_t src_height, int src_stride,
-                          const QRegion *clip)
+static void gdi_canvas_put_image(SpiceCanvas *spice_canvas, HDC dc, const SpiceRect *dest, const uint8_t *src_data,
+                                 uint32_t src_width, uint32_t src_height, int src_stride,
+                                 const QRegion *clip)
 {
+    GdiCanvas *canvas = (GdiCanvas *)spice_canvas;
     SpiceRect src;
     src.top = 0;
     src.bottom = src_height;
@@ -1127,9 +1132,10 @@ static void gdi_draw_image_transparent(GdiCanvas *canvas, HDC dest_dc, const Spi
     release_bitmap(dc, bitmap, prev_bitmap, 0);
 }
 
-void gdi_canvas_draw_transparent(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip,
-                                 SpiceTransparent* transparent)
+static void gdi_canvas_draw_transparent(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip,
+                                        SpiceTransparent* transparent)
 {
+    GdiCanvas *canvas = (GdiCanvas *)spice_canvas;
     pixman_image_t *surface;
     GdiImage image;
     PixmanData *pixman_data;
@@ -1199,8 +1205,9 @@ static void gdi_draw_image_alpha(HDC dest_dc, const SpiceRect *src, const SpiceR
     release_bitmap(dc, bitmap, prev_bitmap, 0);
 }
 
-void gdi_canvas_draw_alpha_blend(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend)
+static void gdi_canvas_draw_alpha_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend)
 {
+    GdiCanvas *canvas = (GdiCanvas *)spice_canvas;
     pixman_image_t *surface;
     GdiImage image;
     PixmanData *pixman_data;
@@ -1233,8 +1240,9 @@ void gdi_canvas_draw_alpha_blend(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *
     pixman_image_unref(surface);
 }
 
-void gdi_canvas_draw_opaque(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque)
+static void gdi_canvas_draw_opaque(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque)
 {
+    GdiCanvas *canvas = (GdiCanvas *)spice_canvas;
     pixman_image_t *surface;
     GdiImage image;
     struct BitmapData bitmapmask;
@@ -1278,8 +1286,9 @@ void gdi_canvas_draw_opaque(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip,
     pixman_image_unref(surface);
 }
 
-void gdi_canvas_draw_blend(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend)
+static void gdi_canvas_draw_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend)
 {
+    GdiCanvas *canvas = (GdiCanvas *)spice_canvas;
     pixman_image_t *surface;
     GdiImage image;
     struct BitmapData bitmapmask;
@@ -1315,8 +1324,9 @@ void gdi_canvas_draw_blend(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, 
     pixman_image_unref(surface);
 }
 
-void gdi_canvas_draw_blackness(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness)
+static void gdi_canvas_draw_blackness(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness)
 {
+    GdiCanvas *canvas = (GdiCanvas *)spice_canvas;
     struct BitmapData bitmapmask;
 
     bitmapmask = get_mask_bitmap(canvas, &blackness->mask);
@@ -1328,8 +1338,9 @@ void gdi_canvas_draw_blackness(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *cl
     free_mask(&bitmapmask);
 }
 
-void gdi_canvas_draw_invers(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers)
+static void gdi_canvas_draw_invers(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers)
 {
+    GdiCanvas *canvas = (GdiCanvas *)spice_canvas;
     struct BitmapData bitmapmask;
 
     bitmapmask = get_mask_bitmap(canvas, &invers->mask);
@@ -1341,8 +1352,9 @@ void gdi_canvas_draw_invers(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip,
     free_mask(&bitmapmask);
 }
 
-void gdi_canvas_draw_whiteness(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness)
+static void gdi_canvas_draw_whiteness(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness)
 {
+    GdiCanvas *canvas = (GdiCanvas *)spice_canvas;
     struct BitmapData bitmapmask;
 
     bitmapmask = get_mask_bitmap(canvas, &whiteness->mask);
@@ -1354,8 +1366,9 @@ void gdi_canvas_draw_whiteness(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *cl
     free_mask(&bitmapmask);
 }
 
-void gdi_canvas_draw_rop3(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3)
+static void gdi_canvas_draw_rop3(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3)
 {
+    GdiCanvas *canvas = (GdiCanvas *)spice_canvas;
     pixman_image_t *surface;
     GdiImage image;
     struct BitmapData bitmapmask;
@@ -1396,8 +1409,9 @@ void gdi_canvas_draw_rop3(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, S
     pixman_image_unref(surface);
 }
 
-void gdi_canvas_copy_bits(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos)
+static void gdi_canvas_copy_bits(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos)
 {
+    GdiCanvas *canvas = (GdiCanvas *)spice_canvas;
     Lock lock(*canvas->lock);
 
     set_clip(canvas, clip);
@@ -1406,8 +1420,9 @@ void gdi_canvas_copy_bits(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, S
            bbox->bottom - bbox->top, canvas->dc, src_pos->x, src_pos->y, SRCCOPY);
 }
 
-void gdi_canvas_draw_text(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceText *text)
+static void gdi_canvas_draw_text(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceText *text)
 {
+    GdiCanvas *canvas = (GdiCanvas *)spice_canvas;
     SpiceString *str;
 
     Lock lock(*canvas->lock);
@@ -1512,8 +1527,9 @@ static uint32_t *gdi_get_userstyle(GdiCanvas *canvas, uint8_t nseg, SPICE_ADDRES
     return local_style;
 }
 
-void gdi_canvas_draw_stroke(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke)
+static void gdi_canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke)
 {
+    GdiCanvas *canvas = (GdiCanvas *)spice_canvas;
     HPEN hpen;
     HPEN prev_hpen;
     LOGBRUSH logbrush;
@@ -1675,19 +1691,21 @@ void gdi_canvas_draw_stroke(GdiCanvas *canvas, SpiceRect *bbox, SpiceClip *clip,
     }
 }
 
-void gdi_canvas_clear(GdiCanvas *canvas)
+static void gdi_canvas_clear(SpiceCanvas *spice_canvas)
 {
 }
 
+static void gdi_canvas_set_access_params(SpiceCanvas *spice_canvas, unsigned long base, unsigned long max)
+{
 #ifdef CAIRO_CANVAS_ACCESS_TEST
-void gdi_canvas_set_access_params(GdiCanvas *canvas, unsigned long base, unsigned long max)
-{
+    GdiCanvas *canvas = (GdiCanvas *)spice_canvas;
     __canvas_set_access_params(&canvas->base, base, max);
-}
 #endif
+}
 
-void gdi_canvas_destroy(GdiCanvas *canvas)
+static void gdi_canvas_destroy(SpiceCanvas *spice_canvas)
 {
+    GdiCanvas *canvas = (GdiCanvas *)spice_canvas;
     if (!canvas) {
         return;
     }
@@ -1696,16 +1714,14 @@ void gdi_canvas_destroy(GdiCanvas *canvas)
 }
 
 static int need_init = 1;
+static SpiceCanvasOps gdi_canvas_ops;
 
+SpiceCanvas *gdi_canvas_create(HDC dc, Mutex* lock, int bits
 #ifdef CAIRO_CANVAS_CACHE
-GdiCanvas *gdi_canvas_create(HDC dc, Mutex* lock, int bits,
-                             SpiceImageCache *bits_cache,
-                             SpicePaletteCache *palette_cache
+                             , SpiceImageCache *bits_cache
+                             , SpicePaletteCache *palette_cache
 #elif defined(CAIRO_CANVAS_IMAGE_CACHE)
-GdiCanvas *gdi_canvas_create(HDC dc, int bits,
-                             SpiceImageCache *bits_cache
-#else
-GdiCanvas *gdi_canvas_create(HDC dc, int bits
+                             , SpiceImageCache *bits_cache
 #endif
                             , SpiceGlzDecoder *glz_decoder
                             )
@@ -1717,20 +1733,17 @@ GdiCanvas *gdi_canvas_create(HDC dc, int bits
         return NULL;
     }
     memset(canvas, 0, sizeof(GdiCanvas));
+    init_ok = canvas_base_init(&canvas->base, &gdi_canvas_ops, bits
 #ifdef CAIRO_CANVAS_CACHE
-    init_ok = canvas_base_init(&canvas->base, bits,
-                               bits_cache,
-                               palette_cache
+                               ,bits_cache
+                               ,palette_cache
 #elif defined(CAIRO_CANVAS_IMAGE_CACHE)
-    init_ok = gdi_canvas_base_init(&canvas->base, bits,
-                                   bits_cache
-#else
-    init_ok = gdi_canvas_base_init(&canvas->base, bits
+                               , bits_cache
 #endif
                                , glz_decoder);
     canvas->dc = dc;
     canvas->lock = lock;
-    return canvas;
+    return (SpiceCanvas *)canvas;
 }
 
 void gdi_canvas_init() //unsafe global function
@@ -1739,6 +1752,26 @@ void gdi_canvas_init() //unsafe global function
         return;
     }
     need_init = 0;
+
+    canvas_base_init_ops(&gdi_canvas_ops);
+    gdi_canvas_ops.draw_fill = gdi_canvas_draw_fill;
+    gdi_canvas_ops.draw_copy = gdi_canvas_draw_copy;
+    gdi_canvas_ops.draw_opaque = gdi_canvas_draw_opaque;
+    gdi_canvas_ops.copy_bits = gdi_canvas_copy_bits;
+    gdi_canvas_ops.draw_text = gdi_canvas_draw_text;
+    gdi_canvas_ops.draw_stroke = gdi_canvas_draw_stroke;
+    gdi_canvas_ops.draw_rop3 = gdi_canvas_draw_rop3;
+    gdi_canvas_ops.draw_blend = gdi_canvas_draw_blend;
+    gdi_canvas_ops.draw_blackness = gdi_canvas_draw_blackness;
+    gdi_canvas_ops.draw_whiteness = gdi_canvas_draw_whiteness;
+    gdi_canvas_ops.draw_invers = gdi_canvas_draw_invers;
+    gdi_canvas_ops.draw_transparent = gdi_canvas_draw_transparent;
+    gdi_canvas_ops.draw_alpha_blend = gdi_canvas_draw_alpha_blend;
+    gdi_canvas_ops.put_image = gdi_canvas_put_image;
+    gdi_canvas_ops.clear = gdi_canvas_clear;
+    gdi_canvas_ops.set_access_params = gdi_canvas_set_access_params;
+    gdi_canvas_ops.destroy = gdi_canvas_destroy;
+
     rop3_init();
 }
 

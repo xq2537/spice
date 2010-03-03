@@ -32,31 +32,12 @@ public:
     virtual ~GDICanvas();
 
     virtual void set_mode(int x, int y, int bits);
-    virtual void clear();
     virtual void thread_touch() {}
     virtual void copy_pixels(const QRegion& region, RedDrawable* dc,
                              const PixmapHeader* pixmap);
     virtual void copy_pixels(const QRegion& region, RedDrawable& dc);
-    virtual void put_image(HDC dc, const PixmapHeader& image, const SpiceRect& dest,
-                           const QRegion* clip);
 
     virtual CanvasType get_pixmap_type();
-
-protected:
-    virtual void set_access_params(unsigned long base, unsigned long max);
-    virtual void draw_fill(SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill);
-    virtual void draw_copy(SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy);
-    virtual void draw_opaque(SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque);
-    virtual void copy_bits(SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos);
-    virtual void draw_text(SpiceRect *bbox, SpiceClip *clip, SpiceText *text);
-    virtual void draw_stroke(SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke);
-    virtual void draw_rop3(SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3);
-    virtual void draw_blend(SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend);
-    virtual void draw_blackness(SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness);
-    virtual void draw_whiteness(SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness);
-    virtual void draw_invers(SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers);
-    virtual void draw_transparent(SpiceRect *bbox, SpiceClip *clip, SpiceTransparent* transparent);
-    virtual void draw_alpha_blend(SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend);
 
 private:
     void create_pixmap(int width, int height);
@@ -64,7 +45,6 @@ private:
     void destroy();
 
 private:
-    GdiCanvas* _canvas;
     RedPixmapGdi *_pixmap;
     RedPixmapGdi *_helper_pixmap;
     HDC _dc;

@@ -19,12 +19,15 @@
 #include <math.h>
 #include "cairo_canvas.h"
 #define CANVAS_USE_PIXMAN
+#define CANVAS_SINGLE_INSTANCE
 #include "canvas_base.c"
 #include "rop3.h"
 #include "rect.h"
 #include "region.h"
 #include "lines.h"
 #include "pixman_utils.h"
+
+typedef struct CairoCanvas CairoCanvas;
 
 struct CairoCanvas {
     CanvasBase base;
@@ -1007,8 +1010,9 @@ static void touch_brush(CairoCanvas *canvas, SpiceBrush *brush)
     }
 }
 
-void canvas_draw_fill(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill)
+static void canvas_draw_fill(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill)
 {
+    CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_region32_t dest_region;
     SpiceROP rop;
 
@@ -1037,8 +1041,9 @@ void canvas_draw_fill(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, Spi
     pixman_region32_fini(&dest_region);
 }
 
-void canvas_draw_copy(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy)
+static void canvas_draw_copy(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy)
 {
+    CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_region32_t dest_region;
     SpiceROP rop;
 
@@ -1106,16 +1111,15 @@ void canvas_draw_copy(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, Spi
     pixman_region32_fini(&dest_region);
 }
 
+static void canvas_put_image(SpiceCanvas *spice_canvas,
 #ifdef WIN32
-void canvas_put_image(CairoCanvas *canvas, HDC dc, const SpiceRect *dest, const uint8_t *src_data,
-                      uint32_t src_width, uint32_t src_height, int src_stride,
-                      const QRegion *clip)
-#else
-void canvas_put_image(CairoCanvas *canvas, const SpiceRect *dest, const uint8_t *src_data,
-                      uint32_t src_width, uint32_t src_height, int src_stride,
-                      const QRegion *clip)
+                             HDC dc,
 #endif
+                             const SpiceRect *dest, const uint8_t *src_data,
+                             uint32_t src_width, uint32_t src_height, int src_stride,
+                             const QRegion *clip)
 {
+    CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_image_t *src;
     int dest_width;
     int dest_height;
@@ -1165,8 +1169,9 @@ void canvas_put_image(CairoCanvas *canvas, const SpiceRect *dest, const uint8_t 
     pixman_image_unref(src);
 }
 
-void canvas_draw_transparent(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceTransparent* transparent)
+static void canvas_draw_transparent(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceTransparent* transparent)
 {
+    CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_region32_t dest_region;
 
     pixman_region32_init_rect(&dest_region,
@@ -1205,8 +1210,9 @@ void canvas_draw_transparent(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *cl
     pixman_region32_fini(&dest_region);
 }
 
-void canvas_draw_alpha_blend(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend)
+static void canvas_draw_alpha_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend)
 {
+    CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_region32_t dest_region;
 
     pixman_region32_init_rect(&dest_region,
@@ -1251,8 +1257,9 @@ void canvas_draw_alpha_blend(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *cl
     pixman_region32_fini(&dest_region);
 }
 
-void canvas_draw_opaque(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque)
+static void canvas_draw_opaque(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque)
 {
+    CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_region32_t dest_region;
     SpiceROP rop;
 
@@ -1300,8 +1307,9 @@ void canvas_draw_opaque(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, S
     pixman_region32_fini(&dest_region);
 }
 
-void canvas_draw_blend(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend)
+static void canvas_draw_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend)
 {
+    CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_region32_t dest_region;
     SpiceROP rop;
 
@@ -1372,8 +1380,9 @@ void canvas_draw_blend(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, Sp
     pixman_region32_fini(&dest_region);
 }
 
-void canvas_draw_blackness(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness)
+static void canvas_draw_blackness(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness)
 {
+    CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_region32_t dest_region;
 
     pixman_region32_init_rect(&dest_region,
@@ -1396,8 +1405,9 @@ void canvas_draw_blackness(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip
     pixman_region32_fini(&dest_region);
 }
 
-void canvas_draw_whiteness(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness)
+static void canvas_draw_whiteness(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness)
 {
+    CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_region32_t dest_region;
 
     pixman_region32_init_rect(&dest_region,
@@ -1420,8 +1430,9 @@ void canvas_draw_whiteness(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip
     pixman_region32_fini(&dest_region);
 }
 
-void canvas_draw_invers(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers)
+static void canvas_draw_invers(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers)
 {
+    CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_region32_t dest_region;
 
     pixman_region32_init_rect(&dest_region,
@@ -1445,8 +1456,9 @@ void canvas_draw_invers(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, S
     pixman_region32_fini(&dest_region);
 }
 
-void canvas_draw_rop3(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3)
+static void canvas_draw_rop3(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3)
 {
+    CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_region32_t dest_region;
     pixman_image_t *d;
     pixman_image_t *s;
@@ -1509,8 +1521,9 @@ void canvas_draw_rop3(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, Spi
     pixman_region32_fini(&dest_region);
 }
 
-void canvas_copy_bits(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos)
+static void canvas_copy_bits(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos)
 {
+    CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_region32_t dest_region;
     int dx, dy;
 
@@ -1541,8 +1554,9 @@ void canvas_copy_bits(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, Spi
     pixman_region32_fini(&dest_region);
 }
 
-void canvas_draw_text(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceText *text)
+static void canvas_draw_text(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceText *text)
 {
+    CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_region32_t dest_region;
     pixman_image_t *str_mask, *brush;
     SpiceString *str;
@@ -1909,8 +1923,9 @@ static void stroke_lines_draw(StrokeLines *lines,
 }
 
 
-void canvas_draw_stroke(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke)
+static void canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke)
 {
+    CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     StrokeGC gc = { {0} };
     lineGCOps ops = {
         stroke_fill_spans,
@@ -2074,8 +2089,9 @@ void canvas_draw_stroke(CairoCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, S
     pixman_region32_fini(&gc.dest_region);
 }
 
-void canvas_read_bits(CairoCanvas *canvas, uint8_t *dest, int dest_stride, const SpiceRect *area)
+static void canvas_read_bits(SpiceCanvas *spice_canvas, uint8_t *dest, int dest_stride, const SpiceRect *area)
 {
+    CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_image_t* surface;
     uint8_t *src;
     int src_stride;
@@ -2093,8 +2109,9 @@ void canvas_read_bits(CairoCanvas *canvas, uint8_t *dest, int dest_stride, const
     }
 }
 
-void canvas_group_start(CairoCanvas *canvas, QRegion *region)
+static void canvas_group_start(SpiceCanvas *spice_canvas, QRegion *region)
 {
+    CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_region32_fini(&canvas->canvas_region);
     /* Make sure we always clip to canvas size */
     pixman_region32_init_rect(&canvas->canvas_region,
@@ -2105,8 +2122,9 @@ void canvas_group_start(CairoCanvas *canvas, QRegion *region)
     pixman_region32_intersect(&canvas->canvas_region, &canvas->canvas_region, region);
 }
 
-void canvas_group_end(CairoCanvas *canvas)
+static void canvas_group_end(SpiceCanvas *spice_canvas)
 {
+    CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_region32_fini(&canvas->canvas_region);
     pixman_region32_init_rect(&canvas->canvas_region,
                               0, 0,
@@ -2114,8 +2132,9 @@ void canvas_group_end(CairoCanvas *canvas)
                               pixman_image_get_height(canvas->image));
 }
 
-void canvas_clear(CairoCanvas *canvas)
+static void canvas_clear(SpiceCanvas *spice_canvas)
 {
+    CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     spice_pixman_fill_rect(canvas->image,
                            0, 0,
                            pixman_image_get_width(canvas->image),
@@ -2123,15 +2142,17 @@ void canvas_clear(CairoCanvas *canvas)
                            0);
 }
 
+static void canvas_set_access_params(SpiceCanvas *spice_canvas, unsigned long base, unsigned long max)
+{
 #ifdef CAIRO_CANVAS_ACCESS_TEST
-void canvas_set_access_params(CairoCanvas *canvas, unsigned long base, unsigned long max)
-{
+    CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     __canvas_set_access_params(&canvas->base, base, max);
-}
 #endif
+}
 
-void canvas_destroy(CairoCanvas *canvas)
+static void canvas_destroy(SpiceCanvas *spice_canvas)
 {
+    CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     if (!canvas) {
         return;
     }
@@ -2144,18 +2165,16 @@ void canvas_destroy(CairoCanvas *canvas)
 }
 
 static int need_init = 1;
+static SpiceCanvasOps cairo_canvas_ops;
 
+SpiceCanvas *canvas_create(pixman_image_t *image, int bits
 #ifdef CAIRO_CANVAS_CACHE
-CairoCanvas *canvas_create(pixman_image_t *image, int bits,
-                           SpiceImageCache *bits_cache,
-                           SpicePaletteCache *palette_cache
+                           , SpiceImageCache *bits_cache
+                           , SpicePaletteCache *palette_cache
 #elif defined(CAIRO_CANVAS_IMAGE_CACHE)
-CairoCanvas *canvas_create(pixman_image_t *image, int bits,
-                           SpiceImageCache *bits_cache
-#else
-CairoCanvas *canvas_create(pixman_image_t *image, int bits
+                           , SpiceImageCache *bits_cache
 #endif
-                            , SpiceGlzDecoder *glz_decoder
+                           , SpiceGlzDecoder *glz_decoder
 #ifndef CAIRO_CANVAS_NO_CHUNKS
                            , SpiceVirtMapping *virt_mapping
 #endif
@@ -2168,15 +2187,12 @@ CairoCanvas *canvas_create(pixman_image_t *image, int bits
         return NULL;
     }
     memset(canvas, 0, sizeof(CairoCanvas));
+    init_ok = canvas_base_init(&canvas->base, &cairo_canvas_ops, bits
 #ifdef CAIRO_CANVAS_CACHE
-    init_ok = canvas_base_init(&canvas->base, bits,
-                               bits_cache,
-                               palette_cache
+                               , bits_cache
+                               , palette_cache
 #elif defined(CAIRO_CANVAS_IMAGE_CACHE)
-    init_ok = canvas_base_init(&canvas->base, bits,
-                               bits_cache
-#else
-    init_ok = canvas_base_init(&canvas->base, bits
+                               , bits_cache
 #endif
                                , glz_decoder
 #ifndef CAIRO_CANVAS_NO_CHUNKS
@@ -2192,7 +2208,7 @@ CairoCanvas *canvas_create(pixman_image_t *image, int bits
                               pixman_image_get_width (canvas->image),
                               pixman_image_get_height (canvas->image));
 
-    return canvas;
+    return (SpiceCanvas *)canvas;
 }
 
 void cairo_canvas_init() //unsafe global function
@@ -2201,6 +2217,29 @@ void cairo_canvas_init() //unsafe global function
         return;
     }
     need_init = 0;
+
+    canvas_base_init_ops(&cairo_canvas_ops);
+    cairo_canvas_ops.draw_fill = canvas_draw_fill;
+    cairo_canvas_ops.draw_copy = canvas_draw_copy;
+    cairo_canvas_ops.draw_opaque = canvas_draw_opaque;
+    cairo_canvas_ops.copy_bits = canvas_copy_bits;
+    cairo_canvas_ops.draw_text = canvas_draw_text;
+    cairo_canvas_ops.draw_stroke = canvas_draw_stroke;
+    cairo_canvas_ops.draw_rop3 = canvas_draw_rop3;
+    cairo_canvas_ops.draw_blend = canvas_draw_blend;
+    cairo_canvas_ops.draw_blackness = canvas_draw_blackness;
+    cairo_canvas_ops.draw_whiteness = canvas_draw_whiteness;
+    cairo_canvas_ops.draw_invers = canvas_draw_invers;
+    cairo_canvas_ops.draw_transparent = canvas_draw_transparent;
+    cairo_canvas_ops.draw_alpha_blend = canvas_draw_alpha_blend;
+    cairo_canvas_ops.put_image = canvas_put_image;
+    cairo_canvas_ops.clear = canvas_clear;
+    cairo_canvas_ops.read_bits = canvas_read_bits;
+    cairo_canvas_ops.group_start = canvas_group_start;
+    cairo_canvas_ops.group_end = canvas_group_end;
+    cairo_canvas_ops.set_access_params = canvas_set_access_params;
+    cairo_canvas_ops.destroy = canvas_destroy;
+
     rop3_init();
 }
 

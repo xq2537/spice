@@ -23,7 +23,8 @@
 
 Canvas::Canvas(PixmapCache& pixmap_cache, PaletteCache& palette_cache,
                GlzDecoderWindow &glz_decoder_window)
-    : _pixmap_cache (pixmap_cache)
+    : _canvas (NULL)
+    , _pixmap_cache (pixmap_cache)
     , _palette_cache (palette_cache)
     , _glz_decoder(glz_decoder_window, _glz_handler, _glz_debug)
 {
@@ -31,7 +32,16 @@ Canvas::Canvas(PixmapCache& pixmap_cache, PaletteCache& palette_cache,
 
 Canvas::~Canvas()
 {
+    /* _canvas is both set and destroyed by derived class */
 }
+
+void Canvas::clear()
+{
+    if (_canvas) {
+        _canvas->ops->clear(_canvas);
+    }
+}
+
 
 inline void Canvas::access_test(void *ptr, size_t size)
 {
@@ -107,7 +117,7 @@ void Canvas::begin_draw(SpiceMsgDisplayBase& base, int size, size_t min_size)
 {
     _base = (unsigned long)&base;
     _max = _base + size;
-    set_access_params(_base, _max);
+    _canvas->ops->set_access_params(_canvas, _base, _max);
     access_test(&base, min_size);
     localalize_ptr(&base.clip.data);
 }
@@ -117,7 +127,8 @@ void Canvas::draw_fill(SpiceMsgDisplayDrawFill& fill, int size)
     begin_draw(fill.base, size, sizeof(SpiceMsgDisplayDrawFill));
     localalize_brush(fill.data.brush);
     localalize_mask(fill.data.mask);
-    draw_fill(&fill.base.box, &fill.base.clip, &fill.data);
+    _canvas->ops->draw_fill(_canvas, &fill.base.box, &fill.base.clip, &fill.data);
+    touched_bbox(&fill.base.box);
 }
 
 void Canvas::draw_text(SpiceMsgDisplayDrawText& text, int size)
@@ -126,7 +137,8 @@ void Canvas::draw_text(SpiceMsgDisplayDrawText& text, int size)
     localalize_brush(text.data.fore_brush);
     localalize_brush(text.data.back_brush);
     localalize_ptr(&text.data.str);
-    draw_text(&text.base.box, &text.base.clip, &text.data);
+    _canvas->ops->draw_text(_canvas, &text.base.box, &text.base.clip, &text.data);
+    touched_bbox(&text.base.box);
 }
 
 void Canvas::draw_opaque(SpiceMsgDisplayDrawOpaque& opaque, int size)
@@ -135,7 +147,8 @@ void Canvas::draw_opaque(SpiceMsgDisplayDrawOpaque& opaque, int size)
     localalize_brush(opaque.data.brush);
     localalize_image(&opaque.data.src_bitmap);
     localalize_mask(opaque.data.mask);
-    draw_opaque(&opaque.base.box, &opaque.base.clip, &opaque.data);
+    _canvas->ops->draw_opaque(_canvas, &opaque.base.box, &opaque.base.clip, &opaque.data);
+    touched_bbox(&opaque.base.box);
 }
 
 void Canvas::draw_copy(SpiceMsgDisplayDrawCopy& copy, int size)
@@ -143,27 +156,31 @@ void Canvas::draw_copy(SpiceMsgDisplayDrawCopy& copy, int size)
     begin_draw(copy.base, size, sizeof(SpiceMsgDisplayDrawCopy));
     localalize_image(&copy.data.src_bitmap);
     localalize_mask(copy.data.mask);
-    draw_copy(&copy.base.box, &copy.base.clip, &copy.data);
+    _canvas->ops->draw_copy(_canvas, &copy.base.box, &copy.base.clip, &copy.data);
+    touched_bbox(&copy.base.box);
 }
 
 void Canvas::draw_transparent(SpiceMsgDisplayDrawTransparent& transparent, int size)
 {
     begin_draw(transparent.base, size, sizeof(SpiceMsgDisplayDrawTransparent));
     localalize_image(&transparent.data.src_bitmap);
-    draw_transparent(&transparent.base.box, &transparent.base.clip, &transparent.data);
+    _canvas->ops->draw_transparent(_canvas, &transparent.base.box, &transparent.base.clip, &transparent.data);
+    touched_bbox(&transparent.base.box);
 }
 
 void Canvas::draw_alpha_blend(SpiceMsgDisplayDrawAlphaBlend& alpha_blend, int size)
 {
     begin_draw(alpha_blend.base, size, sizeof(SpiceMsgDisplayDrawAlphaBlend));
     localalize_image(&alpha_blend.data.src_bitmap);
-    draw_alpha_blend(&alpha_blend.base.box, &alpha_blend.base.clip, &alpha_blend.data);
+    _canvas->ops->draw_alpha_blend(_canvas, &alpha_blend.base.box, &alpha_blend.base.clip, &alpha_blend.data);
+    touched_bbox(&alpha_blend.base.box);
 }
 
 void Canvas::copy_bits(SpiceMsgDisplayCopyBits& copy, int size)
 {
     begin_draw(copy.base, size, sizeof(SpiceMsgDisplayCopyBits));
-    copy_bits(&copy.base.box, &copy.base.clip, &copy.src_pos);
+    _canvas->ops->copy_bits(_canvas, &copy.base.box, &copy.base.clip, &copy.src_pos);
+    touched_bbox(&copy.base.box);
 }
 
 void Canvas::draw_blend(SpiceMsgDisplayDrawBlend& blend, int size)
@@ -171,28 +188,32 @@ void Canvas::draw_blend(SpiceMsgDisplayDrawBlend& blend, int size)
     begin_draw(blend.base, size, sizeof(SpiceMsgDisplayDrawBlend));
     localalize_image(&blend.data.src_bitmap);
     localalize_mask(blend.data.mask);
-    draw_blend(&blend.base.box, &blend.base.clip, &blend.data);
+    _canvas->ops->draw_blend(_canvas, &blend.base.box, &blend.base.clip, &blend.data);
+    touched_bbox(&blend.base.box);
 }
 
 void Canvas::draw_blackness(SpiceMsgDisplayDrawBlackness& blackness, int size)
 {
     begin_draw(blackness.base, size, sizeof(SpiceMsgDisplayDrawBlackness));
     localalize_mask(blackness.data.mask);
-    draw_blackness(&blackness.base.box, &blackness.base.clip, &blackness.data);
+    _canvas->ops->draw_blackness(_canvas, &blackness.base.box, &blackness.base.clip, &blackness.data);
+    touched_bbox(&blackness.base.box);
 }
 
 void Canvas::draw_whiteness(SpiceMsgDisplayDrawWhiteness& whiteness, int size)
 {
     begin_draw(whiteness.base, size, sizeof(SpiceMsgDisplayDrawWhiteness));
     localalize_mask(whiteness.data.mask);
-    draw_whiteness(&whiteness.base.box, &whiteness.base.clip, &whiteness.data);
+    _canvas->ops->draw_whiteness(_canvas, &whiteness.base.box, &whiteness.base.clip, &whiteness.data);
+    touched_bbox(&whiteness.base.box);
 }
 
 void Canvas::draw_invers(SpiceMsgDisplayDrawInvers& invers, int size)
 {
     begin_draw(invers.base, size, sizeof(SpiceMsgDisplayDrawInvers));
     localalize_mask(invers.data.mask);
-    draw_invers(&invers.base.box, &invers.base.clip, &invers.data);
+    _canvas->ops->draw_invers(_canvas, &invers.base.box, &invers.base.clip, &invers.data);
+    touched_bbox(&invers.base.box);
 }
 
 void Canvas::draw_rop3(SpiceMsgDisplayDrawRop3& rop3, int size)
@@ -201,7 +222,8 @@ void Canvas::draw_rop3(SpiceMsgDisplayDrawRop3& rop3, int size)
     localalize_brush(rop3.data.brush);
     localalize_image(&rop3.data.src_bitmap);
     localalize_mask(rop3.data.mask);
-    draw_rop3(&rop3.base.box, &rop3.base.clip, &rop3.data);
+    _canvas->ops->draw_rop3(_canvas, &rop3.base.box, &rop3.base.clip, &rop3.data);
+    touched_bbox(&rop3.base.box);
 }
 
 void Canvas::draw_stroke(SpiceMsgDisplayDrawStroke& stroke, int size)
@@ -210,5 +232,21 @@ void Canvas::draw_stroke(SpiceMsgDisplayDrawStroke& stroke, int size)
     localalize_brush(stroke.data.brush);
     localalize_ptr(&stroke.data.path);
     localalize_attr(stroke.data.attr);
-    draw_stroke(&stroke.base.box, &stroke.base.clip, &stroke.data);
+    _canvas->ops->draw_stroke(_canvas, &stroke.base.box, &stroke.base.clip, &stroke.data);
+    touched_bbox(&stroke.base.box);
+}
+
+void Canvas::put_image(
+#ifdef WIN32
+                        HDC dc,
+#endif
+                        const PixmapHeader& image, const SpiceRect& dest, const QRegion* clip)
+{
+    _canvas->ops->put_image(_canvas,
+#ifdef WIN32
+                            dc,
+#endif
+                            &dest, image.data, image.width, image.height, image.stride,
+                            clip);
+    touched_bbox(&dest);
 }

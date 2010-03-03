@@ -28,12 +28,14 @@
 #define GL_CANVAS
 #include "canvas_base.c"
 
+typedef struct GLCanvas GLCanvas;
+
 struct GLCanvas {
     CanvasBase base;
     GLCCtx glc;
-    void *usr_data;
     void *private_data;
     int private_data_size;
+    int textures_lost;
 };
 
 static inline uint8_t *copy_opposite_image(GLCanvas *canvas, void *data, int stride, int height)
@@ -350,8 +352,9 @@ static void set_op(GLCanvas *canvas, uint16_t rop_decriptor)
     glc_set_op(canvas->glc, op);
 }
 
-void gl_canvas_draw_fill(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill)
+static void gl_canvas_draw_fill(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill)
 {
+    GLCanvas *canvas = (GLCanvas *)spice_canvas;
     GLCRect rect;
     set_clip(canvas, bbox, clip);
     set_mask(canvas, &fill->mask, bbox->left, bbox->top);
@@ -363,8 +366,9 @@ void gl_canvas_draw_fill(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, Spi
     glc_flush(canvas->glc);
 }
 
-void gl_canvas_draw_copy(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy)
+static void gl_canvas_draw_copy(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy)
 {
+    GLCanvas *canvas = (GLCanvas *)spice_canvas;
     pixman_image_t *surface;
     GLCRecti src;
     GLCRecti dest;
@@ -385,8 +389,9 @@ void gl_canvas_draw_copy(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, Spi
     glc_flush(canvas->glc);
 }
 
-void gl_canvas_draw_opaque(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque)
+static void gl_canvas_draw_opaque(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque)
 {
+    GLCanvas *canvas = (GLCanvas *)spice_canvas;
     pixman_image_t *surface;
     GLCRecti src;
     GLCRecti dest;
@@ -413,8 +418,9 @@ void gl_canvas_draw_opaque(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, S
     glc_flush(canvas->glc);
 }
 
-void gl_canvas_draw_alpha_blend(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd *alpha_blend)
+static void gl_canvas_draw_alpha_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd *alpha_blend)
 {
+    GLCanvas *canvas = (GLCanvas *)spice_canvas;
     pixman_image_t *surface;
     GLCRecti src;
     GLCRecti dest;
@@ -434,8 +440,9 @@ void gl_canvas_draw_alpha_blend(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *cl
     glc_flush(canvas->glc);
 }
 
-void gl_canvas_draw_blend(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend)
+static void gl_canvas_draw_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend)
 {
+    GLCanvas *canvas = (GLCanvas *)spice_canvas;
     pixman_image_t *surface;
     GLCRecti src;
     GLCRecti dest;
@@ -455,8 +462,9 @@ void gl_canvas_draw_blend(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, Sp
     glc_flush(canvas->glc);
 }
 
-void gl_canvas_draw_transparent(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceTransparent *transparent)
+static void gl_canvas_draw_transparent(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceTransparent *transparent)
 {
+    GLCanvas *canvas = (GLCanvas *)spice_canvas;
     pixman_image_t *surface;
     pixman_image_t *trans_surf;
     GLCImage image;
@@ -493,23 +501,27 @@ static inline void fill_common(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *cli
     glc_fill_rect(canvas->glc, &rect);
 }
 
-void gl_canvas_draw_whiteness(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness)
+static void gl_canvas_draw_whiteness(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness)
 {
+    GLCanvas *canvas = (GLCanvas *)spice_canvas;
     fill_common(canvas, bbox, clip, &whiteness->mask, GLC_OP_SET);
 }
 
-void gl_canvas_draw_blackness(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness)
+static void gl_canvas_draw_blackness(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness)
 {
+    GLCanvas *canvas = (GLCanvas *)spice_canvas;
     fill_common(canvas, bbox, clip, &blackness->mask, GLC_OP_CLEAR);
 }
 
-void gl_canvas_draw_invers(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers)
+static void gl_canvas_draw_invers(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers)
 {
+    GLCanvas *canvas = (GLCanvas *)spice_canvas;
     fill_common(canvas, bbox, clip, &invers->mask, GLC_OP_INVERT);
 }
 
-void gl_canvas_draw_rop3(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3)
+static void gl_canvas_draw_rop3(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3)
 {
+    GLCanvas *canvas = (GLCanvas *)spice_canvas;
     pixman_image_t *d;
     pixman_image_t *s;
     GLCImage image;
@@ -608,8 +620,9 @@ void gl_canvas_draw_rop3(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, Spi
     pixman_image_unref(d);
 }
 
-void gl_canvas_draw_stroke(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke)
+static void gl_canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke)
 {
+    GLCanvas *canvas = (GLCanvas *)spice_canvas;
     GLCPath path;
 
     set_clip(canvas, bbox, clip);
@@ -627,8 +640,9 @@ void gl_canvas_draw_stroke(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, S
     glc_path_destroy(path);
 }
 
-void gl_canvas_draw_text(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceText *text)
+static void gl_canvas_draw_text(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceText *text)
 {
+    GLCanvas *canvas = (GLCanvas *)spice_canvas;
     GLCRect rect;
     SpiceString *str;
 
@@ -685,14 +699,16 @@ void gl_canvas_draw_text(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, Spi
     glc_flush(canvas->glc);
 }
 
-void gl_canvas_clear(GLCanvas *canvas)
+static void gl_canvas_clear(SpiceCanvas *spice_canvas)
 {
+    GLCanvas *canvas = (GLCanvas *)spice_canvas;
     glc_clear(canvas->glc);
     glc_flush(canvas->glc);
 }
 
-void gl_canvas_copy_pixels(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos)
+static void gl_canvas_copy_bits(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos)
 {
+    GLCanvas *canvas = (GLCanvas *)spice_canvas;
     set_clip(canvas, bbox, clip);
     glc_clear_mask(canvas->glc, GLC_MASK_A);
     glc_set_op(canvas->glc, GLC_OP_COPY);
@@ -700,8 +716,9 @@ void gl_canvas_copy_pixels(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, S
                     bbox->right - bbox->left, bbox->bottom - bbox->top);
 }
 
-void gl_canvas_read_pixels(GLCanvas *canvas, uint8_t *dest, int dest_stride, const SpiceRect *area)
+static void gl_canvas_read_bits(SpiceCanvas *spice_canvas, uint8_t *dest, int dest_stride, const SpiceRect *area)
 {
+    GLCanvas *canvas = (GLCanvas *)spice_canvas;
     GLCImage image;
 
     ASSERT(dest_stride > 0);
@@ -713,8 +730,9 @@ void gl_canvas_read_pixels(GLCanvas *canvas, uint8_t *dest, int dest_stride, con
     glc_read_pixels(canvas->glc, area->left, area->top, &image);
 }
 
-void gl_canvas_set_top_mask(GLCanvas *canvas, QRegion *region)
+static void gl_canvas_group_start(SpiceCanvas *spice_canvas, QRegion *region)
 {
+    GLCanvas *canvas = (GLCanvas *)spice_canvas;
     GLCRect *glc_rects;
     GLCRect *now, *end;
     int num_rect;
@@ -734,10 +752,11 @@ void gl_canvas_set_top_mask(GLCanvas *canvas, QRegion *region)
     free(glc_rects);
 }
 
-void gl_canvas_put_image(GLCanvas *canvas, const SpiceRect *dest, const uint8_t *src_data,
+static void gl_canvas_put_image(SpiceCanvas *spice_canvas, const SpiceRect *dest, const uint8_t *src_data,
                          uint32_t src_width, uint32_t src_height, int src_stride,
                          const QRegion *clip)
 {
+    GLCanvas *canvas = (GLCanvas *)spice_canvas;
     GLCRecti src;
     GLCRecti gldest;
     GLCImage image;
@@ -781,39 +800,33 @@ void gl_canvas_put_image(GLCanvas *canvas, const SpiceRect *dest, const uint8_t 
     glc_flush(canvas->glc);
 }
 
-void gl_canvas_clear_top_mask(GLCanvas *canvas)
+static void gl_canvas_group_end(SpiceCanvas *spice_canvas)
 {
+    GLCanvas *canvas = (GLCanvas *)spice_canvas;
     glc_clear_mask(canvas->glc, GLC_MASK_B);
 }
 
+static void gl_canvas_set_access_params(SpiceCanvas *spice_canvas, unsigned long base, unsigned long max)
+{
 #ifdef CAIRO_CANVAS_ACCESS_TEST
-void gl_canvas_set_access_params(GLCanvas *canvas, unsigned long base, unsigned long max)
-{
+    GLCanvas *canvas = (GLCanvas *)spice_canvas;
     __canvas_set_access_params(&canvas->base, base, max);
-}
-
 #endif
-
-void *gl_canvas_get_usr_data(GLCanvas *canvas)
-{
-    return canvas->usr_data;
 }
 
 static int need_init = 1;
+static SpiceCanvasOps gl_canvas_ops;
 
+SpiceCanvas *gl_canvas_create(int width, int height, int depth
 #ifdef CAIRO_CANVAS_CACHE
-GLCanvas *gl_canvas_create(void *usr_data, int width, int height, int depth,
-                           SpiceImageCache *bits_cache,
-                           SpicePaletteCache *palette_cache
+                              , SpiceImageCache *bits_cache
+                              , SpicePaletteCache *palette_cache
 #elif defined(CAIRO_CANVAS_IMAGE_CACHE)
-GLCanvas *gl_canvas_create(void *usr_data, int width, int height, int depth,
-                           SpiceImageCache *bits_cache
-#else
-GLCanvas *gl_canvas_create(void *usr_data, int width, int height, int depth
+                              , SpiceImageCache *bits_cache
 #endif
-                           , SpiceGlzDecoder *glz_decoder
+                              , SpiceGlzDecoder *glz_decoder
 #ifndef CAIRO_CANVAS_NO_CHUNKS
-                           , SpiceVirtMapping *virt_mapping
+                              , SpiceVirtMapping *virt_mapping
 #endif
                            )
 {
@@ -828,17 +841,13 @@ GLCanvas *gl_canvas_create(void *usr_data, int width, int height, int depth
     if (!(canvas->glc = glc_create(width, height))) {
         goto error_1;
     }
-    canvas->usr_data = usr_data;
     canvas->private_data = NULL;
+    init_ok = canvas_base_init(&canvas->base, &gl_canvas_ops, depth
 #ifdef CAIRO_CANVAS_CACHE
-    init_ok = canvas_base_init(&canvas->base, depth,
-                               bits_cache,
-                               palette_cache
+                               , bits_cache
+                               , palette_cache
 #elif defined(CAIRO_CANVAS_IMAGE_CACHE)
-    init_ok = canvas_base_init(&canvas->base, depth,
-                               bits_cache
-#else
-    init_ok = canvas_base_init(&canvas->base, depth
+                               , bits_cache
 #endif
                                , glz_decoder
 #ifndef CAIRO_CANVAS_NO_CHUNKS
@@ -849,7 +858,7 @@ GLCanvas *gl_canvas_create(void *usr_data, int width, int height, int depth
         goto error_2;
     }
 
-    return canvas;
+    return (SpiceCanvas *)canvas;
 
 error_2:
     glc_destroy(canvas->glc, 0);
@@ -859,13 +868,23 @@ error_1:
     return NULL;
 }
 
-void gl_canvas_destroy(GLCanvas *canvas, int textures_lost)
+void gl_canvas_set_textures_lost(SpiceCanvas *spice_canvas,
+                                 int textures_lost)
 {
+    GLCanvas *canvas = (GLCanvas *)spice_canvas;
+
+    canvas->textures_lost = textures_lost;
+}
+
+static void gl_canvas_destroy(SpiceCanvas *spice_canvas)
+{
+    GLCanvas *canvas = (GLCanvas *)spice_canvas;
+
     if (!canvas) {
         return;
     }
     canvas_base_destroy(&canvas->base);
-    glc_destroy(canvas->glc, textures_lost);
+    glc_destroy(canvas->glc, canvas->textures_lost);
     if (canvas->private_data) {
         free(canvas->private_data);
     }
@@ -878,5 +897,28 @@ void gl_canvas_init() //unsafe global function
         return;
     }
     need_init = 0;
+
+    canvas_base_init_ops(&gl_canvas_ops);
+    gl_canvas_ops.draw_fill = gl_canvas_draw_fill;
+    gl_canvas_ops.draw_copy = gl_canvas_draw_copy;
+    gl_canvas_ops.draw_opaque = gl_canvas_draw_opaque;
+    gl_canvas_ops.copy_bits = gl_canvas_copy_bits;
+    gl_canvas_ops.draw_text = gl_canvas_draw_text;
+    gl_canvas_ops.draw_stroke = gl_canvas_draw_stroke;
+    gl_canvas_ops.draw_rop3 = gl_canvas_draw_rop3;
+    gl_canvas_ops.draw_blend = gl_canvas_draw_blend;
+    gl_canvas_ops.draw_blackness = gl_canvas_draw_blackness;
+    gl_canvas_ops.draw_whiteness = gl_canvas_draw_whiteness;
+    gl_canvas_ops.draw_invers = gl_canvas_draw_invers;
+    gl_canvas_ops.draw_transparent = gl_canvas_draw_transparent;
+    gl_canvas_ops.draw_alpha_blend = gl_canvas_draw_alpha_blend;
+    gl_canvas_ops.put_image = gl_canvas_put_image;
+    gl_canvas_ops.clear = gl_canvas_clear;
+    gl_canvas_ops.read_bits = gl_canvas_read_bits;
+    gl_canvas_ops.group_start = gl_canvas_group_start;
+    gl_canvas_ops.group_end = gl_canvas_group_end;
+    gl_canvas_ops.set_access_params = gl_canvas_set_access_params;
+    gl_canvas_ops.destroy = gl_canvas_destroy;
+
     rop3_init();
 }

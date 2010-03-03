@@ -249,7 +249,7 @@ public:
     virtual void copy_pixels(const QRegion& region, RedDrawable& dc) = 0;
     virtual void thread_touch() = 0;
 
-    virtual void clear() = 0;
+    void clear();
 
     void draw_fill(SpiceMsgDisplayDrawFill& fill, int size);
     void draw_text(SpiceMsgDisplayDrawText& text, int size);
@@ -265,31 +265,17 @@ public:
     void draw_rop3(SpiceMsgDisplayDrawRop3& rop3, int size);
     void draw_stroke(SpiceMsgDisplayDrawStroke& stroke, int size);
 
+    void put_image(
 #ifdef WIN32
-    virtual void put_image(HDC dc, const PixmapHeader& image,
-                           const SpiceRect& dest, const QRegion* clip) = 0;
-#else
-    virtual void put_image(const PixmapHeader& image, const SpiceRect& dest,
-                           const QRegion* clip) = 0;
+                   HDC dc,
 #endif
+                   const PixmapHeader& image,
+                   const SpiceRect& dest, const QRegion* clip);
 
     virtual CanvasType get_pixmap_type() { return CANVAS_TYPE_INVALID; }
 
 protected:
-    virtual void set_access_params(unsigned long base, unsigned long max) = 0;
-    virtual void draw_fill(SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill) = 0;
-    virtual void draw_copy(SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy) = 0;
-    virtual void draw_opaque(SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque) = 0;
-    virtual void copy_bits(SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos) = 0;
-    virtual void draw_text(SpiceRect *bbox, SpiceClip *clip, SpiceText *text) = 0;
-    virtual void draw_stroke(SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke) = 0;
-    virtual void draw_rop3(SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3) = 0;
-    virtual void draw_blend(SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend) = 0;
-    virtual void draw_blackness(SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness) = 0;
-    virtual void draw_whiteness(SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness) = 0;
-    virtual void draw_invers(SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers) = 0;
-    virtual void draw_transparent(SpiceRect *bbox, SpiceClip *clip, SpiceTransparent* transparent) = 0;
-    virtual void draw_alpha_blend(SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend) = 0;
+    virtual void touched_bbox(const SpiceRect *bbox) {};
 
     PixmapCache& pixmap_cache() { return _pixmap_cache;}
     PaletteCache& palette_cache() { return _palette_cache;}
@@ -304,6 +290,9 @@ private:
     void localalize_attr(SpiceLineAttr& attr);
     void localalize_mask(SpiceQMask& mask);
     void begin_draw(SpiceMsgDisplayBase& base, int size, size_t min_size);
+
+protected:
+    SpiceCanvas* _canvas;
 
 private:
     PixmapCache& _pixmap_cache;

@@ -830,48 +830,9 @@ typedef struct UpgradeItem {
     uint32_t n_rects;
 } UpgradeItem;
 
-typedef void (*draw_fill_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill);
-typedef void (*draw_copy_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy);
-typedef void (*draw_opaque_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque);
-typedef void (*copy_bits_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos);
-typedef void (*draw_text_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceText *text);
-typedef void (*draw_stroke_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke);
-typedef void (*draw_rop3_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3);
-typedef void (*draw_blend_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend);
-typedef void (*draw_blackness_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness);
-typedef void (*draw_whiteness_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness);
-typedef void (*draw_invers_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers);
-typedef void (*draw_transparent_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceTransparent* transparent);
-typedef void (*draw_alpha_blend_t)(void *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend);
-typedef void (*read_pixels_t)(void *canvas, uint8_t *dest, int dest_stride, const SpiceRect *area);
-typedef void (*set_top_mask_t)(void *canvas, QRegion *region);
-typedef void (*clear_top_mask_t)(void *canvas);
-typedef void (*validate_area_t)(void *canvas, int32_t stride, uint8_t *line_0, const SpiceRect *area);
-typedef void (*destroy_t)(void *canvas);
-
-typedef struct DrawFuncs {
-    draw_fill_t draw_fill;
-    draw_copy_t draw_copy;
-    draw_opaque_t draw_opaque;
-    copy_bits_t copy_bits;
-    draw_text_t draw_text;
-    draw_stroke_t draw_stroke;
-    draw_rop3_t draw_rop3;
-    draw_blend_t draw_blend;
-    draw_blackness_t draw_blackness;
-    draw_whiteness_t draw_whiteness;
-    draw_invers_t draw_invers;
-    draw_transparent_t draw_transparent;
-    draw_alpha_blend_t draw_alpha_blend;
-    read_pixels_t read_pixels;
-    set_top_mask_t set_top_mask;
-    clear_top_mask_t clear_top_mask;
-    validate_area_t validate_area;
-    destroy_t destroy;
-} DrawFuncs;
-
 typedef struct DrawContext {
-    void *canvas;
+    SpiceCanvas *canvas;
+    int canvas_draws_on_surface;
     int top_down;
     uint32_t width;
     uint32_t height;
@@ -929,7 +890,6 @@ typedef struct RedWorker {
     uint32_t renderers[RED_MAX_RENDERERS];
     uint32_t renderer;
 
-    DrawFuncs draw_funcs;
     Surface surface;
 
     Ring current_list;
@@ -1546,8 +1506,10 @@ static inline void __red_destroy_surface(RedWorker *worker)
 #ifdef STREAM_TRACE
         red_reset_stream_trace(worker);
 #endif
-        worker->draw_funcs.destroy(surface->context.canvas);
-        surface->context.canvas = NULL;
+        if (surface->context.canvas) {
+            surface->context.canvas->ops->destroy(surface->context.canvas);
+            surface->context.canvas = NULL;
+        }
     }
 }
 
@@ -3574,11 +3536,12 @@ static inline int red_current_add_qxl(RedWorker *worker, Drawable *drawable,
 static void red_get_area(RedWorker *worker, const SpiceRect *area, uint8_t *dest, int dest_stride,
                          int update)
 {
+    SpiceCanvas *canvas = worker->surface.context.canvas;
     if (update) {
         red_update_area(worker, area);
     }
 
-    worker->draw_funcs.read_pixels(worker->surface.context.canvas, dest, dest_stride, area);
+    canvas->ops->read_bits(canvas, dest, dest_stride, area);
 }
 
 static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
@@ -4173,6 +4136,7 @@ static void unlocalize_attr(SpiceLineAttr *attr)
 static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
 {
     SpiceClip clip = drawable->qxl_drawable->clip;
+    SpiceCanvas *canvas = worker->surface.context.canvas;
 
     worker->local_images_pos = 0;
     image_cache_eaging(&worker->image_cache);
@@ -4185,8 +4149,8 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         SpiceFill fill = drawable->qxl_drawable->u.fill;
         localize_brush(worker, &fill.brush, drawable->group_id);
         localize_mask(worker, &fill.mask, drawable->group_id);
-        worker->draw_funcs.draw_fill(worker->surface.context.canvas, &drawable->qxl_drawable->bbox,
-                                     &clip, &fill); unlocalize_mask(&fill.mask);
+        canvas->ops->draw_fill(canvas, &drawable->qxl_drawable->bbox,
+                               &clip, &fill); unlocalize_mask(&fill.mask);
         unlocalize_brush(&fill.brush);
         break;
     }
@@ -4195,8 +4159,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         localize_brush(worker, &opaque.brush, drawable->group_id);
         localize_bitmap(worker, &opaque.src_bitmap, drawable->group_id);
         localize_mask(worker, &opaque.mask, drawable->group_id);
-        worker->draw_funcs.draw_opaque(worker->surface.context.canvas,
-                                       &drawable->qxl_drawable->bbox, &clip, &opaque);
+        canvas->ops->draw_opaque(canvas, &drawable->qxl_drawable->bbox, &clip, &opaque);
         unlocalize_mask(&opaque.mask);
         unlocalize_bitmap(&opaque.src_bitmap);
         unlocalize_brush(&opaque.brush);
@@ -4206,8 +4169,8 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         SpiceCopy copy = drawable->qxl_drawable->u.copy;
         localize_bitmap(worker, &copy.src_bitmap, drawable->group_id);
         localize_mask(worker, &copy.mask, drawable->group_id);
-        worker->draw_funcs.draw_copy(worker->surface.context.canvas, &drawable->qxl_drawable->bbox,
-                                     &clip, &copy);
+        canvas->ops->draw_copy(canvas, &drawable->qxl_drawable->bbox,
+                               &clip, &copy);
         unlocalize_mask(&copy.mask);
         unlocalize_bitmap(&copy.src_bitmap);
         break;
@@ -4215,30 +4178,30 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
     case QXL_DRAW_TRANSPARENT: {
         SpiceTransparent transparent = drawable->qxl_drawable->u.transparent;
         localize_bitmap(worker, &transparent.src_bitmap, drawable->group_id);
-        worker->draw_funcs.draw_transparent(worker->surface.context.canvas,
-                                            &drawable->qxl_drawable->bbox, &clip, &transparent);
+        canvas->ops->draw_transparent(canvas,
+                                      &drawable->qxl_drawable->bbox, &clip, &transparent);
         unlocalize_bitmap(&transparent.src_bitmap);
         break;
     }
     case QXL_DRAW_ALPHA_BLEND: {
         SpiceAlphaBlnd alpha_blend = drawable->qxl_drawable->u.alpha_blend;
         localize_bitmap(worker, &alpha_blend.src_bitmap, drawable->group_id);
-        worker->draw_funcs.draw_alpha_blend(worker->surface.context.canvas,
-                                            &drawable->qxl_drawable->bbox, &clip, &alpha_blend);
+        canvas->ops->draw_alpha_blend(canvas,
+                                      &drawable->qxl_drawable->bbox, &clip, &alpha_blend);
         unlocalize_bitmap(&alpha_blend.src_bitmap);
         break;
     }
     case QXL_COPY_BITS: {
-        worker->draw_funcs.copy_bits(worker->surface.context.canvas, &drawable->qxl_drawable->bbox,
-                                     &clip, &drawable->qxl_drawable->u.copy_bits.src_pos);
+        canvas->ops->copy_bits(canvas, &drawable->qxl_drawable->bbox,
+                               &clip, &drawable->qxl_drawable->u.copy_bits.src_pos);
         break;
     }
     case QXL_DRAW_BLEND: {
         SpiceBlend blend = drawable->qxl_drawable->u.blend;
         localize_bitmap(worker, &blend.src_bitmap, drawable->group_id);
         localize_mask(worker, &blend.mask, drawable->group_id);
-        worker->draw_funcs.draw_blend(worker->surface.context.canvas, &drawable->qxl_drawable->bbox,
-                                      &clip, &blend);
+        canvas->ops->draw_blend(canvas, &drawable->qxl_drawable->bbox,
+                                &clip, &blend);
         unlocalize_mask(&blend.mask);
         unlocalize_bitmap(&blend.src_bitmap);
         break;
@@ -4246,24 +4209,24 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
     case QXL_DRAW_BLACKNESS: {
         SpiceBlackness blackness = drawable->qxl_drawable->u.blackness;
         localize_mask(worker, &blackness.mask, drawable->group_id);
-        worker->draw_funcs.draw_blackness(worker->surface.context.canvas,
-                                          &drawable->qxl_drawable->bbox, &clip, &blackness);
+        canvas->ops->draw_blackness(canvas,
+                                    &drawable->qxl_drawable->bbox, &clip, &blackness);
         unlocalize_mask(&blackness.mask);
         break;
     }
     case QXL_DRAW_WHITENESS: {
         SpiceWhiteness whiteness = drawable->qxl_drawable->u.whiteness;
         localize_mask(worker, &whiteness.mask, drawable->group_id);
-        worker->draw_funcs.draw_whiteness(worker->surface.context.canvas,
-                                          &drawable->qxl_drawable->bbox, &clip, &whiteness);
+        canvas->ops->draw_whiteness(canvas,
+                                    &drawable->qxl_drawable->bbox, &clip, &whiteness);
         unlocalize_mask(&whiteness.mask);
         break;
     }
     case QXL_DRAW_INVERS: {
         SpiceInvers invers = drawable->qxl_drawable->u.invers;
         localize_mask(worker, &invers.mask, drawable->group_id);
-        worker->draw_funcs.draw_invers(worker->surface.context.canvas,
-                                       &drawable->qxl_drawable->bbox, &clip, &invers);
+        canvas->ops->draw_invers(canvas,
+                                 &drawable->qxl_drawable->bbox, &clip, &invers);
         unlocalize_mask(&invers.mask);
         break;
     }
@@ -4272,8 +4235,8 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         localize_brush(worker, &rop3.brush, drawable->group_id);
         localize_bitmap(worker, &rop3.src_bitmap, drawable->group_id);
         localize_mask(worker, &rop3.mask, drawable->group_id);
-        worker->draw_funcs.draw_rop3(worker->surface.context.canvas, &drawable->qxl_drawable->bbox,
-                                     &clip, &rop3); unlocalize_mask(&rop3.mask);
+        canvas->ops->draw_rop3(canvas, &drawable->qxl_drawable->bbox,
+                               &clip, &rop3); unlocalize_mask(&rop3.mask);
         unlocalize_bitmap(&rop3.src_bitmap);
         unlocalize_brush(&rop3.brush);
         break;
@@ -4283,8 +4246,8 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         localize_brush(worker, &stroke.brush, drawable->group_id);
         localize_path(worker, &stroke.path, drawable->group_id);
         localize_attr(worker, &stroke.attr, drawable->group_id);
-        worker->draw_funcs.draw_stroke(worker->surface.context.canvas,
-                                       &drawable->qxl_drawable->bbox, &clip, &stroke);
+        canvas->ops->draw_stroke(canvas,
+                                 &drawable->qxl_drawable->bbox, &clip, &stroke);
         unlocalize_attr(&stroke.attr);
         unlocalize_path(&stroke.path);
         unlocalize_brush(&stroke.brush);
@@ -4295,8 +4258,8 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         localize_brush(worker, &text.fore_brush, drawable->group_id);
         localize_brush(worker, &text.back_brush, drawable->group_id);
         localize_str(worker, &text.str, drawable->group_id);
-        worker->draw_funcs.draw_text(worker->surface.context.canvas, &drawable->qxl_drawable->bbox,
-                                     &clip, &text);
+        canvas->ops->draw_text(canvas, &drawable->qxl_drawable->bbox,
+                               &clip, &text);
         unlocalize_str(&text.str);
         unlocalize_brush(&text.back_brush);
         unlocalize_brush(&text.fore_brush);
@@ -4313,14 +4276,34 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
 static void red_draw_drawable(RedWorker *worker, Drawable *drawable)
 {
 #ifdef UPDATE_AREA_BY_TREE
+    SpiceCanvas *canvas = worker->surface.context.canvas;
     //todo: add need top mask flag
-    worker->draw_funcs.set_top_mask(worker->surface.context.canvas,
-                                    &drawable->tree_item.base.rgn);
+    canvas->ops->group_start(canvas,
+                             &drawable->tree_item.base.rgn);
 #endif
     red_draw_qxl_drawable(worker, drawable);
 #ifdef UPDATE_AREA_BY_TREE
-    worker->draw_funcs.clear_top_mask(worker->surface.context.canvas);
+    canvas->ops->group_end(canvas);
 #endif
+}
+
+static void validate_area(RedWorker *worker, const SpiceRect *area)
+{
+    if (!worker->surface.context.canvas_draws_on_surface) {
+        SpiceCanvas *canvas = worker->surface.context.canvas;
+        int h;
+        int stride = worker->surface.context.stride;
+        uint8_t *line_0 = worker->surface.context.line_0;
+
+        if (!(h = area->bottom - area->top)) {
+            return;
+        }
+
+        ASSERT(stride < 0);
+        uint8_t *dest = line_0 + (area->top * stride) + area->left * sizeof(uint32_t);
+        dest += (h - 1) * stride;
+        canvas->ops->read_bits(canvas, dest, -stride, area);
+    }
 }
 
 #ifdef UPDATE_AREA_BY_TREE
@@ -4401,8 +4384,7 @@ static void red_update_area(RedWorker *worker, const SpiceRect *area)
         current_remove_drawable(worker, drawable);
         container_cleanup(worker, container);
     }
-    worker->draw_funcs.validate_area(worker->surface.context.canvas, worker->surface.context.stride,
-                                     worker->surface.context.line_0, area);
+    validate_area(worker, area);
 }
 
 #else
@@ -4427,9 +4409,7 @@ static void red_update_area(RedWorker *worker, const SpiceRect *area)
     region_destroy(&rgn);
 
     if (!last) {
-        worker->draw_funcs.validate_area(worker->surface.context.canvas,
-                                         worker->surface.context.stride,
-                                         worker->surface.context.line_0, area);
+        validate_area(worker, area);
         return;
     }
 
@@ -4443,8 +4423,7 @@ static void red_update_area(RedWorker *worker, const SpiceRect *area)
         current_remove_drawable(worker, now);
         container_cleanup(worker, container);
     } while (now != last);
-    worker->draw_funcs.validate_area(worker->surface.context.canvas, worker->surface.context.stride,
-                                     worker->surface.context.line_0, area);
+    validate_area(worker, area);
 }
 
 #endif
@@ -4702,8 +4681,9 @@ static void red_add_screen_image(RedWorker *worker)
     ImageItem *item;
     int stride;
     SpiceRect area;
+    SpiceCanvas *canvas = worker->surface.context.canvas;
 
-    if (!worker->display_channel || !worker->surface.context.canvas) {
+    if (!worker->display_channel || !canvas) {
         return;
     }
 
@@ -4726,7 +4706,7 @@ static void red_add_screen_image(RedWorker *worker)
     area.top = area.left = 0;
     area.right = worker->surface.context.width;
     area.bottom = worker->surface.context.height;
-    worker->draw_funcs.read_pixels(worker->surface.context.canvas, item->data, stride, &area);
+    canvas->ops->read_bits(canvas, item->data, stride, &area);
     red_pipe_add_image_item(worker, item);
     release_image_item(item);
     display_channel_push(worker);
@@ -7445,46 +7425,10 @@ static void red_migrate_display(RedWorker *worker)
     }
 }
 
-static void destroy_cairo_canvas(CairoCanvas *canvas)
-{
-    if (!canvas) {
-        return;
-    }
-
-    canvas_destroy(canvas);
-}
-
-static void validate_area_nop(void *canvas, int32_t stride, uint8_t *line_0, const SpiceRect *area)
-{
-}
-
-static void init_cairo_draw_funcs(RedWorker *worker)
-{
-    worker->draw_funcs.draw_fill = (draw_fill_t)canvas_draw_fill;
-    worker->draw_funcs.draw_copy = (draw_copy_t)canvas_draw_copy;
-    worker->draw_funcs.draw_opaque = (draw_opaque_t)canvas_draw_opaque;
-    worker->draw_funcs.copy_bits = (copy_bits_t)canvas_copy_bits;
-    worker->draw_funcs.draw_text = (draw_text_t)canvas_draw_text;
-    worker->draw_funcs.draw_stroke = (draw_stroke_t)canvas_draw_stroke;
-    worker->draw_funcs.draw_rop3 = (draw_rop3_t)canvas_draw_rop3;
-    worker->draw_funcs.draw_blend = (draw_blend_t)canvas_draw_blend;
-    worker->draw_funcs.draw_blackness = (draw_blackness_t)canvas_draw_blackness;
-    worker->draw_funcs.draw_whiteness = (draw_whiteness_t)canvas_draw_whiteness;
-    worker->draw_funcs.draw_invers = (draw_invers_t)canvas_draw_invers;
-    worker->draw_funcs.draw_transparent = (draw_transparent_t)canvas_draw_transparent;
-    worker->draw_funcs.draw_alpha_blend = (draw_alpha_blend_t)canvas_draw_alpha_blend;
-    worker->draw_funcs.read_pixels = (read_pixels_t)canvas_read_bits;
-
-    worker->draw_funcs.set_top_mask = (set_top_mask_t)canvas_group_start;
-    worker->draw_funcs.clear_top_mask = (clear_top_mask_t)canvas_group_end;
-    worker->draw_funcs.validate_area = validate_area_nop;
-    worker->draw_funcs.destroy = (destroy_t)destroy_cairo_canvas;
-}
-
-static CairoCanvas *create_cairo_context(RedWorker *worker, uint32_t width, uint32_t height,
+static SpiceCanvas *create_cairo_context(RedWorker *worker, uint32_t width, uint32_t height,
                                          int32_t stride, uint8_t depth, void *line_0)
 {
-    CairoCanvas *canvas;
+    SpiceCanvas *canvas;
     pixman_image_t *surface;
 
     surface = pixman_image_create_bits(PIXMAN_x8r8g8b8, width, height,
@@ -7499,78 +7443,29 @@ static CairoCanvas *create_cairo_context(RedWorker *worker, uint32_t width, uint
     return canvas;
 }
 
-static void destroy_gl_canvas(GLCanvas *canvas)
+static SpiceCanvas *create_ogl_context_common(RedWorker *worker, OGLCtx *ctx, uint32_t width,
+                                              uint32_t height, int32_t stride, uint8_t depth)
 {
-    OGLCtx *ctx;
-
-    if (!canvas) {
-        return;
-    }
-
-    ctx = gl_canvas_get_usr_data(canvas);
-    ASSERT(ctx);
-    gl_canvas_destroy(canvas, 0);
-    oglctx_destroy(ctx);
-}
-
-static void gl_validate_area(GLCanvas *canvas, int32_t stride, uint8_t *line_0, const SpiceRect *area)
-{
-    int h;
-
-    if (!(h = area->bottom - area->top)) {
-        return;
-    }
-
-    ASSERT(stride < 0);
-    uint8_t *dest = line_0 + (area->top * stride) + area->left * sizeof(uint32_t);
-    dest += (h - 1) * stride;
-    gl_canvas_read_pixels(canvas, dest, -stride, area);
-}
-
-static void init_ogl_draw_funcs(RedWorker *worker)
-{
-    worker->draw_funcs.draw_fill = (draw_fill_t)gl_canvas_draw_fill;
-    worker->draw_funcs.draw_copy = (draw_copy_t)gl_canvas_draw_copy;
-    worker->draw_funcs.draw_opaque = (draw_opaque_t)gl_canvas_draw_opaque;
-    worker->draw_funcs.copy_bits = (copy_bits_t)gl_canvas_copy_pixels;
-    worker->draw_funcs.draw_text = (draw_text_t)gl_canvas_draw_text;
-    worker->draw_funcs.draw_stroke = (draw_stroke_t)gl_canvas_draw_stroke;
-    worker->draw_funcs.draw_rop3 = (draw_rop3_t)gl_canvas_draw_rop3;
-    worker->draw_funcs.draw_blend = (draw_blend_t)gl_canvas_draw_blend;
-    worker->draw_funcs.draw_blackness = (draw_blackness_t)gl_canvas_draw_blackness;
-    worker->draw_funcs.draw_whiteness = (draw_whiteness_t)gl_canvas_draw_whiteness;
-    worker->draw_funcs.draw_invers = (draw_invers_t)gl_canvas_draw_invers;
-    worker->draw_funcs.draw_transparent = (draw_transparent_t)gl_canvas_draw_transparent;
-    worker->draw_funcs.draw_alpha_blend = (draw_alpha_blend_t)gl_canvas_draw_alpha_blend;
-    worker->draw_funcs.read_pixels = (read_pixels_t)gl_canvas_read_pixels;
-
-    worker->draw_funcs.set_top_mask = (set_top_mask_t)gl_canvas_set_top_mask;
-    worker->draw_funcs.clear_top_mask = (clear_top_mask_t)gl_canvas_clear_top_mask;
-    worker->draw_funcs.validate_area = (validate_area_t)gl_validate_area;
-    worker->draw_funcs.destroy = (destroy_t)destroy_gl_canvas;
-}
-
-static GLCanvas *create_ogl_context_common(RedWorker *worker, OGLCtx *ctx, uint32_t width,
-                                           uint32_t height, int32_t stride, uint8_t depth)
-{
-    GLCanvas *canvas;
+    SpiceCanvas *canvas;
 
     oglctx_make_current(ctx);
-    if (!(canvas = gl_canvas_create(ctx, width, height, depth, &worker->image_cache.base, NULL,
+    if (!(canvas = gl_canvas_create(width, height, depth, &worker->image_cache.base, NULL,
                                     &worker->preload_group_virt_mapping))) {
         return NULL;
     }
 
-    gl_canvas_clear(canvas);
+    spice_canvas_set_usr_data(canvas, ctx, (spice_destroy_fn_t)oglctx_destroy);
+
+    canvas->ops->clear(canvas);
 
     return canvas;
 }
 
-static GLCanvas *create_ogl_pbuf_context(RedWorker *worker, uint32_t width, uint32_t height,
+static SpiceCanvas *create_ogl_pbuf_context(RedWorker *worker, uint32_t width, uint32_t height,
                                          int32_t stride, uint8_t depth)
 {
     OGLCtx *ctx;
-    GLCanvas *canvas;
+    SpiceCanvas *canvas;
 
     if (!(ctx = pbuf_create(width, height))) {
         return NULL;
@@ -7584,10 +7479,10 @@ static GLCanvas *create_ogl_pbuf_context(RedWorker *worker, uint32_t width, uint
     return canvas;
 }
 
-static GLCanvas *create_ogl_pixmap_context(RedWorker *worker, uint32_t width, uint32_t height,
-                                           int32_t stride, uint8_t depth) {
+static SpiceCanvas *create_ogl_pixmap_context(RedWorker *worker, uint32_t width, uint32_t height,
+                                              int32_t stride, uint8_t depth) {
     OGLCtx *ctx;
-    GLCanvas *canvas;
+    SpiceCanvas *canvas;
 
     if (!(ctx = pixmap_create(width, height))) {
         return NULL;
@@ -7601,36 +7496,17 @@ static GLCanvas *create_ogl_pixmap_context(RedWorker *worker, uint32_t width, ui
     return canvas;
 }
 
-static inline void surface_init_draw_funcs(RedWorker *worker, uint32_t renderer)
-{
-    switch (renderer) {
-    case RED_RENDERER_CAIRO:
-        init_cairo_draw_funcs(worker);
-        red_printf("using cairo canvas");
-        return;
-    case RED_RENDERER_OGL_PBUF:
-        init_ogl_draw_funcs(worker);
-        red_printf("using opengl pbuff canvas");
-        return;
-    case RED_RENDERER_OGL_PIXMAP:
-        init_ogl_draw_funcs(worker);
-        red_printf("using opengl pixmap canvas");
-        return;
-    default:
-        red_error("invalid renderer type");
-    };
-}
-
 static inline void *create_canvas_for_surface(RedWorker *worker, Surface *surface,
                                               uint32_t renderer, uint32_t width, uint32_t height,
                                               int32_t stride, uint8_t depth, void *line_0)
 {
-    void *canvas;
+    SpiceCanvas *canvas;
 
     switch (renderer) {
     case RED_RENDERER_CAIRO:
         canvas = create_cairo_context(worker, width, height, stride, depth, line_0);
         surface->context.top_down = TRUE;
+        surface->context.canvas_draws_on_surface = TRUE;
         return canvas;
     case RED_RENDERER_OGL_PBUF:
         canvas = create_ogl_pbuf_context(worker, width, height, stride, depth);
@@ -7656,6 +7532,7 @@ static inline void red_create_surface(RedWorker *worker, uint32_t width, uint32_
     }
     PANIC_ON(surface->context.canvas);
 
+    surface->context.canvas_draws_on_surface = FALSE;
     surface->context.width = width;
     surface->context.height = height;
     surface->context.depth = depth;
@@ -7679,7 +7556,6 @@ static inline void red_create_surface(RedWorker *worker, uint32_t width, uint32_
                                                             surface->context.depth, line_0);
         if (surface->context.canvas) {
             worker->renderer = worker->renderers[i];
-            surface_init_draw_funcs(worker, worker->renderers[i]);
             return;
         }
     }

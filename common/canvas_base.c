@@ -60,6 +60,11 @@
 #define WARN(x) printf("warning: %s\n", x)
 #endif
 
+#define PANIC(str) {                                \
+    printf("%s: panic: %s", __FUNCTION__, str);     \
+    abort();                                        \
+}
+
 #ifndef DBG
 #define DBG(level, format, ...) printf("%s: debug: " format "\n", __FUNCTION__, ## __VA_ARGS__);
 #endif
@@ -170,6 +175,7 @@ typedef struct QuicData {
 } QuicData;
 
 typedef struct CanvasBase {
+    SpiceCanvas parent;
     uint32_t color_shift;
     uint32_t color_mask;
     QuicData quic_data;
@@ -190,6 +196,9 @@ typedef struct CanvasBase {
 
     LzData lz_data;
     GlzData glz_data;
+
+    void *usr_data;
+    spice_destroy_fn_t usr_data_destroy;
 } CanvasBase;
 
 
@@ -1538,17 +1547,59 @@ static void canvas_base_destroy(CanvasBase *canvas)
 #ifdef GDI_CANVAS
     DeleteDC(canvas->dc);
 #endif
+
+    if (canvas->usr_data && canvas->usr_data_destroy) {
+        canvas->usr_data_destroy (canvas->usr_data);
+        canvas->usr_data = NULL;
+    }
 }
 
+/* This is kind of lame, but it protects against muliple
+   instances of these functions. We really should stop including
+   canvas_base.c and build it separately instead */
+#ifdef  CANVAS_SINGLE_INSTANCE
+
+void spice_canvas_set_usr_data(SpiceCanvas *spice_canvas,
+                               void *data,
+                               spice_destroy_fn_t destroy_fn)
+{
+    CanvasBase *canvas = (CanvasBase *)spice_canvas;
+    if (canvas->usr_data && canvas->usr_data_destroy) {
+        canvas->usr_data_destroy (canvas->usr_data);
+    }
+    canvas->usr_data = data;
+    canvas->usr_data_destroy = destroy_fn;
+}
+
+void *spice_canvas_get_usr_data(SpiceCanvas *spice_canvas)
+{
+    CanvasBase *canvas = (CanvasBase *)spice_canvas;
+    return  canvas->usr_data;
+}
+#endif
+
+static void unimplemented_op(SpiceCanvas *canvas)
+{
+    PANIC("unimplemented canvas operation");
+}
+
+inline static void canvas_base_init_ops(SpiceCanvasOps *ops)
+{
+    void **ops_cast;
+    int i;
+
+    ops_cast = (void **)ops;
+    for (i = 0; i < sizeof(SpiceCanvasOps) / sizeof(void *); i++) {
+        ops_cast[i] = (void *) unimplemented_op;
+    }
+}
+
+static int canvas_base_init(CanvasBase *canvas, SpiceCanvasOps *ops, int depth
 #ifdef CAIRO_CANVAS_CACHE
-static int canvas_base_init(CanvasBase *canvas, int depth,
-                            SpiceImageCache *bits_cache,
-                            SpicePaletteCache *palette_cache
+                            , SpiceImageCache *bits_cache
+                            , SpicePaletteCache *palette_cache
 #elif defined(CAIRO_CANVAS_IMAGE_CACHE)
-static int canvas_base_init(CanvasBase *canvas, int depth,
-                            SpiceImageCache *bits_cache
-#else
-static int canvas_base_init(CanvasBase *canvas, int depth
+                            , SpiceImageCache *bits_cache
 #endif
                             , SpiceGlzDecoder *glz_decoder
 #ifndef CAIRO_CANVAS_NO_CHUNKS
@@ -1556,6 +1607,7 @@ static int canvas_base_init(CanvasBase *canvas, int depth
 #endif
                             )
 {
+    canvas->parent.ops = ops;
     canvas->quic_data.usr.error = quic_usr_error;
     canvas->quic_data.usr.warn = quic_usr_warn;
     canvas->quic_data.usr.info = quic_usr_warn;
@@ -1612,4 +1664,3 @@ static int canvas_base_init(CanvasBase *canvas, int depth
 #endif
     return 1;
 }
-

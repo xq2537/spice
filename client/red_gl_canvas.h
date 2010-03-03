@@ -39,29 +39,12 @@ public:
     void copy_pixels(const QRegion& region, RedDrawable* dc,
                      const PixmapHeader* pixmap);
     void copy_pixels(const QRegion& region, RedDrawable& dc);
-    void put_image(const PixmapHeader& image, const SpiceRect& dest,
-                   const QRegion* clip);
-
-    void set_access_params(unsigned long base, unsigned long max);
-    void draw_fill(SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill);
-    void draw_copy(SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy);
-    void draw_opaque(SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque);
-    void copy_bits(SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos);
-    void draw_text(SpiceRect *bbox, SpiceClip *clip, SpiceText *text);
-    void draw_stroke(SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke);
-    void draw_rop3(SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3);
-    void draw_blend(SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend);
-    void draw_blackness(SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness);
-    void draw_whiteness(SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness);
-    void draw_invers(SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers);
-    void draw_transparent(SpiceRect *bbox, SpiceClip *clip, SpiceTransparent* transparent);
-    void draw_alpha_blend(SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend);
-
     virtual void textures_lost();
     virtual CanvasType get_pixmap_type();
     virtual void touch_context();
     virtual void pre_gl_copy();
     virtual void post_gl_copy();
+    void touched_bbox(const SpiceRect *bbox);
 
 private:
     void create_pixmap(int width, int height, RedWindow *win,
@@ -70,7 +53,6 @@ private:
     void destroy();
 
 private:
-    GLCanvas* _canvas;
     RedPixmapGL *_pixmap;
     bool _textures_lost;
 };

@@ -22,12 +22,16 @@
 
 #include "pixman_utils.h"
 #include "lz.h"
+#include "region.h"
 #include <spice/draw.h>
+
+typedef void (*spice_destroy_fn_t)(void *data);
 
 typedef struct _SpiceImageCache SpiceImageCache;
 typedef struct _SpicePaletteCache SpicePaletteCache;
 typedef struct _SpiceGlzDecoder SpiceGlzDecoder;
 typedef struct _SpiceVirtMapping SpiceVirtMapping;
+typedef struct _SpiceCanvas SpiceCanvas;
 
 typedef struct {
     void (*put)(SpiceImageCache *cache,
@@ -75,5 +79,40 @@ struct _SpiceVirtMapping {
   SpiceVirtMappingOps *ops;
 };
 
+typedef struct {
+    void (*draw_fill)(SpiceCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceFill *fill);
+    void (*draw_copy)(SpiceCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceCopy *copy);
+    void (*draw_opaque)(SpiceCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceOpaque *opaque);
+    void (*copy_bits)(SpiceCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos);
+    void (*draw_text)(SpiceCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceText *text);
+    void (*draw_stroke)(SpiceCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceStroke *stroke);
+    void (*draw_rop3)(SpiceCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3);
+    void (*draw_blend)(SpiceCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend);
+    void (*draw_blackness)(SpiceCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlackness *blackness);
+    void (*draw_whiteness)(SpiceCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness);
+    void (*draw_invers)(SpiceCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers);
+    void (*draw_transparent)(SpiceCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceTransparent* transparent);
+    void (*draw_alpha_blend)(SpiceCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend);
+    void (*put_image)(SpiceCanvas *canvas,
+#ifdef WIN32
+                      HDC dc,
 #endif
+                      const SpiceRect *dest, const uint8_t *src_data,
+                      uint32_t src_width, uint32_t src_height, int src_stride,
+                      const QRegion *clip);
+    void (*clear)(SpiceCanvas *canvas);
+    void (*read_bits)(SpiceCanvas *canvas, uint8_t *dest, int dest_stride, const SpiceRect *area);
+    void (*group_start)(SpiceCanvas *canvas, QRegion *region);
+    void (*group_end)(SpiceCanvas *canvas);
+    void (*set_access_params)(SpiceCanvas *canvas, unsigned long base, unsigned long max);
+    void (*destroy)(SpiceCanvas *canvas);
+} SpiceCanvasOps;
 
+void spice_canvas_set_usr_data(SpiceCanvas *canvas, void *data, spice_destroy_fn_t destroy_fn);
+void *spice_canvas_get_usr_data(SpiceCanvas *canvas);
+
+struct _SpiceCanvas {
+  SpiceCanvasOps *ops;
+};
+
+#endif
