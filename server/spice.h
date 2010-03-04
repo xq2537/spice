@@ -20,10 +20,16 @@
 
 #include "vd_interface.h"
 
+/* old interface */
 extern const char *spice_usage_str[];
 
 int spice_parse_args(const char *args);
 void spice_init(CoreInterface *core);
 
-#endif
+/* new interface */
+typedef struct RedsState SpiceServer;
+SpiceServer *spice_server_new(void);
+int spice_server_init(SpiceServer *s, CoreInterface *core);
+void spice_server_destroy(SpiceServer *s);
 
+#endif
