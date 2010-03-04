@@ -49,4 +49,14 @@ int spice_server_add_interface(SpiceServer *s, VDInterface *interface);
 int spice_server_remove_interface(SpiceServer *s, VDInterface *interface);
 int spice_server_kbd_leds(SpiceServer *s, KeyboardInterface *kbd, int leds);
 
+typedef enum {
+    SPICE_IMAGE_COMPRESS_INVALID  = 0,
+    SPICE_IMAGE_COMPRESS_OFF      = 1,
+    SPICE_IMAGE_COMPRESS_AUTO_GLZ = 2,
+    SPICE_IMAGE_COMPRESS_AUTO_LZ  = 3,
+    SPICE_IMAGE_COMPRESS_QUIC     = 4,
+    SPICE_IMAGE_COMPRESS_GLZ      = 5,
+    SPICE_IMAGE_COMPRESS_LZ       = 6,
+} spice_image_compression_t;
+
 #endif

@@ -912,7 +912,7 @@ typedef struct RedWorker {
 
     ImageCache image_cache;
 
-    image_compression_t image_compression;
+    spice_image_compression_t image_compression;
 
     uint32_t mouse_mode;
 
@@ -5501,13 +5501,14 @@ static inline int red_compress_image(DisplayChannel *display_channel,
                                      RedImage *dest, Bitmap *src, Drawable *drawable,
                                      compress_send_data_t* o_comp_data)
 {
-    image_compression_t image_compression = display_channel->base.worker->image_compression;
+    spice_image_compression_t image_compression =
+        display_channel->base.worker->image_compression;
     int quic_compress = FALSE;
 
-    if ((image_compression == IMAGE_COMPRESS_OFF) ||
+    if ((image_compression == SPICE_IMAGE_COMPRESS_OFF) ||
         ((src->y * src->stride) < MIN_SIZE_TO_COMPRESS)) { // TODO: change the size cond
         return FALSE;
-    } else if (image_compression == IMAGE_COMPRESS_QUIC) {
+    } else if (image_compression == SPICE_IMAGE_COMPRESS_QUIC) {
         if (BITMAP_FMT_IS_PLT[src->format]) {
             return FALSE;
         } else {
@@ -5519,16 +5520,16 @@ static inline int red_compress_image(DisplayChannel *display_channel,
             of the image in bytes (2) unstable bitmaps
         */
         if (_stride_is_extra(src) || (src->flags & QXL_BITMAP_UNSTABLE)) {
-            if ((image_compression == IMAGE_COMPRESS_LZ) ||
-                (image_compression == IMAGE_COMPRESS_GLZ) ||
+            if ((image_compression == SPICE_IMAGE_COMPRESS_LZ) ||
+                (image_compression == SPICE_IMAGE_COMPRESS_GLZ) ||
                 BITMAP_FMT_IS_PLT[src->format]) {
                 return FALSE;
             } else {
                 quic_compress = TRUE;
             }
         } else {
-            if ((image_compression == IMAGE_COMPRESS_AUTO_LZ) ||
-                (image_compression == IMAGE_COMPRESS_AUTO_GLZ)) {
+            if ((image_compression == SPICE_IMAGE_COMPRESS_AUTO_LZ) ||
+                (image_compression == SPICE_IMAGE_COMPRESS_AUTO_GLZ)) {
                 if ((src->x < MIN_DIMENSION_TO_QUIC) || (src->y < MIN_DIMENSION_TO_QUIC)) {
                     quic_compress = FALSE;
                 } else {
@@ -5553,13 +5554,13 @@ static inline int red_compress_image(DisplayChannel *display_channel,
     } else {
         int glz;
         int ret;
-        if ((image_compression == IMAGE_COMPRESS_AUTO_GLZ) ||
-            (image_compression == IMAGE_COMPRESS_GLZ)) {
+        if ((image_compression == SPICE_IMAGE_COMPRESS_AUTO_GLZ) ||
+            (image_compression == SPICE_IMAGE_COMPRESS_GLZ)) {
             glz = BITMAP_FMT_IS_RGB[src->format] && (
                     (src->x * src->y) < glz_enc_dictionary_get_size(
                         display_channel->glz_dict->dict));
-        } else if ((image_compression == IMAGE_COMPRESS_AUTO_LZ) ||
-                   (image_compression == IMAGE_COMPRESS_LZ)) {
+        } else if ((image_compression == SPICE_IMAGE_COMPRESS_AUTO_LZ) ||
+                   (image_compression == SPICE_IMAGE_COMPRESS_LZ)) {
             glz = FALSE;
         } else {
             red_error("invalid image compression type %u", image_compression);
@@ -5696,9 +5697,10 @@ static void fill_brush(DisplayChannel *display_channel, Brush *brush, Drawable *
 static void fill_mask(DisplayChannel *display_channel, QMask *mask, Drawable *drawable)
 {
     if (mask->bitmap) {
-        if (display_channel->base.worker->image_compression != IMAGE_COMPRESS_OFF) {
-            image_compression_t save_img_comp = display_channel->base.worker->image_compression;
-            display_channel->base.worker->image_compression = IMAGE_COMPRESS_OFF;
+        if (display_channel->base.worker->image_compression != SPICE_IMAGE_COMPRESS_OFF) {
+            spice_image_compression_t save_img_comp =
+                display_channel->base.worker->image_compression;
+            display_channel->base.worker->image_compression = SPICE_IMAGE_COMPRESS_OFF;
             fill_bits(display_channel, &mask->bitmap, drawable);
             display_channel->base.worker->image_compression = save_img_comp;
         } else {
@@ -8301,24 +8303,25 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         red_migrate_cursor(worker);
         break;
     case RED_WORKER_MESSAGE_SET_COMPRESSION:
-        receive_data(worker->channel, &worker->image_compression, sizeof(image_compression_t));
+        receive_data(worker->channel, &worker->image_compression,
+                     sizeof(spice_image_compression_t));
         switch (worker->image_compression) {
-        case IMAGE_COMPRESS_AUTO_LZ:
+        case SPICE_IMAGE_COMPRESS_AUTO_LZ:
             red_printf("ic auto_lz");
             break;
-        case IMAGE_COMPRESS_AUTO_GLZ:
+        case SPICE_IMAGE_COMPRESS_AUTO_GLZ:
             red_printf("ic auto_glz");
             break;
-        case IMAGE_COMPRESS_QUIC:
+        case SPICE_IMAGE_COMPRESS_QUIC:
             red_printf("ic quic");
             break;
-        case IMAGE_COMPRESS_LZ:
+        case SPICE_IMAGE_COMPRESS_LZ:
             red_printf("ic lz");
             break;
-        case IMAGE_COMPRESS_GLZ:
+        case SPICE_IMAGE_COMPRESS_GLZ:
             red_printf("ic glz");
             break;
-        case IMAGE_COMPRESS_OFF:
+        case SPICE_IMAGE_COMPRESS_OFF:
             red_printf("ic off");
             break;
         default:

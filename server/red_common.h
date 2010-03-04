@@ -21,6 +21,7 @@
 #include <sys/uio.h>
 #include <openssl/ssl.h>
 
+#include "spice.h"
 #include "red.h"
 
 #ifndef MIN
@@ -77,16 +78,6 @@
 #define OFFSETOF(type, member) ((unsigned long)&((type *)0)->member)
 #define CONTAINEROF(ptr, type, member) \
     ((type *)((uint8_t *)(ptr) - OFFSETOF(type, member)))
-
-typedef enum {
-    IMAGE_COMPRESS_INVALID,
-    IMAGE_COMPRESS_AUTO_GLZ,
-    IMAGE_COMPRESS_AUTO_LZ,
-    IMAGE_COMPRESS_QUIC,
-    IMAGE_COMPRESS_GLZ,
-    IMAGE_COMPRESS_LZ,
-    IMAGE_COMPRESS_OFF,
-} image_compression_t;
 
 enum {
     STREAM_VIDEO_INVALID,
