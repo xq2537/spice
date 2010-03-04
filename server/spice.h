@@ -32,7 +32,11 @@ SpiceServer *spice_server_new(void);
 int spice_server_init(SpiceServer *s, CoreInterface *core);
 void spice_server_destroy(SpiceServer *s);
 
+#define SPICE_ADDR_FLAG_IPV4_ONLY (1 << 0)
+#define SPICE_ADDR_FLAG_IPV6_ONLY (1 << 1)
+
 int spice_server_set_port(SpiceServer *s, int port);
+void spice_server_set_addr(SpiceServer *s, const char *addr, int flags);
 int spice_server_set_noauth(SpiceServer *s);
 int spice_server_set_ticket(SpiceServer *s, const char *passwd, int lifetime,
                             int fail_if_connected, int disconnect_if_connected);
