@@ -59,4 +59,8 @@ typedef enum {
     SPICE_IMAGE_COMPRESS_LZ       = 6,
 } spice_image_compression_t;
 
+int spice_server_set_image_compression(SpiceServer *s,
+                                       spice_image_compression_t comp);
+spice_image_compression_t spice_server_get_image_compression(SpiceServer *s);
+
 #endif

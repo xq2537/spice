@@ -5618,6 +5618,20 @@ int spice_server_set_tls(SpiceServer *s, int port,
     return 0;
 }
 
+int spice_server_set_image_compression(SpiceServer *s,
+                                       spice_image_compression_t comp)
+{
+    ASSERT(reds == s);
+    set_image_compression(comp);
+    return 0;
+}
+
+spice_image_compression_t spice_server_get_image_compression(SpiceServer *s)
+{
+    ASSERT(reds == s);
+    return image_compression;
+}
+
 int spice_server_add_interface(SpiceServer *s, VDInterface *interface)
 {
     ASSERT(reds == s);
