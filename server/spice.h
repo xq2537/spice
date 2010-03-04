@@ -37,4 +37,8 @@ int spice_server_set_noauth(SpiceServer *s);
 int spice_server_set_ticket(SpiceServer *s, const char *passwd, int lifetime,
                             int fail_if_connected, int disconnect_if_connected);
 
+int spice_server_add_interface(SpiceServer *s, VDInterface *interface);
+int spice_server_remove_interface(SpiceServer *s, VDInterface *interface);
+int spice_server_kbd_leds(SpiceServer *s, KeyboardInterface *kbd, int leds);
+
 #endif

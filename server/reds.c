@@ -5125,8 +5125,10 @@ static void interface_change_notifier(void *opaque, VDInterface *interface,
                 return;
             }
             keyboard = (KeyboardInterface *)interface;
-            if (!keyboard->register_leds_notifier(keyboard, reds_on_keyborad_leads_change, NULL)) {
-                red_error("register leds  notifier failed");
+            if (keyboard->register_leds_notifier) {
+                if (!keyboard->register_leds_notifier(keyboard, reds_on_keyborad_leads_change, NULL)) {
+                    red_error("register leds  notifier failed");
+                }
             }
         } else if (strcmp(interface->type, VD_INTERFACE_MOUSE) == 0) {
             red_printf("VD_INTERFACE_MOUSE");
@@ -5410,10 +5412,14 @@ static void do_spice_init(CoreInterface *core_interface)
         red_error("key modifiers timer create failed");
     }
 
-    while ((interface = core->next(core, interface))) {
-        interface_change_notifier(&reds, interface, VD_INTERFACE_ADDING);
+    if (core->next) {
+        while ((interface = core->next(core, interface))) {
+            interface_change_notifier(&reds, interface, VD_INTERFACE_ADDING);
+        }
     }
-    core->register_change_notifiers(core, &reds, interface_change_notifier);
+    if (core->register_change_notifiers) {
+        core->register_change_notifiers(core, &reds, interface_change_notifier);
+    }
 
 #ifdef RED_STATISTICS
     int shm_name_len = strlen(REDS_STAT_SHM_NAME) + 20;
@@ -5537,5 +5543,26 @@ int spice_server_set_ticket(SpiceServer *s, const char *passwd, int lifetime,
         memset(taTicket.password, 0, sizeof(taTicket.password));
         taTicket.expiration_time = 0;
     }
+    return 0;
+}
+
+int spice_server_add_interface(SpiceServer *s, VDInterface *interface)
+{
+    ASSERT(reds == s);
+    interface_change_notifier(NULL, interface, VD_INTERFACE_ADDING);
+    return 0;
+}
+
+int spice_server_remove_interface(SpiceServer *s, VDInterface *interface)
+{
+    ASSERT(reds == s);
+    interface_change_notifier(NULL, interface, VD_INTERFACE_REMOVING);
+    return 0;
+}
+
+int spice_server_kbd_leds(SpiceServer *s, KeyboardInterface *kbd, int leds)
+{
+    ASSERT(reds == s);
+    reds_on_keyborad_leads_change(NULL, leds);
     return 0;
 }
