@@ -5619,6 +5619,19 @@ spice_image_compression_t spice_server_get_image_compression(SpiceServer *s)
     return image_compression;
 }
 
+int spice_server_set_channel_security(SpiceServer *s,
+                                      spice_channel_t channel,
+                                      int security)
+{
+    ASSERT(reds == s);
+    if (channel == SPICE_CHANNEL_ALL) {
+        set_all_channels_security(security);
+    } else {
+        set_one_channel_security(channel, security);
+    }
+    return 0;
+}
+
 int spice_server_add_interface(SpiceServer *s, VDInterface *interface)
 {
     ASSERT(reds == s);

@@ -79,4 +79,8 @@ typedef enum {
 #define SPICE_CHANNEL_SECURITY_NON (1 << 0)
 #define SPICE_CHANNEL_SECURITY_SSL (1 << 1)
 
+int spice_server_set_channel_security(SpiceServer *s,
+                                      spice_channel_t channel,
+                                      int security);
+
 #endif
