@@ -106,6 +106,90 @@ typedef struct {
     void (*group_end)(SpiceCanvas *canvas);
     void (*set_access_params)(SpiceCanvas *canvas, unsigned long base, unsigned long max);
     void (*destroy)(SpiceCanvas *canvas);
+
+    /* Implementation vfuncs */
+    void (*fill_solid_spans)(SpiceCanvas *canvas,
+                             SpicePoint *points,
+                             int *widths,
+                             int n_spans,
+                             uint32_t color);
+    void (*fill_solid_rects)(SpiceCanvas *canvas,
+                             pixman_box32_t *rects,
+                             int n_rects,
+                             uint32_t color);
+    void (*fill_solid_rects_rop)(SpiceCanvas *canvas,
+                                 pixman_box32_t *rects,
+                                 int n_rects,
+                                 uint32_t color,
+                                 SpiceROP rop);
+    void (*fill_tiled_rects)(SpiceCanvas *canvas,
+                             pixman_box32_t *rects,
+                             int n_rects,
+                             pixman_image_t *tile,
+                             int offset_x, int offset_y);
+    void (*fill_tiled_rects_rop)(SpiceCanvas *canvas,
+                                 pixman_box32_t *rects,
+                                 int n_rects,
+                                 pixman_image_t *tile,
+                                 int offset_x, int offset_y,
+                                 SpiceROP rop);
+    void (*blit_image)(SpiceCanvas *canvas,
+                       pixman_region32_t *region,
+                       pixman_image_t *src_image,
+                       int offset_x, int offset_y);
+    void (*blit_image_rop)(SpiceCanvas *canvas,
+                           pixman_region32_t *region,
+                           pixman_image_t *src_image,
+                           int offset_x, int offset_y,
+                           SpiceROP rop);
+    void (*scale_image)(SpiceCanvas *canvas,
+                        pixman_region32_t *region,
+                        pixman_image_t *src_image,
+                        int src_x, int src_y,
+                        int src_width, int src_height,
+                        int dest_x, int dest_y,
+                        int dest_width, int dest_height,
+                        int scale_mode);
+    void (*scale_image_rop)(SpiceCanvas *canvas,
+                            pixman_region32_t *region,
+                            pixman_image_t *src_image,
+                            int src_x, int src_y,
+                            int src_width, int src_height,
+                            int dest_x, int dest_y,
+                            int dest_width, int dest_height,
+                            int scale_mode, SpiceROP rop);
+    void (*blend_image)(SpiceCanvas *canvas,
+                        pixman_region32_t *region,
+                        pixman_image_t *src_image,
+                        int src_x, int src_y,
+                        int dest_x, int dest_y,
+                        int width, int height,
+                        int overall_alpha);
+    void (*blend_scale_image)(SpiceCanvas *canvas,
+                              pixman_region32_t *region,
+                              pixman_image_t *src_image,
+                              int src_x, int src_y,
+                              int src_width, int src_height,
+                              int dest_x, int dest_y,
+                              int dest_width, int dest_height,
+                              int scale_mode,
+                              int overall_alpha);
+    void (*colorkey_image)(SpiceCanvas *canvas,
+                           pixman_region32_t *region,
+                           pixman_image_t *src_image,
+                           int offset_x, int offset_y,
+                           uint32_t transparent_color);
+    void (*colorkey_scale_image)(SpiceCanvas *canvas,
+                                 pixman_region32_t *region,
+                                 pixman_image_t *src_image,
+                                 int src_x, int src_y,
+                                 int src_width, int src_height,
+                                 int dest_x, int dest_y,
+                                 int dest_width, int dest_height,
+                                 uint32_t transparent_color);
+    void (*copy_region)(SpiceCanvas *canvas,
+                        pixman_region32_t *dest_region,
+                        int dx, int dy);
 } SpiceCanvasOps;
 
 void spice_canvas_set_usr_data(SpiceCanvas *canvas, void *data, spice_destroy_fn_t destroy_fn);
