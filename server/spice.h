@@ -36,6 +36,10 @@ int spice_server_set_port(SpiceServer *s, int port);
 int spice_server_set_noauth(SpiceServer *s);
 int spice_server_set_ticket(SpiceServer *s, const char *passwd, int lifetime,
                             int fail_if_connected, int disconnect_if_connected);
+int spice_server_set_tls(SpiceServer *s, int port,
+                         const char *ca_cert_file, const char *certs_file,
+                         const char *private_key_file, const char *key_passwd,
+                         const char *dh_key_file, const char *ciphersuite);
 
 int spice_server_add_interface(SpiceServer *s, VDInterface *interface);
 int spice_server_remove_interface(SpiceServer *s, VDInterface *interface);
