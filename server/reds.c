@@ -339,9 +339,6 @@ typedef struct RedSSLParameters {
     char ciphersuite[256];
 } RedSSLParameters;
 
-#define CHANNEL_SECURITY_NON (1 << 0)
-#define CHANNEL_SECURITY_SSL (1 << 1)
-
 typedef struct ChannelSecurityOptions ChannelSecurityOptions;
 struct ChannelSecurityOptions {
     uint32_t channel_id;
@@ -365,7 +362,8 @@ static void reds_main_write(void *data);
 static void reds_push();
 
 static ChannelSecurityOptions *channels_security = NULL;
-static int default_channel_security = CHANNEL_SECURITY_NON | CHANNEL_SECURITY_SSL;
+static int default_channel_security =
+    SPICE_CHANNEL_SECURITY_NON | SPICE_CHANNEL_SECURITY_SSL;
 
 static RedSSLParameters ssl_parameters;
 
@@ -2821,8 +2819,8 @@ static int reds_security_check(RedLinkInfo *link)
 {
     ChannelSecurityOptions *security_option = find_channel_security(link->link_mess->channel_type);
     uint32_t security = security_option ? security_option->options : default_channel_security;
-    return (link->peer->ssl && (security & CHANNEL_SECURITY_SSL)) || (!link->peer->ssl &&
-                                                                 (security & CHANNEL_SECURITY_NON));
+    return (link->peer->ssl && (security & SPICE_CHANNEL_SECURITY_SSL)) ||
+        (!link->peer->ssl && (security & SPICE_CHANNEL_SECURITY_NON));
 }
 
 static void reds_handle_read_link_done(void *opaque)
@@ -3807,25 +3805,14 @@ static OptionsMap _spice_options[] = {
     {NULL, 0},
 };
 
-enum {
-    CHANNEL_NAME_INVALID,
-    CHANNEL_NAME_ALL,
-    CHANNEL_NAME_MAIN,
-    CHANNEL_NAME_DISPLAY,
-    CHANNEL_NAME_INPUTS,
-    CHANNEL_NAME_CURSOR,
-    CHANNEL_NAME_PLAYBACK,
-    CHANNEL_NAME_RECORD,
-};
-
 static OptionsMap _channel_map[] = {
-    {"all", CHANNEL_NAME_ALL},
-    {"main", CHANNEL_NAME_MAIN},
-    {"display", CHANNEL_NAME_DISPLAY},
-    {"inputs", CHANNEL_NAME_INPUTS},
-    {"cursor", CHANNEL_NAME_CURSOR},
-    {"playback", CHANNEL_NAME_PLAYBACK},
-    {"record", CHANNEL_NAME_RECORD},
+    {"all", SPICE_CHANNEL_ALL},
+    {"main", SPICE_CHANNEL_MAIN},
+    {"display", SPICE_CHANNEL_DISPLAY},
+    {"inputs", SPICE_CHANNEL_INPUTS},
+    {"cursor", SPICE_CHANNEL_CURSOR},
+    {"playback", SPICE_CHANNEL_PLAYBACK},
+    {"record", SPICE_CHANNEL_RECORD},
     {NULL, 0},
 };
 
@@ -3873,30 +3860,30 @@ static int set_channels_security(const char *channels, uint32_t security)
     str = local_str;
     do {
         switch (channel_name = get_option(&str, &val, _channel_map, '+')) {
-        case CHANNEL_NAME_ALL:
+        case SPICE_CHANNEL_ALL:
             all++;
             break;
-        case CHANNEL_NAME_MAIN:
+        case SPICE_CHANNEL_MAIN:
             specific++;
             set_one_channel_security(RED_CHANNEL_MAIN, security);
             break;
-        case CHANNEL_NAME_DISPLAY:
+        case SPICE_CHANNEL_DISPLAY:
             specific++;
             set_one_channel_security(RED_CHANNEL_DISPLAY, security);
             break;
-        case CHANNEL_NAME_INPUTS:
+        case SPICE_CHANNEL_INPUTS:
             specific++;
             set_one_channel_security(RED_CHANNEL_INPUTS, security);
             break;
-        case CHANNEL_NAME_CURSOR:
+        case SPICE_CHANNEL_CURSOR:
             specific++;
             set_one_channel_security(RED_CHANNEL_CURSOR, security);
             break;
-        case CHANNEL_NAME_PLAYBACK:
+        case SPICE_CHANNEL_PLAYBACK:
             specific++;
             set_one_channel_security(RED_CHANNEL_PLAYBACK, security);
             break;
-        case CHANNEL_NAME_RECORD:
+        case SPICE_CHANNEL_RECORD:
             specific++;
             set_one_channel_security(RED_CHANNEL_RECORD, security);
             break;
@@ -4066,12 +4053,12 @@ int __attribute__ ((visibility ("default"))) spice_parse_args(const char *in_arg
             }
             break;
         case SPICE_SECURED_CHANNELS:
-            if (!val || !set_channels_security(val, CHANNEL_SECURITY_SSL)) {
+            if (!val || !set_channels_security(val, SPICE_CHANNEL_SECURITY_SSL)) {
                 goto error;
             }
             break;
         case SPICE_UNSECURED_CHANNELS:
-            if (!val || !set_channels_security(val, CHANNEL_SECURITY_NON)) {
+            if (!val || !set_channels_security(val, SPICE_CHANNEL_SECURITY_NON)) {
                 goto error;
             }
             break;
