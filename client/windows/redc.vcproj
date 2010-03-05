@@ -303,7 +303,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\pixman_utils.cpp"
+				RelativePath="..\pixman_utils.cpp"
 				>
 			</File>
 			<File
