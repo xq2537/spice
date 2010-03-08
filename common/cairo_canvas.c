@@ -21,7 +21,6 @@
 #define CANVAS_USE_PIXMAN
 #define CANVAS_SINGLE_INSTANCE
 #include "canvas_base.c"
-#include "rop3.h"
 #include "rect.h"
 #include "region.h"
 #include "pixman_utils.h"
@@ -34,36 +33,6 @@ struct CairoCanvas {
     int private_data_size;
     pixman_image_t *image;
 };
-
-static pixman_image_t* canvas_surface_from_self(CairoCanvas *canvas,
-                                                int x, int y,
-                                                int32_t width, int32_t heigth)
-{
-    pixman_image_t *surface;
-    pixman_image_t *src_surface;
-    uint8_t *dest;
-    int dest_stride;
-    uint8_t *src;
-    int src_stride;
-    int i;
-
-    surface = pixman_image_create_bits(PIXMAN_x8r8g8b8, width, heigth, NULL, 0);
-    if (surface == NULL) {
-        CANVAS_ERROR("create surface failed");
-    }
-
-    dest = (uint8_t *)pixman_image_get_data(surface);
-    dest_stride = pixman_image_get_stride(surface);
-
-    src_surface = canvas->image;
-    src = (uint8_t *)pixman_image_get_data(src_surface);
-    src_stride = pixman_image_get_stride(src_surface);
-    src += y * src_stride + (x << 2);
-    for (i = 0; i < heigth; i++, dest += dest_stride, src += src_stride) {
-        memcpy(dest, src, width << 2);
-    }
-    return surface;
-}
 
 static pixman_image_t *canvas_get_pixman_brush(CairoCanvas *canvas,
                                                SpiceBrush *brush)
@@ -630,70 +599,6 @@ static void colorkey_scale_image(SpiceCanvas *spice_canvas,
 
     pixman_image_unref(scaled);
 }
-static void canvas_draw_rop3(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceRop3 *rop3)
-{
-    CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
-    pixman_region32_t dest_region;
-    pixman_image_t *d;
-    pixman_image_t *s;
-    SpicePoint src_pos;
-    int width;
-    int heigth;
-
-    pixman_region32_init_rect(&dest_region,
-                              bbox->left, bbox->top,
-                              bbox->right - bbox->left,
-                              bbox->bottom - bbox->top);
-
-
-    canvas_clip_pixman(&canvas->base, &dest_region, clip);
-    canvas_mask_pixman(&canvas->base, &dest_region, &rop3->mask,
-                       bbox->left, bbox->top);
-
-    width = bbox->right - bbox->left;
-    heigth = bbox->bottom - bbox->top;
-
-    d = canvas_surface_from_self(canvas, bbox->left, bbox->top, width, heigth);
-    s = canvas_get_image(&canvas->base, rop3->src_bitmap);
-
-    if (!rect_is_same_size(bbox, &rop3->src_area)) {
-        pixman_image_t *scaled_s = canvas_scale_surface(s, &rop3->src_area, width, heigth,
-                                                        rop3->scale_mode);
-        pixman_image_unref(s);
-        s = scaled_s;
-        src_pos.x = 0;
-        src_pos.y = 0;
-    } else {
-        src_pos.x = rop3->src_area.left;
-        src_pos.y = rop3->src_area.top;
-    }
-    if (pixman_image_get_width(s) - src_pos.x < width ||
-        pixman_image_get_height(s) - src_pos.y < heigth) {
-        CANVAS_ERROR("bad src bitmap size");
-    }
-    if (rop3->brush.type == SPICE_BRUSH_TYPE_PATTERN) {
-        pixman_image_t *p = canvas_get_image(&canvas->base, rop3->brush.u.pattern.pat);
-        SpicePoint pat_pos;
-
-        pat_pos.x = (bbox->left - rop3->brush.u.pattern.pos.x) % pixman_image_get_width(p);
-        pat_pos.y = (bbox->top - rop3->brush.u.pattern.pos.y) % pixman_image_get_height(p);
-        do_rop3_with_pattern(rop3->rop3, d, s, &src_pos, p, &pat_pos);
-        pixman_image_unref(p);
-    } else {
-        uint32_t color = (canvas->base.color_shift) == 8 ? rop3->brush.u.color :
-                                                         canvas_16bpp_to_32bpp(rop3->brush.u.color);
-        do_rop3_with_color(rop3->rop3, d, s, &src_pos, color);
-    }
-    pixman_image_unref(s);
-
-    blit_image(spice_canvas, &dest_region, d,
-               bbox->left,
-               bbox->top);
-
-    pixman_image_unref(d);
-
-    pixman_region32_fini(&dest_region);
-}
 
 static void canvas_put_image(SpiceCanvas *spice_canvas,
 #ifdef WIN32
@@ -943,7 +848,6 @@ void cairo_canvas_init() //unsafe global function
 
     canvas_base_init_ops(&cairo_canvas_ops);
     cairo_canvas_ops.draw_text = canvas_draw_text;
-    cairo_canvas_ops.draw_rop3 = canvas_draw_rop3;
     cairo_canvas_ops.put_image = canvas_put_image;
     cairo_canvas_ops.clear = canvas_clear;
     cairo_canvas_ops.read_bits = canvas_read_bits;

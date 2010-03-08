@@ -30,6 +30,7 @@
 #include "canvas_utils.h"
 #include "rect.h"
 #include "lines.h"
+#include "rop3.h"
 
 #include "mutex.h"
 
@@ -1082,6 +1083,33 @@ static pixman_image_t *canvas_get_image(CanvasBase *canvas, SPICE_ADDRESS addr)
 static void canvas_touch_image(CanvasBase *canvas, SPICE_ADDRESS addr)
 {
     canvas_get_image_internal(canvas, addr, FALSE);
+}
+
+static pixman_image_t* canvas_get_image_from_self(SpiceCanvas *canvas,
+                                                  int x, int y,
+                                                  int32_t width, int32_t height)
+{
+    pixman_image_t *surface;
+    uint8_t *dest;
+    int dest_stride;
+    SpiceRect area;
+
+    surface = pixman_image_create_bits(PIXMAN_x8r8g8b8, width, height, NULL, 0);
+    if (surface == NULL) {
+        CANVAS_ERROR("create surface failed");
+    }
+
+    dest = (uint8_t *)pixman_image_get_data(surface);
+    dest_stride = pixman_image_get_stride(surface);
+
+    area.left = x;
+    area.top = y;
+    area.right = x + width;
+    area.bottom = y + height;
+
+    canvas->ops->read_bits(canvas, dest, dest_stride, &area);
+
+    return surface;
 }
 
 static inline uint8_t revers_bits(uint8_t byte)
@@ -2804,6 +2832,71 @@ static void canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox,
     pixman_region32_fini(&gc.dest_region);
 }
 
+static void canvas_draw_rop3(SpiceCanvas *spice_canvas, SpiceRect *bbox,
+                             SpiceClip *clip, SpiceRop3 *rop3)
+{
+    CanvasBase *canvas = (CanvasBase *)spice_canvas;
+    pixman_region32_t dest_region;
+    pixman_image_t *d;
+    pixman_image_t *s;
+    SpicePoint src_pos;
+    int width;
+    int heigth;
+
+    pixman_region32_init_rect(&dest_region,
+                              bbox->left, bbox->top,
+                              bbox->right - bbox->left,
+                              bbox->bottom - bbox->top);
+
+    canvas_clip_pixman(canvas, &dest_region, clip);
+    canvas_mask_pixman(canvas, &dest_region, &rop3->mask,
+                       bbox->left, bbox->top);
+
+    width = bbox->right - bbox->left;
+    heigth = bbox->bottom - bbox->top;
+
+    d = canvas_get_image_from_self(spice_canvas, bbox->left, bbox->top, width, heigth);
+    s = canvas_get_image(canvas, rop3->src_bitmap);
+
+    if (!rect_is_same_size(bbox, &rop3->src_area)) {
+        pixman_image_t *scaled_s = canvas_scale_surface(s, &rop3->src_area, width, heigth,
+                                                        rop3->scale_mode);
+        pixman_image_unref(s);
+        s = scaled_s;
+        src_pos.x = 0;
+        src_pos.y = 0;
+    } else {
+        src_pos.x = rop3->src_area.left;
+        src_pos.y = rop3->src_area.top;
+    }
+    if (pixman_image_get_width(s) - src_pos.x < width ||
+        pixman_image_get_height(s) - src_pos.y < heigth) {
+        CANVAS_ERROR("bad src bitmap size");
+    }
+    if (rop3->brush.type == SPICE_BRUSH_TYPE_PATTERN) {
+        pixman_image_t *p = canvas_get_image(canvas, rop3->brush.u.pattern.pat);
+        SpicePoint pat_pos;
+
+        pat_pos.x = (bbox->left - rop3->brush.u.pattern.pos.x) % pixman_image_get_width(p);
+        pat_pos.y = (bbox->top - rop3->brush.u.pattern.pos.y) % pixman_image_get_height(p);
+        do_rop3_with_pattern(rop3->rop3, d, s, &src_pos, p, &pat_pos);
+        pixman_image_unref(p);
+    } else {
+        uint32_t color = (canvas->color_shift) == 8 ? rop3->brush.u.color :
+                                                         canvas_16bpp_to_32bpp(rop3->brush.u.color);
+        do_rop3_with_color(rop3->rop3, d, s, &src_pos, color);
+    }
+    pixman_image_unref(s);
+
+    spice_canvas->ops->blit_image(spice_canvas, &dest_region, d,
+                                  bbox->left,
+                                  bbox->top);
+
+    pixman_image_unref(d);
+
+    pixman_region32_fini(&dest_region);
+}
+
 static void canvas_copy_bits(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos)
 {
     CanvasBase *canvas = (CanvasBase *)spice_canvas;
@@ -2890,6 +2983,7 @@ inline static void canvas_base_init_ops(SpiceCanvasOps *ops)
     ops->draw_transparent = canvas_draw_transparent;
     ops->draw_alpha_blend = canvas_draw_alpha_blend;
     ops->draw_stroke = canvas_draw_stroke;
+    ops->draw_rop3 = canvas_draw_rop3;
     ops->group_start = canvas_base_group_start;
     ops->group_end = canvas_base_group_end;
 }
