@@ -816,10 +816,11 @@ void spice_pixman_blit_colorkey (pixman_image_t *dest,
             uint32_t *d = (uint32_t *)byte_line;
             uint32_t *s = (uint32_t *)byte_line;
 
+            transparent_color &= 0xffffff;
             s = (uint32_t *)src_line;
             for (x = 0; x < width; x++) {
                 uint32_t val = *s;
-                if (val != (0xffffff & transparent_color)) {
+                if ((0xffffff & val) != transparent_color) {
                     *d = val;
                 }
                 s++; d++;
