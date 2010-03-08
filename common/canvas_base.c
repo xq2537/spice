@@ -29,6 +29,7 @@
 #include "pixman_utils.h"
 #include "canvas_utils.h"
 #include "rect.h"
+#include "lines.h"
 
 #include "mutex.h"
 
@@ -2355,6 +2356,454 @@ static void canvas_draw_invers(SpiceCanvas *spice_canvas, SpiceRect *bbox, Spice
     pixman_region32_fini(&dest_region);
 }
 
+typedef struct {
+    lineGC base;
+    SpiceCanvas *canvas;
+    pixman_region32_t dest_region;
+    SpiceROP fore_rop;
+    SpiceROP back_rop;
+    int solid;
+    uint32_t color;
+    pixman_image_t *tile;
+    int tile_offset_x;
+    int tile_offset_y;
+} StrokeGC;
+
+static void stroke_fill_spans(lineGC * pGC,
+                              int num_spans,
+                              SpicePoint *points,
+                              int *widths,
+                              int sorted,
+                              int foreground)
+{
+    SpiceCanvas *canvas;
+    StrokeGC *strokeGC;
+    int i;
+    SpiceROP rop;
+
+    strokeGC = (StrokeGC *)pGC;
+    canvas = strokeGC->canvas;
+
+    num_spans = spice_canvas_clip_spans(&strokeGC->dest_region,
+                                        points, widths, num_spans,
+                                        points, widths, sorted);
+
+    if (foreground) {
+        rop = strokeGC->fore_rop;
+    } else {
+        rop = strokeGC->back_rop;
+    }
+
+    if (strokeGC->solid) {
+        if (rop == SPICE_ROP_COPY) {
+            canvas->ops->fill_solid_spans(canvas, points, widths, num_spans,
+                                          strokeGC->color);
+        } else {
+            for (i = 0; i < num_spans; i++) {
+                pixman_box32_t r;
+                r.x1 = points[i].x;
+                r.y1 = points[i].y;
+                r.x2 = points[i].x + widths[i];
+                canvas->ops->fill_solid_rects_rop(canvas, &r, 1,
+                                                  strokeGC->color, rop);
+            }
+        }
+    } else {
+        if (rop == SPICE_ROP_COPY) {
+            for (i = 0; i < num_spans; i++) {
+                pixman_box32_t r;
+                r.x1 = points[i].x;
+                r.y1 = points[i].y;
+                r.x2 = points[i].x + widths[i];
+                canvas->ops->fill_tiled_rects(canvas, &r, 1,
+                                              strokeGC->tile,
+                                              strokeGC->tile_offset_x,
+                                              strokeGC->tile_offset_y);
+            }
+        } else {
+            for (i = 0; i < num_spans; i++) {
+                pixman_box32_t r;
+                r.x1 = points[i].x;
+                r.y1 = points[i].y;
+                r.x2 = points[i].x + widths[i];
+                canvas->ops->fill_tiled_rects_rop(canvas, &r, 1,
+                                                  strokeGC->tile,
+                                                  strokeGC->tile_offset_x,
+                                                  strokeGC->tile_offset_y, rop);
+            }
+        }
+    }
+}
+
+static void stroke_fill_rects(lineGC * pGC,
+                              int num_rects,
+                              pixman_rectangle32_t *rects,
+                              int foreground)
+{
+    SpiceCanvas *canvas;
+    pixman_region32_t area;
+    pixman_box32_t *boxes;
+    StrokeGC *strokeGC;
+    SpiceROP rop;
+    int i;
+    pixman_box32_t *area_rects;
+    int n_area_rects;
+
+    strokeGC = (StrokeGC *)pGC;
+    canvas = strokeGC->canvas;
+
+    if (foreground) {
+        rop = strokeGC->fore_rop;
+    } else {
+        rop = strokeGC->back_rop;
+    }
+
+    /* TODO: We can optimize this for more common cases where
+       dest is one rect */
+
+    boxes = (pixman_box32_t *)malloc(num_rects * sizeof(pixman_box32_t));
+    for (i = 0; i < num_rects; i++) {
+        boxes[i].x1 = rects[i].x;
+        boxes[i].y1 = rects[i].y;
+        boxes[i].x2 = rects[i].x + rects[i].width;
+        boxes[i].y2 = rects[i].y + rects[i].height;
+    }
+    pixman_region32_init_rects(&area, boxes, num_rects);
+    pixman_region32_intersect(&area, &area, &strokeGC->dest_region);
+    free(boxes);
+
+    area_rects = pixman_region32_rectangles(&area, &n_area_rects);
+
+    if (strokeGC->solid) {
+        if (rop == SPICE_ROP_COPY) {
+            canvas->ops->fill_solid_rects(canvas, area_rects, n_area_rects,
+                                          strokeGC->color);
+        } else {
+            canvas->ops->fill_solid_rects_rop(canvas, area_rects, n_area_rects,
+                                              strokeGC->color, rop);
+        }
+    } else {
+        if (rop == SPICE_ROP_COPY) {
+            canvas->ops->fill_tiled_rects(canvas, area_rects, n_area_rects,
+                                          strokeGC->tile,
+                                          strokeGC->tile_offset_x,
+                                          strokeGC->tile_offset_y);
+        } else {
+            canvas->ops->fill_tiled_rects_rop(canvas, area_rects, n_area_rects,
+                                              strokeGC->tile,
+                                              strokeGC->tile_offset_x,
+                                              strokeGC->tile_offset_y,
+                                              rop);
+        }
+    }
+
+   pixman_region32_fini(&area);
+}
+
+typedef struct {
+    SpicePoint *points;
+    int num_points;
+    int size;
+} StrokeLines;
+
+static void stroke_lines_init(StrokeLines *lines)
+{
+    lines->points = (SpicePoint *)malloc(10*sizeof(SpicePoint));
+    lines->size = 10;
+    lines->num_points = 0;
+}
+
+static void stroke_lines_free(StrokeLines *lines)
+{
+    free(lines->points);
+}
+
+static void stroke_lines_append(StrokeLines *lines,
+                                int x, int y)
+{
+    if (lines->num_points == lines->size) {
+        lines->size *= 2;
+        lines->points = (SpicePoint *)realloc(lines->points,
+                                              lines->size * sizeof(SpicePoint));
+    }
+    lines->points[lines->num_points].x = x;
+    lines->points[lines->num_points].y = y;
+    lines->num_points++;
+}
+
+static void stroke_lines_append_fix(StrokeLines *lines,
+                                    SpicePointFix *point)
+{
+    stroke_lines_append(lines,
+                        fix_to_int(point->x),
+                        fix_to_int(point->y));
+}
+
+static inline int64_t dot(SPICE_FIXED28_4 x1,
+                          SPICE_FIXED28_4 y1,
+                          SPICE_FIXED28_4 x2,
+                          SPICE_FIXED28_4 y2)
+{
+    return (((int64_t)x1) *((int64_t)x2) +
+            ((int64_t)y1) *((int64_t)y2)) >> 4;
+}
+
+static inline int64_t dot2(SPICE_FIXED28_4 x,
+                           SPICE_FIXED28_4 y)
+{
+    return (((int64_t)x) *((int64_t)x) +
+            ((int64_t)y) *((int64_t)y)) >> 4;
+}
+
+static void subdivide_bezier(StrokeLines *lines,
+                             SpicePointFix point0,
+                             SpicePointFix point1,
+                             SpicePointFix point2,
+                             SpicePointFix point3)
+{
+    int64_t A2, B2, C2, AB, CB, h1, h2;
+
+    A2 = dot2(point1.x - point0.x,
+              point1.y - point0.y);
+    B2 = dot2(point3.x - point0.x,
+              point3.y - point0.y);
+    C2 = dot2(point2.x - point3.x,
+              point2.y - point3.y);
+
+    AB = dot(point1.x - point0.x,
+             point1.y - point0.y,
+             point3.x - point0.x,
+             point3.y - point0.y);
+
+    CB = dot(point2.x - point3.x,
+             point2.y - point3.y,
+             point0.x - point3.x,
+             point0.y - point3.y);
+
+    h1 = (A2*B2 - AB*AB) >> 3;
+    h2 = (C2*B2 - CB*CB) >> 3;
+
+    if (h1 < B2 && h2 < B2) {
+        /* deviation squared less than half a pixel, use straight line */
+        stroke_lines_append_fix(lines, &point3);
+    } else {
+        SpicePointFix point01, point23, point12, point012, point123, point0123;
+
+        point01.x = (point0.x + point1.x) / 2;
+        point01.y = (point0.y + point1.y) / 2;
+        point12.x = (point1.x + point2.x) / 2;
+        point12.y = (point1.y + point2.y) / 2;
+        point23.x = (point2.x + point3.x) / 2;
+        point23.y = (point2.y + point3.y) / 2;
+        point012.x = (point01.x + point12.x) / 2;
+        point012.y = (point01.y + point12.y) / 2;
+        point123.x = (point12.x + point23.x) / 2;
+        point123.y = (point12.y + point23.y) / 2;
+        point0123.x = (point012.x + point123.x) / 2;
+        point0123.y = (point012.y + point123.y) / 2;
+
+        subdivide_bezier(lines, point0, point01, point012, point0123);
+        subdivide_bezier(lines, point0123, point123, point23, point3);
+    }
+}
+
+static void stroke_lines_append_bezier(StrokeLines *lines,
+                                       SpicePointFix *point1,
+                                       SpicePointFix *point2,
+                                       SpicePointFix *point3)
+{
+    SpicePointFix point0;
+
+    point0.x = int_to_fix(lines->points[lines->num_points-1].x);
+    point0.y = int_to_fix(lines->points[lines->num_points-1].y);
+
+    subdivide_bezier(lines, point0, *point1, *point2, *point3);
+}
+
+static void stroke_lines_draw(StrokeLines *lines,
+                              lineGC *gc,
+                              int dashed)
+{
+    if (lines->num_points != 0) {
+        if (dashed) {
+            spice_canvas_zero_dash_line(gc, CoordModeOrigin,
+                                        lines->num_points, lines->points);
+        } else {
+            spice_canvas_zero_line(gc, CoordModeOrigin,
+                                   lines->num_points, lines->points);
+        }
+        lines->num_points = 0;
+    }
+}
+
+
+static void canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox,
+                               SpiceClip *clip, SpiceStroke *stroke)
+{
+    CanvasBase *canvas = (CanvasBase *)spice_canvas;
+    StrokeGC gc = { { 0 } };
+    lineGCOps ops = {
+        stroke_fill_spans,
+        stroke_fill_rects
+    };
+    uint32_t *data_size;
+    uint32_t more;
+    SpicePathSeg *seg;
+    StrokeLines lines;
+    int i;
+    int dashed;
+
+    pixman_region32_init_rect(&gc.dest_region,
+                              bbox->left, bbox->top,
+                              bbox->right - bbox->left,
+                              bbox->bottom - bbox->top);
+
+    canvas_clip_pixman(canvas, &gc.dest_region, clip);
+
+    if (pixman_region32_n_rects(&gc.dest_region) == 0) {
+        touch_brush(canvas, &stroke->brush);
+        pixman_region32_fini(&gc.dest_region);
+        return;
+    }
+
+    gc.canvas = spice_canvas;
+    gc.fore_rop = ropd_descriptor_to_rop(stroke->fore_mode,
+                                         ROP_INPUT_BRUSH,
+                                         ROP_INPUT_DEST);
+    gc.back_rop = ropd_descriptor_to_rop(stroke->back_mode,
+                                         ROP_INPUT_BRUSH,
+                                         ROP_INPUT_DEST);
+
+    gc.base.width = canvas->width;
+    gc.base.height = canvas->height;
+    gc.base.alu = gc.fore_rop;
+    gc.base.lineWidth = 0;
+
+    /* dash */
+    gc.base.dashOffset = 0;
+    gc.base.dash = NULL;
+    gc.base.numInDashList = 0;
+    gc.base.lineStyle = LineSolid;
+    /* win32 cosmetic lines are endpoint-exclusive, so use CapNotLast */
+    gc.base.capStyle = CapNotLast;
+    gc.base.joinStyle = JoinMiter;
+    gc.base.ops = &ops;
+
+    dashed = 0;
+    if (stroke->attr.flags & SPICE_LINE_FLAGS_STYLED) {
+        SPICE_FIXED28_4 *style = (SPICE_FIXED28_4*)SPICE_GET_ADDRESS(stroke->attr.style);
+        int nseg;
+
+        dashed = 1;
+
+        nseg = stroke->attr.style_nseg;
+
+        /* To truly handle back_mode we should use LineDoubleDash here
+           and treat !foreground as back_rop using the same brush.
+           However, using the same brush for that seems wrong.
+           The old cairo backend was stroking the non-dashed line with
+           rop_mode before enabling dashes for the foreground which is
+           not right either. The gl an gdi backend don't use back_mode
+           at all */
+        gc.base.lineStyle = LineOnOffDash;
+        gc.base.dash = (unsigned char *)malloc(nseg);
+        gc.base.numInDashList = nseg;
+        access_test(canvas, style, nseg * sizeof(*style));
+
+        if (stroke->attr.flags & SPICE_LINE_FLAGS_START_WITH_GAP) {
+            gc.base.dash[stroke->attr.style_nseg - 1] = fix_to_int(style[0]);
+            for (i = 0; i < stroke->attr.style_nseg - 1; i++) {
+                gc.base.dash[i] = fix_to_int(style[i+1]);
+            }
+            gc.base.dashOffset = gc.base.dash[0];
+        } else {
+            for (i = 0; i < stroke->attr.style_nseg; i++) {
+                gc.base.dash[i] = fix_to_int(style[i]);
+            }
+        }
+    }
+
+    switch (stroke->brush.type) {
+    case SPICE_BRUSH_TYPE_NONE:
+        gc.solid = TRUE;
+        gc.color = 0;
+        break;
+    case SPICE_BRUSH_TYPE_SOLID:
+        gc.solid = TRUE;
+        gc.color = stroke->brush.u.color;
+        break;
+    case SPICE_BRUSH_TYPE_PATTERN:
+        gc.solid = FALSE;
+        gc.tile = canvas_get_image(canvas,
+                                   stroke->brush.u.pattern.pat);
+        gc.tile_offset_x = stroke->brush.u.pattern.pos.x;
+        gc.tile_offset_y = stroke->brush.u.pattern.pos.y;
+        break;
+    default:
+        CANVAS_ERROR("invalid brush type");
+    }
+
+    data_size = (uint32_t*)SPICE_GET_ADDRESS(stroke->path);
+    access_test(canvas, data_size, sizeof(uint32_t));
+    more = *data_size;
+    seg = (SpicePathSeg*)(data_size + 1);
+
+    stroke_lines_init(&lines);
+
+    do {
+        access_test(canvas, seg, sizeof(SpicePathSeg));
+
+        uint32_t flags = seg->flags;
+        SpicePointFix* point = (SpicePointFix*)seg->data;
+        SpicePointFix* end_point = point + seg->count;
+        access_test(canvas, point, (unsigned long)end_point - (unsigned long)point);
+        ASSERT(point < end_point);
+        more -= ((unsigned long)end_point - (unsigned long)seg);
+        seg = (SpicePathSeg*)end_point;
+
+        if (flags & SPICE_PATH_BEGIN) {
+            stroke_lines_draw(&lines, (lineGC *)&gc, dashed);
+            stroke_lines_append_fix(&lines, point);
+            point++;
+        }
+
+        if (flags & SPICE_PATH_BEZIER) {
+            ASSERT((point - end_point) % 3 == 0);
+            for (; point + 2 < end_point; point += 3) {
+                stroke_lines_append_bezier(&lines,
+                                           &point[0],
+                                           &point[1],
+                                           &point[2]);
+            }
+        } else
+            {
+            for (; point < end_point; point++) {
+                stroke_lines_append_fix(&lines, point);
+            }
+        }
+        if (flags & SPICE_PATH_END) {
+            if (flags & SPICE_PATH_CLOSE) {
+                stroke_lines_append(&lines,
+                                    lines.points[0].x, lines.points[0].y);
+            }
+            stroke_lines_draw(&lines, (lineGC *)&gc, dashed);
+        }
+    } while (more);
+
+    stroke_lines_draw(&lines, (lineGC *)&gc, dashed);
+
+    if (gc.base.dash) {
+        free(gc.base.dash);
+    }
+    stroke_lines_free(&lines);
+
+    if (!gc.solid && gc.tile) {
+        pixman_image_unref(gc.tile);
+    }
+
+    pixman_region32_fini(&gc.dest_region);
+}
+
 static void canvas_copy_bits(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpicePoint *src_pos)
 {
     CanvasBase *canvas = (CanvasBase *)spice_canvas;
@@ -2440,6 +2889,7 @@ inline static void canvas_base_init_ops(SpiceCanvasOps *ops)
     ops->draw_invers = canvas_draw_invers;
     ops->draw_transparent = canvas_draw_transparent;
     ops->draw_alpha_blend = canvas_draw_alpha_blend;
+    ops->draw_stroke = canvas_draw_stroke;
     ops->group_start = canvas_base_group_start;
     ops->group_end = canvas_base_group_end;
 }
