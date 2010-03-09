@@ -5388,7 +5388,7 @@ static void init_vd_agent_resources()
 
 const char *version_string = VERSION;
 
-void __attribute__ ((visibility ("default"))) spice_init(CoreInterface *core_interface)
+static void do_spice_init(CoreInterface *core_interface)
 {
     VDInterface *interface = NULL;
 
@@ -5405,10 +5405,6 @@ void __attribute__ ((visibility ("default"))) spice_init(CoreInterface *core_int
     if (core_interface->base.minor_version > 1) {
         log_proc = core->log;
     }
-    if (!(reds = malloc(sizeof(RedsState)))) {
-        red_error("reds alloc failed");
-    }
-    memset(reds, 0, sizeof(RedsState));
     reds->listen_socket = -1;
     reds->secure_listen_socket = -1;
     reds->peer = NULL;
@@ -5476,3 +5472,35 @@ void __attribute__ ((visibility ("default"))) spice_init(CoreInterface *core_int
     atexit(reds_exit);
 }
 
+void __attribute__ ((visibility ("default"))) spice_init(CoreInterface *core_interface)
+{
+    spice_server_new();
+    do_spice_init(core_interface);
+}
+
+/* new interface */
+SpiceServer *spice_server_new(void)
+{
+    /* we can't handle multiple instances (yet) */
+    ASSERT(reds == NULL);
+
+    if (!(reds = malloc(sizeof(RedsState)))) {
+        red_error("reds alloc failed");
+    }
+    memset(reds, 0, sizeof(RedsState));
+    return reds;
+}
+
+int spice_server_init(SpiceServer *s, CoreInterface *core)
+{
+    ASSERT(reds == s);
+    do_spice_init(core);
+    red_dispatcher_add_renderer("cairo");
+    return 0;
+}
+
+void spice_server_destroy(SpiceServer *s)
+{
+    ASSERT(reds == s);
+    reds_exit();
+}
