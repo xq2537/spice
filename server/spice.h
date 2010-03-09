@@ -82,4 +82,6 @@ int spice_server_set_channel_security(SpiceServer *s,
                                       spice_channel_name_t channel,
                                       int security);
 
+int spice_server_set_mouse_absolute(SpiceServer *s, int absolute);
+
 #endif
