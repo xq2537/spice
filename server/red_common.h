@@ -22,21 +22,7 @@
 #include <openssl/ssl.h>
 
 #include <spice/protocol.h>
-
-#ifndef MIN
-#define MIN(x, y) (((x) <= (y)) ? (x) : (y))
-#endif
-#ifndef MAX
-#define MAX(x, y) (((x) >= (y)) ? (x) : (y))
-#endif
-
-#ifndef ABS
-#define ABS(a) ((a) >= 0 ? (a) : -(a))
-#endif
-
-#ifndef ALIGN
-#define ALIGN(a, b) (((a) + ((b) - 1)) & ~((b) - 1))
-#endif
+#include <spice/macros.h>
 
 #define ASSERT(x) if (!(x)) {                               \
     printf("%s: ASSERT %s failed\n", __FUNCTION__, #x);     \
@@ -52,9 +38,6 @@
     printf("%s: panic %s\n", __FUNCTION__, #x);             \
     abort();                                                \
 }
-
-#define TRUE 1
-#define FALSE 0
 
 #define red_error(format, ...) {                                 \
     printf("%s: " format "\n", __FUNCTION__, ## __VA_ARGS__ );   \
@@ -78,10 +61,6 @@
         printf("%s: " format "\n", __FUNCTION__, ## __VA_ARGS__ );  \
     }                                                               \
 }
-
-#define OFFSETOF(type, member) ((unsigned long)&((type *)0)->member)
-#define CONTAINEROF(ptr, type, member) \
-    ((type *)((uint8_t *)(ptr) - OFFSETOF(type, member)))
 
 typedef enum {
     IMAGE_COMPRESS_INVALID,

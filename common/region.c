@@ -19,15 +19,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <spice/macros.h>
 
 #include "region.h"
 #include "rect.h"
-
-#define FALSE 0
-#define TRUE 1
-
-#define MIN(x, y) (((x) <= (y)) ? (x) : (y))
-#define MAX(x, y) (((x) >= (y)) ? (x) : (y))
 
 #define ASSERT(x) if (!(x)) {                               \
     printf("%s: ASSERT %s failed\n", __FUNCTION__, #x);     \

@@ -26,9 +26,7 @@
 #include <stdio.h>
 
 #include <spice/types.h>
-
-#define MIN(x, y) (((x) <= (y)) ? (x) : (y))
-#define MAX(x, y) (((x) >= (y)) ? (x) : (y))
+#include <spice/macros.h>
 
 class GlzException: public std::exception {
 public:

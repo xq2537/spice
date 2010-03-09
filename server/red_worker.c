@@ -1180,7 +1180,7 @@ static void cb_validate_virt(void *opaque, unsigned long virt, unsigned long fro
 
 static void *op_get_virt_preload_group(SpiceVirtMapping *mapping, unsigned long addr, uint32_t add_size)
 {
-    RedWorker *worker = CONTAINEROF(mapping, RedWorker, preload_group_virt_mapping);
+    RedWorker *worker = SPICE_CONTAINEROF(mapping, RedWorker, preload_group_virt_mapping);
     return (void *)get_virt(worker, addr, add_size,
                             worker->preload_group_id);
 }
@@ -1188,7 +1188,7 @@ static void *op_get_virt_preload_group(SpiceVirtMapping *mapping, unsigned long 
 static void op_validate_virt_preload_group(SpiceVirtMapping *mapping, unsigned long virt,
                                            unsigned long from_addr, uint32_t add_size)
 {
-    RedWorker *worker = CONTAINEROF(mapping, RedWorker, preload_group_virt_mapping);
+    RedWorker *worker = SPICE_CONTAINEROF(mapping, RedWorker, preload_group_virt_mapping);
     int slot_id = get_memslot_id(worker, from_addr);
     validate_virt(worker, virt, slot_id, add_size,
                   worker->preload_group_id);
@@ -1406,7 +1406,7 @@ static void red_pipe_clear(RedChannel *channel)
         ring_remove(&item->link);
         switch (item->type) {
         case PIPE_ITEM_TYPE_DRAW:
-            release_drawable(channel->worker, CONTAINEROF(item, Drawable, pipe_item));
+            release_drawable(channel->worker, SPICE_CONTAINEROF(item, Drawable, pipe_item));
             break;
         case PIPE_ITEM_TYPE_CURSOR:
             red_release_cursor(channel->worker, (CursorItem *)item);
@@ -1432,14 +1432,14 @@ static void red_pipe_clear(RedChannel *channel)
             break;
         case PIPE_ITEM_TYPE_STREAM_CREATE:
             red_display_release_stream((DisplayChannel *)channel,
-                                       CONTAINEROF(item, StreamAgent, create_item));
+                                       SPICE_CONTAINEROF(item, StreamAgent, create_item));
             break;
         case PIPE_ITEM_TYPE_STREAM_CLIP:
             red_display_release_stream_clip((DisplayChannel *)channel, (StreamClipItem*)item);
             break;
         case PIPE_ITEM_TYPE_STREAM_DESTROY:
             red_display_release_stream((DisplayChannel *)channel,
-                                       CONTAINEROF(item, StreamAgent, destroy_item));
+                                       SPICE_CONTAINEROF(item, StreamAgent, destroy_item));
             break;
         }
     }
@@ -1655,14 +1655,14 @@ static inline void current_remove(RedWorker *worker, TreeItem *item)
 
         if (now->type == TREE_ITEM_TYPE_DRAWABLE) {
             ring_item = now->siblings_link.prev;
-            remove_drawable(worker, CONTAINEROF(now, Drawable, tree_item));
+            remove_drawable(worker, SPICE_CONTAINEROF(now, Drawable, tree_item));
         } else {
             Container *container = (Container *)now;
 
             ASSERT(now->type == TREE_ITEM_TYPE_CONTAINER);
 
             if ((ring_item = ring_get_head(&container->items))) {
-                now = CONTAINEROF(ring_item, TreeItem, siblings_link);
+                now = SPICE_CONTAINEROF(ring_item, TreeItem, siblings_link);
                 continue;
             }
             ring_item = now->siblings_link.prev;
@@ -1673,7 +1673,7 @@ static inline void current_remove(RedWorker *worker, TreeItem *item)
         }
 
         if ((ring_item = ring_next(&container->items, ring_item))) {
-            now = CONTAINEROF(ring_item, TreeItem, siblings_link);
+            now = SPICE_CONTAINEROF(ring_item, TreeItem, siblings_link);
         } else {
             now = (TreeItem *)container;
         }
@@ -1692,7 +1692,7 @@ static void current_tree_for_each(RedWorker *worker, void (*f)(TreeItem *, void 
     top_ring = ring;
 
     for (;;) {
-        TreeItem *now = CONTAINEROF(ring_item, TreeItem, siblings_link);
+        TreeItem *now = SPICE_CONTAINEROF(ring_item, TreeItem, siblings_link);
 
         f(now, data);
 
@@ -1723,7 +1723,7 @@ static void red_current_clear(RedWorker *worker)
     RingItem *ring_item;
 
     while ((ring_item = ring_get_head(&worker->current))) {
-        TreeItem *now = CONTAINEROF(ring_item, TreeItem, siblings_link);
+        TreeItem *now = SPICE_CONTAINEROF(ring_item, TreeItem, siblings_link);
         current_remove(worker, now);
     }
 }
@@ -1753,7 +1753,7 @@ static void print_rgn(const char* prefix, const QRegion* rgn)
 static void print_draw_item(const char* prefix, const DrawItem *draw_item)
 {
     const TreeItem *base = &draw_item->base;
-    const Drawable *drawable = CONTAINEROF(draw_item, Drawable, tree_item);
+    const Drawable *drawable = SPICE_CONTAINEROF(draw_item, Drawable, tree_item);
     printf("TEST: %s: draw id %u container %u effect %u",
            prefix,
            base->id, base->container ? base->container->base.id : 0,
@@ -1889,7 +1889,7 @@ static inline void __exclude_region(RedWorker *worker, TreeItem *item, QRegion *
                 }
             } else {
                 if (frame_candidate) {
-                    Drawable *drawable = CONTAINEROF(draw, Drawable, tree_item);
+                    Drawable *drawable = SPICE_CONTAINEROF(draw, Drawable, tree_item);
                     red_stream_maintenance(worker, frame_candidate, drawable);
                 }
                 region_exclude(&draw->base.rgn, &and_rgn);
@@ -1938,7 +1938,7 @@ static void exclude_region(RedWorker *worker, Ring *ring, RingItem *ring_item, Q
     top_ring = ring;
 
     for (;;) {
-        TreeItem *now = CONTAINEROF(ring_item, TreeItem, siblings_link);
+        TreeItem *now = SPICE_CONTAINEROF(ring_item, TreeItem, siblings_link);
         Container *container = now->container;
 
         ASSERT(!region_is_empty(&now->rgn));
@@ -2001,7 +2001,7 @@ static void exclude_region(RedWorker *worker, Ring *ring, RingItem *ring_item, Q
     top_ring = ring;
 
     for (;;) {
-        TreeItem *now = CONTAINEROF(ring_item, TreeItem, siblings_link);
+        TreeItem *now = SPICE_CONTAINEROF(ring_item, TreeItem, siblings_link);
         Container *container = now->container;
 
         ASSERT(!region_is_empty(&now->rgn));
@@ -2394,7 +2394,7 @@ static void red_detach_streams_behind(RedWorker *worker, QRegion *region)
     DisplayChannel *channel = worker->display_channel;
 
     while (item) {
-        Stream *stream = CONTAINEROF(item, Stream, link);
+        Stream *stream = SPICE_CONTAINEROF(item, Stream, link);
         item = ring_next(ring, item);
 
         if (channel) {
@@ -2420,7 +2420,7 @@ static void red_stop_streams_behind(RedWorker *worker, QRegion *region)
     RingItem *item = ring_get_head(ring);
 
     while (item) {
-        Stream *stream = CONTAINEROF(item, Stream, link);
+        Stream *stream = SPICE_CONTAINEROF(item, Stream, link);
         stream->refs++;
         if (stream->current && region_intersects(region, &stream->current->tree_item.base.rgn)) {
             red_stop_stream_gracefully(worker, stream);
@@ -2446,7 +2446,7 @@ static void red_streams_update_clip(RedWorker *worker, Drawable *drawable)
     item = ring_get_head(ring);
 
     while (item) {
-        Stream *stream = CONTAINEROF(item, Stream, link);
+        Stream *stream = SPICE_CONTAINEROF(item, Stream, link);
         StreamAgent *agent;
 
         item = ring_next(ring, item);
@@ -2476,7 +2476,7 @@ static inline unsigned int red_get_streams_timout(RedWorker *worker)
     while ((item = ring_next(ring, item))) {
         Stream *stream;
 
-        stream = CONTAINEROF(item, Stream, link);
+        stream = SPICE_CONTAINEROF(item, Stream, link);
 #ifdef STREAM_TRACE
         red_time_t delta = (stream->last_time + RED_STREAM_TIMOUT) - now;
 
@@ -2507,7 +2507,7 @@ static inline void red_handle_streams_timout(RedWorker *worker)
     red_time_t now = timespec_to_red_time(&time);
     item = ring_get_head(ring);
     while (item) {
-        Stream *stream = CONTAINEROF(item, Stream, link);
+        Stream *stream = SPICE_CONTAINEROF(item, Stream, link);
 #ifdef STREAM_TRACE
         item = ring_next(ring, item);
         if (now >= (stream->last_time + RED_STREAM_TIMOUT)) {
@@ -2628,8 +2628,8 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
 
     ASSERT(drawable->qxl_drawable->type == QXL_DRAW_COPY);
     src_rect = &drawable->qxl_drawable->u.copy.src_area;
-    stream_width = ALIGN(src_rect->right - src_rect->left, 2);
-    stream_height = ALIGN(src_rect->bottom - src_rect->top, 2);
+    stream_width = SPICE_ALIGN(src_rect->right - src_rect->left, 2);
+    stream_height = SPICE_ALIGN(src_rect->bottom - src_rect->top, 2);
 
     if (!(av_ctx = red_init_video_encoder(stream_width, stream_height))) {
         goto error_1;
@@ -2699,7 +2699,7 @@ static void red_disply_start_streams(DisplayChannel *display_channel)
     RingItem *item = ring;
 
     while ((item = ring_next(ring, item))) {
-        Stream *stream = CONTAINEROF(item, Stream, link);
+        Stream *stream = SPICE_CONTAINEROF(item, Stream, link);
         red_dispaly_create_stream(display_channel, stream);
     }
 }
@@ -2850,8 +2850,8 @@ static void reset_rate(StreamAgent *stream_agent)
         return;
     }
 
-    int stream_width = ALIGN(stream->width, 2);
-    int stream_height = ALIGN(stream->height, 2);
+    int stream_width = SPICE_ALIGN(stream->width, 2);
+    int stream_height = SPICE_ALIGN(stream->height, 2);
 
     new_ctx = red_init_video_encoder(stream_width, stream_height);
     if (!new_ctx) {
@@ -3030,8 +3030,8 @@ static inline int red_current_add_equal(RedWorker *worker, DrawItem *item, TreeI
         return FALSE;
     }
 
-    drawable = CONTAINEROF(item, Drawable, tree_item);
-    other_drawable = CONTAINEROF(other_draw_item, Drawable, tree_item);
+    drawable = SPICE_CONTAINEROF(item, Drawable, tree_item);
+    other_drawable = SPICE_CONTAINEROF(other_draw_item, Drawable, tree_item);
 
     if (item->effect == QXL_EFFECT_OPAQUE) {
         int add_after = !!other_drawable->stream;
@@ -3091,7 +3091,7 @@ static inline void red_use_stream_trace(RedWorker *worker, Drawable *drawable)
     item = ring_get_head(ring);
 
     while (item) {
-        Stream *stream = CONTAINEROF(item, Stream, link);
+        Stream *stream = SPICE_CONTAINEROF(item, Stream, link);
         if (!stream->current && __red_is_next_stream_frame(worker,
                                                            drawable,
                                                            stream->width,
@@ -3124,7 +3124,7 @@ static void red_reset_stream_trace(RedWorker *worker)
     RingItem *item = ring_get_head(ring);
 
     while (item) {
-        Stream *stream = CONTAINEROF(item, Stream, link);
+        Stream *stream = SPICE_CONTAINEROF(item, Stream, link);
         item = ring_next(ring, item);
         if (!stream->current) {
             red_stop_stream(worker, stream);
@@ -3157,7 +3157,7 @@ static inline int red_current_add(RedWorker *worker, Drawable *drawable)
     now = ring_next(ring, ring);
 
     while (now) {
-        TreeItem *sibling = CONTAINEROF(now, TreeItem, siblings_link);
+        TreeItem *sibling = SPICE_CONTAINEROF(now, TreeItem, siblings_link);
         int test_res;
 
         if (!region_bounds_intersects(&item->base.rgn, &sibling->rgn)) {
@@ -3295,7 +3295,7 @@ static inline int red_current_add(RedWorker *worker, Drawable *drawable)
     now = ring_next(ring, ring);
 
     while (now) {
-        TreeItem *sibling = CONTAINEROF(now, TreeItem, siblings_link);
+        TreeItem *sibling = SPICE_CONTAINEROF(now, TreeItem, siblings_link);
         int test_res;
 
         if (!region_bounds_intersects(&item->base.rgn, &sibling->rgn)) {
@@ -3592,7 +3592,7 @@ static void free_one_drawable(RedWorker *worker, int force_glz_free)
     Container *container;
 
     ASSERT(ring_item);
-    drawable = CONTAINEROF(ring_item, Drawable, list_link);
+    drawable = SPICE_CONTAINEROF(ring_item, Drawable, list_link);
     if (drawable->red_glz_drawable && force_glz_free) {
         ASSERT(worker->display_channel);
         red_display_free_glz_drawable(worker->display_channel, drawable->red_glz_drawable);
@@ -3655,8 +3655,9 @@ static inline void red_process_drawable(RedWorker *worker, QXLDrawable *drawable
     if (drawable->clip.type == SPICE_CLIP_TYPE_RECTS) {
         QRegion rgn;
 
-        region_init(&rgn);
-        add_clip_rects(worker, &rgn, drawable->clip.data + OFFSETOF(QXLClipRects, chunk), group_id);
+        region_init(&
+		    rgn);
+        add_clip_rects(worker, &rgn, drawable->clip.data + SPICE_OFFSETOF(QXLClipRects, chunk), group_id);
         region_and(&item->tree_item.base.rgn, &rgn);
         region_destroy(&rgn);
     } else if (drawable->clip.type == SPICE_CLIP_TYPE_PATH) {
@@ -4314,11 +4315,11 @@ static inline void __red_collect_for_update(RedWorker *worker, Ring *ring, RingI
     Ring *top_ring = ring;
 
     for (;;) {
-        TreeItem *now = CONTAINEROF(ring_item, TreeItem, siblings_link);
+        TreeItem *now = SPICE_CONTAINEROF(ring_item, TreeItem, siblings_link);
         Container *container = now->container;
         if (region_intersects(rgn, &now->rgn)) {
             if (IS_DRAW_ITEM(now)) {
-                Drawable *drawable = CONTAINEROF(now, Drawable, tree_item);
+                Drawable *drawable = SPICE_CONTAINEROF(now, Drawable, tree_item);
 
                 ring_add(items, &drawable->collect_link);
                 region_or(rgn, &now->rgn);
@@ -4326,7 +4327,7 @@ static inline void __red_collect_for_update(RedWorker *worker, Ring *ring, RingI
                     region_or(rgn, &drawable->tree_item.shadow->base.rgn);
                 }
             } else if (now->type == TREE_ITEM_TYPE_SHADOW) {
-                Drawable *owner = CONTAINEROF(((Shadow *)now)->owner, Drawable, tree_item);
+                Drawable *owner = SPICE_CONTAINEROF(((Shadow *)now)->owner, Drawable, tree_item);
                 if (!ring_item_is_linked(&owner->collect_link)) {
                     region_or(rgn, &now->rgn);
                     region_or(rgn, &owner->tree_item.base.rgn);
@@ -4375,7 +4376,7 @@ static void red_update_area(RedWorker *worker, const SpiceRect *area)
     region_destroy(&rgn);
 
     while ((ring_item = ring_get_head(&items))) {
-        Drawable *drawable = CONTAINEROF(ring_item, Drawable, collect_link);
+        Drawable *drawable = SPICE_CONTAINEROF(ring_item, Drawable, collect_link);
         Container *container;
 
         ring_remove(ring_item);
@@ -4400,7 +4401,7 @@ static void red_update_area(RedWorker *worker, const SpiceRect *area)
     region_init(&rgn);
     region_add(&rgn, area);
     while ((ring_item = ring_next(ring, ring_item))) {
-        now = CONTAINEROF(ring_item, Drawable, list_link);
+        now = SPICE_CONTAINEROF(ring_item, Drawable, list_link);
         if (region_intersects(&rgn, &now->tree_item.base.rgn)) {
             last = now;
             break;
@@ -4417,7 +4418,7 @@ static void red_update_area(RedWorker *worker, const SpiceRect *area)
         Container *container;
 
         ring_item = ring_get_tail(&worker->current_list);
-        now = CONTAINEROF(ring_item, Drawable, list_link);
+        now = SPICE_CONTAINEROF(ring_item, Drawable, list_link);
         red_draw_drawable(worker, now);
         container = now->tree_item.base.container;
         current_remove_drawable(worker, now);
@@ -4974,7 +4975,7 @@ static void red_display_handle_glz_drawables_to_free(DisplayChannel* channel)
     pthread_mutex_lock(&channel->glz_drawables_inst_to_free_lock);
 
     while ((ring_link = ring_get_head(&channel->glz_drawables_inst_to_free))) {
-        GlzDrawableInstanceItem *drawable_instance = CONTAINEROF(ring_link,
+        GlzDrawableInstanceItem *drawable_instance = SPICE_CONTAINEROF(ring_link,
                                                                  GlzDrawableInstanceItem,
                                                                  free_link);
         red_display_free_glz_drawable_instance(channel, drawable_instance);
@@ -4997,7 +4998,7 @@ static void red_display_free_glz_drawable(DisplayChannel *channel, RedGlzDrawabl
             /* Last instance: red_display_free_glz_drawable_instance will free the drawable */
             cont = FALSE;
         }
-        GlzDrawableInstanceItem *instance = CONTAINEROF(head_instance,
+        GlzDrawableInstanceItem *instance = SPICE_CONTAINEROF(head_instance,
                                                         GlzDrawableInstanceItem,
                                                         glz_link);
         if (!ring_item_is_linked(&instance->free_link)) {
@@ -5028,7 +5029,7 @@ static void red_display_clear_glz_drawables(DisplayChannel *channel)
     pthread_rwlock_wrlock(&channel->glz_dict->encode_lock);
 
     while ((ring_link = ring_get_head(&channel->glz_drawables))) {
-        RedGlzDrawable *drawable = CONTAINEROF(ring_link, RedGlzDrawable, link);
+        RedGlzDrawable *drawable = SPICE_CONTAINEROF(ring_link, RedGlzDrawable, link);
         // no need to lock the to_free list, since we assured no other thread is encoding and
         // thus not other thread access the to_free list of the channel
         red_display_free_glz_drawable(channel, drawable);
@@ -5051,7 +5052,7 @@ static int red_display_free_some_independent_glz_drawables(DisplayChannel *chann
     RingItem *ring_link = ring_get_head(&channel->glz_drawables);
 
     while ((n < RED_RELEASE_BUNCH_SIZE) && (ring_link != NULL)) {
-        RedGlzDrawable *glz_drawable = CONTAINEROF(ring_link, RedGlzDrawable, link);
+        RedGlzDrawable *glz_drawable = SPICE_CONTAINEROF(ring_link, RedGlzDrawable, link);
         ring_link = ring_next(&channel->glz_drawables, ring_link);
         if (!glz_drawable->drawable) {
             red_display_free_glz_drawable(channel, glz_drawable);
@@ -5324,7 +5325,7 @@ static void glz_usr_free_image(GlzEncoderUsrContext *usr, GlzUsrImageContext *im
     GlzData *lz_data = (GlzData *)usr;
     GlzDrawableInstanceItem *glz_drawable_instance = (GlzDrawableInstanceItem *)image;
     DisplayChannel *drawable_channel = glz_drawable_instance->red_glz_drawable->display_channel;
-    DisplayChannel *this_channel = CONTAINEROF(lz_data, DisplayChannel, glz_data);
+    DisplayChannel *this_channel = SPICE_CONTAINEROF(lz_data, DisplayChannel, glz_data);
     if (this_channel == drawable_channel) {
         red_display_free_glz_drawable_instance(drawable_channel, glz_drawable_instance);
     } else {
@@ -5524,12 +5525,12 @@ static inline int _stride_is_extra(SpiceBitmap *bitmap)
             return (bitmap->x < bitmap->stride);
         case SPICE_BITMAP_FMT_4BIT_BE:
         case SPICE_BITMAP_FMT_4BIT_LE: {
-            int bytes_width = ALIGN(bitmap->x, 2) >> 1;
+            int bytes_width = SPICE_ALIGN(bitmap->x, 2) >> 1;
             return bytes_width < bitmap->stride;
         }
         case SPICE_BITMAP_FMT_1BIT_BE:
         case SPICE_BITMAP_FMT_1BIT_LE: {
-            int bytes_width = ALIGN(bitmap->x, 8) >> 3;
+            int bytes_width = SPICE_ALIGN(bitmap->x, 8) >> 3;
             return bytes_width < bitmap->stride;
         }
         default:
@@ -6993,8 +6994,8 @@ static void red_display_send_stream_start(DisplayChannel *display_channel, Strea
 
     stream_create->src_width = stream->width;
     stream_create->src_height = stream->height;
-    stream_create->stream_width = ALIGN(stream_create->src_width, 2);
-    stream_create->stream_height = ALIGN(stream_create->src_height, 2);
+    stream_create->stream_width = SPICE_ALIGN(stream_create->src_width, 2);
+    stream_create->stream_height = SPICE_ALIGN(stream_create->src_height, 2);
     stream_create->dest = stream->dest_area;
 
     add_buf(channel, BUF_TYPE_RAW, stream_create, sizeof(*stream_create), 0, 0);
@@ -7178,7 +7179,7 @@ static void display_channel_push(RedWorker *worker)
         red_display_reset_send_data(display_channel);
         switch (pipe_item->type) {
         case PIPE_ITEM_TYPE_DRAW: {
-            Drawable *drawable = CONTAINEROF(pipe_item, Drawable, pipe_item);
+            Drawable *drawable = SPICE_CONTAINEROF(pipe_item, Drawable, pipe_item);
             send_qxl_drawable(display_channel, drawable);
             release_drawable(worker, drawable);
             break;
@@ -7188,7 +7189,7 @@ static void display_channel_push(RedWorker *worker)
             free(pipe_item);
             break;
         case PIPE_ITEM_TYPE_STREAM_CREATE: {
-            StreamAgent *agent = CONTAINEROF(pipe_item, StreamAgent, create_item);
+            StreamAgent *agent = SPICE_CONTAINEROF(pipe_item, StreamAgent, create_item);
             red_display_send_stream_start(display_channel, agent);
             red_display_release_stream(display_channel, agent);
             break;
@@ -7200,7 +7201,7 @@ static void display_channel_push(RedWorker *worker)
             break;
         }
         case PIPE_ITEM_TYPE_STREAM_DESTROY: {
-            StreamAgent *agent = CONTAINEROF(pipe_item, StreamAgent, destroy_item);
+            StreamAgent *agent = SPICE_CONTAINEROF(pipe_item, StreamAgent, destroy_item);
             red_display_send_stream_end(display_channel, agent);
             red_display_release_stream(display_channel, agent);
             break;
@@ -7329,7 +7330,7 @@ static void __show_tree_call(TreeItem *item, void *data)
 
     switch (item->type) {
     case TREE_ITEM_TYPE_DRAWABLE: {
-        Drawable *drawable = CONTAINEROF(item, Drawable, tree_item);
+        Drawable *drawable = SPICE_CONTAINEROF(item, Drawable, tree_item);
         const int max_indent = 200;
         char indent_str[max_indent + 1];
         int indent_str_len;
@@ -8163,7 +8164,7 @@ static void display_channel_hold_item(void *item)
     switch (((PipeItem *)item)->type) {
     case PIPE_ITEM_TYPE_DRAW:
     case PIPE_ITEM_TYPE_STREAM_CREATE:
-        CONTAINEROF(item, Drawable, pipe_item)->refs++;
+        SPICE_CONTAINEROF(item, Drawable, pipe_item)->refs++;
         break;
     case PIPE_ITEM_TYPE_STREAM_CLIP:
         ((StreamClipItem *)item)->refs++;
@@ -8185,7 +8186,7 @@ static void display_channel_release_item(RedChannel *channel, void *item)
     switch (((PipeItem *)item)->type) {
     case PIPE_ITEM_TYPE_DRAW:
     case PIPE_ITEM_TYPE_STREAM_CREATE:
-        release_drawable(channel->worker, CONTAINEROF(item, Drawable, pipe_item));
+        release_drawable(channel->worker, SPICE_CONTAINEROF(item, Drawable, pipe_item));
         break;
     case PIPE_ITEM_TYPE_STREAM_CLIP:
         red_display_release_stream_clip((DisplayChannel *)channel, (StreamClipItem *)item);
@@ -8689,7 +8690,7 @@ static void inline red_create_mem_slots(RedWorker *worker)
 
 static void handle_dev_input(EventListener *listener, uint32_t events)
 {
-    RedWorker *worker = CONTAINEROF(listener, RedWorker, dev_listener);
+    RedWorker *worker = SPICE_CONTAINEROF(listener, RedWorker, dev_listener);
     RedWorkeMessage message;
 
     read_message(worker->channel, &message);
@@ -9054,7 +9055,7 @@ static void dump_palette(FILE *f, SpicePalette* plt)
 static void dump_line(FILE *f, uint8_t* line, uint16_t n_pixel_bits, int width, int row_size)
 {
     int i;
-    int copy_bytes_size = ALIGN(n_pixel_bits * width, 8) / 8;
+    int copy_bytes_size = SPICE_ALIGN(n_pixel_bits * width, 8) / 8;
 
     fwrite(line, 1, copy_bytes_size, f);
     if (row_size > copy_bytes_size) {

@@ -20,10 +20,7 @@
 
 #include "common.h"
 #include <spice/error_codes.h>
-
-#define MIN(x, y) (((x) <= (y)) ? (x) : (y))
-#define MAX(x, y) (((x) >= (y)) ? (x) : (y))
-#define ALIGN(a, b) (((a) + ((b) - 1)) & ~((b) - 1))
+#include <spice/macros.h>
 
 class Exception: public std::exception {
 public:

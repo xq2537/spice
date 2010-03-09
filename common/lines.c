@@ -48,6 +48,7 @@ SOFTWARE.
 
 
 #include <stdio.h>
+#include <spice/macros.h>
 #ifdef _XOPEN_SOURCE
 #include <math.h>
 #else
@@ -56,22 +57,6 @@ SOFTWARE.
 #undef _XOPEN_SOURCE
 #endif
 #include "lines.h"
-
-#ifndef FALSE
-#   define FALSE 0
-#endif
-
-#ifndef TRUE
-#   define TRUE 1
-#endif
-
-#ifndef MIN
-#  define MIN(a, b) ((a < b) ? a : b)
-#endif
-
-#ifndef MAX
-#  define MAX(a, b) ((a > b) ? a : b)
-#endif
 
 #define xalloc(i) malloc(i)
 #define xrealloc(a,b) realloc(a,b)

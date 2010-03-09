@@ -18,6 +18,8 @@
 
 #include "canvas_utils.h"
 
+#include <spice/macros.h>
+
 #ifdef __GNUC__
 #include <stdlib.h>
 #include <stdio.h>
@@ -40,10 +42,6 @@ extern int gdi_handlers;
     printf("%s: " format "\n", __FUNCTION__, ## __VA_ARGS__);   \
     abort();                                                    \
 }
-#endif
-
-#ifndef ALIGN
-#define ALIGN(a, b) (((a) + ((b) - 1)) & ~((b) - 1))
 #endif
 
 static void release_data(pixman_image_t *image, void *release_data)
@@ -154,11 +152,11 @@ pixman_image_t * surface_create(pixman_format_code_t format, int width, int heig
             break;
         case PIXMAN_a8:
             bitmap_info.inf.bmiHeader.biBitCount = 8;
-            nstride = ALIGN(width, 4);
+            nstride = SPICE_ALIGN(width, 4);
             break;
         case PIXMAN_a1:
             bitmap_info.inf.bmiHeader.biBitCount = 1;
-            nstride = ALIGN(width, 32) / 8;
+            nstride = SPICE_ALIGN(width, 32) / 8;
             break;
         default:
             CANVAS_ERROR("invalid format");
@@ -208,10 +206,10 @@ pixman_image_t * surface_create(pixman_format_code_t format, int width, int heig
             stride = width * 4;
             break;
         case PIXMAN_a8:
-            stride = ALIGN(width, 4);
+            stride = SPICE_ALIGN(width, 4);
             break;
         case PIXMAN_a1:
-            stride = ALIGN(width, 32) / 8;
+            stride = SPICE_ALIGN(width, 32) / 8;
             break;
         default:
             CANVAS_ERROR("invalid format");

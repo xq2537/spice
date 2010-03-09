@@ -34,29 +34,29 @@ CursorData::CursorData(SpiceCursor& cursor, int data_size)
         expected_size = (_header.width << 2) * _header.height;
         break;
     case SPICE_CURSOR_TYPE_MONO:
-        expected_size = (ALIGN(_header.width, 8) >> 2) * _header.height;
+        expected_size = (SPICE_ALIGN(_header.width, 8) >> 2) * _header.height;
         break;
     case SPICE_CURSOR_TYPE_COLOR4:
-        expected_size = (ALIGN(_header.width, 2) >> 1) * _header.height;
-        expected_size += (ALIGN(_header.width, 8) >> 3) * _header.height;
+        expected_size = (SPICE_ALIGN(_header.width, 2) >> 1) * _header.height;
+        expected_size += (SPICE_ALIGN(_header.width, 8) >> 3) * _header.height;
         expected_size += 16 * sizeof(uint32_t);
         break;
     case SPICE_CURSOR_TYPE_COLOR8:
         expected_size = _header.width * _header.height;
-        expected_size += (ALIGN(_header.width, 8) >> 3) * _header.height;
+        expected_size += (SPICE_ALIGN(_header.width, 8) >> 3) * _header.height;
         expected_size += 256 * sizeof(uint32_t);
         break;
     case SPICE_CURSOR_TYPE_COLOR16:
         expected_size = (_header.width << 1) * _header.height;
-        expected_size += (ALIGN(_header.width, 8) >> 3) * _header.height;
+        expected_size += (SPICE_ALIGN(_header.width, 8) >> 3) * _header.height;
         break;
     case SPICE_CURSOR_TYPE_COLOR24:
         expected_size = (_header.width * 3) * _header.height;
-        expected_size += (ALIGN(_header.width, 8) >> 3) * _header.height;
+        expected_size += (SPICE_ALIGN(_header.width, 8) >> 3) * _header.height;
         break;
     case SPICE_CURSOR_TYPE_COLOR32:
         expected_size = (_header.width << 2) * _header.height;
-        expected_size += (ALIGN(_header.width, 8) >> 3) * _header.height;
+        expected_size += (SPICE_ALIGN(_header.width, 8) >> 3) * _header.height;
         break;
     }
 
@@ -92,10 +92,10 @@ int LocalCursor::get_size_bits(const SpiceCursorHeader& header, int& size)
         size = (header.width << 2) * header.height;
         return 32;
     case SPICE_CURSOR_TYPE_MONO:
-        size = (ALIGN(header.width, 8) >> 3) * header.height;
+        size = (SPICE_ALIGN(header.width, 8) >> 3) * header.height;
         return 1;
     case SPICE_CURSOR_TYPE_COLOR4:
-        size = (ALIGN(header.width, 2) >> 1) * header.height;
+        size = (SPICE_ALIGN(header.width, 2) >> 1) * header.height;
         return 4;
     case SPICE_CURSOR_TYPE_COLOR8:
         size = header.width * header.height;

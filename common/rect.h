@@ -20,9 +20,7 @@
 #define _H_RECT
 
 #include <spice/draw.h>
-
-#define MIN(x, y) (((x) <= (y)) ? (x) : (y))
-#define MAX(x, y) (((x) >= (y)) ? (x) : (y))
+#include <spice/macros.h>
 
 static inline void rect_sect(SpiceRect* r, const SpiceRect* bounds)
 {

@@ -20,6 +20,7 @@
 // http://sun.iinf.polsl.gliwice.pl/~rstaros/sfalic/index.html
 
 #include "quic.h"
+#include <spice/macros.h>
 
 //#define DEBUG
 
@@ -36,8 +37,6 @@
 #define QUIC_VERSION_MINOR 1U
 #define QUIC_VERSION ((QUIC_VERSION_MAJOR << 16) | (QUIC_VERSION_MAJOR & 0xffff))
 
-#define ABS(a) ((a) >= 0 ? (a) : -(a))
-
 #ifdef DEBUG
 
 #define ASSERT(usr, x) \
@@ -48,9 +47,6 @@
 #define ASSERT(usr, x)
 
 #endif
-
-#define FALSE 0
-#define TRUE 1
 
 typedef uint8_t BYTE;
 

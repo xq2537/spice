@@ -23,6 +23,7 @@
 #include <math.h>
 
 #include <spice/draw.h>
+#include <spice/macros.h>
 #include "quic.h"
 #include "lz.h"
 #include "canvas_base.h"
@@ -69,18 +70,6 @@
 
 #ifndef DBG
 #define DBG(level, format, ...) printf("%s: debug: " format "\n", __FUNCTION__, ## __VA_ARGS__);
-#endif
-
-#ifndef ALIGN
-#define ALIGN(a, b) (((a) + ((b) - 1)) & ~((b) - 1))
-#endif
-
-#ifndef MIN
-#define MIN(x, y) (((x) <= (y)) ? (x) : (y))
-#endif
-
-#ifndef MAX
-#define MAX(x, y) (((x) >= (y)) ? (x) : (y))
 #endif
 
 #define ROUND(_x) ((int)floor((_x) + 0.5))
@@ -1148,7 +1137,7 @@ static pixman_image_t *canvas_get_bitmap_mask(CanvasBase *canvas, SpiceBitmap* b
     src_stride = bitmap->stride;
     end_line = src_line + (bitmap->y * src_stride);
     access_test(canvas, src_line, end_line - src_line);
-    line_size = ALIGN(bitmap->x, 8) >> 3;
+    line_size = SPICE_ALIGN(bitmap->x, 8) >> 3;
 
     dest_stride = pixman_image_get_stride(surface);
     dest_line = (uint8_t *)pixman_image_get_data(surface);
@@ -1243,7 +1232,7 @@ static inline pixman_image_t *canvas_A1_invers(pixman_image_t *src_surf)
         uint8_t *src_line = (uint8_t *)pixman_image_get_data(src_surf);
         int src_stride = pixman_image_get_stride(src_surf);
         uint8_t *end_line = src_line + (height * src_stride);
-        int line_size = ALIGN(width, 8) >> 3;
+        int line_size = SPICE_ALIGN(width, 8) >> 3;
         uint8_t *dest_line = (uint8_t *)pixman_image_get_data(invers);
         int dest_stride = pixman_image_get_stride(invers);
 
@@ -1382,7 +1371,7 @@ static pixman_image_t *canvas_get_mask(CanvasBase *canvas, SpiceQMask *mask, int
 static inline SpiceRasterGlyph *canvas_next_raster_glyph(const SpiceRasterGlyph *glyph, int bpp)
 {
     return (SpiceRasterGlyph *)((uint8_t *)(glyph + 1) +
-                                          (ALIGN(glyph->width * bpp, 8) * glyph->height >> 3));
+                                          (SPICE_ALIGN(glyph->width * bpp, 8) * glyph->height >> 3));
 }
 
 static inline void canvas_raster_glyph_box(const SpiceRasterGlyph *glyph, SpiceRect *r)
@@ -1472,7 +1461,7 @@ static void canvas_put_glyph_bits(SpiceRasterGlyph *glyph, int bpp, uint8_t *des
     width = glyph_box.right - glyph_box.left;
     switch (bpp) {
     case 1: {
-        int src_stride = ALIGN(width, 8) >> 3;
+        int src_stride = SPICE_ALIGN(width, 8) >> 3;
         int i;
 
         src += src_stride * (lines);
@@ -1485,7 +1474,7 @@ static void canvas_put_glyph_bits(SpiceRasterGlyph *glyph, int bpp, uint8_t *des
     }
     case 4: {
         uint8_t *end;
-        int src_stride = ALIGN(width * 4, 8) >> 3;
+        int src_stride = SPICE_ALIGN(width * 4, 8) >> 3;
 
         src += src_stride * lines;
         dest += glyph_box.left;

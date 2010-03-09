@@ -24,11 +24,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <getopt.h>
+#include <spice/macros.h>
 
-
-#define ALIGN(a, b) (((a) + ((b) - 1)) & ~((b) - 1))
-#define TRUE 1
-#define FALSE 0
 
 #define TAB "    "
 
@@ -143,7 +140,7 @@ static Pixmap *init_bitmap(size_t input_size, uint8_t *buf)
     if (file_header->header.bpp == 32) {
         stride = file_header->header.width * sizeof(uint32_t);
     } else if (file_header->header.bpp == 24) {
-        stride = ALIGN(file_header->header.width * 3, 4);
+        stride = SPICE_ALIGN(file_header->header.width * 3, 4);
     } else {
         ERROR("unsupported bpp");
         return NULL;

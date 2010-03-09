@@ -842,7 +842,7 @@ static void snd_set_command(SndChannel *channel, uint32_t command)
 
 static void snd_playback_start(PlaybackPlug *plug)
 {
-    PlaybackChannel *playback_channel = CONTAINEROF(plug, PlaybackChannel, plug);
+    PlaybackChannel *playback_channel = SPICE_CONTAINEROF(plug, PlaybackChannel, plug);
 
     ASSERT(!playback_channel->base.active);
     reds_desable_mm_timer();
@@ -857,7 +857,7 @@ static void snd_playback_start(PlaybackPlug *plug)
 
 static void snd_playback_stop(PlaybackPlug *plug)
 {
-    PlaybackChannel *playback_channel = CONTAINEROF(plug, PlaybackChannel, plug);
+    PlaybackChannel *playback_channel = SPICE_CONTAINEROF(plug, PlaybackChannel, plug);
 
     ASSERT(playback_channel->base.active);
     reds_enable_mm_timer();
@@ -880,7 +880,7 @@ static void snd_playback_stop(PlaybackPlug *plug)
 
 static void snd_playback_get_frame(PlaybackPlug *plug, uint32_t **frame, uint32_t *num_samples)
 {
-    PlaybackChannel *playback_channel = CONTAINEROF(plug, PlaybackChannel, plug);
+    PlaybackChannel *playback_channel = SPICE_CONTAINEROF(plug, PlaybackChannel, plug);
 
     ASSERT(playback_channel->base.active);
     if (!playback_channel->free_frames) {
@@ -896,7 +896,7 @@ static void snd_playback_get_frame(PlaybackPlug *plug, uint32_t **frame, uint32_
 
 static void snd_playback_put_frame(PlaybackPlug *plug, uint32_t *samples)
 {
-    PlaybackChannel *playback_channel = CONTAINEROF(plug, PlaybackChannel, plug);
+    PlaybackChannel *playback_channel = SPICE_CONTAINEROF(plug, PlaybackChannel, plug);
     AudioFrame *frame;
 
     ASSERT(playback_channel->base.active);
@@ -904,7 +904,7 @@ static void snd_playback_put_frame(PlaybackPlug *plug, uint32_t *samples)
     if (playback_channel->pending_frame) {
         snd_playback_free_frame(playback_channel, playback_channel->pending_frame);
     }
-    frame = CONTAINEROF(samples, AudioFrame, samples);
+    frame = SPICE_CONTAINEROF(samples, AudioFrame, samples);
     frame->time = reds_get_mm_time();
     red_dispatcher_set_mm_time(frame->time);
     playback_channel->pending_frame = frame;
@@ -1015,7 +1015,7 @@ static void snd_record_migrate(Channel *channel)
 
 static void snd_record_start(RecordPlug *plug)
 {
-    RecordChannel *record_channel = CONTAINEROF(plug, RecordChannel, plug);
+    RecordChannel *record_channel = SPICE_CONTAINEROF(plug, RecordChannel, plug);
 
     ASSERT(!record_channel->base.active);
     record_channel->base.active = TRUE;
@@ -1031,7 +1031,7 @@ static void snd_record_start(RecordPlug *plug)
 
 static void snd_record_stop(RecordPlug *plug)
 {
-    RecordChannel *record_channel = CONTAINEROF(plug, RecordChannel, plug);
+    RecordChannel *record_channel = SPICE_CONTAINEROF(plug, RecordChannel, plug);
 
     ASSERT(record_channel->base.active);
     record_channel->base.active = FALSE;
@@ -1045,7 +1045,7 @@ static void snd_record_stop(RecordPlug *plug)
 
 static uint32_t snd_record_read(RecordPlug *plug, uint32_t num_samples, uint32_t *samples)
 {
-    RecordChannel *record_channel = CONTAINEROF(plug, RecordChannel, plug);
+    RecordChannel *record_channel = SPICE_CONTAINEROF(plug, RecordChannel, plug);
     uint32_t read_pos;
     uint32_t now;
     uint32_t len;

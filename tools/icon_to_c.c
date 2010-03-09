@@ -24,16 +24,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <getopt.h>
-
-#define ALIGN(a, b) (((a) + ((b) - 1)) & ~((b) - 1))
-#define TRUE 1
-#define FALSE 0
+#include <spice/macros.h>
 
 #define TAB "    "
 
 #define ERROR(str) printf("%s: error: %s\n", prog_name, str); exit(-1);
-
-#define ALIGN(a, b) (((a) + ((b) - 1)) & ~((b) - 1))
 
 static char *prog_name = NULL;
 
@@ -166,7 +161,7 @@ static Icon *init_icon(uint8_t *buf, size_t buf_size)
         }
 
         if (!bitmap->image_size) {
-            bitmap->image_size = ALIGN(bitmap->bpp * bitmap->width, 32) / 8 * bitmap->height;
+            bitmap->image_size = SPICE_ALIGN(bitmap->bpp * bitmap->width, 32) / 8 * bitmap->height;
         }
 
         if (bitmap->compression || bitmap->horizontal_resolution || bitmap->vertical_resolution ||
@@ -179,7 +174,7 @@ static Icon *init_icon(uint8_t *buf, size_t buf_size)
         }
 
         int pixmap_size = bitmap->width * sizeof(uint32_t) * ico->height;
-        int mask_size = ALIGN(bitmap->width, 8) / 8 * ico->height;
+        int mask_size = SPICE_ALIGN(bitmap->width, 8) / 8 * ico->height;
         Icon* icon = malloc(sizeof(*icon) + pixmap_size + mask_size);
         icon->width = ico->width;
         icon->height = ico->height;
@@ -223,7 +218,7 @@ static int icon_to_c_struct(const Icon *icon, const char *dest_file, const char 
     }
     uint32_t pixmap_stride = icon->width * sizeof(uint32_t);
     uint32_t pixmap_size = pixmap_stride * icon->height;
-    uint32_t mask_stride = ALIGN(icon->width, 8) / 8;
+    uint32_t mask_stride = SPICE_ALIGN(icon->width, 8) / 8;
     uint32_t mask_size = mask_stride * icon->height;
     fprintf(f, "static const struct {\n"
                TAB "uint32_t width;\n"

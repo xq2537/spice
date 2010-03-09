@@ -1766,7 +1766,7 @@ static int main_channel_restore_vdi_wqueue(MainMigrateData *data, uint8_t *pos, 
         if (inf->port == VDP_SERVER_PORT) {
             VDInternalBuf *buf;
 
-            if (inf->len > sizeof(*buf) - OFFSETOF(VDInternalBuf, header)) {
+            if (inf->len > sizeof(*buf) - SPICE_OFFSETOF(VDInternalBuf, header)) {
                 red_printf("bad buffer len");
                 reds_disconnect();
                 return FALSE;
@@ -1786,7 +1786,7 @@ static int main_channel_restore_vdi_wqueue(MainMigrateData *data, uint8_t *pos, 
             VDAgentExtBuf *buf;
 
             state->num_tokens--;
-            if (inf->len > sizeof(*buf) - OFFSETOF(VDAgentExtBuf, buf)) {
+            if (inf->len > sizeof(*buf) - SPICE_OFFSETOF(VDAgentExtBuf, buf)) {
                 red_printf("bad buffer len");
                 reds_disconnect();
                 return FALSE;

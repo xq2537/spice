@@ -18,6 +18,7 @@
 #ifndef _H_GLZ_ENCODER_CONFIG
 #define _H_GLZ_ENCODER_CONFIG
 
+#include <spice/macros.h>
 #include "lz_common.h"
 
 typedef void GlzUsrImageContext;
@@ -55,9 +56,6 @@ struct GlzEncoderUsrContext {
 #endif
 
 #define INLINE inline
-
-#define FALSE 0
-#define TRUE 1
 
 
 #endif

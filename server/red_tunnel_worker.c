@@ -1678,9 +1678,9 @@ static void tunnel_channel_release_msg_rcv_buf(RedChannel *channel, SpiceDataHea
 {
     TunnelChannel *tunnel_channel = (TunnelChannel *)channel;
     if (msg_header->type == SPICE_MSGC_TUNNEL_SOCKET_DATA) {
-        ASSERT(!(CONTAINEROF(msg, RedSocketRawRcvBuf, buf)->base.usr_opaque));
+        ASSERT(!(SPICE_CONTAINEROF(msg, RedSocketRawRcvBuf, buf)->base.usr_opaque));
         __tunnel_worker_free_socket_rcv_buf(tunnel_channel->worker,
-                                            CONTAINEROF(msg, RedSocketRawRcvBuf, buf));
+                                            SPICE_CONTAINEROF(msg, RedSocketRawRcvBuf, buf));
     }
 }
 
@@ -2324,7 +2324,7 @@ static int tunnel_channel_handle_message(RedChannel *channel, SpiceDataHeader *h
         }
 
         return tunnel_channel_handle_socket_receive_data(tunnel_channel, sckt,
-                                                    CONTAINEROF(msg, RedSocketRawRcvBuf, buf),
+                                                    SPICE_CONTAINEROF(msg, RedSocketRawRcvBuf, buf),
                                                     header->size - sizeof(SpiceMsgcTunnelSocketData));
     }
     case SPICE_MSGC_TUNNEL_SOCKET_FIN:
@@ -2591,7 +2591,7 @@ static void tunnel_channel_send_init(TunnelChannel *channel, PipeItem *item)
 
 static void tunnel_channel_send_service_ip_map(TunnelChannel *channel, PipeItem *item)
 {
-    TunnelService *service = CONTAINEROF(item, TunnelService, pipe_item);
+    TunnelService *service = SPICE_CONTAINEROF(item, TunnelService, pipe_item);
 
     channel->send_data.u.service_ip.service_id = service->id;
     channel->send_data.u.service_ip.virtual_ip.type = SPICE_TUNNEL_IP_TYPE_IPv4;
@@ -2605,8 +2605,8 @@ static void tunnel_channel_send_service_ip_map(TunnelChannel *channel, PipeItem 
 
 static void tunnel_channel_send_socket_open(TunnelChannel *channel, PipeItem *item)
 {
-    RedSocketOutData *sckt_out_data = CONTAINEROF(item, RedSocketOutData, status_pipe_item);
-    RedSocket *sckt = CONTAINEROF(sckt_out_data, RedSocket, out_data);
+    RedSocketOutData *sckt_out_data = SPICE_CONTAINEROF(item, RedSocketOutData, status_pipe_item);
+    RedSocket *sckt = SPICE_CONTAINEROF(sckt_out_data, RedSocket, out_data);
 
     channel->send_data.u.socket_open.connection_id = sckt->connection_id;
     channel->send_data.u.socket_open.service_id = sckt->far_service->id;
@@ -2626,8 +2626,8 @@ static void tunnel_channel_send_socket_open(TunnelChannel *channel, PipeItem *it
 
 static void tunnel_channel_send_socket_fin(TunnelChannel *channel, PipeItem *item)
 {
-    RedSocketOutData *sckt_out_data = CONTAINEROF(item, RedSocketOutData, status_pipe_item);
-    RedSocket *sckt = CONTAINEROF(sckt_out_data, RedSocket, out_data);
+    RedSocketOutData *sckt_out_data = SPICE_CONTAINEROF(item, RedSocketOutData, status_pipe_item);
+    RedSocket *sckt = SPICE_CONTAINEROF(sckt_out_data, RedSocket, out_data);
 
     ASSERT(!sckt->out_data.ready_chunks_queue.head);
 
@@ -2652,8 +2652,8 @@ static void tunnel_channel_send_socket_fin(TunnelChannel *channel, PipeItem *ite
 
 static void tunnel_channel_send_socket_close(TunnelChannel *channel, PipeItem *item)
 {
-    RedSocketOutData *sckt_out_data = CONTAINEROF(item, RedSocketOutData, status_pipe_item);
-    RedSocket *sckt = CONTAINEROF(sckt_out_data, RedSocket, out_data);
+    RedSocketOutData *sckt_out_data = SPICE_CONTAINEROF(item, RedSocketOutData, status_pipe_item);
+    RedSocket *sckt = SPICE_CONTAINEROF(sckt_out_data, RedSocket, out_data);
 
     // can happen when it is a forced close
     if (sckt->out_data.ready_chunks_queue.head) {
@@ -2684,8 +2684,8 @@ static void tunnel_channel_send_socket_close(TunnelChannel *channel, PipeItem *i
 
 static void tunnel_channel_send_socket_closed_ack(TunnelChannel *channel, PipeItem *item)
 {
-    RedSocketOutData *sckt_out_data = CONTAINEROF(item, RedSocketOutData, status_pipe_item);
-    RedSocket *sckt = CONTAINEROF(sckt_out_data, RedSocket, out_data);
+    RedSocketOutData *sckt_out_data = SPICE_CONTAINEROF(item, RedSocketOutData, status_pipe_item);
+    RedSocket *sckt = SPICE_CONTAINEROF(sckt_out_data, RedSocket, out_data);
 
     channel->send_data.u.socket_close_ack.connection_id = sckt->connection_id;
 
@@ -2709,8 +2709,8 @@ static void tunnel_channel_send_socket_closed_ack(TunnelChannel *channel, PipeIt
 
 static void tunnel_channel_send_socket_token(TunnelChannel *channel, PipeItem *item)
 {
-    RedSocketOutData *sckt_out_data = CONTAINEROF(item, RedSocketOutData, token_pipe_item);
-    RedSocket *sckt = CONTAINEROF(sckt_out_data, RedSocket, out_data);
+    RedSocketOutData *sckt_out_data = SPICE_CONTAINEROF(item, RedSocketOutData, token_pipe_item);
+    RedSocket *sckt = SPICE_CONTAINEROF(sckt_out_data, RedSocket, out_data);
 
     /* notice that the num of tokens sent can be > SOCKET_TOKENS_TO_SEND, since
        the sending is performed after the pipe item was pushed */
@@ -2736,8 +2736,8 @@ static void tunnel_channel_send_socket_token(TunnelChannel *channel, PipeItem *i
 
 static void tunnel_channel_send_socket_out_data(TunnelChannel *channel, PipeItem *item)
 {
-    RedSocketOutData *sckt_out_data = CONTAINEROF(item, RedSocketOutData, data_pipe_item);
-    RedSocket *sckt = CONTAINEROF(sckt_out_data, RedSocket, out_data);
+    RedSocketOutData *sckt_out_data = SPICE_CONTAINEROF(item, RedSocketOutData, data_pipe_item);
+    RedSocket *sckt = SPICE_CONTAINEROF(sckt_out_data, RedSocket, out_data);
     ReadyTunneledChunk *chunk;
     uint32_t total_push_size = 0;
     uint32_t pushed_bufs_num = 0;
@@ -2792,8 +2792,8 @@ static void tunnel_channel_send_socket_out_data(TunnelChannel *channel, PipeItem
 
 static void tunnel_worker_release_socket_out_data(TunnelWorker *worker, PipeItem *item)
 {
-    RedSocketOutData *sckt_out_data = CONTAINEROF(item, RedSocketOutData, data_pipe_item);
-    RedSocket *sckt = CONTAINEROF(sckt_out_data, RedSocket, out_data);
+    RedSocketOutData *sckt_out_data = SPICE_CONTAINEROF(item, RedSocketOutData, data_pipe_item);
+    RedSocket *sckt = SPICE_CONTAINEROF(sckt_out_data, RedSocket, out_data);
 
     ASSERT(sckt_out_data->ready_chunks_queue.head);
 

@@ -24,6 +24,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
+#include <spice/macros.h>
 
 #include <GL/gl.h>
 #include <GL/glu.h>
@@ -36,9 +37,6 @@
 
 #include "glc.h"
 #include "gl_utils.h"
-
-#define TRUE 1
-#define FALSE 0
 
 #define ASSERT(x) if (!(x)) {printf("%s: assert failed %s\n", __FUNCTION__, #x); abort();}
 

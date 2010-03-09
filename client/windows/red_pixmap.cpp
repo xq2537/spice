@@ -25,7 +25,7 @@ RedPixmap::RedPixmap(int width, int height, RedPixmap::Format format,
     : _format (format)
     , _width (width)
     , _height (height)
-    , _stride (ALIGN(width * (_format == RedPixmap::A1 ? 1: 32), 32) / 8)
+    , _stride (SPICE_ALIGN(width * (_format == RedPixmap::A1 ? 1: 32), 32) / 8)
     , _top_bottom (top_bottom)
     , _data (NULL)
 {

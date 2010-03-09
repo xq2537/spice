@@ -22,15 +22,7 @@
 #define __LZ_CONFIG_H
 
 #include <spice/types.h>
-
-#ifndef FALSE
-#define FALSE 0
-#endif
-
-#ifndef TRUE
-#define TRUE 1
-#endif
-
+#include <spice/macros.h>
 
 #ifdef __GNUC__
 

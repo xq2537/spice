@@ -137,7 +137,7 @@ MonoCursor::MonoCursor(const SpiceCursorHeader& header, const uint8_t* data)
 
     int dest_stride = _pixmap->get_stride();
     uint8_t *dest_line = _pixmap->get_data();
-    int src_stride = ALIGN(header.width, 8) >> 3;
+    int src_stride = SPICE_ALIGN(header.width, 8) >> 3;
     const uint8_t* src_line = data;
     const uint8_t* end_line = src_line + _pixmap->get_height() * src_stride;
 
@@ -188,7 +188,7 @@ ColorCursor::ColorCursor(const SpiceCursorHeader& header)
 void ColorCursor::init_pixels(const SpiceCursorHeader& header, const uint8_t* pixels,
                               const uint8_t *and_mask)
 {
-    int mask_stride = ALIGN(header.width, 8) / 8;
+    int mask_stride = SPICE_ALIGN(header.width, 8) / 8;
     int invers_stride = _invers->get_stride();
     int pixmap_stride = _pixmap->get_stride();
     uint8_t *_pixmap_line = _pixmap->get_data();
@@ -266,7 +266,7 @@ class ColorCursor4: public ColorCursor {
 public:
     ColorCursor4(const SpiceCursorHeader& header, const uint8_t* data)
         : ColorCursor(header)
-        , _src_stride (ALIGN(header.width, 2) >> 1)
+        , _src_stride (SPICE_ALIGN(header.width, 2) >> 1)
         , _palette ((uint32_t*)(data + _src_stride * header.height))
     {
         init_pixels(header, data, (uint8_t*)(_palette + 16));
