@@ -574,10 +574,10 @@ static uint8_t *create_bitmap(HBITMAP *bitmap, HBITMAP *prev_bitmap, HDC *dc,
 
     switch (bits) {
     case 1:
-        nstride = ALIGN(width, 32) / 8;
+        nstride = SPICE_ALIGN(width, 32) / 8;
         break;
     case 8:
-        nstride = ALIGN(width, 4);
+        nstride = SPICE_ALIGN(width, 4);
         break;
     case 32:
         nstride = width * 4;
