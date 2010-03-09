@@ -5504,3 +5504,52 @@ void spice_server_destroy(SpiceServer *s)
     ASSERT(reds == s);
     reds_exit();
 }
+
+int spice_server_set_port(SpiceServer *s, int port)
+{
+    ASSERT(reds == s);
+    if (port < 0 || port > 0xffff) {
+        return -1;
+    }
+    spice_port = port;
+    return 0;
+}
+
+int spice_server_set_noauth(SpiceServer *s)
+{
+    ASSERT(reds == s);
+    memset(taTicket.password, 0, sizeof(taTicket.password));
+    ticketing_enabled = 0;
+    return 0;
+}
+
+int spice_server_set_ticket(SpiceServer *s, const char *passwd, int lifetime,
+                            int fail_if_connected, int disconnect_if_connected)
+{
+    ASSERT(reds == s);
+
+    if (reds->peer) {
+        if (fail_if_connected) {
+            return -1;
+        }
+        if (disconnect_if_connected) {
+            reds_disconnect();
+        }
+    }
+
+    on_activating_ticketing();
+    ticketing_enabled = 1;
+    if (lifetime == 0) {
+        taTicket.expiration_time = INT_MAX;
+    } else {
+        time_t now = time(NULL);
+        taTicket.expiration_time = now + lifetime;
+    }
+    if (passwd != NULL) {
+        strncpy(taTicket.password, passwd, sizeof(taTicket.password));
+    } else {
+        memset(taTicket.password, 0, sizeof(taTicket.password));
+        taTicket.expiration_time = 0;
+    }
+    return 0;
+}

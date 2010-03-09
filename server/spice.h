@@ -32,4 +32,9 @@ SpiceServer *spice_server_new(void);
 int spice_server_init(SpiceServer *s, CoreInterface *core);
 void spice_server_destroy(SpiceServer *s);
 
+int spice_server_set_port(SpiceServer *s, int port);
+int spice_server_set_noauth(SpiceServer *s);
+int spice_server_set_ticket(SpiceServer *s, const char *passwd, int lifetime,
+                            int fail_if_connected, int disconnect_if_connected);
+
 #endif
