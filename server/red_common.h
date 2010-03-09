@@ -21,6 +21,7 @@
 #include <sys/uio.h>
 #include <openssl/ssl.h>
 
+#include "spice.h"
 #include <spice/protocol.h>
 #include <spice/macros.h>
 
@@ -61,16 +62,6 @@
         printf("%s: " format "\n", __FUNCTION__, ## __VA_ARGS__ );  \
     }                                                               \
 }
-
-typedef enum {
-    IMAGE_COMPRESS_INVALID,
-    IMAGE_COMPRESS_AUTO_GLZ,
-    IMAGE_COMPRESS_AUTO_LZ,
-    IMAGE_COMPRESS_QUIC,
-    IMAGE_COMPRESS_GLZ,
-    IMAGE_COMPRESS_LZ,
-    IMAGE_COMPRESS_OFF,
-} image_compression_t;
 
 enum {
     STREAM_VIDEO_INVALID,

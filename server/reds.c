@@ -84,7 +84,7 @@ static int ticketing_enabled = 1; //Ticketing is enabled by default
 static pthread_mutex_t *lock_cs;
 static long *lock_count;
 uint32_t streaming_video = STREAM_VIDEO_FILTER;
-image_compression_t image_compression = IMAGE_COMPRESS_AUTO_GLZ;
+spice_image_compression_t image_compression = SPICE_IMAGE_COMPRESS_AUTO_GLZ;
 void *red_tunnel = NULL;
 int agent_mouse = TRUE;
 
@@ -3606,25 +3606,25 @@ static void reds_do_info_spice()
     }
     core->term_printf(core, " ticketing=%s", ticketing_enabled ? "on" : "off");
     switch (image_compression) {
-    case IMAGE_COMPRESS_AUTO_GLZ:
+    case SPICE_IMAGE_COMPRESS_AUTO_GLZ:
         core->term_printf(core, " ic=auto_glz");
         break;
-    case IMAGE_COMPRESS_AUTO_LZ:
+    case SPICE_IMAGE_COMPRESS_AUTO_LZ:
         core->term_printf(core, " ic=auto_lz");
         break;
-    case IMAGE_COMPRESS_QUIC:
+    case SPICE_IMAGE_COMPRESS_QUIC:
         core->term_printf(core, " ic=quic");
         break;
-    case IMAGE_COMPRESS_LZ:
+    case SPICE_IMAGE_COMPRESS_LZ:
         core->term_printf(core, " ic=lz");
         break;
-    case IMAGE_COMPRESS_GLZ:
+    case SPICE_IMAGE_COMPRESS_GLZ:
         core->term_printf(core, " ic=glz");
         break;
-    case IMAGE_COMPRESS_OFF:
+    case SPICE_IMAGE_COMPRESS_OFF:
         core->term_printf(core, " ic=off");
         break;
-    case IMAGE_COMPRESS_INVALID:
+    case SPICE_IMAGE_COMPRESS_INVALID:
     default:
         core->term_printf(core, " ic=invalid");
     }
@@ -3648,7 +3648,7 @@ static void reds_do_info_spice()
                       snd_get_playback_compression() ? "on" : "off");
 }
 
-static void set_image_compression(image_compression_t val)
+static void set_image_compression(spice_image_compression_t val)
 {
     if (val == image_compression) {
         return;
@@ -3657,28 +3657,28 @@ static void set_image_compression(image_compression_t val)
     red_dispatcher_on_ic_change();
 }
 
-static image_compression_t reds_get_image_compression(const char *val)
+static spice_image_compression_t reds_get_image_compression(const char *val)
 {
     if ((strcmp(val, "on") == 0) || (strcmp(val, "auto_glz") == 0)) {
-        return IMAGE_COMPRESS_AUTO_GLZ;
+        return SPICE_IMAGE_COMPRESS_AUTO_GLZ;
     } else if (strcmp(val, "auto_lz") == 0) {
-        return IMAGE_COMPRESS_AUTO_LZ;
+        return SPICE_IMAGE_COMPRESS_AUTO_LZ;
     } else if (strcmp(val, "quic") == 0) {
-        return IMAGE_COMPRESS_QUIC;
+        return SPICE_IMAGE_COMPRESS_QUIC;
     } else if (strcmp(val, "glz") == 0) {
-        return IMAGE_COMPRESS_GLZ;
+        return SPICE_IMAGE_COMPRESS_GLZ;
     } else if (strcmp(val, "lz") == 0) {
-        return IMAGE_COMPRESS_LZ;
+        return SPICE_IMAGE_COMPRESS_LZ;
     } else if (strcmp(val, "off") == 0) {
-        return IMAGE_COMPRESS_OFF;
+        return SPICE_IMAGE_COMPRESS_OFF;
     }
-    return IMAGE_COMPRESS_INVALID;
+    return SPICE_IMAGE_COMPRESS_INVALID;
 }
 
 static void reds_do_set_image_compression(const char *val)
 {
-    image_compression_t real_val = reds_get_image_compression(val);
-    if (real_val == IMAGE_COMPRESS_INVALID) {
+    spice_image_compression_t real_val = reds_get_image_compression(val);
+    if (real_val == SPICE_IMAGE_COMPRESS_INVALID) {
         core->term_printf(core, "bad image compression arg\n");
         return;
     }
@@ -3990,7 +3990,7 @@ int __attribute__ ((visibility ("default"))) spice_parse_args(const char *in_arg
                 goto error;
             }
             image_compression = reds_get_image_compression(val);
-            if (image_compression == IMAGE_COMPRESS_INVALID) {
+            if (image_compression == SPICE_IMAGE_COMPRESS_INVALID) {
                 goto error;
             }
             break;

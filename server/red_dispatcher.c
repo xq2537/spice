@@ -62,7 +62,7 @@ typedef struct RedWorkeState {
 } RedWorkeState;
 
 extern uint32_t streaming_video;
-extern image_compression_t image_compression;
+extern spice_image_compression_t image_compression;
 
 static RedDispatcher *dispatchers = NULL;
 
@@ -388,7 +388,8 @@ void red_dispatcher_set_mm_time(uint32_t mm_time)
 static inline int calc_compression_level()
 {
     ASSERT(streaming_video != STREAM_VIDEO_INVALID);
-    if ((streaming_video != STREAM_VIDEO_OFF) || (image_compression != IMAGE_COMPRESS_QUIC)) {
+    if ((streaming_video != STREAM_VIDEO_OFF) ||
+        (image_compression != SPICE_IMAGE_COMPRESS_QUIC)) {
         return 0;
     } else {
         return 1;
@@ -403,7 +404,7 @@ void red_dispatcher_on_ic_change()
         RedWorkeMessage message = RED_WORKER_MESSAGE_SET_COMPRESSION;
         now->qxl_interface->set_compression_level(now->qxl_interface, compression_level);
         write_message(now->channel, &message);
-        send_data(now->channel, &image_compression, sizeof(image_compression_t));
+        send_data(now->channel, &image_compression, sizeof(spice_image_compression_t));
         now = now->next;
     }
 }
