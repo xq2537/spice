@@ -538,6 +538,7 @@ typedef struct  {
             int src_stride;
             uint32_t dest_stride;
             int lines;
+            int bytes;
             int max_lines_bunch;
             int input_bufs_pos;
             RedCompressBuf *input_bufs[2];
@@ -5299,7 +5300,7 @@ static int quic_usr_more_lines_unstable(QuicUsrContext *usr, uint8_t **out_lines
     uint8_t *dest = out;
     for (; src != end; src += quic_data->u.unstable_lines_data.src_stride,
                        dest += quic_data->u.unstable_lines_data.dest_stride) {
-        memcpy(dest, src, quic_data->u.unstable_lines_data.dest_stride);
+        memcpy(dest, src, quic_data->u.unstable_lines_data.bytes);
     }
     *out_lines = out;
     return lines;
@@ -5723,7 +5724,7 @@ static inline int red_quic_compress_image(DisplayChannel *display_channel, RedIm
     QuicData *quic_data = &worker->quic_data;
     QuicContext *quic = worker->quic;
     QuicImageType type;
-    int size;
+    int size, bpp;
 
 #ifdef COMPRESS_STAT
     stat_time_t start_time = stat_now();
@@ -5732,15 +5733,19 @@ static inline int red_quic_compress_image(DisplayChannel *display_channel, RedIm
     switch (src->format) {
     case SPICE_BITMAP_FMT_32BIT:
         type = QUIC_IMAGE_TYPE_RGB32;
+        bpp  = 4;
         break;
     case SPICE_BITMAP_FMT_RGBA:
         type = QUIC_IMAGE_TYPE_RGBA;
+        bpp  = 4;
         break;
     case SPICE_BITMAP_FMT_16BIT:
         type = QUIC_IMAGE_TYPE_RGB16;
+        bpp  = 2;
         break;
     case SPICE_BITMAP_FMT_24BIT:
         type = QUIC_IMAGE_TYPE_RGB24;
+        bpp  = 3;
         break;
     default:
         return FALSE;
@@ -5783,6 +5788,7 @@ static inline int red_quic_compress_image(DisplayChannel *display_channel, RedIm
             quic_data->data.u.unstable_lines_data.src_stride = stride;
             quic_data->data.u.unstable_lines_data.dest_stride = src->stride;
             quic_data->data.u.unstable_lines_data.lines = src->y;
+            quic_data->data.u.unstable_lines_data.bytes = src->x * bpp;
             quic_data->data.u.unstable_lines_data.input_bufs_pos = 0;
             if (!(quic_data->data.u.unstable_lines_data.input_bufs[0] =
                                             red_display_alloc_compress_buf(display_channel)) ||
