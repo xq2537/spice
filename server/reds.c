@@ -77,8 +77,9 @@ static VDIPortInterface *vdagent = NULL;
 
 static int spice_port = -1;
 static int spice_secure_port = -1;
+static char spice_addr[256];
+static int spice_family = PF_UNSPEC;
 
-static struct in_addr spice_addr = {INADDR_ANY};
 static int ticketing_enabled = 1; //Ticketing is enabled by default
 static pthread_mutex_t *lock_cs;
 static long *lock_count;
@@ -3105,54 +3106,76 @@ static void reds_accept(void *data)
     reds_handle_new_link(link);
 }
 
-static int reds_init_socket(uint16_t port)
+static int reds_init_socket(const char *addr, int portnr, int family)
 {
-    struct sockaddr_in addr;
-    int sock;
-    int flags;
+    static const int on=1, off=0;
+    struct addrinfo ai,*res,*e;
+    char port[33];
+    char uaddr[INET6_ADDRSTRLEN+1];
+    char uport[33];
+    int slisten,rc;
 
-    if ((sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) == -1) {
-        red_error("socket failed, %s", strerror(errno));
+    memset(&ai,0, sizeof(ai));
+    ai.ai_flags = AI_PASSIVE | AI_ADDRCONFIG;
+    ai.ai_socktype = SOCK_STREAM;
+    ai.ai_family = family;
+
+    snprintf(port, sizeof(port), "%d", portnr);
+    rc = getaddrinfo(strlen(addr) ? addr : NULL, port, &ai, &res);
+    if (rc != 0) {
+        red_error("getaddrinfo(%s,%s): %s\n", addr, port,
+                  gai_strerror(rc));
     }
 
-    flags = 1;
-    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &flags, sizeof(flags)) < 0) {
-        red_error("socket set sockopt failed, %s", strerror(errno));
-    }
+    for (e = res; e != NULL; e = e->ai_next) {
+        getnameinfo((struct sockaddr*)e->ai_addr,e->ai_addrlen,
+                    uaddr,INET6_ADDRSTRLEN, uport,32,
+                    NI_NUMERICHOST | NI_NUMERICSERV);
+        slisten = socket(e->ai_family, e->ai_socktype, e->ai_protocol);
+        if (slisten < 0) {
+            continue;
+        }
 
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = spice_addr.s_addr;
-    if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
-        red_error("bind failed, %s", strerror(errno));
+        setsockopt(slisten,SOL_SOCKET,SO_REUSEADDR,(void*)&on,sizeof(on));
+#ifdef IPV6_V6ONLY
+        if (e->ai_family == PF_INET6) {
+            /* listen on both ipv4 and ipv6 */
+            setsockopt(slisten,IPPROTO_IPV6,IPV6_V6ONLY,(void*)&off,
+                       sizeof(off));
+        }
+#endif
+        if (bind(slisten, e->ai_addr, e->ai_addrlen) == 0) {
+            goto listen;
+        }
+        close(slisten);
     }
+    red_error("%s: binding socket to %s:%d failed\n", __FUNCTION__,
+              addr, portnr);
+    freeaddrinfo(res);
+    return -1;
 
-    if ((flags = fcntl(sock, F_GETFL)) == -1) {
-        red_error("fcntl get failed, %s", strerror(errno));
+listen:
+    freeaddrinfo(res);
+    if (listen(slisten,1) != 0) {
+        red_error("%s: listen: %s", __FUNCTION__, strerror(errno));
+        close(slisten);
+        return -1;
     }
-
-    if (fcntl(sock, F_SETFL, flags | O_NONBLOCK) == -1) {
-        red_error("fcntl set failed, %s", strerror(errno));
-    }
-
-    if (listen(sock, 2) == -1) {
-        red_error("listen failed, %s", strerror(errno));
-    }
-
-    return sock;
+    return slisten;
 }
 
 static void reds_init_net()
 {
     if (spice_port != -1) {
-        reds->listen_socket = reds_init_socket(spice_port);
+        reds->listen_socket = reds_init_socket(spice_addr, spice_port, spice_family);
         if (core->set_file_handlers(core, reds->listen_socket, reds_accept, NULL, NULL)) {
             red_error("set fd handle failed");
         }
     }
 
     if (spice_secure_port != -1) {
-        reds->secure_listen_socket = reds_init_socket(spice_secure_port);
+        reds->secure_listen_socket = reds_init_socket(spice_addr, spice_secure_port,
+                                                      spice_family);
         if (core->set_file_handlers(core, reds->secure_listen_socket,
                                     reds_accept_ssl_connection, NULL, NULL)) {
             red_error("set fd handle failed");
@@ -3955,15 +3978,11 @@ int __attribute__ ((visibility ("default"))) spice_parse_args(const char *in_arg
             break;
         }
         case SPICE_OPTION_HOST: {
-            struct hostent* host_addr;
-            if (!val) {
-                goto error;
+            if (val) {
+                strncpy(spice_addr, val, sizeof(spice_addr));
+                /* force ipv4 here for backward compatibility */
+                spice_family = PF_INET;
             }
-            if ((host_addr = gethostbyname(val)) == NULL || host_addr->h_addrtype != AF_INET) {
-                goto error;
-            }
-            ASSERT(host_addr->h_length == sizeof(spice_addr));
-            memcpy(&spice_addr, host_addr->h_addr, sizeof(spice_addr));
             break;
         }
         case SPICE_OPTION_IMAGE_COMPRESSION:
@@ -5523,6 +5542,18 @@ int spice_server_set_port(SpiceServer *s, int port)
     }
     spice_port = port;
     return 0;
+}
+
+void spice_server_set_addr(SpiceServer *s, const char *addr, int flags)
+{
+    ASSERT(reds == s);
+    strncpy(spice_addr, addr, sizeof(spice_addr));
+    if (flags & SPICE_ADDR_FLAG_IPV4_ONLY) {
+        spice_family = PF_INET;
+    }
+    if (flags & SPICE_ADDR_FLAG_IPV6_ONLY) {
+        spice_family = PF_INET6;
+    }
 }
 
 int spice_server_set_noauth(SpiceServer *s)
