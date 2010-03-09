@@ -46,6 +46,7 @@ RED_COMMON_SRCS =	 		\
 	lz.cpp				\
 	monitor.cpp			\
 	monitor.h			\
+	mem.cpp				\
 	menu.cpp			\
 	menu.h				\
 	pixels_source.h			\

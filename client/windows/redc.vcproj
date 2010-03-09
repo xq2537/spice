@@ -265,6 +265,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\mem.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\menu.cpp"
 				>
 			</File>

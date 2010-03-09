@@ -69,6 +69,7 @@ RED_COMMON_SRCS = 					\
 	$(top_srcdir)/client/lines.cpp			\
 	$(top_srcdir)/client/monitor.cpp		\
 	$(top_srcdir)/client/monitor.h			\
+	$(top_srcdir)/client/mem.cpp			\
 	$(top_srcdir)/client/menu.cpp			\
 	$(top_srcdir)/client/menu.h			\
 	$(top_srcdir)/client/pixels_source.h		\

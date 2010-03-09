@@ -30,6 +30,7 @@ COMMON_SRCS = 						\
 	$(top_srcdir)/common/quic.c			\
 	$(top_srcdir)/common/lz.c			\
 	$(top_srcdir)/common/canvas_utils.c		\
+	$(top_srcdir)/common/mem.c			\
 	$(NULL)
 
 lib_LTLIBRARIES = libspice.la
