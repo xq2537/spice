@@ -3278,10 +3278,14 @@ static void reds_init_ssl()
     SSL_CTX_set_verify_depth(reds->ctx, 1);
 #endif
 
-    load_dh_params(reds->ctx, ssl_parameters.dh_key_file);
+    if (strlen(ssl_parameters.dh_key_file) > 0) {
+        load_dh_params(reds->ctx, ssl_parameters.dh_key_file);
+    }
 
     SSL_CTX_set_session_id_context(reds->ctx, (const unsigned char *)"SPICE", 5);
-    SSL_CTX_set_cipher_list(reds->ctx, ssl_parameters.ciphersuite);
+    if (strlen(ssl_parameters.ciphersuite) > 0) {
+        SSL_CTX_set_cipher_list(reds->ctx, ssl_parameters.ciphersuite);
+    }
 
     openssl_thread_setup();
 
@@ -5556,6 +5560,44 @@ int spice_server_set_ticket(SpiceServer *s, const char *passwd, int lifetime,
     } else {
         memset(taTicket.password, 0, sizeof(taTicket.password));
         taTicket.expiration_time = 0;
+    }
+    return 0;
+}
+
+int spice_server_set_tls(SpiceServer *s, int port,
+                         const char *ca_cert_file, const char *certs_file,
+                         const char *private_key_file, const char *key_passwd,
+                         const char *dh_key_file, const char *ciphersuite)
+{
+    ASSERT(reds == s);
+    if (port == 0 || ca_cert_file == NULL || certs_file == NULL ||
+        private_key_file == NULL) {
+        return -1;
+    }
+    if (port < 0 || port > 0xffff) {
+        return -1;
+    }
+    memset(&ssl_parameters, 0, sizeof(ssl_parameters));
+
+    spice_secure_port = port;
+    strncpy(ssl_parameters.ca_certificate_file, ca_cert_file,
+            sizeof(ssl_parameters.ca_certificate_file)-1);
+    strncpy(ssl_parameters.certs_file, certs_file,
+            sizeof(ssl_parameters.certs_file)-1);
+    strncpy(ssl_parameters.private_key_file, private_key_file,
+            sizeof(ssl_parameters.private_key_file)-1);
+
+    if (key_passwd) {
+        strncpy(ssl_parameters.keyfile_password, key_passwd,
+                sizeof(ssl_parameters.keyfile_password)-1);
+    }
+    if (ciphersuite) {
+        strncpy(ssl_parameters.ciphersuite, ciphersuite,
+                sizeof(ssl_parameters.ciphersuite)-1);
+    }
+    if (dh_key_file) {
+        strncpy(ssl_parameters.dh_key_file, dh_key_file,
+                sizeof(ssl_parameters.dh_key_file)-1);
     }
     return 0;
 }
