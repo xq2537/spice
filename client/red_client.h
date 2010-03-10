@@ -77,6 +77,7 @@ private:
     int _port;
     int _sport;
     RedPeer::HostAuthOptions _auth_options;
+    std::string _con_ciphers;
     Thread* _thread;
     Mutex _lock;
     Condition _cond;
@@ -150,6 +151,7 @@ public:
     bool is_auto_display_res() { return _auto_display_res;}
     RedPeer::ConnectionOptions::Type get_connection_options(uint32_t channel_type);
     RedPeer::HostAuthOptions& get_host_auth_options() { return _host_auth_opt;}
+    const std::string& get_connection_ciphers() { return _con_ciphers;}
     void get_sync_info(uint8_t channel_type, uint8_t channel_id, SyncInfo& info);
     void wait_for_channels(int wait_list_size, RedWaitForChannel* wait_list);
     PixmapCache& get_pixmap_cache() {return _pixmap_cache;}
@@ -218,6 +220,7 @@ private:
 
     PeerConnectionOptMap _con_opt_map;
     RedPeer::HostAuthOptions _host_auth_opt;
+    std::string _con_ciphers;
     Migrate _migrate;
     Mutex _channels_lock;
     typedef std::list<ChannelFactory*> Factorys;

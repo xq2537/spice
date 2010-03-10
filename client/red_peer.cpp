@@ -509,7 +509,6 @@ int RedPeer::ssl_verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
     return 0;
 }
 
-// todo: use SSL_CTX_set_cipher_list, etc.
 void RedPeer::connect_secure(const ConnectionOptions& options, const char* host)
 {
     int return_code;
@@ -556,6 +555,12 @@ void RedPeer::connect_secure(const ConnectionOptions& options, const char* host)
 
         if (auth_flags) {
             SSL_CTX_set_verify(_ctx, SSL_VERIFY_PEER, ssl_verify_callback);
+        }
+
+        return_code = SSL_CTX_set_cipher_list(_ctx, options.ciphers.c_str());
+        if (return_code != 1) {
+            LOG_WARN("SSL_CTX_set_cipher_list failed, ciphers=%s", options.ciphers.c_str());
+            ssl_error();
         }
 
         _ssl = SSL_new(_ctx);

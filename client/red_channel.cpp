@@ -396,7 +396,8 @@ void RedChannel::run()
                 ConnectionOptions con_options(_client.get_connection_options(get_type()),
                                               _client.get_port(),
                                               _client.get_sport(),
-                                              _client.get_host_auth_options());
+                                              _client.get_host_auth_options(),
+                                              _client.get_connection_ciphers());
                 RedChannelBase::connect(con_options, _client.get_connection_id(),
                                         _client.get_host(), _client.get_password());
                 on_connect();

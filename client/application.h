@@ -156,6 +156,7 @@ public:
     void connect();
     const PeerConnectionOptMap& get_con_opt_map() {return _peer_con_opt;}
     const RedPeer::HostAuthOptions& get_host_auth_opt() { return _host_auth_opt;}
+    const std::string& get_connection_ciphers() { return _con_ciphers;}
     uint32_t get_mouse_mode();
     const std::vector<int>& get_canvas_types() { return _canvas_types;}
 
@@ -166,6 +167,9 @@ public:
 
 private:
     bool set_channels_security(CmdLineParser& parser, bool on, char *val, const char* arg0);
+    bool set_connection_ciphers(const char* ciphers, const char* arg0);
+    bool set_ca_file(const char* ca_file, const char* arg0);
+    bool set_host_cert_subject(const char* subject, const char* arg0);
     bool set_enable_channels(CmdLineParser& parser, bool enable, char *val, const char* arg0);
     bool set_canvas_option(CmdLineParser& parser, char *val, const char* arg0);
     void on_cmd_line_invalid_arg(const char* arg0, const char* what, const char* val);
@@ -226,6 +230,7 @@ private:
     RedClient _client;
     PeerConnectionOptMap _peer_con_opt;
     RedPeer::HostAuthOptions _host_auth_opt;
+    std::string _con_ciphers;
     std::vector<bool> _enabled_channels;
     std::vector<RedScreen*> _screens;
     RedScreen* _main_screen;
