@@ -164,11 +164,13 @@ SPICE_REQUIRES+=" openssl"
 have_gl=yes
 AC_CHECK_LIB(GL, glBlendFunc, GL_LIBS="$GL_LIBS -lGL", have_gl=no)
 AC_CHECK_LIB(GLU, gluSphere, GL_LIBS="$GL_LIBS -lGLU", have_gl=no)
+GL_CFLAGS="-DGL_GLEXT_PROTOTYPES"
 
 if test "x$have_gl" = "xno"; then
    AC_MSG_ERROR([GL libraries not available])
 fi
 
+AC_SUBST(GL_CFLAGS)
 AC_SUBST(GL_LIBS)
 SPICE_NONPKGCONFIG_LIBS+=" $GL_LIBS"
 

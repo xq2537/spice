@@ -18,7 +18,6 @@
 #ifndef _H_PIXELE_SOURSR_P
 #define _H_PIXELE_SOURSR_P
 
-#define GL_GLEXT_PROTOTYPES
 #include <X11/X.h>
 #include <GL/glu.h>
 #include <X11/extensions/XShm.h>

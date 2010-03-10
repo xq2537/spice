@@ -15,8 +15,6 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define GL_GLEXT_PROTOTYPES
-
 #include "common.h"
 #include "canvas.h"
 #include "red_pixmap.h"

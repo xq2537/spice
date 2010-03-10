@@ -15,7 +15,6 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define GL_GLEXT_PROTOTYPES
 #include "common.h"
 #include "red_drawable.h"
 #include "pixels_source_p.h"

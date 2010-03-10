@@ -18,8 +18,6 @@
    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 */
 
-#define GL_GLEXT_PROTOTYPES
-
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
