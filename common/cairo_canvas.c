@@ -812,10 +812,10 @@ SpiceCanvas *canvas_create(pixman_image_t *image, int bits
     CairoCanvas *canvas;
     int init_ok;
 
-    if (need_init || !(canvas = (CairoCanvas *)malloc(sizeof(CairoCanvas)))) {
+    if (need_init) {
         return NULL;
     }
-    memset(canvas, 0, sizeof(CairoCanvas));
+    canvas = spice_new0(CairoCanvas, 1);
     init_ok = canvas_base_init(&canvas->base, &cairo_canvas_ops,
                                pixman_image_get_width (image),
                                pixman_image_get_height (image),

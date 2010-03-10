@@ -46,7 +46,7 @@ static inline uint8_t *copy_opposite_image(GLCanvas *canvas, void *data, int str
     int i;
 
     if (!canvas->private_data) {
-        canvas->private_data = malloc(stride * height);
+        canvas->private_data = spice_malloc_n(height, stride);
         if (!canvas->private_data) {
             return ret_data;
         }
@@ -55,7 +55,7 @@ static inline uint8_t *copy_opposite_image(GLCanvas *canvas, void *data, int str
 
     if (canvas->private_data_size < (stride * height)) {
         free(canvas->private_data);
-        canvas->private_data = malloc(stride * height);
+        canvas->private_data = spice_malloc_n(height, stride);
         if (!canvas->private_data) {
             return ret_data;
         }
@@ -742,7 +742,7 @@ static void gl_canvas_group_start(SpiceCanvas *spice_canvas, QRegion *region)
 
     rects = pixman_region32_rectangles(region, &num_rect);
 
-    glc_rects = (GLCRect *)malloc(num_rect * sizeof(GLCRect));
+    glc_rects = spice_new(GLCRect, num_rect);
     now = glc_rects;
     end = glc_rects + num_rect;
 
@@ -837,10 +837,10 @@ SpiceCanvas *gl_canvas_create(int width, int height, int depth
     GLCanvas *canvas;
     int init_ok;
 
-    if (need_init || !(canvas = (GLCanvas *)malloc(sizeof(GLCanvas)))) {
+    if (need_init) {
         return NULL;
     }
-    memset(canvas, 0, sizeof(GLCanvas));
+    canvas = spice_new0(GLCanvas, 1);
 
     if (!(canvas->glc = glc_create(width, height))) {
         goto error_1;

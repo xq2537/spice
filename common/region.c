@@ -23,6 +23,7 @@
 
 #include "region.h"
 #include "rect.h"
+#include "mem.h"
 
 #define ASSERT(x) if (!(x)) {                               \
     printf("%s: ASSERT %s failed\n", __FUNCTION__, #x);     \
@@ -352,7 +353,7 @@ SpiceRect *region_dup_rects(const QRegion *rgn, uint32_t *num_rects)
     if (num_rects) {
         *num_rects = n;
     }
-    rects = (SpiceRect *)malloc(sizeof(SpiceRect)*n);
+    rects = spice_new(SpiceRect, n);
     for (i = 0; i < n; i++) {
         rects[i].left = boxes[i].x1;
         rects[i].top = boxes[i].y1;

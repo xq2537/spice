@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include "mem.h"
 
 #ifndef ASSERT
 #define ASSERT(x) if (!(x)) {                               \
@@ -909,7 +910,7 @@ pixman_bool_t spice_pixman_region32_init_rects (pixman_region32_t *region,
     if (count < 10) {
         boxes = boxes_array;
     } else {
-        boxes = (pixman_box32_t *)malloc(sizeof(pixman_box32_t) * count);
+        boxes = spice_new(pixman_box32_t, count);
         if (boxes == NULL) {
             return FALSE;
         }

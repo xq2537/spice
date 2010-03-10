@@ -33,6 +33,7 @@
 #include "wglext.h"
 #endif
 
+#include "mem.h"
 #include "glc.h"
 #include "gl_utils.h"
 
@@ -169,11 +170,6 @@ static void fill_mask(InternaCtx *ctx, int x_dest, int y_dest, int width, int he
                       const uint8_t *bitmap);
 static void set_pat(InternaCtx *ctx, InternalPat *pat);
 
-static inline void *zmalloc(size_t size)
-{
-    return calloc(1, size);
-}
-
 static inline void set_raster_pos(InternaCtx *ctx, int x, int y)
 {
     if (x >= 0 && y >= 0 && x < ctx->width && y < ctx->height) {
@@ -192,11 +188,8 @@ static TassVertex *alloc_tess_vertex(InternaCtx *ctx)
         TassVertexBuf *buf;
         int i;
 
-        if (!(buf = (TassVertexBuf *)malloc(sizeof(TassVertexBuf) +
-                                            sizeof(TassVertex) * TESS_VERTEX_ALLOC_BUNCH))) {
-            //warn
-            return NULL;
-        }
+        buf = (TassVertexBuf *)spice_malloc(sizeof(TassVertexBuf) +
+                                            sizeof(TassVertex) * TESS_VERTEX_ALLOC_BUNCH);
         buf->next = ctx->vertex_bufs;
         ctx->vertex_bufs = buf;
         for (i = 0; i < TESS_VERTEX_ALLOC_BUNCH; i++) {
@@ -250,10 +243,7 @@ static TassVertex *bezier_flattener(InternaCtx *ctx, PathPoint *points)
     for (i = 0; i < num_points - 2; i++) {
         TassVertex *vertex;
 
-        if (!(vertex = alloc_tess_vertex(ctx))) {
-            //warn
-            return NULL;
-        }
+        vertex = alloc_tess_vertex(ctx);
         vertex->list_link = vertex_list;
         vertex_list = vertex;
     }
@@ -288,27 +278,24 @@ static TassVertex *bezier_flattener(InternaCtx *ctx, PathPoint *points)
 #define MORE_X(path, Type, name) {                                              \
     Type *name;                                                                 \
                                                                                 \
-    if (!(name = (Type *)zmalloc(sizeof(*name) * path->name##_size * 2))) {     \
-        return FALSE;                                                           \
-    }                                                                           \
+    name = spice_new0(Type, path->name##_size * 2);                             \
     memcpy(name, path->name, sizeof(*name) * path->name##_size);                \
     free(path->name);                                                           \
     path->name = name;                                                          \
     path->name##_size *= 2;                                                     \
-    return TRUE;                                                                \
 }
 
-static int more_points(InternalPath *path)
+static void more_points(InternalPath *path)
 {
     MORE_X(path, PathPoint, points);
 }
 
-static int more_segments(InternalPath *path)
+static void more_segments(InternalPath *path)
 {
     MORE_X(path, PathSegment, segments);
 }
 
-static int more_paths(InternalPath *path)
+static void more_paths(InternalPath *path)
 {
     MORE_X(path, Path, paths);
 }
@@ -329,9 +316,8 @@ void glc_path_move_to(GLCPath path, double x, double y)
     if (internal->current_segment) {
         internal->current_segment = NULL;
         internal->current_path = NULL;
-        if (internal->points_pos == internal->points_size && !more_points(internal)) {
-            //warn
-            return;
+        if (internal->points_pos == internal->points_size) {
+            more_points(internal);
         }
         internal->points_pos++;
     }
@@ -340,37 +326,33 @@ void glc_path_move_to(GLCPath path, double x, double y)
     internal->points[internal->points_pos - 1].z = 0;
 }
 
-static int add_segment_common(InternalPath *internal, int type, int num_points)
+static void add_segment_common(InternalPath *internal, int type, int num_points)
 {
-    if (internal->points_size - internal->points_pos < num_points && !more_points(internal)) {
-        //warn
-        return FALSE;
+    if (internal->points_size - internal->points_pos < num_points) {
+        more_points(internal);
     }
 
     if (internal->current_segment) {
         if (internal->current_segment->type == type) {
             internal->current_segment->count++;
-            return TRUE;
+            return;
         }
-        if (internal->segments_pos == internal->segments_size && !more_segments(internal)) {
-            //warn
-            return FALSE;
+        if (internal->segments_pos == internal->segments_size) {
+            more_segments(internal);
         }
         internal->current_segment = &internal->segments[internal->segments_pos++];
         internal->current_segment->type = type;
         internal->current_segment->count = 1;
         internal->current_path->num_segments++;
-        return TRUE;
+        return;
     }
 
-    if (internal->paths_pos == internal->paths_size && !more_paths(internal)) {
-        //warn
-        return FALSE;
+    if (internal->paths_pos == internal->paths_size) {
+        more_paths(internal);
     }
 
-    if (internal->segments_pos == internal->segments_size && !more_segments(internal)) {
-        //warn
-        return FALSE;
+    if (internal->segments_pos == internal->segments_size) {
+        more_segments(internal);
     }
 
     internal->current_path = &internal->paths[internal->paths_pos++];
@@ -379,7 +361,6 @@ static int add_segment_common(InternalPath *internal, int type, int num_points)
     internal->current_segment = &internal->segments[internal->segments_pos++];
     internal->current_segment->type = type;
     internal->current_segment->count = 1;
-    return TRUE;
 }
 
 void glc_path_line_to(GLCPath path, double x, double y)
@@ -388,9 +369,7 @@ void glc_path_line_to(GLCPath path, double x, double y)
 
     ASSERT(internal);
 
-    if (!add_segment_common(internal, GLC_PATH_SEG_LINES, 1)) {
-        return;
-    }
+    add_segment_common(internal, GLC_PATH_SEG_LINES, 1);
     put_point(internal, x, y);
 }
 
@@ -401,9 +380,7 @@ void glc_path_curve_to(GLCPath path, double p1_x, double p1_y, double p2_x, doub
 
     ASSERT(internal);
 
-    if (!add_segment_common(internal, GLC_PATH_SEG_BEIZER, 3)) {
-        return;
-    }
+    add_segment_common(internal, GLC_PATH_SEG_BEIZER, 3);
     put_point(internal, p1_x, p1_y);
     put_point(internal, p2_x, p2_y);
     put_point(internal, p3_x, p3_y);
@@ -442,39 +419,19 @@ GLCPath glc_path_create(GLCCtx glc)
     InternalPath *path;
 
     ASSERT(ctx);
-    if (!(path = (InternalPath *)zmalloc(sizeof(*path)))) {
-        return NULL;
-    }
+    path = spice_new0(InternalPath, 1);
+    path->paths_size = 2;
+    path->paths = spice_new(Path, path->paths_size);
 
-    path->paths = (Path *)malloc(sizeof(*path->paths) * (path->paths_size = 2));
-    if (!path->paths) {
-        goto error_1;
-    }
+    path->segments_size = 4;
+    path->segments = spice_new(PathSegment, path->segments_size);
 
-    path->segments = (PathSegment *)malloc(sizeof(*path->segments) * (path->segments_size = 4));
-    if (!path->segments) {
-        goto error_2;
-    }
-
-    path->points = (PathPoint *)malloc(sizeof(*path->points) * (path->points_size = 20));
-    if (!path->points) {
-        goto error_3;
-    }
+    path->points_size = 20;
+    path->points = spice_new(PathPoint, path->points_size);
 
     path->owner = ctx;
     path->points_pos = 1;
     return path;
-
-error_3:
-    free(path->segments);
-
-error_2:
-    free(path->paths);
-
-error_1:
-    free(path);
-
-    return NULL;
 }
 
 void glc_path_destroy(GLCPath path)
@@ -559,10 +516,7 @@ static inline void init_pattern(InternalPat *pat, int x_orign, int y_orign, cons
     ASSERT(height > 0 && height <= pat->owner->max_texture_size);
 
     if (width2 != width || height2 != height) {
-        if (!(tmp_pixmap = (uint32_t *)malloc(width2 * height2 * sizeof(uint32_t)))) {
-            //warn
-            return;
-        }
+        tmp_pixmap = (uint32_t *)spice_malloc(width2 * height2 * sizeof(uint32_t));
         scale(tmp_pixmap, width2, height2, (uint32_t *)image->pixels, width, height, image->stride);
     }
 
@@ -607,9 +561,7 @@ GLCPattern glc_pattern_create(GLCCtx glc, int x_orign, int y_orign, const GLCIma
 
     ASSERT(ctx && image);
 
-    if (!(pat = (InternalPat *)zmalloc(sizeof(*pat)))) {
-        return NULL;
-    }
+    pat = spice_new0(InternalPat, 1);
     pat->refs = 1;
     pat->owner = ctx;
     glGenTextures(1, &pat->texture);
@@ -704,11 +656,7 @@ void glc_set_line_dash(GLCCtx glc, const double *dashes, int num_dashes, double 
 
     ASSERT(ctx);
     if (dashes && num_dashes >= 0 && offset >= 0) {
-        ctx->line_dash.dashes = (double *)malloc(sizeof(double) * num_dashes);
-        if (!ctx->line_dash.dashes) {
-            // FIXME: error
-            return;
-        }
+        ctx->line_dash.dashes = spice_new(double, num_dashes);
         memcpy(ctx->line_dash.dashes, dashes, sizeof(double) * num_dashes);
         ctx->line_dash.num_dashes = num_dashes;
         ctx->line_dash.offset = offset;
@@ -1420,10 +1368,7 @@ static void tessellation_combine(GLdouble coords[3], GLdouble *vertex_data[4], G
 {
     TassVertex *vertex;
 
-    if (!(vertex = alloc_tess_vertex((InternaCtx *)usr_data))) {
-        *data_out = NULL;
-        return;
-    }
+    vertex = alloc_tess_vertex((InternaCtx *)usr_data);
     vertex->point.x = coords[0];
     vertex->point.y = coords[1];
     //vertex->point.z = coords[2];
@@ -1522,10 +1467,7 @@ GLCCtx glc_create(int width, int height)
 
     ASSERT(sizeof(PathPoint) == sizeof(Vertex));
 
-    if (!(ctx = (InternaCtx *)zmalloc(sizeof(*ctx)))) {
-        return NULL;
-    }
-
+    ctx = spice_new0(InternaCtx, 1);
     if (!init(ctx, width, height)) {
         free(ctx);
         return NULL;

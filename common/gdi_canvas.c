@@ -1508,7 +1508,7 @@ static uint32_t *gdi_get_userstyle(GdiCanvas *canvas, uint8_t nseg, SPICE_ADDRES
     if (nseg == 0) {
         CANVAS_ERROR("bad nseg");
     }
-    local_style = (uint32_t *)malloc(nseg * sizeof(*local_style));
+    local_style = spice_new(uint32_t , nseg);
 
     if (start_is_gap) {
         offset = (uint32_t)fix_to_double(*style);
@@ -1730,10 +1730,10 @@ SpiceCanvas *gdi_canvas_create(int width, int height,
     GdiCanvas *canvas;
     int init_ok;
 
-    if (need_init || !(canvas = (GdiCanvas *)malloc(sizeof(GdiCanvas)))) {
+    if (need_init) {
         return NULL;
     }
-    memset(canvas, 0, sizeof(GdiCanvas));
+    canvas = spice_new0(GdiCanvas, 1);
     init_ok = canvas_base_init(&canvas->base, &gdi_canvas_ops,
                                width, height, bits
 #ifdef CAIRO_CANVAS_CACHE

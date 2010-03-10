@@ -57,9 +57,10 @@ SOFTWARE.
 #undef _XOPEN_SOURCE
 #endif
 #include "lines.h"
+#include "mem.h"
 
-#define xalloc(i) malloc(i)
-#define xrealloc(a,b) realloc(a,b)
+#define xalloc(i) spice_malloc(i)
+#define xrealloc(a,b) spice_realloc(a,b)
 #define xfree(i) free(i)
 
 typedef unsigned int CARD32;

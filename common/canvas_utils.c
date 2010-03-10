@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #endif
+#include "mem.h"
 
 #ifdef WIN32
 extern int gdi_handlers;
@@ -89,7 +90,7 @@ static inline pixman_image_t *__surface_create_stride(pixman_format_code_t forma
     pixman_image_t *surface;
     PixmanData *pixman_data;
 
-    data = (uint8_t *)malloc(abs(stride) * height);
+    data = (uint8_t *)spice_malloc_n(abs(stride), height);
     if (stride < 0) {
         stride_data = data + (-stride) * (height - 1);
     } else {

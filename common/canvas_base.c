@@ -32,6 +32,7 @@
 #include "rect.h"
 #include "lines.h"
 #include "rop3.h"
+#include "mem.h"
 
 #include "mutex.h"
 
@@ -879,7 +880,7 @@ static pixman_image_t *canvas_get_bits(CanvasBase *canvas, SpiceBitmap *bitmap)
     palette = (SpicePalette *)SPICE_GET_ADDRESS(bitmap->palette);
     if (canvas->color_shift == 5) {
         int size = sizeof(SpicePalette) + (palette->num_ents << 2);
-        SpicePalette *local_palette = malloc(size);
+        SpicePalette *local_palette = spice_malloc(size);
         pixman_image_t* surface;
 
         memcpy(local_palette, palette, size);
@@ -1634,7 +1635,7 @@ static void quic_usr_warn(QuicUsrContext *usr, const char *fmt, ...)
 
 static void *quic_usr_malloc(QuicUsrContext *usr, int size)
 {
-    return malloc(size);
+    return spice_malloc(size);
 }
 
 static void quic_usr_free(QuicUsrContext *usr, void *ptr)
@@ -1673,7 +1674,7 @@ static void lz_usr_error(LzUsrContext *usr, const char *fmt, ...)
 
 static void *lz_usr_malloc(LzUsrContext *usr, int size)
 {
-    return malloc(size);
+    return spice_malloc(size);
 }
 
 static void lz_usr_free(LzUsrContext *usr, void *ptr)
@@ -2478,7 +2479,7 @@ static void stroke_fill_rects(lineGC * pGC,
     /* TODO: We can optimize this for more common cases where
        dest is one rect */
 
-    boxes = (pixman_box32_t *)malloc(num_rects * sizeof(pixman_box32_t));
+    boxes = spice_new(pixman_box32_t, num_rects);
     for (i = 0; i < num_rects; i++) {
         boxes[i].x1 = rects[i].x;
         boxes[i].y1 = rects[i].y;
@@ -2525,7 +2526,7 @@ typedef struct {
 
 static void stroke_lines_init(StrokeLines *lines)
 {
-    lines->points = (SpicePoint *)malloc(10*sizeof(SpicePoint));
+    lines->points = spice_new(SpicePoint, 10);
     lines->size = 10;
     lines->num_points = 0;
 }
@@ -2540,8 +2541,7 @@ static void stroke_lines_append(StrokeLines *lines,
 {
     if (lines->num_points == lines->size) {
         lines->size *= 2;
-        lines->points = (SpicePoint *)realloc(lines->points,
-                                              lines->size * sizeof(SpicePoint));
+        lines->points = spice_renew(SpicePoint, lines->points, lines->size);
     }
     lines->points[lines->num_points].x = x;
     lines->points[lines->num_points].y = y;
@@ -2723,7 +2723,7 @@ static void canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox,
            not right either. The gl an gdi backend don't use back_mode
            at all */
         gc.base.lineStyle = LineOnOffDash;
-        gc.base.dash = (unsigned char *)malloc(nseg);
+        gc.base.dash = (unsigned char *)spice_malloc(nseg);
         gc.base.numInDashList = nseg;
         access_test(canvas, style, nseg * sizeof(*style));
 
