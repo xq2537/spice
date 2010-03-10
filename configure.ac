@@ -101,7 +101,7 @@ AC_CHECK_LIB(rt, clock_gettime,
    )
 AC_SUBST(LIBRT)
 
-SPICE_NONPKGCONFIG_LIBS+=" $LIBM $LIBRT"
+SPICE_NONPKGCONFIG_LIBS+=" -pthread $LIBM $LIBRT"
 
 SPICE_REQUIRES=""
 
@@ -188,6 +188,11 @@ AM_CONDITIONAL([HAVE_XRANDR12], [test "x$have_xrandr12" = "xyes"])
 if test "x$have_xrandr12" = "xyes" ; then
   AC_DEFINE([HAVE_XRANDR12], [], [Define if we have XRANDR 12])
 fi
+
+PKG_CHECK_MODULES(MISC_X, x11 xext xrender)
+AC_SUBST(MISC_X_CFLAGS)
+AC_SUBST(MISC_X_LIBS)
+SPICE_REQUIRES+=" x11 xext xrender"
 
 # Add parameter for (partial) static linkage of spice client.
 # this is used to achive single binary package for all (?) distros.

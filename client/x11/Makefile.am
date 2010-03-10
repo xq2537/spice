@@ -23,8 +23,10 @@ INCLUDES = \
 	$(CELT051_CFLAGS)				\
 	$(SSL_CFLAGS)					\
 	$(XRANDR_CFLAGS)				\
+	$(MISC_X_CFLAGS)				\
 	$(CEGUI_CFLAGS)					\
 	$(WARN_CFLAGS)                                  \
+	$(SPICE_NONPKGCONFIG_CFLAGS)			\
 	$(NULL)
 
 
@@ -154,7 +156,8 @@ spicec_LDFLAGS = \
 	$(LOG4CPP_LIBS)					\
 	$(CELT051_LIBS)					\
 	$(SSL_LIBS)					\
-	$(CEGUI_LIBS)
+	$(CEGUI_LIBS)					\
+	$(SPICE_NONPKGCONFIG_LIBS)
 
 spicec_LDADD =						\
 	$(PIXMAN_LIBS)					\
@@ -162,6 +165,7 @@ spicec_LDADD =						\
 	$(ALSA_LIBS)					\
 	$(GL_LIBS)					\
 	$(XRANDR_LIBS)					\
+	$(MISC_X_LIBS)					\
 	$(CEGUI_LIBS)					\
 	-lrt
 
