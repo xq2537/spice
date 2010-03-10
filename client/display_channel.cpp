@@ -128,8 +128,9 @@ static inline void yuv420_to_rgb(AVFrame* frame, uint8_t* data, uint32_t width, 
     ASSERT(width % 2 == 0);
     ASSERT(height % 2 == 0);
 
+    /* turning it to be down to top */
     if (top_down) {
-        data += stride * height - 1;
+        data += stride * (height - 1);
         stride = -stride;
     }
 
@@ -333,16 +334,11 @@ VideoStream::VideoStream(RedClient& client, Canvas& canvas, DisplayChannel& chan
         _pixmap.width = src_width;
         _pixmap.height = src_height;
 
-        if (top_down) {
-            _pixmap.data = _uncompressed_data;
-            _pixmap.stride = _stride;
-        } else {
 #ifdef WIN32
-            SetViewportOrgEx(_dc, 0, stream_height - src_height, NULL);
+        SetViewportOrgEx(_dc, 0, stream_height - src_height, NULL);
 #endif
-            _pixmap.data = _uncompressed_data + _stride * (src_height - 1);
-            _pixmap.stride = -_stride;
-        }
+        _pixmap.data = _uncompressed_data + _stride * (src_height - 1);
+        _pixmap.stride = -_stride;
 
         set_clip(clip_type, num_clip_rects, clip_rects);
 
