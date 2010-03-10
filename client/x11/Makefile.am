@@ -8,6 +8,7 @@ INCLUDES = \
 	-DCAIRO_CANVAS_NO_CHUNKS			\
 	-DUSE_GLZ					\
 	-DUSE_OGL					\
+	-D__STDC_LIMIT_MACROS				\
 	-I. 						\
 	-I..						\
 	-I$(top_srcdir)/common				\
