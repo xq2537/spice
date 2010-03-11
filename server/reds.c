@@ -78,6 +78,7 @@ static int spice_port = -1;
 static int spice_secure_port = -1;
 static char spice_addr[256];
 static int spice_family = PF_UNSPEC;
+static char *default_renderer = "cairo";
 
 static int ticketing_enabled = 1; //Ticketing is enabled by default
 static pthread_mutex_t *lock_cs;
@@ -5500,7 +5501,8 @@ int spice_server_init(SpiceServer *s, CoreInterface *core)
 {
     ASSERT(reds == s);
     do_spice_init(core);
-    red_dispatcher_add_renderer("cairo");
+    if (default_renderer)
+        red_dispatcher_add_renderer(default_renderer);
     return 0;
 }
 
@@ -5638,6 +5640,15 @@ int spice_server_set_mouse_absolute(SpiceServer *s, int absolute)
 
     ASSERT(reds == s);
     reds_set_mouse_mode(mode);
+    return 0;
+}
+
+int spice_server_add_renderer(SpiceServer *s, const char *name)
+{
+    ASSERT(reds == s);
+    if (!red_dispatcher_add_renderer(name))
+        return -1;
+    default_renderer = NULL;
     return 0;
 }
 

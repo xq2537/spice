@@ -85,4 +85,6 @@ int spice_server_set_channel_security(SpiceServer *s,
 
 int spice_server_set_mouse_absolute(SpiceServer *s, int absolute);
 
+int spice_server_add_renderer(SpiceServer *s, const char *name);
+
 #endif
