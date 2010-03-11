@@ -245,11 +245,7 @@ RedChannel *red_channel_create(int size, RedsStreamContext *peer, CoreInterface 
     ASSERT(size >= sizeof(*channel));
     ASSERT(config_socket && disconnect && handle_message && alloc_recv_buf &&
            release_item);
-    if (!(channel = malloc(size))) {
-        red_printf("malloc failed");
-        goto error1;
-    }
-    memset(channel, 0, size);
+    channel = spice_malloc0(size);
 
     channel->handle_acks = handle_acks;
     channel->disconnect = disconnect;
@@ -282,7 +278,7 @@ RedChannel *red_channel_create(int size, RedsStreamContext *peer, CoreInterface 
     channel->outgoing.on_msg_done = red_channel_peer_on_out_msg_done;
 
     if (!config_socket(channel)) {
-        goto error2;
+        goto error;
     }
 
     channel->core->set_file_handlers(channel->core, channel->peer->socket,
@@ -290,9 +286,8 @@ RedChannel *red_channel_create(int size, RedsStreamContext *peer, CoreInterface 
 
     return channel;
 
-error2:
+error:
     free(channel);
-error1:
     peer->cb_free(peer);
 
     return NULL;
@@ -480,10 +475,7 @@ void red_channel_pipe_add_tail(RedChannel *channel, PipeItem *item)
 
 void red_channel_pipe_add_type(RedChannel *channel, int pipe_item_type)
 {
-    PipeItem *item = malloc(sizeof(*item));
-    if (!item) {
-        red_error("malloc failed");
-    }
+    PipeItem *item = spice_new(PipeItem, 1);
     red_channel_pipe_item_init(channel, item, pipe_item_type);
     red_channel_pipe_add(channel, item);
 

@@ -22,6 +22,7 @@
 #include <openssl/ssl.h>
 
 #include "spice.h"
+#include "mem.h"
 #include <spice/protocol.h>
 #include <spice/macros.h>
 

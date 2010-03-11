@@ -536,11 +536,9 @@ static char *base64decode(const char *input, int length)
     BIO *b64;
     BIO *bmem;
     int n;
-    char *buffer = (char *)malloc(length);
-    memset(buffer, 0, length);
+    char *buffer = (char *)spice_malloc0(length);
+    char *inbuffer = (char *)spice_malloc0(length + 1);
 
-    char *inbuffer = (char *)malloc(length + 1);
-    memset(inbuffer, 0, length + 1);
     memcpy(inbuffer, input, length);
     inbuffer[length] = '\n';
 
@@ -1063,9 +1061,7 @@ static SimpleOutItem *new_simple_out_item(uint32_t type, int message_size)
 {
     SimpleOutItem *item;
 
-    if (!(item = (SimpleOutItem *)malloc(sizeof(*item) + message_size))) {
-        return NULL;
-    }
+    item = (SimpleOutItem *)spice_malloc(sizeof(*item) + message_size);
     ring_item_init(&item->base.link);
     item->base.prepare = reds_prepare_basic_out_item;
     item->base.release = reds_free_basic_out_item;
@@ -1142,9 +1138,10 @@ static int send_ping(int size)
     struct timespec time_space;
     PingItem *item;
 
-    if (!reds->peer || !(item = (PingItem *)malloc(sizeof(*item)))) {
+    if (!reds->peer) {
         return FALSE;
     }
+    item = spice_new(PingItem, 1);
     ring_item_init(&item->base.link);
     item->base.prepare = reds_prepare_ping_item;
     item->base.release = reds_free_ping_item;
@@ -1640,10 +1637,7 @@ static void main_channel_push_migrate_data_item()
 {
     SendMainMigrateItem *item;
 
-    if (!(item = (SendMainMigrateItem *)malloc(sizeof(*item)))) {
-        PANIC("malloc failed");
-    }
-    memset(item, 0, sizeof(*item));
+    item = spice_new0(SendMainMigrateItem, 1);
     ring_item_init(&item->base.link);
     item->base.prepare = main_channel_send_migrate_data_item;
     item->base.release = main_channelrelease_migrate_data_item;
@@ -1770,11 +1764,7 @@ static int main_channel_restore_vdi_wqueue(MainMigrateData *data, uint8_t *pos, 
                 reds_disconnect();
                 return FALSE;
             }
-            if (!(buf = malloc(sizeof(VDInternalBuf)))) {
-                red_printf("no internal buff");
-                reds_disconnect();
-                return FALSE;
-            }
+            buf = spice_new(VDInternalBuf, 1);
             ring_item_init(&buf->base.link);
             buf->base.free = free_tmp_internal_buf;
             buf->base.now = (uint8_t *)&buf->base.chunk_header;
@@ -2568,11 +2558,7 @@ static void inputs_link(Channel *channel, RedsStreamContext *peer, int migration
     red_printf("");
     ASSERT(channel->data == NULL);
 
-    if (!(inputs_state = malloc(sizeof(InputsState)))) {
-        red_printf("alloc input state failed");
-        close(peer->socket);
-        return;
-    }
+    inputs_state = spice_new0(InputsState, 1);
 
     delay_val = 1;
     if (setsockopt(peer->socket, IPPROTO_TCP, TCP_NODELAY, &delay_val, sizeof(delay_val)) == -1) {
@@ -2584,7 +2570,6 @@ static void inputs_link(Channel *channel, RedsStreamContext *peer, int migration
         red_printf("fcntl failed, %s", strerror(errno));
     }
 
-    memset(inputs_state, 0, sizeof(*inputs_state));
     inputs_state->peer = peer;
     inputs_state->end_pos = 0;
     inputs_state->channel = channel;
@@ -2661,10 +2646,8 @@ static void openssl_init(RedLinkInfo *link)
 static void inputs_init()
 {
     Channel *channel;
-    if (!(channel = malloc(sizeof(Channel)))) {
-        red_error("alloc inputs chanel failed");
-    }
-    memset(channel, 0, sizeof(Channel));
+
+    channel = spice_new0(Channel, 1);
     channel->type = SPICE_CHANNEL_INPUTS;
     channel->link = inputs_link;
     channel->shutdown = inputs_shutdown;
@@ -2918,11 +2901,7 @@ static void reds_handle_read_header_done(void *opaque)
         return;
     }
 
-    if (!(link->link_mess = malloc(header->size))) {
-        red_printf("malloc failed %u", header->size);
-        reds_release_link(link);
-        return;
-    }
+    link->link_mess = spice_malloc(header->size);
 
     obj->now = (uint8_t *)link->link_mess;
     obj->end = obj->now + header->size;
@@ -2975,40 +2954,27 @@ static RedLinkInfo *__reds_accept_connection(int listen_socket)
 
     if ((flags = fcntl(socket, F_GETFL)) == -1) {
         red_printf("accept failed, %s", strerror(errno));
-        goto error1;
+        goto error;
     }
 
     if (fcntl(socket, F_SETFL, flags | O_NONBLOCK) == -1) {
         red_printf("accept failed, %s", strerror(errno));
-        goto error1;
+        goto error;
     }
 
     if (setsockopt(socket, IPPROTO_TCP, TCP_NODELAY, &delay_val, sizeof(delay_val)) == -1) {
         red_printf("setsockopt failed, %s", strerror(errno));
     }
 
-    if (!(link = malloc(sizeof(RedLinkInfo)))) {
-        red_printf("malloc failed");
-        goto error1;
-    }
-
-    if (!(peer = malloc(sizeof(RedsStreamContext)))) {
-        red_printf("malloc failed");
-        goto error2;
-    }
-
-    memset(link, 0, sizeof(RedLinkInfo));
-    memset(peer, 0, sizeof(RedsStreamContext));
+    link = spice_new0(RedLinkInfo, 1);
+    peer = spice_new0(RedsStreamContext, 1);
     link->peer = peer;
     peer->socket = socket;
     openssl_init(link);
 
     return link;
 
-error2:
-    free(link);
-
-error1:
+error:
     close(socket);
 
     return NULL;
@@ -3469,8 +3435,7 @@ static void reds_do_set_ticket(const char *password, const char *args)
         int option;
         char *val;
 
-        in_args = local_args = malloc(strlen(args) + 1);
-        strcpy(local_args, args);
+        in_args = local_args = spice_strdup(args);
         do {
             switch (option = get_option(&in_args, &val, _spice_ticket_options, ',')) {
             case SPICE_TICKET_OPTION_EXPIRATION: {
@@ -3836,10 +3801,7 @@ static void set_one_channel_security(int id, uint32_t security)
         security_options->options = security;
         return;
     }
-    security_options = (ChannelSecurityOptions *)malloc(sizeof(*security_options));
-    if (!security_options) {
-        red_error("malloc failed");
-    }
+    security_options = spice_new(ChannelSecurityOptions, 1);
     security_options->channel_id = id;
     security_options->options = security;
     security_options->next = channels_security;
@@ -3848,17 +3810,14 @@ static void set_one_channel_security(int id, uint32_t security)
 
 static int set_channels_security(const char *channels, uint32_t security)
 {
-    char *local_str = malloc(strlen(channels) + 1);
+    char *local_str;
     int channel_name;
     char *str;
     char *val;
     int all = 0;
     int specific = 0;
 
-    if (!local_str) {
-        red_error("malloc failed");
-    }
-    strcpy(local_str, channels);
+    local_str = spice_strdup(channels);
     str = local_str;
     do {
         switch (channel_name = get_option(&str, &val, _channel_map, '+')) {
@@ -3928,8 +3887,7 @@ int __attribute__ ((visibility ("default"))) spice_parse_args(const char *in_arg
 
     memset(&ssl_parameters, 0, sizeof(ssl_parameters));
 
-    local_args = malloc(strlen(in_args) + 1);
-    strcpy(local_args, in_args);
+    local_args = spice_strdup(in_args);
 
     args = local_args;
     do {
@@ -4394,14 +4352,7 @@ static void reds_mig_send_ticket(RedsMigSpice *s)
 
 static void reds_mig_receive_cert_public_key(RedsMigSpice *s)
 {
-    s->cert_pub_key = malloc(s->cert_pub_key_len);
-    if (!s->cert_pub_key) {
-        red_printf("alloc failed");
-        reds_mig_failed(s);
-        return;
-    }
-
-    memcpy(s->cert_pub_key, s->read.buf, s->cert_pub_key_len);
+    s->cert_pub_key = spice_memdup(s->read.buf, s->cert_pub_key_len);
 
     s->read.size = SPICE_TICKET_PUBKEY_BYTES;
     s->read.end_pos = 0;
@@ -4530,21 +4481,12 @@ static void reds_mig_started(void *opaque, const char *in_args)
         goto error;
     }
 
-    spice_migration = (RedsMigSpice *)malloc(sizeof(RedsMigSpice));
-    if (!spice_migration) {
-        red_printf("Could not allocate memory for spice migration structure");
-        goto error;
-    }
-    memset(spice_migration, 0, sizeof(RedsMigSpice));
+    spice_migration = spice_new0(RedsMigSpice, 1);
     spice_migration->port = -1;
     spice_migration->sport = -1;
 
-    if (!(spice_migration->local_args = malloc(strlen(in_args) + 1))) {
-        red_printf("str malloc failed");
-        goto error;
-    }
+    spice_migration->local_args = spice_strdup(in_args);
 
-    strcpy(spice_migration->local_args, in_args);
     args = spice_migration->local_args;
     do {
         switch (option = get_option(&args, &val, spice_mig_options, ',')) {
@@ -5351,11 +5293,7 @@ static void init_vd_agent_resources()
     state->recive_len = sizeof(state->vdi_chunk_header);
 
     for (i = 0; i < REDS_AGENT_WINDOW_SIZE; i++) {
-        VDAgentExtBuf *buf = (VDAgentExtBuf *)malloc(sizeof(VDAgentExtBuf));
-        if (!buf) {
-            PANIC("alloc failed");
-        }
-        memset(buf, 0, sizeof(*buf));
+        VDAgentExtBuf *buf = spice_new0(VDAgentExtBuf, 1);
         ring_item_init(&buf->base.link);
         buf->base.chunk_header.port = VDP_CLIENT_PORT;
         buf->base.free = free_external_agent_buff;
@@ -5363,11 +5301,7 @@ static void init_vd_agent_resources()
     }
 
     for (i = 0; i < REDS_NUM_INTERNAL_AGENT_MESSAGES; i++) {
-        VDInternalBuf *buf = (VDInternalBuf *)malloc(sizeof(VDInternalBuf));
-        if (!buf) {
-            PANIC("alloc failed");
-        }
-        memset(buf, 0, sizeof(*buf));
+        VDInternalBuf *buf = spice_new0(VDInternalBuf, 1);
         ring_item_init(&buf->base.link);
         buf->base.free = free_internal_agent_buff;
         buf->base.chunk_header.port = VDP_SERVER_PORT;
@@ -5380,11 +5314,7 @@ static void init_vd_agent_resources()
     }
 
     for (i = 0; i < REDS_VDI_PORT_NUM_RECIVE_BUFFS; i++) {
-        VDIReadBuf *buf = (VDIReadBuf *)malloc(sizeof(VDIReadBuf));
-        if (!buf) {
-            PANIC("alloc failed");
-        }
-        memset(buf, 0, sizeof(*buf));
+        VDIReadBuf *buf = spice_new0(VDIReadBuf, 1);
         buf->out_item.prepare = reds_prepare_read_buf;
         buf->out_item.release = reds_release_read_buf;
         buf->header.type = SPICE_MSG_MAIN_AGENT_DATA;
@@ -5446,9 +5376,7 @@ static void do_spice_init(CoreInterface *core_interface)
     int shm_name_len = strlen(SPICE_STAT_SHM_NAME) + 20;
     int fd;
 
-    if (!(reds->stat_shm_name = (char *)malloc(shm_name_len))) {
-        red_error("stat_shm_name alloc failed");
-    }
+    reds->stat_shm_name = (char *)spice_malloc(shm_name_len);
     snprintf(reds->stat_shm_name, shm_name_len, SPICE_STAT_SHM_NAME, getpid());
     if ((fd = shm_open(reds->stat_shm_name, O_CREAT | O_RDWR, 0444)) == -1) {
         red_error("statistics shm_open failed, %s", strerror(errno));
@@ -5500,10 +5428,7 @@ SpiceServer *spice_server_new(void)
     /* we can't handle multiple instances (yet) */
     ASSERT(reds == NULL);
 
-    if (!(reds = malloc(sizeof(RedsState)))) {
-        red_error("reds alloc failed");
-    }
-    memset(reds, 0, sizeof(RedsState));
+    reds = spice_new0(RedsState, 1);
     return reds;
 }
 

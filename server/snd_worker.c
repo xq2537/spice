@@ -795,11 +795,7 @@ static SndChannel *__new_channel(SndWorker *worker, int size, RedsStreamContext 
     }
 
     ASSERT(size >= sizeof(*channel));
-    if (!(channel = malloc(size))) {
-        red_printf("malloc failed");
-        goto error1;
-    }
-    memset(channel, 0, size);
+    channel = spice_malloc0(size);
     channel->peer = peer;
     channel->worker = worker;
     channel->recive_data.message = (SpiceDataHeader *)channel->recive_data.buf;
@@ -1201,10 +1197,7 @@ static SndWorker *find_worker(VDInterface *interface)
 void snd_attach_playback(PlaybackInterface *interface)
 {
     SndWorker *playback_worker;
-    if (!(playback_worker = (SndWorker *)malloc(sizeof(*playback_worker)))) {
-        red_error("playback channel malloc failed");
-    }
-    memset(playback_worker, 0, sizeof(*playback_worker));
+    playback_worker = spice_new0(SndWorker, 1);
     playback_worker->base.type = SPICE_CHANNEL_PLAYBACK;
     playback_worker->base.link = snd_set_playback_peer;
     playback_worker->base.shutdown = snd_shutdown;
@@ -1213,9 +1206,7 @@ void snd_attach_playback(PlaybackInterface *interface)
 
     playback_worker->interface = &interface->base;
     playback_worker->base.num_caps = 1;
-    if (!(playback_worker->base.caps = malloc(sizeof(uint32_t)))) {
-        PANIC("malloc failed");
-    }
+    playback_worker->base.caps = spice_new(uint32_t, 1);
     playback_worker->base.caps[0] = (1 << SPICE_PLAYBACK_CAP_CELT_0_5_1);
 
     add_worker(playback_worker);
@@ -1225,11 +1216,7 @@ void snd_attach_playback(PlaybackInterface *interface)
 void snd_attach_record(RecordInterface *interface)
 {
     SndWorker *record_worker;
-    if (!(record_worker = (SndWorker *)malloc(sizeof(*record_worker)))) {
-        PANIC("malloc failed");
-    }
-
-    memset(record_worker, 0, sizeof(*record_worker));
+    record_worker = spice_new0(SndWorker, 1);
     record_worker->base.type = SPICE_CHANNEL_RECORD;
     record_worker->base.link = snd_set_record_peer;
     record_worker->base.shutdown = snd_shutdown;
@@ -1239,9 +1226,7 @@ void snd_attach_record(RecordInterface *interface)
     record_worker->interface = &interface->base;
 
     record_worker->base.num_caps = 1;
-    if (!(record_worker->base.caps = malloc(sizeof(uint32_t)))) {
-        PANIC("malloc failed");
-    }
+    record_worker->base.caps = spice_new(uint32_t, 1);
     record_worker->base.caps[0] = (1 << SPICE_RECORD_CAP_CELT_0_5_1);
     add_worker(record_worker);
     reds_register_channel(&record_worker->base);

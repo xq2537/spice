@@ -82,10 +82,7 @@ static int FUNC_NAME(add)(CHANNEL *channel, uint64_t id, size_t size)
     CacheItem *item;
     int key;
 
-    item = malloc(sizeof(*item));
-    if (!item) {
-        return FALSE;
-    }
+    item = spice_new(CacheItem, 1);
 
     channel->VAR_NAME(available) -= size;
     while (channel->VAR_NAME(available) < 0) {

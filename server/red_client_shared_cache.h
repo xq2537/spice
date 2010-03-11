@@ -68,10 +68,7 @@ static int FUNC_NAME(add)(CACHE *cache, uint64_t id, uint32_t size, CHANNEL *cha
 
     ASSERT(size > 0);
 
-    item = malloc(sizeof(*item));
-    if (!item) {
-        return FALSE;
-    }
+    item = spice_new(NewCacheItem, 1);
     serial = channel_message_serial((RedChannel *)channel);
 
     pthread_mutex_lock(&cache->lock);

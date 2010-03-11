@@ -1315,10 +1315,7 @@ static inline void red_pipe_add_tail(RedChannel *channel, PipeItem *item)
 
 static void red_pipe_add_verb(RedChannel* channel, uint16_t verb)
 {
-    VerbItem *item = malloc(sizeof(*item));
-    if (!item) {
-        PANIC("malloc failed");
-    }
+    VerbItem *item = spice_new(VerbItem, 1);
     red_pipe_item_init(&item->base, PIPE_ITEM_TYPE_VERB);
     item->verb = verb;
     red_pipe_add(channel, &item->base);
@@ -1326,10 +1323,7 @@ static void red_pipe_add_verb(RedChannel* channel, uint16_t verb)
 
 static void red_pipe_add_type(RedChannel* channel, int pipe_item_type)
 {
-    PipeItem *item = malloc(sizeof(*item));
-    if (!item) {
-        PANIC("malloc failed");
-    }
+    PipeItem *item = spice_new(PipeItem, 1);
     red_pipe_item_init(item, pipe_item_type);
     red_pipe_add(channel, item);
 }
@@ -2048,10 +2042,7 @@ static void exclude_region(RedWorker *worker, Ring *ring, RingItem *ring_item, Q
 
 static inline Container *__new_container(RedWorker *worker, DrawItem *item)
 {
-    Container *container = malloc(sizeof(Container));
-    if (!container) {
-        return NULL;
-    }
+    Container *container = spice_new(Container, 1);
     worker->containers_count++;
 #ifdef PIPE_DEBUG
     container->base.id = ++worker->last_id;
@@ -2240,10 +2231,7 @@ static inline void red_detach_stream(RedWorker *worker, Stream *stream)
 
 static StreamClipItem *__new_stream_clip(DisplayChannel* channel, StreamAgent *agent)
 {
-    StreamClipItem *item = (StreamClipItem *)malloc(sizeof(*item));
-    if (!item) {
-        PANIC("alloc failed");
-    }
+    StreamClipItem *item = spice_new(StreamClipItem, 1);
     red_pipe_item_init((PipeItem *)item, PIPE_ITEM_TYPE_STREAM_CLIP);
 
     item->stream_agent = agent;
@@ -2351,9 +2339,7 @@ static inline void red_detach_stream_gracefully(RedWorker *worker, Stream *strea
     if ((channel = worker->display_channel) && !pipe_item_is_linked(&stream->current->pipe_item)) {
         UpgradeItem *upgrade_item;
 
-        if (!(upgrade_item = (UpgradeItem *)malloc(sizeof(*upgrade_item)))) {
-            PANIC("malloc failed");
-        }
+        upgrade_item = spice_new(UpgradeItem, 1);
         upgrade_item->refs = 1;
         red_pipe_item_init(&upgrade_item->base, PIPE_ITEM_TYPE_UPGRADE);
         upgrade_item->drawable = stream->current;
@@ -2370,16 +2356,14 @@ static inline void red_stop_stream_gracefully(RedWorker *worker, Stream *stream)
 {
     ASSERT(stream->current);
     if (worker->display_channel && !pipe_item_is_linked(&stream->current->pipe_item)) {
-        UpgradeItem *item;
-        if ((item = (UpgradeItem *)malloc(sizeof(*item)))) {
-            item->refs = 1;
-            red_pipe_item_init(&item->base, PIPE_ITEM_TYPE_UPGRADE);
-            item->drawable = stream->current;
-            item->drawable->refs++;
-            item->rects = region_dup_rects(&item->drawable->tree_item.base.rgn,
-                                           &item->n_rects);
-            red_pipe_add((RedChannel *)worker->display_channel, &item->base);
-        }
+        UpgradeItem *item = spice_new(UpgradeItem, 1);
+        item->refs = 1;
+        red_pipe_item_init(&item->base, PIPE_ITEM_TYPE_UPGRADE);
+        item->drawable = stream->current;
+        item->drawable->refs++;
+        item->rects = region_dup_rects(&item->drawable->tree_item.base.rgn,
+                                       &item->n_rects);
+        red_pipe_add((RedChannel *)worker->display_channel, &item->base);
     }
     red_stop_stream(worker, stream);
 }
@@ -2643,9 +2627,7 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
         goto error_3;
     }
 
-    if (!(frame_buf = malloc(pict_size))) {
-        goto error_3;
-    }
+    frame_buf = spice_malloc(pict_size);
 
     if (avpicture_fill((AVPicture *)frame, frame_buf, av_ctx->pix_fmt, stream_width,
                        stream_height) < 0) {
@@ -3390,10 +3372,7 @@ static inline Shadow *__new_shadow(RedWorker *worker, Drawable *item, SpicePoint
         return NULL;
     }
 
-    Shadow *shadow = malloc(sizeof(Shadow));
-    if (!shadow) {
-        return NULL;
-    }
+    Shadow *shadow = spice_new(Shadow, 1);
     worker->shadows_count++;
 #ifdef PIPE_DEBUG
     shadow->base.id = ++worker->last_id;
@@ -3560,10 +3539,7 @@ static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
     height = drawable->qxl_drawable->bbox.bottom - drawable->qxl_drawable->bbox.top;
     dest_stride = width * sizeof(uint32_t);
 
-    if (!(image = malloc(sizeof(QXLImage) + height * dest_stride))) {
-        red_printf("alloc failed");
-        return FALSE;
-    }
+    image = spice_malloc_n_m(height, dest_stride, sizeof(QXLImage));
     dest = (uint8_t *)(image + 1);
 
     image->descriptor.type = SPICE_IMAGE_TYPE_BITMAP;
@@ -3700,8 +3676,7 @@ static void localize_path(RedWorker *worker, QXLPHYSICAL *in_path, uint32_t grou
 
     ASSERT(in_path && *in_path);
     path = (QXLPath *)get_virt(worker, *in_path, sizeof(QXLPath), group_id);
-    data = malloc(sizeof(uint32_t) + path->data_size);
-    ASSERT(data);
+    data = spice_malloc_n_m(1, path->data_size, sizeof(uint32_t));
     *in_path = (QXLPHYSICAL)data;
     *(uint32_t *)data = path->data_size;
     data += sizeof(uint32_t);
@@ -3733,8 +3708,7 @@ static void localize_str(RedWorker *worker, QXLPHYSICAL *in_str, uint32_t group_
     int memslot_id = get_memslot_id(worker, *in_str);
 
     ASSERT(in_str);
-    str = malloc(sizeof(uint32_t) + qxl_str->data_size);
-    ASSERT(str);
+    str = spice_malloc_n_m(1, qxl_str->data_size, sizeof(uint32_t));
     *in_str = (QXLPHYSICAL)str;
     str->length = qxl_str->length;
     str->flags = qxl_str->flags;
@@ -3777,8 +3751,7 @@ static void localize_clip(RedWorker *worker, SpiceClip *clip, uint32_t group_id)
         clip_rects = (QXLClipRects *)get_virt(worker, clip->data, sizeof(QXLClipRects), group_id);
         chunk = &clip_rects->chunk;
         ASSERT(clip->data);
-        data = malloc(sizeof(uint32_t) + clip_rects->num_rects * sizeof(SpiceRect));
-        ASSERT(data);
+        data = spice_malloc_n_m(clip_rects->num_rects, sizeof(SpiceRect), sizeof(uint32_t));
         clip->data = (QXLPHYSICAL)data;
         *(uint32_t *)(data) = clip_rects->num_rects;
         data += sizeof(uint32_t);
@@ -3887,9 +3860,7 @@ static void image_cache_put(SpiceImageCache *spice_cache, uint64_t id, pixman_im
     }
 #endif
 
-    if (!(item = (ImageCacheItem *)malloc(sizeof(ImageCacheItem)))) {
-        red_error("alloc failed");
-    }
+    item = spice_new(ImageCacheItem, 1);
     item->id = id;
 #ifdef IMAGE_CACHE_AGE
     item->age = cache->age;
@@ -3999,8 +3970,7 @@ static void localize_bitmap(RedWorker *worker, QXLPHYSICAL *in_bitmap, uint32_t 
         } else {
             QXLPHYSICAL src_data;
             int size = image->bitmap.y * image->bitmap.stride;
-            uint8_t *data = malloc(size);
-            ASSERT(data);
+            uint8_t *data = spice_malloc_n(image->bitmap.y, image->bitmap.stride);
             local_image->bitmap.data = (QXLPHYSICAL)data;
             src_data = image->bitmap.data;
 
@@ -4038,11 +4008,7 @@ static void localize_bitmap(RedWorker *worker, QXLPHYSICAL *in_bitmap, uint32_t 
             validate_virt(worker, (unsigned long)ents, slot_id, (num_ents * sizeof(uint32_t)),
                           group_id);
 
-            shadow_palette = (SpicePalette *)malloc(sizeof(SpicePalette) + num_ents * sizeof(uint32_t) +
-                                               sizeof(QXLPHYSICAL));
-            if (!shadow_palette) {
-                PANIC("SpicePalette malloc failed");
-            }
+            shadow_palette = (SpicePalette *)spice_malloc_n_m(num_ents, sizeof(uint32_t),sizeof(SpicePalette) + sizeof(QXLPHYSICAL));
 
             memcpy(shadow_palette->ents, ents, num_ents * sizeof(uint32_t));
             shadow_palette->num_ents = num_ents;
@@ -4119,8 +4085,7 @@ static void localize_attr(RedWorker *worker, SpiceLineAttr *attr, uint32_t group
         ASSERT(attr->style);
         buf = (uint8_t *)get_virt(worker, attr->style, attr->style_nseg * sizeof(uint32_t),
                                   group_id);
-        data = malloc(attr->style_nseg * sizeof(uint32_t));
-        ASSERT(data);
+        data = spice_malloc_n(attr->style_nseg, sizeof(uint32_t));
         memcpy(data, buf, attr->style_nseg * sizeof(uint32_t));
         attr->style = (QXLPHYSICAL)data;
     }
@@ -4689,11 +4654,7 @@ static void red_add_screen_image(RedWorker *worker)
     }
 
     stride = worker->surface.context.width << 2;
-    if (!(item = (ImageItem *)malloc(sizeof(ImageItem) +
-                                     worker->surface.context.height * stride))) {
-        //warn
-        return;
-    }
+    item = (ImageItem *)spice_malloc_n_m(worker->surface.context.height, stride, sizeof(ImageItem));
 
     red_pipe_item_init(&item->link, PIPE_ITEM_TYPE_IMAGE);
 
@@ -4830,9 +4791,7 @@ static inline RedCompressBuf *red_display_alloc_compress_buf(DisplayChannel *dis
         ret = display_channel->send_data.free_compress_bufs;
         display_channel->send_data.free_compress_bufs = ret->next;
     } else {
-        if (!(ret = malloc(sizeof(*ret)))) {
-            return NULL;
-        }
+        ret = spice_new(RedCompressBuf, 1);
     }
 
     ret->next = display_channel->send_data.used_compress_bufs;
@@ -4886,9 +4845,7 @@ static RedGlzDrawable *red_display_get_glz_drawable(DisplayChannel *channel, Dra
         return drawable->red_glz_drawable;
     }
 
-    if (!(ret = malloc(sizeof(*ret)))) {
-        PANIC("malloc failed");
-    }
+    ret = spice_new(RedGlzDrawable, 1);
 
     ret->display_channel = channel;
     ret->qxl_drawable = drawable->qxl_drawable;
@@ -5141,17 +5098,17 @@ static void glz_usr_warn(GlzEncoderUsrContext *usr, const char *fmt, ...)
 
 static void *quic_usr_malloc(QuicUsrContext *usr, int size)
 {
-    return malloc(size);
+    return spice_malloc(size);
 }
 
 static void *lz_usr_malloc(LzUsrContext *usr, int size)
 {
-    return malloc(size);
+    return spice_malloc(size);
 }
 
 static void *glz_usr_malloc(GlzEncoderUsrContext *usr, int size)
 {
-    return malloc(size);
+    return spice_malloc(size);
 }
 
 static void quic_usr_free(QuicUsrContext *usr, void *ptr)
@@ -6444,10 +6401,7 @@ static void display_channel_push_release(DisplayChannel *channel, uint8_t type, 
 
     if (free_list->res->count == free_list->res_size) {
         SpiceResorceList *new_list;
-        new_list = malloc(sizeof(*new_list) + free_list->res_size * sizeof(SpiceResorceID) * 2);
-        if (!new_list) {
-            PANIC("malloc failed");
-        }
+        new_list = spice_malloc(sizeof(*new_list) + free_list->res_size * sizeof(SpiceResorceID) * 2);
         new_list->count = free_list->res->count;
         memcpy(new_list->resorces, free_list->res->resorces,
                new_list->count * sizeof(SpiceResorceID));
@@ -6652,9 +6606,7 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
     if (display_channel->send_data.stream_outbuf_size < min_buf_size) {
         uint8_t *new_buf;
 
-        if (!(new_buf = malloc(min_buf_size + FF_INPUT_BUFFER_PADDING_SIZE))) {
-            return FALSE;
-        }
+        new_buf = spice_malloc(min_buf_size + FF_INPUT_BUFFER_PADDING_SIZE);
 
         red_display_unshare_stream_buf(display_channel);
         free(display_channel->send_data.stream_outbuf);
@@ -6694,9 +6646,7 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
             new_size = display_channel->send_data.stream_outbuf_size * 2;
             new_size = MIN(new_size, max_size);
 
-            if (!(new_buf = malloc(new_size + FF_INPUT_BUFFER_PADDING_SIZE))) {
-                return FALSE;
-            }
+            new_buf = spice_malloc(new_size + FF_INPUT_BUFFER_PADDING_SIZE);
             red_printf("new streaming video buf size %u", new_size);
             red_display_unshare_stream_buf(display_channel);
             free(display_channel->send_data.stream_outbuf);
@@ -7725,12 +7675,7 @@ static GlzSharedDictionary *_red_create_glz_dictionary(DisplayChannel *display,
                                                        uint8_t id,
                                                        GlzEncDictContext *opaque_dict)
 {
-    GlzSharedDictionary *shared_dict = malloc(sizeof(*shared_dict));
-    memset(shared_dict, 0, sizeof(*shared_dict)); // nullify the ring base
-
-    if (!shared_dict) {
-        return NULL;
-    }
+    GlzSharedDictionary *shared_dict = spice_new0(GlzSharedDictionary, 1);
     shared_dict->dict = opaque_dict;
     shared_dict->id = id;
     shared_dict->refs = 1;
@@ -7845,11 +7790,7 @@ static void red_release_glz(DisplayChannel *channel)
 
 static PixmapCache *red_create_pixmap_cache(uint8_t id, int64_t size)
 {
-    PixmapCache *cache = malloc(sizeof(*cache));
-    if (!cache) {
-        return NULL;
-    }
-    memset(cache, 0, sizeof(*cache));
+    PixmapCache *cache = spice_new0(PixmapCache, 1);
     ring_item_init(&cache->base);
     pthread_mutex_init(&cache->lock, NULL);
     cache->id = id;
@@ -8105,11 +8046,7 @@ static RedChannel *__new_channel(RedWorker *worker, int size, RedsStreamContext 
     }
 
     ASSERT(size >= sizeof(*channel));
-    if (!(channel = malloc(size))) {
-        red_printf("malloc failed");
-        goto error1;
-    }
-    memset(channel, 0, size);
+    channel = spice_malloc0(size);
     channel->id = worker->id;
     channel->listener.refs = 1;
     channel->listener.action = handler;
@@ -8235,20 +8172,16 @@ static void handle_new_display_channel(RedWorker *worker, RedsStreamContext *pee
     red_display_init_streams(display_channel);
 
     stream_buf_size = FF_MIN_BUFFER_SIZE + FF_INPUT_BUFFER_PADDING_SIZE;
-    if (!(display_channel->send_data.stream_outbuf = malloc(stream_buf_size))) {
-        PANIC("alloc failed");
-    }
+    display_channel->send_data.stream_outbuf = spice_malloc(stream_buf_size);
     display_channel->send_data.stream_outbuf_size = FF_MIN_BUFFER_SIZE;
     red_display_share_stream_buf(display_channel);
     red_display_init_glz_data(display_channel);
     worker->display_channel = display_channel;
 
 
-    if (!(display_channel->send_data.free_list.res = malloc(sizeof(SpiceResorceList) +
-                                                            DISPLAY_FREE_LIST_DEFAULT_SIZE *
-                                                            sizeof(SpiceResorceID)))) {
-        PANIC("free list alloc failed");
-    }
+    display_channel->send_data.free_list.res =
+        spice_malloc(sizeof(SpiceResorceList) +
+                     DISPLAY_FREE_LIST_DEFAULT_SIZE * sizeof(SpiceResorceID));
     display_channel->send_data.free_list.res_size = DISPLAY_FREE_LIST_DEFAULT_SIZE;
     red_ref_channel((RedChannel*)display_channel);
     on_new_display_channel(worker);
@@ -8348,8 +8281,7 @@ static void red_save_cursor(RedWorker *worker)
 
     local = (LocalCursor *)worker->cursor;
     size = sizeof(CursorData) + sizeof(SpiceCursor) + local->data_size;
-    cursor_data = malloc(size);
-    ASSERT(cursor_data);
+    cursor_data = spice_malloc(size);
 
     cursor_data->position = worker->cursor_position;
     cursor_data->visible = worker->cursor_visible;
@@ -8365,10 +8297,7 @@ static LocalCursor *_new_local_cursor(SpiceCursorHeader *header, int data_size, 
 {
     LocalCursor *local;
 
-    local = (LocalCursor *)malloc(sizeof(LocalCursor) + data_size);
-    if (!local) {
-        return NULL;
-    }
+    local = (LocalCursor *)spice_malloc(sizeof(LocalCursor) + data_size);
 
     red_pipe_item_init(&local->base.pipe_data, PIPE_ITEM_TYPE_LOCAL_CURSOR);
     local->base.refs = 1;
@@ -8674,13 +8603,10 @@ static void inline red_create_mem_slots(RedWorker *worker)
 
     ASSERT(worker->num_memslots > 0);
     ASSERT(worker->num_memslots_groups > 0);
-    worker->mem_slots = (MemSlot **)malloc(sizeof(MemSlot *) * worker->num_memslots_groups);
-    PANIC_ON(!worker->mem_slots);
+    worker->mem_slots = spice_new(MemSlot *, worker->num_memslots_groups);
 
     for (i = 0; i <  worker->num_memslots_groups; ++i) {
-        worker->mem_slots[i] = malloc(sizeof(MemSlot) * worker->num_memslots);
-        PANIC_ON(!worker->mem_slots[i]);
-        memset(worker->mem_slots[i], 0, sizeof(MemSlot) * worker->num_memslots);
+        worker->mem_slots[i] = spice_new0(MemSlot, worker->num_memslots);
     }
 
     worker->memslot_id_shift = 64 - worker->mem_slot_bits;

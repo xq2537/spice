@@ -645,10 +645,7 @@ static inline RedSocketRawSndBuf *__tunnel_worker_alloc_socket_snd_buf(TunnelWor
         ret = worker->free_snd_buf;
         worker->free_snd_buf = (RedSocketRawSndBuf *)worker->free_snd_buf->base.next;
     } else {
-        ret = (RedSocketRawSndBuf *)malloc(sizeof(*ret));
-        if (!ret) {
-            red_error("malloc of send buf failed");
-        }
+        ret = spice_new(RedSocketRawSndBuf, 1);
     }
     ret->base.data = ret->buf;
     ret->base.size = 0;
@@ -707,10 +704,7 @@ static inline RedSocketRawRcvBuf *__tunnel_worker_alloc_socket_rcv_buf(TunnelWor
         ret = worker->free_rcv_buf;
         worker->free_rcv_buf = (RedSocketRawRcvBuf *)worker->free_rcv_buf->base.next;
     } else {
-        ret = (RedSocketRawRcvBuf *)malloc(sizeof(*ret));
-        if (!ret) {
-            red_error("malloc of send buf failed");
-        }
+        ret = spice_new(RedSocketRawRcvBuf, 1);
     }
     ret->msg_info = (SpiceMsgcTunnelSocketData *)ret->buf;
     ret->base.usr_opaque = NULL;
@@ -853,7 +847,7 @@ static void __ready_queue_push(ReadyTunneledChunkQueue *queue, ReadyTunneledChun
 static void ready_queue_add_orig_chunk(ReadyTunneledChunkQueue *queue, RawTunneledBuffer *origin,
                                        uint8_t *data, int size)
 {
-    ReadyTunneledChunk *chunk = malloc(sizeof(ReadyTunneledChunk));
+    ReadyTunneledChunk *chunk = spice_new(ReadyTunneledChunk, 1);
     chunk->type = READY_TUNNELED_CHUNK_TYPE_ORIG;
     chunk->origin = tunneled_buffer_ref(origin);
     chunk->data = data;
@@ -921,8 +915,7 @@ static inline TunneledBufferProcessQueue *__tunnel_socket_alloc_simple_process_q
                                                                             uint32_t service_type,
                                                                             uint32_t direction_type)
 {
-    TunneledBufferProcessQueue *ret_queue = malloc(sizeof(TunneledBufferProcessQueue));
-    memset(ret_queue, 0, sizeof(TunneledBufferProcessQueue));
+    TunneledBufferProcessQueue *ret_queue = spice_new0(TunneledBufferProcessQueue, 1);
     ret_queue->service_type = service_type;
     ret_queue->direction = direction_type;
     ret_queue->usr_opaque = sckt;
@@ -979,12 +972,7 @@ static void tunnel_send_packet(void *opaque_tunnel, const uint8_t *pkt, int pkt_
 
 void *red_tunnel_attach(CoreInterface *core_interface, NetWireInterface *vlan_interface)
 {
-    TunnelWorker *worker = (TunnelWorker *)malloc(sizeof(TunnelWorker));
-
-    if (!worker) {
-        red_error("malloc of tunnel worker failed");
-    }
-    memset(worker, 0, sizeof(*worker));
+    TunnelWorker *worker = spice_new0(TunnelWorker, 1);
 
     worker->core_interface = core_interface;
     worker->vlan_interface = vlan_interface;
@@ -1056,12 +1044,7 @@ static inline TunnelService *__tunnel_worker_add_service(TunnelWorker *worker, u
                                                          char *name, char *description,
                                                          struct in_addr *virt_ip)
 {
-    TunnelService *new_service = malloc(size);
-
-    if (!new_service) {
-        red_error("malloc of TunnelService failed");
-    }
-    memset(new_service, 0, size);
+    TunnelService *new_service = spice_malloc0(size);
 
     if (!virt_ip) {
         TunnelService *service_of_same_group;
@@ -1290,7 +1273,7 @@ static RedSocket *tunnel_worker_create_socket(TunnelWorker *worker, uint16_t loc
     new_socket = __tunnel_worker_find_free_socket(worker);
 
     if (!new_socket) {
-        red_error("malloc of RedSocket failed");
+        red_error("creation of RedSocket failed");
     }
 
     tunnel_worker_alloc_socket(worker, new_socket, local_port, far_service, slirp_s);
@@ -1662,11 +1645,7 @@ static uint8_t *tunnel_channel_alloc_msg_rcv_buf(RedChannel *channel, SpiceDataH
         return (__tunnel_worker_alloc_socket_rcv_buf(tunnel_channel->worker)->buf);
     } else if ((msg_header->type == SPICE_MSGC_MIGRATE_DATA) ||
                (msg_header->type == SPICE_MSGC_TUNNEL_SERVICE_ADD)) {
-        uint8_t *ret = malloc(msg_header->size);
-        if (!ret) {
-            red_error("failed allocating");
-        }
-        return ret;
+        return spice_malloc(msg_header->size);
     } else {
         return (tunnel_channel->control_rcv_buf);
     }
@@ -1771,13 +1750,7 @@ static int tunnel_channel_handle_migrate_mark(TunnelChannel *channel)
         return FALSE;
     }
     channel->expect_migrate_mark = FALSE;
-    migrate_item = (TunnelMigrateItem *)malloc(sizeof(*migrate_item));
-
-    if (!migrate_item) {
-        red_error("failed alloc TunnelMigrateItem");
-    }
-
-    memset(migrate_item, 0, sizeof(*migrate_item));
+    migrate_item = spice_new0(TunnelMigrateItem, 1);
     migrate_item->base.type = PIPE_ITEM_TYPE_MIGRATE_DATA;
 
     migrate_item->slirp_state_size = net_slirp_state_export(&migrate_item->slirp_state);
@@ -1789,18 +1762,11 @@ static int tunnel_channel_handle_migrate_mark(TunnelChannel *channel)
     migrate_item->services_list_size = sizeof(TunnelMigrateServicesList) +
         (sizeof(uint32_t)*channel->worker->num_services);
     migrate_item->services_list =
-        (TunnelMigrateServicesList *)malloc(migrate_item->services_list_size);
-    if (!migrate_item->services_list) {
-        red_error("failed alloc services list");
-    }
+        (TunnelMigrateServicesList *)spice_malloc(migrate_item->services_list_size);
     migrate_item->services_list->num_services = channel->worker->num_services;
 
-    migrate_item->services = (TunnelMigrateServiceItem *)malloc(
+    migrate_item->services = (TunnelMigrateServiceItem *)spice_malloc(
             channel->worker->num_services * sizeof(TunnelMigrateServiceItem));
-
-    if (!migrate_item->services) {
-        red_error("failed alloc services items");
-    }
 
     for (mig_service = migrate_item->services,
          service = (TunnelService *)ring_get_head(&channel->worker->services);
@@ -1815,11 +1781,8 @@ static int tunnel_channel_handle_migrate_mark(TunnelChannel *channel)
 
     migrate_item->sockets_list_size = sizeof(TunnelMigrateSocketList) +
         (sizeof(uint32_t)*channel->worker->num_sockets);
-    migrate_item->sockets_list = (TunnelMigrateSocketList *)malloc(
-            migrate_item->sockets_list_size);
-    if (!migrate_item->sockets_list) {
-        red_error("failed alloc sockets list");
-    }
+    migrate_item->sockets_list =
+        (TunnelMigrateSocketList *) spice_malloc(migrate_item->sockets_list_size);
 
     migrate_item->sockets_list->num_sockets = channel->worker->num_sockets;
 
@@ -1918,11 +1881,7 @@ static void restore_tokens_buf_release(RawTunneledBuffer *buf)
 
 RawTunneledBuffer *__tunnel_socket_alloc_restore_tokens_buf(RedSocket *sckt, int num_tokens)
 {
-    RedSocketRestoreTokensBuf *buf = (RedSocketRestoreTokensBuf *)malloc(sizeof(*buf));
-    if (!buf) {
-        red_error("failed alloc");
-    }
-    memset(buf, 0, sizeof(*buf));
+    RedSocketRestoreTokensBuf *buf = spice_new0(RedSocketRestoreTokensBuf, 1);
 
     buf->base.base.usr_opaque = sckt;
     buf->base.base.refs = 1;

@@ -483,10 +483,7 @@ RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface)
         red_error("socketpair failed %s", strerror(errno));
     }
 
-    if (!(dispatcher = malloc(sizeof(RedDispatcher)))) {
-        red_error("malloc failed");
-    }
-    memset(dispatcher, 0, sizeof(RedDispatcher));
+    dispatcher = spice_new0(RedDispatcher, 1);
     dispatcher->channel = channels[0];
     init_data.qxl_interface = dispatcher->qxl_interface = qxl_interface;
     init_data.id = qxl_interface->base.id;
@@ -540,10 +537,8 @@ RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface)
 
     read_message(dispatcher->channel, &message);
     ASSERT(message == RED_WORKER_MESSAGE_READY);
-    if (!(reds_channel = malloc(sizeof(Channel)))) {
-        red_error("reds channel malloc failed");
-    }
-    memset(reds_channel, 0, sizeof(Channel));
+
+    reds_channel = spice_new0(Channel, 1);
     reds_channel->type = SPICE_CHANNEL_DISPLAY;
     reds_channel->id = qxl_interface->base.id;
     reds_channel->link = red_dispatcher_set_peer;
@@ -552,10 +547,7 @@ RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface)
     reds_channel->data = dispatcher;
     reds_register_channel(reds_channel);
 
-    if (!(cursor_channel = malloc(sizeof(Channel)))) {
-        red_error("reds channel malloc failed");
-    }
-    memset(cursor_channel, 0, sizeof(Channel));
+    cursor_channel = spice_new0(Channel, 1);
     cursor_channel->type = SPICE_CHANNEL_CURSOR;
     cursor_channel->id = qxl_interface->base.id;
     cursor_channel->link = red_dispatcher_set_cursor_peer;
