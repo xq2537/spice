@@ -18,6 +18,9 @@ RED_COMMON_SRCS =	 		\
 	cmd_line_parser.cpp		\
 	cmd_line_parser.h		\
 	common.h			\
+	controller.cpp			\
+	controller.h			\
+	controller_prot.h		\
 	cursor_channel.cpp		\
 	cursor_channel.h		\
 	cursor.cpp			\

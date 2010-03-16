@@ -263,6 +263,7 @@ RedClient::RedClient(Application& application)
     , _connection_id (0)
     , _mouse_mode (RED_MOUSE_MODE_SERVER)
     , _notify_disconnect (false)
+    , _auto_display_res (false)
     , _aborting (false)
     , _agent_connected (false)
     , _agent_mon_config_sent (false)
@@ -329,7 +330,7 @@ void RedClient::init(const char* host, int port, int sport, const char *password
     }
 }
 
-void RedClient::set_target(const char* host, uint16_t port, uint16_t sport)
+void RedClient::set_target(const std::string& host, int port, int sport)
 {
     _port = port;
     _sport = sport;

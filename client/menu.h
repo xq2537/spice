@@ -26,7 +26,7 @@ public:
 
 class Menu {
 public:
-    Menu(CommandTarget& target, const std::string& name);
+    Menu(CommandTarget& target, const std::string& name, int id = 0);
 
     enum ItemType {
         MENU_ITEM_TYPE_INVALID,
@@ -46,6 +46,7 @@ public:
     void set_name(const std::string& name) { _name = name;}
     const std::string& get_name() { return _name;}
     CommandTarget& get_target() { return _target;}
+    int get_id() { return _id;}
 
     void add_command(const std::string& name, int cmd_id, int state = 0);
     void add_separator();
@@ -57,6 +58,7 @@ public:
     ItemType item_type_at(int pos);
     void command_at(int pos, std::string& name, int& cmd_id, int& state);
     Menu* sub_at(int pos);
+    Menu* find_sub(int id);
 
     void clear();
 
@@ -94,6 +96,7 @@ private:
     CommandTarget& _target;
     std::string _name;
     std::vector<MenuItem> _items;
+    int _id;
 };
 
 #endif

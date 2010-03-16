@@ -53,6 +53,10 @@ CmdLineParser::CmdLineParser(std::string description, bool allow_positional_args
     , _positional_args (allow_positional_args)
     , _done (false)
 {
+    optind = 1;
+    opterr = 1;
+    optopt = 0;
+    optarg = 0;
 }
 
 CmdLineParser::~CmdLineParser()

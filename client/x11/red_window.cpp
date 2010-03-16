@@ -1199,7 +1199,7 @@ void RedWindow::set_title(std::wstring& title)
     int r;
     if (_win) {
         r = XwcTextListToTextProperty(x_display, &name, 1, XStringStyle, &text_prop);
-        if (r >= 0) {
+        if (r == Success) {
             XSetWMName(x_display, _win, &text_prop);
             XFree(text_prop.value);
         } else {

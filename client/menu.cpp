@@ -20,10 +20,11 @@
 #include "utils.h"
 #include "debug.h"
 
-Menu::Menu(CommandTarget& target, const std::string& name)
+Menu::Menu(CommandTarget& target, const std::string& name, int id)
     : _refs (1)
     , _target (target)
     , _name (name)
+    , _id (id)
 {
 }
 
@@ -113,6 +114,21 @@ Menu* Menu::sub_at(int pos)
         THROW("incorrect item type");
     }
     return ((Menu*)_items[pos].obj)->ref();
+}
+
+Menu* Menu::find_sub(int id)
+{
+    Menu* sub;
+
+    if (_id == id) {
+        return ref();
+    }
+    for (unsigned int i = 0; i < _items.size(); i++) {
+        if (_items[i].type == MENU_ITEM_TYPE_MENU && (sub = ((Menu*)_items[i].obj)->find_sub(id))) {
+            return sub;
+        }
+    }
+    return NULL;
 }
 
 void Menu::clear()

@@ -1,0 +1,111 @@
+/*
+   Copyright (C) 2009 Red Hat, Inc.
+
+   This program is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public License as
+   published by the Free Software Foundation; either version 2 of
+   the License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef _H_CONTROLLER_MENU
+#define _H_CONTROLLER_MENU
+
+#include "named_pipe.h"
+
+class ControllerConnection;
+struct ControllerInit;
+struct ControllerMsg;
+class CmdLineParser;
+class Menu;
+
+class ControllerInterface {
+public:
+    virtual ~ControllerInterface() {}
+
+    virtual void add_controller(int32_t opaque_conn_ref) = 0;
+    virtual void delete_controller(int32_t opaque_conn_ref) = 0;
+    virtual bool connect(const std::string& host, int port, int sport,
+                         const std::string& password) = 0;
+    virtual void set_title(const std::wstring& title) = 0;
+    virtual void show_me(bool full_screen, bool auto_display_res) = 0;
+    virtual void hide_me() = 0;
+    virtual bool set_channels_security(CmdLineParser& parser, bool on, char *val,
+                                       const char* arg0) = 0;
+    virtual bool set_enable_channels(CmdLineParser& parser, bool enable, char *val,
+                                     const char* arg0) = 0;
+    virtual void set_hotkeys(const std::string& hotkeys) = 0;
+    virtual int get_controller_menu_item_id(int32_t opaque_conn_ref, uint32_t id) = 0;
+    virtual Menu* get_app_menu() = 0;
+    virtual void set_menu(Menu* menu) = 0;
+    virtual void delete_menu() = 0;
+};
+
+class Controller : public NamedPipe::ListenerInterface {
+public:
+    Controller(ControllerInterface *handler);
+    virtual ~Controller();
+
+    bool handler_attached() { return !!_handler;}
+    Controller* ref() { _refs++; return this;}
+    void unref() { if (!--_refs) delete this;}
+
+    virtual NamedPipe::ConnectionInterface &create();
+    bool set_exclusive(bool exclusive);
+    void add_connection(NamedPipe::ConnectionRef conn_ref, ControllerConnection *conn);
+    void remove_connection(NamedPipe::ConnectionRef conn_ref);
+    void on_command(NamedPipe::ConnectionRef conn_ref, int32_t id);
+
+private:
+    ControllerInterface *_handler;
+    std::map<NamedPipe::ConnectionRef, ControllerConnection*> _connections;
+    NamedPipe::ListenerRef _pipe;
+    bool _exclusive;
+    int _refs;
+};
+
+#define CONTROLLER_BUF_SIZE 4096
+
+class ControllerConnection : public NamedPipe::ConnectionInterface {
+public:
+    ControllerConnection(ControllerInterface *handler, Controller& parent);
+    virtual ~ControllerConnection();
+
+    virtual void bind(NamedPipe::ConnectionRef conn_ref);
+    virtual void on_data();
+    bool write_msg(const void *buf, int len);
+
+private:
+    bool read_msgs();
+    bool handle_init(ControllerInit *init);
+    bool handle_message(ControllerMsg *hdr);
+    bool create_menu(wchar_t* resource);
+    bool set_multi_val(uint32_t op, char* multi_val);
+
+private:
+    ControllerInterface *_handler;
+    Controller& _parent;
+    bool _initialized;
+
+    int _write_pending;
+    uint8_t *_write_pos;
+    uint8_t *_read_pos;
+    uint8_t _write_buf[CONTROLLER_BUF_SIZE];
+    uint8_t _read_buf[CONTROLLER_BUF_SIZE];
+
+    std::string _host;
+    std::string _password;
+    int _port;
+    int _sport;
+    bool _full_screen;
+    bool _auto_display_res;
+};
+
+#endif

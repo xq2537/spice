@@ -140,7 +140,9 @@ public:
     void activate_interval_timer(Timer* timer, unsigned int millisec);
     void deactivate_interval_timer(Timer* timer);
 
-    void set_target(const char* host, uint16_t port, uint16_t sport);
+    void set_target(const std::string& host, int port, int sport);
+    void set_password(const std::string& password) { _password = password;}
+    void set_auto_display_res(bool auto_display_res) { _auto_display_res = auto_display_res;}
     const char* get_password() { return _password.c_str();}
     const char* get_host() { return _host.c_str();}
     int get_port() { return _port;}

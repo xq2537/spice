@@ -27,6 +27,7 @@
 #include "hot_keys.h"
 #include "process_loop.h"
 #include "foreign_menu.h"
+#include "controller.h"
 
 class RedScreen;
 class Application;
@@ -130,7 +131,8 @@ public:
 class Application : public ProcessLoop,
                     public Platform::EventListener,
                     public Platform::DisplayModeListner,
-                    public ForeignMenuInterface {
+                    public ForeignMenuInterface,
+                    public ControllerInterface {
 public:
     Application();
     virtual ~Application();
@@ -168,7 +170,7 @@ public:
     void minimize();
     void show_splash(int screen_id);
     void hide_splash(int screen_id);
-    void set_title(std::wstring& title);
+    void set_title(const std::wstring& title);
     void hide();
     void show();
     void external_show();
@@ -189,10 +191,21 @@ public:
     int get_foreign_menu_item_id(int32_t opaque_conn_ref, uint32_t msg_id);
     void update_menu();
 
+    void add_controller(int32_t opaque_conn_ref);
+    void delete_controller(int32_t opaque_conn_ref);
+    bool connect(const std::string& host, int port, int sport, const std::string& password);
+    void show_me(bool full_screen, bool auto_display_res);
+    void hide_me();
+    void set_hotkeys(const std::string& hotkeys);
+    int get_controller_menu_item_id(int32_t opaque_conn_ref, uint32_t msg_id);
+    void set_menu(Menu* menu);
+    void delete_menu();
+
     static int main(int argc, char** argv, const char* version_str);
 
 private:
     bool set_channels_security(CmdLineParser& parser, bool on, char *val, const char* arg0);
+    bool set_channels_security(int port, int sport);
     bool set_connection_ciphers(const char* ciphers, const char* arg0);
     bool set_ca_file(const char* ca_file, const char* arg0);
     bool set_host_cert_subject(const char* subject, const char* arg0);
@@ -200,6 +213,7 @@ private:
     bool set_canvas_option(CmdLineParser& parser, char *val, const char* arg0);
     void on_cmd_line_invalid_arg(const char* arg0, const char* what, const char* val);
     bool process_cmd_line(int argc, char** argv);
+    void register_channels();
     void abort();
     void init_scan_code(int index);
     void init_korean_scan_code(int index);
@@ -282,6 +296,8 @@ private:
     bool _during_host_switch;
     AutoRef<SwitchHostTimer> _switch_host_timer;
     AutoRef<ForeignMenu> _foreign_menu;
+    bool _enable_controller;
+    AutoRef<Controller> _controller;
     std::map<int32_t, int32_t> _pipe_connections;
 };
 

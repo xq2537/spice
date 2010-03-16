@@ -43,6 +43,9 @@ RED_COMMON_SRCS = 					\
 	$(CLIENT_DIR)/cmd_line_parser.cpp		\
 	$(CLIENT_DIR)/cmd_line_parser.h			\
 	$(CLIENT_DIR)/common.h				\
+	$(CLIENT_DIR)/controller.cpp			\
+	$(CLIENT_DIR)/controller.h			\
+	$(CLIENT_DIR)/controller_prot.h			\
 	$(CLIENT_DIR)/cursor_channel.cpp		\
 	$(CLIENT_DIR)/cursor_channel.h			\
 	$(CLIENT_DIR)/cursor.cpp			\

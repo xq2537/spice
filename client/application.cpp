@@ -290,15 +290,16 @@ enum AppCommands {
     APP_CMD_INVALID,
     APP_CMD_SEND_CTL_ALT_DEL,
     APP_CMD_TOGGLE_FULL_SCREEN,
-    APP_CMD_RELEASE_CAPTURE,
     APP_CMD_SEND_TOGGLE_KEYS,
     APP_CMD_SEND_RELEASE_KEYS,
     APP_CMD_SEND_CTL_ALT_END,
+    APP_CMD_RELEASE_CAPTURE,
 #ifdef RED_DEBUG
     APP_CMD_CONNECT,
     APP_CMD_DISCONNECT,
 #endif
     APP_CMD_FOREIGN_MENU_MASK = 0x01000000,
+    APP_CMD_CONTROLLER_MENU_MASK = 0x02000000,
 };
 
 #define MENU_ID_MASK    0x000000ff
@@ -323,6 +324,7 @@ Application::Application()
     , _splash_mode (true)
     , _sys_key_intercept_mode (false)
     , _during_host_switch(false)
+    , _enable_controller (false)
 {
     DBG(0, "");
     Platform::set_process_loop(*this);
@@ -462,6 +464,10 @@ int Application::run()
 void Application::on_start_running()
 {
     _foreign_menu.reset(new ForeignMenu(this));
+    if (_enable_controller) {
+        _controller.reset(new Controller(this));
+        return;
+    }
     _client.connect();
 }
 
@@ -819,6 +825,9 @@ void Application::do_command(int command)
         if ((command & APP_CMD_FOREIGN_MENU_MASK) == APP_CMD_FOREIGN_MENU_MASK) {
             ASSERT(*_foreign_menu);
             (*_foreign_menu)->on_command(conn_ref, command & MENU_ID_MASK);
+        } else if ((command & APP_CMD_CONTROLLER_MENU_MASK) == APP_CMD_CONTROLLER_MENU_MASK) {
+            ASSERT(*_controller);
+            (*_controller)->on_command(conn_ref, command & MENU_ID_MASK);
         }
     }
 }
@@ -850,6 +859,75 @@ void Application::update_menu()
             _screens[i]->update_menu();
         }
     }
+}
+
+void Application::add_controller(int32_t opaque_conn_ref)
+{
+    _pipe_connections[opaque_conn_ref & MENU_CONN_MASK] = opaque_conn_ref;
+}
+
+void Application::delete_controller(int32_t opaque_conn_ref)
+{
+    _pipe_connections.erase(opaque_conn_ref & MENU_CONN_MASK);
+    delete_menu();
+}
+
+bool Application::connect(const std::string& host, int port, int sport, const std::string& password)
+{
+    _client.set_target(host, port, sport);
+    _client.set_password(password);
+    if (!set_channels_security(port, sport)) {
+        return false;
+    }
+    register_channels();
+    connect();
+    return true;
+}
+
+void Application::show_me(bool full_screen, bool auto_display_res)
+{
+    if (auto_display_res) {
+        Monitor* mon = find_monitor(0);
+        ASSERT(mon);
+        Point size = mon->get_size();
+        _main_screen->set_mode(size.x, size.y, 32);
+    }
+    if (full_screen) {
+        enter_full_screen();
+    } else {
+        _main_screen->show(true, NULL);
+    }
+}
+void Application::hide_me()
+{
+    if (_full_screen) {
+        exit_full_screen();
+    }
+    hide();
+}
+
+void Application::set_hotkeys(const std::string& hotkeys)
+{
+    std::auto_ptr<HotKeysParser> parser(new HotKeysParser(hotkeys, _commands_map));
+    _hot_keys = parser->get();
+}
+
+int Application::get_controller_menu_item_id(int32_t opaque_conn_ref, uint32_t msg_id)
+{
+    return APP_CMD_CONTROLLER_MENU_MASK | ((opaque_conn_ref & MENU_CONN_MASK) << MENU_CONN_SHIFT) |
+           (msg_id & MENU_ID_MASK);
+}
+
+void Application::set_menu(Menu* menu)
+{
+    _app_menu.reset(menu->ref());
+    update_menu();
+}
+
+void Application::delete_menu()
+{
+    init_menu();
+    update_menu();
 }
 
 #ifdef REDKEY_DEBUG
@@ -1454,7 +1532,7 @@ uint32_t Application::get_mouse_mode()
     return _client.get_mouse_mode();
 }
 
-void Application::set_title(std::wstring& title)
+void Application::set_title(const std::wstring& title)
 {
     _title = title;
 
@@ -1737,7 +1815,7 @@ void Application::on_cmd_line_invalid_arg(const char* arg0, const char* what, co
 
 bool Application::process_cmd_line(int argc, char** argv)
 {
-    std::string host;
+    std::string host = "";
     int sport = -1;
     int port = -1;
     bool auto_display_res = false;
@@ -1758,12 +1836,12 @@ bool Application::process_cmd_line(int argc, char** argv)
         SPICE_OPT_ENABLE_CHANNELS,
         SPICE_OPT_DISABLE_CHANNELS,
         SPICE_OPT_CANVAS_TYPE,
+        SPICE_OPT_CONTROLLER,
     };
 
     CmdLineParser parser("Spice client", false);
 
     parser.add(SPICE_OPT_HOST, "host", "spice server address", "host", true, 'h');
-    parser.set_reqired(SPICE_OPT_HOST);
     parser.add(SPICE_OPT_PORT, "port", "spice server port", "port", true, 'p');
     parser.add(SPICE_OPT_SPORT, "secure-port", "spice server secure port", "port", true, 's');
     parser.add(SPICE_OPT_SECURE_CHANNELS, "secure-channels",
@@ -1794,6 +1872,8 @@ bool Application::process_cmd_line(int argc, char** argv)
 
     parser.add(SPICE_OPT_CANVAS_TYPE, "canvas-type", "set rendering canvas", "canvas_type", true);
     parser.set_multi(SPICE_OPT_CANVAS_TYPE, ',');
+
+    parser.add(SPICE_OPT_CONTROLLER, "controller", "enable external controller");
 
     _peer_con_opt[RED_CHANNEL_MAIN] = RedPeer::ConnectionOptions::CON_OP_INVALID;
     _peer_con_opt[RED_CHANNEL_DISPLAY] = RedPeer::ConnectionOptions::CON_OP_INVALID;
@@ -1878,6 +1958,14 @@ bool Application::process_cmd_line(int argc, char** argv)
                 return false;
             }
             break;
+        case SPICE_OPT_CONTROLLER:
+            if (argc > 2) {
+                std::cout << "controller cannot be combined with other options\n";
+                _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
+                return false;
+            }
+            _enable_controller = true;
+            return true;
         case CmdLineParser::OPTION_HELP:
             parser.show_help();
             return false;
@@ -1889,13 +1977,43 @@ bool Application::process_cmd_line(int argc, char** argv)
         }
     }
 
+    if (host.empty()) {
+        std::cout << "missing --host\n";
+        return false;
+    }
+
     if (parser.is_set(SPICE_OPT_SECURE_CHANNELS) && !parser.is_set(SPICE_OPT_SPORT)) {
         Platform::term_printf("%s: missing --secure-port\n", argv[0]);
         _exit_code = SPICEC_ERROR_CODE_CMD_LINE_ERROR;
         return false;
     }
 
+    if (!set_channels_security(port, sport)) {
+        Platform::term_printf("%s: missing --port or --sport\n", argv[0]);
+        return false;
+    }
+    register_channels();
+
+    _client.init(host.c_str(), port, sport, password.c_str(), auto_display_res);
+    if (auto_display_res) {
+        Monitor* mon = find_monitor(0);
+        ASSERT(mon);
+        Point size = mon->get_size();
+        _main_screen->set_mode(size.x, size.y, 32);
+    }
+
+    if (full_screen) {
+        enter_full_screen();
+    } else {
+        _main_screen->show(true, NULL);
+    }
+    return true;
+}
+
+bool Application::set_channels_security(int port, int sport)
+{
     PeerConnectionOptMap::iterator iter = _peer_con_opt.begin();
+
     for (; iter != _peer_con_opt.end(); iter++) {
         if ((*iter).second == RedPeer::ConnectionOptions::CON_OP_SECURE) {
             continue;
@@ -1905,26 +2023,29 @@ bool Application::process_cmd_line(int argc, char** argv)
             continue;
         }
 
-        if (parser.is_set(SPICE_OPT_PORT) && parser.is_set(SPICE_OPT_SPORT)) {
+        if (port != -1 && sport != -1) {
             (*iter).second = RedPeer::ConnectionOptions::CON_OP_BOTH;
             continue;
         }
 
-        if (parser.is_set(SPICE_OPT_PORT)) {
+        if (port != -1) {
             (*iter).second = RedPeer::ConnectionOptions::CON_OP_UNSECURE;
             continue;
         }
 
-        if (parser.is_set(SPICE_OPT_SPORT)) {
+        if (sport != -1) {
             (*iter).second = RedPeer::ConnectionOptions::CON_OP_SECURE;
             continue;
         }
 
-        Platform::term_printf("%s: missing --port or --sport\n", argv[0]);
         _exit_code = SPICEC_ERROR_CODE_CMD_LINE_ERROR;
         return false;
     }
+    return true;
+}
 
+void Application::register_channels()
+{
     if (_enabled_channels[RED_CHANNEL_DISPLAY]) {
         _client.register_channel_factory(DisplayChannel::Factory());
     }
@@ -1944,21 +2065,6 @@ bool Application::process_cmd_line(int argc, char** argv)
     if (_enabled_channels[RED_CHANNEL_RECORD]) {
         _client.register_channel_factory(RecordChannel::Factory());
     }
-
-    _client.init(host.c_str(), port, sport, password.c_str(), auto_display_res);
-    if (auto_display_res) {
-        Monitor* mon = find_monitor(0);
-        ASSERT(mon);
-        Point size = mon->get_size();
-        _main_screen->set_mode(size.x, size.y, 32);
-    }
-
-    if (full_screen) {
-        enter_full_screen();
-    } else {
-        _main_screen->show(true, NULL);
-    }
-    return true;
 }
 
 void Application::init_logger()
