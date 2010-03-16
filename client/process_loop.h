@@ -220,10 +220,15 @@ protected:
         virtual void on_event() {}
     };
 
+    virtual void on_start_running() {}
     void wakeup();
     void do_quit(int error_code);
 
     friend class QuitEvent; // allowing access to quit
+
+protected:
+    bool _started;
+    pthread_t _thread;
 
 private:
     EventSources _event_sources;
@@ -236,8 +241,6 @@ private:
 
     bool _quitting;
     int _exit_code;
-    bool _started;
-    pthread_t _thread;
 };
 
 #endif

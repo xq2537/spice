@@ -298,7 +298,12 @@ enum AppCommands {
     APP_CMD_CONNECT,
     APP_CMD_DISCONNECT,
 #endif
+    APP_CMD_FOREIGN_MENU_MASK = 0x01000000,
 };
+
+#define MENU_ID_MASK    0x000000ff
+#define MENU_CONN_MASK  0x0000ffff
+#define MENU_CONN_SHIFT 8
 
 Application::Application()
     : ProcessLoop (this)
@@ -450,10 +455,14 @@ void Application::switch_host(const std::string& host, int port, int sport,
 
 int Application::run()
 {
-       _client.connect();
-       _exit_code = ProcessLoop::run();
-       return _exit_code;
+    _exit_code = ProcessLoop::run();
+    return _exit_code;
+}
 
+void Application::on_start_running()
+{
+    _foreign_menu.reset(new ForeignMenu(this));
+    _client.connect();
 }
 
 RedScreen* Application::find_screen(int id)
@@ -805,6 +814,41 @@ void Application::do_command(int command)
         do_disconnect();
         break;
 #endif
+    default:
+        int32_t conn_ref = _pipe_connections[(command >> MENU_CONN_SHIFT) & MENU_CONN_MASK];
+        if ((command & APP_CMD_FOREIGN_MENU_MASK) == APP_CMD_FOREIGN_MENU_MASK) {
+            ASSERT(*_foreign_menu);
+            (*_foreign_menu)->on_command(conn_ref, command & MENU_ID_MASK);
+        }
+    }
+}
+
+void Application::add_foreign_menu(int32_t opaque_conn_ref, Menu* sub_menu)
+{
+    _pipe_connections[opaque_conn_ref & MENU_CONN_MASK] = opaque_conn_ref;
+    (*_app_menu)->add_sub(sub_menu);
+    update_menu();
+}
+
+void Application::delete_foreign_menu(int32_t opaque_conn_ref, Menu* sub_menu)
+{
+    _pipe_connections.erase(opaque_conn_ref & MENU_CONN_MASK);
+    (*_app_menu)->remove_sub(sub_menu);
+    update_menu();
+}
+
+int Application::get_foreign_menu_item_id(int32_t opaque_conn_ref, uint32_t msg_id)
+{
+    return APP_CMD_FOREIGN_MENU_MASK | ((opaque_conn_ref & MENU_CONN_MASK) << MENU_CONN_SHIFT) |
+           (msg_id & MENU_ID_MASK);
+}
+
+void Application::update_menu()
+{
+    for (size_t i = 0; i < _screens.size(); ++i) {
+        if (_screens[i]) {
+            _screens[i]->update_menu();
+        }
     }
 }
 
@@ -1156,12 +1200,18 @@ void Application::on_app_activated()
 {
     _active = true;
     _inputs_handler->on_focus_in();
+    if (*_foreign_menu) {
+        (*_foreign_menu)->on_activate();
+    }
 }
 
 void Application::on_app_deactivated()
 {
     _active = false;
     _inputs_handler->on_focus_out();
+    if (*_foreign_menu) {
+        (*_foreign_menu)->on_deactivate();
+    }
 #ifdef WIN32
     if (!_changing_screens) {
         exit_full_screen();

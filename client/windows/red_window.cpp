@@ -901,7 +901,7 @@ static int alloc_sys_cmd_id()
 
 static void free_sys_cmd_id(int id)
 {
-    free_sys_menu_id.push_back(id >> 4);
+    free_sys_menu_id.push_back(id);
 }
 
 static void insert_menu(Menu* menu, HMENU native, CommandMap& _commands_map)

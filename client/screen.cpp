@@ -89,8 +89,7 @@ RedScreen::RedScreen(Application& owner, int id, const std::wstring& name, int w
         THROW("create inactive cursor failed");
     }
     _window.set_cursor(_default_cursor);
-    AutoRef<Menu> menu(_owner.get_app_menu());
-    _window.set_menu(*menu);
+    update_menu();
     AutoRef<Icon> icon(Platform::load_icon(RED_ICON_RES_ID));
     _window.set_icon(*icon);
     _window.start_key_interception();
@@ -724,6 +723,12 @@ void RedScreen::external_show()
 {
     DBG(0, "Entry");
     _window.external_show();
+}
+
+void RedScreen::update_menu()
+{
+    AutoRef<Menu> menu(_owner.get_app_menu());
+    _window.set_menu(*menu);
 }
 
 void RedScreen::on_exposed_rect(const Rect& area)

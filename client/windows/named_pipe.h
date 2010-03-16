@@ -23,10 +23,7 @@
 #include "event_sources.h"
 #include "platform.h"
 
-#define PIPE_TIMEOUT 5000
 #define PIPE_BUF_SIZE 8192
-#define PIPE_MAX_NAME_LEN 256
-#define PIPE_PREFIX TEXT("\\\\.\\pipe\\")
 
 class WinConnection;
 

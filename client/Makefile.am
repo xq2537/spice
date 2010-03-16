@@ -25,6 +25,9 @@ RED_COMMON_SRCS =	 		\
 	debug.h				\
 	display_channel.cpp		\
 	display_channel.h		\
+	foreign_menu.cpp		\
+	foreign_menu.h			\
+	foreign_menu_prot.h		\
 	red_gl_canvas.cpp		\
 	red_gl_canvas.h			\
 	gl_canvas.cpp			\

@@ -49,7 +49,7 @@ void SyncEvent::response(AbstractProcessLoop& events_loop)
 void SyncEvent::wait()
 {
 #ifdef RED_DEBUG
-    ASSERT(!_process_loop || !_process_loop->is_same_thread(pthread_self()));
+    ASSERT(_process_loop && !_process_loop->is_same_thread(pthread_self()));
 #endif
     Lock lock(_mutex);
     while (!_ready) {
@@ -123,9 +123,6 @@ void EventsQueue::process_events()
 
         lock.unlock();
         event->response(_owner);
-#ifdef RED_DEBUG
-        event->set_process_loop(NULL);
-#endif
         event->unref();
     }
 }
@@ -260,13 +257,12 @@ void TimersQueue::timers_action()
 }
 
 ProcessLoop::ProcessLoop(void* owner)
-    : _events_queue (*this)
+    : _started (false)
+    , _events_queue (*this)
     , _timers_queue (*this)
     , _owner (owner)
     , _quitting (false)
     , _exit_code (0)
-    , _started (false)
-
 {
     _event_sources.add_trigger(_wakeup_trigger);
 }
@@ -280,6 +276,7 @@ int ProcessLoop::run()
 {
     _thread = pthread_self();
     _started = true;
+    on_start_running();
     for (;;) {
         if (_event_sources.wait_events(_timers_queue.get_soonest_timeout())) {
             _quitting = true;

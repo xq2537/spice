@@ -26,6 +26,7 @@
 #include "menu.h"
 #include "hot_keys.h"
 #include "process_loop.h"
+#include "foreign_menu.h"
 
 class RedScreen;
 class Application;
@@ -129,7 +130,7 @@ public:
 class Application : public ProcessLoop,
                     public Platform::EventListener,
                     public Platform::DisplayModeListner,
-                    public CommandTarget {
+                    public ForeignMenuInterface {
 public:
     Application();
     virtual ~Application();
@@ -152,6 +153,7 @@ public:
     void on_activate_screen(RedScreen* screen);
     void on_start_screen_key_interception(RedScreen* screen);
     void on_stop_screen_key_interception(RedScreen* screen);
+    virtual void on_start_running();
     virtual void on_app_activated();
     virtual void on_app_deactivated();
     virtual void on_monitors_change();
@@ -181,6 +183,11 @@ public:
 
     Menu* get_app_menu();
     virtual void do_command(int command);
+
+    void add_foreign_menu(int32_t opaque_conn_ref, Menu* sub_menu);
+    void delete_foreign_menu(int32_t opaque_conn_ref, Menu* sub_menu);
+    int get_foreign_menu_item_id(int32_t opaque_conn_ref, uint32_t msg_id);
+    void update_menu();
 
     static int main(int argc, char** argv, const char* version_str);
 
@@ -274,6 +281,8 @@ private:
     AutoRef<Menu> _app_menu;
     bool _during_host_switch;
     AutoRef<SwitchHostTimer> _switch_host_timer;
+    AutoRef<ForeignMenu> _foreign_menu;
+    std::map<int32_t, int32_t> _pipe_connections;
 };
 
 #endif

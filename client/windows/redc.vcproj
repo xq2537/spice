@@ -225,6 +225,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\foreign_menu.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\gdi_canvas.cpp"
 				>
 			</File>
@@ -434,6 +438,14 @@
 			</File>
 			<File
 				RelativePath=".\event_sources_p.h"
+				>
+			</File>
+			<File
+				RelativePath="..\foreign_menu.h"
+				>
+			</File>
+			<File
+				RelativePath="..\foreign_menu_prot.h"
 				>
 			</File>
 			<File
