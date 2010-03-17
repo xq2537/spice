@@ -288,6 +288,8 @@ RedClient::RedClient(Application& application)
     message_loop->set_handler(RED_MIGRATE_BEGIN, &RedClient::handle_migrate_begin,
                               sizeof(RedMigrationBegin));
     message_loop->set_handler(RED_MIGRATE_CANCEL, &RedClient::handle_migrate_cancel, 0);
+    message_loop->set_handler(RED_MIGRATE_SWITCH_HOST, &RedClient::handle_migrate_switch_host,
+                              sizeof(RedMigrationSwitchHost));
     message_loop->set_handler(RED_INIT, &RedClient::handle_init, sizeof(RedInit));
     message_loop->set_handler(RED_CHANNELS_LIST, &RedClient::handle_channels,
                               sizeof(RedChannels));
@@ -392,7 +394,8 @@ RedPeer::ConnectionOptions::Type RedClient::get_connection_options(uint32_t chan
 
 void RedClient::connect()
 {
-    //todo wait for disconnect state
+    //todo wait for disconnect state (but notifce that the main process loop
+    // must run when waiting for aborts)
     if (_connection_id || !abort_channels()) {
         return;
     }
@@ -789,6 +792,21 @@ void RedClient::handle_agent_tokens(RedPeer::InMessage* message)
 {
     RedAgentTokens *token = (RedAgentTokens *)message->data();
     _agent_tokens += token->num_tokens;
+}
+
+void RedClient::handle_migrate_switch_host(RedPeer::InMessage* message)
+{
+    RedMigrationSwitchHost* migrate = (RedMigrationSwitchHost*)message->data();
+    char* host = ((char*)migrate) + migrate->host_offset;
+    char* subject = NULL;
+    if (migrate->cert_subject_size) {
+        subject = ((char*)migrate)+ migrate->cert_subject_offset;
+    }
+    AutoRef<SwitchHostEvent> switch_event(new SwitchHostEvent(host,
+                                                              migrate->port,
+                                                              migrate->sport,
+                                                              subject));
+    push_event(*switch_event);
 }
 
 void RedClient::migrate_channel(RedChannel& channel)

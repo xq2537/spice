@@ -238,6 +238,8 @@ typedef struct RedsStatValue {
 
 #endif
 
+typedef struct SimpleOutItem SimpleOutItem;
+
 typedef struct RedsState {
     int listen_socket;
     int secure_listen_socket;
@@ -280,6 +282,8 @@ typedef struct RedsState {
     uint32_t net_test_id;
     int net_test_stage;
     int peer_minor_version;
+
+    SimpleOutItem* mig_switch_host_item;
 } RedsState;
 
 uint64_t bitrate_per_sec = ~0;
@@ -1032,11 +1036,11 @@ static int outgoing_write(RedsStreamContext *peer, OutgoingHandler *handler, voi
     return OUTGOING_OK;
 }
 
-typedef struct SimpleOutItem {
+struct SimpleOutItem {
     RedsOutItem base;
     RedDataHeader header;
     uint8_t data[0];
-} SimpleOutItem;
+};
 
 static void reds_prepare_basic_out_item(RedsOutItem *in_item, struct iovec* vec, int *len)
 {
@@ -5691,4 +5695,152 @@ int spice_server_kbd_leds(SpiceServer *s, KeyboardInterface *kbd, int leds)
     ASSERT(reds == s);
     reds_on_keyborad_leads_change(NULL, leds);
     return 0;
+}
+
+static void reds_free_mig_switch_host_item(RedsOutItem *item)
+{
+    if (!item) {
+        return;
+    }
+
+    ASSERT((SimpleOutItem*)item == reds->mig_switch_host_item);
+    free(item);
+    reds->mig_switch_host_item = NULL;
+}
+
+int spice_server_migrate_info(SpiceServer *s, const char* dest, int port, int secure_port,
+                              const char* cert_subject)
+{
+    int host_len;
+    int subject_len;
+    RedMigrationSwitchHost *mig_msg;
+
+    ASSERT(reds == s);
+
+    if (reds->mig_switch_host_item) {
+        reds_free_mig_switch_host_item(&reds->mig_switch_host_item->base);
+    }
+
+    if ((port == -1 && secure_port == -1) || !dest) {
+        red_printf("invalid args port %d secure-port %d host %s",
+                   port,
+                   secure_port,
+                   dest ? dest : "NULL");
+        return -1;
+    }
+
+    host_len = strlen(dest) + 1;
+    subject_len = cert_subject ? strlen(cert_subject) + 1 : 0;
+    reds->mig_switch_host_item = new_simple_out_item(RED_MIGRATE_SWITCH_HOST,
+                                                     sizeof(RedMigrationSwitchHost) +
+                                                     host_len + subject_len);
+    if (!(reds->mig_switch_host_item)) {
+        red_printf("alloc item failed");
+        return -1;
+    }
+    reds->mig_switch_host_item->base.release = reds_free_mig_switch_host_item;
+    mig_msg = (RedMigrationSwitchHost*)reds->mig_switch_host_item->data;
+    mig_msg->port = port;
+    mig_msg->sport = secure_port;
+    mig_msg->host_offset = sizeof(RedMigrationSwitchHost);
+    mig_msg->host_size = host_len;
+    mig_msg->cert_subject_offset = sizeof(RedMigrationSwitchHost) + host_len;
+    mig_msg->cert_subject_size = subject_len;
+    memcpy((uint8_t*)(mig_msg) + mig_msg->host_offset, dest, host_len);
+    memcpy((uint8_t*)(mig_msg) + mig_msg->cert_subject_offset, cert_subject, subject_len);
+
+    return 0;
+}
+
+int spice_server_migrate_start(SpiceServer *s)
+{
+    ASSERT(reds == s);
+    red_printf("");
+
+    if (reds->listen_socket != -1) {
+        core->set_file_handlers(core, reds->listen_socket, NULL, NULL, NULL);
+    }
+
+    if (reds->secure_listen_socket != -1) {
+        core->set_file_handlers(core, reds->secure_listen_socket, NULL, NULL, NULL);
+    }
+
+    if (reds->peer == NULL) {
+        red_printf("not connected to peer");
+        return 0;
+    }
+
+    return 0;
+}
+
+static inline uint64_t get_now()
+{
+    struct timespec time;
+
+    clock_gettime(CLOCK_MONOTONIC, &time);
+
+    return time.tv_sec * 1000000 + (time.tv_nsec / 1000);
+}
+
+int spice_server_migrate_end(SpiceServer *s, int completed)
+{
+    ASSERT(reds == s);
+    red_printf("status %s", completed ? "success" : "failure");
+
+    if (reds->listen_socket != -1) {
+        core->set_file_handlers(core, reds->listen_socket, reds_accept, NULL, NULL);
+    }
+
+    if (reds->secure_listen_socket != -1) {
+        core->set_file_handlers(core, reds->secure_listen_socket, reds_accept_ssl_connection,
+                                NULL, NULL);
+    }
+
+    if (reds->peer == NULL) {
+        red_printf("no peer connected");
+        if (reds->mig_switch_host_item) {
+            reds_free_mig_switch_host_item(&reds->mig_switch_host_item->base);
+        }
+        return 0;
+    }
+
+    if (completed) {
+        uint64_t end_time;
+
+        if ((RED_VERSION_MAJOR == 1) && (reds->peer_minor_version < 2)) {
+            red_printf("minor version mismatch client %u server %u",
+                       reds->peer_minor_version, RED_VERSION_MINOR);
+            reds_disconnect();
+            return 0;
+        }
+
+        if (!reds->mig_switch_host_item) {
+            red_printf("missing pre-migrate information");
+            reds_disconnect();
+            return -1;
+        }
+        reds_push_pipe_item(&reds->mig_switch_host_item->base);
+        end_time = get_now() + MIGRATE_TIMEOUT * 1000;
+
+        // waiting for the client to receive the message and diconnect
+        while (reds->peer) {
+            usleep(10000);
+            if (get_now() > end_time) {
+                red_printf("timeout");
+                break;
+            }
+            reds_main_read(NULL);
+            reds_push();
+        }
+        if (!reds->peer) {
+           red_printf("client disconnected");
+        }
+        reds_disconnect();
+        return 0;
+    } else {
+        if (reds->mig_switch_host_item) {
+            reds_free_mig_switch_host_item(&reds->mig_switch_host_item->base);
+        }
+        return 0;
+    }
 }

@@ -91,4 +91,15 @@ int spice_server_add_renderer(SpiceServer *s, const char *name);
 int spice_server_get_sock_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen);
 int spice_server_get_peer_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen);
 
+/*
+ * setting information about the migration destination.
+ * For null port use -1.
+ * cert_subject format: pairs of <field>=<value> separated with commas.
+ * Commas and backslashes within <value> must be preceded by a backslash.
+ */
+int spice_server_migrate_info(SpiceServer *s, const char* dest, int port, int secure_port,
+                              const char* cert_subject);
+int spice_server_migrate_start(SpiceServer *s);
+int spice_server_migrate_end(SpiceServer *s, int completed);
+
 #endif

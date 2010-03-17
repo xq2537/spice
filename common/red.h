@@ -46,7 +46,7 @@
 
 #define RED_MAGIC (*(uint32_t*)"REDQ")
 #define RED_VERSION_MAJOR 1
-#define RED_VERSION_MINOR 1
+#define RED_VERSION_MINOR 2
 
 // Encryption & Ticketing Parameters
 #define RED_MAX_PASSWORD_LENGTH 60
@@ -166,6 +166,8 @@ enum {
     RED_AGENT_DATA,
     RED_AGENT_TOKEN,
 
+    RED_MIGRATE_SWITCH_HOST,
+
     RED_MESSAGES_END,
 };
 
@@ -230,6 +232,15 @@ typedef struct ATTR_PACKED RedMigrationBegin {
     uint32_t pub_key_offset;
     uint32_t pub_key_size;
 } RedMigrationBegin;
+
+typedef struct ATTR_PACKED RedMigrationSwitchHost {
+    uint16_t port;
+    uint16_t sport;
+    uint32_t host_offset;
+    uint32_t host_size;
+    uint32_t cert_subject_offset;
+    uint32_t cert_subject_size;
+} RedMigrationSwitchHost;
 
 enum {
     RED_MIGRATE_NEED_FLUSH = (1 << 0),

@@ -51,6 +51,8 @@
 
 #define CA_FILE_NAME "spice_truststore.pem"
 
+#define SWITCH_HOST_TIMEOUT 150
+
 #ifdef CAIRO_CANVAS_CACH_IS_SHARED
 mutex_t cairo_surface_user_data_mutex;
 #endif
@@ -65,16 +67,26 @@ void ConnectedEvent::response(AbstractProcessLoop& events_loop)
 void DisconnectedEvent::response(AbstractProcessLoop& events_loop)
 {
     Application* app = static_cast<Application*>(events_loop.get_owner());
+
+    if (app->_during_host_switch) {
+        app->_client.connect();
+        app->activate_interval_timer(*app->_switch_host_timer, SWITCH_HOST_TIMEOUT);
+        // todo: add indication for migration
+        app->show_splash(0);
+    } else {
 #ifdef RED_DEBUG
-    app->show_splash(0);
+        app->show_splash(0);
 #else
-    app->do_quit(SPICEC_ERROR_CODE_SUCCESS);
+        app->do_quit(SPICEC_ERROR_CODE_SUCCESS);
 #endif
+    }
 }
 
 void ConnectionErrorEvent::response(AbstractProcessLoop& events_loop)
 {
     Application* app = static_cast<Application*>(events_loop.get_owner());
+
+    app->_during_host_switch = false;
 #ifdef RED_DEBUG
     app->show_splash(0);
 #else
@@ -94,6 +106,32 @@ void MonitorsQuery::do_response(AbstractProcessLoop& events_loop)
         info.position = mon->get_position();
         _monitors.push_back(info);
     }
+}
+
+SwitchHostEvent::SwitchHostEvent(const char* host, int port, int sport, const char* cert_subject)
+{
+    _host = host;
+    _port = port;
+    _sport = sport;
+    if (cert_subject) {
+        _cert_subject = cert_subject;
+    }
+}
+
+void SwitchHostTimer::response(AbstractProcessLoop& events_loop) {
+    Application* app = (Application*)events_loop.get_owner();
+
+    if (app->_during_host_switch) {
+        app->do_connect();
+    } else {
+        app->deactivate_interval_timer(this);
+    }
+}
+
+void SwitchHostEvent::response(AbstractProcessLoop& events_loop)
+{
+    Application* app = static_cast<Application*>(events_loop.get_owner());
+    app->switch_host(_host, _port, _sport, _cert_subject);
 }
 
 class GUILayer: public ScreenLayer {
@@ -279,6 +317,7 @@ Application::Application()
     , _title (L"SPICEc:%d")
     , _splash_mode (true)
     , _sys_key_intercept_mode (false)
+    , _during_host_switch(false)
 {
     DBG(0, "");
     Platform::set_process_loop(*this);
@@ -327,6 +366,8 @@ Application::Application()
     _sticky_info.key_down = false;
     _sticky_info.key  = REDKEY_INVALID;
     _sticky_info.timer.reset(new StickyKeyTimer());
+
+    _switch_host_timer.reset(new SwitchHostTimer());
 }
 
 Application::~Application()
@@ -391,6 +432,21 @@ void Application::connect()
 {
     _client.connect();
 }
+
+void Application::switch_host(const std::string& host, int port, int sport,
+                              const std::string& cert_subject)
+{
+    LOG_INFO("host=%s port=%d sport=%d", host.c_str(), port, sport);
+    _during_host_switch = true;
+    do_disconnect();
+    _client.set_target(host.c_str(), port, sport);
+
+    if (!cert_subject.empty()) {
+        set_host_cert_subject(cert_subject.c_str(), "spicec");
+    }
+
+    _client.connect();
+ }
 
 int Application::run()
 {
@@ -701,6 +757,10 @@ void Application::unpress_all()
 
 void Application::on_connected()
 {
+    if (_during_host_switch) {
+        _during_host_switch = false;
+        deactivate_interval_timer(*_switch_host_timer);
+    }
 }
 
 void Application::on_disconnecting()
