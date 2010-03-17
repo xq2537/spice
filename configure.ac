@@ -203,12 +203,12 @@ AC_ARG_ENABLE(static-linkage,
 
 
 AS_IF([test "$_cflags_is_set" = "yes"], [], [
-    CFLAGS="-g -O3"
+    CFLAGS="-g -O2"
 ])
 
 
 AS_IF([test "$_cxxflags_is_set" = "yes"], [], [
-    CXXFLAGS="-g -O3"
+    CXXFLAGS="-g -O2"
 ])
 
 
