@@ -2149,7 +2149,7 @@ static void canvas_draw_alpha_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, 
                                              bbox->top,
                                              bbox->right - bbox->left,
                                              bbox->bottom - bbox->top,
-                                             SPICE_IMAGE_SCALE_MODE_INTERPOLATE,
+                                             SPICE_IMAGE_SCALE_MODE_NEAREST,
                                              alpha_blend->alpha);
     }
 
