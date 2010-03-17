@@ -675,7 +675,7 @@ static void canvas_draw_text(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceCl
 
     canvas_clip_pixman(&canvas->base, &dest_region, clip);
 
-    if (pixman_region32_n_rects(&dest_region) == 0) {
+    if (!pixman_region32_not_empty(&dest_region)) {
         touch_brush(&canvas->base, &text->fore_brush);
         touch_brush(&canvas->base, &text->back_brush);
         pixman_region32_fini(&dest_region);
