@@ -2422,6 +2422,7 @@ static void stroke_fill_spans(lineGC * pGC,
                 r.x1 = points[i].x;
                 r.y1 = points[i].y;
                 r.x2 = points[i].x + widths[i];
+                r.y2 = r.y1 + 1;
                 canvas->ops->fill_solid_rects_rop(canvas, &r, 1,
                                                   strokeGC->color, rop);
             }
@@ -2433,6 +2434,7 @@ static void stroke_fill_spans(lineGC * pGC,
                 r.x1 = points[i].x;
                 r.y1 = points[i].y;
                 r.x2 = points[i].x + widths[i];
+                r.y2 = r.y1 + 1;
                 canvas->ops->fill_tiled_rects(canvas, &r, 1,
                                               strokeGC->tile,
                                               strokeGC->tile_offset_x,
@@ -2444,6 +2446,7 @@ static void stroke_fill_spans(lineGC * pGC,
                 r.x1 = points[i].x;
                 r.y1 = points[i].y;
                 r.x2 = points[i].x + widths[i];
+                r.y2 = r.y1 + 1;
                 canvas->ops->fill_tiled_rects_rop(canvas, &r, 1,
                                                   strokeGC->tile,
                                                   strokeGC->tile_offset_x,

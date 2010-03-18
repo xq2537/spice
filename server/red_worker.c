@@ -5949,10 +5949,15 @@ static void fill_bits(DisplayChannel *display_channel, QXLPHYSICAL *in_bitmap, D
     int memslot_id;
     compress_send_data_t comp_send_data;
 
-    ASSERT(*in_bitmap);
+    if (*in_bitmap == 0) {
+        ASSERT(drawable->self_bitmap);
+        qxl_image = (QXLImage *)drawable->self_bitmap;
+    } else {
+        qxl_image = (QXLImage *)get_virt(worker, *in_bitmap, sizeof(QXLImage),
+                                         drawable->group_id);
+    }
 
     image = alloc_image(display_channel);
-    qxl_image = (QXLImage *)get_virt(worker, *in_bitmap, sizeof(QXLImage), drawable->group_id);
 
     image->descriptor.id = qxl_image->descriptor.id;
     image->descriptor.type = qxl_image->descriptor.type;
