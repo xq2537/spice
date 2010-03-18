@@ -170,14 +170,15 @@ void Migrate::run()
     DBG(0, "");
     try {
         conn_type = _client.get_connection_options(SPICE_CHANNEL_MAIN);
-        RedPeer::ConnectionOptions con_opt(conn_type, _port, _sport, _auth_options);
+        RedPeer::ConnectionOptions con_opt(conn_type, _port, _sport, _auth_options, _con_ciphers);
         MigChannels::iterator iter = _channels.begin();
         connection_id = _client.get_connection_id();
         connect_one(**iter, con_opt, connection_id);
 
         for (++iter; iter != _channels.end(); ++iter) {
             conn_type = _client.get_connection_options((*iter)->get_type());
-            con_opt = RedPeer::ConnectionOptions(conn_type, _port, _sport, _auth_options);
+            con_opt = RedPeer::ConnectionOptions(conn_type, _port, _sport,
+						 _auth_options, _con_ciphers);
             connect_one(**iter, con_opt, connection_id);
         }
         _connected = true;
@@ -227,6 +228,7 @@ void Migrate::start(const SpiceMsgMainMigrationBegin* migrate)
                                          migrate->pub_key_size);
     }
 
+    _con_ciphers = _client.get_connection_ciphers();
     _password = _client._password;
     Lock lock(_lock);
     _running = true;
@@ -460,6 +462,7 @@ void RedClient::connect()
     }
 
     _host_auth_opt = _application.get_host_auth_opt();
+    _con_ciphers = _application.get_connection_ciphers();
     RedChannel::connect();
 }
 

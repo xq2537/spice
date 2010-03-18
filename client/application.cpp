@@ -321,6 +321,7 @@ enum AppCommands {
 Application::Application()
     : ProcessLoop (this)
     , _client (*this)
+    , _con_ciphers ("DEFAULT")
     , _enabled_channels (SPICE_END_CHANNEL, true)
     , _main_screen (NULL)
     , _active (false)
@@ -362,6 +363,11 @@ Application::Application()
 #else
     _canvas_types[0] = CANVAS_OPTION_CAIRO;
 #endif
+
+    _host_auth_opt.type_flags = RedPeer::HostAuthOptions::HOST_AUTH_OP_NAME;
+
+    Platform::get_app_data_dir(_host_auth_opt.CA_file, app_name);
+    Platform::path_append(_host_auth_opt.CA_file, CA_FILE_NAME);
 
     std::auto_ptr<HotKeysParser> parser(new HotKeysParser("toggle-fullscreen=shift+f11"
                                                           ",release-cursor=shift+f12"
@@ -1683,6 +1689,65 @@ bool Application::set_channels_security(CmdLineParser& parser, bool on, char *va
     return true;
 }
 
+bool Application::set_connection_ciphers(const char* ciphers, const char* arg0)
+{
+    _con_ciphers = ciphers;
+    return true;
+}
+
+bool Application::set_ca_file(const char* ca_file, const char* arg0)
+{
+    _host_auth_opt.CA_file = ca_file;
+    return true;
+}
+
+bool Application::set_host_cert_subject(const char* subject, const char* arg0)
+{
+    std::string subject_str(subject);
+    std::string::const_iterator iter = subject_str.begin();
+    std::string entry;
+    _host_auth_opt.type_flags = RedPeer::HostAuthOptions::HOST_AUTH_OP_SUBJECT;
+    _host_auth_opt.host_subject.clear();
+
+    while (true) {
+        if ((iter == subject_str.end()) || (*iter == ',')) {
+            RedPeer::HostAuthOptions::CertFieldValuePair entry_pair;
+            int value_pos = entry.find_first_of('=');
+            if ((value_pos == std::string::npos) || (value_pos == (entry.length() - 1))) {
+                Platform::term_printf("%s: host_subject bad format: assignment for %s is missing\n",
+                                      arg0, entry.c_str());
+                _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
+                return false;
+            }
+            entry_pair.first = entry.substr(0, value_pos);
+            entry_pair.second = entry.substr(value_pos + 1);
+            _host_auth_opt.host_subject.push_back(entry_pair);
+            DBG(0, "subject entry: %s=%s", entry_pair.first.c_str(), entry_pair.second.c_str());
+            if (iter == subject_str.end()) {
+                break;
+            }
+            entry.clear();
+        } else if (*iter == '\\') {
+            iter++;
+            if (iter == subject_str.end()) {
+                LOG_WARN("single \\ in host subject");
+                entry.append(1, '\\');
+                continue;
+            } else if ((*iter == '\\') || (*iter == ',')) {
+                entry.append(1, *iter);
+            } else {
+                LOG_WARN("single \\ in host subject");
+                entry.append(1, '\\');
+                continue;
+            }
+        } else {
+            entry.append(1, *iter);
+        }
+        iter++;
+    }
+    return true;
+}
+
 bool Application::set_canvas_option(CmdLineParser& parser, char *val, const char* arg0)
 {
     typedef std::map< std::string, CanvasOption> CanvasNamesMap;
@@ -1798,6 +1863,9 @@ bool Application::process_cmd_line(int argc, char** argv)
         SPICE_OPT_FULL_SCREEN,
         SPICE_OPT_SECURE_CHANNELS,
         SPICE_OPT_UNSECURE_CHANNELS,
+        SPICE_OPT_TLS_CIPHERS,
+        SPICE_OPT_CA_FILE,
+        SPICE_OPT_HOST_SUBJECT,
         SPICE_OPT_ENABLE_CHANNELS,
         SPICE_OPT_DISABLE_CHANNELS,
         SPICE_OPT_CANVAS_TYPE,
@@ -1826,6 +1894,14 @@ bool Application::process_cmd_line(int argc, char** argv)
                "force unsecure connection on the specified channels", "channel",
                true);
     parser.set_multi(SPICE_OPT_UNSECURE_CHANNELS, ',');
+    parser.add(SPICE_OPT_TLS_CIPHERS, "tls-ciphers", "ciphers for secure connections",
+               "ciphers", true);
+    parser.add(SPICE_OPT_CA_FILE, "ca-file", "truststore file for secure connections",
+               "ca-file", true);
+    parser.add(SPICE_OPT_HOST_SUBJECT, "host-subject",
+               "subject of the host certifcate. Format: field=value pairs separated"
+               " by commmas. Commas and backslashes within values must be preceded by"
+               " a backslash", "host-subject", true);
     parser.add(SPICE_OPT_PASSWORD, "password", "server password", "password", true, 'w');
     parser.add(SPICE_OPT_FULL_SCREEN, "full-screen", "open in full screen mode", "auto-conf",
                false, 'f');
@@ -1842,11 +1918,6 @@ bool Application::process_cmd_line(int argc, char** argv)
     for (int i = SPICE_CHANNEL_MAIN; i < SPICE_END_CHANNEL; i++) {
         _peer_con_opt[i] = RedPeer::ConnectionOptions::CON_OP_INVALID;
     }
-
-    _host_auth_opt.type_flags = RedPeer::HostAuthOptions::HOST_AUTH_OP_NAME;
-
-    Platform::get_app_data_dir(_host_auth_opt.CA_file, app_name);
-    Platform::path_append(_host_auth_opt.CA_file, CA_FILE_NAME);
 
     parser.begin(argc, argv);
 
@@ -1891,6 +1962,21 @@ bool Application::process_cmd_line(int argc, char** argv)
             break;
         case SPICE_OPT_UNSECURE_CHANNELS:
             if (!set_channels_security(parser, false, val, argv[0])) {
+                return false;
+            }
+            break;
+        case SPICE_OPT_TLS_CIPHERS:
+            if (!set_connection_ciphers(val, argv[0])) {
+                return false;
+            }
+            break;
+        case SPICE_OPT_CA_FILE:
+            if (!set_ca_file(val, argv[0])) {
+                return false;
+            }
+            break;
+        case SPICE_OPT_HOST_SUBJECT:
+            if (!set_host_cert_subject(val, argv[0])) {
                 return false;
             }
             break;

@@ -72,11 +72,13 @@ public:
         };
 
         ConnectionOptions(Type in_type, int in_port, int in_sport,
-                          const HostAuthOptions& in_host_auth)
+                          const HostAuthOptions& in_host_auth,
+                          const std::string& in_ciphers)
             : type (in_type)
             , unsecure_port (in_port)
             , secure_port (in_sport)
             , host_auth (in_host_auth)
+            , ciphers (in_ciphers)
         {
         }
 
@@ -97,6 +99,7 @@ public:
         int unsecure_port;
         int secure_port;
         HostAuthOptions host_auth; // for secure connection
+        std::string ciphers;
     };
 
     void connect_unsecure(const char* host, int port);
