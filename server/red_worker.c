@@ -1266,6 +1266,11 @@ static void red_pipe_clear_device_resources(RedChannel *channel)
             channel->pipe_size--;
             break;
         }
+
+        if (!item) {
+            // the released item was the head of the pipe
+            item = (PipeItem *)ring;
+        }
     }
 }
 
