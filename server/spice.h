@@ -22,9 +22,6 @@
 #include "vd_interface.h"
 
 /* old interface */
-extern const char *spice_usage_str[];
-
-int spice_parse_args(const char *args);
 void spice_init(CoreInterface *core);
 
 /* new interface */
