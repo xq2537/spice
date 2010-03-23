@@ -266,34 +266,6 @@ struct MigrationInterface {
     int (*begin_hook)(MigrationInterface *mig, VDObjectRef notifier);
 };
 
-#define VD_INTERFACE_QTERM "qemu_terminal"
-#define VD_INTERFACE_QTERM_MAJOR 1
-#define VD_INTERFACE_QTERM_MINOR 1
-typedef struct QTermInterface QTermInterface;
-
-struct QTermInterface {
-    VDInterface base;
-
-    VDObjectRef (*add_action_command_handler)(QTermInterface *term, const char *module_name,
-                                              const char *name,
-                                              const char *args_type,
-                                              void *handler,
-                                              const char *params,
-                                              const char *help);
-    void (*remove_action_command_handler)(QTermInterface *term, VDObjectRef obj);
-
-    VDObjectRef (*add_info_command_handler)(QTermInterface *term, const char *module_name,
-                                            const char *name,
-                                            void *handler,
-                                            const char *help);
-    void (*remove_info_command_handler)(QTermInterface *term, VDObjectRef obj);
-};
-
-#define VD_INTERFACE_QTERM2 "qemu_terminal_2"
-#define VD_INTERFACE_QTERM2_MAJOR 1
-#define VD_INTERFACE_QTERM2_MINOR 0
-typedef struct QTerm2Interface QTerm2Interface;
-
 enum VDIArgType{
     ARG_TYPE_INVALID,
     ARG_TYPE_INT,
@@ -316,28 +288,6 @@ typedef struct VDICmdArg {
 
 typedef void (*VDICmdHandler)(const VDICmdArg* args);
 typedef void (*VDIInfoCmdHandler)(void);
-
-struct QTerm2Interface {
-    VDInterface base;
-
-    VDObjectRef (*add_action_command_handler)(QTerm2Interface *term,
-                                              const char *module_name,
-                                              const char *command_name,
-                                              const VDIArgDescriptor *args_type,
-                                              VDICmdHandler handler,
-                                              const char *params_text,
-                                              const char *help_text);
-
-    void (*remove_action_command_handler)(QTerm2Interface *term, VDObjectRef obj);
-
-    VDObjectRef (*add_info_command_handler)(QTerm2Interface *term,
-                                            const char *module_name,
-                                            const char *command_name,
-                                            VDIInfoCmdHandler handler,
-                                            const char *help_text);
-
-    void (*remove_info_command_handler)(QTerm2Interface *term, VDObjectRef obj);
-};
 
 #define VD_INTERFACE_PLAYBACK "playback"
 #define VD_INTERFACE_PLAYBACK_MAJOR 1
