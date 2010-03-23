@@ -3728,16 +3728,6 @@ static void reds_do_set_playback_compression_2(const VDICmdArg *args)
     reds_do_set_playback_compression(args[0].string_val);
 }
 
-static void set_all_channels_security(uint32_t security)
-{
-    while (channels_security) {
-        ChannelSecurityOptions *temp = channels_security;
-        channels_security = channels_security->next;
-        free(temp);
-    }
-    default_channel_security = security;
-}
-
 static void set_one_channel_security(int id, uint32_t security)
 {
     ChannelSecurityOptions *security_options;
@@ -5197,17 +5187,32 @@ spice_image_compression_t spice_server_get_image_compression(SpiceServer *s)
     return image_compression;
 }
 
-int spice_server_set_channel_security(SpiceServer *s,
-                                      spice_channel_name_t channel,
-                                      int security)
+int spice_server_set_channel_security(SpiceServer *s, const char *channel, int security)
 {
+    static const char *names[] = {
+        [ SPICE_CHANNEL_MAIN     ] = "main",
+        [ SPICE_CHANNEL_DISPLAY  ] = "display",
+        [ SPICE_CHANNEL_INPUTS   ] = "inputs",
+        [ SPICE_CHANNEL_CURSOR   ] = "cursor",
+        [ SPICE_CHANNEL_PLAYBACK ] = "playback",
+        [ SPICE_CHANNEL_RECORD   ] = "record",
+        [ SPICE_CHANNEL_TUNNEL   ] = "tunnel",
+    };
+    int i;
+
     ASSERT(reds == s);
-    if (channel == SPICE_CHANNEL_NAME_ALL) {
-        set_all_channels_security(security);
-    } else {
-        set_one_channel_security(channel, security);
+
+    if (channel == NULL) {
+        default_channel_security = security;
+        return 0;
     }
-    return 0;
+    for (i = 0; i < SPICE_N_ELEMENTS(names); i++) {
+        if (names[i] && strcmp(names[i], channel) == 0) {
+            set_one_channel_security(i, security);
+            return 0;
+        }
+    }
+    return -1;
 }
 
 int spice_server_set_mouse_absolute(SpiceServer *s, int absolute)

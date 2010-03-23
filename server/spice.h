@@ -61,24 +61,10 @@ int spice_server_set_image_compression(SpiceServer *s,
                                        spice_image_compression_t comp);
 spice_image_compression_t spice_server_get_image_compression(SpiceServer *s);
 
-typedef enum {
-    SPICE_CHANNEL_NAME_INVALID  = 0,
-    SPICE_CHANNEL_NAME_MAIN     = 1,
-    SPICE_CHANNEL_NAME_DISPLAY,
-    SPICE_CHANNEL_NAME_INPUTS,
-    SPICE_CHANNEL_NAME_CURSOR,
-    SPICE_CHANNEL_NAME_PLAYBACK,
-    SPICE_CHANNEL_NAME_RECORD,
-    SPICE_CHANNEL_NAME_TUNNEL,
-    SPICE_CHANNEL_NAME_ALL      = 999,
-} spice_channel_name_t;
-
 #define SPICE_CHANNEL_SECURITY_NONE (1 << 0)
 #define SPICE_CHANNEL_SECURITY_SSL (1 << 1)
 
-int spice_server_set_channel_security(SpiceServer *s,
-                                      spice_channel_name_t channel,
-                                      int security);
+int spice_server_set_channel_security(SpiceServer *s, const char *channel, int security);
 
 int spice_server_set_mouse_absolute(SpiceServer *s, int absolute);
 
