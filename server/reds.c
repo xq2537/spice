@@ -372,16 +372,6 @@ static int default_channel_security =
 
 static RedSSLParameters ssl_parameters;
 
-
-void (*log_proc)(CoreInterface *core, LogLevel level, const char* component,
-                 const char* format, ...) = NULL;
-
-#define LOG_MESSAGE(level, format, ...) {                           \
-    if (log_proc) {                                                 \
-        log_proc(core, level, "spice", format, ## __VA_ARGS__ );    \
-    }                                                               \
-}
-
 static int args_is_empty(const VDICmdArg* args)
 {
     return !args || args[0].descriptor.type == ARG_TYPE_INVALID;
@@ -748,7 +738,6 @@ static void reds_disconnect()
     }
 
     red_printf("");
-    LOG_MESSAGE(VD_LOG_INFO, "user disconnected");
     reds->disconnecting = TRUE;
     reds_reset_outgoing();
 
@@ -1042,12 +1031,9 @@ static void do_ping_client(const char *opt, int has_interval, int interval)
             reds->ping_interval = interval * 1000;
         }
         core->arm_timer(core, reds->ping_timer, reds->ping_interval);
-        core->term_printf(core, "ping on, interval %u s\n", reds->ping_interval / 1000);
     } else if (!strcmp(opt, "off")) {
         core->disarm_timer(core, reds->ping_timer);
-        core->term_printf(core, "ping off\n");
     } else {
-        core->term_printf(core, "ping invalid option: %s\n", opt);
         return;
     }
 }
@@ -1061,13 +1047,6 @@ static void ping_timer_cb()
     }
     do_ping_client(NULL, 0, 0);
     core->arm_timer(core, reds->ping_timer, reds->ping_interval);
-}
-
-static void do_info_rtt_client()
-{
-    core->term_printf(core, "rtt=%uus, min/max/avg=%u/%u/%uus\n", reds->roundtrip_stat.value,
-                      reds->roundtrip_stat.min, reds->roundtrip_stat.max,
-                      reds->roundtrip_stat.average);
 }
 
 #endif
@@ -1831,7 +1810,6 @@ static void reds_main_handle_message(void *opaque, SpiceDataHeader *message)
         }
 #ifdef RED_STATISTICS
         reds_update_stat_value(&reds->roundtrip_stat, roundtrip);
-        do_info_rtt_client();
 #endif
         break;
     }
@@ -2069,11 +2047,6 @@ static void reds_handle_main_link(RedLinkInfo *link)
     reds->mig_wait_disconnect = FALSE;
     reds->peer = link->peer;
     reds->in_handler.shut = FALSE;
-    if (reds->mig_target) {
-        LOG_MESSAGE(VD_LOG_INFO, "migrate connection");
-    } else {
-        LOG_MESSAGE(VD_LOG_INFO, "new user connection");
-    }
 
     reds_show_new_channel(link);
     __reds_release_link(link);
@@ -2510,9 +2483,12 @@ static void reds_handle_other_links(RedLinkInfo *link)
         char *mess = "keybord channel is unsecure";
         const int mess_len = strlen(mess);
 
-        LOG_MESSAGE(VD_LOG_WARN, "%s", mess);
+        if (!(item = new_simple_out_item(SPICE_MSG_NOTIFY, sizeof(SpiceMsgNotify) + mess_len + 1))) {
+            red_printf("alloc item failed");
+            reds_disconnect();
+            return;
+        }
 
-        item = new_simple_out_item(SPICE_MSG_NOTIFY, sizeof(SpiceMsgNotify) + mess_len + 1);
         notify = (SpiceMsgNotify *)item->data;
         notify->time_stamp = get_time_stamp();
         notify->severty = SPICE_NOTIFY_SEVERITY_WARN;
@@ -2558,7 +2534,6 @@ static void reds_handle_ticket(void *opaque)
 
         if (expired || strncmp(password, actual_sever_pass, SPICE_MAX_PASSWORD_LENGTH) != 0) {
             reds_send_link_result(link, SPICE_LINK_ERR_PERMISSION_DENIED);
-            LOG_MESSAGE(VD_LOG_WARN, "bad connection password or time expired");
             reds_release_link(link);
             return;
         }
@@ -2645,13 +2620,9 @@ static void reds_handle_read_link_done(void *opaque)
 
     if (!reds_security_check(link)) {
         if (link->peer->ssl) {
-            LOG_MESSAGE(VD_LOG_INFO, "channels of type %d should connect only over "
-                                     "a non secure link", link_mess->channel_type);
             red_printf("spice channels %d should not be encrypted", link_mess->channel_type);
             reds_send_link_error(link, SPICE_LINK_ERR_NEED_UNSECURED);
         } else {
-            LOG_MESSAGE(VD_LOG_INFO, "channels of type %d should connect only over "
-                                     "a secure link", link_mess->channel_type);
             red_printf("spice channels %d should be encrypted", link_mess->channel_type);
             reds_send_link_error(link, SPICE_LINK_ERR_NEED_SECURED);
         }
@@ -2692,7 +2663,6 @@ static void reds_handle_read_header_done(void *opaque)
 
     if (header->magic != SPICE_MAGIC) {
         reds_send_link_error(link, SPICE_LINK_ERR_INVALID_MAGIC);
-        LOG_MESSAGE(VD_LOG_ERROR, "bad magic %u", header->magic);
         reds_release_link(link);
         return;
     }
@@ -2701,11 +2671,6 @@ static void reds_handle_read_header_done(void *opaque)
         if (header->major_version > 0) {
             reds_send_link_error(link, SPICE_LINK_ERR_VERSION_MISMATCH);
         }
-        LOG_MESSAGE(VD_LOG_INFO, "version mismatch client %u.%u server %u.%u",
-                    header->major_version,
-                    header->minor_version,
-                    SPICE_VERSION_MAJOR,
-                    SPICE_VERSION_MINOR);
 
         red_printf("version mismatch");
         reds_release_link(link);
@@ -4280,9 +4245,6 @@ static void do_spice_init(CoreInterface *core_interface)
         red_error("bad core interface version");
     }
     core = core_interface;
-    if (core_interface->base.minor_version > 1) {
-        log_proc = core->log;
-    }
     reds->listen_socket = -1;
     reds->secure_listen_socket = -1;
     reds->peer = NULL;

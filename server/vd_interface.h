@@ -80,10 +80,6 @@ struct CoreInterface {
                              void (*on_read)(void *),
                              void (*on_write)(void *),
                              void *opaque);
-
-    void (*term_printf)(CoreInterface *core, const char* str, ...);
-    void (*log)(CoreInterface *core, LogLevel level, const char* component,
-                const char* format, ...);
 };
 
 #define VD_INTERFACE_QXL "qxl"
