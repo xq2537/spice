@@ -4987,10 +4987,6 @@ static void do_spice_init(CoreInterface *core_interface)
         red_error("key modifiers timer create failed");
     }
 
-    if (core->register_change_notifiers) {
-        core->register_change_notifiers(core, &reds, interface_change_notifier);
-    }
-
 #ifdef RED_STATISTICS
     int shm_name_len = strlen(SPICE_STAT_SHM_NAME) + 20;
     int fd;

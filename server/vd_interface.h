@@ -71,10 +71,6 @@ typedef void (*timer_callback_t)(void *opaque);
 struct CoreInterface {
     VDInterface base;
 
-    VDObjectRef (*register_change_notifiers)(CoreInterface *core, void *opaque,
-                                             vd_interface_change_notifier_t in_notifier);
-    void (*unregister_change_notifiers)(CoreInterface *core, VDObjectRef notifier);
-
     VDObjectRef (*create_timer)(CoreInterface *core, timer_callback_t, void *opaue);
     void (*arm_timer)(CoreInterface *core, VDObjectRef timer, uint32_t ms);
     void (*disarm_timer)(CoreInterface *core, VDObjectRef timer);
