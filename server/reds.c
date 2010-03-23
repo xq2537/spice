@@ -4958,8 +4958,6 @@ const char *version_string = VERSION;
 
 static void do_spice_init(CoreInterface *core_interface)
 {
-    VDInterface *interface = NULL;
-
     red_printf("starting %s", version_string);
 
     if (core_interface->base.base_version != VM_INTERFACE_VERSION) {
@@ -4989,11 +4987,6 @@ static void do_spice_init(CoreInterface *core_interface)
         red_error("key modifiers timer create failed");
     }
 
-    if (core->next) {
-        while ((interface = core->next(core, interface))) {
-            interface_change_notifier(&reds, interface, VD_INTERFACE_ADDING);
-        }
-    }
     if (core->register_change_notifiers) {
         core->register_change_notifiers(core, &reds, interface_change_notifier);
     }
