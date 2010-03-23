@@ -41,7 +41,7 @@ Controller::Controller(ControllerInterface *handler)
 {
     char pipe_name[PIPE_NAME_MAX_LEN];
 
-    ASSERT(_handler != NULL);
+    ASSERT(_handler);
     snprintf(pipe_name, PIPE_NAME_MAX_LEN, PIPE_NAME, Platform::get_process_id());
     LOG_INFO("Creating a controller connection %s", pipe_name);
     _pipe = NamedPipe::create(pipe_name, *this);
@@ -52,9 +52,9 @@ Controller::Controller(ControllerInterface *handler)
 
 Controller::~Controller()
 {
-    _handler = NULL;
     std::map<NamedPipe::ConnectionRef, ControllerConnection*>::const_iterator conn;
     for (conn = _connections.begin(); conn != _connections.end(); ++conn) {
+        conn->second->reset_handler();
         delete conn->second;
     }
     if (_pipe) {
@@ -131,8 +131,9 @@ ControllerConnection::~ControllerConnection()
     if (_opaque != NamedPipe::INVALID_CONNECTION) {
         NamedPipe::destroy_connection(_opaque);
     }
-    if (_parent.handler_attached()) {
-        _handler->delete_controller(_opaque);
+    if (_handler) {
+        _handler->clear_menu_items(_opaque);
+        _handler->delete_menu();
     }
 }
 
@@ -159,7 +160,7 @@ bool ControllerConnection::read_msgs()
     size_t nread = _read_pos - _read_buf;
     int32_t size;
 
-    ASSERT(_handler != NULL);
+    ASSERT(_handler);
     ASSERT(_opaque != NamedPipe::INVALID_CONNECTION);
     size = NamedPipe::read(_opaque, (uint8_t*)_read_pos, sizeof(_read_buf) - nread);
     if (size == 0) {
@@ -215,18 +216,24 @@ bool ControllerConnection::read_msgs()
 
 bool ControllerConnection::write_msg(const void *buf, int len)
 {
+    RecurciveLock lock(_write_lock);
     uint8_t *pos;
     int32_t written = 0;
 
     ASSERT(_opaque != NamedPipe::INVALID_CONNECTION);
     if (_write_pending && buf != _write_pos) {
-        if (_write_pending + len > sizeof(_write_buf)) {
-            DBG(0, "Dropping msg due to pending write %d", _write_pending);
+        if ((_write_pos + _write_pending + len > _write_buf + sizeof(_write_buf)) &&
+                                              !write_msg(_write_pos, _write_pending)) {
             return false;
         }
-        memcpy(_write_buf + _write_pending, buf, len);
-        _write_pending += len;
-        return true;
+        if (_write_pending) {
+            if (_write_pos + _write_pending + len > _write_buf + sizeof(_write_buf)) {
+                DBG(0, "Dropping message, due to insufficient space in write buffer");
+                return true;
+            }
+            memcpy(_write_pos + _write_pending, buf, len);
+            _write_pending += len;
+        }
     }
     pos = (uint8_t*)buf;
     while (len && (written = NamedPipe::write(_opaque, pos, len)) > 0) {
@@ -253,6 +260,7 @@ bool ControllerConnection::write_msg(const void *buf, int len)
 
 bool ControllerConnection::handle_init(ControllerInit *init)
 {
+    ASSERT(_handler);
     if (init->credentials != 0) {
         LOG_ERROR("Controller menu has wrong credentials 0x%x", init->credentials);
         return false;
@@ -260,7 +268,6 @@ bool ControllerConnection::handle_init(ControllerInit *init)
     if (!_parent.set_exclusive(init->flags & CONTROLLER_FLAG_EXCLUSIVE)) {
         return false;
     }
-    _handler->add_controller(_opaque);
     return true;
 }
 
@@ -269,6 +276,7 @@ bool ControllerConnection::handle_message(ControllerMsg *hdr)
     uint32_t value = ((ControllerValue*)hdr)->value;
     char *data = (char*)((ControllerData*)hdr)->data;
 
+    ASSERT(_handler);
     switch (hdr->id) {
     case CONTROLLER_HOST:
         _host.assign(data);
@@ -285,6 +293,12 @@ bool ControllerConnection::handle_message(ControllerMsg *hdr)
     case CONTROLLER_SECURE_CHANNELS:
     case CONTROLLER_DISABLE_CHANNELS:
         return set_multi_val(hdr->id, data);
+    case CONTROLLER_TLS_CIPHERS:
+        return _handler->set_connection_ciphers(data, "Controller");
+    case CONTROLLER_CA_FILE:
+        return _handler->set_ca_file(data, "Controller");
+    case CONTROLLER_HOST_SUBJECT:
+        return _handler->set_host_cert_subject(data, "Controller");
     case CONTROLLER_FULL_SCREEN:
         _full_screen = !!(value & CONTROLLER_SET_FULL_SCREEN);
         _auto_display_res = !!(value & CONTROLLER_AUTO_DISPLAY_RES);
@@ -342,6 +356,7 @@ bool ControllerConnection::create_menu(wchar_t* resource)
     int state;
     int id;
 
+    ASSERT(_handler);
     AutoRef<Menu> app_menu(_handler->get_app_menu());
     AutoRef<Menu> menu(new Menu((*app_menu)->get_target(), ""));
     wchar_t* item = next_tok(resource, CONTROLLER_MENU_ITEM_DELIMITER, &item_state);
@@ -406,6 +421,7 @@ bool ControllerConnection::set_multi_val(uint32_t op, char* multi_val)
     char* argv[] = {NULL, (char*)"--set", multi_val};
     char* val;
 
+    ASSERT(_handler);
     parser.add(id, "set", "none", "none", true);
     parser.set_multi(id, ',');
     parser.begin(3, argv);

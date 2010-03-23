@@ -51,9 +51,9 @@ ForeignMenu::ForeignMenu(ForeignMenuInterface *handler)
 
 ForeignMenu::~ForeignMenu()
 {
-    _handler = NULL;
     std::map<NamedPipe::ConnectionRef, ForeignMenuConnection*>::const_iterator conn;
     for (conn = _connections.begin(); conn != _connections.end(); ++conn) {
+        conn->second->reset_handler();
         delete conn->second;
     }
     if (_foreign_menu) {
@@ -85,6 +85,14 @@ void ForeignMenu::remove_connection(NamedPipe::ConnectionRef conn_ref)
     ForeignMenuConnection *conn = _connections[conn_ref];
     _connections.erase(conn_ref);
     delete conn;
+}
+
+void ForeignMenu::add_sub_menus()
+{
+    std::map<NamedPipe::ConnectionRef, ForeignMenuConnection*>::const_iterator conn;
+    for (conn = _connections.begin(); conn != _connections.end(); ++conn) {
+        conn->second->add_sub_menu();
+    }
 }
 
 void ForeignMenu::on_command(NamedPipe::ConnectionRef conn_ref, int32_t id)
@@ -144,8 +152,11 @@ ForeignMenuConnection::~ForeignMenuConnection()
     if (_opaque != NamedPipe::INVALID_CONNECTION) {
         NamedPipe::destroy_connection(_opaque);
     }
-    if (_parent.handler_attached()) {
-        _handler->delete_foreign_menu(_opaque, _sub_menu);
+    if (_handler) {
+        AutoRef<Menu> app_menu(_handler->get_app_menu());
+        (*app_menu)->remove_sub(_sub_menu);
+        _handler->update_menu();
+        _handler->clear_menu_items(_opaque);
     }
     if (_sub_menu) {
         _sub_menu->unref();
@@ -175,7 +186,7 @@ bool ForeignMenuConnection::read_msgs()
     size_t nread = _read_pos - _read_buf;
     int32_t size;
 
-    ASSERT(_handler != NULL);
+    ASSERT(_handler);
     ASSERT(_opaque != NamedPipe::INVALID_CONNECTION);
     size = NamedPipe::read(_opaque, (uint8_t*)_read_pos, sizeof(_read_buf) - nread);
     if (size == 0) {
@@ -231,18 +242,24 @@ bool ForeignMenuConnection::read_msgs()
 
 bool ForeignMenuConnection::write_msg(const void *buf, int len)
 {
+    RecurciveLock lock(_write_lock);
     uint8_t *pos;
     int32_t written = 0;
 
     ASSERT(_opaque != NamedPipe::INVALID_CONNECTION);
     if (_write_pending && buf != _write_pos) {
-        if (_write_pending + len > sizeof(_write_buf)) {
-            DBG(0, "Dropping msg due to pending write %d", _write_pending);
+        if ((_write_pos + _write_pending + len > _write_buf + sizeof(_write_buf)) &&
+                                              !write_msg(_write_pos, _write_pending)) {
             return false;
         }
-        memcpy(_write_buf + _write_pending, buf, len);
-        _write_pending += len;
-        return true;
+        if (_write_pending) {
+            if (_write_pos + _write_pending + len > _write_buf + sizeof(_write_buf)) {
+                DBG(0, "Dropping message, due to insufficient space in write buffer");
+                return true;
+            }
+            memcpy(_write_pos + _write_pending, buf, len);
+            _write_pending += len;
+        }
     }
     pos = (uint8_t*)buf;
     while (len && (written = NamedPipe::write(_opaque, pos, len)) > 0) {
@@ -271,6 +288,7 @@ bool ForeignMenuConnection::handle_init(FrgMenuInit *init)
 {
     std::string title = "Untitled";
 
+    ASSERT(_handler);
     if (_sub_menu) {
         LOG_ERROR("Foreign menu already initialized");
         return false;
@@ -284,13 +302,23 @@ bool ForeignMenuConnection::handle_init(FrgMenuInit *init)
         title = (char*)init->title;
     }
     _sub_menu = new Menu((CommandTarget&)*_handler, title);
-    _handler->add_foreign_menu(_opaque, _sub_menu);
+    add_sub_menu();
+    _handler->update_menu();
     return true;
+}
+
+void ForeignMenuConnection::add_sub_menu()
+{
+    if (_sub_menu) {
+        AutoRef<Menu> app_menu(_handler->get_app_menu());
+        (*app_menu)->add_sub(_sub_menu);
+    }
 }
 
 bool ForeignMenuConnection::handle_message(FrgMenuMsg *hdr)
 {
     ASSERT(_sub_menu);
+    ASSERT(_handler);
     switch (hdr->id) {
     case FOREIGN_MENU_SET_TITLE:
         ((char*)hdr)[hdr->size - 1] = '\0';
@@ -306,10 +334,12 @@ bool ForeignMenuConnection::handle_message(FrgMenuMsg *hdr)
     case FOREIGN_MENU_REMOVE_ITEM: {
         int id = _handler->get_foreign_menu_item_id(_opaque, ((FrgMenuRmItem*)hdr)->id);
         _sub_menu->remove_command(id);
+        _handler->remove_menu_item(id);
         break;
     }
     case FOREIGN_MENU_CLEAR:
         _sub_menu->clear();
+        _handler->clear_menu_items(_opaque);
         break;
     case FOREIGN_MENU_MODIFY_ITEM:
     default:

@@ -298,13 +298,9 @@ enum AppCommands {
     APP_CMD_CONNECT,
     APP_CMD_DISCONNECT,
 #endif
-    APP_CMD_FOREIGN_MENU_MASK = 0x01000000,
-    APP_CMD_CONTROLLER_MENU_MASK = 0x02000000,
+    APP_CMD_EXTERNAL_BEGIN = 0x400,
+    APP_CMD_EXTERNAL_END = 0x800,
 };
-
-#define MENU_ID_MASK    0x000000ff
-#define MENU_CONN_MASK  0x0000ffff
-#define MENU_CONN_SHIFT 8
 
 Application::Application()
     : ProcessLoop (this)
@@ -821,35 +817,56 @@ void Application::do_command(int command)
         break;
 #endif
     default:
-        int32_t conn_ref = _pipe_connections[(command >> MENU_CONN_SHIFT) & MENU_CONN_MASK];
-        if ((command & APP_CMD_FOREIGN_MENU_MASK) == APP_CMD_FOREIGN_MENU_MASK) {
+        AppMenuItemMap::iterator iter = _app_menu_items.find(command);
+        ASSERT(iter != _app_menu_items.end());
+        AppMenuItem* item = &(*iter).second;
+        if (item->type == APP_MENU_ITEM_TYPE_FOREIGN) {
             ASSERT(*_foreign_menu);
-            (*_foreign_menu)->on_command(conn_ref, command & MENU_ID_MASK);
-        } else if ((command & APP_CMD_CONTROLLER_MENU_MASK) == APP_CMD_CONTROLLER_MENU_MASK) {
+            (*_foreign_menu)->on_command(item->conn_ref, item->ext_id);
+        } else if (item->type == APP_MENU_ITEM_TYPE_CONTROLLER) {
             ASSERT(*_controller);
-            (*_controller)->on_command(conn_ref, command & MENU_ID_MASK);
+            (*_controller)->on_command(item->conn_ref, item->ext_id);
         }
     }
 }
 
-void Application::add_foreign_menu(int32_t opaque_conn_ref, Menu* sub_menu)
+int Application::get_menu_item_id(AppMenuItemType type, int32_t conn_ref, uint32_t ext_id)
 {
-    _pipe_connections[opaque_conn_ref & MENU_CONN_MASK] = opaque_conn_ref;
-    (*_app_menu)->add_sub(sub_menu);
-    update_menu();
+    int free_id = APP_CMD_EXTERNAL_BEGIN;
+    AppMenuItem item = {type, conn_ref, ext_id};
+    AppMenuItemMap::iterator iter = _app_menu_items.begin();
+    for (; iter != _app_menu_items.end(); iter++) {
+        if (!memcmp(&(*iter).second, &item, sizeof(item))) {
+            return (*iter).first;
+        } else if (free_id == (*iter).first && ++free_id > APP_CMD_EXTERNAL_END) {
+            return APP_CMD_INVALID;
+        }
+    }
+    _app_menu_items[free_id] = item;
+    return free_id;
 }
 
-void Application::delete_foreign_menu(int32_t opaque_conn_ref, Menu* sub_menu)
+void Application::clear_menu_items(int32_t opaque_conn_ref)
 {
-    _pipe_connections.erase(opaque_conn_ref & MENU_CONN_MASK);
-    (*_app_menu)->remove_sub(sub_menu);
-    update_menu();
+    AppMenuItemMap::iterator iter = _app_menu_items.begin();
+    AppMenuItemMap::iterator curr;
+
+    while (iter != _app_menu_items.end()) {
+        curr = iter++;
+        if (((*curr).second).conn_ref == opaque_conn_ref) {
+            _app_menu_items.erase(curr);
+        }
+    }
+}
+
+void Application::remove_menu_item(int item_id)
+{
+    _app_menu_items.erase(item_id);
 }
 
 int Application::get_foreign_menu_item_id(int32_t opaque_conn_ref, uint32_t msg_id)
 {
-    return APP_CMD_FOREIGN_MENU_MASK | ((opaque_conn_ref & MENU_CONN_MASK) << MENU_CONN_SHIFT) |
-           (msg_id & MENU_ID_MASK);
+    return get_menu_item_id(APP_MENU_ITEM_TYPE_FOREIGN, opaque_conn_ref, msg_id);
 }
 
 void Application::update_menu()
@@ -859,17 +876,6 @@ void Application::update_menu()
             _screens[i]->update_menu();
         }
     }
-}
-
-void Application::add_controller(int32_t opaque_conn_ref)
-{
-    _pipe_connections[opaque_conn_ref & MENU_CONN_MASK] = opaque_conn_ref;
-}
-
-void Application::delete_controller(int32_t opaque_conn_ref)
-{
-    _pipe_connections.erase(opaque_conn_ref & MENU_CONN_MASK);
-    delete_menu();
 }
 
 bool Application::connect(const std::string& host, int port, int sport, const std::string& password)
@@ -914,20 +920,25 @@ void Application::set_hotkeys(const std::string& hotkeys)
 
 int Application::get_controller_menu_item_id(int32_t opaque_conn_ref, uint32_t msg_id)
 {
-    return APP_CMD_CONTROLLER_MENU_MASK | ((opaque_conn_ref & MENU_CONN_MASK) << MENU_CONN_SHIFT) |
-           (msg_id & MENU_ID_MASK);
+    return get_menu_item_id(APP_MENU_ITEM_TYPE_CONTROLLER, opaque_conn_ref, msg_id);
 }
 
 void Application::set_menu(Menu* menu)
 {
-    _app_menu.reset(menu->ref());
+    if (menu) {
+        _app_menu.reset(menu->ref());
+    } else {
+        init_menu();
+    }
+    if (*_foreign_menu) {
+        (*_foreign_menu)->add_sub_menus();
+    }
     update_menu();
 }
 
 void Application::delete_menu()
 {
-    init_menu();
-    update_menu();
+    set_menu(NULL);
 }
 
 #ifdef REDKEY_DEBUG

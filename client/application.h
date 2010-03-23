@@ -128,6 +128,20 @@ public:
     virtual void response(AbstractProcessLoop& events_loop);
 };
 
+enum AppMenuItemType {
+    APP_MENU_ITEM_TYPE_INVALID,
+    APP_MENU_ITEM_TYPE_FOREIGN,
+    APP_MENU_ITEM_TYPE_CONTROLLER,
+};
+
+typedef struct AppMenuItem {
+    AppMenuItemType type;
+    int32_t conn_ref;
+    uint32_t ext_id;
+} AppMenuItem;
+
+typedef std::map<int, AppMenuItem> AppMenuItemMap;
+
 class Application : public ProcessLoop,
                     public Platform::EventListener,
                     public Platform::DisplayModeListner,
@@ -186,13 +200,11 @@ public:
     Menu* get_app_menu();
     virtual void do_command(int command);
 
-    void add_foreign_menu(int32_t opaque_conn_ref, Menu* sub_menu);
-    void delete_foreign_menu(int32_t opaque_conn_ref, Menu* sub_menu);
     int get_foreign_menu_item_id(int32_t opaque_conn_ref, uint32_t msg_id);
+    void clear_menu_items(int32_t opaque_conn_ref);
+    void remove_menu_item(int item_id);
     void update_menu();
 
-    void add_controller(int32_t opaque_conn_ref);
-    void delete_controller(int32_t opaque_conn_ref);
     bool connect(const std::string& host, int port, int sport, const std::string& password);
     void show_me(bool full_screen, bool auto_display_res);
     void hide_me();
@@ -244,6 +256,7 @@ private:
     void send_command_hotkey(int command);
     void send_hotkey_key_set(const HotkeySet& key_set);
     void menu_item_callback(unsigned int item_id);
+    int get_menu_item_id(AppMenuItemType type, int32_t conn_ref, uint32_t ext_id);
     int get_hotkeys_commnad();
     bool is_key_set_pressed(const HotkeySet& key_set);
     bool is_cad_pressed();
@@ -298,7 +311,7 @@ private:
     AutoRef<ForeignMenu> _foreign_menu;
     bool _enable_controller;
     AutoRef<Controller> _controller;
-    std::map<int32_t, int32_t> _pipe_connections;
+    AppMenuItemMap _app_menu_items;
 };
 
 #endif

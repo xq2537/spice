@@ -29,9 +29,10 @@ class ForeignMenuInterface : public CommandTarget {
 public:
     virtual ~ForeignMenuInterface() {}
 
-    virtual void add_foreign_menu(int32_t opaque_conn_ref, Menu* sub_menu) = 0;
-    virtual void delete_foreign_menu(int32_t opaque_conn_ref, Menu* sub_menu) = 0;
     virtual int get_foreign_menu_item_id(int32_t opaque_conn_ref, uint32_t msg_id) = 0;
+    virtual void clear_menu_items(int32_t opaque_conn_ref) = 0;
+    virtual void remove_menu_item(int item_id) = 0;
+    virtual Menu* get_app_menu() = 0;
     virtual void update_menu() = 0;
 };
 
@@ -40,13 +41,13 @@ public:
     ForeignMenu(ForeignMenuInterface *handler);
     virtual ~ForeignMenu();
 
-    bool handler_attached() { return !!_handler;}
     ForeignMenu* ref() { _refs++; return this;}
     void unref() { if (!--_refs) delete this;}
 
     virtual NamedPipe::ConnectionInterface &create();
     void add_connection(NamedPipe::ConnectionRef conn_ref, ForeignMenuConnection *conn);
     void remove_connection(NamedPipe::ConnectionRef conn_ref);
+    void add_sub_menus();
     void on_command(NamedPipe::ConnectionRef conn_ref, int32_t id);
     void on_activate();
     void on_deactivate();
@@ -68,9 +69,12 @@ class ForeignMenuConnection : public NamedPipe::ConnectionInterface {
 public:
     ForeignMenuConnection(ForeignMenuInterface *handler, ForeignMenu& parent);
     virtual ~ForeignMenuConnection();
+
     virtual void bind(NamedPipe::ConnectionRef conn_ref);
     virtual void on_data();
     bool write_msg(const void *buf, int len);
+    void reset_handler() { _handler = NULL;}
+    void add_sub_menu();
 
 private:
     bool read_msgs();
@@ -88,6 +92,7 @@ private:
     uint8_t *_read_pos;
     uint8_t _write_buf[FOREIGN_MENU_BUF_SIZE];
     uint8_t _read_buf[FOREIGN_MENU_BUF_SIZE];
+    RecurciveMutex _write_lock;
 };
 
 #endif

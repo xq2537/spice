@@ -19,6 +19,7 @@
 #define _H_CONTROLLER_MENU
 
 #include "named_pipe.h"
+#include "threads.h"
 
 class ControllerConnection;
 struct ControllerInit;
@@ -30,8 +31,6 @@ class ControllerInterface {
 public:
     virtual ~ControllerInterface() {}
 
-    virtual void add_controller(int32_t opaque_conn_ref) = 0;
-    virtual void delete_controller(int32_t opaque_conn_ref) = 0;
     virtual bool connect(const std::string& host, int port, int sport,
                          const std::string& password) = 0;
     virtual void set_title(const std::wstring& title) = 0;
@@ -41,8 +40,12 @@ public:
                                        const char* arg0) = 0;
     virtual bool set_enable_channels(CmdLineParser& parser, bool enable, char *val,
                                      const char* arg0) = 0;
+    virtual bool set_connection_ciphers(const char* ciphers, const char* arg0) = 0;
+    virtual bool set_ca_file(const char* ca_file, const char* arg0) = 0;
+    virtual bool set_host_cert_subject(const char* subject, const char* arg0) = 0;
     virtual void set_hotkeys(const std::string& hotkeys) = 0;
     virtual int get_controller_menu_item_id(int32_t opaque_conn_ref, uint32_t id) = 0;
+    virtual void clear_menu_items(int32_t opaque_conn_ref) = 0;
     virtual Menu* get_app_menu() = 0;
     virtual void set_menu(Menu* menu) = 0;
     virtual void delete_menu() = 0;
@@ -53,7 +56,6 @@ public:
     Controller(ControllerInterface *handler);
     virtual ~Controller();
 
-    bool handler_attached() { return !!_handler;}
     Controller* ref() { _refs++; return this;}
     void unref() { if (!--_refs) delete this;}
 
@@ -81,6 +83,7 @@ public:
     virtual void bind(NamedPipe::ConnectionRef conn_ref);
     virtual void on_data();
     bool write_msg(const void *buf, int len);
+    void reset_handler() { _handler = NULL;}
 
 private:
     bool read_msgs();
@@ -99,6 +102,7 @@ private:
     uint8_t *_read_pos;
     uint8_t _write_buf[CONTROLLER_BUF_SIZE];
     uint8_t _read_buf[CONTROLLER_BUF_SIZE];
+    RecurciveMutex _write_lock;
 
     std::string _host;
     std::string _password;
