@@ -15,8 +15,7 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define GL_GLEXT_PROTOTYPES
-
+#include "glext_proto.h"
 #include "common.h"
 #include "canvas.h"
 #include "red_pixmap.h"
@@ -25,7 +24,6 @@
 #endif
 #include "debug.h"
 #include "utils.h"
-#include "common.h"
 #include "display_channel.h"
 #include "application.h"
 #include "screen.h"
@@ -34,8 +32,6 @@
 #endif
 #include "red_cairo_canvas.h"
 #include "red_client.h"
-#include "utils.h"
-#include "debug.h"
 #ifdef WIN32
 #include "red_gdi_canvas.h"
 #endif
