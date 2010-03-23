@@ -102,7 +102,7 @@ RED_COMMON_SRCS = 					\
 	$(CLIENT_DIR)/icon.h                        	\
 	$(NULL)
 
-bin_PROGRAMS = spicec
+libexec_PROGRAMS = spicec
 
 spicec_SOURCES =			\
 	atomic_count.h			\
