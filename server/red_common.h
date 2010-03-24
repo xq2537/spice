@@ -79,13 +79,6 @@
 #define CONTAINEROF(ptr, type, member) \
     ((type *)((uint8_t *)(ptr) - OFFSETOF(type, member)))
 
-enum {
-    STREAM_VIDEO_INVALID,
-    STREAM_VIDEO_OFF,
-    STREAM_VIDEO_ALL,
-    STREAM_VIDEO_FILTER
-};
-
 static inline uint64_t get_time_stamp()
 {
     struct timespec time_space;

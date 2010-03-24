@@ -2740,7 +2740,7 @@ static inline void red_update_copy_graduality(RedWorker* worker, Drawable *drawa
     QXLImage *qxl_image;
     ASSERT(drawable->qxl_drawable->type == QXL_DRAW_COPY);
 
-    if (worker->streaming_video != STREAM_VIDEO_FILTER) {
+    if (worker->streaming_video != SPICE_STREAM_VIDEO_FILTER) {
         drawable->copy_bitmap_graduality = BITMAP_GRADUAL_INVALID;
         return;
     }
@@ -2810,7 +2810,7 @@ static inline void red_stream_maintenance(RedWorker *worker, Drawable *candidate
 #else
     if (!worker->streaming_video ||
                         !red_is_next_stream_frame(candidate, prev, worker->dev_info.phys_delta)) {
-    if ((worker->streaming_video == STREAM_VIDEO_OFF) ||
+    if ((worker->streaming_video == SPICE_STREAM_VIDEO_OFF) ||
                          !red_is_next_stream_frame(candidate, prev, worker->dev_info.phys_delta) {
         return;
     }
@@ -3299,7 +3299,7 @@ static inline void red_update_streamable(RedWorker *worker, Drawable *drawable,
 {
     QXLImage *qxl_image;
 
-    if (worker->streaming_video == STREAM_VIDEO_OFF) {
+    if (worker->streaming_video == SPICE_STREAM_VIDEO_OFF) {
         return;
     }
 
@@ -3314,7 +3314,7 @@ static inline void red_update_streamable(RedWorker *worker, Drawable *drawable,
         return;
     }
 
-    if (worker->streaming_video == STREAM_VIDEO_FILTER) {
+    if (worker->streaming_video == SPICE_STREAM_VIDEO_FILTER) {
         Rect* rect;
         int size;
 
@@ -8356,15 +8356,15 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         break;
     case RED_WORKER_MESSAGE_SET_STREAMING_VIDEO:
         receive_data(worker->channel, &worker->streaming_video, sizeof(uint32_t));
-        ASSERT(worker->streaming_video != STREAM_VIDEO_INVALID);
+        ASSERT(worker->streaming_video != SPICE_STREAM_VIDEO_INVALID);
         switch(worker->streaming_video) {
-            case STREAM_VIDEO_ALL:
+            case SPICE_STREAM_VIDEO_ALL:
                 red_printf("sv all");
                 break;
-            case STREAM_VIDEO_FILTER:
+            case SPICE_STREAM_VIDEO_FILTER:
                 red_printf("sv filter");
                 break;
-            case STREAM_VIDEO_OFF:
+            case SPICE_STREAM_VIDEO_OFF:
                 red_printf("sv off");
                 break;
             default:

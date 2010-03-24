@@ -83,7 +83,7 @@ static char *default_renderer = "cairo";
 static int ticketing_enabled = 1; //Ticketing is enabled by default
 static pthread_mutex_t *lock_cs;
 static long *lock_count;
-uint32_t streaming_video = STREAM_VIDEO_FILTER;
+uint32_t streaming_video = SPICE_STREAM_VIDEO_FILTER;
 spice_image_compression_t image_compression = SPICE_IMAGE_COMPRESS_AUTO_GLZ;
 int agent_mouse = TRUE;
 
@@ -3631,16 +3631,16 @@ static void reds_do_info_spice()
     }
 
     switch (streaming_video) {
-        case STREAM_VIDEO_ALL:
+        case SPICE_STREAM_VIDEO_ALL:
             core->term_printf(core, " sv=all");
             break;
-        case STREAM_VIDEO_FILTER:
+        case SPICE_STREAM_VIDEO_FILTER:
             core->term_printf(core, " sv=filter");
             break;
-        case STREAM_VIDEO_OFF:
+        case SPICE_STREAM_VIDEO_OFF:
             core->term_printf(core, " sv=off");
             break;
-        case STREAM_VIDEO_INVALID:
+        case SPICE_STREAM_VIDEO_INVALID:
         default:
             core->term_printf(core, " sv=invalid");
 
@@ -3699,22 +3699,22 @@ static void reds_do_set_image_compression_2(const VDICmdArg *args)
 static int reds_get_streaming_video(const char *val)
 {
     if (strcmp(val, "on") == 0) {
-        return STREAM_VIDEO_FILTER;
+        return SPICE_STREAM_VIDEO_FILTER;
     } else if (strcmp(val, "filter") == 0) {
-        return STREAM_VIDEO_FILTER;
+        return SPICE_STREAM_VIDEO_FILTER;
     } else if (strcmp(val, "all") == 0) {
-        return STREAM_VIDEO_ALL;
+        return SPICE_STREAM_VIDEO_ALL;
     } else if (strcmp(val, "off") == 0){
-        return STREAM_VIDEO_OFF;
+        return SPICE_STREAM_VIDEO_OFF;
     } else {
-        return STREAM_VIDEO_INVALID;
+        return SPICE_STREAM_VIDEO_INVALID;
     }
 }
 
 static void reds_do_set_streaming_video(const char *val)
 {
     uint32_t new_val = reds_get_streaming_video(val);
-    if (new_val == STREAM_VIDEO_INVALID) {
+    if (new_val == SPICE_STREAM_VIDEO_INVALID) {
         core->term_printf(core, "bad streaming video arg\n");
         return;
     }
@@ -4072,7 +4072,7 @@ int __attribute__ ((visibility ("default"))) spice_parse_args(const char *in_arg
                 goto error;
             }
             streaming_video = reds_get_streaming_video(val);
-            if (streaming_video == STREAM_VIDEO_INVALID) {
+            if (streaming_video == SPICE_STREAM_VIDEO_INVALID) {
                 goto error;
             }
             break;

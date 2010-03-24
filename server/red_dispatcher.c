@@ -317,8 +317,8 @@ void red_dispatcher_set_mm_time(uint32_t mm_time)
 
 static inline int calc_compression_level()
 {
-    ASSERT(streaming_video != STREAM_VIDEO_INVALID);
-    if ((streaming_video != STREAM_VIDEO_OFF) ||
+    ASSERT(streaming_video != SPICE_STREAM_VIDEO_INVALID);
+    if ((streaming_video != SPICE_STREAM_VIDEO_OFF) ||
         (image_compression != SPICE_IMAGE_COMPRESS_QUIC)) {
         return 0;
     } else {

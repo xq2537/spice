@@ -91,6 +91,13 @@ int spice_server_add_renderer(SpiceServer *s, const char *name);
 int spice_server_get_sock_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen);
 int spice_server_get_peer_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen);
 
+enum {
+    SPICE_STREAM_VIDEO_INVALID,
+    SPICE_STREAM_VIDEO_OFF,
+    SPICE_STREAM_VIDEO_ALL,
+    SPICE_STREAM_VIDEO_FILTER
+};
+
 /*
  * setting information about the migration destination.
  * For null port use -1.
