@@ -324,7 +324,7 @@ AC_SUBST([SPICEC_STATIC_LINKAGE_BDYNAMIC])
 
 AC_OUTPUT([
 Makefile
-spice.pc
+spice-server.pc
 common/Makefile
 common/linux/ffmpeg_inc.h
 server/Makefile

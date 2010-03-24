@@ -1,7 +1,7 @@
 SUBDIRS = common server client
 
 pkgconfigdir = $(libdir)/pkgconfig
-pkgconfig_DATA = spice.pc
+pkgconfig_DATA = spice-server.pc
 
 DISTCLEANFILES =                                \
-	spice.pc
+	spice-server.pc
