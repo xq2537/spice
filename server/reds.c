@@ -1090,11 +1090,7 @@ static void reds_send_channels()
     int i;
 
     message_size = sizeof(SpiceMsgChannels) + reds->num_of_channels * sizeof(SpiceChannelId);
-    if (!(item = new_simple_out_item(SPICE_MSG_MAIN_CHANNELS_LIST, message_size))) {
-        red_printf("alloc item failed");
-        reds_disconnect();
-        return;
-    }
+    item = new_simple_out_item(SPICE_MSG_MAIN_CHANNELS_LIST, message_size);
     channels_info = (SpiceMsgChannels *)item->data;
     channels_info->num_of_channels = reds->num_of_channels;
     channel = reds->channels;
@@ -1241,11 +1237,7 @@ static void reds_send_mouse_mode()
         return;
     }
 
-    if (!(item = new_simple_out_item(SPICE_MSG_MAIN_MOUSE_MODE, sizeof(SpiceMsgMainMouseMode)))) {
-        red_printf("alloc item failed");
-        reds_disconnect();
-        return;
-    }
+    new_simple_out_item(SPICE_MSG_MAIN_MOUSE_MODE, sizeof(SpiceMsgMainMouseMode));
     mouse_mode = (SpiceMsgMainMouseMode *)item->data;
     mouse_mode->supported_modes = SPICE_MOUSE_MODE_SERVER;
     if (reds->is_client_mouse_allowed) {
@@ -1287,9 +1279,7 @@ static void reds_update_mouse_mode()
 static void reds_send_agent_connected()
 {
     SimpleOutItem *item;
-    if (!(item = new_simple_out_item(SPICE_MSG_MAIN_AGENT_CONNECTED, 0))) {
-        PANIC("alloc item failed");
-    }
+    item = new_simple_out_item(SPICE_MSG_MAIN_AGENT_CONNECTED, 0);
     reds_push_pipe_item(&item->base);
 }
 
@@ -1298,9 +1288,7 @@ static void reds_send_agent_disconnected()
     SpiceMsgMainAgentDisconnect *disconnect;
     SimpleOutItem *item;
 
-    if (!(item = new_simple_out_item(SPICE_MSG_MAIN_AGENT_DISCONNECTED, sizeof(SpiceMsgMainAgentDisconnect)))) {
-        PANIC("alloc item failed");
-    }
+    item = new_simple_out_item(SPICE_MSG_MAIN_AGENT_DISCONNECTED, sizeof(SpiceMsgMainAgentDisconnect));
     disconnect = (SpiceMsgMainAgentDisconnect *)item->data;
     disconnect->error_code = SPICE_LINK_ERR_OK;
     reds_push_pipe_item(&item->base);
@@ -1338,11 +1326,7 @@ static void reds_send_tokens()
         return;
     }
 
-    if (!(item = new_simple_out_item(SPICE_MSG_MAIN_AGENT_TOKEN, sizeof(SpiceMsgMainAgentTokens)))) {
-        red_printf("alloc item failed");
-        reds_disconnect();
-        return;
-    }
+    item = new_simple_out_item(SPICE_MSG_MAIN_AGENT_TOKEN, sizeof(SpiceMsgMainAgentTokens));
     tokens = (SpiceMsgMainAgentTokens *)item->data;
     tokens->num_tokens = reds->agent_state.num_tokens;
     reds->agent_state.num_client_tokens += tokens->num_tokens;
@@ -2262,11 +2246,7 @@ static void reds_handle_main_link(RedLinkInfo *link)
         SimpleOutItem *item;
         SpiceMsgMainInit *init;
 
-        if (!(item = new_simple_out_item(SPICE_MSG_MAIN_INIT, sizeof(SpiceMsgMainInit)))) {
-            red_printf("alloc item failed");
-            reds_disconnect();
-            return;
-        }
+        item = new_simple_out_item(SPICE_MSG_MAIN_INIT, sizeof(SpiceMsgMainInit));
         init = (SpiceMsgMainInit *)item->data;
         init->session_id = connection_id;
         init->display_channels_hint = red_dispatcher_count();
@@ -2688,12 +2668,7 @@ static void reds_handle_other_links(RedLinkInfo *link)
 
         LOG_MESSAGE(VD_LOG_WARN, "%s", mess);
 
-        if (!(item = new_simple_out_item(SPICE_MSG_NOTIFY, sizeof(SpiceMsgNotify) + mess_len + 1))) {
-            red_printf("alloc item failed");
-            reds_disconnect();
-            return;
-        }
-
+        item = new_simple_out_item(SPICE_MSG_NOTIFY, sizeof(SpiceMsgNotify) + mess_len + 1);
         notify = (SpiceMsgNotify *)item->data;
         notify->time_stamp = get_time_stamp();
         notify->severty = SPICE_NOTIFY_SEVERITY_WARN;
@@ -4272,11 +4247,6 @@ static void reds_mig_continue(RedsMigSpice *s)
     host_len = strlen(s->host) + 1;
     item = new_simple_out_item(SPICE_MSG_MAIN_MIGRATE_BEGIN,
                                sizeof(SpiceMsgMainMigrationBegin) + host_len + s->cert_pub_key_len);
-    if (!(item)) {
-        red_printf("alloc item failed");
-        reds_disconnect();
-        return;
-    }
     migrate = (SpiceMsgMainMigrationBegin *)item->data;
     migrate->port = s->port;
     migrate->sport = s->sport;
@@ -4591,11 +4561,7 @@ static void reds_mig_finished(void *opaque, int completed)
         reds->mig_wait_disconnect = TRUE;
         core->arm_timer(core, reds->mig_timer, MIGRATE_TIMEOUT);
 
-        if (!(item = new_simple_out_item(SPICE_MSG_MIGRATE, sizeof(SpiceMsgMigrate)))) {
-            red_printf("alloc item failed");
-            reds_disconnect();
-            return;
-        }
+        item = new_simple_out_item(SPICE_MSG_MIGRATE, sizeof(SpiceMsgMigrate));
         migrate = (SpiceMsgMigrate *)item->data;
         migrate->flags = SPICE_MIGRATE_NEED_FLUSH | SPICE_MIGRATE_NEED_DATA_TRANSFER;
         reds_push_pipe_item(&item->base);
@@ -4605,11 +4571,7 @@ static void reds_mig_finished(void *opaque, int completed)
             channel = channel->next;
         }
     } else {
-        if (!(item = new_simple_out_item(SPICE_MSG_MAIN_MIGRATE_CANCEL, 0))) {
-            red_printf("alloc item failed");
-            reds_disconnect();
-            return;
-        }
+        item = new_simple_out_item(SPICE_MSG_MAIN_MIGRATE_CANCEL, 0);
         reds_push_pipe_item(&item->base);
         reds_mig_cleanup();
     }
