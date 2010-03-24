@@ -32,8 +32,26 @@ char *spice_strdup(const char *str)
 {
     char *copy;
 
+    if (str == NULL) {
+        return NULL;
+    }
+
     copy = (char *)spice_malloc(strlen(str) + 1);
     strcpy(copy, str);
+    return copy;
+}
+
+char *spice_strndup(const char *str, size_t n_bytes)
+{
+    char *copy;
+
+    if (str == NULL) {
+        return NULL;
+    }
+
+    copy = (char *)spice_malloc(n_bytes + 1);
+    strncpy(copy, str, n_bytes);
+    copy[n_bytes] = 0;
     return copy;
 }
 

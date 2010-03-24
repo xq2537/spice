@@ -23,6 +23,7 @@
 #include <spice/macros.h>
 
 char *spice_strdup(const char *str) SPICE_GNUC_MALLOC;
+char *spice_strndup(const char *str, size_t n_bytes) SPICE_GNUC_MALLOC;
 void *spice_memdup(const void *mem, size_t n_bytes) SPICE_GNUC_MALLOC;
 void *spice_malloc(size_t n_bytes) SPICE_GNUC_MALLOC SPICE_GNUC_ALLOC_SIZE(1);
 void *spice_malloc0(size_t n_bytes) SPICE_GNUC_MALLOC SPICE_GNUC_ALLOC_SIZE(1);
