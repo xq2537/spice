@@ -5643,6 +5643,19 @@ int spice_server_get_streaming_video(SpiceServer *s)
     return streaming_video;
 }
 
+int spice_server_set_playback_compression(SpiceServer *s, int enable)
+{
+    ASSERT(reds == s);
+    snd_set_playback_compression(enable);
+    return 0;
+}
+
+int spice_server_get_playback_compression(SpiceServer *s)
+{
+    ASSERT(reds == s);
+    return snd_get_playback_compression();
+}
+
 int spice_server_set_channel_security(SpiceServer *s,
                                       spice_channel_t channel,
                                       int security)

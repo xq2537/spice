@@ -104,6 +104,9 @@ enum {
 int spice_server_set_streaming_video(SpiceServer *s, int value);
 int spice_server_get_streaming_video(SpiceServer *s);
 
+int spice_server_set_playback_compression(SpiceServer *s, int enable);
+int spice_server_get_playback_compression(SpiceServer *s);
+
 /*
  * setting information about the migration destination.
  * For null port use -1.
