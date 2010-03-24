@@ -98,6 +98,9 @@ enum {
     SPICE_STREAM_VIDEO_FILTER
 };
 
+int spice_server_set_streaming_video(SpiceServer *s, int value);
+int spice_server_get_streaming_video(SpiceServer *s);
+
 /*
  * setting information about the migration destination.
  * For null port use -1.

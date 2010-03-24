@@ -5625,6 +5625,24 @@ spice_image_compression_t spice_server_get_image_compression(SpiceServer *s)
     return image_compression;
 }
 
+int spice_server_set_streaming_video(SpiceServer *s, int value)
+{
+    ASSERT(reds == s);
+    if (value != SPICE_STREAM_VIDEO_OFF &&
+        value != SPICE_STREAM_VIDEO_ALL &&
+        value != SPICE_STREAM_VIDEO_FILTER)
+        return -1;
+    streaming_video = value;
+    red_dispatcher_on_sv_change();
+    return 0;
+}
+
+int spice_server_get_streaming_video(SpiceServer *s)
+{
+    ASSERT(reds == s);
+    return streaming_video;
+}
+
 int spice_server_set_channel_security(SpiceServer *s,
                                       spice_channel_t channel,
                                       int security)
