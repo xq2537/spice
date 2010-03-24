@@ -22,6 +22,8 @@
 #include <openssl/ssl.h>
 #include <sys/uio.h>
 
+#define __visible__ __attribute__ ((visibility ("default")))
+
 typedef struct RedsStreamContext {
     void *ctx;
 

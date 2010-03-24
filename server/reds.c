@@ -4305,14 +4305,14 @@ static void do_spice_init(CoreInterface *core_interface)
     atexit(reds_exit);
 }
 
-void __attribute__ ((visibility ("default"))) spice_init(CoreInterface *core_interface)
+__visible__ void spice_init(CoreInterface *core_interface)
 {
     spice_server_new();
     do_spice_init(core_interface);
 }
 
 /* new interface */
-SpiceServer *spice_server_new(void)
+__visible__ SpiceServer *spice_server_new(void)
 {
     /* we can't handle multiple instances (yet) */
     ASSERT(reds == NULL);
@@ -4321,7 +4321,7 @@ SpiceServer *spice_server_new(void)
     return reds;
 }
 
-int spice_server_init(SpiceServer *s, CoreInterface *core)
+__visible__ int spice_server_init(SpiceServer *s, CoreInterface *core)
 {
     ASSERT(reds == s);
     do_spice_init(core);
@@ -4331,13 +4331,13 @@ int spice_server_init(SpiceServer *s, CoreInterface *core)
     return 0;
 }
 
-void spice_server_destroy(SpiceServer *s)
+__visible__ void spice_server_destroy(SpiceServer *s)
 {
     ASSERT(reds == s);
     reds_exit();
 }
 
-int spice_server_set_port(SpiceServer *s, int port)
+__visible__ int spice_server_set_port(SpiceServer *s, int port)
 {
     ASSERT(reds == s);
     if (port < 0 || port > 0xffff) {
@@ -4347,7 +4347,7 @@ int spice_server_set_port(SpiceServer *s, int port)
     return 0;
 }
 
-void spice_server_set_addr(SpiceServer *s, const char *addr, int flags)
+__visible__ void spice_server_set_addr(SpiceServer *s, const char *addr, int flags)
 {
     ASSERT(reds == s);
     strncpy(spice_addr, addr, sizeof(spice_addr));
@@ -4359,7 +4359,7 @@ void spice_server_set_addr(SpiceServer *s, const char *addr, int flags)
     }
 }
 
-int spice_server_set_noauth(SpiceServer *s)
+__visible__ int spice_server_set_noauth(SpiceServer *s)
 {
     ASSERT(reds == s);
     memset(taTicket.password, 0, sizeof(taTicket.password));
@@ -4367,8 +4367,10 @@ int spice_server_set_noauth(SpiceServer *s)
     return 0;
 }
 
-int spice_server_set_ticket(SpiceServer *s, const char *passwd, int lifetime,
-                            int fail_if_connected, int disconnect_if_connected)
+__visible__ int spice_server_set_ticket(SpiceServer *s,
+                                        const char *passwd, int lifetime,
+                                        int fail_if_connected,
+                                        int disconnect_if_connected)
 {
     ASSERT(reds == s);
 
@@ -4398,10 +4400,10 @@ int spice_server_set_ticket(SpiceServer *s, const char *passwd, int lifetime,
     return 0;
 }
 
-int spice_server_set_tls(SpiceServer *s, int port,
-                         const char *ca_cert_file, const char *certs_file,
-                         const char *private_key_file, const char *key_passwd,
-                         const char *dh_key_file, const char *ciphersuite)
+__visible__ int spice_server_set_tls(SpiceServer *s, int port,
+                                     const char *ca_cert_file, const char *certs_file,
+                                     const char *private_key_file, const char *key_passwd,
+                                     const char *dh_key_file, const char *ciphersuite)
 {
     ASSERT(reds == s);
     if (port == 0 || ca_cert_file == NULL || certs_file == NULL ||
@@ -4436,21 +4438,21 @@ int spice_server_set_tls(SpiceServer *s, int port,
     return 0;
 }
 
-int spice_server_set_image_compression(SpiceServer *s,
-                                       spice_image_compression_t comp)
+__visible__ int spice_server_set_image_compression(SpiceServer *s,
+                                                   spice_image_compression_t comp)
 {
     ASSERT(reds == s);
     set_image_compression(comp);
     return 0;
 }
 
-spice_image_compression_t spice_server_get_image_compression(SpiceServer *s)
+__visible__ spice_image_compression_t spice_server_get_image_compression(SpiceServer *s)
 {
     ASSERT(reds == s);
     return image_compression;
 }
 
-int spice_server_set_channel_security(SpiceServer *s, const char *channel, int security)
+__visible__ int spice_server_set_channel_security(SpiceServer *s, const char *channel, int security)
 {
     static const char *names[] = {
         [ SPICE_CHANNEL_MAIN     ] = "main",
@@ -4478,7 +4480,7 @@ int spice_server_set_channel_security(SpiceServer *s, const char *channel, int s
     return -1;
 }
 
-int spice_server_set_mouse_absolute(SpiceServer *s, int absolute)
+__visible__ int spice_server_set_mouse_absolute(SpiceServer *s, int absolute)
 {
     uint32_t mode = absolute ? SPICE_MOUSE_MODE_CLIENT : SPICE_MOUSE_MODE_SERVER;
 
@@ -4487,7 +4489,7 @@ int spice_server_set_mouse_absolute(SpiceServer *s, int absolute)
     return 0;
 }
 
-int spice_server_get_sock_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen)
+__visible__ int spice_server_get_sock_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen)
 {
     ASSERT(reds == s);
     if (!reds->peer) {
@@ -4499,7 +4501,7 @@ int spice_server_get_sock_info(SpiceServer *s, struct sockaddr *sa, socklen_t *s
     return 0;
 }
 
-int spice_server_get_peer_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen)
+__visible__ int spice_server_get_peer_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen)
 {
     ASSERT(reds == s);
     if (!reds->peer) {
@@ -4511,7 +4513,7 @@ int spice_server_get_peer_info(SpiceServer *s, struct sockaddr *sa, socklen_t *s
     return 0;
 }
 
-int spice_server_add_renderer(SpiceServer *s, const char *name)
+__visible__ int spice_server_add_renderer(SpiceServer *s, const char *name)
 {
     ASSERT(reds == s);
     if (!red_dispatcher_add_renderer(name)) {
@@ -4521,21 +4523,21 @@ int spice_server_add_renderer(SpiceServer *s, const char *name)
     return 0;
 }
 
-int spice_server_add_interface(SpiceServer *s, VDInterface *interface)
+__visible__ int spice_server_add_interface(SpiceServer *s, VDInterface *interface)
 {
     ASSERT(reds == s);
     interface_change_notifier(NULL, interface, VD_INTERFACE_ADDING);
     return 0;
 }
 
-int spice_server_remove_interface(SpiceServer *s, VDInterface *interface)
+__visible__ int spice_server_remove_interface(SpiceServer *s, VDInterface *interface)
 {
     ASSERT(reds == s);
     interface_change_notifier(NULL, interface, VD_INTERFACE_REMOVING);
     return 0;
 }
 
-int spice_server_kbd_leds(SpiceServer *s, KeyboardInterface *kbd, int leds)
+__visible__ int spice_server_kbd_leds(SpiceServer *s, KeyboardInterface *kbd, int leds)
 {
     ASSERT(reds == s);
     reds_on_keyboard_leds_change(NULL, leds);
