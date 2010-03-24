@@ -8,6 +8,6 @@ Description: SPICE server library
 Version: @VERSION@
 
 Requires: @SPICE_REQUIRES@
-Libs: -L${libdir} -lspice
+Libs: -L${libdir} -lspice-server
 Libs.private: @SPICE_NONPKGCONFIG_LIBS@
-Cflags: -I${includedir}/libspice
+Cflags: -I${includedir}/spice-server

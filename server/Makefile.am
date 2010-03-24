@@ -33,14 +33,14 @@ COMMON_SRCS = 						\
 	$(top_srcdir)/common/mem.c			\
 	$(NULL)
 
-lib_LTLIBRARIES = libspice.la
+lib_LTLIBRARIES = libspice-server.la
 
-libspice_la_LDFLAGS = 				\
+libspice_server_la_LDFLAGS =			\
 	-version-number $(SPICE_LT_VERSION)	\
 	-no-undefined				\
 	$(NULL)
 
-libspice_la_LIBADD = 				\
+libspice_server_la_LIBADD = 			\
 	$(GL_LIBS)				\
 	$(FFMPEG_LIBS)				\
 	$(PIXMAN_LIBS)				\
@@ -50,7 +50,7 @@ libspice_la_LIBADD = 				\
 	$(LIBRT)				\
 	$(NULL)
 
-libspice_la_SOURCES =				\
+libspice_server_la_SOURCES =			\
 	glz_encoder.c				\
 	glz_encoder_config.h			\
 	glz_encoder_dictionary.c		\
@@ -80,8 +80,8 @@ libspice_la_SOURCES =				\
 	$(COMMON_SRCS)				\
 	$(NULL)
 
-libspiceincludedir = $(includedir)/libspice
-libspiceinclude_HEADERS =               	\
+libspice_serverincludedir = $(includedir)/spice-server
+libspice_serverinclude_HEADERS =               	\
 	spice.h					\
 	vd_interface.h				\
 	$(NULL)
