@@ -5665,6 +5665,20 @@ int spice_server_set_mouse_absolute(SpiceServer *s, int absolute)
     return 0;
 }
 
+int spice_server_set_agent_mouse(SpiceServer *s, int enable)
+{
+    ASSERT(reds == s);
+    agent_mouse = enable;
+    reds_update_mouse_mode();
+    return 0;
+}
+
+int spice_server_get_agent_mouse(SpiceServer *s)
+{
+    ASSERT(reds == s);
+    return agent_mouse;
+}
+
 int spice_server_get_sock_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen)
 {
     ASSERT(reds == s);

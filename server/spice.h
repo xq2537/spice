@@ -86,6 +86,9 @@ int spice_server_set_channel_security(SpiceServer *s,
 
 int spice_server_set_mouse_absolute(SpiceServer *s, int absolute);
 
+int spice_server_set_agent_mouse(SpiceServer *s, int enable);
+int spice_server_get_agent_mouse(SpiceServer *s);
+
 int spice_server_add_renderer(SpiceServer *s, const char *name);
 
 int spice_server_get_sock_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen);
