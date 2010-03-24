@@ -778,8 +778,9 @@ typedef struct DrawItem {
 typedef enum {
     BITMAP_GRADUAL_INVALID,
     BITMAP_GRADUAL_NOT_AVAIL,
-    BITMAP_GRADUAL_TRUE,
-    BITMAP_GRADUAL_FALSE,
+    BITMAP_GRADUAL_LOW,
+    BITMAP_GRADUAL_MEDIUM,
+    BITMAP_GRADUAL_HIGH,
 } BitmapGradualType;
 
 struct Drawable {
@@ -1003,7 +1004,7 @@ static void red_display_release_stream_clip(DisplayChannel* channel, StreamClipI
 static int red_display_free_some_independent_glz_drawables(DisplayChannel *channel);
 static void red_display_free_glz_drawable(DisplayChannel *channel, RedGlzDrawable *drawable);
 static void reset_rate(StreamAgent *stream_agent);
-static int _bitmap_is_gradual(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_id);
+static BitmapGradualType _get_bitmap_graduality_level(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_id);
 static inline int _stride_is_extra(SpiceBitmap *bitmap);
 
 #ifdef DUMP_BITMAP
@@ -2904,11 +2905,7 @@ static inline void red_update_copy_graduality(RedWorker* worker, Drawable *drawa
         (qxl_image->bitmap.flags & QXL_BITMAP_UNSTABLE)) {
         drawable->copy_bitmap_graduality = BITMAP_GRADUAL_NOT_AVAIL;
     } else  {
-        if (_bitmap_is_gradual(worker, &qxl_image->bitmap, drawable->group_id)) {
-            drawable->copy_bitmap_graduality = BITMAP_GRADUAL_TRUE;
-        } else {
-            drawable->copy_bitmap_graduality = BITMAP_GRADUAL_FALSE;
-        }
+        drawable->copy_bitmap_graduality = _get_bitmap_graduality_level(worker, &qxl_image->bitmap, drawable->group_id);
     }
 }
 
@@ -2928,7 +2925,7 @@ static void red_stream_add_frame(RedWorker* worker, Drawable *frame_drawable,
     frame_drawable->frames_count = frames_count + 1;
     frame_drawable->gradual_frames_count  = gradual_frames_count;
 
-    if (frame_drawable->copy_bitmap_graduality != BITMAP_GRADUAL_FALSE) {
+    if (frame_drawable->copy_bitmap_graduality != BITMAP_GRADUAL_LOW) {
         if ((frame_drawable->frames_count - last_gradual_frame) >
             RED_STREAM_FRAMES_RESET_CONDITION) {
             frame_drawable->frames_count = 1;
@@ -5388,11 +5385,16 @@ typedef uint16_t rgb16_pixel_t;
 #define RED_BITMAP_UTILS_RGB32
 #include "red_bitmap_utils.h"
 
-#define GRADUAL_SCORE_RGB24_TH -0.03
-#define GRADUAL_SCORE_RGB16_TH 0
+#define GRADUAL_HIGH_RGB24_TH -0.03
+#define GRADUAL_HIGH_RGB16_TH 0
+
+// setting a more permissive threshold for stream identification in order
+// not to miss streams that were artificially scaled on the guest (e.g., full screen view
+// in window media player 12). see red_stream_add_frame
+#define GRADUAL_MEDIUM_SCORE_TH 0.002
 
 // assumes that stride doesn't overflow
-static int _bitmap_is_gradual(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_id)
+static BitmapGradualType _get_bitmap_graduality_level(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_id)
 {
     double score = 0.0;
     int num_samples = 0;
@@ -5477,9 +5479,19 @@ static int _bitmap_is_gradual(RedWorker *worker, SpiceBitmap *bitmap, uint32_t g
     score /= num_samples;
 
     if (bitmap->format == SPICE_BITMAP_FMT_16BIT) {
-        return (score < GRADUAL_SCORE_RGB16_TH);
+        if (score < GRADUAL_HIGH_RGB16_TH) {
+            return BITMAP_GRADUAL_HIGH;
+        }
     } else {
-        return (score < GRADUAL_SCORE_RGB24_TH);
+        if (score < GRADUAL_HIGH_RGB24_TH) {
+            return BITMAP_GRADUAL_HIGH;
+        }
+    }
+
+    if (score < GRADUAL_MEDIUM_SCORE_TH) {
+        return BITMAP_GRADUAL_MEDIUM;
+    } else {
+        return BITMAP_GRADUAL_LOW;
     }
 }
 
@@ -5871,10 +5883,10 @@ static inline int red_compress_image(DisplayChannel *display_channel,
                 } else {
                     if (drawable->copy_bitmap_graduality == BITMAP_GRADUAL_INVALID) {
                         quic_compress = BITMAP_FMT_IS_RGB[src->format] &&
-                            _bitmap_is_gradual(display_channel->base.worker, src,
-                                               drawable->group_id);
+			    (_get_bitmap_graduality_level(display_channel->base.worker, src, drawable->group_id) ==
+                             BITMAP_GRADUAL_HIGH);
                     } else {
-                        quic_compress = (drawable->copy_bitmap_graduality == BITMAP_GRADUAL_TRUE);
+                        quic_compress = (drawable->copy_bitmap_graduality == BITMAP_GRADUAL_HIGH);
                     }
                 }
             } else {
