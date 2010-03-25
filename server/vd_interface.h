@@ -68,6 +68,12 @@ typedef void (*vd_interface_change_notifier_t)(void *opaque, VDInterface *interf
                                                VDInterfaceChangeType change);
 typedef void (*timer_callback_t)(void *opaque);
 
+#define SPICE_WATCH_EVENT_READ  (1 << 0)
+#define SPICE_WATCH_EVENT_WRITE (1 << 1)
+
+typedef struct SpiceWatch SpiceWatch;
+typedef void (*SpiceWatchFunc)(int fd, int event, void *opaque);
+
 struct CoreInterface {
     VDInterface base;
 
@@ -80,6 +86,11 @@ struct CoreInterface {
                              void (*on_read)(void *),
                              void (*on_write)(void *),
                              void *opaque);
+
+    SpiceWatch *(*watch_add)(int fd, int event_mask, SpiceWatchFunc func, void *opaque);
+    void (*watch_update_mask)(SpiceWatch *watch, int event_mask);
+    void (*watch_remove)(SpiceWatch *watch);
+
 };
 
 #define VD_INTERFACE_QXL "qxl"
