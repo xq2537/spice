@@ -239,7 +239,8 @@ static void snd_disconnect_channel(SndChannel *channel)
     channel->cleanup(channel);
     worker = channel->worker;
     worker->connection = NULL;
-    core->set_file_handlers(core, channel->peer->socket, NULL, NULL, NULL);
+    core->watch_remove(channel->peer->watch);
+    channel->peer->watch = NULL;
     channel->peer->cb_free(channel->peer);
     free(channel);
 }
@@ -287,10 +288,7 @@ static int snd_send_data(SndChannel *channel)
 
             if (channel->blocked) {
                 channel->blocked = FALSE;
-                if (core->set_file_handlers(core, channel->peer->socket, snd_receive,
-                                            NULL, channel) == -1) {
-                    red_printf("qemu_set_fd_handler failed");
-                }
+                core->watch_update_mask(channel->peer->watch, SPICE_WATCH_EVENT_READ);
             }
             break;
         }
@@ -300,10 +298,8 @@ static int snd_send_data(SndChannel *channel)
             switch (errno) {
             case EAGAIN:
                 channel->blocked = TRUE;
-                if (core->set_file_handlers(core, channel->peer->socket, snd_receive,
-                                            channel->send_messages, channel) == -1) {
-                    red_printf("qemu_set_fd_handler failed");
-                }
+                core->watch_update_mask(channel->peer->watch, SPICE_WATCH_EVENT_READ |
+                                        SPICE_WATCH_EVENT_WRITE);
                 return FALSE;
             case EINTR:
                 break;
@@ -489,6 +485,18 @@ static void snd_receive(void* data)
                 channel->recive_data.message = (SpiceDataHeader *)channel->recive_data.buf;
             }
         }
+    }
+}
+
+static void snd_event(int fd, int event, void *data)
+{
+    SndChannel *channel = data;
+
+    if (event & SPICE_WATCH_EVENT_READ) {
+        snd_receive(channel);
+    }
+    if (event & SPICE_WATCH_EVENT_WRITE) {
+        channel->send_messages(channel);
     }
 }
 
@@ -802,8 +810,10 @@ static SndChannel *__new_channel(SndWorker *worker, int size, RedsStreamContext 
     channel->recive_data.now = channel->recive_data.buf;
     channel->recive_data.end = channel->recive_data.buf + sizeof(channel->recive_data.buf);
 
-    if (core->set_file_handlers(core, peer->socket, snd_receive, NULL, channel) == -1) {
-        red_printf("qemu_set_fd_handler failed, %s", strerror(errno));
+    peer->watch = core->watch_add(peer->socket, SPICE_WATCH_EVENT_READ,
+                                  snd_event, channel);
+    if (peer->watch == NULL) {
+        red_printf("watch_add failed, %s", strerror(errno));
         goto error2;
     }
 
