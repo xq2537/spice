@@ -28,11 +28,10 @@
 #include <errno.h>
 #include "red_channel.h"
 
-static void red_channel_receive(void *data);
 static void red_channel_push(RedChannel *channel);
-static void red_channel_opaque_push(void *data);
 static PipeItem *red_channel_pipe_get(RedChannel *channel);
 static void red_channel_pipe_clear(RedChannel *channel);
+static void red_channel_event(int fd, int event, void *data);
 
 /* return the number of bytes read. -1 in case of error */
 static int red_peer_receive(RedsStreamContext *peer, uint8_t *buf, uint32_t size)
@@ -207,9 +206,9 @@ static void red_channel_peer_on_out_block(void *opaque)
 {
     RedChannel *channel = (RedChannel *)opaque;
     channel->send_data.blocked = TRUE;
-    channel->core->set_file_handlers(channel->core, channel->peer->socket,
-                                     red_channel_receive, red_channel_opaque_push,
-                                     channel);
+    channel->core->watch_update_mask(channel->peer->watch,
+                                     SPICE_WATCH_EVENT_READ |
+                                     SPICE_WATCH_EVENT_WRITE);
 }
 
 static void red_channel_peer_on_out_msg_done(void *opaque)
@@ -224,9 +223,8 @@ static void red_channel_peer_on_out_msg_done(void *opaque)
     }
     if (channel->send_data.blocked) {
         channel->send_data.blocked = FALSE;
-        channel->core->set_file_handlers(channel->core, channel->peer->socket,
-                                         red_channel_receive, NULL,
-                                         channel);
+        channel->core->watch_update_mask(channel->peer->watch,
+                                         SPICE_WATCH_EVENT_READ);
     }
 }
 
@@ -281,8 +279,9 @@ RedChannel *red_channel_create(int size, RedsStreamContext *peer, CoreInterface 
         goto error;
     }
 
-    channel->core->set_file_handlers(channel->core, channel->peer->socket,
-                                     red_channel_receive, NULL, channel);
+    channel->peer->watch = channel->core->watch_add(channel->peer->socket,
+                                                    SPICE_WATCH_EVENT_READ,
+                                                    red_channel_event, channel);
 
     return channel;
 
@@ -299,8 +298,7 @@ void red_channel_destroy(RedChannel *channel)
         return;
     }
     red_channel_pipe_clear(channel);
-    channel->core->set_file_handlers(channel->core, channel->peer->socket,
-                                     NULL, NULL, NULL);
+    channel->core->watch_remove(channel->peer->watch);
     channel->peer->cb_free(channel->peer);
     free(channel);
 }
@@ -309,8 +307,8 @@ void red_channel_shutdown(RedChannel *channel)
 {
     red_printf("");
     if (!channel->peer->shutdown) {
-        channel->core->set_file_handlers(channel->core, channel->peer->socket,
-                                         red_channel_receive, NULL, channel);
+        channel->core->watch_update_mask(channel->peer->watch,
+                                         SPICE_WATCH_EVENT_READ);
         red_channel_pipe_clear(channel);
         shutdown(channel->peer->socket, SHUT_RDWR);
         channel->peer->shutdown = TRUE;
@@ -346,10 +344,16 @@ int red_channel_handle_message(RedChannel *channel, SpiceDataHeader *header, uin
     return TRUE;
 }
 
-static void red_channel_receive(void *data)
+static void red_channel_event(int fd, int event, void *data)
 {
     RedChannel *channel = (RedChannel *)data;
-    red_peer_handle_incoming(channel->peer, &channel->incoming);
+
+    if (event & SPICE_WATCH_EVENT_READ) {
+        red_peer_handle_incoming(channel->peer, &channel->incoming);
+    }
+    if (event & SPICE_WATCH_EVENT_WRITE) {
+        red_channel_push(channel);
+    }
 }
 
 static void inline __red_channel_add_buf(RedChannel *channel, void *data, uint32_t size)
@@ -426,11 +430,6 @@ static void red_channel_push(RedChannel *channel)
         channel->send_item(channel, pipe_item);
     }
     channel->during_send = FALSE;
-}
-
-static void red_channel_opaque_push(void *data)
-{
-    red_channel_push((RedChannel *)data);
 }
 
 uint64_t red_channel_get_message_serial(RedChannel *channel)
