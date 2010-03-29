@@ -491,7 +491,12 @@ static int reds_ssl_free(RedsStreamContext *peer)
 static void __reds_release_link(RedLinkInfo *link)
 {
     ASSERT(link->peer);
-    core->set_file_handlers(core, link->peer->socket, NULL, NULL, NULL);
+    if (link->peer->watch) {
+        core->watch_remove(link->peer->watch);
+        link->peer->watch = NULL;
+    } else {
+        core->set_file_handlers(core, link->peer->socket, NULL, NULL, NULL);
+    }
     free(link->link_mess);
     BN_free(link->tiTicketing.bn);
     if (link->tiTicketing.rsa) {
@@ -2709,20 +2714,27 @@ static void reds_handle_new_link(RedLinkInfo *link)
     async_read_handler(0, 0, &link->asyc_read);
 }
 
-static void reds_handle_ssl_accept(void *data)
+static void reds_handle_ssl_accept(int fd, int event, void *data)
 {
     RedLinkInfo *link = (RedLinkInfo *)data;
     int return_code;
 
     if ((return_code = SSL_accept(link->peer->ssl)) != 1) {
         int ssl_error = SSL_get_error(link->peer->ssl, return_code);
-
         if (ssl_error != SSL_ERROR_WANT_READ && ssl_error != SSL_ERROR_WANT_WRITE) {
             red_printf("SSL_accept failed, error=%d", ssl_error);
             reds_release_link(link);
+        } else {
+            if (ssl_error == SSL_ERROR_WANT_READ) {
+                core->watch_update_mask(link->peer->watch, SPICE_WATCH_EVENT_READ);
+            } else {
+                core->watch_update_mask(link->peer->watch, SPICE_WATCH_EVENT_WRITE);
+            }
         }
         return;
     }
+    core->watch_remove(link->peer->watch);
+    link->peer->watch = NULL;
     reds_handle_new_link(link);
 }
 
@@ -2829,8 +2841,10 @@ static void reds_accept_ssl_connection(int fd, int event, void *data)
     ssl_error = SSL_get_error(link->peer->ssl, return_code);
     if (return_code == -1 && (ssl_error == SSL_ERROR_WANT_READ ||
                               ssl_error == SSL_ERROR_WANT_WRITE)) {
-        core->set_file_handlers(core, link->peer->socket, reds_handle_ssl_accept,
-                                reds_handle_ssl_accept, link);
+        int eventmask = ssl_error == SSL_ERROR_WANT_READ ?
+            SPICE_WATCH_EVENT_READ : SPICE_WATCH_EVENT_WRITE;
+        link->peer->watch = core->watch_add(link->peer->socket, eventmask,
+                                            reds_handle_ssl_accept, link);
         return;
     }
 
