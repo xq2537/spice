@@ -298,7 +298,6 @@ typedef struct AsyncRead {
     void *opaque;
     uint8_t *now;
     uint8_t *end;
-    int active_file_handlers;
     void (*done)(void *opaque);
     void (*error)(void *opaque, int err);
 } AsyncRead;
@@ -2549,14 +2548,14 @@ static void reds_handle_ticket(void *opaque)
 
 static inline void async_read_clear_handlers(AsyncRead *obj)
 {
-    if (!obj->active_file_handlers) {
+    if (!obj->peer->watch) {
         return;
     }
-    obj->active_file_handlers = FALSE;
-    core->set_file_handlers(core, obj->peer->socket, NULL, NULL, NULL);
+    core->watch_remove(obj->peer->watch);
+    obj->peer->watch = NULL;
 }
 
-static void async_read_handler(void *data)
+static void async_read_handler(int fd, int event, void *data)
 {
     AsyncRead *obj = (AsyncRead *)data;
 
@@ -2568,10 +2567,10 @@ static void async_read_handler(void *data)
             if (n < 0) {
                 switch (errno) {
                 case EAGAIN:
-                    if (!obj->active_file_handlers) {
-                        obj->active_file_handlers = TRUE;
-                        core->set_file_handlers(core, obj->peer->socket, async_read_handler, NULL,
-                                                obj);
+                    if (!obj->peer->watch) {
+                        obj->peer->watch = core->watch_add(obj->peer->socket,
+                                                           SPICE_WATCH_EVENT_READ,
+                                                           async_read_handler, obj);
                     }
                     return;
                 case EINTR:
@@ -2640,7 +2639,7 @@ static void reds_handle_read_link_done(void *opaque)
     obj->now = (uint8_t *)&link->tiTicketing.encrypted_ticket.encrypted_data;
     obj->end = obj->now + link->tiTicketing.rsa_size;
     obj->done = reds_handle_ticket;
-    async_read_handler(&link->asyc_read);
+    async_read_handler(0, 0, &link->asyc_read);
 }
 
 static void reds_handle_link_error(void *opaque, int err)
@@ -2693,7 +2692,7 @@ static void reds_handle_read_header_done(void *opaque)
     obj->now = (uint8_t *)link->link_mess;
     obj->end = obj->now + header->size;
     obj->done = reds_handle_read_link_done;
-    async_read_handler(&link->asyc_read);
+    async_read_handler(0, 0, &link->asyc_read);
 }
 
 static void reds_handle_new_link(RedLinkInfo *link)
@@ -2703,10 +2702,9 @@ static void reds_handle_new_link(RedLinkInfo *link)
     obj->peer = link->peer;
     obj->now = (uint8_t *)&link->link_header;
     obj->end = (uint8_t *)((SpiceLinkHeader *)&link->link_header + 1);
-    obj->active_file_handlers = FALSE;
     obj->done = reds_handle_read_header_done;
     obj->error = reds_handle_link_error;
-    async_read_handler(&link->asyc_read);
+    async_read_handler(0, 0, &link->asyc_read);
 }
 
 static void reds_handle_ssl_accept(void *data)
