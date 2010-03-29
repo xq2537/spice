@@ -364,7 +364,6 @@ typedef struct PingItem {
 
 static uint8_t zero_page[ZERO_BUF_SIZE] = {0};
 
-static void reds_main_write(void *data);
 static void reds_push();
 
 static ChannelSecurityOptions *channels_security = NULL;
@@ -750,7 +749,8 @@ static void reds_disconnect()
     }
 
     reds_shatdown_channels();
-    core->set_file_handlers(core, reds->peer->socket, NULL, NULL, NULL);
+    core->watch_remove(reds->peer->watch);
+    reds->peer->watch = NULL;
     reds->peer->cb_free(reds->peer);
     reds->peer = NULL;
     reds->in_handler.shut = TRUE;
@@ -1830,13 +1830,6 @@ static void reds_main_handle_message(void *opaque, SpiceDataHeader *message)
     }
 }
 
-static void reds_main_read(void *data)
-{
-    if (handle_incoming(reds->peer, &reds->in_handler)) {
-        reds_disconnect();
-    }
-}
-
 static int reds_send_data()
 {
     RedsOutgoingData *outgoing = &reds->outgoing;
@@ -1851,8 +1844,8 @@ static int reds_send_data()
         if ((n = reds->peer->cb_writev(reds->peer->ctx, outgoing->vec, outgoing->vec_size)) == -1) {
             switch (errno) {
             case EAGAIN:
-                core->set_file_handlers(core, reds->peer->socket, reds_main_read, reds_main_write,
-                                        NULL);
+                core->watch_update_mask(reds->peer->watch,
+                                        SPICE_WATCH_EVENT_READ | SPICE_WATCH_EVENT_WRITE);
                 return FALSE;
             case EINTR:
                 break;
@@ -1892,14 +1885,21 @@ static void reds_push()
     }
 }
 
-static void reds_main_write(void *data)
+static void reds_main_event(int fd, int event, void *data)
 {
-    RedsOutgoingData *outgoing = &reds->outgoing;
-
-    if (reds_send_data()) {
-        reds_push();
-        if (!outgoing->item) {
-            core->set_file_handlers(core, reds->peer->socket, reds_main_read, NULL, NULL);
+    if (event & SPICE_WATCH_EVENT_READ) {
+        if (handle_incoming(reds->peer, &reds->in_handler)) {
+            reds_disconnect();
+        }
+    }
+    if (event & SPICE_WATCH_EVENT_WRITE) {
+        RedsOutgoingData *outgoing = &reds->outgoing;
+        if (reds_send_data()) {
+            reds_push();
+            if (!outgoing->item) {
+                core->watch_update_mask(reds->peer->watch,
+                                        SPICE_WATCH_EVENT_READ);
+            }
         }
     }
 }
@@ -2058,7 +2058,9 @@ static void reds_handle_main_link(RedLinkInfo *link)
         }
         reds->agent_state.plug_generation++;
     }
-    core->set_file_handlers(core, reds->peer->socket, reds_main_read, NULL, NULL);
+    reds->peer->watch = core->watch_add(reds->peer->socket,
+                                        SPICE_WATCH_EVENT_READ,
+                                        reds_main_event, NULL);
 
     if (!reds->mig_target) {
         SimpleOutItem *item;
