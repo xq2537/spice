@@ -26,7 +26,7 @@ AC_PROG_LIBTOOL
 AM_PROG_CC_C_O
 AC_C_BIGENDIAN
 
-SPICE_LT_VERSION=m4_format("%d:%d:%d", SPICE_MAJOR, SPICE_MINOR, SPICE_MICRO)
+SPICE_LT_VERSION=m4_format("%d:%d:%d", 1, 0, 0)
 AC_SUBST(SPICE_LT_VERSION)
 
 # Check for the CPU we are using
