@@ -494,8 +494,6 @@ static void __reds_release_link(RedLinkInfo *link)
     if (link->peer->watch) {
         core->watch_remove(link->peer->watch);
         link->peer->watch = NULL;
-    } else {
-        core->set_file_handlers(core, link->peer->socket, NULL, NULL, NULL);
     }
     free(link->link_mess);
     BN_free(link->tiTicketing.bn);

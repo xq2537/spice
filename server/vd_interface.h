@@ -82,11 +82,6 @@ struct CoreInterface {
     void (*disarm_timer)(CoreInterface *core, VDObjectRef timer);
     void (*destroy_timer)(CoreInterface *core, VDObjectRef timer);
 
-    int (*set_file_handlers)(CoreInterface *core, int fd,
-                             void (*on_read)(void *),
-                             void (*on_write)(void *),
-                             void *opaque);
-
     SpiceWatch *(*watch_add)(int fd, int event_mask, SpiceWatchFunc func, void *opaque);
     void (*watch_update_mask)(SpiceWatch *watch, int event_mask);
     void (*watch_remove)(SpiceWatch *watch);
