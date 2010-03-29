@@ -3246,6 +3246,7 @@ typedef struct RedsMigWrite {
 
 typedef struct RedsMigSpice {
     int fd;
+    SpiceWatch *watch;
     RedsMigWrite write;
     RedsMigRead read;
 
@@ -3340,7 +3341,8 @@ static int reds_mig_actual_write(RedsMigSpice *s)
 static void reds_mig_failed(RedsMigSpice *s)
 {
     red_printf("");
-    core->set_file_handlers(core, s->fd, NULL, NULL, NULL);
+    core->watch_remove(s->watch);
+    s->watch = NULL;
     if (s->local_args) {
         free(s->local_args);
     }
@@ -3349,23 +3351,21 @@ static void reds_mig_failed(RedsMigSpice *s)
     reds_mig_disconnect();
 }
 
-static void reds_mig_write(void *data)
+static void reds_mig_event(int fd, int event, void *data)
 {
     RedsMigSpice *s = data;
 
-    if (reds_mig_actual_write((RedsMigSpice *)data)) {
-        red_printf("write error cannot continue spice migration");
-        reds_mig_failed(s);
+    if (event & SPICE_WATCH_EVENT_READ) {
+        if (reds_mig_actual_read((RedsMigSpice *)data)) {
+            red_printf("read error cannot continue spice migration");
+            reds_mig_failed(s);
+        }
     }
-}
-
-static void reds_mig_read(void *data)
-{
-    RedsMigSpice *s = data;
-
-    if (reds_mig_actual_read((RedsMigSpice *)data)) {
-        red_printf("read error cannot continue spice migration");
-        reds_mig_failed(s);
+    if (event & SPICE_WATCH_EVENT_WRITE) {
+        if (reds_mig_actual_write((RedsMigSpice *)data)) {
+            red_printf("write error cannot continue spice migration");
+            reds_mig_failed(s);
+        }
     }
 }
 
@@ -3376,7 +3376,8 @@ static void reds_mig_continue(RedsMigSpice *s)
     int host_len;
 
     red_printf("");
-    core->set_file_handlers(core, s->fd, NULL, NULL, NULL);
+    core->watch_remove(s->watch);
+    s->watch = NULL;
     host_len = strlen(s->host) + 1;
     item = new_simple_out_item(SPICE_MSG_MAIN_MIGRATE_BEGIN,
                                sizeof(SpiceMsgMainMigrationBegin) + host_len + s->cert_pub_key_len);
@@ -3404,7 +3405,7 @@ static void reds_mig_receive_ack(RedsMigSpice *s)
     s->read.end_pos = 0;
     s->read.handle_data = reds_mig_continue;
 
-    core->set_file_handlers(core, s->fd, reds_mig_read, NULL, s);
+    core->watch_update_mask(s->watch, SPICE_WATCH_EVENT_READ);
 }
 
 static void reds_mig_send_link_id(RedsMigSpice *s)
@@ -3417,7 +3418,7 @@ static void reds_mig_send_link_id(RedsMigSpice *s)
     s->write.length = sizeof(RedsMigSpiceMessage);
     s->write.handle_done = reds_mig_receive_ack;
 
-    core->set_file_handlers(core, s->fd, reds_mig_write, reds_mig_write, s);
+    core->watch_update_mask(s->watch, SPICE_WATCH_EVENT_READ | SPICE_WATCH_EVENT_WRITE);
 }
 
 static void reds_mig_send_ticket(RedsMigSpice *s)
@@ -3442,7 +3443,7 @@ static void reds_mig_send_ticket(RedsMigSpice *s)
             s->write.length = RSA_size(rsa);
             s->write.now = s->write.buf;
             s->write.handle_done = reds_mig_send_link_id;
-            core->set_file_handlers(core, s->fd, reds_mig_write, reds_mig_write, s);
+            core->watch_update_mask(s->watch, SPICE_WATCH_EVENT_READ | SPICE_WATCH_EVENT_WRITE);
         } else {
             reds_mig_failed(s);
         }
@@ -3462,7 +3463,7 @@ static void reds_mig_receive_cert_public_key(RedsMigSpice *s)
     s->read.end_pos = 0;
     s->read.handle_data = reds_mig_send_ticket;
 
-    core->set_file_handlers(core, s->fd, reds_mig_read, NULL, s);
+    core->watch_update_mask(s->watch, SPICE_WATCH_EVENT_READ);
 }
 
 static void reds_mig_receive_cert_public_key_info(RedsMigSpice *s)
@@ -3488,7 +3489,7 @@ static void reds_mig_receive_cert_public_key_info(RedsMigSpice *s)
         s->read.handle_data = reds_mig_send_ticket;
     }
 
-    core->set_file_handlers(core, s->fd, reds_mig_read, NULL, s);
+    core->watch_update_mask(s->watch, SPICE_WATCH_EVENT_READ);
 }
 
 static void reds_mig_handle_send_abort_done(RedsMigSpice *s)
@@ -3506,14 +3507,14 @@ static void reds_mig_receive_version(RedsMigSpice *s)
     s->write.length = sizeof(resault);
     s->write.now = s->write.buf;
     s->write.handle_done = reds_mig_handle_send_abort_done;
-    core->set_file_handlers(core, s->fd, reds_mig_write, reds_mig_write, s);
+    core->watch_update_mask(s->watch, SPICE_WATCH_EVENT_READ | SPICE_WATCH_EVENT_WRITE);
 }
 
 static void reds_mig_control(RedsMigSpice *spice_migration)
 {
     uint32_t *control;
 
-    core->set_file_handlers(core, spice_migration->fd, NULL, NULL, NULL);
+    core->watch_update_mask(spice_migration->watch, 0);
     control = (uint32_t *)spice_migration->read.buf;
 
     switch (*control) {
@@ -3522,8 +3523,7 @@ static void reds_mig_control(RedsMigSpice *spice_migration)
         spice_migration->read.end_pos = 0;
         spice_migration->read.handle_data = reds_mig_receive_cert_public_key_info;
 
-        core->set_file_handlers(core, spice_migration->fd, reds_mig_read,
-                                NULL, spice_migration);
+        core->watch_update_mask(spice_migration->watch, SPICE_WATCH_EVENT_READ);
         break;
     case REDS_MIG_ABORT:
         red_printf("abort");
@@ -3535,8 +3535,7 @@ static void reds_mig_control(RedsMigSpice *spice_migration)
         spice_migration->read.end_pos = 0;
         spice_migration->read.handle_data = reds_mig_receive_version;
 
-        core->set_file_handlers(core, spice_migration->fd, reds_mig_read,
-                                NULL, spice_migration);
+        core->watch_update_mask(spice_migration->watch, SPICE_WATCH_EVENT_READ);
         break;
     default:
         red_printf("invalid control");
@@ -3550,7 +3549,7 @@ static void reds_mig_receive_control(RedsMigSpice *spice_migration)
     spice_migration->read.end_pos = 0;
     spice_migration->read.handle_data = reds_mig_control;
 
-    core->set_file_handlers(core, spice_migration->fd, reds_mig_read, NULL, spice_migration);
+    core->watch_update_mask(spice_migration->watch, SPICE_WATCH_EVENT_READ);
 }
 
 static void reds_mig_started(void *opaque, const char *in_args)
@@ -3651,8 +3650,10 @@ static void reds_mig_started(void *opaque, const char *in_args)
     version = (uint32_t *)spice_migration->write.buf;
     *version = REDS_MIG_VERSION;
     spice_migration->write.handle_done = reds_mig_receive_control;
-    core->set_file_handlers(core, spice_migration->fd, reds_mig_write,
-                            reds_mig_write, spice_migration);
+    spice_migration->watch = core->watch_add(spice_migration->fd,
+                                             SPICE_WATCH_EVENT_READ | SPICE_WATCH_EVENT_WRITE,
+                                             reds_mig_event,
+                                             spice_migration);
     return;
 
 error:
