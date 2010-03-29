@@ -3311,8 +3311,7 @@ static UserTimer *create_timer(SlirpUsrNetworkInterface *usr_interface,
 
     worker = ((RedSlirpNetworkInterface *)usr_interface)->worker;
 
-    return (void *)worker->core_interface->create_timer(worker->core_interface,
-                                                        proc, opaque);
+    return (void *)worker->core_interface->timer_add(proc, opaque);
 }
 
 static void arm_timer(SlirpUsrNetworkInterface *usr_interface, UserTimer *timer, uint32_t ms)
@@ -3333,7 +3332,7 @@ static void arm_timer(SlirpUsrNetworkInterface *usr_interface, UserTimer *timer,
         return;
     }
 
-    worker->core_interface->arm_timer(worker->core_interface, (VDObjectRef)timer, ms);
+    worker->core_interface->timer_start((SpiceTimer*)timer, ms);
 }
 
 /***********************************************

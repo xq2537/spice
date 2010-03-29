@@ -267,9 +267,9 @@ typedef struct RedsState {
     int is_client_mouse_allowed;
     int dispatcher_allows_client_mouse;
     MonitorMode monitor_mode;
-    VDObjectRef mig_timer;
-    VDObjectRef key_modifiers_timer;
-    VDObjectRef mm_timer;
+    SpiceTimer *mig_timer;
+    SpiceTimer *key_modifiers_timer;
+    SpiceTimer *mm_timer;
 
     TicketAuthentication taTicket;
     SSL_CTX *ctx;
@@ -279,7 +279,7 @@ typedef struct RedsState {
     SpiceStat *stat;
     pthread_mutex_t stat_lock;
     RedsStatValue roundtrip_stat;
-    VDObjectRef ping_timer;
+    SpiceTimer *ping_timer;
     int ping_interval;
 #endif
     uint32_t ping_id;
@@ -686,7 +686,7 @@ static void reds_mig_cleanup()
         reds->mig_inprogress = FALSE;
         reds->mig_wait_connect = FALSE;
         reds->mig_wait_disconnect = FALSE;
-        core->disarm_timer(core, reds->mig_timer);
+        core->timer_cancel(reds->mig_timer);
         mig->notifier_done(mig, reds->mig_notifier);
     }
 }
@@ -1034,9 +1034,9 @@ static void do_ping_client(const char *opt, int has_interval, int interval)
         if (has_interval && interval > 0) {
             reds->ping_interval = interval * 1000;
         }
-        core->arm_timer(core, reds->ping_timer, reds->ping_interval);
+        core->timer_start(reds->ping_timer, reds->ping_interval);
     } else if (!strcmp(opt, "off")) {
-        core->disarm_timer(core, reds->ping_timer);
+        core->timer_cancel(reds->ping_timer);
     } else {
         return;
     }
@@ -1046,11 +1046,11 @@ static void ping_timer_cb()
 {
     if (!reds->peer) {
         red_printf("not connected to peer, ping off");
-        core->disarm_timer(core, reds->ping_timer);
+        core->timer_cancel(reds->ping_timer);
         return;
     }
     do_ping_client(NULL, 0, 0);
-    core->arm_timer(core, reds->ping_timer, reds->ping_interval);
+    core->timer_start(reds->ping_timer, reds->ping_interval);
 }
 
 #endif
@@ -2100,7 +2100,7 @@ static void reds_handle_main_link(RedLinkInfo *link)
 
 static void activate_modifiers_watch()
 {
-    core->arm_timer(core, reds->key_modifiers_timer, KEY_MODIFIERS_TTL);
+    core->timer_start(reds->key_modifiers_timer, KEY_MODIFIERS_TTL);
 }
 
 static void push_key_scan(uint8_t scan)
@@ -3394,7 +3394,7 @@ static void reds_mig_continue(RedsMigSpice *s)
     free(s->local_args);
     free(s);
     reds->mig_wait_connect = TRUE;
-    core->arm_timer(core, reds->mig_timer, MIGRATE_TIMEOUT);
+    core->timer_start(reds->mig_timer, MIGRATE_TIMEOUT);
 }
 
 static void reds_mig_receive_ack(RedsMigSpice *s)
@@ -3690,7 +3690,7 @@ static void reds_mig_finished(void *opaque, int completed)
         SpiceMsgMigrate *migrate;
 
         reds->mig_wait_disconnect = TRUE;
-        core->arm_timer(core, reds->mig_timer, MIGRATE_TIMEOUT);
+        core->timer_start(reds->mig_timer, MIGRATE_TIMEOUT);
 
         item = new_simple_out_item(SPICE_MSG_MIGRATE, sizeof(SpiceMsgMigrate));
         migrate = (SpiceMsgMigrate *)item->data;
@@ -3959,7 +3959,7 @@ void reds_enable_mm_timer()
     SpiceMsgMainMultiMediaTime *time_mes;
     SimpleOutItem *item;
 
-    core->arm_timer(core, reds->mm_timer, MM_TIMER_GRANULARITY_MS);
+    core->timer_start(reds->mm_timer, MM_TIMER_GRANULARITY_MS);
     if (!reds->peer) {
         return;
     }
@@ -3976,13 +3976,13 @@ void reds_enable_mm_timer()
 
 void reds_desable_mm_timer()
 {
-    core->disarm_timer(core, reds->mm_timer);
+    core->timer_cancel(reds->mm_timer);
 }
 
 static void mm_timer_proc(void *opaque)
 {
     red_dispatcher_set_mm_time(reds_get_mm_time());
-    core->arm_timer(core, reds->mm_timer, MM_TIMER_GRANULARITY_MS);
+    core->timer_start(reds->mm_timer, MM_TIMER_GRANULARITY_MS);
 }
 
 static void attach_to_red_agent(VDIPortInterface *interface)
@@ -4273,10 +4273,10 @@ static void do_spice_init(CoreInterface *core_interface)
 
     init_vd_agent_resources();
 
-    if (!(reds->mig_timer = core->create_timer(core, migrate_timout, NULL))) {
+    if (!(reds->mig_timer = core->timer_add(migrate_timout, NULL))) {
         red_error("migration timer create failed");
     }
-    if (!(reds->key_modifiers_timer = core->create_timer(core, key_modifiers_sender, NULL))) {
+    if (!(reds->key_modifiers_timer = core->timer_add(key_modifiers_sender, NULL))) {
         red_error("key modifiers timer create failed");
     }
 
@@ -4303,16 +4303,16 @@ static void do_spice_init(CoreInterface *core_interface)
     if (pthread_mutex_init(&reds->stat_lock, NULL)) {
         red_error("mutex init failed");
     }
-    if (!(reds->ping_timer = core->create_timer(core, ping_timer_cb, NULL))) {
+    if (!(reds->ping_timer = core->timer_add(ping_timer_cb, NULL))) {
         red_error("ping timer create failed");
     }
     reds->ping_interval = PING_INTERVAL;
 #endif
 
-    if (!(reds->mm_timer = core->create_timer(core, mm_timer_proc, NULL))) {
+    if (!(reds->mm_timer = core->timer_add(mm_timer_proc, NULL))) {
         red_error("mm timer create failed");
     }
-    core->arm_timer(core, reds->mm_timer, MM_TIMER_GRANULARITY_MS);
+    core->timer_start(reds->mm_timer, MM_TIMER_GRANULARITY_MS);
 
     reds_init_net();
     if (reds->secure_listen_socket != -1) {

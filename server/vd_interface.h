@@ -66,7 +66,6 @@ typedef enum {
 
 typedef void (*vd_interface_change_notifier_t)(void *opaque, VDInterface *interface,
                                                VDInterfaceChangeType change);
-typedef void (*timer_callback_t)(void *opaque);
 
 #define SPICE_WATCH_EVENT_READ  (1 << 0)
 #define SPICE_WATCH_EVENT_WRITE (1 << 1)
@@ -74,13 +73,16 @@ typedef void (*timer_callback_t)(void *opaque);
 typedef struct SpiceWatch SpiceWatch;
 typedef void (*SpiceWatchFunc)(int fd, int event, void *opaque);
 
+typedef struct SpiceTimer SpiceTimer;
+typedef void (*SpiceTimerFunc)(void *opaque);
+
 struct CoreInterface {
     VDInterface base;
 
-    VDObjectRef (*create_timer)(CoreInterface *core, timer_callback_t, void *opaue);
-    void (*arm_timer)(CoreInterface *core, VDObjectRef timer, uint32_t ms);
-    void (*disarm_timer)(CoreInterface *core, VDObjectRef timer);
-    void (*destroy_timer)(CoreInterface *core, VDObjectRef timer);
+    SpiceTimer *(*timer_add)(SpiceTimerFunc func, void *opaque);
+    void (*timer_start)(SpiceTimer *timer, uint32_t ms);
+    void (*timer_cancel)(SpiceTimer *timer);
+    void (*timer_remove)(SpiceTimer *timer);
 
     SpiceWatch *(*watch_add)(int fd, int event_mask, SpiceWatchFunc func, void *opaque);
     void (*watch_update_mask)(SpiceWatch *watch, int event_mask);
