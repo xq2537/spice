@@ -2277,30 +2277,30 @@ static void inputs_relase_keys(void)
     push_key_scan(0x38 | 0x80); //LALT
 }
 
-static void inputs_read(void *data)
+static void inputs_event(int fd, int event, void *data)
 {
-    InputsState *inputs_state = (InputsState *)data;
-    if (handle_incoming(inputs_state->peer, &inputs_state->in_handler)) {
-        inputs_relase_keys();
-        core->set_file_handlers(core, inputs_state->peer->socket, NULL, NULL, NULL);
-        if (inputs_state->channel) {
-            inputs_state->channel->data = NULL;
-            reds->inputs_state = NULL;
+    InputsState *inputs_state = data;
+
+    if (event & SPICE_WATCH_EVENT_READ) {
+        if (handle_incoming(inputs_state->peer, &inputs_state->in_handler)) {
+            inputs_relase_keys();
+            core->watch_remove(inputs_state->peer->watch);
+            inputs_state->peer->watch = NULL;
+            if (inputs_state->channel) {
+                inputs_state->channel->data = NULL;
+                reds->inputs_state = NULL;
+            }
+            inputs_state->peer->cb_free(inputs_state->peer);
+            free(inputs_state);
         }
-        inputs_state->peer->cb_free(inputs_state->peer);
-        free(inputs_state);
+    }
+    if (event & SPICE_WATCH_EVENT_WRITE) {
+        if (handle_outgoing(inputs_state->peer, &inputs_state->out_handler)) {
+            reds_disconnect();
+        }
     }
 }
 
-static void inputs_write(void *data)
-{
-    InputsState *inputs_state = (InputsState *)data;
-
-    red_printf("");
-    if (handle_outgoing(inputs_state->peer, &inputs_state->out_handler)) {
-        reds_disconnect();
-    }
-}
 
 static void inputs_shutdown(Channel *channel)
 {
@@ -2337,15 +2337,14 @@ static void inputs_migrate(Channel *channel)
 static void inputs_select(void *opaque, int select)
 {
     InputsState *inputs_state;
+    int eventmask = SPICE_WATCH_EVENT_READ;
     red_printf("");
 
     inputs_state = (InputsState *)opaque;
     if (select) {
-        core->set_file_handlers(core, inputs_state->peer->socket, inputs_read, inputs_write,
-                                inputs_state);
-    } else {
-        core->set_file_handlers(core, inputs_state->peer->socket, inputs_read, NULL, inputs_state);
+        eventmask |= SPICE_WATCH_EVENT_WRITE;
     }
+    core->watch_update_mask(inputs_state->peer->watch, eventmask);
 }
 
 static void inputs_may_write(void *opaque)
@@ -2388,7 +2387,8 @@ static void inputs_link(Channel *channel, RedsStreamContext *peer, int migration
     inputs_state->pending_mouse_event = FALSE;
     channel->data = inputs_state;
     reds->inputs_state = inputs_state;
-    core->set_file_handlers(core, peer->socket, inputs_read, NULL, inputs_state);
+    peer->watch = core->watch_add(peer->socket, SPICE_WATCH_EVENT_READ,
+                                  inputs_event, inputs_state);
 
     SpiceDataHeader header;
     SpiceMsgInputsInit inputs_init;
