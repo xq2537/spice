@@ -245,6 +245,8 @@ typedef struct RedsStatValue {
 typedef struct RedsState {
     int listen_socket;
     int secure_listen_socket;
+    SpiceWatch *listen_watch;
+    SpiceWatch *secure_listen_watch;
     RedsStreamContext *peer;
     int disconnecting;
     uint32_t link_id;
@@ -2784,7 +2786,7 @@ static RedLinkInfo *reds_accept_connection(int listen_socket)
     return link;
 }
 
-static void reds_accept_ssl_connection(void *data)
+static void reds_accept_ssl_connection(int fd, int event, void *data)
 {
     RedLinkInfo *link;
     int return_code;
@@ -2843,7 +2845,7 @@ error:
     free(link);
 }
 
-static void reds_accept(void *data)
+static void reds_accept(int fd, int event, void *data)
 {
     RedLinkInfo *link;
 
@@ -2917,7 +2919,10 @@ static void reds_init_net()
 {
     if (spice_port != -1) {
         reds->listen_socket = reds_init_socket(spice_addr, spice_port, spice_family);
-        if (core->set_file_handlers(core, reds->listen_socket, reds_accept, NULL, NULL)) {
+        reds->listen_watch = core->watch_add(reds->listen_socket,
+                                             SPICE_WATCH_EVENT_READ,
+                                             reds_accept, NULL);
+        if (reds->listen_watch == NULL) {
             red_error("set fd handle failed");
         }
     }
@@ -2925,8 +2930,10 @@ static void reds_init_net()
     if (spice_secure_port != -1) {
         reds->secure_listen_socket = reds_init_socket(spice_addr, spice_secure_port,
                                                       spice_family);
-        if (core->set_file_handlers(core, reds->secure_listen_socket,
-                                    reds_accept_ssl_connection, NULL, NULL)) {
+        reds->secure_listen_watch = core->watch_add(reds->secure_listen_socket,
+                                                    SPICE_WATCH_EVENT_READ,
+                                                    reds_accept_ssl_connection, NULL);
+        if (reds->secure_listen_watch == NULL) {
             red_error("set fd handle failed");
         }
     }
@@ -3545,12 +3552,12 @@ static void reds_mig_started(void *opaque, const char *in_args)
 
     reds->mig_inprogress = TRUE;
 
-    if (reds->listen_socket != -1) {
-        core->set_file_handlers(core, reds->listen_socket, NULL, NULL, NULL);
+    if (reds->listen_watch != NULL) {
+        core->watch_update_mask(reds->listen_watch, 0);
     }
 
-    if (reds->secure_listen_socket != -1) {
-        core->set_file_handlers(core, reds->secure_listen_socket, NULL, NULL, NULL);
+    if (reds->secure_listen_watch != NULL) {
+        core->watch_update_mask(reds->secure_listen_watch, 0);
     }
 
     if (reds->peer == NULL) {
@@ -3650,13 +3657,12 @@ static void reds_mig_finished(void *opaque, int completed)
     SimpleOutItem *item;
 
     red_printf("");
-    if (reds->listen_socket != -1) {
-        core->set_file_handlers(core, reds->listen_socket, reds_accept, NULL, NULL);
+    if (reds->listen_watch != NULL) {
+        core->watch_update_mask(reds->listen_watch, SPICE_WATCH_EVENT_READ);
     }
 
-    if (reds->secure_listen_socket != -1) {
-        core->set_file_handlers(core, reds->secure_listen_socket, reds_accept_ssl_connection,
-                                NULL, NULL);
+    if (reds->secure_listen_watch != NULL) {
+        core->watch_update_mask(reds->secure_listen_watch, SPICE_WATCH_EVENT_READ);
     }
 
     if (reds->peer == NULL) {
