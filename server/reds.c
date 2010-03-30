@@ -4029,8 +4029,7 @@ static void attach_to_red_agent(VDIPortInterface *interface)
 }
 
 __visible__ int spice_server_add_interface(SpiceServer *s,
-                                           SpiceBaseInstance *sin,
-                                           int id)
+                                           SpiceBaseInstance *sin)
 {
     SpiceBaseInterface *interface = sin->sif;
 
@@ -4083,17 +4082,20 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
             red_error("migration register failed");
         }
 
-    } else if (strcmp(interface->type, VD_INTERFACE_QXL) == 0) {
-        QXLInterface *qxl_interface;
+    } else if (strcmp(interface->type, SPICE_INTERFACE_QXL) == 0) {
+        QXLInstance *qxl;
 
-        red_printf("VD_INTERFACE_QXL");
-        if (interface->major_version != VD_INTERFACE_QXL_MAJOR ||
-            interface->minor_version < VD_INTERFACE_QXL_MINOR) {
+        red_printf("SPICE_INTERFACE_QXL");
+        if (interface->major_version != SPICE_INTERFACE_QXL_MAJOR ||
+            interface->minor_version < SPICE_INTERFACE_QXL_MINOR) {
             red_printf("unsuported qxl interface");
             return -1;
         }
-        qxl_interface = (QXLInterface *)interface;
-        red_dispatcher_init(qxl_interface, id);
+
+        qxl = SPICE_CONTAINEROF(sin, QXLInstance, base);
+        qxl->st = spice_new0(QXLState, 1);
+        qxl->st->qif = SPICE_CONTAINEROF(interface, QXLInterface, base);
+        qxl->st->dispatcher = red_dispatcher_init(qxl);
 
     } else if (strcmp(interface->type, VD_INTERFACE_TABLET) == 0) {
         red_printf("VD_INTERFACE_TABLET");

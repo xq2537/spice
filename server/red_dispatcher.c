@@ -40,7 +40,7 @@ static int num_active_workers = 0;
 typedef struct RedDispatcher RedDispatcher;
 struct RedDispatcher {
     QXLWorker base;
-    QXLInterface *qxl_interface;
+    QXLInstance *qxl;
     int channel;
     pthread_t worker_thread;
     uint32_t pending;
@@ -387,7 +387,7 @@ void red_dispatcher_set_mm_time(uint32_t mm_time)
 {
     RedDispatcher *now = dispatchers;
     while (now) {
-        now->qxl_interface->set_mm_time(now->qxl_interface, mm_time);
+        now->qxl->st->qif->set_mm_time(now->qxl, mm_time);
         now = now->next;
     }
 }
@@ -409,7 +409,7 @@ void red_dispatcher_on_ic_change()
     RedDispatcher *now = dispatchers;
     while (now) {
         RedWorkeMessage message = RED_WORKER_MESSAGE_SET_COMPRESSION;
-        now->qxl_interface->set_compression_level(now->qxl_interface, compression_level);
+        now->qxl->st->qif->set_compression_level(now->qxl, compression_level);
         write_message(now->channel, &message);
         send_data(now->channel, &image_compression, sizeof(spice_image_compression_t));
         now = now->next;
@@ -422,7 +422,7 @@ void red_dispatcher_on_sv_change()
     RedDispatcher *now = dispatchers;
     while (now) {
         RedWorkeMessage message = RED_WORKER_MESSAGE_SET_STREAMING_VIDEO;
-        now->qxl_interface->set_compression_level(now->qxl_interface, compression_level);
+        now->qxl->st->qif->set_compression_level(now->qxl, compression_level);
         write_message(now->channel, &message);
         send_data(now->channel, &streaming_video, sizeof(uint32_t));
         now = now->next;
@@ -458,11 +458,11 @@ uint32_t red_dispatcher_qxl_ram_size()
     if (!dispatchers) {
         return 0;
     }
-    dispatchers->qxl_interface->get_init_info(dispatchers->qxl_interface, &qxl_info);
+    dispatchers->qxl->st->qif->get_init_info(dispatchers->qxl, &qxl_info);
     return qxl_info.qxl_ram_size;
 }
 
-RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface, int id)
+RedDispatcher *red_dispatcher_init(QXLInstance *qxl)
 {
     RedDispatcher *dispatcher;
     int channels[2];
@@ -475,9 +475,9 @@ RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface, int id)
     sigset_t thread_sig_mask;
     sigset_t curr_sig_mask;
 
-    if (qxl_interface->pci_vendor != REDHAT_PCI_VENDOR_ID ||
-        qxl_interface->pci_id != QXL_DEVICE_ID ||
-        qxl_interface->pci_revision != QXL_REVISION) {
+    if (qxl->st->qif->pci_vendor != REDHAT_PCI_VENDOR_ID ||
+        qxl->st->qif->pci_id != QXL_DEVICE_ID ||
+        qxl->st->qif->pci_revision != QXL_REVISION) {
         red_printf("pci mismatch");
         return NULL;
     }
@@ -492,8 +492,8 @@ RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface, int id)
 
     dispatcher = spice_new0(RedDispatcher, 1);
     dispatcher->channel = channels[0];
-    init_data.qxl_interface = dispatcher->qxl_interface = qxl_interface;
-    init_data.id = id;
+    init_data.qxl = dispatcher->qxl = qxl;
+    init_data.id = qxl->id;
     init_data.channel = channels[1];
     init_data.pending = &dispatcher->pending;
     init_data.num_renderers = num_renderers;
@@ -502,8 +502,8 @@ RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface, int id)
     init_data.image_compression = image_compression;
     init_data.streaming_video = streaming_video;
 
-    dispatcher->base.major_version = VD_INTERFACE_QXL_MAJOR;
-    dispatcher->base.major_version = VD_INTERFACE_QXL_MINOR;
+    dispatcher->base.major_version = SPICE_INTERFACE_QXL_MAJOR;
+    dispatcher->base.minor_version = SPICE_INTERFACE_QXL_MINOR;
     dispatcher->base.wakeup = qxl_worker_wakeup;
     dispatcher->base.oom = qxl_worker_oom;
     dispatcher->base.save = qxl_worker_save;
@@ -522,7 +522,7 @@ RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface, int id)
     dispatcher->base.reset_cursor = qxl_worker_reset_cursor;
     dispatcher->base.destroy_surface_wait = qxl_worker_destroy_surface_wait;
 
-    qxl_interface->get_init_info(qxl_interface, &init_info);
+    qxl->st->qif->get_init_info(qxl, &init_info);
 
     init_data.memslot_id_bits = init_info.memslot_id_bits;
     init_data.memslot_gen_bits = init_info.memslot_gen_bits;
@@ -548,7 +548,7 @@ RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface, int id)
 
     reds_channel = spice_new0(Channel, 1);
     reds_channel->type = SPICE_CHANNEL_DISPLAY;
-    reds_channel->id = id;
+    reds_channel->id = qxl->id;
     reds_channel->link = red_dispatcher_set_peer;
     reds_channel->shutdown = red_dispatcher_shutdown_peer;
     reds_channel->migrate = red_dispatcher_migrate;
@@ -557,14 +557,14 @@ RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface, int id)
 
     cursor_channel = spice_new0(Channel, 1);
     cursor_channel->type = SPICE_CHANNEL_CURSOR;
-    cursor_channel->id = id;
+    cursor_channel->id = qxl->id;
     cursor_channel->link = red_dispatcher_set_cursor_peer;
     cursor_channel->shutdown = red_dispatcher_shutdown_cursor_peer;
     cursor_channel->migrate = red_dispatcher_cursor_migrate;
     cursor_channel->data = dispatcher;
     reds_register_channel(cursor_channel);
-    qxl_interface->attache_worker(qxl_interface, &dispatcher->base);
-    qxl_interface->set_compression_level(qxl_interface, calc_compression_level());
+    qxl->st->qif->attache_worker(qxl, &dispatcher->base);
+    qxl->st->qif->set_compression_level(qxl, calc_compression_level());
 
     dispatcher->next = dispatchers;
     dispatchers = dispatcher;

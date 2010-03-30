@@ -83,7 +83,7 @@ enum {
 };
 
 typedef struct WorkerInitData {
-    struct QXLInterface *qxl_interface;
+    struct QXLInstance *qxl;
     int id;
     int channel;
     uint32_t *pending;

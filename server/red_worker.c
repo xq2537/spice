@@ -921,7 +921,7 @@ typedef struct RedWorker {
     EventListener dev_listener;
     DisplayChannel *display_channel;
     CursorChannel *cursor_channel;
-    QXLInterface *qxl;
+    QXLInstance *qxl;
     int id;
     int channel;
     int running;
@@ -1508,7 +1508,7 @@ static inline void red_destroy_surface(RedWorker *worker, uint32_t surface_id)
 
                 release_info_ext.group_id = surface->release_group_id;
                 release_info_ext.info = surface->release_info;
-                worker->qxl->release_resource(worker->qxl, release_info_ext);
+                worker->qxl->st->qif->release_resource(worker->qxl, release_info_ext);
             }
 
             region_destroy(&surface->draw_dirty_region);
@@ -1542,7 +1542,7 @@ static inline void free_qxl_drawable(RedWorker *worker, QXLDrawable *drawable, u
     }
     release_info_ext.group_id = group_id;
     release_info_ext.info = &drawable->release_info;
-    worker->qxl->release_resource(worker->qxl, release_info_ext);
+    worker->qxl->st->qif->release_resource(worker->qxl, release_info_ext);
 }
 
 static void remove_depended_item(DependItem *item)
@@ -3903,7 +3903,7 @@ static inline void red_process_surface(RedWorker *worker, QXLSurfaceCmd *surface
                            height, stride, surface->u.surface_create.format, data);
         release_info_ext.group_id = group_id;
         release_info_ext.info = &surface->release_info;
-        worker->qxl->release_resource(worker->qxl, release_info_ext);
+        worker->qxl->st->qif->release_resource(worker->qxl, release_info_ext);
         break;
     }
     case QXL_SURFACE_CMD_DESTROY:
@@ -4730,7 +4730,7 @@ static void red_release_cursor(RedWorker *worker, CursorItem *cursor)
         cursor_cmd = cursor->qxl_cursor;
         release_info_ext.group_id = cursor->group_id;
         release_info_ext.info = &cursor_cmd->release_info;
-        worker->qxl->release_resource(worker->qxl, release_info_ext);
+        worker->qxl->st->qif->release_resource(worker->qxl, release_info_ext);
         free_cursor_item(worker, cursor);
     }
 }
@@ -4836,14 +4836,14 @@ static int red_process_cursor(RedWorker *worker, uint32_t max_pipe_size)
     int n = 0;
 
     while (!worker->cursor_channel || worker->cursor_channel->base.pipe_size <= max_pipe_size) {
-        if (!worker->qxl->get_cursor_command(worker->qxl, &ext_cmd)) {
+        if (!worker->qxl->st->qif->get_cursor_command(worker->qxl, &ext_cmd)) {
             if (worker->repoll_cursor_ring < CMD_RING_POLL_RETRIES) {
                 worker->repoll_cursor_ring++;
                 worker->epoll_timeout = MIN(worker->epoll_timeout, CMD_RING_POLL_TIMEOUT);
                 break;
             }
             if (worker->repoll_cursor_ring > CMD_RING_POLL_RETRIES ||
-                worker->qxl->req_cursor_notification(worker->qxl)) {
+                worker->qxl->st->qif->req_cursor_notification(worker->qxl)) {
                 worker->repoll_cursor_ring++;
                 break;
             }
@@ -4873,14 +4873,14 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size)
     uint64_t start = red_now();
 
     while (!worker->display_channel || worker->display_channel->base.pipe_size <= max_pipe_size) {
-        if (!worker->qxl->get_command(worker->qxl, &ext_cmd)) {
+        if (!worker->qxl->st->qif->get_command(worker->qxl, &ext_cmd)) {
             if (worker->repoll_cmd_ring < CMD_RING_POLL_RETRIES) {
                 worker->repoll_cmd_ring++;
                 worker->epoll_timeout = MIN(worker->epoll_timeout, CMD_RING_POLL_TIMEOUT);
                 break;
             }
             if (worker->repoll_cmd_ring > CMD_RING_POLL_RETRIES ||
-                         worker->qxl->req_cmd_notification(worker->qxl)) {
+                         worker->qxl->st->qif->req_cmd_notification(worker->qxl)) {
                 worker->repoll_cmd_ring++;
                 break;
             }
@@ -4904,10 +4904,10 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size)
             surface_id = draw_cmd->surface_id;
             validate_surface(worker, surface_id);
             red_update_area(worker, &draw_cmd->area, draw_cmd->surface_id);
-            worker->qxl->notify_update(worker->qxl, draw_cmd->update_id);
+            worker->qxl->st->qif->notify_update(worker->qxl, draw_cmd->update_id);
             release_info_ext.group_id = ext_cmd.group_id;
             release_info_ext.info = &draw_cmd->release_info;
-            worker->qxl->release_resource(worker->qxl, release_info_ext);
+            worker->qxl->st->qif->release_resource(worker->qxl, release_info_ext);
             break;
         }
         case QXL_CMD_MESSAGE: {
@@ -4917,7 +4917,7 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size)
             red_printf("MESSAGE: %s", message->data);
             release_info_ext.group_id = ext_cmd.group_id;
             release_info_ext.info = &message->release_info;
-            worker->qxl->release_resource(worker->qxl, release_info_ext);
+            worker->qxl->st->qif->release_resource(worker->qxl, release_info_ext);
             break;
         }
         case QXL_CMD_SURFACE: {
@@ -8098,7 +8098,7 @@ static inline void flush_display_commands(RedWorker *worker)
         uint64_t end_time;
 
         red_process_commands(worker, MAX_PIPE_SIZE);
-        if (!worker->qxl->has_command(worker->qxl)) {
+        if (!worker->qxl->st->qif->has_command(worker->qxl)) {
             break;
         }
 
@@ -8106,7 +8106,7 @@ static inline void flush_display_commands(RedWorker *worker)
             display_channel_push(worker);
         }
 
-        if (!worker->qxl->has_command(worker->qxl)) {
+        if (!worker->qxl->st->qif->has_command(worker->qxl)) {
             break;
         }
         end_time = red_now() + DISPLAY_CLIENT_TIMEOUT * 10;
@@ -8869,7 +8869,7 @@ static void red_save_cursor(RedWorker *worker)
     cursor_data->data_size = local->data_size;
     cursor_data->_cursor.header = local->red_cursor.header;
     memcpy(cursor_data->_cursor.data, local->red_cursor.data, local->data_size);
-    worker->qxl->set_save_data(worker->qxl, cursor_data, size);
+    worker->qxl->st->qif->set_save_data(worker->qxl, cursor_data, size);
 }
 
 static LocalCursor *_new_local_cursor(SpiceCursorHeader *header, int data_size, SpicePoint16 position)
@@ -8934,7 +8934,7 @@ static void red_cursor_flush(RedWorker *worker)
 static void red_save(RedWorker *worker)
 {
     if (!worker->cursor) {
-        worker->qxl->set_save_data(worker->qxl, NULL, 0);
+        worker->qxl->st->qif->set_save_data(worker->qxl, NULL, 0);
         return;
     }
     red_save_cursor(worker);
@@ -8942,7 +8942,7 @@ static void red_save(RedWorker *worker)
 
 static void red_cursor_load(RedWorker *worker)
 {
-    CursorData *cursor_data = worker->qxl->get_save_data(worker->qxl);
+    CursorData *cursor_data = worker->qxl->st->qif->get_save_data(worker->qxl);
     LocalCursor *local;
 
     if (!cursor_data) {
@@ -9228,7 +9228,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         while (red_process_commands(worker, MAX_PIPE_SIZE)) {
             display_channel_push(worker);
         }
-        if (worker->qxl->flush_resources(worker->qxl) == 0) {
+        if (worker->qxl->st->qif->flush_resources(worker->qxl) == 0) {
             red_printf("oom current %u pipe %u", worker->current_size, worker->display_channel ?
                        worker->display_channel->base.pipe_size : 0);
             red_free_some(worker);
@@ -9437,7 +9437,7 @@ static void red_init(RedWorker *worker, WorkerInitData *init_data)
     ASSERT(sizeof(CursorItem) <= QXL_CURSUR_DEVICE_DATA_SIZE);
 
     memset(worker, 0, sizeof(RedWorker));
-    worker->qxl = init_data->qxl_interface;
+    worker->qxl = init_data->qxl;
     worker->id = init_data->id;
     worker->channel = init_data->channel;
     worker->pending = init_data->pending;

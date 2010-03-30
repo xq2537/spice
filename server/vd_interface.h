@@ -84,11 +84,12 @@ struct SpiceCoreInterface {
 
 };
 
-#define VD_INTERFACE_QXL "qxl"
-#define VD_INTERFACE_QXL_MAJOR 3
-#define VD_INTERFACE_QXL_MINOR 0
+#define SPICE_INTERFACE_QXL "qxl"
+#define SPICE_INTERFACE_QXL_MAJOR 3
+#define SPICE_INTERFACE_QXL_MINOR 0
 typedef struct QXLInterface QXLInterface;
-typedef void (*qxl_mode_change_notifier_t)(void *opaque);
+typedef struct QXLInstance QXLInstance;
+typedef struct QXLState QXLState;
 typedef struct QXLWorker QXLWorker;
 typedef struct QXLDevMemSlot QXLDevMemSlot;
 typedef struct QXLDevSurfaceCreate QXLDevSurfaceCreate;
@@ -183,21 +184,27 @@ struct QXLInterface {
     uint16_t pci_id;
     uint8_t pci_revision;
 
-    void (*attache_worker)(QXLInterface *qxl, QXLWorker *qxl_worker);
-    void (*set_compression_level)(QXLInterface *qxl, int level);
-    void (*set_mm_time)(QXLInterface *qxl, uint32_t mm_time);
+    void (*attache_worker)(QXLInstance *qin, QXLWorker *qxl_worker);
+    void (*set_compression_level)(QXLInstance *qin, int level);
+    void (*set_mm_time)(QXLInstance *qin, uint32_t mm_time);
 
-    void (*get_init_info)(QXLInterface *qxl, QXLDevInitInfo *info);
-    int (*get_command)(QXLInterface *qxl, struct QXLCommandExt *cmd);
-    int (*req_cmd_notification)(QXLInterface *qxl);
-    int (*has_command)(QXLInterface *qxl);
-    void (*release_resource)(QXLInterface *qxl, struct QXLReleaseInfoExt release_info);
-    int (*get_cursor_command)(QXLInterface *qxl, struct QXLCommandExt *cmd);
-    int (*req_cursor_notification)(QXLInterface *qxl);
-    void (*notify_update)(QXLInterface *qxl, uint32_t update_id);
-    void (*set_save_data)(QXLInterface *qxl, void *data, int size);
-    void *(*get_save_data)(QXLInterface *qxl);
-    int (*flush_resources)(QXLInterface *qxl);
+    void (*get_init_info)(QXLInstance *qin, QXLDevInitInfo *info);
+    int (*get_command)(QXLInstance *qin, struct QXLCommandExt *cmd);
+    int (*req_cmd_notification)(QXLInstance *qin);
+    int (*has_command)(QXLInstance *qin);
+    void (*release_resource)(QXLInstance *qin, struct QXLReleaseInfoExt release_info);
+    int (*get_cursor_command)(QXLInstance *qin, struct QXLCommandExt *cmd);
+    int (*req_cursor_notification)(QXLInstance *qin);
+    void (*notify_update)(QXLInstance *qin, uint32_t update_id);
+    void (*set_save_data)(QXLInstance *qin, void *data, int size);
+    void *(*get_save_data)(QXLInstance *qin);
+    int (*flush_resources)(QXLInstance *qin);
+};
+
+struct QXLInstance {
+    SpiceBaseInstance  base;
+    int                id;
+    QXLState           *st;
 };
 
 #define SPICE_INTERFACE_KEYBOARD "keyboard"

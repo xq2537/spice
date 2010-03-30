@@ -41,8 +41,7 @@ int spice_server_set_tls(SpiceServer *s, int port,
                          const char *dh_key_file, const char *ciphersuite);
 
 int spice_server_add_interface(SpiceServer *s,
-                               SpiceBaseInstance *sin,
-                               int id);
+                               SpiceBaseInstance *sin);
 int spice_server_remove_interface(SpiceBaseInstance *sin);
 int spice_server_kbd_leds(SpiceKbdInstance *sin, int leds);
 
