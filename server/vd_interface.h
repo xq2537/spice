@@ -219,17 +219,24 @@ struct SpiceKbdInstance {
     SpiceKbdState     *st;
 };
 
-#define VD_INTERFACE_MOUSE "mouse"
-#define VD_INTERFACE_MOUSE_MAJOR 1
-#define VD_INTERFACE_MOUSE_MINOR 1
-typedef struct MouseInterface MouseInterface;
+#define SPICE_INTERFACE_MOUSE "mouse"
+#define SPICE_INTERFACE_MOUSE_MAJOR 1
+#define SPICE_INTERFACE_MOUSE_MINOR 1
+typedef struct SpiceMouseInterface SpiceMouseInterface;
+typedef struct SpiceMouseInstance SpiceMouseInstance;
+typedef struct SpiceMouseState SpiceMouseState;
 
-struct MouseInterface {
+struct SpiceMouseInterface {
     SpiceBaseInterface base;
 
-    void (*moution)(MouseInterface* mouse, int dx, int dy, int dz,
-                    uint32_t buttons_state);
-    void (*buttons)(MouseInterface* mouse, uint32_t buttons_state);
+    void (*motion)(SpiceMouseInstance *sin, int dx, int dy, int dz,
+                   uint32_t buttons_state);
+    void (*buttons)(SpiceMouseInstance *sin, uint32_t buttons_state);
+};
+
+struct SpiceMouseInstance {
+    SpiceBaseInstance base;
+    SpiceMouseState   *st;
 };
 
 #define VD_INTERFACE_TABLET "tablet"

@@ -57,7 +57,7 @@
 SpiceCoreInterface *core = NULL;
 static MigrationInterface *mig = NULL;
 static SpiceKbdInstance *keyboard = NULL;
-static MouseInterface *mouse = NULL;
+static SpiceMouseInstance *mouse = NULL;
 static TabletInterface *tablet = NULL;
 static VDIPortInterface *vdagent = NULL;
 
@@ -2163,8 +2163,11 @@ static void inputs_handle_input(void *opaque, SpiceDataHeader *header)
             }
         }
         if (mouse && reds->mouse_mode == SPICE_MOUSE_MODE_SERVER) {
-            mouse->moution(mouse, mouse_motion->dx, mouse_motion->dy, 0,
-                           RED_MOUSE_STATE_TO_LOCAL(mouse_motion->buttons_state));
+            SpiceMouseInterface *sif;
+            sif = SPICE_CONTAINEROF(mouse->base.sif, SpiceMouseInterface, base);
+            sif->motion(mouse,
+                        mouse_motion->dx, mouse_motion->dy, 0,
+                        RED_MOUSE_STATE_TO_LOCAL(mouse_motion->buttons_state));
         }
         break;
     }
@@ -2219,7 +2222,10 @@ static void inputs_handle_input(void *opaque, SpiceDataHeader *header)
                 tablet->wheel(tablet, dz, RED_MOUSE_STATE_TO_LOCAL(mouse_press->buttons_state));
             }
         } else if (mouse) {
-            mouse->moution(mouse, 0, 0, dz, RED_MOUSE_STATE_TO_LOCAL(mouse_press->buttons_state));
+            SpiceMouseInterface *sif;
+            sif = SPICE_CONTAINEROF(mouse->base.sif, SpiceMouseInterface, base);
+            sif->motion(mouse, 0, 0, dz,
+                        RED_MOUSE_STATE_TO_LOCAL(mouse_press->buttons_state));
         }
         break;
     }
@@ -2234,7 +2240,10 @@ static void inputs_handle_input(void *opaque, SpiceDataHeader *header)
                 tablet->buttons(tablet, RED_MOUSE_STATE_TO_LOCAL(mouse_release->buttons_state));
             }
         } else if (mouse) {
-            mouse->buttons(mouse, RED_MOUSE_STATE_TO_LOCAL(mouse_release->buttons_state));
+            SpiceMouseInterface *sif;
+            sif = SPICE_CONTAINEROF(mouse->base.sif, SpiceMouseInterface, base);
+            sif->buttons(mouse,
+                         RED_MOUSE_STATE_TO_LOCAL(mouse_release->buttons_state));
         }
         break;
     }
@@ -4041,18 +4050,19 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
         keyboard = SPICE_CONTAINEROF(sin, SpiceKbdInstance, base);
         keyboard->st = spice_new0(SpiceKbdState, 1);
 
-    } else if (strcmp(interface->type, VD_INTERFACE_MOUSE) == 0) {
-        red_printf("VD_INTERFACE_MOUSE");
+    } else if (strcmp(interface->type, SPICE_INTERFACE_MOUSE) == 0) {
+        red_printf("SPICE_INTERFACE_MOUSE");
         if (mouse) {
             red_printf("already have mouse");
             return -1;
         }
-        if (interface->major_version != VD_INTERFACE_MOUSE_MAJOR ||
-            interface->minor_version < VD_INTERFACE_MOUSE_MINOR) {
+        if (interface->major_version != SPICE_INTERFACE_MOUSE_MAJOR ||
+            interface->minor_version < SPICE_INTERFACE_MOUSE_MINOR) {
             red_printf("unsuported mouse interface");
             return -1;
         }
-        mouse = (MouseInterface *)interface;
+        mouse = SPICE_CONTAINEROF(sin, SpiceMouseInstance, base);
+        mouse->st = spice_new0(SpiceMouseState, 1);
 
     } else if (strcmp(interface->type, VD_INTERFACE_MIGRATION) == 0) {
         red_printf("VD_INTERFACE_MIGRATION");
