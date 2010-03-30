@@ -21,13 +21,10 @@
 #include <sys/socket.h>
 #include "vd_interface.h"
 
-/* old interface */
-void spice_init(CoreInterface *core);
-
 /* new interface */
 typedef struct RedsState SpiceServer;
 SpiceServer *spice_server_new(void);
-int spice_server_init(SpiceServer *s, CoreInterface *core);
+int spice_server_init(SpiceServer *s, SpiceCoreInterface *core);
 void spice_server_destroy(SpiceServer *s);
 
 #define SPICE_ADDR_FLAG_IPV4_ONLY (1 << 0)

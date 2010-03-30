@@ -228,7 +228,8 @@ static void red_channel_peer_on_out_msg_done(void *opaque)
     }
 }
 
-RedChannel *red_channel_create(int size, RedsStreamContext *peer, CoreInterface *core,
+RedChannel *red_channel_create(int size, RedsStreamContext *peer,
+                               SpiceCoreInterface *core,
                                int migrate, int handle_acks,
                                channel_configure_socket_proc config_socket,
                                channel_disconnect_proc disconnect,

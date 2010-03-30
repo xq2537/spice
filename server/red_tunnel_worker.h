@@ -24,6 +24,6 @@
 
 #include "vd_interface.h"
 
-void *red_tunnel_attach(CoreInterface *core_interface, NetWireInterface *vlan_interface);
+void *red_tunnel_attach(SpiceCoreInterface *core_interface, NetWireInterface *vlan_interface);
 
 #endif

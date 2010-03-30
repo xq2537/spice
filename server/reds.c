@@ -54,7 +54,7 @@
 #include "red_tunnel_worker.h"
 #endif
 
-CoreInterface *core = NULL;
+SpiceCoreInterface *core = NULL;
 static MigrationInterface *mig = NULL;
 static KeyboardInterface *keyboard = NULL;
 static MouseInterface *mouse = NULL;
@@ -4267,11 +4267,11 @@ static void init_vd_agent_resources()
 
 const char *version_string = VERSION;
 
-static void do_spice_init(CoreInterface *core_interface)
+static void do_spice_init(SpiceCoreInterface *core_interface)
 {
     red_printf("starting %s", version_string);
 
-    if (core_interface->base.major_version != VD_INTERFACE_CORE_MAJOR) {
+    if (core_interface->base.major_version != SPICE_INTERFACE_CORE_MAJOR) {
         red_error("bad core interface version");
     }
     core = core_interface;
@@ -4335,12 +4335,6 @@ static void do_spice_init(CoreInterface *core_interface)
     atexit(reds_exit);
 }
 
-__visible__ void spice_init(CoreInterface *core_interface)
-{
-    spice_server_new();
-    do_spice_init(core_interface);
-}
-
 /* new interface */
 __visible__ SpiceServer *spice_server_new(void)
 {
@@ -4351,7 +4345,7 @@ __visible__ SpiceServer *spice_server_new(void)
     return reds;
 }
 
-__visible__ int spice_server_init(SpiceServer *s, CoreInterface *core)
+__visible__ int spice_server_init(SpiceServer *s, SpiceCoreInterface *core)
 {
     ASSERT(reds == s);
     do_spice_init(core);

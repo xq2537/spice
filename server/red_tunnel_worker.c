@@ -534,7 +534,7 @@ struct TunnelWorker {
     Channel channel_interface; // for reds
     TunnelChannel *channel;
 
-    CoreInterface *core_interface;
+    SpiceCoreInterface *core_interface;
     NetWireInterface *vlan_interface;
     RedSlirpNetworkInterface tunnel_interface;
     RedSlirpNetworkInterface null_interface;
@@ -970,7 +970,8 @@ static void tunnel_send_packet(void *opaque_tunnel, const uint8_t *pkt, int pkt_
     net_slirp_input(pkt, pkt_len);
 }
 
-void *red_tunnel_attach(CoreInterface *core_interface, NetWireInterface *vlan_interface)
+void *red_tunnel_attach(SpiceCoreInterface *core_interface,
+                        NetWireInterface *vlan_interface)
 {
     TunnelWorker *worker = spice_new0(TunnelWorker, 1);
 

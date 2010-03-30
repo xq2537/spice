@@ -50,23 +50,16 @@ struct SpiceBaseInstance {
     SpiceBaseInterface *sif;
 };
 
-#define VD_INTERFACE_CORE "core"
-#define VD_INTERFACE_CORE_MAJOR 1
-#define VD_INTERFACE_CORE_MINOR 2
-typedef struct CoreInterface CoreInterface;
-typedef enum {
-    VD_INTERFACE_ADDING,
-    VD_INTERFACE_REMOVING,
-} SpiceBaseInterfaceChangeType;
+#define SPICE_INTERFACE_CORE "core"
+#define SPICE_INTERFACE_CORE_MAJOR 1
+#define SPICE_INTERFACE_CORE_MINOR 2
+typedef struct SpiceCoreInterface SpiceCoreInterface;
 
 typedef enum {
     VD_LOG_ERROR = 1,
     VD_LOG_WARN,
     VD_LOG_INFO,
 } LogLevel;
-
-typedef void (*vd_interface_change_notifier_t)(void *opaque, SpiceBaseInterface *interface,
-                                               SpiceBaseInterfaceChangeType change);
 
 #define SPICE_WATCH_EVENT_READ  (1 << 0)
 #define SPICE_WATCH_EVENT_WRITE (1 << 1)
@@ -77,7 +70,7 @@ typedef void (*SpiceWatchFunc)(int fd, int event, void *opaque);
 typedef struct SpiceTimer SpiceTimer;
 typedef void (*SpiceTimerFunc)(void *opaque);
 
-struct CoreInterface {
+struct SpiceCoreInterface {
     SpiceBaseInterface base;
 
     SpiceTimer *(*timer_add)(SpiceTimerFunc func, void *opaque);

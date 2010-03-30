@@ -67,7 +67,7 @@ void reds_set_client_mouse_allowed(int is_client_mouse_allowed,
 void reds_register_channel(Channel *channel);
 void reds_unregister_channel(Channel *channel);
 
-extern struct CoreInterface *core;
+extern struct SpiceCoreInterface *core;
 extern uint64_t bitrate_per_sec;
 
 #define IS_LOW_BANDWIDTH() (bitrate_per_sec < 10 * 1024 * 1024)
