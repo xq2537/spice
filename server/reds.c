@@ -359,7 +359,6 @@ typedef struct PingItem {
     int size;
 } PingItem;
 
-
 #define ZERO_BUF_SIZE 4096
 
 static uint8_t zero_page[ZERO_BUF_SIZE] = {0};
@@ -4004,163 +4003,179 @@ static void attach_to_red_agent(VDIPortInterface *interface)
     reds_send_agent_connected();
 }
 
-static void interface_change_notifier(void *opaque, VDInterface *interface,
-                                      VDInterfaceChangeType change)
+__visible__ int spice_server_add_interface(SpiceServer *s,
+                                           SpiceBaseInstance *sin,
+                                           int id)
 {
-    if (interface->base_version != VM_INTERFACE_VERSION) {
-        red_printf("unsuported base interface version");
-        return;
-    }
-    switch (change) {
-    case VD_INTERFACE_ADDING:
-        if (strcmp(interface->type, VD_INTERFACE_KEYBOARD) == 0) {
-            red_printf("VD_INTERFACE_KEYBOARD");
-            if (keyboard) {
-                red_printf("already have keyboard");
-                return;
-            }
-            if (interface->major_version != VD_INTERFACE_KEYBOARD_MAJOR ||
-                interface->minor_version < VD_INTERFACE_KEYBOARD_MINOR) {
-                red_printf("unsuported keyboard interface");
-                return;
-            }
-            keyboard = (KeyboardInterface *)interface;
-            if (keyboard->register_leds_notifier) {
-                if (!keyboard->register_leds_notifier(keyboard, reds_on_keyboard_leds_change, NULL)) {
-                    red_error("register leds notifier failed");
-                }
-            }
-        } else if (strcmp(interface->type, VD_INTERFACE_MOUSE) == 0) {
-            red_printf("VD_INTERFACE_MOUSE");
-            if (mouse) {
-                red_printf("already have mouse");
-                return;
-            }
-            if (interface->major_version != VD_INTERFACE_MOUSE_MAJOR ||
-                interface->minor_version < VD_INTERFACE_MOUSE_MINOR) {
-                red_printf("unsuported mouse interface");
-                return;
-            }
-            mouse = (MouseInterface *)interface;
-        } else if (strcmp(interface->type, VD_INTERFACE_MIGRATION) == 0) {
-            red_printf("VD_INTERFACE_MIGRATION");
-            if (mig) {
-                red_printf("already have migration");
-                return;
-            }
-            if (interface->major_version != VD_INTERFACE_MIGRATION_MAJOR ||
-                interface->minor_version < VD_INTERFACE_MIGRATION_MINOR) {
-                red_printf("unsuported migration interface");
-                return;
-            }
-            mig = (MigrationInterface *)interface;
-            reds->mig_notifier = mig->register_notifiers(mig, MIGRATION_NOTIFY_SPICE_KEY,
-                                                         reds_mig_started, reds_mig_finished,
-                                                         reds_mig_recv, NULL);
-            if (reds->mig_notifier == INVALID_VD_OBJECT_REF) {
-                red_error("migration register failed");
-            }
-        } else if (strcmp(interface->type, VD_INTERFACE_QXL) == 0) {
-            QXLInterface *qxl_interface;
+    SpiceBaseInterface *interface = sin->sif;
 
-            red_printf("VD_INTERFACE_QXL");
-            if (interface->major_version != VD_INTERFACE_QXL_MAJOR ||
-                interface->minor_version < VD_INTERFACE_QXL_MINOR) {
-                red_printf("unsuported qxl interface");
-                return;
+    ASSERT(reds == s);
+
+    if (strcmp(interface->type, VD_INTERFACE_KEYBOARD) == 0) {
+        red_printf("VD_INTERFACE_KEYBOARD");
+        if (keyboard) {
+            red_printf("already have keyboard");
+            return -1;
+        }
+        if (interface->major_version != VD_INTERFACE_KEYBOARD_MAJOR ||
+            interface->minor_version < VD_INTERFACE_KEYBOARD_MINOR) {
+            red_printf("unsuported keyboard interface");
+            return -1;
+        }
+        keyboard = (KeyboardInterface *)interface;
+        if (keyboard->register_leds_notifier) {
+            if (!keyboard->register_leds_notifier(keyboard, reds_on_keyboard_leds_change, NULL)) {
+                red_error("register leds notifier failed");
             }
-            qxl_interface = (QXLInterface *)interface;
-            red_dispatcher_init(qxl_interface);
-        } else if (strcmp(interface->type, VD_INTERFACE_TABLET) == 0) {
-            red_printf("VD_INTERFACE_TABLET");
-            if (tablet) {
-                red_printf("already have tablet");
-                return;
-            }
-            if (interface->major_version != VD_INTERFACE_TABLET_MAJOR ||
-                interface->minor_version < VD_INTERFACE_TABLET_MINOR) {
-                red_printf("unsuported tablet interface");
-                return;
-            }
-            tablet = (TabletInterface *)interface;
-            reds_update_mouse_mode();
-            if (reds->is_client_mouse_allowed) {
-                tablet->set_logical_size(tablet, reds->monitor_mode.x_res,
-                                         reds->monitor_mode.y_res);
-            }
-        } else if (strcmp(interface->type, VD_INTERFACE_PLAYBACK) == 0) {
-            red_printf("VD_INTERFACE_PLAYBACK");
-            if (interface->major_version != VD_INTERFACE_PLAYBACK_MAJOR ||
-                interface->minor_version < VD_INTERFACE_PLAYBACK_MINOR) {
-                red_printf("unsuported playback interface");
-                return;
-            }
-            snd_attach_playback((PlaybackInterface *)interface);
-        } else if (strcmp(interface->type, VD_INTERFACE_RECORD) == 0) {
-            red_printf("VD_INTERFACE_RECORD");
-            if (interface->major_version != VD_INTERFACE_RECORD_MAJOR ||
-                interface->minor_version < VD_INTERFACE_RECORD_MINOR) {
-                red_printf("unsuported record interface");
-                return;
-            }
-            snd_attach_record((RecordInterface *)interface);
-        } else if (strcmp(interface->type, VD_INTERFACE_VDI_PORT) == 0) {
-            red_printf("VD_INTERFACE_VDI_PORT");
-            if (vdagent) {
-                red_printf("vdi port already attached");
-                return;
-            }
-            if (interface->major_version != VD_INTERFACE_VDI_PORT_MAJOR ||
-                interface->minor_version < VD_INTERFACE_VDI_PORT_MINOR) {
-                red_printf("unsuported vdi port interface");
-                return;
-            }
-            attach_to_red_agent((VDIPortInterface *)interface);
-        } else if (strcmp(interface->type, VD_INTERFACE_NET_WIRE) == 0) {
+        }
+
+    } else if (strcmp(interface->type, VD_INTERFACE_MOUSE) == 0) {
+        red_printf("VD_INTERFACE_MOUSE");
+        if (mouse) {
+            red_printf("already have mouse");
+            return -1;
+        }
+        if (interface->major_version != VD_INTERFACE_MOUSE_MAJOR ||
+            interface->minor_version < VD_INTERFACE_MOUSE_MINOR) {
+            red_printf("unsuported mouse interface");
+            return -1;
+        }
+        mouse = (MouseInterface *)interface;
+
+    } else if (strcmp(interface->type, VD_INTERFACE_MIGRATION) == 0) {
+        red_printf("VD_INTERFACE_MIGRATION");
+        if (mig) {
+            red_printf("already have migration");
+            return -1;
+        }
+        if (interface->major_version != VD_INTERFACE_MIGRATION_MAJOR ||
+            interface->minor_version < VD_INTERFACE_MIGRATION_MINOR) {
+            red_printf("unsuported migration interface");
+            return -1;
+        }
+        mig = (MigrationInterface *)interface;
+        reds->mig_notifier = mig->register_notifiers(mig, MIGRATION_NOTIFY_SPICE_KEY,
+                                                     reds_mig_started, reds_mig_finished,
+                                                     reds_mig_recv, NULL);
+        if (reds->mig_notifier == INVALID_VD_OBJECT_REF) {
+            red_error("migration register failed");
+        }
+
+    } else if (strcmp(interface->type, VD_INTERFACE_QXL) == 0) {
+        QXLInterface *qxl_interface;
+
+        red_printf("VD_INTERFACE_QXL");
+        if (interface->major_version != VD_INTERFACE_QXL_MAJOR ||
+            interface->minor_version < VD_INTERFACE_QXL_MINOR) {
+            red_printf("unsuported qxl interface");
+            return -1;
+        }
+        qxl_interface = (QXLInterface *)interface;
+        red_dispatcher_init(qxl_interface, id);
+
+    } else if (strcmp(interface->type, VD_INTERFACE_TABLET) == 0) {
+        red_printf("VD_INTERFACE_TABLET");
+        if (tablet) {
+            red_printf("already have tablet");
+            return -1;
+        }
+        if (interface->major_version != VD_INTERFACE_TABLET_MAJOR ||
+            interface->minor_version < VD_INTERFACE_TABLET_MINOR) {
+            red_printf("unsuported tablet interface");
+            return -1;
+        }
+        tablet = (TabletInterface *)interface;
+        reds_update_mouse_mode();
+        if (reds->is_client_mouse_allowed) {
+            tablet->set_logical_size(tablet, reds->monitor_mode.x_res,
+                                     reds->monitor_mode.y_res);
+        }
+
+    } else if (strcmp(interface->type, VD_INTERFACE_PLAYBACK) == 0) {
+        red_printf("VD_INTERFACE_PLAYBACK");
+        if (interface->major_version != VD_INTERFACE_PLAYBACK_MAJOR ||
+            interface->minor_version < VD_INTERFACE_PLAYBACK_MINOR) {
+            red_printf("unsuported playback interface");
+            return -1;
+        }
+        snd_attach_playback((PlaybackInterface *)interface);
+
+    } else if (strcmp(interface->type, VD_INTERFACE_RECORD) == 0) {
+        red_printf("VD_INTERFACE_RECORD");
+        if (interface->major_version != VD_INTERFACE_RECORD_MAJOR ||
+            interface->minor_version < VD_INTERFACE_RECORD_MINOR) {
+            red_printf("unsuported record interface");
+            return -1;
+        }
+        snd_attach_record((RecordInterface *)interface);
+
+    } else if (strcmp(interface->type, VD_INTERFACE_VDI_PORT) == 0) {
+        red_printf("VD_INTERFACE_VDI_PORT");
+        if (vdagent) {
+            red_printf("vdi port already attached");
+            return -1;
+        }
+        if (interface->major_version != VD_INTERFACE_VDI_PORT_MAJOR ||
+            interface->minor_version < VD_INTERFACE_VDI_PORT_MINOR) {
+            red_printf("unsuported vdi port interface");
+            return -1;
+        }
+        attach_to_red_agent((VDIPortInterface *)interface);
+
+    } else if (strcmp(interface->type, VD_INTERFACE_NET_WIRE) == 0) {
 #ifdef HAVE_SLIRP
-            NetWireInterface * net_wire = (NetWireInterface *)interface;
-            red_printf("VD_INTERFACE_NET_WIRE");
-            if (red_tunnel) {
-                red_printf("net wire already attached");
-                return;
-            }
-            if (interface->major_version != VD_INTERFACE_NET_WIRE_MAJOR ||
-                interface->minor_version < VD_INTERFACE_NET_WIRE_MINOR) {
-                red_printf("unsuported net wire interface");
-                return;
-            }
-            red_tunnel = red_tunnel_attach(core, net_wire);
+        NetWireInterface * net_wire = (NetWireInterface *)interface;
+        red_printf("VD_INTERFACE_NET_WIRE");
+        if (red_tunnel) {
+            red_printf("net wire already attached");
+            return -1;
+        }
+        if (interface->major_version != VD_INTERFACE_NET_WIRE_MAJOR ||
+            interface->minor_version < VD_INTERFACE_NET_WIRE_MINOR) {
+            red_printf("unsuported net wire interface");
+            return -1;
+        }
+        red_tunnel = red_tunnel_attach(core, net_wire);
 #else
-            red_printf("unsupported net wire interface");
+        red_printf("unsupported net wire interface");
+        return -1;
 #endif
-        }
-        break;
-    case VD_INTERFACE_REMOVING:
-        if (strcmp(interface->type, VD_INTERFACE_TABLET) == 0) {
-            red_printf("remove VD_INTERFACE_TABLET");
-            if (interface == (VDInterface *)tablet) {
-                tablet = NULL;
-                reds_update_mouse_mode();
-            }
-            break;
-        } else if (strcmp(interface->type, VD_INTERFACE_PLAYBACK) == 0) {
-            red_printf("remove VD_INTERFACE_PLAYBACK");
-            snd_detach_playback((PlaybackInterface *)interface);
-            break;
-        } else if (strcmp(interface->type, VD_INTERFACE_RECORD) == 0) {
-            red_printf("remove VD_INTERFACE_RECORD");
-            snd_detach_record((RecordInterface *)interface);
-            break;
-        } else if (strcmp(interface->type, VD_INTERFACE_VDI_PORT) == 0) {
-            red_printf("remove VD_INTERFACE_VDI_PORT");
-            if (interface == (VDInterface *)vdagent) {
-                reds_agent_remove();
-            }
-            break;
-        }
-        red_error("VD_INTERFACE_REMOVING unsupported");
-        break;
     }
+
+    return 0;
+}
+
+__visible__ int spice_server_remove_interface(SpiceBaseInstance *sin)
+{
+    SpiceBaseInterface *interface = sin->sif;
+
+    if (strcmp(interface->type, VD_INTERFACE_TABLET) == 0) {
+        red_printf("remove VD_INTERFACE_TABLET");
+        if (interface == (SpiceBaseInterface *)tablet) {
+            tablet = NULL;
+            reds_update_mouse_mode();
+        }
+
+    } else if (strcmp(interface->type, VD_INTERFACE_PLAYBACK) == 0) {
+        red_printf("remove VD_INTERFACE_PLAYBACK");
+        snd_detach_playback((PlaybackInterface *)interface);
+
+    } else if (strcmp(interface->type, VD_INTERFACE_RECORD) == 0) {
+        red_printf("remove VD_INTERFACE_RECORD");
+        snd_detach_record((RecordInterface *)interface);
+
+    } else if (strcmp(interface->type, VD_INTERFACE_VDI_PORT) == 0) {
+        red_printf("remove VD_INTERFACE_VDI_PORT");
+        if (interface == (SpiceBaseInterface *)vdagent) {
+            reds_agent_remove();
+        }
+
+    } else {
+        red_error("VD_INTERFACE_REMOVING unsupported");
+        return -1;
+    }
+
+    return 0;
 }
 
 static void free_external_agent_buff(VDIPortBuf *in_buf)
@@ -4255,10 +4270,6 @@ const char *version_string = VERSION;
 static void do_spice_init(CoreInterface *core_interface)
 {
     red_printf("starting %s", version_string);
-
-    if (core_interface->base.base_version != VM_INTERFACE_VERSION) {
-        red_error("bad base interface version");
-    }
 
     if (core_interface->base.major_version != VD_INTERFACE_CORE_MAJOR) {
         red_error("bad core interface version");
@@ -4542,23 +4553,8 @@ __visible__ int spice_server_add_renderer(SpiceServer *s, const char *name)
     return 0;
 }
 
-__visible__ int spice_server_add_interface(SpiceServer *s, VDInterface *interface)
+__visible__ int spice_server_kbd_leds(SpiceBaseInstance *sin, int leds)
 {
-    ASSERT(reds == s);
-    interface_change_notifier(NULL, interface, VD_INTERFACE_ADDING);
-    return 0;
-}
-
-__visible__ int spice_server_remove_interface(SpiceServer *s, VDInterface *interface)
-{
-    ASSERT(reds == s);
-    interface_change_notifier(NULL, interface, VD_INTERFACE_REMOVING);
-    return 0;
-}
-
-__visible__ int spice_server_kbd_leds(SpiceServer *s, KeyboardInterface *kbd, int leds)
-{
-    ASSERT(reds == s);
     reds_on_keyboard_leds_change(NULL, leds);
     return 0;
 }

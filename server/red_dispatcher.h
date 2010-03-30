@@ -19,7 +19,7 @@
 #define _H_RED_DISPATCHER
 
 
-struct RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface);
+struct RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface, int id);
 
 void red_dispatcher_set_mm_time(uint32_t);
 void red_dispatcher_on_ic_change();

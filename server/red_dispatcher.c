@@ -462,7 +462,7 @@ uint32_t red_dispatcher_qxl_ram_size()
     return qxl_info.qxl_ram_size;
 }
 
-RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface)
+RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface, int id)
 {
     RedDispatcher *dispatcher;
     int channels[2];
@@ -493,7 +493,7 @@ RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface)
     dispatcher = spice_new0(RedDispatcher, 1);
     dispatcher->channel = channels[0];
     init_data.qxl_interface = dispatcher->qxl_interface = qxl_interface;
-    init_data.id = qxl_interface->base.id;
+    init_data.id = id;
     init_data.channel = channels[1];
     init_data.pending = &dispatcher->pending;
     init_data.num_renderers = num_renderers;
@@ -548,7 +548,7 @@ RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface)
 
     reds_channel = spice_new0(Channel, 1);
     reds_channel->type = SPICE_CHANNEL_DISPLAY;
-    reds_channel->id = qxl_interface->base.id;
+    reds_channel->id = id;
     reds_channel->link = red_dispatcher_set_peer;
     reds_channel->shutdown = red_dispatcher_shutdown_peer;
     reds_channel->migrate = red_dispatcher_migrate;
@@ -557,7 +557,7 @@ RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface)
 
     cursor_channel = spice_new0(Channel, 1);
     cursor_channel->type = SPICE_CHANNEL_CURSOR;
-    cursor_channel->id = qxl_interface->base.id;
+    cursor_channel->id = id;
     cursor_channel->link = red_dispatcher_set_cursor_peer;
     cursor_channel->shutdown = red_dispatcher_shutdown_cursor_peer;
     cursor_channel->migrate = red_dispatcher_cursor_migrate;

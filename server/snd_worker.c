@@ -142,7 +142,7 @@ typedef struct PlaybackChannel {
 
 struct SndWorker {
     Channel base;
-    VDInterface *interface;
+    SpiceBaseInterface *interface;
     SndChannel *connection;
     SndWorker *next;
 };
@@ -1192,7 +1192,7 @@ static void remove_worker(SndWorker *worker)
     red_printf("not found");
 }
 
-static SndWorker *find_worker(VDInterface *interface)
+static SndWorker *find_worker(SpiceBaseInterface *interface)
 {
     SndWorker *worker = workers;
     while (worker) {
@@ -1242,7 +1242,7 @@ void snd_attach_record(RecordInterface *interface)
     reds_register_channel(&record_worker->base);
 }
 
-static void snd_detach_common(VDInterface *interface)
+static void snd_detach_common(SpiceBaseInterface *interface)
 {
     SndWorker *worker = find_worker(interface);
 

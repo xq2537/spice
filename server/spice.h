@@ -43,9 +43,11 @@ int spice_server_set_tls(SpiceServer *s, int port,
                          const char *private_key_file, const char *key_passwd,
                          const char *dh_key_file, const char *ciphersuite);
 
-int spice_server_add_interface(SpiceServer *s, VDInterface *interface);
-int spice_server_remove_interface(SpiceServer *s, VDInterface *interface);
-int spice_server_kbd_leds(SpiceServer *s, KeyboardInterface *kbd, int leds);
+int spice_server_add_interface(SpiceServer *s,
+                               SpiceBaseInstance *sin,
+                               int id);
+int spice_server_remove_interface(SpiceBaseInstance *sin);
+int spice_server_kbd_leds(SpiceBaseInstance *sin, int leds);
 
 typedef enum {
     SPICE_IMAGE_COMPRESS_INVALID  = 0,

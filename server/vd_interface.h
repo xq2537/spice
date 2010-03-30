@@ -36,17 +36,18 @@
 #define VM_INTERFACE_VERSION 1
 typedef unsigned long VDObjectRef;
 #define INVALID_VD_OBJECT_REF 0
-typedef struct VDInterface VDInterface;
 
-struct VDInterface {
-    uint32_t base_version;
+typedef struct SpiceBaseInterface SpiceBaseInterface;
+typedef struct SpiceBaseInstance SpiceBaseInstance;
+
+struct SpiceBaseInterface {
     const char *type;
-    unsigned int id;
     const char *description;
-    //todo: swap minor major order on VM_INTERFACE_VERSION change
-    //      (here and in spacific interfaces)
-    uint32_t minor_version;
     uint32_t major_version;
+    uint32_t minor_version;
+};
+struct SpiceBaseInstance {
+    SpiceBaseInterface *sif;
 };
 
 #define VD_INTERFACE_CORE "core"
@@ -56,7 +57,7 @@ typedef struct CoreInterface CoreInterface;
 typedef enum {
     VD_INTERFACE_ADDING,
     VD_INTERFACE_REMOVING,
-} VDInterfaceChangeType;
+} SpiceBaseInterfaceChangeType;
 
 typedef enum {
     VD_LOG_ERROR = 1,
@@ -64,8 +65,8 @@ typedef enum {
     VD_LOG_INFO,
 } LogLevel;
 
-typedef void (*vd_interface_change_notifier_t)(void *opaque, VDInterface *interface,
-                                               VDInterfaceChangeType change);
+typedef void (*vd_interface_change_notifier_t)(void *opaque, SpiceBaseInterface *interface,
+                                               SpiceBaseInterfaceChangeType change);
 
 #define SPICE_WATCH_EVENT_READ  (1 << 0)
 #define SPICE_WATCH_EVENT_WRITE (1 << 1)
@@ -77,7 +78,7 @@ typedef struct SpiceTimer SpiceTimer;
 typedef void (*SpiceTimerFunc)(void *opaque);
 
 struct CoreInterface {
-    VDInterface base;
+    SpiceBaseInterface base;
 
     SpiceTimer *(*timer_add)(SpiceTimerFunc func, void *opaque);
     void (*timer_start)(SpiceTimer *timer, uint32_t ms);
@@ -183,7 +184,7 @@ struct QXLDevSurfaceCreate {
 struct SpiceRect;
 
 struct QXLInterface {
-    VDInterface base;
+    SpiceBaseInterface base;
 
     uint16_t pci_vendor;
     uint16_t pci_id;
@@ -213,7 +214,7 @@ typedef struct KeyboardInterface KeyboardInterface;
 typedef void (*keyborad_leads_notifier_t)(void *opaque, uint8_t leds);
 
 struct KeyboardInterface {
-    VDInterface base;
+    SpiceBaseInterface base;
 
     void (*push_scan_freg)(KeyboardInterface *keyboard, uint8_t frag);
     uint8_t (*get_leds)(KeyboardInterface *keyboard);
@@ -228,7 +229,7 @@ struct KeyboardInterface {
 typedef struct MouseInterface MouseInterface;
 
 struct MouseInterface {
-    VDInterface base;
+    SpiceBaseInterface base;
 
     void (*moution)(MouseInterface* mouse, int dx, int dy, int dz,
                     uint32_t buttons_state);
@@ -241,7 +242,7 @@ struct MouseInterface {
 typedef struct TabletInterface TabletInterface;
 
 struct TabletInterface {
-    VDInterface base;
+    SpiceBaseInterface base;
 
     void (*set_logical_size)(TabletInterface* tablet, int width, int height);
     void (*position)(TabletInterface* tablet, int x, int y, uint32_t buttons_state);
@@ -258,7 +259,7 @@ typedef void (*migration_notify_finished_t)(void *opaque, int completed);
 typedef void (*migration_notify_recv_t)(void *opaque, int fd);
 
 struct MigrationInterface {
-    VDInterface base;
+    SpiceBaseInterface base;
 
     VDObjectRef (*register_notifiers)(MigrationInterface* mig, const char *key,
                                       migration_notify_started_t,
@@ -317,7 +318,7 @@ struct PlaybackPlug {
 };
 
 struct PlaybackInterface {
-    VDInterface base;
+    SpiceBaseInterface base;
 
     VDObjectRef (*plug)(PlaybackInterface *playback, PlaybackPlug* plug, int *enable);
     void (*unplug)(PlaybackInterface *playback, VDObjectRef);
@@ -343,7 +344,7 @@ struct RecordPlug {
 };
 
 struct RecordInterface {
-    VDInterface base;
+    SpiceBaseInterface base;
 
     VDObjectRef (*plug)(RecordInterface *recorder, RecordPlug* plug, int *enable);
     void (*unplug)(RecordInterface *recorder, VDObjectRef);
@@ -362,7 +363,7 @@ struct VDIPortPlug {
 };
 
 struct VDIPortInterface {
-    VDInterface base;
+    SpiceBaseInterface base;
 
     VDObjectRef (*plug)(VDIPortInterface *port, VDIPortPlug* plug);
     void (*unplug)(VDIPortInterface *port, VDObjectRef plug);
@@ -378,7 +379,7 @@ typedef struct NetWireInterface NetWireInterface;
 typedef void (*net_wire_packet_route_proc_t)(void *opaque, const uint8_t *pkt, int pkt_len);
 
 struct NetWireInterface {
-    VDInterface base;
+    SpiceBaseInterface base;
 
     struct in_addr (*get_ip)(NetWireInterface *vlan);
     int (*can_send_packet)(NetWireInterface *vlan);
