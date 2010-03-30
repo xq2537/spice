@@ -56,7 +56,7 @@
 
 SpiceCoreInterface *core = NULL;
 static MigrationInterface *mig = NULL;
-static KeyboardInterface *keyboard = NULL;
+static SpiceKbdInstance *keyboard = NULL;
 static MouseInterface *mouse = NULL;
 static TabletInterface *tablet = NULL;
 static VDIPortInterface *vdagent = NULL;
@@ -2102,12 +2102,26 @@ static void activate_modifiers_watch()
     core->timer_start(reds->key_modifiers_timer, KEY_MODIFIERS_TTL);
 }
 
-static void push_key_scan(uint8_t scan)
+static void kbd_push_scan(SpiceKbdInstance *sin, uint8_t scan)
 {
-    if (!keyboard) {
+    SpiceKbdInterface *sif;
+
+    if (!sin) {
         return;
     }
-    keyboard->push_scan_freg(keyboard, scan);
+    sif = SPICE_CONTAINEROF(sin->base.sif, SpiceKbdInterface, base);
+    sif->push_scan_freg(sin, scan);
+}
+
+static uint8_t kbd_get_leds(SpiceKbdInstance *sin)
+{
+    SpiceKbdInterface *sif;
+
+    if (!sin) {
+        return 0;
+    }
+    sif = SPICE_CONTAINEROF(sin->base.sif, SpiceKbdInterface, base);
+    return sif->get_leds(sin);
 }
 
 static void inputs_handle_input(void *opaque, SpiceDataHeader *header)
@@ -2128,7 +2142,7 @@ static void inputs_handle_input(void *opaque, SpiceDataHeader *header)
         uint8_t *now = (uint8_t *)&key_down->code;
         uint8_t *end = now + sizeof(key_down->code);
         for (; now < end && *now; now++) {
-            push_key_scan(*now);
+            kbd_push_scan(keyboard, *now);
         }
         break;
     }
@@ -2226,22 +2240,24 @@ static void inputs_handle_input(void *opaque, SpiceDataHeader *header)
     }
     case SPICE_MSGC_INPUTS_KEY_MODIFIERS: {
         SpiceMsgcKeyModifiers *modifiers = (SpiceMsgcKeyModifiers *)buf;
+        uint8_t leds;
+
         if (!keyboard) {
             break;
         }
-        uint8_t leds = keyboard->get_leds(keyboard);
+        leds = kbd_get_leds(keyboard);
         if ((modifiers->modifiers & SPICE_SCROLL_LOCK_MODIFIER) !=
                                                                 (leds & SPICE_SCROLL_LOCK_MODIFIER)) {
-            push_key_scan(SCROLL_LOCK_SCAN_CODE);
-            push_key_scan(SCROLL_LOCK_SCAN_CODE | 0x80);
+            kbd_push_scan(keyboard, SCROLL_LOCK_SCAN_CODE);
+            kbd_push_scan(keyboard, SCROLL_LOCK_SCAN_CODE | 0x80);
         }
         if ((modifiers->modifiers & SPICE_NUM_LOCK_MODIFIER) != (leds & SPICE_NUM_LOCK_MODIFIER)) {
-            push_key_scan(NUM_LOCK_SCAN_CODE);
-            push_key_scan(NUM_LOCK_SCAN_CODE | 0x80);
+            kbd_push_scan(keyboard, NUM_LOCK_SCAN_CODE);
+            kbd_push_scan(keyboard, NUM_LOCK_SCAN_CODE | 0x80);
         }
         if ((modifiers->modifiers & SPICE_CAPS_LOCK_MODIFIER) != (leds & SPICE_CAPS_LOCK_MODIFIER)) {
-            push_key_scan(CAPS_LOCK_SCAN_CODE);
-            push_key_scan(CAPS_LOCK_SCAN_CODE | 0x80);
+            kbd_push_scan(keyboard, CAPS_LOCK_SCAN_CODE);
+            kbd_push_scan(keyboard, CAPS_LOCK_SCAN_CODE | 0x80);
         }
         activate_modifiers_watch();
         break;
@@ -2266,12 +2282,12 @@ void reds_set_client_mouse_allowed(int is_client_mouse_allowed, int x_res, int y
 
 static void inputs_relase_keys(void)
 {
-    push_key_scan(0x2a | 0x80); //LSHIFT
-    push_key_scan(0x36 | 0x80); //RSHIFT
-    push_key_scan(0xe0); push_key_scan(0x1d | 0x80); //RCTRL
-    push_key_scan(0x1d | 0x80); //LCTRL
-    push_key_scan(0xe0); push_key_scan(0x38 | 0x80); //RALT
-    push_key_scan(0x38 | 0x80); //LALT
+    kbd_push_scan(keyboard, 0x2a | 0x80); //LSHIFT
+    kbd_push_scan(keyboard, 0x36 | 0x80); //RSHIFT
+    kbd_push_scan(keyboard, 0xe0); kbd_push_scan(keyboard, 0x1d | 0x80); //RCTRL
+    kbd_push_scan(keyboard, 0x1d | 0x80); //LCTRL
+    kbd_push_scan(keyboard, 0xe0); kbd_push_scan(keyboard, 0x38 | 0x80); //RALT
+    kbd_push_scan(keyboard, 0x38 | 0x80); //LALT
 }
 
 static void inputs_event(int fd, int event, void *data)
@@ -2393,7 +2409,7 @@ static void inputs_link(Channel *channel, RedsStreamContext *peer, int migration
     header.type = SPICE_MSG_INPUTS_INIT;
     header.size = sizeof(SpiceMsgInputsInit);
     header.sub_list = 0;
-    inputs_init.keyboard_modifiers = keyboard ? keyboard->get_leds(keyboard) : 0;
+    inputs_init.keyboard_modifiers = kbd_get_leds(keyboard);
     if (outgoing_write(inputs_state->peer, &inputs_state->out_handler, &header,
                        sizeof(SpiceDataHeader)) != OUTGOING_OK ||
         outgoing_write(inputs_state->peer, &inputs_state->out_handler, &inputs_init,
@@ -3938,7 +3954,7 @@ static void migrate_timout(void *opaque)
 
 static void key_modifiers_sender(void *opaque)
 {
-    reds_send_keyboard_modifiers(keyboard ? keyboard->get_leds(keyboard) : 0);
+    reds_send_keyboard_modifiers(kbd_get_leds(keyboard));
 }
 
 uint32_t reds_get_mm_time()
@@ -4011,23 +4027,19 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
 
     ASSERT(reds == s);
 
-    if (strcmp(interface->type, VD_INTERFACE_KEYBOARD) == 0) {
-        red_printf("VD_INTERFACE_KEYBOARD");
+    if (strcmp(interface->type, SPICE_INTERFACE_KEYBOARD) == 0) {
+        red_printf("SPICE_INTERFACE_KEYBOARD");
         if (keyboard) {
             red_printf("already have keyboard");
             return -1;
         }
-        if (interface->major_version != VD_INTERFACE_KEYBOARD_MAJOR ||
-            interface->minor_version < VD_INTERFACE_KEYBOARD_MINOR) {
+        if (interface->major_version != SPICE_INTERFACE_KEYBOARD_MAJOR ||
+            interface->minor_version < SPICE_INTERFACE_KEYBOARD_MINOR) {
             red_printf("unsuported keyboard interface");
             return -1;
         }
-        keyboard = (KeyboardInterface *)interface;
-        if (keyboard->register_leds_notifier) {
-            if (!keyboard->register_leds_notifier(keyboard, reds_on_keyboard_leds_change, NULL)) {
-                red_error("register leds notifier failed");
-            }
-        }
+        keyboard = SPICE_CONTAINEROF(sin, SpiceKbdInstance, base);
+        keyboard->st = spice_new0(SpiceKbdState, 1);
 
     } else if (strcmp(interface->type, VD_INTERFACE_MOUSE) == 0) {
         red_printf("VD_INTERFACE_MOUSE");
@@ -4547,7 +4559,7 @@ __visible__ int spice_server_add_renderer(SpiceServer *s, const char *name)
     return 0;
 }
 
-__visible__ int spice_server_kbd_leds(SpiceBaseInstance *sin, int leds)
+__visible__ int spice_server_kbd_leds(SpiceKbdInstance *sin, int leds)
 {
     reds_on_keyboard_leds_change(NULL, leds);
     return 0;

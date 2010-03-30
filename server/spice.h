@@ -44,7 +44,7 @@ int spice_server_add_interface(SpiceServer *s,
                                SpiceBaseInstance *sin,
                                int id);
 int spice_server_remove_interface(SpiceBaseInstance *sin);
-int spice_server_kbd_leds(SpiceBaseInstance *sin, int leds);
+int spice_server_kbd_leds(SpiceKbdInstance *sin, int leds);
 
 typedef enum {
     SPICE_IMAGE_COMPRESS_INVALID  = 0,

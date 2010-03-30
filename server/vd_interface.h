@@ -200,20 +200,23 @@ struct QXLInterface {
     int (*flush_resources)(QXLInterface *qxl);
 };
 
-#define VD_INTERFACE_KEYBOARD "keyboard"
-#define VD_INTERFACE_KEYBOARD_MAJOR 1
-#define VD_INTERFACE_KEYBOARD_MINOR 1
-typedef struct KeyboardInterface KeyboardInterface;
-typedef void (*keyborad_leads_notifier_t)(void *opaque, uint8_t leds);
+#define SPICE_INTERFACE_KEYBOARD "keyboard"
+#define SPICE_INTERFACE_KEYBOARD_MAJOR 1
+#define SPICE_INTERFACE_KEYBOARD_MINOR 1
+typedef struct SpiceKbdInterface SpiceKbdInterface;
+typedef struct SpiceKbdInstance SpiceKbdInstance;
+typedef struct SpiceKbdState SpiceKbdState;
 
-struct KeyboardInterface {
+struct SpiceKbdInterface {
     SpiceBaseInterface base;
 
-    void (*push_scan_freg)(KeyboardInterface *keyboard, uint8_t frag);
-    uint8_t (*get_leds)(KeyboardInterface *keyboard);
-    VDObjectRef (*register_leds_notifier)(KeyboardInterface *keyboard,
-                                          keyborad_leads_notifier_t notifier, void *opaque);
-    void (*unregister_leds_notifayer)(KeyboardInterface *keyboard, VDObjectRef notifier);
+    void (*push_scan_freg)(SpiceKbdInstance *sin, uint8_t frag);
+    uint8_t (*get_leds)(SpiceKbdInstance *sin);
+};
+
+struct SpiceKbdInstance {
+    SpiceBaseInstance base;
+    SpiceKbdState     *st;
 };
 
 #define VD_INTERFACE_MOUSE "mouse"

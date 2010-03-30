@@ -58,6 +58,10 @@ typedef struct Channel {
     void *data;
 } Channel;
 
+struct SpiceKbdState {
+    int dummy;
+};
+
 void reds_desable_mm_timer();
 void reds_enable_mm_timer();
 void reds_update_mm_timer(uint32_t mm_time);
