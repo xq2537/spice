@@ -139,6 +139,8 @@ public:
     virtual void disconnect();
     virtual bool abort();
 
+    void connect(bool wait_main_disconnect);
+
     void push_event(Event* event);
     void activate_interval_timer(Timer* timer, unsigned int millisec);
     void deactivate_interval_timer(Timer* timer);
@@ -194,6 +196,7 @@ private:
     void handle_agent_disconnected(RedPeer::InMessage* message);
     void handle_agent_data(RedPeer::InMessage* message);
     void handle_agent_tokens(RedPeer::InMessage* message);
+    void handle_migrate_switch_host(RedPeer::InMessage* message);
 
     void on_agent_reply(VDAgentReply* reply);
 

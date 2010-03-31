@@ -86,6 +86,18 @@ private:
     std::vector<MonitorInfo> _monitors;
 };
 
+class SwitchHostEvent: public Event {
+public:
+    SwitchHostEvent(const char* host, int port, int sport, const char* cert_subject);
+    virtual void response(AbstractProcessLoop& events_loop);
+
+private:
+    std::string _host;
+    int _port;
+    int _sport;
+    std::string _cert_subject;
+};
+
 enum CanvasOption {
     CANVAS_OPTION_INVALID,
     CANVAS_OPTION_CAIRO,
@@ -186,6 +198,8 @@ public:
     void show();
     void external_show();
     void connect();
+    void switch_host(const std::string& host, int port, int sport, const std::string& cert_subject);
+
     const PeerConnectionOptMap& get_con_opt_map() {return _peer_con_opt;}
     const RedPeer::HostAuthOptions& get_host_auth_opt() { return _host_auth_opt;}
     const std::string& get_connection_ciphers() { return _con_ciphers;}
@@ -317,6 +331,7 @@ private:
 #ifdef GUI_DEMO
     AutoRef<TestTimer> _gui_test_timer;
 #endif
+    bool _during_host_switch;
 
     State _state;
 };

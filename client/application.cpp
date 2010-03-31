@@ -86,6 +86,22 @@ void MonitorsQuery::do_response(AbstractProcessLoop& events_loop)
     }
 }
 
+SwitchHostEvent::SwitchHostEvent(const char* host, int port, int sport, const char* cert_subject)
+{
+    _host = host;
+    _port = port;
+    _sport = sport;
+    if (cert_subject) {
+        _cert_subject = cert_subject;
+    }
+}
+
+void SwitchHostEvent::response(AbstractProcessLoop& events_loop)
+{
+    Application* app = static_cast<Application*>(events_loop.get_owner());
+    app->switch_host(_host, _port, _sport, _cert_subject);
+}
+
 //todo: add inactive visual appearance
 class GUIBarrier: public ScreenLayer {
 public:
@@ -337,6 +353,7 @@ Application::Application()
     , _title (L"SPICEc:%d")
     , _sys_key_intercept_mode (false)
     , _gui_mode (GUI_MODE_FULL)
+    , _during_host_switch(false)
     , _state (DISCONNECTED)
 {
     DBG(0, "");
@@ -534,6 +551,20 @@ void Application::connect()
     ASSERT(_state == DISCONNECTED);
     set_state(CONNECTING);
     _client.connect();
+}
+
+void Application::switch_host(const std::string& host, int port, int sport,
+                              const std::string& cert_subject)
+{
+    LOG_INFO("host=%s port=%d sport=%d", host.c_str(), port, sport);
+    _during_host_switch = true;
+    // we will try to connect to the new host when DiconnectedEvent occurs
+    do_disconnect();
+    _client.set_target(host.c_str(), port, sport);
+
+    if (!cert_subject.empty()) {
+        set_host_cert_subject(cert_subject.c_str(), "spicec");
+    }
 }
 
 int Application::run()
@@ -751,17 +782,26 @@ void Application::set_state(State state)
 
 void Application::on_connected()
 {
+    _during_host_switch = false;
+
     set_state(CONNECTED);
 }
 
 void Application::on_disconnected(int error_code)
 {
-    if (_gui_mode != GUI_MODE_FULL) {
+    bool host_switch = _during_host_switch && (error_code == SPICEC_ERROR_CODE_SUCCESS);
+    if (_gui_mode != GUI_MODE_FULL && !host_switch) {
+        _during_host_switch = false;
         ProcessLoop::quit(error_code);
         return;
     }
+
+    // todo: display special notification for host switch (during migration)
     set_state(DISCONNECTED);
     show_gui();
+    if (host_switch) {
+        _client.connect(true);
+    }
 }
 
 void Application::on_visibility_start(int screen_id)

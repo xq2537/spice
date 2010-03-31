@@ -178,7 +178,7 @@ void Migrate::run()
         for (++iter; iter != _channels.end(); ++iter) {
             conn_type = _client.get_connection_options((*iter)->get_type());
             con_opt = RedPeer::ConnectionOptions(conn_type, _port, _sport,
-						 _auth_options, _con_ciphers);
+                                                 _auth_options, _con_ciphers);
             connect_one(**iter, con_opt, connection_id);
         }
         _connected = true;
@@ -332,6 +332,9 @@ RedClient::RedClient(Application& application)
     message_loop->set_handler(SPICE_MSG_MAIN_MIGRATE_BEGIN, &RedClient::handle_migrate_begin,
                               sizeof(SpiceMsgMainMigrationBegin));
     message_loop->set_handler(SPICE_MSG_MAIN_MIGRATE_CANCEL, &RedClient::handle_migrate_cancel, 0);
+    message_loop->set_handler(SPICE_MSG_MAIN_MIGRATE_SWITCH_HOST,
+                              &RedClient::handle_migrate_switch_host,
+                              sizeof(SpiceMsgMainMigrationSwitchHost));
     message_loop->set_handler(SPICE_MSG_MAIN_INIT, &RedClient::handle_init, sizeof(SpiceMsgMainInit));
     message_loop->set_handler(SPICE_MSG_MAIN_CHANNELS_LIST, &RedClient::handle_channels,
                               sizeof(SpiceMsgChannels));
@@ -437,11 +440,19 @@ RedPeer::ConnectionOptions::Type RedClient::get_connection_options(uint32_t chan
 
 void RedClient::connect()
 {
+    connect(false);
+}
+
+void RedClient::connect(bool wait_main_disconnect)
+{
+    // assumption: read _connection_id is atomic
     if (_connection_id) {
-        return;
+        if (!wait_main_disconnect) {
+            return;
+        }
     }
 
-    while (!abort_channels()) {
+    while (!abort_channels() || _connection_id) {
         _application.process_events_queue();
         Platform::msleep(100);
     }
@@ -836,6 +847,31 @@ void RedClient::handle_agent_tokens(RedPeer::InMessage* message)
     SpiceMsgMainAgentTokens *token = (SpiceMsgMainAgentTokens *)message->data();
     _agent_tokens += token->num_tokens;
 }
+
+void RedClient::handle_migrate_switch_host(RedPeer::InMessage* message)
+{
+    SpiceMsgMainMigrationSwitchHost* migrate = (SpiceMsgMainMigrationSwitchHost*)message->data();
+    char* host = ((char*)migrate) + migrate->host_offset;
+    char* subject = NULL;
+
+    if (host[migrate->host_size - 1] != '\0') {
+        THROW("host is not a null-terminated string");
+    }
+
+    if (migrate->cert_subject_size) {
+        subject = ((char*)migrate)+ migrate->cert_subject_offset;
+        if (subject[migrate->cert_subject_size - 1] != '\0') {
+            THROW("cert subject is not a null-terminated string");
+        }
+    }
+
+    AutoRef<SwitchHostEvent> switch_event(new SwitchHostEvent(host,
+                                                              migrate->port,
+                                                              migrate->sport,
+                                                              subject));
+    push_event(*switch_event);
+}
+
 
 void RedClient::migrate_channel(RedChannel& channel)
 {
