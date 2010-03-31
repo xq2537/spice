@@ -15,8 +15,6 @@ COMMON_SRCS = 				\
 	glc.h				\
 	glc.c				\
 	gl_utils.h			\
-	lookup3.h			\
-	lookup3.c			\
 	lz_common.h			\
 	mutex.h				\
 	ogl_ctx.h			\
