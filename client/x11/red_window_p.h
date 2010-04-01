@@ -36,7 +36,7 @@ public:
     void migrate(RedWindow& red_window, PixelsSource_p& pix_source, int dest_screen);
     void create(RedWindow& red_window, PixelsSource_p& pix_source, int x, int y,
                 unsigned int width, unsigned int height, int in_screen);
-    void destroy(PixelsSource_p& pix_source);
+    void destroy(RedWindow& red_window, PixelsSource_p& pix_source);
     void set_minmax(PixelsSource_p& pix_source, int width, int height);
     void wait_for_reparent();
     void wait_for_map();

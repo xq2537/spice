@@ -1051,11 +1051,17 @@ RedWindow_p::RedWindow_p()
 {
 }
 
-void RedWindow_p::destroy(PixelsSource_p& pix_source)
+void RedWindow_p::destroy(RedWindow& red_window, PixelsSource_p& pix_source)
 {
     if (_win == None) {
         return;
     }
+
+    if (focus_window == &red_window) {
+        focus_window = NULL;
+        red_window.on_focus_out();
+    }
+
     XPlatform::cleare_win_proc(_win);
     XSelectInput(x_display, _win, 0);
     XSync(x_display, False);
@@ -1163,7 +1169,7 @@ void RedWindow_p::migrate(RedWindow& red_window, PixelsSource_p& pix_source, int
     }
     XTextProperty text_pro;
     bool valid_title = XGetWMName(x_display, _win, &text_pro) && text_pro.value;
-    destroy(pix_source);
+    destroy(red_window, pix_source);
     create(red_window, pix_source, _show_pos.x, _show_pos.y, attrib.width, attrib.height,
            to_screen);
     if (valid_title) {
@@ -1227,7 +1233,7 @@ RedWindow::RedWindow(RedWindow::Listener& listener, int screen)
 
 RedWindow::~RedWindow()
 {
-    destroy(*(PixelsSource_p*)get_opaque());
+    destroy(*this, *(PixelsSource_p*)get_opaque());
     if (_local_cursor) {
         _local_cursor->unref();
     }
