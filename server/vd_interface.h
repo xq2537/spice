@@ -153,6 +153,7 @@ typedef struct QXLDevInitInfo {
     uint8_t memslot_id_bits;
     uint32_t qxl_ram_size;
     uint8_t internal_groupslot_id;
+    uint32_t n_surfaces;
 } QXLDevInitInfo;
 
 struct QXLDevMemSlot {
@@ -178,6 +179,8 @@ struct QXLDevSurfaceCreate {
     uint32_t group_id;
 };
 
+struct SpiceRect;
+
 struct QXLInterface {
     VDInterface base;
 
@@ -196,7 +199,7 @@ struct QXLInterface {
     void (*release_resource)(QXLInterface *qxl, struct QXLReleaseInfoExt release_info);
     int (*get_cursor_command)(QXLInterface *qxl, struct QXLCommandExt *cmd);
     int (*req_cursor_notification)(QXLInterface *qxl);
-    const struct SpiceRect *(*get_update_area)(QXLInterface *qxl);
+    void (*get_update_area)(QXLInterface *qxl, const struct SpiceRect **rect, uint32_t **surface_id);
     void (*notify_update)(QXLInterface *qxl, uint32_t update_id);
     void (*set_save_data)(QXLInterface *qxl, void *data, int size);
     void *(*get_save_data)(QXLInterface *qxl);

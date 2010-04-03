@@ -25,8 +25,8 @@
 #include "red_pixmap_cairo.h"
 
 CCanvas::CCanvas(PixmapCache& pixmap_cache, PaletteCache& palette_cache,
-                 GlzDecoderWindow &glz_decoder_window)
-    : Canvas (pixmap_cache, palette_cache, glz_decoder_window)
+                 GlzDecoderWindow &glz_decoder_window, CSurfaces& csurfaces)
+    : Canvas (pixmap_cache, palette_cache, glz_decoder_window, csurfaces)
     , _pixmap (0)
 {
 }
@@ -94,6 +94,7 @@ void CCanvas::set_mode(int width, int height, int depth, RedWindow *win)
     if (!(_canvas = canvas_create(surface, depth,
                                   &pixmap_cache().base,
                                   &palette_cache().base,
+                                  &csurfaces().base,
                                   &glz_decoder()))) {
         THROW("create canvas failed");
     }

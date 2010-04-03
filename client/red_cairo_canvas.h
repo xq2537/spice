@@ -26,7 +26,7 @@ class RedPixmap;
 class CCanvas: public Canvas {
 public:
     CCanvas(PixmapCache& pixmap_cache, PaletteCache& palette_cache,
-            GlzDecoderWindow &glz_decoder_window);
+            GlzDecoderWindow &glz_decoder_window, CSurfaces &csurfaces);
     virtual ~CCanvas();
 
     virtual void set_mode(int x, int y, int bits, RedWindow *win);

@@ -22,11 +22,12 @@
 
 
 Canvas::Canvas(PixmapCache& pixmap_cache, PaletteCache& palette_cache,
-               GlzDecoderWindow &glz_decoder_window)
+               GlzDecoderWindow &glz_decoder_window, CSurfaces &csurfaces)
     : _canvas (NULL)
     , _pixmap_cache (pixmap_cache)
     , _palette_cache (palette_cache)
     , _glz_decoder(glz_decoder_window, _glz_handler, _glz_debug)
+    , _csurfaces(csurfaces)
 {
 }
 
@@ -65,6 +66,8 @@ void Canvas::localalize_image(SPICE_ADDRESS* in_bitmap)
     localalize_ptr(in_bitmap);
     image = (SpiceImageDescriptor*)SPICE_GET_ADDRESS(*in_bitmap);
     switch (image->type) {
+    case SPICE_IMAGE_TYPE_SURFACE:
+        break;
     case SPICE_IMAGE_TYPE_BITMAP: {
         SpiceBitmapImage *bitmap = (SpiceBitmapImage *)image;
         localalize_ptr(&bitmap->bitmap.data);

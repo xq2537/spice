@@ -25,8 +25,8 @@
 #include <GL/glx.h>
 
 GCanvas::GCanvas(PixmapCache& pixmap_cache, PaletteCache& palette_cache,
-                 GlzDecoderWindow &glz_decoder_window)
-    : Canvas(pixmap_cache, palette_cache, glz_decoder_window)
+                 GlzDecoderWindow &glz_decoder_window, CSurfaces &csurfaces)
+    : Canvas(pixmap_cache, palette_cache, glz_decoder_window, csurfaces)
     , _pixmap (0)
     , _textures_lost (false)
 {
@@ -92,6 +92,7 @@ void GCanvas::set_mode(int width, int height, int depth, RedWindow *win,
     if (!(_canvas = gl_canvas_create(width, height, depth,
                                      &pixmap_cache().base,
                                      &palette_cache().base,
+                                     &csurfaces().base,
                                      &glz_decoder()))) {
         THROW("create canvas failed");
     }

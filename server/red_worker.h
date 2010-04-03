@@ -96,6 +96,7 @@ typedef struct WorkerInitData {
     uint8_t memslot_gen_bits;
     uint8_t memslot_id_bits;
     uint8_t internal_groupslot_id;
+    uint32_t n_surfaces;
 } WorkerInitData;
 
 void *red_worker_main(void *arg);

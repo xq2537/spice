@@ -28,6 +28,7 @@ SpiceCanvas *gl_canvas_create(int width, int height, int depth
 #elif defined(CAIRO_CANVAS_IMAGE_CACHE)
                            , SpiceImageCache *bits_cache
 #endif
+			   , SpiceImageSurfaces *surfaces
                            , SpiceGlzDecoder *glz_decoder
 #ifndef CAIRO_CANVAS_NO_CHUNKS
                             , SpiceVirtMapping *virt_mapping

@@ -29,7 +29,7 @@ class RedPixmapGL;
 class GCanvas: public Canvas {
 public:
     GCanvas(PixmapCache& pixmap_cache, PaletteCache& palette_cache,
-            GlzDecoderWindow &glz_decoder_window);
+            GlzDecoderWindow &glz_decoder_window, CSurfaces &csurfaces);
     virtual ~GCanvas();
 
     void set_mode(int width, int height, int depth, RedWindow *win,

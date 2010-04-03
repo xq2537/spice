@@ -36,6 +36,102 @@ enum CanvasType {
     CANVAS_TYPE_GDI,
 };
 
+template <class T, int HASH_SIZE, class Base = EmptyBase>
+class CHash : public Base {
+public:
+    CHash()
+    {
+        memset(_hash, 0, sizeof(_hash));
+    }
+
+    ~CHash()
+    {
+    }
+
+    void add(uint32_t id, T* data)
+    {
+        Item** item = &_hash[key(id)];
+
+        while (*item) {
+            PANIC_ON((*item)->id == id);
+            item = &(*item)->next;
+        }
+        *item = new Item(id, data);
+    }
+
+    bool is_present(uint32_t id)
+    {
+        Item* item = _hash[key(id)];
+
+        for (;;) {
+            if (!item) {
+                return false;
+            }
+
+            if (item->id != id) {
+                item = item->next;
+                continue;
+            }
+
+            return true;
+        }
+    }
+
+    T* get(uint32_t id)
+    {
+        Item* item = _hash[key(id)];
+
+        for (;;) {
+            PANIC_ON(!item);
+
+            if (item->id != id) {
+                item = item->next;
+                continue;
+            }
+
+            return item->data;
+        }
+    }
+
+    void remove(uint32_t id)
+    {
+        Item** item = &_hash[key(id)];
+
+        while (*item) {
+            if ((*item)->id == id) {
+                Item *rm_item = *item;
+                *item = rm_item->next;
+                delete rm_item;
+                return;
+            }
+            item = &(*item)->next;
+        }
+        THROW("id %lu, not found", id);
+    }
+
+private:
+    inline uint32_t key(uint32_t id) {return id % HASH_SIZE;}
+
+private:
+    class Item {
+    public:
+        Item(uint32_t in_id, T* data)
+            : id (in_id)
+            , next (NULL)
+            , data (data) {}
+
+        ~Item()
+        {
+        }
+
+        uint64_t id;
+        Item* next;
+        T* data;
+    };
+
+    Item* _hash[HASH_SIZE];
+};
+
 class PixmapCacheTreat {
 public:
     static inline pixman_image_t *get(pixman_image_t *surf)
@@ -80,6 +176,45 @@ public:
         base.ops = &cache_ops;
     }
 };
+
+class SpiceImageSurfacesBase;
+
+typedef CHash<SpiceCanvas, 1024, SpiceImageSurfacesBase> CSurfaces;
+
+class SpiceImageSurfacesBase {
+public:
+    SpiceImageSurfaces base;
+
+    static void op_put(SpiceImageSurfaces *c, uint32_t surface_id, SpiceCanvas *surface)
+    {
+        CSurfaces* cache = reinterpret_cast<CSurfaces*>(c);
+        cache->add(surface_id, surface);
+    }
+
+    static SpiceCanvas* op_get(SpiceImageSurfaces *s, uint32_t surface_id)
+    {
+        CSurfaces* cache = reinterpret_cast<CSurfaces*>(s);
+        return cache->get(surface_id);
+    }
+
+    static void op_del(SpiceImageSurfaces *c, uint32_t surface_id)
+    {
+        CSurfaces* cache = reinterpret_cast<CSurfaces*>(c);
+        cache->remove(surface_id);
+    }
+
+    SpiceImageSurfacesBase()
+    {
+        static SpiceImageSurfacesOps cache_ops = {
+            op_get
+        };
+        base.ops = &cache_ops;
+    }
+};
+
+class Canvas;
+
+typedef CHash<Canvas, 1024, SpiceImageSurfacesBase> CCanvases;
 
 class CachedPalette {
 public:
@@ -241,7 +376,7 @@ public:
 class Canvas {
 public:
     Canvas(PixmapCache& bits_cache, PaletteCache& palette_cache,
-           GlzDecoderWindow &glz_decoder_window);
+           GlzDecoderWindow &glz_decoder_window, CSurfaces& csurfaces);
     virtual ~Canvas();
 
     virtual void copy_pixels(const QRegion& region, RedDrawable* dc,
@@ -274,11 +409,14 @@ public:
 
     virtual CanvasType get_pixmap_type() { return CANVAS_TYPE_INVALID; }
 
+    virtual SpiceCanvas *get_internal_canvas() { return _canvas; }
+
 protected:
     virtual void touched_bbox(const SpiceRect *bbox) {};
 
     PixmapCache& pixmap_cache() { return _pixmap_cache;}
     PaletteCache& palette_cache() { return _palette_cache;}
+    CSurfaces& csurfaces() { return _csurfaces; }
 
     GlzDecoder& glz_decoder() {return _glz_decoder;}
 
@@ -293,6 +431,7 @@ private:
 
 protected:
     SpiceCanvas* _canvas;
+    CSurfaces _surfaces;
 
 private:
     PixmapCache& _pixmap_cache;
@@ -301,6 +440,8 @@ private:
     GlzDecodeSurfaceHandler _glz_handler;
     GlzDecoderCanvasDebug _glz_debug;
     GlzDecoder _glz_decoder;
+
+    CSurfaces& _csurfaces;
 
     unsigned long _base;
     unsigned long _max;

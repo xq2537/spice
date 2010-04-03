@@ -28,7 +28,7 @@ class RedPixmap;
 class GDICanvas: public Canvas {
 public:
     GDICanvas(PixmapCache& pixmap_cache, PaletteCache& palette_cache,
-              GlzDecoderWindow &glz_decoder_window);
+              GlzDecoderWindow &glz_decoder_window, CSurfaces &csurfaces);
     virtual ~GDICanvas();
 
     virtual void set_mode(int x, int y, int bits);

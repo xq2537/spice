@@ -79,6 +79,21 @@ private:
     DisplayChannel& _channel;
 };
 
+class DisplaySurfacesManger {
+public:
+    void add_surface(int surface_id, SpiceCanvas *surface);
+    void del_surface(int surface_id);
+    void add_canvas(int surface_id, Canvas *canvas);
+    void del_canvas(int surface_id);
+
+    CSurfaces& get_surfaces();
+    bool is_present_canvas(int surface_id);
+    Canvas* get_canvas(int surface_id);
+private:
+    CSurfaces surfaces;
+    CCanvases canvases;
+};
+
 class DisplayChannel: public RedChannel, public ScreenLayer {
 public:
     DisplayChannel(RedClient& client, uint32_t id,
@@ -117,22 +132,24 @@ protected:
 private:
     void set_draw_handlers();
     void clear_draw_handlers();
-    bool create_cairo_canvas(int width, int height, int depth);
+    bool create_cairo_canvas(int surface_id, int width, int height, int depth);
 #ifdef USE_OGL
-    bool create_ogl_canvas(int width, int height, int depth, bool recreate,
+    bool create_ogl_canvas(int surface_id, int width, int height, int depth, bool recreate,
                            RenderType rendertype);
 #endif
 #ifdef WIN32
-    bool create_gdi_canvas(int width, int height, int depth);
+    bool create_gdi_canvas(int surface_id, int width, int height, int depth);
 #endif
-    void destroy_canvas();
-    void create_canvas(const std::vector<int>& canvas_type, int width, int height,
+    void destroy_canvas(int surface_id);
+    void create_canvas(int surface_id, const std::vector<int>& canvas_type, int width, int height,
                        int depth);
     void destroy_strams();
     void update_cursor();
 
     void create_primary_surface(int width, int height, int depth);
+    void create_surface(int surface_id, int width, int height, int depth);
     void destroy_primary_surface();
+    void destroy_surface(int surface_id);
 
     void handle_mode(RedPeer::InMessage* message);
     void handle_mark(RedPeer::InMessage* message);
@@ -174,7 +191,7 @@ private:
     static void set_clip_rects(const SpiceClip& clip, uint32_t& num_clip_rects, SpiceRect*& clip_rects,
                                unsigned long addr_offset, uint8_t *min, uint8_t *max);
 private:
-    std::auto_ptr<Canvas> _canvas;
+    DisplaySurfacesManger surfaces_mngr;
     PixmapCache& _pixmap_cache;
     PaletteCache _palette_cache;
     GlzDecoderWindow& _glz_window;
@@ -216,6 +233,8 @@ private:
     friend class SetModeEvent;
     friend class CreatePrimarySurfaceEvent;
     friend class DestroyPrimarySurfaceEvent;
+    friend class CreateSurfaceEvent;
+    friend class DestroySurfaceEvent;
     friend class ActivateTimerEvent;
     friend class VideoStream;
     friend class StreamsTrigger;

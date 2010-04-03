@@ -37,6 +37,7 @@ SpiceCanvas *gdi_canvas_create(int width, int height,
                                HDC dc, class Mutex *lock, int bits,
                                SpiceImageCache *bits_cache,
                                SpicePaletteCache *palette_cache,
+			       SpiceImageSurfaces *surfaces,
                                SpiceGlzDecoder *glz_decoder);
 
 void gdi_canvas_init();

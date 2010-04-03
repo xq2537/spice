@@ -522,6 +522,7 @@ RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface)
     init_data.num_memslots = init_info.num_memslots;
     init_data.num_memslots_groups = init_info.num_memslots_groups;
     init_data.internal_groupslot_id = init_info.internal_groupslot_id;
+    init_data.n_surfaces = init_info.n_surfaces;
 
     num_active_workers = 1;
 

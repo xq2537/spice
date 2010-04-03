@@ -24,8 +24,8 @@
 #include "red_pixmap_gdi.h"
 
 GDICanvas::GDICanvas(PixmapCache& pixmap_cache, PaletteCache& palette_cache,
-                     GlzDecoderWindow &glz_decoder_window)
-    : Canvas (pixmap_cache, palette_cache, glz_decoder_window)
+                     GlzDecoderWindow &glz_decoder_window, CSurfaces &csurfaces)
+    : Canvas (pixmap_cache, palette_cache, glz_decoder_window, csurfaces)
     , _pixmap (0)
 {
 }
@@ -38,6 +38,7 @@ GDICanvas::~GDICanvas()
 void GDICanvas::destroy()
 {
     if (_canvas) {
+        _canvas->ops->destroy(_canvas);
         _canvas = NULL;
     }
     destroy_pixmap();
@@ -84,6 +85,7 @@ void GDICanvas::set_mode(int width, int height, int depth)
                                       &_pixmap->get_mutex(),
                                       depth, &pixmap_cache().base,
                                       &palette_cache().base,
+                                      &csurfaces().base,
                                       &glz_decoder()))) {
         THROW("create canvas failed");
     }

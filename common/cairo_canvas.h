@@ -33,6 +33,7 @@ SpiceCanvas *canvas_create(pixman_image_t *image, int bits
 #elif defined(CAIRO_CANVAS_IMAGE_CACHE)
                            , SpiceImageCache *bits_cache
 #endif
+			   , SpiceImageSurfaces *surfaces
                            , SpiceGlzDecoder *glz_decoder
 #ifndef CAIRO_CANVAS_NO_CHUNKS
                            , SpiceVirtMapping *virt_mapping

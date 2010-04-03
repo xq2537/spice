@@ -51,11 +51,18 @@ static pixman_image_t *canvas_get_pixman_brush(CairoCanvas *canvas,
 
         return pixman_image_create_solid_fill(&c);
     }
-    case SPICE_BRUSH_TYPE_PATTERN: {
+    case SPICE_BRUSH_TYPE_PATTERN: { 
+        CairoCanvas *surface_canvas;
         pixman_image_t* surface;
         pixman_transform_t t;
 
-        surface = canvas_get_image(&canvas->base, brush->u.pattern.pat);
+        surface_canvas = (CairoCanvas *)canvas_get_surface(&canvas->base, brush->u.pattern.pat);
+        if (surface_canvas) {
+            surface = surface_canvas->image;
+            surface = pixman_image_ref(surface);
+        } else {
+            surface = canvas_get_image(&canvas->base, brush->u.pattern.pat);
+        }
         pixman_transform_init_translate(&t,
                                         pixman_int_to_fixed(-brush->u.pattern.pos.x),
                                         pixman_int_to_fixed(-brush->u.pattern.pos.y));
@@ -70,6 +77,14 @@ static pixman_image_t *canvas_get_pixman_brush(CairoCanvas *canvas,
     }
 }
 
+static pixman_image_t *get_image(SpiceCanvas *canvas)
+{
+    CairoCanvas *cairo_canvas = (CairoCanvas *)canvas;
+
+    pixman_image_ref(cairo_canvas->image);
+
+    return cairo_canvas->image;
+}
 
 static void copy_region(SpiceCanvas *spice_canvas,
                         pixman_region32_t *dest_region,
@@ -194,16 +209,16 @@ static void fill_solid_rects_rop(SpiceCanvas *spice_canvas,
     }
 }
 
-static void fill_tiled_rects(SpiceCanvas *spice_canvas,
-                             pixman_box32_t *rects,
-                             int n_rects,
-                             pixman_image_t *tile,
-                             int offset_x, int offset_y)
+static void __fill_tiled_rects(SpiceCanvas *spice_canvas,
+                               pixman_box32_t *rects,
+                               int n_rects,
+                               pixman_image_t *tile,
+                               int offset_x, int offset_y)
 {
     CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     int i;
 
-   for (i = 0; i < n_rects; i++) {
+    for (i = 0; i < n_rects; i++) {
         spice_pixman_tile_rect(canvas->image,
                                rects[i].x1, rects[i].y1,
                                rects[i].x2 - rects[i].x1,
@@ -212,17 +227,37 @@ static void fill_tiled_rects(SpiceCanvas *spice_canvas,
     }
 }
 
-static void fill_tiled_rects_rop(SpiceCanvas *spice_canvas,
-                                 pixman_box32_t *rects,
-                                 int n_rects,
-                                 pixman_image_t *tile,
-                                 int offset_x, int offset_y,
-                                 SpiceROP rop)
+static void fill_tiled_rects(SpiceCanvas *spice_canvas,
+                               pixman_box32_t *rects,
+                               int n_rects,
+                               pixman_image_t *tile,
+                               int offset_x, int offset_y)
+{
+    __fill_tiled_rects(spice_canvas, rects, n_rects, tile, offset_x, offset_y);
+}
+
+static void fill_tiled_rects_from_surface(SpiceCanvas *spice_canvas,
+                                          pixman_box32_t *rects,
+                                          int n_rects,
+                                          SpiceCanvas *surface_canvas,
+                                          int offset_x, int offset_y)
+{
+    CairoCanvas *cairo_surface_canvas = (CairoCanvas *)surface_canvas;
+    __fill_tiled_rects(spice_canvas, rects, n_rects, cairo_surface_canvas->image, offset_x,
+                       offset_y);
+}
+
+static void __fill_tiled_rects_rop(SpiceCanvas *spice_canvas,
+                                   pixman_box32_t *rects,
+                                   int n_rects,
+                                   pixman_image_t *tile,
+                                   int offset_x, int offset_y,
+                                   SpiceROP rop)
 {
     CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     int i;
 
-   for (i = 0; i < n_rects; i++) {
+    for (i = 0; i < n_rects; i++) {
         spice_pixman_tile_rect_rop(canvas->image,
                                    rects[i].x1, rects[i].y1,
                                    rects[i].x2 - rects[i].x1,
@@ -231,11 +266,32 @@ static void fill_tiled_rects_rop(SpiceCanvas *spice_canvas,
                                    rop);
     }
 }
+static void fill_tiled_rects_rop(SpiceCanvas *spice_canvas,
+                                 pixman_box32_t *rects,
+                                 int n_rects,
+                                 pixman_image_t *tile,
+                                 int offset_x, int offset_y,
+                                 SpiceROP rop)
+{
+    __fill_tiled_rects_rop(spice_canvas, rects, n_rects, tile, offset_x, offset_y, rop);
+}
 
-static void blit_image(SpiceCanvas *spice_canvas,
-                       pixman_region32_t *region,
-                       pixman_image_t *src_image,
-                       int offset_x, int offset_y)
+static void fill_tiled_rects_rop_from_surface(SpiceCanvas *spice_canvas,
+                                              pixman_box32_t *rects,
+                                              int n_rects,
+                                              SpiceCanvas *surface_canvas,
+                                              int offset_x, int offset_y,
+                                              SpiceROP rop)
+{
+    CairoCanvas *cairo_surface_canvas = (CairoCanvas *)surface_canvas;
+    __fill_tiled_rects_rop(spice_canvas, rects, n_rects, cairo_surface_canvas->image, offset_x,
+                           offset_y, rop);
+}
+
+static void __blit_image(SpiceCanvas *spice_canvas,
+                         pixman_region32_t *region,
+                         pixman_image_t *src_image,
+                         int offset_x, int offset_y)
 {
     CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_box32_t *rects;
@@ -262,11 +318,28 @@ static void blit_image(SpiceCanvas *spice_canvas,
     }
 }
 
-static void blit_image_rop(SpiceCanvas *spice_canvas,
-                           pixman_region32_t *region,
-                           pixman_image_t *src_image,
-                           int offset_x, int offset_y,
-                           SpiceROP rop)
+static void blit_image(SpiceCanvas *spice_canvas,
+                       pixman_region32_t *region,
+                       pixman_image_t *src_image,
+                       int offset_x, int offset_y)
+{
+    __blit_image(spice_canvas, region, src_image, offset_x, offset_y);
+}
+
+static void blit_image_from_surface(SpiceCanvas *spice_canvas,
+                                    pixman_region32_t *region,
+                                    SpiceCanvas *surface_canvas,
+                                    int offset_x, int offset_y)
+{
+    CairoCanvas *cairo_surface_canvas = (CairoCanvas *)surface_canvas;
+    __blit_image(spice_canvas, region, cairo_surface_canvas->image, offset_x, offset_y);
+}
+
+static void __blit_image_rop(SpiceCanvas *spice_canvas,
+                             pixman_region32_t *region,
+                             pixman_image_t *src_image,
+                             int offset_x, int offset_y,
+                             SpiceROP rop)
 {
     CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_box32_t *rects;
@@ -293,14 +366,35 @@ static void blit_image_rop(SpiceCanvas *spice_canvas,
     }
 }
 
-static void scale_image(SpiceCanvas *spice_canvas,
-                        pixman_region32_t *region,
-                        pixman_image_t *src,
-                        int src_x, int src_y,
-                        int src_width, int src_height,
-                        int dest_x, int dest_y,
-                        int dest_width, int dest_height,
-                        int scale_mode)
+static void blit_image_rop(SpiceCanvas *spice_canvas,
+                           pixman_region32_t *region,
+                           pixman_image_t *src_image,
+                           int offset_x, int offset_y,
+                           SpiceROP rop)
+{
+    __blit_image_rop(spice_canvas, region, src_image, offset_x, offset_y, rop);
+}
+
+static void blit_image_rop_from_surface(SpiceCanvas *spice_canvas,
+                                        pixman_region32_t *region,
+                                        SpiceCanvas *surface_canvas,
+                                        int offset_x, int offset_y,
+                                        SpiceROP rop)
+{
+    CairoCanvas *cairo_surface_canvas = (CairoCanvas *)surface_canvas;
+    __blit_image_rop(spice_canvas, region, cairo_surface_canvas->image, offset_x, offset_y, rop);
+}
+
+
+
+static void __scale_image(SpiceCanvas *spice_canvas,
+                          pixman_region32_t *region,
+                          pixman_image_t *src,
+                          int src_x, int src_y,
+                          int src_width, int src_height,
+                          int dest_x, int dest_y,
+                          int dest_width, int dest_height,
+                          int scale_mode)
 {
     CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_transform_t transform;
@@ -337,14 +431,41 @@ static void scale_image(SpiceCanvas *spice_canvas,
     pixman_image_set_clip_region32(canvas->image, NULL);
 }
 
-static void scale_image_rop(SpiceCanvas *spice_canvas,
-                            pixman_region32_t *region,
-                            pixman_image_t *src,
-                            int src_x, int src_y,
-                            int src_width, int src_height,
-                            int dest_x, int dest_y,
-                            int dest_width, int dest_height,
-                            int scale_mode, SpiceROP rop)
+static void scale_image(SpiceCanvas *spice_canvas,
+                        pixman_region32_t *region,
+                        pixman_image_t *src,
+                        int src_x, int src_y,
+                        int src_width, int src_height,
+                        int dest_x, int dest_y,
+                        int dest_width, int dest_height,
+                        int scale_mode)
+{
+    __scale_image(spice_canvas, region, src, src_x, src_y, src_width, src_height, dest_x, dest_y,
+                  dest_width,dest_height,scale_mode);
+}
+
+static void scale_image_from_surface(SpiceCanvas *spice_canvas,
+                                     pixman_region32_t *region,
+                                     SpiceCanvas *surface_canvas,
+                                     int src_x, int src_y,
+                                     int src_width, int src_height,
+                                     int dest_x, int dest_y,
+                                     int dest_width, int dest_height,
+                                     int scale_mode)
+{
+    CairoCanvas *cairo_surface_canvas = (CairoCanvas *)surface_canvas;
+    __scale_image(spice_canvas, region, cairo_surface_canvas->image, src_x, src_y, src_width,
+                  src_height, dest_x, dest_y, dest_width,dest_height,scale_mode);
+}
+
+static void __scale_image_rop(SpiceCanvas *spice_canvas,
+                              pixman_region32_t *region,
+                              pixman_image_t *src,
+                              int src_x, int src_y,
+                              int src_width, int src_height,
+                              int dest_x, int dest_y,
+                              int dest_width, int dest_height,
+                              int scale_mode, SpiceROP rop)
 {
     CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_transform_t transform;
@@ -407,13 +528,40 @@ static void scale_image_rop(SpiceCanvas *spice_canvas,
     pixman_image_unref(scaled);
 }
 
-static void blend_image(SpiceCanvas *spice_canvas,
-                        pixman_region32_t *region,
-                        pixman_image_t *src,
-                        int src_x, int src_y,
-                        int dest_x, int dest_y,
-                        int width, int height,
-                        int overall_alpha)
+static void scale_image_rop(SpiceCanvas *spice_canvas,
+                            pixman_region32_t *region,
+                            pixman_image_t *src,
+                            int src_x, int src_y,
+                            int src_width, int src_height,
+                            int dest_x, int dest_y,
+                            int dest_width, int dest_height,
+                            int scale_mode, SpiceROP rop)
+{
+    __scale_image_rop(spice_canvas, region, src, src_x, src_y, src_width, src_height, dest_x,
+                      dest_y, dest_width, dest_height, scale_mode, rop);
+}
+
+static void scale_image_rop_from_surface(SpiceCanvas *spice_canvas,
+                                         pixman_region32_t *region,
+                                         SpiceCanvas *surface_canvas,
+                                         int src_x, int src_y,
+                                         int src_width, int src_height,
+                                         int dest_x, int dest_y,
+                                         int dest_width, int dest_height,
+                                         int scale_mode, SpiceROP rop)
+{
+    CairoCanvas *cairo_surface_canvas = (CairoCanvas *)surface_canvas;
+    __scale_image_rop(spice_canvas, region, cairo_surface_canvas->image, src_x, src_y, src_width,
+                      src_height, dest_x, dest_y, dest_width, dest_height, scale_mode, rop);
+}
+
+static void __blend_image(SpiceCanvas *spice_canvas,
+                          pixman_region32_t *region,
+                          pixman_image_t *src,
+                          int src_x, int src_y,
+                          int dest_x, int dest_y,
+                          int width, int height,
+                          int overall_alpha)
 {
     CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_image_t *mask;
@@ -444,15 +592,40 @@ static void blend_image(SpiceCanvas *spice_canvas,
     pixman_image_set_clip_region32(canvas->image, NULL);
 }
 
-static void blend_scale_image(SpiceCanvas *spice_canvas,
-                              pixman_region32_t *region,
-                              pixman_image_t *src,
-                              int src_x, int src_y,
-                              int src_width, int src_height,
-                              int dest_x, int dest_y,
-                              int dest_width, int dest_height,
-                              int scale_mode,
-                              int overall_alpha)
+static void blend_image(SpiceCanvas *spice_canvas,
+                        pixman_region32_t *region,
+                        pixman_image_t *src,
+                        int src_x, int src_y,
+                        int dest_x, int dest_y,
+                        int width, int height,
+                        int overall_alpha)
+{
+    __blend_image(spice_canvas, region, src, src_x, src_y, dest_x, dest_y, width, height,
+                  overall_alpha);
+}
+
+static void blend_image_from_surface(SpiceCanvas *spice_canvas,
+                                     pixman_region32_t *region,
+                                     SpiceCanvas *surface_canvas,
+                                     int src_x, int src_y,
+                                     int dest_x, int dest_y,
+                                     int width, int height,
+                                     int overall_alpha)
+{
+    CairoCanvas *cairo_surface_canvas = (CairoCanvas *)surface_canvas;
+    __blend_image(spice_canvas, region, cairo_surface_canvas->image, src_x, src_y, dest_x, dest_y,
+                  width, height, overall_alpha);
+}
+
+static void __blend_scale_image(SpiceCanvas *spice_canvas,
+                                pixman_region32_t *region,
+                                pixman_image_t *src,
+                                int src_x, int src_y,
+                                int src_width, int src_height,
+                                int dest_x, int dest_y,
+                                int dest_width, int dest_height,
+                                int scale_mode,
+                                int overall_alpha)
 {
     CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_transform_t transform;
@@ -501,11 +674,41 @@ static void blend_scale_image(SpiceCanvas *spice_canvas,
     pixman_image_set_clip_region32(canvas->image, NULL);
 }
 
-static void colorkey_image(SpiceCanvas *spice_canvas,
-                           pixman_region32_t *region,
-                           pixman_image_t *src_image,
-                           int offset_x, int offset_y,
-                           uint32_t transparent_color)
+static void blend_scale_image(SpiceCanvas *spice_canvas,
+                              pixman_region32_t *region,
+                              pixman_image_t *src,
+                              int src_x, int src_y,
+                              int src_width, int src_height,
+                              int dest_x, int dest_y,
+                              int dest_width, int dest_height,
+                              int scale_mode,
+                              int overall_alpha)
+{
+    __blend_scale_image(spice_canvas, region, src, src_x, src_y, src_width, src_height, dest_x,
+                        dest_y, dest_width, dest_height, scale_mode, overall_alpha);
+}
+
+static void blend_scale_image_from_surface(SpiceCanvas *spice_canvas,
+                                           pixman_region32_t *region,
+                                           SpiceCanvas *surface_canvas,
+                                           int src_x, int src_y,
+                                           int src_width, int src_height,
+                                           int dest_x, int dest_y,
+                                           int dest_width, int dest_height,
+                                           int scale_mode,
+                                           int overall_alpha)
+{
+    CairoCanvas *cairo_surface_canvas = (CairoCanvas *)surface_canvas;
+    __blend_scale_image(spice_canvas, region, cairo_surface_canvas->image, src_x, src_y, src_width,
+                        src_height, dest_x, dest_y, dest_width, dest_height, scale_mode,
+                        overall_alpha);
+}
+
+static void __colorkey_image(SpiceCanvas *spice_canvas,
+                             pixman_region32_t *region,
+                             pixman_image_t *src_image,
+                             int offset_x, int offset_y,
+                             uint32_t transparent_color)
 {
     CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_box32_t *rects;
@@ -533,14 +736,34 @@ static void colorkey_image(SpiceCanvas *spice_canvas,
     }
 }
 
-static void colorkey_scale_image(SpiceCanvas *spice_canvas,
-                                 pixman_region32_t *region,
-                                 pixman_image_t *src,
-                                 int src_x, int src_y,
-                                 int src_width, int src_height,
-                                 int dest_x, int dest_y,
-                                 int dest_width, int dest_height,
-                                 uint32_t transparent_color)
+static void colorkey_image(SpiceCanvas *spice_canvas,
+                           pixman_region32_t *region,
+                           pixman_image_t *src_image,
+                           int offset_x, int offset_y,
+                           uint32_t transparent_color)
+{
+    __colorkey_image(spice_canvas, region, src_image, offset_x, offset_y, transparent_color);
+}
+
+static void colorkey_image_from_surface(SpiceCanvas *spice_canvas,
+                                        pixman_region32_t *region,
+                                        SpiceCanvas *surface_canvas,
+                                        int offset_x, int offset_y,
+                                        uint32_t transparent_color)
+{
+    CairoCanvas *cairo_surface_canvas = (CairoCanvas *)surface_canvas;
+    __colorkey_image(spice_canvas, region, cairo_surface_canvas->image, offset_x, offset_y,
+                     transparent_color);
+}
+
+static void __colorkey_scale_image(SpiceCanvas *spice_canvas,
+                                   pixman_region32_t *region,
+                                   pixman_image_t *src,
+                                   int src_x, int src_y,
+                                   int src_width, int src_height,
+                                   int dest_x, int dest_y,
+                                   int dest_width, int dest_height,
+                                   uint32_t transparent_color)
 {
     CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_transform_t transform;
@@ -598,6 +821,34 @@ static void colorkey_scale_image(SpiceCanvas *spice_canvas,
     }
 
     pixman_image_unref(scaled);
+}
+
+static void colorkey_scale_image(SpiceCanvas *spice_canvas,
+                                 pixman_region32_t *region,
+                                 pixman_image_t *src,
+                                 int src_x, int src_y,
+                                 int src_width, int src_height,
+                                 int dest_x, int dest_y,
+                                 int dest_width, int dest_height,
+                                 uint32_t transparent_color)
+{
+    __colorkey_scale_image(spice_canvas, region, src, src_x, src_y, src_width, src_height, dest_x,
+                           dest_y, dest_width, dest_height, transparent_color);
+}
+
+static void colorkey_scale_image_from_surface(SpiceCanvas *spice_canvas,
+                                              pixman_region32_t *region,
+                                              SpiceCanvas *surface_canvas,
+                                              int src_x, int src_y,
+                                              int src_width, int src_height,
+                                              int dest_x, int dest_y,
+                                              int dest_width, int dest_height,
+                                              uint32_t transparent_color)
+{
+    CairoCanvas *cairo_surface_canvas = (CairoCanvas *)surface_canvas;
+    __colorkey_scale_image(spice_canvas, region, cairo_surface_canvas->image, src_x, src_y,
+                           src_width, src_height, dest_x, dest_y, dest_width, dest_height,
+                           transparent_color);
 }
 
 static void canvas_put_image(SpiceCanvas *spice_canvas,
@@ -803,6 +1054,7 @@ SpiceCanvas *canvas_create(pixman_image_t *image, int bits
 #elif defined(CAIRO_CANVAS_IMAGE_CACHE)
                            , SpiceImageCache *bits_cache
 #endif
+                           , SpiceImageSurfaces *surfaces
                            , SpiceGlzDecoder *glz_decoder
 #ifndef CAIRO_CANVAS_NO_CHUNKS
                            , SpiceVirtMapping *virt_mapping
@@ -826,6 +1078,7 @@ SpiceCanvas *canvas_create(pixman_image_t *image, int bits
 #elif defined(CAIRO_CANVAS_IMAGE_CACHE)
                                , bits_cache
 #endif
+                               , surfaces
                                , glz_decoder
 #ifndef CAIRO_CANVAS_NO_CHUNKS
                                , virt_mapping
@@ -858,15 +1111,26 @@ void cairo_canvas_init() //unsafe global function
     cairo_canvas_ops.fill_solid_rects = fill_solid_rects;
     cairo_canvas_ops.fill_solid_rects_rop = fill_solid_rects_rop;
     cairo_canvas_ops.fill_tiled_rects = fill_tiled_rects;
+    cairo_canvas_ops.fill_tiled_rects_from_surface = fill_tiled_rects_from_surface;
     cairo_canvas_ops.fill_tiled_rects_rop = fill_tiled_rects_rop;
+    cairo_canvas_ops.fill_tiled_rects_rop_from_surface = fill_tiled_rects_rop_from_surface;
     cairo_canvas_ops.blit_image = blit_image;
+    cairo_canvas_ops.blit_image_from_surface = blit_image_from_surface;
     cairo_canvas_ops.blit_image_rop = blit_image_rop;
+    cairo_canvas_ops.blit_image_rop_from_surface = blit_image_rop_from_surface;
     cairo_canvas_ops.scale_image = scale_image;
+    cairo_canvas_ops.scale_image_from_surface = scale_image_from_surface;
     cairo_canvas_ops.scale_image_rop = scale_image_rop;
+    cairo_canvas_ops.scale_image_rop_from_surface = scale_image_rop_from_surface;
     cairo_canvas_ops.blend_image = blend_image;
+    cairo_canvas_ops.blend_image_from_surface = blend_image_from_surface;
     cairo_canvas_ops.blend_scale_image = blend_scale_image;
+    cairo_canvas_ops.blend_scale_image_from_surface = blend_scale_image_from_surface;
     cairo_canvas_ops.colorkey_image = colorkey_image;
+    cairo_canvas_ops.colorkey_image_from_surface = colorkey_image_from_surface;
     cairo_canvas_ops.colorkey_scale_image = colorkey_scale_image;
+    cairo_canvas_ops.colorkey_scale_image_from_surface = colorkey_scale_image_from_surface;
     cairo_canvas_ops.copy_region = copy_region;
+    cairo_canvas_ops.get_image = get_image;
     rop3_init();
 }

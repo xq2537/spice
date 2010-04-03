@@ -190,6 +190,8 @@ typedef struct CanvasBase {
     HDC dc;
 #endif
 
+    SpiceImageSurfaces *surfaces;
+
     LzData lz_data;
     GlzData glz_data;
 
@@ -948,6 +950,34 @@ static void dump_surface(pixman_image_t *surface, int cache)
 
 #endif
 
+static SpiceCanvas *canvas_get_surface_internal(CanvasBase *canvas, SPICE_ADDRESS addr)
+{
+    SpiceImageDescriptor *descriptor = (SpiceImageDescriptor *)SPICE_GET_ADDRESS(addr);
+    access_test(canvas, descriptor, sizeof(SpiceImageDescriptor));
+
+    if (descriptor->type == SPICE_IMAGE_TYPE_SURFACE) {
+        SpiceSurfaceImage *surface = (SpiceSurfaceImage *)descriptor;
+        access_test(canvas, descriptor, sizeof(SpiceSurfaceImage));
+        return canvas->surfaces->ops->get(canvas->surfaces, surface->surface.surface_id);
+    }
+    return NULL;
+}
+
+static SpiceCanvas *canvas_get_surface_mask_internal(CanvasBase *canvas, SPICE_ADDRESS addr)
+{
+    SpiceImageDescriptor *descriptor;
+ 
+    descriptor = (SpiceImageDescriptor *)SPICE_GET_ADDRESS(addr);
+    access_test(canvas, descriptor, sizeof(SpiceImageDescriptor));
+
+    if (descriptor->type == SPICE_IMAGE_TYPE_SURFACE) {
+        SpiceSurfaceImage *surface = (SpiceSurfaceImage *)descriptor;
+        access_test(canvas, descriptor, sizeof(SpiceSurfaceImage));
+        return canvas->surfaces->ops->get(canvas->surfaces, surface->surface.surface_id);
+    }
+    return NULL;
+}
+
 #if defined(CAIRO_CANVAS_CACHE) || defined(CAIRO_CANVAS_IMAGE_CACHE)
 
 //#define DEBUG_LZ
@@ -1064,6 +1094,16 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
 }
 
 #endif
+
+static SpiceCanvas *canvas_get_surface_mask(CanvasBase *canvas, SPICE_ADDRESS addr)
+{
+    return canvas_get_surface_mask_internal(canvas, addr);
+}
+
+static SpiceCanvas *canvas_get_surface(CanvasBase *canvas, SPICE_ADDRESS addr)
+{
+    return canvas_get_surface_internal(canvas, addr);
+}
 
 static pixman_image_t *canvas_get_image(CanvasBase *canvas, SPICE_ADDRESS addr)
 {
@@ -1316,10 +1356,6 @@ static pixman_image_t *canvas_get_mask(CanvasBase *canvas, SpiceQMask *mask, int
 
     if (needs_invert_out) {
         *needs_invert_out = 0;
-    }
-
-    if (!mask->bitmap) {
-        return NULL;
     }
 
     descriptor = (SpiceImageDescriptor *)SPICE_GET_ADDRESS(mask->bitmap);
@@ -1807,6 +1843,7 @@ static void canvas_mask_pixman(CanvasBase *canvas,
                                pixman_region32_t *dest_region,
                                SpiceQMask *mask, int x, int y)
 {
+    SpiceCanvas *surface_canvas;
     pixman_image_t *image, *subimage;
     int needs_invert;
     pixman_region32_t mask_region;
@@ -1815,13 +1852,19 @@ static void canvas_mask_pixman(CanvasBase *canvas,
     int mask_width, mask_height, mask_stride;
     pixman_box32_t extents;
 
-    needs_invert = FALSE;
-    image = canvas_get_mask(canvas,
-                            mask,
-                            &needs_invert);
+    if (!mask->bitmap) {
+        return;
+    }
 
-    if (image == NULL) {
-        return; /* no mask */
+    surface_canvas = canvas_get_surface_mask(canvas, mask->bitmap);
+    if (surface_canvas) {
+        needs_invert = mask->flags & SPICE_MASK_FLAGS_INVERS;
+        image = surface_canvas->ops->get_image(surface_canvas);
+    } else {
+        needs_invert = FALSE;
+        image = canvas_get_mask(canvas,
+                                mask,
+                                &needs_invert);
     }
 
     mask_data = pixman_image_get_data(image);
@@ -1921,20 +1964,35 @@ static void draw_brush(SpiceCanvas *canvas,
             canvas->ops->fill_solid_rects_rop(canvas, rects, n_rects, color, rop);
         }
         break;
-    case SPICE_BRUSH_TYPE_PATTERN:
+        case SPICE_BRUSH_TYPE_PATTERN: {
+        SpiceCanvas *surface_canvas;
+
         pattern = &brush->u.pattern;
-        tile = canvas_get_image(canvas_base, pattern->pat);
         offset_x = pattern->pos.x;
         offset_y = pattern->pos.y;
 
-        if (rop == SPICE_ROP_COPY) {
-            canvas->ops->fill_tiled_rects(canvas, rects, n_rects, tile, offset_x, offset_y);
+        surface_canvas = canvas_get_surface(canvas_base, pattern->pat);
+        if (surface_canvas) {
+            if (rop == SPICE_ROP_COPY) {
+                canvas->ops->fill_tiled_rects_from_surface(canvas, rects, n_rects, surface_canvas,
+                                                           offset_x, offset_y);
+            } else {
+                canvas->ops->fill_tiled_rects_rop_from_surface(canvas, rects, n_rects,
+                                                               surface_canvas, offset_x, offset_y,
+                                                               rop);
+            }
         } else {
-            canvas->ops->fill_tiled_rects_rop(canvas, rects, n_rects,
-                                              tile, offset_x, offset_y, rop);
+            tile = canvas_get_image(canvas_base, pattern->pat);
+            if (rop == SPICE_ROP_COPY) {
+                canvas->ops->fill_tiled_rects(canvas, rects, n_rects, tile, offset_x, offset_y);
+            } else {
+                canvas->ops->fill_tiled_rects_rop(canvas, rects, n_rects,
+                                                  tile, offset_x, offset_y, rop);
+            }
+            pixman_image_unref(tile);
         }
-        pixman_image_unref(tile);
         break;
+    }
     case SPICE_BRUSH_TYPE_NONE:
         /* Still need to do *something* here, because rop could be e.g invert dest */
         canvas->ops->fill_solid_rects_rop(canvas, rects, n_rects, 0, rop);
@@ -1991,6 +2049,7 @@ static void canvas_draw_copy(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceCl
 {
     CanvasBase *canvas = (CanvasBase *)spice_canvas;
     pixman_region32_t dest_region;
+    SpiceCanvas *surface_canvas;
     pixman_image_t *src_image;
     SpiceROP rop;
 
@@ -2013,36 +2072,67 @@ static void canvas_draw_copy(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceCl
         return;
     }
 
-    src_image = canvas_get_image(canvas, copy->src_bitmap);
-
-    if (rect_is_same_size(bbox, &copy->src_area)) {
-        if (rop == SPICE_ROP_COPY) {
-            spice_canvas->ops->blit_image(spice_canvas, &dest_region,
-                                          src_image,
-                                          bbox->left - copy->src_area.left,
-                                          bbox->top - copy->src_area.top);
+    surface_canvas = canvas_get_surface(canvas, copy->src_bitmap);
+    if (surface_canvas) {
+        if (rect_is_same_size(bbox, &copy->src_area)) {
+            if (rop == SPICE_ROP_COPY) {
+                spice_canvas->ops->blit_image_from_surface(spice_canvas, &dest_region,
+                                                           surface_canvas,
+                                                           bbox->left - copy->src_area.left,
+                                                           bbox->top - copy->src_area.top);
+            } else {
+                spice_canvas->ops->blit_image_rop_from_surface(spice_canvas, &dest_region,
+                                                               surface_canvas,
+                                                               bbox->left - copy->src_area.left,
+                                                               bbox->top - copy->src_area.top,
+                                                               rop);
+            }
         } else {
-            spice_canvas->ops->blit_image_rop(spice_canvas, &dest_region,
-                                              src_image,
-                                              bbox->left - copy->src_area.left,
-                                              bbox->top - copy->src_area.top,
-                                              rop);
+            if (rop == SPICE_ROP_COPY) {
+                spice_canvas->ops->scale_image_from_surface(spice_canvas, &dest_region,
+                                                            surface_canvas,
+                                                            copy->src_area.left,
+                                                            copy->src_area.top,
+                                                            copy->src_area.right - copy->src_area.left,
+                                                            copy->src_area.bottom - copy->src_area.top,
+                                                            bbox->left,
+                                                            bbox->top,
+                                                            bbox->right - bbox->left,
+                                                            bbox->bottom - bbox->top,
+                                                            copy->scale_mode);
+            } else {
+                spice_canvas->ops->scale_image_rop_from_surface(spice_canvas, &dest_region,
+                                                                surface_canvas,
+                                                                copy->src_area.left,
+                                                                copy->src_area.top,
+                                                                copy->src_area.right - copy->src_area.left,
+                                                                copy->src_area.bottom - copy->src_area.top,
+                                                                bbox->left,
+                                                                bbox->top,
+                                                                bbox->right - bbox->left,
+                                                                bbox->bottom - bbox->top,
+                                                                copy->scale_mode,
+                                                                rop);
+            }
         }
     } else {
-        if (rop == SPICE_ROP_COPY) {
-            spice_canvas->ops->scale_image(spice_canvas, &dest_region,
-                                           src_image,
-                                           copy->src_area.left,
-                                           copy->src_area.top,
-                                           copy->src_area.right - copy->src_area.left,
-                                           copy->src_area.bottom - copy->src_area.top,
-                                           bbox->left,
-                                           bbox->top,
-                                           bbox->right - bbox->left,
-                                           bbox->bottom - bbox->top,
-                                           copy->scale_mode);
+        src_image = canvas_get_image(canvas, copy->src_bitmap);
+        if (rect_is_same_size(bbox, &copy->src_area)) {
+            if (rop == SPICE_ROP_COPY) {
+                spice_canvas->ops->blit_image(spice_canvas, &dest_region,
+                                              src_image,
+                                              bbox->left - copy->src_area.left,
+                                              bbox->top - copy->src_area.top);
+            } else {
+                spice_canvas->ops->blit_image_rop(spice_canvas, &dest_region,
+                                                  src_image,
+                                                  bbox->left - copy->src_area.left,
+                                                  bbox->top - copy->src_area.top,
+                                                  rop);
+            }
         } else {
-            spice_canvas->ops->scale_image_rop(spice_canvas, &dest_region,
+            if (rop == SPICE_ROP_COPY) {
+                spice_canvas->ops->scale_image(spice_canvas, &dest_region,
                                                src_image,
                                                copy->src_area.left,
                                                copy->src_area.top,
@@ -2052,18 +2142,31 @@ static void canvas_draw_copy(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceCl
                                                bbox->top,
                                                bbox->right - bbox->left,
                                                bbox->bottom - bbox->top,
-                                               copy->scale_mode,
-                                               rop);
+                                               copy->scale_mode);
+            } else {
+                spice_canvas->ops->scale_image_rop(spice_canvas, &dest_region,
+                                                   src_image,
+                                                   copy->src_area.left,
+                                                   copy->src_area.top,
+                                                   copy->src_area.right - copy->src_area.left,
+                                                   copy->src_area.bottom - copy->src_area.top,
+                                                   bbox->left,
+                                                   bbox->top,
+                                                   bbox->right - bbox->left,
+                                                   bbox->bottom - bbox->top,
+                                                   copy->scale_mode,
+                                                   rop);
+            }
         }
+        pixman_image_unref(src_image);
     }
-
-    pixman_image_unref(src_image);
     pixman_region32_fini(&dest_region);
 }
 
 static void canvas_draw_transparent(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceTransparent* transparent)
 {
     CanvasBase *canvas = (CanvasBase *)spice_canvas;
+    SpiceCanvas *surface_canvas;
     pixman_image_t *src_image;
     pixman_region32_t dest_region;
 
@@ -2080,29 +2183,50 @@ static void canvas_draw_transparent(SpiceCanvas *spice_canvas, SpiceRect *bbox, 
         return;
     }
 
-    src_image = canvas_get_image(canvas, transparent->src_bitmap);
-
-    if (rect_is_same_size(bbox, &transparent->src_area)) {
-        spice_canvas->ops->colorkey_image(spice_canvas, &dest_region,
-                                          src_image,
-                                          bbox->left - transparent->src_area.left,
-                                          bbox->top - transparent->src_area.top,
-                                          transparent->true_color);
+    surface_canvas = canvas_get_surface(canvas, transparent->src_bitmap);
+    if (surface_canvas) {
+        if (rect_is_same_size(bbox, &transparent->src_area)) {
+            spice_canvas->ops->colorkey_image_from_surface(spice_canvas, &dest_region,
+                                                           surface_canvas,
+                                                           bbox->left - transparent->src_area.left,
+                                                           bbox->top - transparent->src_area.top,
+                                                           transparent->true_color);
+        } else {
+            spice_canvas->ops->colorkey_scale_image_from_surface(spice_canvas, &dest_region,
+                                                                 surface_canvas,
+                                                                 transparent->src_area.left,
+                                                                 transparent->src_area.top,
+                                                                 transparent->src_area.right - transparent->src_area.left,
+                                                                 transparent->src_area.bottom - transparent->src_area.top,
+                                                                 bbox->left,
+                                                                 bbox->top,
+                                                                 bbox->right - bbox->left,
+                                                                 bbox->bottom - bbox->top,
+                                                                 transparent->true_color);
+        }
     } else {
-        spice_canvas->ops->colorkey_scale_image(spice_canvas, &dest_region,
-                                                src_image,
-                                                transparent->src_area.left,
-                                                transparent->src_area.top,
-                                                transparent->src_area.right - transparent->src_area.left,
-                                                transparent->src_area.bottom - transparent->src_area.top,
-                                                bbox->left,
-                                                bbox->top,
-                                                bbox->right - bbox->left,
-                                                bbox->bottom - bbox->top,
-                                                transparent->true_color);
+        src_image = canvas_get_image(canvas, transparent->src_bitmap);
+        if (rect_is_same_size(bbox, &transparent->src_area)) {
+            spice_canvas->ops->colorkey_image(spice_canvas, &dest_region,
+                                              src_image,
+                                              bbox->left - transparent->src_area.left,
+                                              bbox->top - transparent->src_area.top,
+                                              transparent->true_color);
+        } else {
+            spice_canvas->ops->colorkey_scale_image(spice_canvas, &dest_region,
+                                                    src_image,
+                                                    transparent->src_area.left,
+                                                    transparent->src_area.top,
+                                                    transparent->src_area.right - transparent->src_area.left,
+                                                    transparent->src_area.bottom - transparent->src_area.top,
+                                                    bbox->left,
+                                                    bbox->top,
+                                                    bbox->right - bbox->left,
+                                                    bbox->bottom - bbox->top,
+                                                    transparent->true_color);
+        }
+        pixman_image_unref(src_image);
     }
-
-    pixman_image_unref(src_image);
     pixman_region32_fini(&dest_region);
 }
 
@@ -2110,6 +2234,7 @@ static void canvas_draw_alpha_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, 
 {
     CanvasBase *canvas = (CanvasBase *)spice_canvas;
     pixman_region32_t dest_region;
+    SpiceCanvas *surface_canvas;
     pixman_image_t *src_image;
 
     pixman_region32_init_rect(&dest_region,
@@ -2126,34 +2251,62 @@ static void canvas_draw_alpha_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, 
         return;
     }
 
-    src_image = canvas_get_image(canvas, alpha_blend->src_bitmap);
-
-    if (rect_is_same_size(bbox, &alpha_blend->src_area)) {
-        spice_canvas->ops->blend_image(spice_canvas, &dest_region,
-                                       src_image,
-                                       alpha_blend->src_area.left,
-                                       alpha_blend->src_area.top,
-                                       bbox->left,
-                                       bbox->top,
-                                       bbox->right - bbox->left,
-                                       bbox->bottom - bbox->top,
-                                       alpha_blend->alpha);
-    } else {
-        spice_canvas->ops->blend_scale_image(spice_canvas, &dest_region,
-                                             src_image,
-                                             alpha_blend->src_area.left,
-                                             alpha_blend->src_area.top,
-                                             alpha_blend->src_area.right - alpha_blend->src_area.left,
-                                             alpha_blend->src_area.bottom - alpha_blend->src_area.top,
-                                             bbox->left,
-                                             bbox->top,
-                                             bbox->right - bbox->left,
-                                             bbox->bottom - bbox->top,
-                                             SPICE_IMAGE_SCALE_MODE_NEAREST,
-                                             alpha_blend->alpha);
+    surface_canvas = canvas_get_surface(canvas, alpha_blend->src_bitmap);
+    if (surface_canvas) {
+        if (rect_is_same_size(bbox, &alpha_blend->src_area)) {
+            spice_canvas->ops->blend_image_from_surface(spice_canvas, &dest_region,
+                                                        surface_canvas,
+                                                        alpha_blend->src_area.left,
+                                                        alpha_blend->src_area.top,
+                                                        bbox->left,
+                                                        bbox->top,
+                                                        bbox->right - bbox->left,
+                                                        bbox->bottom - bbox->top,
+                                                        alpha_blend->alpha);
+        } else {
+            spice_canvas->ops->blend_scale_image_from_surface(spice_canvas, &dest_region,
+                                                              surface_canvas,
+                                                              alpha_blend->src_area.left,
+                                                              alpha_blend->src_area.top,
+                                                              alpha_blend->src_area.right - alpha_blend->src_area.left,
+                                                              alpha_blend->src_area.bottom - alpha_blend->src_area.top,
+                                                              bbox->left,
+                                                              bbox->top,
+                                                              bbox->right - bbox->left,
+                                                              bbox->bottom - bbox->top,
+                                                              SPICE_IMAGE_SCALE_MODE_NEAREST,
+                                                              alpha_blend->alpha);
+        }
+     } else {
+        src_image = canvas_get_image(canvas, alpha_blend->src_bitmap);
+        if (rect_is_same_size(bbox, &alpha_blend->src_area)) {
+            spice_canvas->ops->blend_image(spice_canvas, &dest_region,
+                                           src_image,
+                                           alpha_blend->src_area.left,
+                                           alpha_blend->src_area.top,
+                                           bbox->left,
+                                           bbox->top,
+                                           bbox->right - bbox->left,
+                                           bbox->bottom - bbox->top,
+                                           alpha_blend->alpha);
+        } else {
+            spice_canvas->ops->blend_scale_image(spice_canvas, &dest_region,
+                                                 src_image,
+                                                 alpha_blend->src_area.left,
+                                                 alpha_blend->src_area.top,
+                                                 alpha_blend->src_area.right - alpha_blend->src_area.left,
+                                                 alpha_blend->src_area.bottom - alpha_blend->src_area.top,
+                                                 bbox->left,
+                                                 bbox->top,
+                                                 bbox->right - bbox->left,
+                                                 bbox->bottom - bbox->top,
+                                                 SPICE_IMAGE_SCALE_MODE_NEAREST,
+                                                 alpha_blend->alpha);
+        }
+ 
+        pixman_image_unref(src_image);
     }
 
-    pixman_image_unref(src_image);
     pixman_region32_fini(&dest_region);
 }
 
@@ -2214,6 +2367,7 @@ static void canvas_draw_opaque(SpiceCanvas *spice_canvas, SpiceRect *bbox, Spice
 static void canvas_draw_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceBlend *blend)
 {
     CanvasBase *canvas = (CanvasBase *)spice_canvas;
+    SpiceCanvas *surface_canvas;
     pixman_image_t *src_image;
     pixman_region32_t dest_region;
     SpiceROP rop;
@@ -2237,40 +2391,74 @@ static void canvas_draw_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceC
         return;
     }
 
-    src_image = canvas_get_image(canvas, blend->src_bitmap);
-
-    if (rect_is_same_size(bbox, &blend->src_area)) {
-        if (rop == SPICE_ROP_COPY)
-            spice_canvas->ops->blit_image(spice_canvas, &dest_region,
-                                          src_image,
-                                          bbox->left - blend->src_area.left,
-                                          bbox->top - blend->src_area.top);
-        else
-            spice_canvas->ops->blit_image_rop(spice_canvas, &dest_region,
+    surface_canvas = canvas_get_surface(canvas, blend->src_bitmap);
+    if (surface_canvas) {
+        if (rect_is_same_size(bbox, &blend->src_area)) {
+            if (rop == SPICE_ROP_COPY)
+                spice_canvas->ops->blit_image_from_surface(spice_canvas, &dest_region,
+                                                           surface_canvas,
+                                                           bbox->left - blend->src_area.left,
+                                                           bbox->top - blend->src_area.top);
+            else
+                spice_canvas->ops->blit_image_rop_from_surface(spice_canvas, &dest_region,
+                                                               surface_canvas,
+                                                               bbox->left - blend->src_area.left,
+                                                               bbox->top - blend->src_area.top,
+                                                               rop);
+        } else {
+            double sx, sy;
+    
+            sx = (double)(blend->src_area.right - blend->src_area.left) / (bbox->right - bbox->left);
+            sy = (double)(blend->src_area.bottom - blend->src_area.top) / (bbox->bottom - bbox->top);
+    
+            if (rop == SPICE_ROP_COPY) {
+                spice_canvas->ops->scale_image_from_surface(spice_canvas, &dest_region,
+                                                            surface_canvas,
+                                                            blend->src_area.left,
+                                                            blend->src_area.top,
+                                                            blend->src_area.right - blend->src_area.left,
+                                                            blend->src_area.bottom - blend->src_area.top,
+                                                            bbox->left,
+                                                            bbox->top,
+                                                            bbox->right - bbox->left,
+                                                            bbox->bottom - bbox->top,
+                                                            blend->scale_mode);
+            } else {
+                spice_canvas->ops->scale_image_rop_from_surface(spice_canvas, &dest_region,
+                                                                surface_canvas,
+                                                                blend->src_area.left,
+                                                                blend->src_area.top,
+                                                                blend->src_area.right - blend->src_area.left,
+                                                                blend->src_area.bottom - blend->src_area.top,
+                                                                bbox->left,
+                                                                bbox->top,
+                                                                bbox->right - bbox->left,
+                                                                bbox->bottom - bbox->top,
+                                                                blend->scale_mode, rop);
+            }
+        }
+    } else {
+        src_image = canvas_get_image(canvas, blend->src_bitmap);
+        if (rect_is_same_size(bbox, &blend->src_area)) {
+            if (rop == SPICE_ROP_COPY)
+                spice_canvas->ops->blit_image(spice_canvas, &dest_region,
                                               src_image,
                                               bbox->left - blend->src_area.left,
-                                              bbox->top - blend->src_area.top,
-                                              rop);
-    } else {
-        double sx, sy;
-
-        sx = (double)(blend->src_area.right - blend->src_area.left) / (bbox->right - bbox->left);
-        sy = (double)(blend->src_area.bottom - blend->src_area.top) / (bbox->bottom - bbox->top);
-
-        if (rop == SPICE_ROP_COPY) {
-            spice_canvas->ops->scale_image(spice_canvas, &dest_region,
-                                           src_image,
-                                           blend->src_area.left,
-                                           blend->src_area.top,
-                                           blend->src_area.right - blend->src_area.left,
-                                           blend->src_area.bottom - blend->src_area.top,
-                                           bbox->left,
-                                           bbox->top,
-                                           bbox->right - bbox->left,
-                                           bbox->bottom - bbox->top,
-                                           blend->scale_mode);
+                                              bbox->top - blend->src_area.top);
+            else
+                spice_canvas->ops->blit_image_rop(spice_canvas, &dest_region,
+                                                  src_image,
+                                                  bbox->left - blend->src_area.left,
+                                                  bbox->top - blend->src_area.top,
+                                                  rop);
         } else {
-            spice_canvas->ops->scale_image_rop(spice_canvas, &dest_region,
+            double sx, sy;
+    
+            sx = (double)(blend->src_area.right - blend->src_area.left) / (bbox->right - bbox->left);
+            sy = (double)(blend->src_area.bottom - blend->src_area.top) / (bbox->bottom - bbox->top);
+    
+            if (rop == SPICE_ROP_COPY) {
+                spice_canvas->ops->scale_image(spice_canvas, &dest_region,
                                                src_image,
                                                blend->src_area.left,
                                                blend->src_area.top,
@@ -2280,11 +2468,23 @@ static void canvas_draw_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceC
                                                bbox->top,
                                                bbox->right - bbox->left,
                                                bbox->bottom - bbox->top,
-                                               blend->scale_mode, rop);
+                                               blend->scale_mode);
+            } else {
+                spice_canvas->ops->scale_image_rop(spice_canvas, &dest_region,
+                                                   src_image,
+                                                   blend->src_area.left,
+                                                   blend->src_area.top,
+                                                   blend->src_area.right - blend->src_area.left,
+                                                   blend->src_area.bottom - blend->src_area.top,
+                                                   bbox->left,
+                                                   bbox->top,
+                                                   bbox->right - bbox->left,
+                                                   bbox->bottom - bbox->top,
+                                                   blend->scale_mode, rop);
+            }
         }
+        pixman_image_unref(src_image);
     }
-
-    pixman_image_unref(src_image);
     pixman_region32_fini(&dest_region);
 }
 
@@ -2382,7 +2582,11 @@ typedef struct {
     SpiceROP back_rop;
     int solid;
     uint32_t color;
-    pixman_image_t *tile;
+    int use_surface_canvas;
+    union {
+        SpiceCanvas *surface_canvas;
+        pixman_image_t *tile;
+    };
     int tile_offset_x;
     int tile_offset_y;
 } StrokeGC;
@@ -2505,16 +2709,31 @@ static void stroke_fill_rects(lineGC * pGC,
         }
     } else {
         if (rop == SPICE_ROP_COPY) {
-            canvas->ops->fill_tiled_rects(canvas, area_rects, n_area_rects,
-                                          strokeGC->tile,
-                                          strokeGC->tile_offset_x,
-                                          strokeGC->tile_offset_y);
-        } else {
-            canvas->ops->fill_tiled_rects_rop(canvas, area_rects, n_area_rects,
+            if (strokeGC->use_surface_canvas) {
+                canvas->ops->fill_tiled_rects_from_surface(canvas, area_rects, n_area_rects,
+                                                           strokeGC->surface_canvas,
+                                                           strokeGC->tile_offset_x,
+                                                           strokeGC->tile_offset_y);
+            } else {
+                canvas->ops->fill_tiled_rects(canvas, area_rects, n_area_rects,
                                               strokeGC->tile,
                                               strokeGC->tile_offset_x,
-                                              strokeGC->tile_offset_y,
-                                              rop);
+                                              strokeGC->tile_offset_y);
+            }
+        } else {
+            if (strokeGC->use_surface_canvas) {
+                canvas->ops->fill_tiled_rects_rop_from_surface(canvas, area_rects, n_area_rects,
+                                                               strokeGC->surface_canvas,
+                                                               strokeGC->tile_offset_x,
+                                                               strokeGC->tile_offset_y,
+                                                               rop);
+            } else {
+                canvas->ops->fill_tiled_rects_rop(canvas, area_rects, n_area_rects,
+                                                  strokeGC->tile,
+                                                  strokeGC->tile_offset_x,
+                                                  strokeGC->tile_offset_y,
+                                                  rop);
+            }
         }
     }
 
@@ -2661,6 +2880,7 @@ static void canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox,
                                SpiceClip *clip, SpiceStroke *stroke)
 {
     CanvasBase *canvas = (CanvasBase *)spice_canvas;
+    SpiceCanvas *surface_canvas = NULL;
     StrokeGC gc = { { 0 } };
     lineGCOps ops = {
         stroke_fill_spans,
@@ -2754,8 +2974,16 @@ static void canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox,
         break;
     case SPICE_BRUSH_TYPE_PATTERN:
         gc.solid = FALSE;
-        gc.tile = canvas_get_image(canvas,
-                                   stroke->brush.u.pattern.pat);
+        surface_canvas = canvas_get_surface(canvas,
+                                            stroke->brush.u.pattern.pat);
+        if (surface_canvas) {
+            gc.use_surface_canvas = TRUE;
+            gc.surface_canvas = surface_canvas;
+        } else {
+            gc.use_surface_canvas = FALSE;
+            gc.tile = canvas_get_image(canvas,
+                                       stroke->brush.u.pattern.pat);
+        }
         gc.tile_offset_x = stroke->brush.u.pattern.pos.x;
         gc.tile_offset_y = stroke->brush.u.pattern.pos.y;
         break;
@@ -2817,17 +3045,20 @@ static void canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox,
     }
     stroke_lines_free(&lines);
 
-    if (!gc.solid && gc.tile) {
+    if (!gc.solid && gc.tile && !surface_canvas) {
         pixman_image_unref(gc.tile);
     }
 
     pixman_region32_fini(&gc.dest_region);
 }
 
+
+//need surfaces handling here !!!
 static void canvas_draw_rop3(SpiceCanvas *spice_canvas, SpiceRect *bbox,
                              SpiceClip *clip, SpiceRop3 *rop3)
 {
     CanvasBase *canvas = (CanvasBase *)spice_canvas;
+    SpiceCanvas *surface_canvas;
     pixman_region32_t dest_region;
     pixman_image_t *d;
     pixman_image_t *s;
@@ -2848,7 +3079,12 @@ static void canvas_draw_rop3(SpiceCanvas *spice_canvas, SpiceRect *bbox,
     heigth = bbox->bottom - bbox->top;
 
     d = canvas_get_image_from_self(spice_canvas, bbox->left, bbox->top, width, heigth);
-    s = canvas_get_image(canvas, rop3->src_bitmap);
+    surface_canvas = canvas_get_surface(canvas, rop3->src_bitmap);
+    if (surface_canvas) {
+        s = surface_canvas->ops->get_image(surface_canvas);
+    } else {
+        s = canvas_get_image(canvas, rop3->src_bitmap);
+    }
 
     if (!rect_is_same_size(bbox, &rop3->src_area)) {
         pixman_image_t *scaled_s = canvas_scale_surface(s, &rop3->src_area, width, heigth,
@@ -2866,7 +3102,15 @@ static void canvas_draw_rop3(SpiceCanvas *spice_canvas, SpiceRect *bbox,
         CANVAS_ERROR("bad src bitmap size");
     }
     if (rop3->brush.type == SPICE_BRUSH_TYPE_PATTERN) {
-        pixman_image_t *p = canvas_get_image(canvas, rop3->brush.u.pattern.pat);
+        SpiceCanvas *_surface_canvas;
+        pixman_image_t *p;
+
+        _surface_canvas = canvas_get_surface(canvas, rop3->brush.u.pattern.pat);
+        if (_surface_canvas) {
+            p = _surface_canvas->ops->get_image(_surface_canvas);
+        } else {
+            p = canvas_get_image(canvas, rop3->brush.u.pattern.pat);
+        }
         SpicePoint pat_pos;
 
         pat_pos.x = (bbox->left - rop3->brush.u.pattern.pos.x) % pixman_image_get_width(p);
@@ -2988,6 +3232,7 @@ static int canvas_base_init(CanvasBase *canvas, SpiceCanvasOps *ops,
 #elif defined(CAIRO_CANVAS_IMAGE_CACHE)
                             , SpiceImageCache *bits_cache
 #endif
+                            , SpiceImageSurfaces *surfaces
                             , SpiceGlzDecoder *glz_decoder
 #ifndef CAIRO_CANVAS_NO_CHUNKS
                             , SpiceVirtMapping *virt_mapping
@@ -3020,6 +3265,7 @@ static int canvas_base_init(CanvasBase *canvas, SpiceCanvasOps *ops,
             return 0;
     }
 #endif
+    canvas->surfaces = surfaces;
     canvas->glz_data.decoder = glz_decoder;
 
     if (depth == 16) {
