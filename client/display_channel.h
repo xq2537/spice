@@ -131,6 +131,9 @@ private:
     void destroy_strams();
     void update_cursor();
 
+    void create_primary_surface(int width, int height, int depth);
+    void destroy_primary_surface();
+
     void handle_mode(RedPeer::InMessage* message);
     void handle_mark(RedPeer::InMessage* message);
     void handle_reset(RedPeer::InMessage* message);
@@ -145,6 +148,9 @@ private:
     void handle_stream_clip(RedPeer::InMessage* message);
     void handle_stream_destroy(RedPeer::InMessage* message);
     void handle_stream_destroy_all(RedPeer::InMessage* message);
+
+    void handle_surface_create(RedPeer::InMessage* message);
+    void handle_surface_destroy(RedPeer::InMessage* message);
 
     void handle_draw_fill(RedPeer::InMessage* message);
     void handle_draw_opaque(RedPeer::InMessage* message);
@@ -208,6 +214,8 @@ private:
     InterruptUpdate _interrupt_update;
 
     friend class SetModeEvent;
+    friend class CreatePrimarySurfaceEvent;
+    friend class DestroyPrimarySurfaceEvent;
     friend class ActivateTimerEvent;
     friend class VideoStream;
     friend class StreamsTrigger;

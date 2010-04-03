@@ -44,9 +44,9 @@
 
 static Mutex avcodec_mutex;
 
-class SetModeEvent: public SyncEvent {
+class CreatePrimarySurfaceEvent: public SyncEvent {
 public:
-    SetModeEvent(DisplayChannel& channel, int width, int height, int depth)
+   CreatePrimarySurfaceEvent(DisplayChannel& channel, int width, int height, int depth)
         : _channel (channel)
         , _width (width)
         , _height (height)
@@ -57,7 +57,6 @@ public:
     virtual void do_response(AbstractProcessLoop& events_loop)
     {
         Application* app = (Application*)events_loop.get_owner();
-        _channel.destroy_canvas();
         _channel.screen()->lock_size();
         _channel.screen()->resize(_width, _height);
         _channel.create_canvas(app->get_canvas_types(), _width, _height, _depth);
@@ -68,6 +67,22 @@ private:
     int _width;
     int _height;
     int _depth;
+};
+
+class DestroyPrimarySurfaceEvent: public SyncEvent {
+public:
+    DestroyPrimarySurfaceEvent(DisplayChannel& channel)
+        : _channel (channel)
+    {
+    }
+
+    virtual void do_response(AbstractProcessLoop& events_loop)
+    {
+        _channel.destroy_canvas();
+    }
+
+private:
+    DisplayChannel& _channel;
 };
 
 class UnlockScreenEvent: public Event {
@@ -658,7 +673,6 @@ DisplayChannel::DisplayChannel(RedClient& client, uint32_t id,
                          sizeof(SpiceMsgDisconnect));
     handler->set_handler(SPICE_MSG_NOTIFY, &DisplayChannel::handle_notify, sizeof(SpiceMsgNotify));
 
-    handler->set_handler(SPICE_MSG_DISPLAY_MODE, &DisplayChannel::handle_mode, sizeof(SpiceMsgDisplayMode));
     handler->set_handler(SPICE_MSG_DISPLAY_MARK, &DisplayChannel::handle_mark, 0);
     handler->set_handler(SPICE_MSG_DISPLAY_RESET, &DisplayChannel::handle_reset, 0);
 
@@ -681,6 +695,11 @@ DisplayChannel::DisplayChannel(RedClient& client, uint32_t id,
                          sizeof(SpiceMsgDisplayStreamDestroy));
     handler->set_handler(SPICE_MSG_DISPLAY_STREAM_DESTROY_ALL,
                          &DisplayChannel::handle_stream_destroy_all, 0);
+
+    handler->set_handler(SPICE_MSG_DISPLAY_SURFACE_CREATE, &DisplayChannel::handle_surface_create,
+                         sizeof(SpiceMsgSurfaceCreate));
+    handler->set_handler(SPICE_MSG_DISPLAY_SURFACE_DESTROY, &DisplayChannel::handle_surface_destroy,
+                         sizeof(SpiceMsgSurfaceDestroy));
 
     get_process_loop().add_trigger(_streams_trigger);
 #ifdef USE_OGL
@@ -1222,44 +1241,6 @@ void DisplayChannel::create_canvas(const std::vector<int>& canvas_types, int wid
     set_draw_handlers();
 }
 
-void DisplayChannel::handle_mode(RedPeer::InMessage* message)
-{
-    SpiceMsgDisplayMode *mode = (SpiceMsgDisplayMode *)message->data();
-
-    _mark = false;
-    attach_to_screen(get_client().get_application(), get_id());
-    clear_area();
-#ifdef USE_OGL
-    if (screen()) {
-        if (_canvas.get()) {
-            if (_canvas->get_pixmap_type() == CANVAS_TYPE_GL) {
-                screen()->unset_type_gl();
-                screen()->untouch_context();
-            }
-        }
-    }
-#endif
-    AutoRef<SetModeEvent> event(new SetModeEvent(*this, mode->x_res,
-                                                 mode->y_res, mode->bits));
-    get_client().push_event(*event);
-    (*event)->wait();
-    if (!(*event)->success()) {
-        THROW("set mode failed");
-    }
-
-    _x_res = mode->x_res;
-    _y_res = mode->y_res;
-    _depth = mode->bits;
-
-#ifdef USE_OGL
-    if (_canvas->get_pixmap_type() == CANVAS_TYPE_GL) {
-        ((GCanvas *)(_canvas.get()))->touch_context();
-        screen()->set_update_interrupt_trigger(&_interrupt_update);
-        screen()->set_type_gl();
-    }
-#endif
-}
-
 void DisplayChannel::handle_mark(RedPeer::InMessage *message)
 {
     _mark = true;
@@ -1361,6 +1342,7 @@ void DisplayChannel::handle_stream_create(RedPeer::InMessage* message)
 {
     SpiceMsgDisplayStreamCreate* stream_create = (SpiceMsgDisplayStreamCreate*)message->data();
 
+    PANIC_ON(stream_create->surface_id != 0);
     Lock lock(_streams_lock);
     if (_streams.size() <= stream_create->id) {
         _streams.resize(stream_create->id + 1);
@@ -1459,6 +1441,71 @@ void DisplayChannel::handle_stream_destroy_all(RedPeer::InMessage* message)
     destroy_strams();
 }
 
+void DisplayChannel::create_primary_surface(int width, int height, int depth)
+{
+   _mark = false;
+    attach_to_screen(get_client().get_application(), get_id());
+    clear_area();
+
+    AutoRef<CreatePrimarySurfaceEvent> event(new CreatePrimarySurfaceEvent(*this, width, height,
+                                                                           depth));
+    get_client().push_event(*event);
+    (*event)->wait();
+    if (!(*event)->success()) {
+        THROW("Create primary surface failed");
+    }
+
+    _x_res = width;
+    _y_res = height;
+    _depth = depth;
+
+#ifdef USE_OGL
+    if (_canvas->get_pixmap_type() == CANVAS_TYPE_GL) {
+        ((GCanvas *)(_canvas.get()))->touch_context();
+        screen()->set_update_interrupt_trigger(&_interrupt_update);
+        screen()->set_type_gl();
+    }
+#endif
+}
+
+void DisplayChannel::destroy_primary_surface()
+{
+#ifdef USE_OGL
+    if (screen()) {
+        if (_canvas.get()) {
+            if (_canvas->get_pixmap_type() == CANVAS_TYPE_GL) {
+                screen()->unset_type_gl();
+                screen()->untouch_context();
+            }
+        }
+    }
+#endif
+
+    AutoRef<DestroyPrimarySurfaceEvent> event(new DestroyPrimarySurfaceEvent(*this));
+    get_client().push_event(*event);
+    (*event)->wait();
+    if (!(*event)->success()) {
+        THROW("Destroying primary surface failed");
+    }
+}
+
+void DisplayChannel::handle_surface_create(RedPeer::InMessage* message)
+{
+    SpiceMsgSurfaceCreate* surface_create = (SpiceMsgSurfaceCreate*)message->data();
+    PANIC_ON(surface_create->surface_id != 0);
+    PANIC_ON(surface_create->flags != SPICE_SURFACE_FLAGS_PRIMARY);
+
+    create_primary_surface(surface_create->width, surface_create->height, surface_create->depth);
+}
+
+void DisplayChannel::handle_surface_destroy(RedPeer::InMessage* message)
+{
+    SpiceMsgSurfaceDestroy* surface_destroy = (SpiceMsgSurfaceDestroy*)message->data();
+    PANIC_ON(surface_destroy->surface_id != 0);
+
+    destroy_primary_surface();
+}
+
 #define PRE_DRAW
 #define POST_DRAW
 
@@ -1472,6 +1519,7 @@ void DisplayChannel::handle_stream_destroy_all(RedPeer::InMessage* message)
 void DisplayChannel::handle_copy_bits(RedPeer::InMessage* message)
 {
     SpiceMsgDisplayCopyBits* copy_bits = (SpiceMsgDisplayCopyBits*)message->data();
+    PANIC_ON(copy_bits->base.surface_id != 0);
     PRE_DRAW;
     _canvas->copy_bits(*copy_bits, message->size());
     POST_DRAW;
@@ -1481,72 +1529,84 @@ void DisplayChannel::handle_copy_bits(RedPeer::InMessage* message)
 void DisplayChannel::handle_draw_fill(RedPeer::InMessage* message)
 {
     SpiceMsgDisplayDrawFill* fill = (SpiceMsgDisplayDrawFill*)message->data();
+    PANIC_ON(fill->base.surface_id != 0);
     DRAW(fill);
 }
 
 void DisplayChannel::handle_draw_opaque(RedPeer::InMessage* message)
 {
     SpiceMsgDisplayDrawOpaque* opaque = (SpiceMsgDisplayDrawOpaque*)message->data();
+    PANIC_ON(opaque->base.surface_id != 0);
     DRAW(opaque);
 }
 
 void DisplayChannel::handle_draw_copy(RedPeer::InMessage* message)
 {
     SpiceMsgDisplayDrawCopy* copy = (SpiceMsgDisplayDrawCopy*)message->data();
+    PANIC_ON(copy->base.surface_id != 0);
     DRAW(copy);
 }
 
 void DisplayChannel::handle_draw_blend(RedPeer::InMessage* message)
 {
     SpiceMsgDisplayDrawBlend* blend = (SpiceMsgDisplayDrawBlend*)message->data();
+    PANIC_ON(blend->base.surface_id != 0);
     DRAW(blend);
 }
 
 void DisplayChannel::handle_draw_blackness(RedPeer::InMessage* message)
 {
     SpiceMsgDisplayDrawBlackness* blackness = (SpiceMsgDisplayDrawBlackness*)message->data();
+    PANIC_ON(blackness->base.surface_id != 0);
     DRAW(blackness);
 }
 
 void DisplayChannel::handle_draw_whiteness(RedPeer::InMessage* message)
 {
     SpiceMsgDisplayDrawWhiteness* whiteness = (SpiceMsgDisplayDrawWhiteness*)message->data();
+    PANIC_ON(whiteness->base.surface_id != 0);
     DRAW(whiteness);
 }
 
 void DisplayChannel::handle_draw_invers(RedPeer::InMessage* message)
 {
     SpiceMsgDisplayDrawInvers* invers = (SpiceMsgDisplayDrawInvers*)message->data();
+    PANIC_ON(invers->base.surface_id != 0);
     DRAW(invers);
 }
 
 void DisplayChannel::handle_draw_rop3(RedPeer::InMessage* message)
 {
     SpiceMsgDisplayDrawRop3* rop3 = (SpiceMsgDisplayDrawRop3*)message->data();
+    PANIC_ON(rop3->base.surface_id != 0);
     DRAW(rop3);
 }
 
 void DisplayChannel::handle_draw_stroke(RedPeer::InMessage* message)
 {
     SpiceMsgDisplayDrawStroke* stroke = (SpiceMsgDisplayDrawStroke*)message->data();
+    PANIC_ON(stroke->base.surface_id != 0);
     DRAW(stroke);
 }
 
 void DisplayChannel::handle_draw_text(RedPeer::InMessage* message)
 {
     SpiceMsgDisplayDrawText* text = (SpiceMsgDisplayDrawText*)message->data();
+    PANIC_ON(text->base.surface_id != 0);
     DRAW(text);
 }
 
 void DisplayChannel::handle_draw_transparent(RedPeer::InMessage* message)
 {
     SpiceMsgDisplayDrawTransparent* transparent = (SpiceMsgDisplayDrawTransparent*)message->data();
+    PANIC_ON(transparent->base.surface_id != 0);
     DRAW(transparent);
 }
 
 void DisplayChannel::handle_draw_alpha_blend(RedPeer::InMessage* message)
 {
     SpiceMsgDisplayDrawAlphaBlend* alpha_blend = (SpiceMsgDisplayDrawAlphaBlend*)message->data();
+    PANIC_ON(alpha_blend->base.surface_id != 0);
     DRAW(alpha_blend);
 }
 

@@ -92,6 +92,11 @@ LOG4CPP_LOGGER("spice")
     ON_PANIC();                             \
 }
 
+#define PANIC_ON(x) if ((x)) {                      \
+    LOG(FATAL, "%s panic %s\n", __FUNCTION__, #x);  \
+    ON_PANIC();                                     \
+}
+
 #define DBGLEVEL 1000
 
 #define DBG(level, format, ...) {               \

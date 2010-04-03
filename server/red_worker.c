@@ -221,7 +221,6 @@ typedef struct BufDescriptor {
 
 enum {
     PIPE_ITEM_TYPE_DRAW,
-    PIPE_ITEM_TYPE_MODE,
     PIPE_ITEM_TYPE_INVAL_ONE,
     PIPE_ITEM_TYPE_CURSOR,
     PIPE_ITEM_TYPE_MIGRATE,
@@ -239,6 +238,8 @@ enum {
     PIPE_ITEM_TYPE_PIXMAP_RESET,
     PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE,
     PIPE_ITEM_TYPE_INVAL_PALLET_CACHE,
+    PIPE_ITEM_TYPE_CREATE_SURFACE,
+    PIPE_ITEM_TYPE_DESTROY_SURFACE,
 };
 
 typedef struct PipeItem {
@@ -278,6 +279,16 @@ struct CacheItem {
     size_t size;
     uint32_t inval_type;
 };
+
+typedef struct SurfaceCreateItem {
+    SpiceMsgSurfaceCreate surface_create;
+    PipeItem pipe_item;
+} SurfaceCreateItem;
+
+typedef struct SurfaceDestroyItem {
+    SpiceMsgSurfaceDestroy surface_destroy;
+    PipeItem pipe_item;
+} SurfaceDestroyItem;
 
 enum {
     CURSOR_TYPE_INVALID,
@@ -628,6 +639,8 @@ struct DisplayChannel {
     Ring glz_drawables_inst_to_free;               // list of instances to be freed
     pthread_mutex_t glz_drawables_inst_to_free_lock;
 
+    uint8_t surface_client_created;
+
     struct {
         union {
             SpiceMsgDisplayDrawFill fill;
@@ -645,6 +658,8 @@ struct DisplayChannel {
             SpiceMsgDisplayDrawText text;
             SpiceMsgDisplayMode mode;
             SpiceMsgDisplayInvalOne inval_one;
+            SpiceMsgSurfaceCreate surface_create;
+            SpiceMsgSurfaceDestroy surface_destroy;
             WaitForChannels wait;
             struct {
                 SpiceMsgDisplayStreamCreate message;
@@ -843,10 +858,10 @@ typedef struct DrawContext {
     void *line_0;
 } DrawContext;
 
-typedef struct Surface {
+typedef struct RedSurface {
     uint32_t refs;
     DrawContext context;
-} Surface;
+} RedSurface;
 
 #ifdef STREAM_TRACE
 typedef struct ItemTrace {
@@ -892,7 +907,7 @@ typedef struct RedWorker {
     uint32_t renderers[RED_MAX_RENDERERS];
     uint32_t renderer;
 
-    Surface surface;
+    RedSurface surface;
 
     Ring current_list;
     Ring current;
@@ -1413,7 +1428,6 @@ static void red_pipe_clear(RedChannel *channel)
         case PIPE_ITEM_TYPE_PIXMAP_RESET:
         case PIPE_ITEM_TYPE_PIXMAP_SYNC:
         case PIPE_ITEM_TYPE_INVAL_ONE:
-        case PIPE_ITEM_TYPE_MODE:
         case PIPE_ITEM_TYPE_MIGRATE:
         case PIPE_ITEM_TYPE_SET_ACK:
         case PIPE_ITEM_TYPE_CURSOR_INIT:
@@ -1421,6 +1435,8 @@ static void red_pipe_clear(RedChannel *channel)
         case PIPE_ITEM_TYPE_MIGRATE_DATA:
         case PIPE_ITEM_TYPE_INVAL_PALLET_CACHE:
         case PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE:
+        case PIPE_ITEM_TYPE_CREATE_SURFACE:
+        case PIPE_ITEM_TYPE_DESTROY_SURFACE:
             free(item);
             break;
         case PIPE_ITEM_TYPE_IMAGE:
@@ -1494,9 +1510,36 @@ static void drawables_init(RedWorker *worker)
 
 static void red_reset_stream_trace(RedWorker *worker);
 
+static SurfaceDestroyItem *get_surface_destroy_item(uint32_t surface_id)
+{
+    SurfaceDestroyItem *destroy;
+
+    destroy = (SurfaceDestroyItem *)malloc(sizeof(SurfaceDestroyItem));
+    PANIC_ON(!destroy);
+
+    destroy->surface_destroy.surface_id = surface_id;
+
+    red_pipe_item_init(&destroy->pipe_item, PIPE_ITEM_TYPE_DESTROY_SURFACE);
+
+    return destroy;
+}
+
+static inline void red_destroy_surface_item(RedWorker *worker, uint32_t surface_id)
+{
+    SurfaceDestroyItem *destroy;
+
+    if (!worker->display_channel) {
+        return;
+    }
+
+    destroy = get_surface_destroy_item(surface_id);
+
+    red_pipe_add(&worker->display_channel->base, &destroy->pipe_item);
+}
+
 static inline void __red_destroy_surface(RedWorker *worker)
 {
-    Surface *surface = &worker->surface;
+    RedSurface *surface = &worker->surface;
 
     if (!--worker->surface.refs) {
 #ifdef STREAM_TRACE
@@ -1505,13 +1548,14 @@ static inline void __red_destroy_surface(RedWorker *worker)
         if (surface->context.canvas) {
             surface->context.canvas->ops->destroy(surface->context.canvas);
             surface->context.canvas = NULL;
+            red_destroy_surface_item(worker, 0);
         }
     }
 }
 
 static inline void red_destroy_surface(RedWorker *worker)
 {
-    Surface *surface = &worker->surface;
+    RedSurface *surface = &worker->surface;
 
     PANIC_ON(!surface->context.canvas);
     __red_destroy_surface(worker);
@@ -4745,10 +4789,11 @@ static inline void fill_rects_clip(RedChannel *channel, QXLPHYSICAL *in_clip, ui
 }
 
 static void fill_base(DisplayChannel *display_channel, SpiceMsgDisplayBase *base, Drawable *drawable,
-                      uint32_t size)
+                      uint32_t size, uint32_t surface_id)
 {
     RedChannel *channel = &display_channel->base;
     add_buf(channel, BUF_TYPE_RAW, base, size, 0, 0);
+    base->surface_id = surface_id;
     base->box = drawable->qxl_drawable->bbox;
     base->clip = drawable->qxl_drawable->clip;
 
@@ -6169,7 +6214,7 @@ static inline void red_send_qxl_drawable(RedWorker *worker, DisplayChannel *disp
     case QXL_DRAW_FILL:
         channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_FILL;
         fill_base(display_channel, &display_channel->send_data.u.fill.base, item,
-                  sizeof(SpiceMsgDisplayDrawFill));
+                  sizeof(SpiceMsgDisplayDrawFill), 0);
         display_channel->send_data.u.fill.data = drawable->u.fill;
         fill_brush(display_channel, &display_channel->send_data.u.fill.data.brush, item);
         fill_mask(display_channel, &display_channel->send_data.u.fill.data.mask, item);
@@ -6177,7 +6222,7 @@ static inline void red_send_qxl_drawable(RedWorker *worker, DisplayChannel *disp
     case QXL_DRAW_OPAQUE:
         channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_OPAQUE;
         fill_base(display_channel, &display_channel->send_data.u.opaque.base, item,
-                  sizeof(SpiceMsgDisplayDrawOpaque));
+                  sizeof(SpiceMsgDisplayDrawOpaque), 0);
         display_channel->send_data.u.opaque.data = drawable->u.opaque;
         fill_bits(display_channel, &display_channel->send_data.u.opaque.data.src_bitmap, item);
         fill_brush(display_channel, &display_channel->send_data.u.opaque.data.brush, item);
@@ -6185,7 +6230,8 @@ static inline void red_send_qxl_drawable(RedWorker *worker, DisplayChannel *disp
         break;
     case QXL_DRAW_COPY:
         channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_COPY;
-        fill_base(display_channel, &display_channel->send_data.u.copy.base, item, sizeof(SpiceMsgDisplayDrawCopy));
+        fill_base(display_channel, &display_channel->send_data.u.copy.base, item,
+                  sizeof(SpiceMsgDisplayDrawCopy), 0);
         display_channel->send_data.u.copy.data = drawable->u.copy;
         fill_bits(display_channel, &display_channel->send_data.u.copy.data.src_bitmap, item);
         fill_mask(display_channel, &display_channel->send_data.u.copy.data.mask, item);
@@ -6193,27 +6239,27 @@ static inline void red_send_qxl_drawable(RedWorker *worker, DisplayChannel *disp
     case QXL_DRAW_TRANSPARENT:
         channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_TRANSPARENT;
         fill_base(display_channel, &display_channel->send_data.u.transparent.base, item,
-                  sizeof(SpiceMsgDisplayDrawTransparent));
+                  sizeof(SpiceMsgDisplayDrawTransparent), 0);
         display_channel->send_data.u.transparent.data = drawable->u.transparent;
         fill_bits(display_channel, &display_channel->send_data.u.transparent.data.src_bitmap, item);
         break;
     case QXL_DRAW_ALPHA_BLEND:
         channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_ALPHA_BLEND;
         fill_base(display_channel, &display_channel->send_data.u.alpha_blend.base, item,
-                  sizeof(SpiceMsgDisplayDrawAlphaBlend));
+                  sizeof(SpiceMsgDisplayDrawAlphaBlend), 0);
         display_channel->send_data.u.alpha_blend.data = drawable->u.alpha_blend;
         fill_bits(display_channel, &display_channel->send_data.u.alpha_blend.data.src_bitmap, item);
         break;
     case QXL_COPY_BITS:
         channel->send_data.header.type = SPICE_MSG_DISPLAY_COPY_BITS;
         fill_base(display_channel, &display_channel->send_data.u.copy_bits.base, item,
-                  sizeof(SpiceMsgDisplayCopyBits));
+                  sizeof(SpiceMsgDisplayCopyBits), 0);
         display_channel->send_data.u.copy_bits.src_pos = drawable->u.copy_bits.src_pos;
         break;
     case QXL_DRAW_BLEND:
         channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_BLEND;
         fill_base(display_channel, &display_channel->send_data.u.blend.base, item,
-                  sizeof(SpiceMsgDisplayDrawBlend));
+                  sizeof(SpiceMsgDisplayDrawBlend), 0);
         display_channel->send_data.u.blend.data = drawable->u.blend;
         fill_bits(display_channel, &display_channel->send_data.u.blend.data.src_bitmap, item);
         fill_mask(display_channel, &display_channel->send_data.u.blend.data.mask, item);
@@ -6221,28 +6267,28 @@ static inline void red_send_qxl_drawable(RedWorker *worker, DisplayChannel *disp
     case QXL_DRAW_BLACKNESS:
         channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_BLACKNESS;
         fill_base(display_channel, &display_channel->send_data.u.blackness.base, item,
-                  sizeof(SpiceMsgDisplayDrawBlackness));
+                  sizeof(SpiceMsgDisplayDrawBlackness), 0);
         display_channel->send_data.u.blackness.data = drawable->u.blackness;
         fill_mask(display_channel, &display_channel->send_data.u.blackness.data.mask, item);
         break;
     case QXL_DRAW_WHITENESS:
         channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_WHITENESS;
         fill_base(display_channel, &display_channel->send_data.u.whiteness.base, item,
-                  sizeof(SpiceMsgDisplayDrawWhiteness));
+                  sizeof(SpiceMsgDisplayDrawWhiteness), 0);
         display_channel->send_data.u.whiteness.data = drawable->u.whiteness;
         fill_mask(display_channel, &display_channel->send_data.u.whiteness.data.mask, item);
         break;
     case QXL_DRAW_INVERS:
         channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_INVERS;
         fill_base(display_channel, &display_channel->send_data.u.invers.base, item,
-                  sizeof(SpiceMsgDisplayDrawInvers));
+                  sizeof(SpiceMsgDisplayDrawInvers), 0);
         display_channel->send_data.u.invers.data = drawable->u.invers;
         fill_mask(display_channel, &display_channel->send_data.u.invers.data.mask, item);
         break;
     case QXL_DRAW_ROP3:
         channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_ROP3;
         fill_base(display_channel, &display_channel->send_data.u.rop3.base, item,
-                  sizeof(SpiceMsgDisplayDrawRop3));
+                  sizeof(SpiceMsgDisplayDrawRop3), 0);
         display_channel->send_data.u.rop3.data = drawable->u.rop3;
         fill_bits(display_channel, &display_channel->send_data.u.rop3.data.src_bitmap, item);
         fill_brush(display_channel, &display_channel->send_data.u.rop3.data.brush, item);
@@ -6251,7 +6297,7 @@ static inline void red_send_qxl_drawable(RedWorker *worker, DisplayChannel *disp
     case QXL_DRAW_STROKE:
         channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_STROKE;
         fill_base(display_channel, &display_channel->send_data.u.stroke.base, item,
-                  sizeof(SpiceMsgDisplayDrawStroke));
+                  sizeof(SpiceMsgDisplayDrawStroke), 0);
         display_channel->send_data.u.stroke.data = drawable->u.stroke;
         fill_path(display_channel, &display_channel->send_data.u.stroke.data.path, item->group_id);
         fill_attr(display_channel, &display_channel->send_data.u.stroke.data.attr, item->group_id);
@@ -6259,7 +6305,8 @@ static inline void red_send_qxl_drawable(RedWorker *worker, DisplayChannel *disp
         break;
     case QXL_DRAW_TEXT:
         channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_TEXT;
-        fill_base(display_channel, &display_channel->send_data.u.text.base, item, sizeof(SpiceMsgDisplayDrawText));
+        fill_base(display_channel, &display_channel->send_data.u.text.base, item,
+                  sizeof(SpiceMsgDisplayDrawText), 0);
         display_channel->send_data.u.text.data = drawable->u.text;
         fill_brush(display_channel, &display_channel->send_data.u.text.data.fore_brush, item);
         fill_brush(display_channel, &display_channel->send_data.u.text.data.back_brush, item);
@@ -6716,29 +6763,6 @@ static inline void send_qxl_drawable(DisplayChannel *display_channel, Drawable *
     red_send_qxl_drawable(display_channel->base.worker, display_channel, item);
 }
 
-static void red_send_mode(DisplayChannel *display_channel)
-{
-    RedChannel *channel;
-    RedWorker *worker;
-
-    ASSERT(display_channel);
-    worker = display_channel->base.worker;
-
-    if (!worker->surface.context.canvas) {
-        return;
-    }
-
-    channel = &display_channel->base;
-    channel->send_data.header.type = SPICE_MSG_DISPLAY_MODE;
-    display_channel->send_data.u.mode.x_res = worker->surface.context.width;
-    display_channel->send_data.u.mode.y_res = worker->surface.context.height;
-    display_channel->send_data.u.mode.bits = worker->surface.context.depth;
-
-    add_buf(channel, BUF_TYPE_RAW, &display_channel->send_data.u.mode, sizeof(SpiceMsgDisplayMode), 0, 0);
-
-    display_begin_send_massage(display_channel, NULL);
-}
-
 static void red_send_set_ack(RedChannel *channel)
 {
     ASSERT(channel);
@@ -6899,6 +6923,7 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
     channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_COPY;
 
     add_buf(channel, BUF_TYPE_RAW, &display_channel->send_data.u.copy, sizeof(SpiceMsgDisplayDrawCopy), 0, 0);
+    display_channel->send_data.u.copy.base.surface_id = 0;
     display_channel->send_data.u.copy.base.box.left = item->pos.x;
     display_channel->send_data.u.copy.base.box.top = item->pos.y;
     display_channel->send_data.u.copy.base.box.right = item->pos.x + bitmap.x;
@@ -6949,6 +6974,7 @@ static void red_display_send_upgrade(DisplayChannel *display_channel, UpgradeIte
     ASSERT(qxl_drawable->u.copy.mask.bitmap == 0);
 
     add_buf(channel, BUF_TYPE_RAW, copy, sizeof(SpiceMsgDisplayDrawCopy), 0, 0);
+    copy->base.surface_id = 0;
     copy->base.box = qxl_drawable->bbox;
     copy->base.clip.type = SPICE_CLIP_TYPE_RECTS;
     copy->base.clip.data = channel->send_data.header.size;
@@ -6969,6 +6995,7 @@ static void red_display_send_stream_start(DisplayChannel *display_channel, Strea
     ASSERT(stream);
     channel->send_data.header.type = SPICE_MSG_DISPLAY_STREAM_CREATE;
     SpiceMsgDisplayStreamCreate *stream_create = &display_channel->send_data.u.stream_create.message;
+    stream_create->surface_id = 0;
     stream_create->id = agent - display_channel->stream_agents;
     stream_create->flags = stream->top_down ? SPICE_STREAM_FLAGS_TOP_DOWN : 0;
     stream_create->codec_type = SPICE_VIDEO_CODEC_TYPE_MJPEG;
@@ -7132,6 +7159,41 @@ static void red_send_cursor(CursorChannel *cursor_channel, CursorItem *cursor)
     red_release_cursor(channel->worker, cursor);
 }
 
+static void red_send_surface_create(DisplayChannel *display, SpiceMsgSurfaceCreate *surface_create)
+{
+    RedChannel *channel;
+
+    ASSERT(display);
+    channel = &display->base;
+
+    channel->send_data.header.type = SPICE_MSG_DISPLAY_SURFACE_CREATE;
+    display->send_data.u.surface_create = *surface_create;
+
+    add_buf(channel, BUF_TYPE_RAW, &display->send_data.u.surface_create,
+            sizeof(SpiceMsgSurfaceCreate), 0, 0);
+
+    display->surface_client_created = TRUE;
+
+    red_begin_send_massage(channel, NULL);
+}
+
+static void red_send_surface_destroy(DisplayChannel *display, uint32_t surface_id)
+{
+    RedChannel *channel;
+
+    ASSERT(display);
+    channel = &display->base;
+
+    channel->send_data.header.type = SPICE_MSG_DISPLAY_SURFACE_DESTROY;
+    display->send_data.u.surface_destroy.surface_id = surface_id;
+
+    add_buf(channel, BUF_TYPE_RAW, &display->send_data.u.surface_destroy,
+            sizeof(SpiceMsgSurfaceDestroy), 0, 0);
+
+    display->surface_client_created = FALSE;
+    red_begin_send_massage(channel, NULL);
+}
+
 static inline PipeItem *red_pipe_get(RedChannel *channel)
 {
     PipeItem *item;
@@ -7195,10 +7257,6 @@ static void display_channel_push(RedWorker *worker)
             display_send_verb(display_channel, ((VerbItem*)pipe_item)->verb);
             free(pipe_item);
             break;
-        case PIPE_ITEM_TYPE_MODE:
-            red_send_mode(display_channel);
-            free(pipe_item);
-            break;
         case PIPE_ITEM_TYPE_MIGRATE:
             red_printf("PIPE_ITEM_TYPE_MIGRATE");
             display_channel_send_migrate(display_channel);
@@ -7229,6 +7287,20 @@ static void display_channel_push(RedWorker *worker)
             red_send_verb((RedChannel *)display_channel, SPICE_MSG_DISPLAY_INVAL_ALL_PALETTES);
             free(pipe_item);
             break;
+        case PIPE_ITEM_TYPE_CREATE_SURFACE: {
+            SurfaceCreateItem *surface_create = SPICE_CONTAINEROF(pipe_item, SurfaceCreateItem,
+                                                                  pipe_item);
+            red_send_surface_create(display_channel, &surface_create->surface_create);
+            free(surface_create);
+            break;
+        }
+        case PIPE_ITEM_TYPE_DESTROY_SURFACE: {
+            SurfaceDestroyItem *surface_destroy = SPICE_CONTAINEROF(pipe_item, SurfaceDestroyItem,
+                                                                    pipe_item);
+            red_send_surface_destroy(display_channel, surface_destroy->surface_destroy.surface_id);
+            free(surface_destroy);
+            break;
+        }
         default:
             red_error("invalid pipe item type");
         }
@@ -7478,7 +7550,7 @@ static SpiceCanvas *create_ogl_pixmap_context(RedWorker *worker, uint32_t width,
     return canvas;
 }
 
-static inline void *create_canvas_for_surface(RedWorker *worker, Surface *surface,
+static inline void *create_canvas_for_surface(RedWorker *worker, RedSurface *surface,
                                               uint32_t renderer, uint32_t width, uint32_t height,
                                               int32_t stride, uint8_t depth, void *line_0)
 {
@@ -7503,16 +7575,52 @@ static inline void *create_canvas_for_surface(RedWorker *worker, Surface *surfac
     };
 }
 
-static inline void red_create_surface(RedWorker *worker, uint32_t width, uint32_t height,
-                                      int32_t stride, uint8_t depth, void *line_0)
+static SurfaceCreateItem *get_surface_create_item(uint32_t surface_id, uint32_t width,
+                                                  uint32_t height, uint8_t depth, uint32_t flags)
+{
+    SurfaceCreateItem *create;
+
+    create = (SurfaceCreateItem *)malloc(sizeof(SurfaceCreateItem));
+    PANIC_ON(!create);
+
+    create->surface_create.surface_id = surface_id;
+    create->surface_create.width = width;
+    create->surface_create.height = height;
+    create->surface_create.flags = flags;
+
+    red_pipe_item_init(&create->pipe_item, PIPE_ITEM_TYPE_CREATE_SURFACE);
+
+    return create;
+}
+
+static inline void red_create_surface_item(RedWorker *worker, RedSurface *surface)
+{
+    SurfaceCreateItem *create;
+
+    if (!surface->context.canvas) {
+        return;
+    }
+
+    if (!worker->display_channel) {
+        return;
+    }
+
+    create = get_surface_create_item(0, surface->context.width, surface->context.height,
+                                     surface->context.depth, SPICE_SURFACE_FLAGS_PRIMARY);
+    red_pipe_add(&worker->display_channel->base, &create->pipe_item);
+}
+
+static inline void red_create_surface(RedWorker *worker, uint32_t surface_id,uint32_t width,
+                                      uint32_t height, int32_t stride, uint8_t depth, void *line_0)
 {
     uint32_t i;
-    Surface *surface = &worker->surface;
+    RedSurface *surface = &worker->surface;
 
     if (stride >= 0) {
         PANIC("Untested path stride >= 0");
     }
     PANIC_ON(surface->context.canvas);
+    ASSERT(surface_id == 0);
 
     surface->context.canvas_draws_on_surface = FALSE;
     surface->context.width = width;
@@ -7529,6 +7637,7 @@ static inline void red_create_surface(RedWorker *worker, uint32_t width, uint32_
         if (!surface->context.canvas) {
             PANIC("drawing canvas creating failed - can`t create same type canvas");
         }
+        red_create_surface_item(worker, surface);
         return;
     }
 
@@ -7538,6 +7647,7 @@ static inline void red_create_surface(RedWorker *worker, uint32_t width, uint32_
                                                             surface->context.depth, line_0);
         if (surface->context.canvas) {
             worker->renderer = worker->renderers[i];
+            red_create_surface_item(worker, surface);
             return;
         }
     }
@@ -7590,14 +7700,14 @@ static inline void red_flush_surface_pipe(RedWorker *worker)
     }
 }
 
-static void push_new_mode(RedWorker *worker)
+static void push_new_primary_surface(RedWorker *worker)
 {
     DisplayChannel *display_channel;
 
     if ((display_channel = worker->display_channel)) {
         red_pipe_add_type(&display_channel->base, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
         if (!display_channel->base.migrate) {
-            red_pipe_add_type(&display_channel->base, PIPE_ITEM_TYPE_MODE);
+            red_create_surface_item(worker, &worker->surface);
         }
         display_channel_push(worker);
     }
@@ -7650,7 +7760,7 @@ static void on_new_display_channel(RedWorker *worker)
     display_channel->base.messages_window = 0;
     if (worker->surface.context.canvas) {
         red_current_flush(worker);
-        push_new_mode(worker);
+        push_new_primary_surface(worker);
         red_add_screen_image(worker);
         if (channel_is_connected(&display_channel->base)) {
             red_pipe_add_verb(&display_channel->base, SPICE_MSG_DISPLAY_MARK);
@@ -8571,11 +8681,11 @@ static inline void handle_dev_create_primary_surface(RedWorker *worker)
         line_0 -= (int32_t)(surface.stride * (surface.height -1));
     }
 
-    red_create_surface(worker, surface.width, surface.height, surface.stride, surface.depth,
+    red_create_surface(worker, 0, surface.width, surface.height, surface.stride, surface.depth,
                        line_0);
 
     if (worker->display_channel) {
-        red_pipe_add_type(&worker->display_channel->base, PIPE_ITEM_TYPE_MODE);
+        red_create_surface_item(worker, &worker->surface);
         red_pipe_add_verb(&worker->display_channel->base, SPICE_MSG_DISPLAY_MARK);
         display_channel_push(worker);
     }
