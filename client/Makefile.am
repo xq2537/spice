@@ -35,6 +35,7 @@ RED_COMMON_SRCS =	 		\
 	red_gl_canvas.h			\
 	gl_canvas.cpp			\
 	glc.cpp				\
+	glext_proto.h			\
 	glz_decoded_image.h		\
 	glz_decoder_config.h		\
 	glz_decoder.cpp			\

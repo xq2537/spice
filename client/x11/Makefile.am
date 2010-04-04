@@ -60,6 +60,7 @@ RED_COMMON_SRCS = 					\
 	$(CLIENT_DIR)/red_gl_canvas.h			\
 	$(CLIENT_DIR)/gl_canvas.cpp			\
 	$(CLIENT_DIR)/glc.cpp				\
+	$(CLIENT_DIR)/glext_proto.h			\
 	$(CLIENT_DIR)/glz_decoded_image.h		\
 	$(CLIENT_DIR)/glz_decoder_config.h		\
 	$(CLIENT_DIR)/glz_decoder.cpp			\
