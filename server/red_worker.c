@@ -1958,6 +1958,46 @@ static void red_clear_surface_glz_drawables(RedWorker *worker, int surface_id)
     pthread_mutex_unlock(&worker->display_channel->glz_drawables_inst_to_free_lock);
 }
 
+static void red_clear_surface_drawables_from_pipe(RedWorker *worker, int surface_id)
+{
+    Ring *ring;
+    PipeItem *item;
+    int x;
+
+    if (!worker->display_channel) {
+        return;
+    }
+
+    ring = &worker->display_channel->base.pipe;
+    item = (PipeItem *) ring;
+    while ((item = (PipeItem *)ring_next(ring, (RingItem *)item))) {
+        if (item->type == PIPE_ITEM_TYPE_DRAW) {
+            PipeItem *tmp_item;
+            Drawable *drawable;
+
+            drawable = SPICE_CONTAINEROF(item, Drawable, pipe_item);
+
+            for (x = 0; x < 3; ++x) {
+                if (drawable->qxl_drawable->surfaces_dest[x] == surface_id) {
+                    return;
+                }
+            }
+
+            if (drawable->qxl_drawable->surface_id == surface_id) {
+                tmp_item = item;
+                item = (PipeItem *)ring_prev(ring, (RingItem *)item);
+                ring_remove(&tmp_item->link);
+                release_drawable(worker, drawable);
+                worker->display_channel->base.pipe_size--;
+
+                if (!item) {
+                    item = (PipeItem *)ring;
+                } 
+            }
+        } 
+    }
+}
+
 #ifdef PIPE_DEBUG
 
 static void print_rgn(const char* prefix, const QRegion* rgn)
@@ -4042,6 +4082,7 @@ static inline void red_process_surface(RedWorker *worker, QXLSurfaceCmd *surface
         red_handle_depends_on_target_surface(worker, surface_id);
         red_current_clear(worker, surface_id);
         red_clear_surface_glz_drawables(worker, surface_id);
+	red_clear_surface_drawables_from_pipe(worker, surface_id);
         red_destroy_surface(worker, surface_id);
         break;
     default:
@@ -9054,8 +9095,9 @@ static inline void destroy_surface_wait(RedWorker *worker, int surface_id)
         red_handle_depends_on_target_surface(worker, surface_id);
     }
     red_flush_surface_pipe(worker);
-    red_clear_surface_glz_drawables(worker, surface_id);
     red_current_clear(worker, surface_id);
+    red_clear_surface_glz_drawables(worker, surface_id);
+    red_clear_surface_drawables_from_pipe(worker, surface_id);
     red_wait_outgoiong_item((RedChannel *)worker->display_channel);
     if (worker->display_channel) {
         ASSERT(!worker->display_channel->base.send_data.item);
