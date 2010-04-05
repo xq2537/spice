@@ -592,6 +592,7 @@ typedef struct GlzDrawableInstanceItem {
 
 struct RedGlzDrawable {
     RingItem link;    // ordered by the time it was encoded
+    RingItem surface_link;
     QXLDrawable *qxl_drawable;
     Drawable    *drawable;
     uint32_t     group_id;
@@ -876,6 +877,7 @@ typedef struct RedSurface {
     uint32_t refs;
     Ring current;
     Ring current_list;
+    Ring glz_drawables;
     int current_gn;
     DrawContext context;
 
@@ -1936,6 +1938,24 @@ static void red_current_clear(RedWorker *worker, int surface_id)
         TreeItem *now = SPICE_CONTAINEROF(ring_item, TreeItem, siblings_link);
         current_remove(worker, now);
     }
+}
+
+static void red_clear_surface_glz_drawables(RedWorker *worker, int surface_id)
+{
+    RingItem *ring_item;
+ 
+    if (!worker->display_channel) {
+        return;
+    }
+
+    pthread_mutex_lock(&worker->display_channel->glz_drawables_inst_to_free_lock);
+
+    while ((ring_item = ring_get_head(&worker->surfaces[surface_id].glz_drawables))) {
+        RedGlzDrawable *now = SPICE_CONTAINEROF(ring_item, RedGlzDrawable, surface_link);
+        red_display_free_glz_drawable(worker->display_channel, now);
+    }
+
+    pthread_mutex_unlock(&worker->display_channel->glz_drawables_inst_to_free_lock);
 }
 
 #ifdef PIPE_DEBUG
@@ -4021,6 +4041,7 @@ static inline void red_process_surface(RedWorker *worker, QXLSurfaceCmd *surface
         set_surface_release_info(worker, surface_id, &surface->release_info, group_id);
         red_handle_depends_on_target_surface(worker, surface_id);
         red_current_clear(worker, surface_id);
+        red_clear_surface_glz_drawables(worker, surface_id);
         red_destroy_surface(worker, surface_id);
         break;
     default:
@@ -5270,11 +5291,17 @@ static void red_display_reset_compress_buf(DisplayChannel *display_channel)
    in the channel (2) to the Drawable*/
 static RedGlzDrawable *red_display_get_glz_drawable(DisplayChannel *channel, Drawable *drawable)
 {
+    int surface_id;
+    RedSurface *surface;
     RedGlzDrawable *ret;
 
     if (drawable->red_glz_drawable) {
         return drawable->red_glz_drawable;
     }
+
+    surface_id = drawable->qxl_drawable->surface_id;
+    validate_surface(channel->base.worker, surface_id);
+    surface = &channel->base.worker->surfaces[surface_id];
 
     ret = spice_new(RedGlzDrawable, 1);
 
@@ -5287,7 +5314,8 @@ static RedGlzDrawable *red_display_get_glz_drawable(DisplayChannel *channel, Dra
     ring_init(&ret->instances);
 
     ring_item_init(&ret->link);
-
+    ring_item_init(&ret->surface_link);
+    ring_add(&surface->glz_drawables, &ret->surface_link);
     ring_add_before(&ret->link, &channel->glz_drawables);
     drawable->red_glz_drawable = ret;
 
@@ -5353,6 +5381,7 @@ static void red_display_free_glz_drawable_instance(DisplayChannel *channel,
         if (ring_item_is_linked(&glz_drawable->link)) {
             ring_remove(&glz_drawable->link);
         }
+        ring_remove(&glz_drawable->surface_link);
         free(glz_drawable);
     }
 }
@@ -8045,6 +8074,7 @@ static inline void red_create_surface(RedWorker *worker, uint32_t surface_id, ui
     ring_init(&surface->current);
     ring_init(&surface->current_list);
     ring_init(&surface->depend_on_me);
+    ring_init(&surface->glz_drawables);
     surface->refs = 1;
     if (worker->renderer != RED_RENDERER_INVALID) {
         surface->context.canvas = create_canvas_for_surface(worker, surface, worker->renderer,
@@ -9024,7 +9054,7 @@ static inline void destroy_surface_wait(RedWorker *worker, int surface_id)
         red_handle_depends_on_target_surface(worker, surface_id);
     }
     red_flush_surface_pipe(worker);
-    red_display_clear_glz_drawables(worker->display_channel);
+    red_clear_surface_glz_drawables(worker, surface_id);
     red_current_clear(worker, surface_id);
     red_wait_outgoiong_item((RedChannel *)worker->display_channel);
     if (worker->display_channel) {
