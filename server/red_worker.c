@@ -8143,6 +8143,11 @@ static inline void flush_display_commands(RedWorker *worker)
     for (;;) {
         uint64_t end_time;
 
+        red_process_commands(worker, MAX_PIPE_SIZE);
+        if (!worker->qxl->has_command(worker->qxl)) {
+            break;
+        }
+
         while (red_process_commands(worker, MAX_PIPE_SIZE)) {
             display_channel_push(worker);
         }
