@@ -918,6 +918,7 @@ static void draw_str_mask_bitmap(struct GdiCanvas *canvas,
         return;
     }
 
+    bitmap.from_surface = 0;
     bitmap.cache = 0;
     bitmap_data = create_bitmap(&bitmap.hbitmap, &bitmap.prev_hbitmap,
                                 &bitmap.dc, NULL,
