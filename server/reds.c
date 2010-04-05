@@ -1237,7 +1237,7 @@ static void reds_send_mouse_mode()
         return;
     }
 
-    new_simple_out_item(SPICE_MSG_MAIN_MOUSE_MODE, sizeof(SpiceMsgMainMouseMode));
+    item = new_simple_out_item(SPICE_MSG_MAIN_MOUSE_MODE, sizeof(SpiceMsgMainMouseMode));
     mouse_mode = (SpiceMsgMainMouseMode *)item->data;
     mouse_mode->supported_modes = SPICE_MOUSE_MODE_SERVER;
     if (reds->is_client_mouse_allowed) {
