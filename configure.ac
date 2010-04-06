@@ -88,6 +88,13 @@ AM_CONDITIONAL(OS_UNIX, test "$os_win32" != "yes")
 AM_CONDITIONAL(OS_LINUX, test "$os_linux" = "yes")
 
 dnl =========================================================================
+dnl Chek optional features
+have_tunnel=no
+AC_ARG_ENABLE(tunnel,
+[  --enable-tunnel         Enable network redirection],
+[  have_tunnel=yes])
+AM_CONDITIONAL(SUPPORT_TUNNEL, test "x$have_tunnel" = "xyes")
+dnl =========================================================================
 dnl Check deps
 
 PKG_CHECK_MODULES(PROTOCOL, spice-protocol)
@@ -118,10 +125,13 @@ AC_SUBST(CEGUI_CFLAGS)
 AC_SUBST(CEGUI_LIBS)
 SPICE_REQUIRES+=" CEGUI"
 
-PKG_CHECK_MODULES(SLIRP, slirp)
-AC_SUBST(SLIRP_CFLAGS)
-AC_SUBST(SLIRP_LIBS)
-SPICE_REQUIRES+=" slirp"
+if test "x$have_tunnel" = "xyes"; then
+	PKG_CHECK_MODULES(SLIRP, slirp)
+	AC_SUBST(SLIRP_CFLAGS)
+	AC_SUBST(SLIRP_LIBS)
+	SPICE_REQUIRES+=" slirp"
+	AC_DEFINE([HAVE_SLIRP], [], [Define if we have slirp])
+fi
 
 PKG_CHECK_MODULES(PIXMAN, pixman-1 >= 0.17.7)
 AC_SUBST(PIXMAN_CFLAGS)
@@ -344,6 +354,8 @@ echo "
         c++ compiler:	          ${CXX}
 
         Have XRANDR 1.2:          ${have_xrandr12}
+
+        Support tunneling:        ${have_tunnel}
 
         Red target:               ${red_target}
 

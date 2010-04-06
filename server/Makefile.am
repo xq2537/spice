@@ -50,6 +50,15 @@ libspice_server_la_LIBADD = 			\
 	$(LIBRT)				\
 	$(NULL)
 
+if SUPPORT_TUNNEL
+	TUNNEL_SRCS =			\
+		red_tunnel_worker.c	\
+		red_tunnel_worker.h	\
+		$(NULL)
+else
+	TUNNEL_SRCS =
+endif
+
 libspice_server_la_SOURCES =			\
 	glz_encoder.c				\
 	glz_encoder_config.h			\
@@ -73,10 +82,9 @@ libspice_server_la_SOURCES =			\
 	snd_worker.h				\
 	red_channel.h				\
 	red_channel.c				\
-	red_tunnel_worker.c			\
-	red_tunnel_worker.h			\
 	spice.h					\
 	vd_interface.h				\
+	$(TUNNEL_SRCS)				\
 	$(COMMON_SRCS)				\
 	$(NULL)
 

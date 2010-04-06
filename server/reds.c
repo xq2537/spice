@@ -46,11 +46,13 @@
 #include "red_common.h"
 #include "red_dispatcher.h"
 #include "snd_worker.h"
-#include "red_tunnel_worker.h"
 #include <spice/stats.h>
 #include "stat.h"
 #include "ring.h"
 #include "config.h"
+#ifdef HAVE_SLIRP
+#include "red_tunnel_worker.h"
+#endif
 
 CoreInterface *core = NULL;
 static MigrationInterface *mig = NULL;
@@ -5162,6 +5164,7 @@ static void interface_change_notifier(void *opaque, VDInterface *interface,
             }
             attach_to_red_agent((VDIPortInterface *)interface);
         } else if (strcmp(interface->type, VD_INTERFACE_NET_WIRE) == 0) {
+#ifdef HAVE_SLIRP
             NetWireInterface * net_wire = (NetWireInterface *)interface;
             red_printf("VD_INTERFACE_NET_WIRE");
             if (red_tunnel) {
@@ -5174,6 +5177,9 @@ static void interface_change_notifier(void *opaque, VDInterface *interface,
                 return;
             }
             red_tunnel = red_tunnel_attach(core, net_wire);
+#else
+            red_printf("unsupported net wire interface");
+#endif
         }
         break;
     case VD_INTERFACE_REMOVING:
