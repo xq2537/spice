@@ -224,6 +224,19 @@ AS_IF([test "$_cxxflags_is_set" = "yes"], [], [
     CXXFLAGS="-g -O2"
 ])
 
+AC_CHECK_LIB(jpeg, jpeg_destroy_decompress,
+    AC_MSG_CHECKING([for jpeglib.h])
+    AC_TRY_CPP(
+[#include <stdio.h>
+#undef PACKAGE
+#undef VERSION
+#undef HAVE_STDLIB_H
+#include <jpeglib.h>],
+        JPEG_LIBS='-ljpeg'
+        AC_MSG_RESULT($jpeg_ok),
+	AC_MSG_ERROR([jpeglib.h not found])),
+    AC_MSG_ERROR([libjpeg not found]))
+AC_SUBST(JPEG_LIBS)
 
 dnl ===========================================================================
 dnl check compiler flags

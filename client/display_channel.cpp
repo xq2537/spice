@@ -38,11 +38,9 @@
 #include "red_gdi_canvas.h"
 #endif
 #include "platform_utils.h"
-#include "ffmpeg_inc.h"
 #include "inputs_channel.h"
 #include "cursor_channel.h"
-
-static Mutex avcodec_mutex;
+#include "mjpeg_decoder.h"
 
 class CreatePrimarySurfaceEvent: public SyncEvent {
 public:
@@ -144,85 +142,6 @@ private:
     AutoRef<RedScreen> _screen;
 };
 
-#define CLIP_ARRAY_SIZE 1500
-#define CLIP_ARRAY_SHIFT 500
-
-static uint8_t clip_array[CLIP_ARRAY_SIZE];
-static uint8_t *clip_zero = &clip_array[CLIP_ARRAY_SHIFT];
-
-static void init_clip_array()
-{
-    int i;
-    for (i = 0; i < CLIP_ARRAY_SHIFT; i++) {
-        clip_array[i] = 0;
-    }
-
-    for (i = CLIP_ARRAY_SHIFT + 256; i < CLIP_ARRAY_SIZE; i++) {
-        clip_array[i] = 0xff;
-    }
-
-    for (i = 0; i < 256; i++) {
-        clip_zero[i] = i;
-    }
-}
-
-#define  CLIP(val) clip_zero[(int)(val)]
-
-#define R(pixel) (((uint8_t*)(pixel))[0])
-#define G(pixel) (((uint8_t*)(pixel))[1])
-#define B(pixel) (((uint8_t*)(pixel))[2])
-
-#define YUV_TO_RGB(pixel, y, u , v) {                           \
-    int Y = (y) - 16;                                           \
-    int U = (u) - 128;                                          \
-    int V = (v) - 128;                                          \
-    R(pixel) = CLIP((298 * Y + 409 * V + 128) >> 8);            \
-    G(pixel) = CLIP((298 * Y - 100 * U - 208 * V + 128) >> 8);  \
-    B(pixel) = CLIP((298 * Y + 516 * U + 128) >> 8);            \
-}
-
-static inline void yuv420_to_rgb(AVFrame* frame, uint8_t* data, uint32_t width, uint32_t height,
-                                 int stride, int top_down)
-{
-    ASSERT(width % 2 == 0);
-    ASSERT(height % 2 == 0);
-
-    /* turning it to be down to top */
-    if (top_down) {
-        data += stride * (height - 1);
-        stride = -stride;
-    }
-
-    // B = 1.164(Y - 16) + 2.018(U - 128)
-    // G = 1.164(Y - 16) - 0.813(V - 128) - 0.391(U - 128)
-    // R = 1.164(Y - 16) + 1.596(V - 128)
-
-    uint8_t* y_line = frame->data[0];
-    uint8_t* u = frame->data[1];
-    uint8_t* v = frame->data[2];
-
-    uint32_t y_stride = frame->linesize[0];
-    uint32_t u_stride = frame->linesize[1];
-    uint32_t v_stride = frame->linesize[2];
-
-    for (unsigned int i = 0; i < height / 2; i++) {
-        uint8_t* now = data;
-        uint8_t* y = y_line;
-
-        for (unsigned int j = 0; j < width / 2; j++) {
-            YUV_TO_RGB(now, *y, u[j], v[j]);
-            YUV_TO_RGB(now + sizeof(uint32_t), *(y + 1), u[j], v[j]);
-            YUV_TO_RGB(now + stride, *(y + y_stride), u[j], v[j]);
-            YUV_TO_RGB(now + stride + sizeof(uint32_t), *(y + y_stride + 1), u[j], v[j]);
-            y += 2;
-            now += 2 * sizeof(uint32_t);
-        }
-        data += stride * 2;
-        y_line += y_stride * 2;
-        u += u_stride;
-        v += v_stride;
-    }
-}
 
 #define MAX_VIDEO_FRAMES 30
 #define MAX_OVER 15
@@ -243,8 +162,6 @@ public:
     void handle_update_mark(uint64_t update_mark);
     uint32_t handle_timer_update(uint32_t now);
 
-    static void init();
-
 private:
     void free_frame(uint32_t frame_index);
     void release_all_bufs();
@@ -259,8 +176,7 @@ private:
     RedClient& _client;
     Canvas& _canvas;
     DisplayChannel& _channel;
-    AVCodecContext* _ctx;
-    AVFrame* _frame;
+    MJpegDecoder *_mjpeg_decoder;
     int _stream_width;
     int _stream_height;
     int _stride;
@@ -339,8 +255,7 @@ VideoStream::VideoStream(RedClient& client, Canvas& canvas, DisplayChannel& chan
     : _client (client)
     , _canvas (canvas)
     , _channel (channel)
-    , _ctx (NULL)
-    , _frame (NULL)
+    , _mjpeg_decoder (NULL)
     , _stream_width (stream_width)
     , _stream_height (stream_height)
     , _stride (stream_width * sizeof(uint32_t))
@@ -354,34 +269,13 @@ VideoStream::VideoStream(RedClient& client, Canvas& canvas, DisplayChannel& chan
     , _update_time (0)
     , next (NULL)
 {
-    AVCodecContext* ctx = NULL;
-    AVCodec* codec;
-    AVFrame* frame = NULL;
-
-    enum CodecID type;
-
     memset(_frames, 0, sizeof(_frames));
     region_init(&_clip_region);
-    switch (codec_type) {
-    case SPICE_VIDEO_CODEC_TYPE_MJPEG:
-        type = CODEC_ID_MJPEG;
-        break;
-    default:
-        THROW("invalid vide codec type %u", codec_type);
+    if (codec_type != SPICE_VIDEO_CODEC_TYPE_MJPEG) {
+      THROW("invalid vide codec type %u", codec_type);
     }
 
-    if (!(codec = avcodec_find_decoder(type))) {
-        THROW("can't find codec %u", type);
-    }
-
-    if (!(ctx = avcodec_alloc_context())) {
-        THROW("alloc codec ctx failed");
-    }
     try {
-        if (!(frame = avcodec_alloc_frame())) {
-            THROW("alloc frame failed");
-        }
-
 #ifdef WIN32
         if (!create_bitmap(&_dc, &_prev_bitmap, &_uncompressed_data, &_stride,
                            stream_width, stream_height)) {
@@ -393,35 +287,37 @@ VideoStream::VideoStream(RedClient& client, Canvas& canvas, DisplayChannel& chan
         _pixmap.width = src_width;
         _pixmap.height = src_height;
 
+	_mjpeg_decoder = new MJpegDecoder(stream_width, stream_height, _stride, _uncompressed_data);
+
 #ifdef WIN32
         SetViewportOrgEx(_dc, 0, stream_height - src_height, NULL);
 #endif
-        _pixmap.data = _uncompressed_data + _stride * (src_height - 1);
-        _pixmap.stride = -_stride;
+
+	if (_top_down) {
+	    _pixmap.data = _uncompressed_data;
+	    _pixmap.stride = _stride;
+	} else {
+	    _pixmap.data = _uncompressed_data + _stride * (src_height - 1);
+	    _pixmap.stride = -_stride;
+	}
 
         set_clip(clip_type, num_clip_rects, clip_rects);
 
-        Lock lock(avcodec_mutex);
-        if (avcodec_open(ctx, codec) < 0) {
-            THROW("open avcodec failed");
-        }
     } catch (...) {
-        av_free(frame);
-        av_free(ctx);
+        if (_mjpeg_decoder) {
+            delete _mjpeg_decoder;
+            _mjpeg_decoder = NULL;
+        }
         release_all_bufs();
         throw;
     }
-    _frame = frame;
-    _ctx = ctx;
 }
 
 VideoStream::~VideoStream()
 {
-    if (_ctx) {
-        Lock lock(avcodec_mutex);
-        avcodec_close(_ctx);
-        av_free(_ctx);
-        av_free(_frame);
+    if (_mjpeg_decoder) {
+        delete _mjpeg_decoder;
+        _mjpeg_decoder = NULL;
     }
     release_all_bufs();
     region_destroy(&_clip_region);
@@ -493,20 +389,8 @@ void VideoStream::maintenance()
         uint8_t* data = tail->compressed_data;
         uint32_t length = tail->compressed_data_size;
         int got_picture = 0;
-        while (length > 0) {
-            int n = avcodec_decode_video(_ctx, _frame, &got_picture, data, length);
-            if (n < 0) {
-                THROW("decoding eror");
-            }
-            if (got_picture) {
-                yuv420_to_rgb(_frame, _uncompressed_data, _stream_width, _stream_height, _stride,
-                              _top_down);
-                ASSERT(length - n == 0);
-                break;
-            }
-            length -= n;
-            data += n;
-        }
+
+        got_picture =_mjpeg_decoder->decode_data(data, length);
         if (got_picture) {
 #ifdef WIN32
             _canvas.put_image(_dc, _pixmap, _dest, _clip);
@@ -560,9 +444,6 @@ uint32_t VideoStream::alloc_frame_slot()
 
 void VideoStream::push_data(uint32_t mm_time, uint32_t length, uint8_t* data, uint32_t ped_size)
 {
-    if (ped_size < FF_INPUT_BUFFER_PADDING_SIZE) {
-        THROW("insufficieant pedding");
-    }
     maintenance();
     uint32_t frame_slot = alloc_frame_slot();
     _frames[frame_slot].compressed_data = new uint8_t[length];
@@ -588,18 +469,10 @@ void VideoStream::set_clip(int type, uint32_t num_clip_rects, SpiceRect* clip_re
     _clip = &_clip_region;
 }
 
-void VideoStream::init()
-{
-    avcodec_init();
-    avcodec_register_all();
-    init_clip_array();
-}
-
 class AutoVStreamInit {
 public:
     AutoVStreamInit()
     {
-        VideoStream::init();
     }
 };
 

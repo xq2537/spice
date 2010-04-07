@@ -42,7 +42,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories=".;..;..\..\common;..\..\..\spice-protocol;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\ffmpeg&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;"
+				AdditionalIncludeDirectories=".;..;..\..\common;..\..\..\spice-protocol;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;"
 				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;CAIRO_CANVAS_ACCESS_TEST;CAIRO_CANVAS_CACHE;RED_DEBUG;CAIRO_CANVAS_NO_CHUNKS;_WIN32_WINNT=0x0500;LOG4CPLUS_STATIC;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC"
 				MinimalRebuild="false"
 				BasicRuntimeChecks="3"
@@ -65,7 +65,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="log4cppD.lib pixman-1D.lib libeay32MTd.lib ssleay32MTd.lib ws2_32.lib msimg32.lib winmm.lib avcodec-51.lib avutil-49.lib libcelt_0_5_1D.lib pthreadsD.lib version.lib CEGUIBase_Static_d.lib CEGUITGAImageCodec_Static_d.lib CEGUIExpatParser_Static_d.lib freetype235MT_D.lib libexpatMT_D.lib pcre_D.lib CEGUIFalagardWRBase_Static_d.lib"
+				AdditionalDependencies="log4cppD.lib pixman-1D.lib libeay32MTd.lib ssleay32MTd.lib ws2_32.lib msimg32.lib winmm.lib libcelt_0_5_1D.lib pthreadsD.lib version.lib CEGUIBase_Static_d.lib CEGUITGAImageCodec_Static_d.lib CEGUIExpatParser_Static_d.lib freetype235MT_D.lib libexpatMT_D.lib pcre_D.lib CEGUIFalagardWRBase_Static_d.lib libjpeg-static-mt-debug.lib"
 				OutputFile="$(OutDir)\spicec.exe"
 				LinkIncremental="2"
 				AdditionalLibraryDirectories="&quot;$(SPICE_LIBS)\lib&quot;"
@@ -124,7 +124,7 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalIncludeDirectories=".;..;..\..\..\spice-protocol;..\..\common;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\ffmpeg&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;"
+				AdditionalIncludeDirectories=".;..;..\..\..\spice-protocol;..\..\common;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;"
 				PreprocessorDefinitions="WIN32;_WINDOWS;CAIRO_CANVAS_ACCESS_TEST;CAIRO_CANVAS_CACHE;CAIRO_CANVAS_NO_CHUNKS;_WIN32_WINNT=0x0500;LOG4CPLUS_STATIC;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
@@ -144,7 +144,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="log4cpp.lib pixman-1.lib libeay32MT.lib ssleay32MT.lib ws2_32.lib msimg32.lib winmm.lib avcodec-51.lib avutil-49.lib libcelt_0_5_1.lib pthreads.lib version.lib CEGUIBase_Static.lib CEGUITGAImageCodec_Static.lib CEGUIExpatParser_Static.lib freetype235MT.lib libexpatMT.lib pcre.lib CEGUIFalagardWRBase_Static.lib"
+				AdditionalDependencies="log4cpp.lib pixman-1.lib libeay32MT.lib ssleay32MT.lib ws2_32.lib msimg32.lib winmm.lib libcelt_0_5_1.lib pthreads.lib version.lib CEGUIBase_Static.lib CEGUITGAImageCodec_Static.lib CEGUIExpatParser_Static.lib freetype235MT.lib libexpatMT.lib pcre.lib CEGUIFalagardWRBase_Static.lib libjpeg-static-mt.lib"
 				OutputFile="$(OutDir)\spicec.exe"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories="&quot;$(SPICE_LIBS)\lib&quot;"
@@ -269,6 +269,10 @@
 			</File>
 			<File
 				RelativePath="..\menu.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\mjpeg_decoder.cpp"
 				>
 			</File>
 			<File
@@ -521,6 +525,10 @@
 			</File>
 			<File
 				RelativePath="..\menu.h"
+				>
+			</File>
+			<File
+				RelativePath="..\mjpeg_decoder.h"
 				>
 			</File>
 			<File

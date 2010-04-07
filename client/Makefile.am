@@ -49,6 +49,8 @@ RED_COMMON_SRCS =	 		\
 	mem.cpp				\
 	menu.cpp			\
 	menu.h				\
+	mjpeg_decoder.h			\
+	mjpeg_decoder.cpp		\
 	pixels_source.h			\
 	platform.h			\
 	playback_channel.cpp		\

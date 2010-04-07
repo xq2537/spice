@@ -12,7 +12,7 @@ INCLUDES = \
 	-DUSE_GLZ					\
 	-DUSE_OGL					\
 	-D__STDC_LIMIT_MACROS				\
-	-I. 						\
+	-I.						\
 	-I..						\
 	-I$(COMMON_DIR)					\
 	-I$(COMMON_DIR)/linux				\
@@ -20,7 +20,6 @@ INCLUDES = \
 	$(PROTOCOL_CFLAGS)				\
 	$(GL_CFLAGS)					\
 	$(ALSA_CFLAGS)					\
-	$(FFMPEG_CFLAGS)				\
 	$(PIXMAN_CFLAGS)				\
 	$(LOG4CPP_CFLAGS)				\
 	$(CELT051_CFLAGS)				\
@@ -33,7 +32,7 @@ INCLUDES = \
 	$(NULL)
 
 
-RED_COMMON_SRCS = 					\
+RED_COMMON_SRCS =					\
 	$(CLIENT_DIR)/application.cpp			\
 	$(CLIENT_DIR)/application.h			\
 	$(CLIENT_DIR)/audio_channels.h			\
@@ -77,6 +76,8 @@ RED_COMMON_SRCS = 					\
 	$(CLIENT_DIR)/mem.cpp				\
 	$(CLIENT_DIR)/menu.cpp				\
 	$(CLIENT_DIR)/menu.h				\
+	$(CLIENT_DIR)/mjpeg_decoder.h			\
+	$(CLIENT_DIR)/mjpeg_decoder.cpp			\
 	$(CLIENT_DIR)/pixels_source.h			\
 	$(CLIENT_DIR)/pixman_utils.cpp			\
 	$(CLIENT_DIR)/platform.h			\
@@ -111,9 +112,9 @@ RED_COMMON_SRCS = 					\
 	$(CLIENT_DIR)/tunnel_channel.h			\
 	$(CLIENT_DIR)/utils.cpp				\
 	$(CLIENT_DIR)/utils.h				\
-	$(CLIENT_DIR)/icon.h                    	\
-	$(CLIENT_DIR)/gui/softrenderer.h        	\
-	$(CLIENT_DIR)/gui/softrenderer.cpp      	\
+	$(CLIENT_DIR)/icon.h				\
+	$(CLIENT_DIR)/gui/softrenderer.h		\
+	$(CLIENT_DIR)/gui/softrenderer.cpp		\
 	$(CLIENT_DIR)/gui/softtexture.h			\
 	$(CLIENT_DIR)/gui/softtexture.cpp		\
 	$(CLIENT_DIR)/gui/resource_provider.h		\
@@ -160,15 +161,14 @@ spicec_LDFLAGS = \
 	$(CELT051_LIBS)					\
 	$(SSL_LIBS)					\
 	$(CEGUI_LIBS)					\
+	$(JPEG_LIBS)					\
 	$(SPICE_NONPKGCONFIG_LIBS)
 
 spicec_LDADD =						\
 	$(PIXMAN_LIBS)					\
-	$(FFMPEG_LIBS)					\
 	$(ALSA_LIBS)					\
 	$(GL_LIBS)					\
 	$(XRANDR_LIBS)					\
 	$(MISC_X_LIBS)					\
 	$(CEGUI_LIBS)					\
 	-lrt
-
