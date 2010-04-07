@@ -58,7 +58,7 @@ SpiceCoreInterface *core = NULL;
 static MigrationInterface *mig = NULL;
 static SpiceKbdInstance *keyboard = NULL;
 static SpiceMouseInstance *mouse = NULL;
-static TabletInterface *tablet = NULL;
+static SpiceTabletInstance *tablet = NULL;
 static VDIPortInterface *vdagent = NULL;
 
 #define MIGRATION_NOTIFY_SPICE_KEY "spice_mig_ext"
@@ -2192,7 +2192,9 @@ static void inputs_handle_input(void *opaque, SpiceDataHeader *header)
         }
         ASSERT((agent_mouse && vdagent) || tablet);
         if (!agent_mouse || !vdagent) {
-            tablet->position(tablet, pos->x, pos->y, RED_MOUSE_STATE_TO_LOCAL(pos->buttons_state));
+            SpiceTabletInterface *sif;
+            sif = SPICE_CONTAINEROF(tablet->base.sif, SpiceTabletInterface, base);
+            sif->position(tablet, pos->x, pos->y, RED_MOUSE_STATE_TO_LOCAL(pos->buttons_state));
             break;
         }
         VDAgentMouseState *mouse_state = &state->mouse_state;
@@ -2219,7 +2221,9 @@ static void inputs_handle_input(void *opaque, SpiceDataHeader *header)
                     (dz == 1 ? VD_AGENT_DBUTTON_MASK : 0);
                 reds_handle_agent_mouse_event();
             } else if (tablet) {
-                tablet->wheel(tablet, dz, RED_MOUSE_STATE_TO_LOCAL(mouse_press->buttons_state));
+                SpiceTabletInterface *sif;
+                sif = SPICE_CONTAINEROF(tablet->base.sif, SpiceTabletInterface, base);
+                sif->wheel(tablet, dz, RED_MOUSE_STATE_TO_LOCAL(mouse_press->buttons_state));
             }
         } else if (mouse) {
             SpiceMouseInterface *sif;
@@ -2237,7 +2241,9 @@ static void inputs_handle_input(void *opaque, SpiceDataHeader *header)
                     RED_MOUSE_BUTTON_STATE_TO_AGENT(mouse_release->buttons_state);
                 reds_handle_agent_mouse_event();
             } else if (tablet) {
-                tablet->buttons(tablet, RED_MOUSE_STATE_TO_LOCAL(mouse_release->buttons_state));
+                SpiceTabletInterface *sif;
+                sif = SPICE_CONTAINEROF(tablet->base.sif, SpiceTabletInterface, base);
+                sif->buttons(tablet, RED_MOUSE_STATE_TO_LOCAL(mouse_release->buttons_state));
             }
         } else if (mouse) {
             SpiceMouseInterface *sif;
@@ -2285,7 +2291,9 @@ void reds_set_client_mouse_allowed(int is_client_mouse_allowed, int x_res, int y
     reds->dispatcher_allows_client_mouse = is_client_mouse_allowed;
     reds_update_mouse_mode();
     if (reds->is_client_mouse_allowed && tablet) {
-        tablet->set_logical_size(tablet, reds->monitor_mode.x_res, reds->monitor_mode.y_res);
+        SpiceTabletInterface *sif;
+        sif = SPICE_CONTAINEROF(tablet->base.sif, SpiceTabletInterface, base);
+        sif->set_logical_size(tablet, reds->monitor_mode.x_res, reds->monitor_mode.y_res);
     }
 }
 
@@ -4097,22 +4105,25 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
         qxl->st->qif = SPICE_CONTAINEROF(interface, QXLInterface, base);
         qxl->st->dispatcher = red_dispatcher_init(qxl);
 
-    } else if (strcmp(interface->type, VD_INTERFACE_TABLET) == 0) {
-        red_printf("VD_INTERFACE_TABLET");
+    } else if (strcmp(interface->type, SPICE_INTERFACE_TABLET) == 0) {
+        red_printf("SPICE_INTERFACE_TABLET");
         if (tablet) {
             red_printf("already have tablet");
             return -1;
         }
-        if (interface->major_version != VD_INTERFACE_TABLET_MAJOR ||
-            interface->minor_version < VD_INTERFACE_TABLET_MINOR) {
+        if (interface->major_version != SPICE_INTERFACE_TABLET_MAJOR ||
+            interface->minor_version < SPICE_INTERFACE_TABLET_MINOR) {
             red_printf("unsuported tablet interface");
             return -1;
         }
-        tablet = (TabletInterface *)interface;
+        tablet = SPICE_CONTAINEROF(sin, SpiceTabletInstance, base);
+        tablet->st = spice_new0(SpiceTabletState, 1);
         reds_update_mouse_mode();
         if (reds->is_client_mouse_allowed) {
-            tablet->set_logical_size(tablet, reds->monitor_mode.x_res,
-                                     reds->monitor_mode.y_res);
+            SpiceTabletInterface *sif;
+            sif = SPICE_CONTAINEROF(tablet->base.sif, SpiceTabletInterface, base);
+            sif->set_logical_size(tablet, reds->monitor_mode.x_res,
+                                  reds->monitor_mode.y_res);
         }
 
     } else if (strcmp(interface->type, VD_INTERFACE_PLAYBACK) == 0) {
@@ -4173,9 +4184,9 @@ __visible__ int spice_server_remove_interface(SpiceBaseInstance *sin)
 {
     SpiceBaseInterface *interface = sin->sif;
 
-    if (strcmp(interface->type, VD_INTERFACE_TABLET) == 0) {
-        red_printf("remove VD_INTERFACE_TABLET");
-        if (interface == (SpiceBaseInterface *)tablet) {
+    if (strcmp(interface->type, SPICE_INTERFACE_TABLET) == 0) {
+        red_printf("remove SPICE_INTERFACE_TABLET");
+        if (sin == &tablet->base) {
             tablet = NULL;
             reds_update_mouse_mode();
         }

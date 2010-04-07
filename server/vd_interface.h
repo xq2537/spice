@@ -246,18 +246,25 @@ struct SpiceMouseInstance {
     SpiceMouseState   *st;
 };
 
-#define VD_INTERFACE_TABLET "tablet"
-#define VD_INTERFACE_TABLET_MAJOR 1
-#define VD_INTERFACE_TABLET_MINOR 1
-typedef struct TabletInterface TabletInterface;
+#define SPICE_INTERFACE_TABLET "tablet"
+#define SPICE_INTERFACE_TABLET_MAJOR 1
+#define SPICE_INTERFACE_TABLET_MINOR 1
+typedef struct SpiceTabletInterface SpiceTabletInterface;
+typedef struct SpiceTabletInstance SpiceTabletInstance;
+typedef struct SpiceTabletState SpiceTabletState;
 
-struct TabletInterface {
+struct SpiceTabletInterface {
     SpiceBaseInterface base;
 
-    void (*set_logical_size)(TabletInterface* tablet, int width, int height);
-    void (*position)(TabletInterface* tablet, int x, int y, uint32_t buttons_state);
-    void (*wheel)(TabletInterface* tablet, int wheel_moution, uint32_t buttons_state);
-    void (*buttons)(TabletInterface* tablet, uint32_t buttons_state);
+    void (*set_logical_size)(SpiceTabletInstance* tablet, int width, int height);
+    void (*position)(SpiceTabletInstance* tablet, int x, int y, uint32_t buttons_state);
+    void (*wheel)(SpiceTabletInstance* tablet, int wheel_moution, uint32_t buttons_state);
+    void (*buttons)(SpiceTabletInstance* tablet, uint32_t buttons_state);
+};
+
+struct SpiceTabletInstance {
+    SpiceBaseInstance base;
+    SpiceTabletState  *st;
 };
 
 #define VD_INTERFACE_MIGRATION "migration"
