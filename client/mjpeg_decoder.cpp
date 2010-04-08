@@ -94,6 +94,7 @@ MJpegDecoder::MJpegDecoder(int width, int height,
 
 MJpegDecoder::~MJpegDecoder()
 {
+    jpeg_destroy_decompress(&_cinfo);
     delete [] _scanline;
     if (_data) {
         delete [] _data;
