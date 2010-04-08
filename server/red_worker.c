@@ -8050,6 +8050,7 @@ static SurfaceCreateItem *get_surface_create_item(uint32_t surface_id, uint32_t 
     create->surface_create.width = width;
     create->surface_create.height = height;
     create->surface_create.flags = flags;
+    create->surface_create.depth = depth;
 
     red_pipe_item_init(&create->pipe_item, PIPE_ITEM_TYPE_CREATE_SURFACE);
 
