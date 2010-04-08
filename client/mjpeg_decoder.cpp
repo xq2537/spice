@@ -113,13 +113,15 @@ void MJpegDecoder::convert_scanline(void)
 
    row = (uint32_t *)(_frame + _y * _stride);
     s = _scanline;
+
+    /* TODO after major bump.
+       We need to check for the old major and for backwards compat
+       a) swap r and b
+       b) to-yuv with right values and then from-yuv with old wrong values
+    */
+
     for (x = 0; x < _width; x++) {
-        /* This switches the order of red and blue.
-           This is not accidental, but for backwards
-           compatibility, since a bug in the old
-           ffmpeg-using mjpeg code got these switched
-           due to endianness issues. */
-        c = s[0] | s[1] << 8 | s[2] << 16;
+        c = s[0] << 16 | s[1] << 8 | s[2];
         s += 3;
         *row++ = c;
     }

@@ -264,6 +264,7 @@ VideoStream::VideoStream(RedClient& client, Canvas& canvas, DisplayChannel& chan
     , _clip (NULL)
     , _frames_head (0)
     , _frames_tail (0)
+    , _kill_mark (0)
     , _uncompressed_data (NULL)
     , _update_mark (0)
     , _update_time (0)

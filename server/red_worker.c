@@ -1,3 +1,4 @@
+/* -*- Mode: C; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 /*
    Copyright (C) 2009 Red Hat, Inc.
 
@@ -38,7 +39,6 @@
 #include "cairo_canvas.h"
 #include "gl_canvas.h"
 #include "ogl_ctx.h"
-#include "ffmpeg_inc.h"
 #include "quic.h"
 #include "lz.h"
 #include "glz_encoder_dictionary.h"
@@ -46,6 +46,7 @@
 #include "stat.h"
 #include "reds.h"
 #include "ring.h"
+#include "mjpeg_encoder.h"
 
 //#define COMPRESS_STAT
 //#define DUMP_BITMAP
@@ -412,13 +413,10 @@ struct Stream {
     int height;
     SpiceRect dest_area;
 #endif
+    MJpegEncoder *mjpeg_encoder;
     int top_down;
     Stream *next;
     RingItem link;
-    AVCodecContext *av_ctx;
-    AVFrame *av_frame;
-    uint8_t* frame_buf;
-    uint8_t* frame_buf_end;
     int bit_rate;
 };
 
@@ -1016,8 +1014,6 @@ typedef struct RedWorker {
 #endif
     SpiceVirtMapping preload_group_virt_mapping;
 } RedWorker;
-
-pthread_mutex_t avcodec_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable);
 static void red_current_flush(RedWorker *worker, int surface_id);
@@ -2486,12 +2482,9 @@ static void red_release_stream(RedWorker *worker, Stream *stream)
 #else
         ring_remove(&stream->link);
 #endif
-        pthread_mutex_lock(&avcodec_lock);
-        avcodec_close(stream->av_ctx);
-        pthread_mutex_unlock(&avcodec_lock);
-        av_free(stream->av_ctx);
-        av_free(stream->av_frame);
-        free(stream->frame_buf);
+        if (stream->mjpeg_encoder) {
+            mjpeg_encoder_destroy(stream->mjpeg_encoder);
+        }
         red_free_stream(worker, stream);
     }
 }
@@ -2814,7 +2807,7 @@ static int get_bit_rate(int width, int height)
     return bit_rate;
 }
 
-static void red_dispaly_create_stream(DisplayChannel *display, Stream *stream)
+static void red_display_create_stream(DisplayChannel *display, Stream *stream)
 {
     StreamAgent *agent = &display->stream_agents[stream - display->base.worker->streams_buf];
     stream->refs++;
@@ -2831,54 +2824,12 @@ static void red_dispaly_create_stream(DisplayChannel *display, Stream *stream)
     red_pipe_add(&display->base, &agent->create_item);
 }
 
-static AVCodecContext *red_init_video_encoder(int width, int height)
-{
-    AVCodec *codec;
-    AVCodecContext *ctx;
-    int r;
-
-    codec = avcodec_find_encoder(CODEC_ID_MJPEG);
-
-    if (!codec) {
-        red_printf("codec not found");
-        return NULL;
-    }
-
-    if (!(ctx = avcodec_alloc_context())) {
-        red_printf("alloc ctx failed");
-        return NULL;
-    }
-    ctx->bit_rate = get_bit_rate(width, height);
-    ASSERT(width % 2 == 0);
-    ASSERT(height % 2 == 0);
-    ctx->width = width;
-    ctx->height = height;
-    ctx->time_base = (AVRational){1, MAX_FPS};
-    ctx->gop_size = 10;
-    ctx->max_b_frames = 0;
-    ctx->pix_fmt = PIX_FMT_YUVJ420P;
-
-    pthread_mutex_lock(&avcodec_lock);
-    r = avcodec_open(ctx, codec);
-    pthread_mutex_unlock(&avcodec_lock);
-    if (r < 0) {
-        red_printf("avcodec open failed");
-        av_free(ctx);
-        return NULL;
-    }
-    return ctx;
-}
-
 static void red_create_stream(RedWorker *worker, Drawable *drawable)
 {
-    AVCodecContext *av_ctx;
     Stream *stream;
-    AVFrame *frame;
-    uint8_t* frame_buf;
     SpiceRect* src_rect;
     int stream_width;
     int stream_height;
-    int pict_size;
 
     ASSERT(!drawable->stream);
 
@@ -2891,24 +2842,7 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
     stream_width = SPICE_ALIGN(src_rect->right - src_rect->left, 2);
     stream_height = SPICE_ALIGN(src_rect->bottom - src_rect->top, 2);
 
-    if (!(av_ctx = red_init_video_encoder(stream_width, stream_height))) {
-        goto error_1;
-    }
-
-    if (!(frame = avcodec_alloc_frame())) {
-        goto error_2;
-    }
-
-    if ((pict_size = avpicture_get_size(av_ctx->pix_fmt, stream_width, stream_height)) < 0) {
-        goto error_3;
-    }
-
-    frame_buf = spice_malloc(pict_size);
-
-    if (avpicture_fill((AVPicture *)frame, frame_buf, av_ctx->pix_fmt, stream_width,
-                       stream_height) < 0) {
-        goto error_4;
-    }
+    stream->mjpeg_encoder = mjpeg_encoder_new(stream_width, stream_height);
 
     ring_add(&worker->streams, &stream->link);
     stream->current = drawable;
@@ -2919,36 +2853,17 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
     stream->dest_area = drawable->qxl_drawable->bbox;
 #endif
     stream->refs = 1;
-    stream->av_ctx = av_ctx;
-    stream->bit_rate = av_ctx->bit_rate;
-    stream->av_frame = frame;
-    stream->frame_buf = frame_buf;
-    stream->frame_buf_end = frame_buf + pict_size;
+    stream->bit_rate = get_bit_rate(stream_width, stream_height);
     QXLImage *qxl_image = (QXLImage *)get_virt(worker, drawable->qxl_drawable->u.copy.src_bitmap,
                                                sizeof(QXLImage), drawable->group_id);
     stream->top_down = !!(qxl_image->bitmap.flags & SPICE_BITMAP_FLAGS_TOP_DOWN);
     drawable->stream = stream;
 
     if (worker->display_channel) {
-        red_dispaly_create_stream(worker->display_channel, stream);
+        red_display_create_stream(worker->display_channel, stream);
     }
 
     return;
-
-error_4:
-    free(frame_buf);
-
-error_3:
-    av_free(frame);
-
-error_2:
-    pthread_mutex_lock(&avcodec_lock);
-    avcodec_close(av_ctx);
-    pthread_mutex_unlock(&avcodec_lock);
-    av_free(av_ctx);
-
-error_1:
-    red_free_stream(worker, stream);
 }
 
 static void red_disply_start_streams(DisplayChannel *display_channel)
@@ -2958,7 +2873,7 @@ static void red_disply_start_streams(DisplayChannel *display_channel)
 
     while ((item = ring_next(ring, item))) {
         Stream *stream = SPICE_CONTAINEROF(item, Stream, link);
-        red_dispaly_create_stream(display_channel, stream);
+        red_display_create_stream(display_channel, stream);
     }
 }
 
@@ -3100,7 +3015,6 @@ static inline int red_is_next_stream_frame(RedWorker *worker, Drawable *candidat
 static void reset_rate(StreamAgent *stream_agent)
 {
     Stream *stream = stream_agent->stream;
-    AVCodecContext *new_ctx;
     int rate;
 
     rate = get_bit_rate(stream->width, stream->height);
@@ -3108,19 +3022,7 @@ static void reset_rate(StreamAgent *stream_agent)
         return;
     }
 
-    int stream_width = SPICE_ALIGN(stream->width, 2);
-    int stream_height = SPICE_ALIGN(stream->height, 2);
-
-    new_ctx = red_init_video_encoder(stream_width, stream_height);
-    if (!new_ctx) {
-        red_printf("craete ctx failed");
-        return;
-    }
-
-    avcodec_close(stream->av_ctx);
-    av_free(stream->av_ctx);
-    stream->av_ctx = new_ctx;
-    stream->bit_rate = rate;
+    /* MJpeg has no rate limiting anyway, so do nothing */
 }
 
 static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream)
@@ -7058,17 +6960,148 @@ static void red_display_unshare_stream_buf(DisplayChannel *display_channel)
 {
 }
 
-#define YUV32
-#include "red_yuv.h"
-#undef YUV32
+static int red_rgb32bpp_to_24 (RedWorker *worker, const SpiceRect *src,
+                               const SpiceBitmap *image,
+                               uint8_t *frame, size_t frame_stride,
+                               long phys_delta, int memslot_id, int id,
+                               Stream *stream, uint32_t group_id)
+{
+    QXLDataChunk *chunk;
+    uint32_t image_stride;
+    uint8_t *frame_row;
+    int offset;
+    int i, x;
 
-#define YUV24
-#include "red_yuv.h"
-#undef YUV24
+    offset = 0;
+    chunk = (QXLDataChunk *)(image->data + phys_delta);
+    image_stride = image->stride;
 
-#define YUV16
-#include "red_yuv.h"
-#undef YUV16
+    const int skip_lines = stream->top_down ? src->top : image->y - (src->bottom - 0);
+    for (i = 0; i < skip_lines; i++) {
+        red_get_image_line(worker, &chunk, &offset, image_stride, phys_delta, memslot_id,
+                           group_id);
+    }
+
+    const int image_height = src->bottom - src->top;
+    const int image_width = src->right - src->left;
+    for (i = 0; i < image_height; i++) {
+        uint32_t *src_line =
+            (uint32_t *)red_get_image_line(worker, &chunk, &offset, image_stride, phys_delta,
+                                           memslot_id, group_id);
+
+        if (!src_line) {
+            return FALSE;
+        }
+
+        src_line += src->left;
+
+        frame_row = frame;
+        for (x = 0; x < image_width; x++) {
+            uint32_t pixel = *src_line++;
+            *frame_row++ = (pixel >> 16) & 0xff;
+            *frame_row++ = (pixel >>  8) & 0xff;
+            *frame_row++ = (pixel >>  0) & 0xff;
+        }
+
+        frame += frame_stride;
+    }
+
+    return TRUE;
+}
+
+static int red_rgb24bpp_to_24 (RedWorker *worker, const SpiceRect *src,
+                               const SpiceBitmap *image,
+                               uint8_t *frame, size_t frame_stride,
+                               long phys_delta, int memslot_id, int id,
+                               Stream *stream, uint32_t group_id)
+{
+    QXLDataChunk *chunk;
+    uint32_t image_stride;
+    uint8_t *frame_row;
+    int offset;
+    int i;
+
+    offset = 0;
+    chunk = (QXLDataChunk *)(image->data + phys_delta);
+    image_stride = image->stride;
+
+    const int skip_lines = stream->top_down ? src->top : image->y - (src->bottom - 0);
+    for (i = 0; i < skip_lines; i++) {
+        red_get_image_line(worker, &chunk, &offset, image_stride, phys_delta, memslot_id,
+                           group_id);
+    }
+
+    const int image_height = src->bottom - src->top;
+    const int image_width = src->right - src->left;
+    for (i = 0; i < image_height; i++) {
+        uint8_t *src_line =
+            (uint8_t *)red_get_image_line(worker, &chunk, &offset, image_stride, phys_delta,
+                                           memslot_id, group_id);
+
+        if (!src_line) {
+            return FALSE;
+        }
+
+        src_line += src->left * 3;
+
+        frame_row = frame;
+        memcpy (frame_row, src_line, image_width * 3);
+        frame += frame_stride;
+    }
+
+    return TRUE;
+}
+
+static int red_rgb16bpp_to_24 (RedWorker *worker, const SpiceRect *src,
+                               const SpiceBitmap *image,
+                               uint8_t *frame, size_t frame_stride,
+                               long phys_delta, int memslot_id, int id,
+                               Stream *stream, uint32_t group_id)
+{
+    QXLDataChunk *chunk;
+    uint32_t image_stride;
+    uint8_t *frame_row;
+    int offset;
+    int i, x;
+
+    offset = 0;
+    chunk = (QXLDataChunk *)(image->data + phys_delta);
+    image_stride = image->stride;
+
+    const int skip_lines = stream->top_down ? src->top : image->y - (src->bottom - 0);
+    for (i = 0; i < skip_lines; i++) {
+        red_get_image_line(worker, &chunk, &offset, image_stride, phys_delta, memslot_id,
+                           group_id);
+    }
+
+    const int image_height = src->bottom - src->top;
+    const int image_width = src->right - src->left;
+    for (i = 0; i < image_height; i++) {
+        uint16_t *src_line =
+            (uint16_t *)red_get_image_line(worker, &chunk, &offset, image_stride, phys_delta,
+                                           memslot_id, group_id);
+
+        if (!src_line) {
+            return FALSE;
+        }
+
+        src_line += src->left;
+
+        frame_row = frame;
+        for (x = 0; x < image_width; x++) {
+            uint16_t pixel = *src_line++;
+            *frame_row++ = ((pixel >> 7) & 0xf8) | ((pixel >> 12) & 0x7);
+            *frame_row++ = ((pixel >> 2) & 0xf8) | ((pixel >> 7) & 0x7);
+            *frame_row++ = ((pixel << 3) & 0xf8) | ((pixel >> 2) & 0x7);
+        }
+
+        frame += frame_stride;
+    }
+
+    return TRUE;
+}
+
+#define PADDING 8 /* old ffmpeg padding */
 
 static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable *drawable)
 {
@@ -7077,6 +7110,8 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
     RedChannel *channel;
     RedWorker* worker;
     unsigned long data;
+    uint8_t *frame;
+    size_t frame_stride;
     int n;
 
     ASSERT(stream);
@@ -7088,7 +7123,7 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
                                      sizeof(QXLImage), drawable->group_id);
 
     if (qxl_image->descriptor.type != SPICE_IMAGE_TYPE_BITMAP ||
-                                            (qxl_image->bitmap.flags & QXL_BITMAP_DIRECT)) {
+        (qxl_image->bitmap.flags & QXL_BITMAP_DIRECT)) {
         return FALSE;
     }
 
@@ -7100,32 +7135,34 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
     }
 
     data = qxl_image->bitmap.data;
+    frame = mjpeg_encoder_get_frame(stream->mjpeg_encoder);
+    frame_stride = mjpeg_encoder_get_frame_stride(stream->mjpeg_encoder);
 
     switch (qxl_image->bitmap.format) {
     case SPICE_BITMAP_FMT_32BIT:
-        if (!red_rgb_to_yuv420_32bpp(worker, &drawable->qxl_drawable->u.copy.src_area,
-                                     &qxl_image->bitmap, stream->av_frame,
-                                     get_virt_delta(worker, data, drawable->group_id),
-                                     get_memslot_id(worker, data),
-                                     stream - worker->streams_buf, stream, drawable->group_id)) {
+        if (!red_rgb32bpp_to_24(worker, &drawable->qxl_drawable->u.copy.src_area,
+                                &qxl_image->bitmap, frame, frame_stride,
+                                get_virt_delta(worker, data, drawable->group_id),
+                                get_memslot_id(worker, data),
+                                stream - worker->streams_buf, stream, drawable->group_id)) {
             return FALSE;
         }
         break;
     case SPICE_BITMAP_FMT_16BIT:
-        if (!red_rgb_to_yuv420_16bpp(worker, &drawable->qxl_drawable->u.copy.src_area,
-                                     &qxl_image->bitmap, stream->av_frame,
-                                     get_virt_delta(worker, data, drawable->group_id),
-                                     get_memslot_id(worker, data),
-                                     stream - worker->streams_buf, stream, drawable->group_id)) {
+        if (!red_rgb16bpp_to_24(worker, &drawable->qxl_drawable->u.copy.src_area,
+                                &qxl_image->bitmap, frame, frame_stride,
+                                get_virt_delta(worker, data, drawable->group_id),
+                                get_memslot_id(worker, data),
+                                stream - worker->streams_buf, stream, drawable->group_id)) {
             return FALSE;
         }
         break;
     case SPICE_BITMAP_FMT_24BIT:
-        if (!red_rgb_to_yuv420_24bpp(worker, &drawable->qxl_drawable->u.copy.src_area,
-                                     &qxl_image->bitmap, stream->av_frame,
-                                     get_virt_delta(worker, data, drawable->group_id),
-                                     get_memslot_id(worker, data),
-                                     stream - worker->streams_buf, stream, drawable->group_id)) {
+        if (!red_rgb24bpp_to_24(worker, &drawable->qxl_drawable->u.copy.src_area,
+                                &qxl_image->bitmap, frame, frame_stride,
+                                get_virt_delta(worker, data, drawable->group_id),
+                                get_memslot_id(worker, data),
+                                stream - worker->streams_buf, stream, drawable->group_id)) {
             return FALSE;
         }
         break;
@@ -7133,75 +7170,34 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
         red_printf_some(1000, "unsupported format %d", qxl_image->bitmap.format);
         return FALSE;
     }
-#if 1
-    uint32_t min_buf_size = stream->av_ctx->width * stream->av_ctx->height * sizeof(uint32_t) / 2;
-    min_buf_size += FF_MIN_BUFFER_SIZE;
-    if (display_channel->send_data.stream_outbuf_size < min_buf_size) {
-        uint8_t *new_buf;
 
-        new_buf = spice_malloc(min_buf_size + FF_INPUT_BUFFER_PADDING_SIZE);
+    while ((n = mjpeg_encoder_encode_frame(stream->mjpeg_encoder,
+                                           display_channel->send_data.stream_outbuf,
+                                           display_channel->send_data.stream_outbuf_size - PADDING)) == 0) {
+        uint8_t *new_buf;
+        size_t new_size;
+
+        new_size = display_channel->send_data.stream_outbuf_size * 2;
+        new_buf = spice_malloc(new_size);
 
         red_display_unshare_stream_buf(display_channel);
         free(display_channel->send_data.stream_outbuf);
         display_channel->send_data.stream_outbuf = new_buf;
-        display_channel->send_data.stream_outbuf_size = min_buf_size;
+        display_channel->send_data.stream_outbuf_size = new_size;
         red_display_share_stream_buf(display_channel);
     }
-    n = avcodec_encode_video(stream->av_ctx, display_channel->send_data.stream_outbuf,
-                             display_channel->send_data.stream_outbuf_size,
-                             stream->av_frame);
 
-    if (n <= 0) {
-        red_printf("avcodec_encode_video failed");
-        return FALSE;
-    }
-
-    if (n > display_channel->send_data.stream_outbuf_size) {
-        PANIC("buf error");
-    }
-#else
-    for (;;) {
-        n = avcodec_encode_video(stream->av_ctx, display_channel->send_data.stream_outbuf,
-                                 display_channel->send_data.stream_outbuf_size,
-                                 stream->av_frame);
-        if (n < 0) {
-            uint8_t *new_buf;
-            size_t max_size;
-            size_t new_size;
-
-            max_size = stream->av_ctx->width * stream->av_ctx->height * sizeof(uint32_t);
-            max_size += MAX(1024, max_size / 10);
-
-            if (display_channel->send_data.stream_outbuf_size == max_size) {
-                return FALSE;
-            }
-
-            new_size = display_channel->send_data.stream_outbuf_size * 2;
-            new_size = MIN(new_size, max_size);
-
-            new_buf = spice_malloc(new_size + FF_INPUT_BUFFER_PADDING_SIZE);
-            red_printf("new streaming video buf size %u", new_size);
-            red_display_unshare_stream_buf(display_channel);
-            free(display_channel->send_data.stream_outbuf);
-            display_channel->send_data.stream_outbuf = new_buf;
-            display_channel->send_data.stream_outbuf_size = new_size;
-            red_display_share_stream_buf(display_channel);
-            continue;
-        }
-        ASSERT(n <= display_channel->send_data.stream_outbuf_size);
-        break;
-    }
- #endif
     channel->send_data.header.type = SPICE_MSG_DISPLAY_STREAM_DATA;
+
     SpiceMsgDisplayStreamData* stream_data = &display_channel->send_data.u.stream_data;
     add_buf(channel, BUF_TYPE_RAW, stream_data, sizeof(SpiceMsgDisplayStreamData), 0, 0);
     add_buf(channel, BUF_TYPE_RAW, display_channel->send_data.stream_outbuf,
-            n + FF_INPUT_BUFFER_PADDING_SIZE, 0, 0);
+            n + PADDING, 0, 0);
 
     stream_data->id = stream - worker->streams_buf;
     stream_data->multi_media_time = drawable->qxl_drawable->mm_time;
     stream_data->data_size = n;
-    stream_data->ped_size = FF_INPUT_BUFFER_PADDING_SIZE;
+    stream_data->ped_size = PADDING;
     display_begin_send_massage(display_channel, NULL);
     agent->lats_send_time = time_now;
     return TRUE;
@@ -8797,9 +8793,9 @@ static void handle_new_display_channel(RedWorker *worker, RedsStreamContext *pee
     display_channel->palette_cache_available = CLIENT_PALETTE_CACHE_SIZE;
     red_display_init_streams(display_channel);
 
-    stream_buf_size = FF_MIN_BUFFER_SIZE + FF_INPUT_BUFFER_PADDING_SIZE;
+    stream_buf_size = 32*1024;
     display_channel->send_data.stream_outbuf = spice_malloc(stream_buf_size);
-    display_channel->send_data.stream_outbuf_size = FF_MIN_BUFFER_SIZE;
+    display_channel->send_data.stream_outbuf_size = stream_buf_size;
     red_display_share_stream_buf(display_channel);
     red_display_init_glz_data(display_channel);
     worker->display_channel = display_channel;
@@ -9571,8 +9567,6 @@ void *red_worker_main(void *arg)
     }
 #endif
 
-    avcodec_init();
-    avcodec_register_all();
     red_init(&worker, (WorkerInitData *)arg);
     red_init_quic(&worker);
     red_init_lz(&worker);

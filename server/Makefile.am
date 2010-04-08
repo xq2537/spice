@@ -5,7 +5,7 @@ INCLUDES = \
 	-I$(top_srcdir)/common			\
 	-I$(top_srcdir)/common/linux	\
 	$(PROTOCOL_CFLAGS)			\
-	$(FFMPEG_CFLAGS)			\
+	$(JPEG_CFLAGS)				\
 	$(PIXMAN_CFLAGS)			\
 	$(GL_CFLAGS)				\
 	$(LOG4CPP_CFLAGS)			\
@@ -42,7 +42,7 @@ libspice_server_la_LDFLAGS =			\
 
 libspice_server_la_LIBADD = 			\
 	$(GL_LIBS)				\
-	$(FFMPEG_LIBS)				\
+	$(JPEG_LIBS)				\
 	$(PIXMAN_LIBS)				\
 	$(SSL_LIBS)				\
 	$(CELT051_LIBS)				\
@@ -66,6 +66,8 @@ libspice_server_la_SOURCES =			\
 	glz_encoder_dictionary.h		\
 	glz_encoder_dictionary_protected.h	\
 	glz_encoder.h				\
+	mjpeg_encoder.h				\
+	mjpeg_encoder.c				\
 	red_bitmap_utils.h			\
 	red_client_cache.h			\
 	red_client_shared_cache.h		\
@@ -77,7 +79,6 @@ libspice_server_la_SOURCES =			\
 	stat.h					\
 	red_worker.c				\
 	red_worker.h				\
-	red_yuv.h				\
 	snd_worker.c				\
 	snd_worker.h				\
 	red_channel.h				\
