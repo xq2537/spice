@@ -20,7 +20,7 @@
 #define _H__PIXMAN_UTILS
 
 #include <spice/types.h>
-
+#define PIXMAN_DONT_DEFINE_STDINT
 #include <pixman.h>
 
 #include <spice/draw.h>

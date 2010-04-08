@@ -49,7 +49,7 @@ SOFTWARE.
 #ifndef LINES_H
 #define LINES_H
 
-#include <pixman.h>
+#include <pixman_utils.h>
 #include <stdlib.h>
 #include <string.h>
 #include <spice/draw.h>
