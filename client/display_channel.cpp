@@ -470,16 +470,6 @@ void VideoStream::set_clip(int type, uint32_t num_clip_rects, SpiceRect* clip_re
     _clip = &_clip_region;
 }
 
-class AutoVStreamInit {
-public:
-    AutoVStreamInit()
-    {
-    }
-};
-
-static AutoVStreamInit auto_init;
-
-
 StreamsTrigger::StreamsTrigger(DisplayChannel& channel)
     : _channel (channel)
 {
