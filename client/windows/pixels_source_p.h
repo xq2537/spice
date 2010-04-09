@@ -18,11 +18,11 @@
 #ifndef _H_PIXELE_SOURSR_P
 #define _H_PIXELE_SOURSR_P
 
-class Mutex;
+class RecurciveMutex;
 
 struct PixelsSource_p {
     HDC dc;
-    Mutex* _mutex;
+    RecurciveMutex* _mutex;
 };
 
 #endif

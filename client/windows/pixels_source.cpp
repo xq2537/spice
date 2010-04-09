@@ -41,7 +41,7 @@ PixelsSource::PixelsSource()
     _origin.x = _origin.y = 0;
     memset(_opaque, 0, sizeof(_opaque));
     PixelsSource_p* p_data = (PixelsSource_p*)_opaque;
-    p_data->_mutex = new Mutex();
+    p_data->_mutex = new RecurciveMutex();
 }
 
 PixelsSource::~PixelsSource()

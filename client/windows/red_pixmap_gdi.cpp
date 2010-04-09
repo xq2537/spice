@@ -94,7 +94,7 @@ RedPixmapGdi::~RedPixmapGdi()
     }
 }
 
-Mutex& RedPixmapGdi::get_mutex()
+RecurciveMutex& RedPixmapGdi::get_mutex()
 {
     RedPixmap_p* p_data = (RedPixmap_p*)get_opaque();
     return *p_data->pixels_source_p._mutex;

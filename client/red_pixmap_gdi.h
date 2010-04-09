@@ -20,7 +20,7 @@
 
 #include "red_pixmap.h"
 
-class Mutex;
+class RecurciveMutex;
 
 class RedPixmapGdi: public RedPixmap {
 public:
@@ -29,7 +29,7 @@ public:
     HDC get_dc();
     void *get_memptr();
     ~RedPixmapGdi();
-    Mutex& get_mutex();
+    RecurciveMutex& get_mutex();
 };
 
 #endif

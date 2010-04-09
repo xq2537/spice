@@ -51,8 +51,8 @@ void RedDrawable::blend_pixels(const PixelsSource& src, int src_x, int src_y, co
     PixelsSource_p* dest_p_data = (PixelsSource_p*)get_opaque();
     PixelsSource_p* src_p_data = (PixelsSource_p*)src.get_opaque();
     for (;;) {
-        Lock lock(*dest_p_data->_mutex);
-        Lock timed_lock(*src_p_data->_mutex, lock_timout);
+        RecurciveLock lock(*dest_p_data->_mutex);
+        RecurciveLock timed_lock(*src_p_data->_mutex, lock_timout);
         if (!timed_lock.is_locked()) {
             continue;
         }
@@ -84,8 +84,8 @@ void RedDrawable::combine_pixels(const PixelsSource& src, int src_x, int src_y, 
     PixelsSource_p* dest_p_data = (PixelsSource_p*)get_opaque();
     PixelsSource_p* src_p_data = (PixelsSource_p*)src.get_opaque();
     for (;;) {
-        Lock lock(*dest_p_data->_mutex);
-        Lock timed_lock(*src_p_data->_mutex, lock_timout);
+        RecurciveLock lock(*dest_p_data->_mutex);
+        RecurciveLock timed_lock(*src_p_data->_mutex, lock_timout);
         if (!timed_lock.is_locked()) {
             continue;
         }
@@ -106,7 +106,7 @@ void RedDrawable::erase_rect(const SpiceRect& rect, rgb32_t color)
     r.bottom = rect.bottom + _origin.y;
 
     PixelsSource_p* dest_p_data = (PixelsSource_p*)get_opaque();
-    Lock lock(*dest_p_data->_mutex);
+    RecurciveLock lock(*dest_p_data->_mutex);
     FillRect(dest_p_data->dc, &r, (HBRUSH)GetStockObject(BLACK_BRUSH));
 }
 
@@ -123,7 +123,7 @@ void RedDrawable::fill_rect(const SpiceRect& rect, rgb32_t color)
                                         rgb32_get_blue(color)));
     for (;;) {
         PixelsSource_p* dest_p_data = (PixelsSource_p*)get_opaque();
-        Lock lock(*dest_p_data->_mutex);
+        RecurciveLock lock(*dest_p_data->_mutex);
         FillRect(dest_p_data->dc, &r, brush);
         break;
     }
@@ -142,7 +142,7 @@ void RedDrawable::frame_rect(const SpiceRect& rect, rgb32_t color)
                                         rgb32_get_blue(color)));
     for (;;) {
         PixelsSource_p* dest_p_data = (PixelsSource_p*)get_opaque();
-        Lock lock(*dest_p_data->_mutex);
+        RecurciveLock lock(*dest_p_data->_mutex);
         FrameRect(dest_p_data->dc, &r, brush);
         break;
     }
