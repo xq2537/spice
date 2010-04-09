@@ -47,6 +47,7 @@
 #include "reds.h"
 #include "ring.h"
 #include "mjpeg_encoder.h"
+#include "red_memslots.h"
 
 //#define COMPRESS_STAT
 //#define DUMP_BITMAP
@@ -907,13 +908,6 @@ typedef struct ItemTrace {
 
 #endif
 
-typedef struct MemSlot {
-    int generation;
-    unsigned long virt_start_addr;
-    unsigned long virt_end_addr;
-    long address_delta;
-} MemSlot;
-
 #define NUM_DRAWABLES 1000
 #define NUM_CURSORS 100
 
@@ -960,16 +954,7 @@ typedef struct RedWorker {
     _CursorItem cursor_items[NUM_CURSORS];
     _CursorItem *free_cursor_items;
 
-    MemSlot **mem_slots;
-    uint32_t num_memslots_groups;
-    uint32_t num_memslots;
-    uint8_t mem_slot_bits;
-    uint8_t generation_bits;
-    uint8_t memslot_id_shift;
-    uint8_t memslot_gen_shift;
-    uint8_t internal_groupslot_id;
-    unsigned long memslot_gen_mask;
-    unsigned long memslot_clean_virt_mask;
+    RedMemSlotInfo mem_slots;
 
     uint32_t preload_group_id;
 
@@ -1115,135 +1100,10 @@ static inline void validate_surface(RedWorker *worker, uint32_t surface_id)
     PANIC_ON(!worker->surfaces[surface_id].context.canvas);
 }
 
-static inline int get_memslot_id(RedWorker *worker, unsigned long addr)
-{
-    return addr >> worker->memslot_id_shift;
-}
-
-static inline int get_generation(RedWorker *worker, unsigned long addr)
-{
-
-    return (addr >> worker->memslot_gen_shift) & worker->memslot_gen_mask;
-}
-
-static inline unsigned long __get_clean_virt(RedWorker *worker, unsigned long addr)
-{
-    return addr & worker->memslot_clean_virt_mask;
-}
-
-static inline void print_memslots(RedWorker *worker)
-{
-    int i;
-    int x;
-
-    for (i = 0; i < worker->num_memslots_groups; ++i) {
-        for (x = 0; x < worker->num_memslots; ++x) {
-            if (!worker->mem_slots[i][x].virt_start_addr &&
-                !worker->mem_slots[i][x].virt_end_addr) {
-                continue;
-            }
-            printf("id %d, group %d, virt start %lx, virt end %lx, generation %u, delta %lx\n",
-                   x, i, worker->mem_slots[i][x].virt_start_addr,
-                   worker->mem_slots[i][x].virt_end_addr, worker->mem_slots[i][x].generation,
-                   worker->mem_slots[i][x].address_delta);
-            }
-    }
-}
-
-static inline unsigned long get_virt_delta(RedWorker *worker, unsigned long addr, int group_id)
-{
-    MemSlot *slot;
-    int slot_id;
-    int generation;
-
-    if (group_id > worker->num_memslots_groups) {
-        PANIC("group_id %d too big", group_id);
-    }
-
-    slot_id = get_memslot_id(worker, addr);
-    if (slot_id > worker->num_memslots) {
-        PANIC("slod_id %d too big", slot_id);
-    }
-
-    slot = &worker->mem_slots[group_id][slot_id];
-
-    generation = get_generation(worker, addr);
-    if (generation != slot->generation) {
-        PANIC("address generation is not valid");
-    }
-
-    return (slot->address_delta - (addr - __get_clean_virt(worker, addr)));
-}
-
-static inline void validate_virt(RedWorker *worker, unsigned long virt, int slot_id,
-                                 uint32_t add_size, uint32_t group_id)
-{
-    MemSlot *slot;
-
-    slot = &worker->mem_slots[group_id][slot_id];
-    if ((virt + add_size) < virt) {
-        PANIC("virtual address overlap");
-    }
-
-    if (virt < slot->virt_start_addr || (virt + add_size) > slot->virt_end_addr) {
-        print_memslots(worker);
-        PANIC("virtual address out of range 0x%lx 0x%lx %d %d 0x%lx 0x%lx 0x%lx", virt,
-              slot->address_delta, slot_id, group_id, slot->virt_start_addr, slot->virt_end_addr,
-              virt + add_size);
-    }
-}
-
-static inline unsigned long get_virt(RedWorker *worker, unsigned long addr, uint32_t add_size,
-                                     int group_id)
-{
-    int slot_id;
-    int generation;
-    unsigned long h_virt;
-
-    MemSlot *slot;
-
-    if (group_id > worker->num_memslots_groups) {
-        PANIC("group_id too big");
-    }
-
-    slot_id = get_memslot_id(worker, addr);
-    if (slot_id > worker->num_memslots) {
-        PANIC("slot_id too big");
-    }
-
-    slot = &worker->mem_slots[group_id][slot_id];
-
-    generation = get_generation(worker, addr);
-    if (generation != slot->generation) {
-        print_memslots(worker);
-        PANIC("address generation is not valid, group_id %d, slot_id %d, gen %d, slot_gen %d\n",
-              group_id, slot_id, generation, slot->generation);
-    }
-
-    h_virt = __get_clean_virt(worker, addr);
-    h_virt += slot->address_delta;
-
-    validate_virt(worker, h_virt, slot_id, add_size, group_id);
-
-    return h_virt;
-}
-
-static void *cb_get_virt(void *opaque, unsigned long addr, uint32_t add_size, uint32_t group_id)
-{
-    return (void *)get_virt((RedWorker *)opaque, addr, add_size, group_id);
-}
-
-static void cb_validate_virt(void *opaque, unsigned long virt, unsigned long from_addr,
-                             uint32_t add_size, uint32_t group_id)
-{
-    int slot_id = get_memslot_id((RedWorker *)opaque, from_addr);
-    validate_virt((RedWorker *)opaque, virt, slot_id, add_size, group_id);
-}
-
 static void *op_get_virt_preload_group(SpiceVirtMapping *mapping, unsigned long addr, uint32_t add_size)
 {
     RedWorker *worker = SPICE_CONTAINEROF(mapping, RedWorker, preload_group_virt_mapping);
-    return (void *)get_virt(worker, addr, add_size,
+    return (void *)get_virt(&worker->mem_slots, addr, add_size,
                             worker->preload_group_id);
 }
 
@@ -1251,8 +1111,8 @@ static void op_validate_virt_preload_group(SpiceVirtMapping *mapping, unsigned l
                                            unsigned long from_addr, uint32_t add_size)
 {
     RedWorker *worker = SPICE_CONTAINEROF(mapping, RedWorker, preload_group_virt_mapping);
-    int slot_id = get_memslot_id(worker, from_addr);
-    validate_virt(worker, virt, slot_id, add_size,
+    int slot_id = get_memslot_id(&worker->mem_slots, from_addr);
+    validate_virt(&worker->mem_slots, virt, slot_id, add_size,
                   worker->preload_group_id);
 }
 
@@ -2363,8 +2223,8 @@ static int is_equal_path(RedWorker *worker, SPICE_ADDRESS p1, SPICE_ADDRESS p2, 
 
     ASSERT(p1 && p2);
 
-    path1 = (QXLPath *)get_virt(worker, p1, sizeof(QXLPath), group_id1);
-    path2 = (QXLPath *)get_virt(worker, p2, sizeof(QXLPath), group_id2);
+    path1 = (QXLPath *)get_virt(&worker->mem_slots, p1, sizeof(QXLPath), group_id1);
+    path2 = (QXLPath *)get_virt(&worker->mem_slots, p2, sizeof(QXLPath), group_id2);
 
     if ((size = path1->data_size) != path2->data_size) {
         return FALSE;
@@ -2390,7 +2250,7 @@ static int is_equal_path(RedWorker *worker, SPICE_ADDRESS p1, SPICE_ADDRESS p2, 
         }
         if ((size1 -= now) == 0) {
             ASSERT(chunk1->next_chunk)
-            chunk1 = (QXLDataChunk *)get_virt(worker, chunk1->next_chunk, sizeof(QXLDataChunk),
+            chunk1 = (QXLDataChunk *)get_virt(&worker->mem_slots, chunk1->next_chunk, sizeof(QXLDataChunk),
                                               group_id1);
             size1 = chunk1->data_size;
             data1 = chunk1->data;
@@ -2400,7 +2260,7 @@ static int is_equal_path(RedWorker *worker, SPICE_ADDRESS p1, SPICE_ADDRESS p2, 
 
         if ((size2 -= now) == 0) {
             ASSERT(chunk2->next_chunk)
-            chunk2 = (QXLDataChunk *)get_virt(worker, chunk2->next_chunk, sizeof(QXLDataChunk),
+            chunk2 = (QXLDataChunk *)get_virt(&worker->mem_slots, chunk2->next_chunk, sizeof(QXLDataChunk),
                                               group_id2);
             size2 = chunk2->data_size;
             data2 = chunk2->data;
@@ -2854,7 +2714,7 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
 #endif
     stream->refs = 1;
     stream->bit_rate = get_bit_rate(stream_width, stream_height);
-    QXLImage *qxl_image = (QXLImage *)get_virt(worker, drawable->qxl_drawable->u.copy.src_bitmap,
+    QXLImage *qxl_image = (QXLImage *)get_virt(&worker->mem_slots, drawable->qxl_drawable->u.copy.src_bitmap,
                                                sizeof(QXLImage), drawable->group_id);
     stream->top_down = !!(qxl_image->bitmap.flags & SPICE_BITMAP_FLAGS_TOP_DOWN);
     drawable->stream = stream;
@@ -2941,7 +2801,7 @@ static inline int __red_is_next_stream_frame(RedWorker *worker,
     }
 
     if (stream) {
-        QXLImage *qxl_image = (QXLImage *)get_virt(worker, qxl_drawable->u.copy.src_bitmap,
+        QXLImage *qxl_image = (QXLImage *)get_virt(&worker->mem_slots, qxl_drawable->u.copy.src_bitmap,
                                                    sizeof(QXLImage), candidate->group_id);
         if (stream->top_down != !!(qxl_image->bitmap.flags & SPICE_BITMAP_FLAGS_TOP_DOWN)) {
             return FALSE;
@@ -2996,7 +2856,7 @@ static inline int red_is_next_stream_frame(RedWorker *worker, Drawable *candidat
         return FALSE;
     }
 
-    qxl_image = (QXLImage *)get_virt(worker, qxl_drawable->u.copy.src_bitmap, sizeof(QXLImage),
+    qxl_image = (QXLImage *)get_virt(&worker->mem_slots, qxl_drawable->u.copy.src_bitmap, sizeof(QXLImage),
                                      candidate->group_id);
 
     if (qxl_image->descriptor.type != SPICE_IMAGE_TYPE_BITMAP) {
@@ -3074,7 +2934,7 @@ static inline void red_update_copy_graduality(RedWorker* worker, Drawable *drawa
         return; // already set
     }
 
-    qxl_image = (QXLImage *)get_virt(worker, drawable->qxl_drawable->u.copy.src_bitmap,
+    qxl_image = (QXLImage *)get_virt(&worker->mem_slots, drawable->qxl_drawable->u.copy.src_bitmap,
                                      sizeof(QXLImage), drawable->group_id);
 
     if (!BITMAP_FMT_IS_RGB[qxl_image->bitmap.format] || _stride_is_extra(&qxl_image->bitmap) ||
@@ -3513,15 +3373,11 @@ static inline int red_current_add(RedWorker *worker, Ring *ring, Drawable *drawa
 static void add_clip_rects(RedWorker *worker, QRegion *rgn, QXLPHYSICAL data, uint32_t group_id)
 {
     while (data) {
-        QXLDataChunk *chunk;
         SpiceRect *now;
         SpiceRect *end;
         uint32_t data_size;
-        chunk = (QXLDataChunk *)get_virt(worker, data, sizeof(QXLDataChunk), group_id);
-        data_size = chunk->data_size;
-        validate_virt(worker, (unsigned long)chunk->data, get_memslot_id(worker, data), data_size,
-                      group_id);
-        now = (SpiceRect *)chunk->data;
+
+        now = (SpiceRect *)validate_chunk(&worker->mem_slots, data, group_id, &data_size, &data);
         end = now + data_size / sizeof(SpiceRect);
 
         for (; now < end; now++) {
@@ -3534,7 +3390,6 @@ static void add_clip_rects(RedWorker *worker, QRegion *rgn, QXLPHYSICAL data, ui
 #endif
             region_add(rgn, r);
         }
-        data = chunk->next_chunk;
     }
 }
 
@@ -3624,7 +3479,7 @@ static inline void red_update_streamable(RedWorker *worker, Drawable *drawable,
         return;
     }
 
-    qxl_image = (QXLImage *)get_virt(worker, qxl_drawable->u.copy.src_bitmap, sizeof(QXLImage),
+    qxl_image = (QXLImage *)get_virt(&worker->mem_slots, qxl_drawable->u.copy.src_bitmap, sizeof(QXLImage),
                                      drawable->group_id);
     if (qxl_image->descriptor.type != SPICE_IMAGE_TYPE_BITMAP) {
         return;
@@ -3964,7 +3819,7 @@ static inline void red_process_surface(RedWorker *worker, QXLSurfaceCmd *surface
         int32_t stride = surface->u.surface_create.stride;
         QXLReleaseInfoExt release_info_ext;
         
-        data = (uint8_t *)get_virt(worker, saved_data, height * abs(stride), group_id);
+        data = (uint8_t *)get_virt(&worker->mem_slots, saved_data, height * abs(stride), group_id);
         if (stride < 0) {
             data -= (int32_t)(stride * (height - 1));
         }
@@ -3995,10 +3850,10 @@ static void localize_path(RedWorker *worker, QXLPHYSICAL *in_path, uint32_t grou
     uint8_t *data;
     uint32_t data_size;
     QXLDataChunk *chunk;
-    int memslot_id = get_memslot_id(worker, *in_path);
+    int memslot_id = get_memslot_id(&worker->mem_slots, *in_path);
 
     ASSERT(in_path && *in_path);
-    path = (QXLPath *)get_virt(worker, *in_path, sizeof(QXLPath), group_id);
+    path = (QXLPath *)get_virt(&worker->mem_slots, *in_path, sizeof(QXLPath), group_id);
     data = spice_malloc_n_m(1, path->data_size, sizeof(uint32_t));
     *in_path = (QXLPHYSICAL)data;
     *(uint32_t *)data = path->data_size;
@@ -4006,10 +3861,10 @@ static void localize_path(RedWorker *worker, QXLPHYSICAL *in_path, uint32_t grou
     chunk = &path->chunk;
     do {
         data_size = chunk->data_size;
-        validate_virt(worker, (unsigned long)chunk->data, memslot_id, data_size, group_id);
+        validate_virt(&worker->mem_slots, (unsigned long)chunk->data, memslot_id, data_size, group_id);
         memcpy(data, chunk->data, data_size);
         data += data_size;
-        chunk = chunk->next_chunk ? (QXLDataChunk *)get_virt(worker, chunk->next_chunk,
+        chunk = chunk->next_chunk ? (QXLDataChunk *)get_virt(&worker->mem_slots, chunk->next_chunk,
                                                              sizeof(QXLDataChunk), group_id) : NULL;
     } while (chunk);
 }
@@ -4023,12 +3878,12 @@ static void unlocalize_path(QXLPHYSICAL *path)
 
 static void localize_str(RedWorker *worker, QXLPHYSICAL *in_str, uint32_t group_id)
 {
-    QXLString *qxl_str = (QXLString *)get_virt(worker, *in_str, sizeof(QXLString), group_id);
+    QXLString *qxl_str = (QXLString *)get_virt(&worker->mem_slots, *in_str, sizeof(QXLString), group_id);
     QXLDataChunk *chunk;
     SpiceString *str;
     uint8_t *dest;
     uint32_t data_size;
-    int memslot_id = get_memslot_id(worker, *in_str);
+    int memslot_id = get_memslot_id(&worker->mem_slots, *in_str);
 
     ASSERT(in_str);
     str = spice_malloc_n_m(1, qxl_str->data_size, sizeof(uint32_t));
@@ -4041,15 +3896,15 @@ static void localize_str(RedWorker *worker, QXLPHYSICAL *in_str, uint32_t group_
         QXLPHYSICAL next_chunk;
 
         data_size = chunk->data_size;
-        validate_virt(worker, (unsigned long)chunk->data, memslot_id, data_size, group_id);
+        validate_virt(&worker->mem_slots, (unsigned long)chunk->data, memslot_id, data_size, group_id);
         memcpy(dest, chunk->data, data_size);
         if (!chunk->next_chunk) {
             return;
         }
         dest += data_size;
         next_chunk = chunk->next_chunk;
-        memslot_id = get_memslot_id(worker, next_chunk);
-        chunk = (QXLDataChunk *)get_virt(worker, next_chunk, sizeof(QXLDataChunk), group_id);
+        memslot_id = get_memslot_id(&worker->mem_slots, next_chunk);
+        chunk = (QXLDataChunk *)get_virt(&worker->mem_slots, next_chunk, sizeof(QXLDataChunk), group_id);
     }
 }
 
@@ -4068,10 +3923,10 @@ static void localize_clip(RedWorker *worker, SpiceClip *clip, uint32_t group_id)
     case SPICE_CLIP_TYPE_RECTS: {
         QXLClipRects *clip_rects;
         QXLDataChunk *chunk;
-        int memslot_id = get_memslot_id(worker, clip->data);
+        int memslot_id = get_memslot_id(&worker->mem_slots, clip->data);
         uint8_t *data;
         uint32_t data_size;
-        clip_rects = (QXLClipRects *)get_virt(worker, clip->data, sizeof(QXLClipRects), group_id);
+        clip_rects = (QXLClipRects *)get_virt(&worker->mem_slots, clip->data, sizeof(QXLClipRects), group_id);
         chunk = &clip_rects->chunk;
         ASSERT(clip->data);
         data = spice_malloc_n_m(clip_rects->num_rects, sizeof(SpiceRect), sizeof(uint32_t));
@@ -4080,10 +3935,10 @@ static void localize_clip(RedWorker *worker, SpiceClip *clip, uint32_t group_id)
         data += sizeof(uint32_t);
         do {
             data_size = chunk->data_size;
-            validate_virt(worker, (unsigned long)chunk->data, memslot_id, data_size, group_id);
+            validate_virt(&worker->mem_slots, (unsigned long)chunk->data, memslot_id, data_size, group_id);
             memcpy(data, chunk->data, data_size);
             data += data_size;
-            chunk = chunk->next_chunk ? (QXLDataChunk *)get_virt(worker, chunk->next_chunk,
+            chunk = chunk->next_chunk ? (QXLDataChunk *)get_virt(&worker->mem_slots, chunk->next_chunk,
                                                                  sizeof(QXLDataChunk), group_id) :
                                          NULL;
         } while (chunk);
@@ -4280,7 +4135,7 @@ static void localize_bitmap(RedWorker *worker, QXLPHYSICAL *in_bitmap, uint32_t 
     QXLImage *local_image;
 
     ASSERT(in_bitmap && *in_bitmap);
-    image = (QXLImage *)get_virt(worker, *in_bitmap, sizeof(QXLImage), group_id);
+    image = (QXLImage *)get_virt(&worker->mem_slots, *in_bitmap, sizeof(QXLImage), group_id);
     local_image = (QXLImage *)alloc_local_image(worker);
     *local_image = *image;
     *in_bitmap = (QXLPHYSICAL)local_image;
@@ -4307,7 +4162,7 @@ static void localize_bitmap(RedWorker *worker, QXLPHYSICAL *in_bitmap, uint32_t 
     }
     case SPICE_IMAGE_TYPE_BITMAP:
         if (image->bitmap.flags & QXL_BITMAP_DIRECT) {
-            local_image->bitmap.data = (QXLPHYSICAL)get_virt(worker, image->bitmap.data,
+            local_image->bitmap.data = (QXLPHYSICAL)get_virt(&worker->mem_slots, image->bitmap.data,
                                                           image->bitmap.stride * image->bitmap.y,
                                                           group_id);
         } else {
@@ -4323,9 +4178,9 @@ static void localize_bitmap(RedWorker *worker, QXLPHYSICAL *in_bitmap, uint32_t 
                 int cp_size;
 
                 ASSERT(src_data);
-                chunk = (QXLDataChunk *)get_virt(worker, src_data, sizeof(QXLDataChunk), group_id);
+                chunk = (QXLDataChunk *)get_virt(&worker->mem_slots, src_data, sizeof(QXLDataChunk), group_id);
                 data_size = chunk->data_size;
-                validate_virt(worker, (unsigned long)chunk->data, get_memslot_id(worker, src_data),
+                validate_virt(&worker->mem_slots, (unsigned long)chunk->data, get_memslot_id(&worker->mem_slots, src_data),
                               data_size, group_id);
                 cp_size = MIN(data_size, size);
                 memcpy(data, chunk->data, cp_size);
@@ -4341,14 +4196,14 @@ static void localize_bitmap(RedWorker *worker, QXLPHYSICAL *in_bitmap, uint32_t 
             SpicePalette *tmp_palette;
             SpicePalette *shadow_palette;
 
-            int slot_id = get_memslot_id(worker, local_image->bitmap.palette);
-            tmp_palette = (SpicePalette *)get_virt(worker, local_image->bitmap.palette,
+            int slot_id = get_memslot_id(&worker->mem_slots, local_image->bitmap.palette);
+            tmp_palette = (SpicePalette *)get_virt(&worker->mem_slots, local_image->bitmap.palette,
                                               sizeof(SpicePalette), group_id);
 
             num_ents = tmp_palette->num_ents;
             ents = tmp_palette->ents;
 
-            validate_virt(worker, (unsigned long)ents, slot_id, (num_ents * sizeof(uint32_t)),
+            validate_virt(&worker->mem_slots, (unsigned long)ents, slot_id, (num_ents * sizeof(uint32_t)),
                           group_id);
 
             shadow_palette = (SpicePalette *)spice_malloc_n_m(num_ents, sizeof(uint32_t),sizeof(SpicePalette) + sizeof(QXLPHYSICAL));
@@ -4430,7 +4285,7 @@ static void localize_attr(RedWorker *worker, SpiceLineAttr *attr, uint32_t group
         uint8_t *data;
 
         ASSERT(attr->style);
-        buf = (uint8_t *)get_virt(worker, attr->style, attr->style_nseg * sizeof(uint32_t),
+        buf = (uint8_t *)get_virt(&worker->mem_slots, attr->style, attr->style_nseg * sizeof(uint32_t),
                                   group_id);
         data = spice_malloc_n(attr->style_nseg, sizeof(uint32_t));
         memcpy(data, buf, attr->style_nseg * sizeof(uint32_t));
@@ -4910,7 +4765,7 @@ static int red_process_cursor(RedWorker *worker, uint32_t max_pipe_size)
         worker->repoll_cursor_ring = 0;
         switch (ext_cmd.cmd.type) {
         case QXL_CMD_CURSOR: {
-            QXLCursorCmd *cursor_cmd = (QXLCursorCmd *)get_virt(worker, ext_cmd.cmd.data,
+            QXLCursorCmd *cursor_cmd = (QXLCursorCmd *)get_virt(&worker->mem_slots, ext_cmd.cmd.data,
                                                                 sizeof(QXLCursorCmd),
                                                                 ext_cmd.group_id);
             qxl_process_cursor(worker, cursor_cmd, ext_cmd.group_id);
@@ -4948,7 +4803,7 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size)
         worker->repoll_cmd_ring = 0;
         switch (ext_cmd.cmd.type) {
         case QXL_CMD_DRAW: {
-            QXLDrawable *drawable = (QXLDrawable *)get_virt(worker, ext_cmd.cmd.data,
+            QXLDrawable *drawable = (QXLDrawable *)get_virt(&worker->mem_slots, ext_cmd.cmd.data,
                                                             sizeof(QXLDrawable), ext_cmd.group_id);
             red_process_drawable(worker, drawable, ext_cmd.group_id);
             break;
@@ -4956,7 +4811,7 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size)
         case QXL_CMD_UPDATE: {
             int surface_id;
             QXLReleaseInfoExt release_info_ext;
-            QXLUpdateCmd *draw_cmd = (QXLUpdateCmd *)get_virt(worker, ext_cmd.cmd.data,
+            QXLUpdateCmd *draw_cmd = (QXLUpdateCmd *)get_virt(&worker->mem_slots, ext_cmd.cmd.data,
                                                               sizeof(QXLUpdateCmd),
                                                               ext_cmd.group_id);
             surface_id = draw_cmd->surface_id;
@@ -4970,7 +4825,7 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size)
         }
         case QXL_CMD_MESSAGE: {
             QXLReleaseInfoExt release_info_ext;
-            QXLMessage *message = (QXLMessage *)get_virt(worker, ext_cmd.cmd.data,
+            QXLMessage *message = (QXLMessage *)get_virt(&worker->mem_slots, ext_cmd.cmd.data,
                                                          sizeof(QXLMessage), ext_cmd.group_id);
             red_printf("MESSAGE: %s", message->data);
             release_info_ext.group_id = ext_cmd.group_id;
@@ -4979,7 +4834,7 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size)
             break;
         }
         case QXL_CMD_SURFACE: {
-            QXLSurfaceCmd *surface = (QXLSurfaceCmd *)get_virt(worker, ext_cmd.cmd.data,
+            QXLSurfaceCmd *surface = (QXLSurfaceCmd *)get_virt(&worker->mem_slots, ext_cmd.cmd.data,
                                                                sizeof(QXLSurfaceCmd), ext_cmd.group_id);
             red_process_surface(worker, surface, ext_cmd.group_id);
             break;
@@ -5088,8 +4943,8 @@ static void fill_path(DisplayChannel *display_channel, QXLPHYSICAL *in_path, uin
     int memslot_id;
     worker = channel->worker;
     ASSERT(in_path && *in_path);
-    memslot_id  = get_memslot_id(worker, *in_path);
-    QXLPath *path = (QXLPath *)get_virt(worker, *in_path, sizeof(QXLPath), group_id);
+    memslot_id  = get_memslot_id(&worker->mem_slots, *in_path);
+    QXLPath *path = (QXLPath *)get_virt(&worker->mem_slots, *in_path, sizeof(QXLPath), group_id);
     *in_path = channel->send_data.header.size;
     add_buf(channel, BUF_TYPE_RAW, &path->data_size, sizeof(uint32_t), 0, 0);
     add_buf(channel, BUF_TYPE_CHUNK, &path->chunk, path->data_size, memslot_id, group_id);
@@ -5102,8 +4957,8 @@ static void fill_str(DisplayChannel *display_channel, QXLPHYSICAL *in_str, uint3
     int memslot_id;
     worker = channel->worker;
     ASSERT(in_str && *in_str);
-    memslot_id  = get_memslot_id(worker, *in_str);
-    QXLString *str = (QXLString *)get_virt(worker, *in_str, sizeof(QXLString), group_id);
+    memslot_id  = get_memslot_id(&worker->mem_slots, *in_str);
+    QXLString *str = (QXLString *)get_virt(&worker->mem_slots, *in_str, sizeof(QXLString), group_id);
     *in_str = channel->send_data.header.size;
     add_buf(channel, BUF_TYPE_RAW, &str->length, sizeof(uint32_t), 0, 0);
     add_buf(channel, BUF_TYPE_CHUNK, &str->chunk, str->data_size, memslot_id, group_id);
@@ -5113,10 +4968,10 @@ static inline void fill_rects_clip(RedChannel *channel, QXLPHYSICAL *in_clip, ui
 {
     RedWorker *worker = channel->worker;
     QXLClipRects *clip;
-    int memslot_id = get_memslot_id(worker, *in_clip);
+    int memslot_id = get_memslot_id(&worker->mem_slots, *in_clip);
 
     ASSERT(in_clip && *in_clip);
-    clip = (QXLClipRects *)get_virt(worker, *in_clip, sizeof(QXLClipRects), group_id);
+    clip = (QXLClipRects *)get_virt(&worker->mem_slots, *in_clip, sizeof(QXLClipRects), group_id);
     *in_clip = channel->send_data.header.size;
     add_buf(channel, BUF_TYPE_RAW, &clip->num_rects, sizeof(uint32_t), 0, 0);
     add_buf(channel, BUF_TYPE_CHUNK, &clip->chunk, clip->num_rects * sizeof(SpiceRect), memslot_id,
@@ -5156,7 +5011,7 @@ static inline void fill_palette(DisplayChannel *display_channel, SPICE_ADDRESS *
     if (!(*io_palette)) {
         return;
     }
-    palette = (SpicePalette *)get_virt(worker, *io_palette, sizeof(SpicePalette), group_id);
+    palette = (SpicePalette *)get_virt(&worker->mem_slots, *io_palette, sizeof(SpicePalette), group_id);
     if (palette->unique) {
         if (red_palette_cache_find(display_channel, palette->unique)) {
             *flags |= SPICE_BITMAP_FLAGS_PAL_FROM_CACHE;
@@ -5794,20 +5649,20 @@ static BitmapGradualType _get_bitmap_graduality_level(RedWorker *worker, SpiceBi
         y = bitmap->y;
         switch (bitmap->format) {
         case SPICE_BITMAP_FMT_16BIT: {
-            uint8_t *lines = (uint8_t*)get_virt(worker, bitmap->data, x * y *
+            uint8_t *lines = (uint8_t*)get_virt(&worker->mem_slots, bitmap->data, x * y *
                                                 sizeof(rgb16_pixel_t), group_id);
             compute_lines_gradual_score_rgb16((rgb16_pixel_t*)lines, x, y, &score, &num_samples);
             break;
         }
         case SPICE_BITMAP_FMT_24BIT: {
-            uint8_t *lines = (uint8_t*)get_virt(worker, bitmap->data, x * y *
+            uint8_t *lines = (uint8_t*)get_virt(&worker->mem_slots, bitmap->data, x * y *
                                                 sizeof(rgb24_pixel_t), group_id);
             compute_lines_gradual_score_rgb24((rgb24_pixel_t*)lines, x, y, &score, &num_samples);
             break;
         }
         case SPICE_BITMAP_FMT_32BIT:
         case SPICE_BITMAP_FMT_RGBA: {
-            uint8_t *lines = (uint8_t*)get_virt(worker, bitmap->data, x * y *
+            uint8_t *lines = (uint8_t*)get_virt(&worker->mem_slots, bitmap->data, x * y *
                                                 sizeof(rgb32_pixel_t), group_id);
             compute_lines_gradual_score_rgb32((rgb32_pixel_t*)lines, x, y, &score, &num_samples);
             break;
@@ -5824,29 +5679,29 @@ static BitmapGradualType _get_bitmap_graduality_level(RedWorker *worker, SpiceBi
         SPICE_ADDRESS relative_address = bitmap->data;
 
         while (relative_address) {
-            chunk = (QXLDataChunk *)get_virt(worker, relative_address, sizeof(QXLDataChunk),
+            chunk = (QXLDataChunk *)get_virt(&worker->mem_slots, relative_address, sizeof(QXLDataChunk),
                                              group_id);
             num_lines = chunk->data_size / bitmap->stride;
             x = bitmap->x;
             switch (bitmap->format) {
             case SPICE_BITMAP_FMT_16BIT:
-                validate_virt(worker, (unsigned long)chunk->data,
-                              get_memslot_id(worker, relative_address),
+                validate_virt(&worker->mem_slots, (unsigned long)chunk->data,
+                              get_memslot_id(&worker->mem_slots, relative_address),
                               sizeof(rgb16_pixel_t) * x * num_lines, group_id);
                 compute_lines_gradual_score_rgb16((rgb16_pixel_t*)chunk->data, x, num_lines,
                                                   &chunk_score, &chunk_num_samples);
                 break;
             case SPICE_BITMAP_FMT_24BIT:
-                validate_virt(worker, (unsigned long)chunk->data,
-                              get_memslot_id(worker, relative_address),
+                validate_virt(&worker->mem_slots, (unsigned long)chunk->data,
+                              get_memslot_id(&worker->mem_slots, relative_address),
                               sizeof(rgb24_pixel_t) * x * num_lines, group_id);
                 compute_lines_gradual_score_rgb24((rgb24_pixel_t*)chunk->data, x, num_lines,
                                                   &chunk_score, &chunk_num_samples);
                 break;
             case SPICE_BITMAP_FMT_32BIT:
             case SPICE_BITMAP_FMT_RGBA:
-                validate_virt(worker, (unsigned long)chunk->data,
-                              get_memslot_id(worker, relative_address),
+                validate_virt(&worker->mem_slots, (unsigned long)chunk->data,
+                              get_memslot_id(&worker->mem_slots, relative_address),
                               sizeof(rgb32_pixel_t) *  x * num_lines, group_id);
                 compute_lines_gradual_score_rgb32((rgb32_pixel_t*)chunk->data, x, num_lines,
                                                   &chunk_score, &chunk_num_samples);
@@ -5961,13 +5816,13 @@ static inline int red_glz_compress_image(DisplayChannel *display_channel,
 
     if ((src->flags & QXL_BITMAP_DIRECT)) {
         glz_data->usr.more_lines = glz_usr_no_more_lines;
-        lines = (uint8_t*)get_virt(worker, src->data, src->stride * src->y, drawable->group_id);
+        lines = (uint8_t*)get_virt(&worker->mem_slots, src->data, src->stride * src->y, drawable->group_id);
         num_lines = src->y;
     } else {
         glz_data->data.u.lines_data.enc_get_virt = cb_get_virt;
-        glz_data->data.u.lines_data.enc_get_virt_opaque = worker;
+        glz_data->data.u.lines_data.enc_get_virt_opaque = &worker->mem_slots;
         glz_data->data.u.lines_data.enc_validate_virt = cb_validate_virt;
-        glz_data->data.u.lines_data.enc_validate_virt_opaque = worker;
+        glz_data->data.u.lines_data.enc_validate_virt_opaque = &worker->mem_slots;
         glz_data->data.u.lines_data.stride = src->stride;
         glz_data->data.u.lines_data.next = src->data;
         glz_data->data.u.lines_data.group_id = drawable->group_id;
@@ -6033,14 +5888,14 @@ static inline int red_lz_compress_image(DisplayChannel *display_channel,
     if ((src->flags & QXL_BITMAP_DIRECT)) {
         lz_data->usr.more_lines = lz_usr_no_more_lines;
         size = lz_encode(lz, type, src->x, src->y, (src->flags & QXL_BITMAP_TOP_DOWN),
-                         (uint8_t*)get_virt(worker, src->data, src->stride * src->y, group_id),
+                         (uint8_t*)get_virt(&worker->mem_slots, src->data, src->stride * src->y, group_id),
                          src->y, src->stride, (uint8_t*)lz_data->data.bufs_head->buf,
                          sizeof(lz_data->data.bufs_head->buf));
     } else {
         lz_data->data.u.lines_data.enc_get_virt = cb_get_virt;
-        lz_data->data.u.lines_data.enc_get_virt_opaque = worker;
+        lz_data->data.u.lines_data.enc_get_virt_opaque = &worker->mem_slots;
         lz_data->data.u.lines_data.enc_validate_virt = cb_validate_virt;
-        lz_data->data.u.lines_data.enc_validate_virt_opaque = worker;
+        lz_data->data.u.lines_data.enc_validate_virt_opaque = &worker->mem_slots;
         lz_data->data.u.lines_data.stride = src->stride;
         lz_data->data.u.lines_data.next = src->data;
         lz_data->data.u.lines_data.group_id = group_id;
@@ -6138,11 +5993,11 @@ static inline int red_quic_compress_image(DisplayChannel *display_channel, RedIm
         uint8_t *data;
 
         if (!(src->flags & QXL_BITMAP_TOP_DOWN)) {
-            data = (uint8_t*)get_virt(worker, src->data, src->stride * src->y, group_id) +
+            data = (uint8_t*)get_virt(&worker->mem_slots, src->data, src->stride * src->y, group_id) +
                    src->stride * (src->y - 1);
             stride = -src->stride;
         } else {
-            data = (uint8_t*)get_virt(worker, src->data, src->stride * src->y, group_id);
+            data = (uint8_t*)get_virt(&worker->mem_slots, src->data, src->stride * src->y, group_id);
             stride = src->stride;
         }
 
@@ -6179,9 +6034,9 @@ static inline int red_quic_compress_image(DisplayChannel *display_channel, RedIm
             return FALSE;
         }
         quic_data->data.u.lines_data.enc_get_virt = cb_get_virt;
-        quic_data->data.u.lines_data.enc_get_virt_opaque = worker;
+        quic_data->data.u.lines_data.enc_get_virt_opaque = &worker->mem_slots;
         quic_data->data.u.lines_data.enc_validate_virt = cb_validate_virt;
-        quic_data->data.u.lines_data.enc_validate_virt_opaque = worker;
+        quic_data->data.u.lines_data.enc_validate_virt_opaque = &worker->mem_slots;
         quic_data->data.u.lines_data.stride = src->stride;
         quic_data->data.u.lines_data.group_id = group_id;
 
@@ -6191,17 +6046,17 @@ static inline int red_quic_compress_image(DisplayChannel *display_channel, RedIm
             stride = src->stride;
         } else {
             SPICE_ADDRESS prev_addr = src->data;
-            QXLDataChunk *chunk = (QXLDataChunk *)get_virt(worker, src->data,
+            QXLDataChunk *chunk = (QXLDataChunk *)get_virt(&worker->mem_slots, src->data,
                                                            sizeof(QXLDataChunk), group_id);
             while (chunk->next_chunk) {
                 prev_addr = chunk->next_chunk;
-                chunk = (QXLDataChunk *)get_virt(worker, chunk->next_chunk, sizeof(QXLDataChunk),
+                chunk = (QXLDataChunk *)get_virt(&worker->mem_slots, chunk->next_chunk, sizeof(QXLDataChunk),
                                                  group_id);
                 ASSERT(chunk->prev_chunk);
             }
             quic_data->data.u.lines_data.next = (SPICE_ADDRESS)prev_addr -
-                                                get_virt_delta(worker,
-                                                               get_memslot_id(worker, src->data),
+                                                get_virt_delta(&worker->mem_slots,
+                                                               get_memslot_id(&worker->mem_slots, src->data),
                                                                group_id);
             quic_data->usr.more_lines = quic_usr_more_lines_revers;
             stride = -src->stride;
@@ -6364,7 +6219,7 @@ static void fill_bits(DisplayChannel *display_channel, QXLPHYSICAL *in_bitmap, D
         ASSERT(drawable->self_bitmap);
         qxl_image = (QXLImage *)drawable->self_bitmap;
     } else {
-        qxl_image = (QXLImage *)get_virt(worker, *in_bitmap, sizeof(QXLImage),
+        qxl_image = (QXLImage *)get_virt(&worker->mem_slots, *in_bitmap, sizeof(QXLImage),
                                          drawable->group_id);
     }
 
@@ -6376,7 +6231,7 @@ static void fill_bits(DisplayChannel *display_channel, QXLPHYSICAL *in_bitmap, D
     image->descriptor.width = qxl_image->descriptor.width;
     image->descriptor.height = qxl_image->descriptor.height;
 
-    memslot_id = get_memslot_id(worker, *in_bitmap);
+    memslot_id = get_memslot_id(&worker->mem_slots, *in_bitmap);
     *in_bitmap = channel->send_data.header.size;
     if ((qxl_image->descriptor.flags & QXL_IMAGE_CACHE)) {
         if (pixmap_cache_hit(display_channel->pixmap_cache, image->descriptor.id,
@@ -6432,10 +6287,10 @@ static void fill_bits(DisplayChannel *display_channel, QXLPHYSICAL *in_bitmap, D
                          drawable->group_id);
             image->bitmap.data = channel->send_data.header.size;
             if (qxl_image->bitmap.flags & QXL_BITMAP_DIRECT) {
-                data = (uint8_t *)get_virt(worker, image_data, stride * y, drawable->group_id);
+                data = (uint8_t *)get_virt(&worker->mem_slots, image_data, stride * y, drawable->group_id);
                 add_buf(channel, BUF_TYPE_RAW, data, y * stride, 0, 0);
             } else {
-                data = (uint8_t *)get_virt(worker, image_data, sizeof(QXLDataChunk),
+                data = (uint8_t *)get_virt(&worker->mem_slots, image_data, sizeof(QXLDataChunk),
                                            drawable->group_id);
                 add_buf(channel, BUF_TYPE_CHUNK, data, y * stride, memslot_id, drawable->group_id);
             }
@@ -6491,7 +6346,7 @@ static void fill_attr(DisplayChannel *display_channel, SpiceLineAttr *attr, uint
 {
     if (attr->style_nseg) {
         RedChannel *channel = &display_channel->base;
-        uint8_t *buf = (uint8_t *)get_virt(channel->worker, attr->style,
+        uint8_t *buf = (uint8_t *)get_virt(&channel->worker->mem_slots, attr->style,
                                            attr->style_nseg * sizeof(uint32_t), group_id);
         ASSERT(attr->style);
         attr->style = channel->send_data.header.size;
@@ -6513,7 +6368,7 @@ static void fill_cursor(CursorChannel *cursor_channel, SpiceCursor *red_cursor, 
         QXLCursor *qxl_cursor;
 
         cursor_cmd = cursor->qxl_cursor;
-        qxl_cursor = (QXLCursor *)get_virt(channel->worker, cursor_cmd->u.set.shape,
+        qxl_cursor = (QXLCursor *)get_virt(&channel->worker->mem_slots, cursor_cmd->u.set.shape,
                                            sizeof(QXLCursor), cursor->group_id);
         red_cursor->flags = 0;
         red_cursor->header = qxl_cursor->header;
@@ -6530,7 +6385,7 @@ static void fill_cursor(CursorChannel *cursor_channel, SpiceCursor *red_cursor, 
 
         if (qxl_cursor->data_size) {
             add_buf(channel, BUF_TYPE_CHUNK, &qxl_cursor->chunk, qxl_cursor->data_size,
-                    get_memslot_id(channel->worker, cursor_cmd->u.set.shape), cursor->group_id);
+                    get_memslot_id(&channel->worker->mem_slots, cursor_cmd->u.set.shape), cursor->group_id);
         }
     } else {
         LocalCursor *local_cursor;
@@ -6734,7 +6589,7 @@ static inline uint32_t __fill_iovec(RedWorker *worker, BufDescriptor *buf, int s
             data_size -= skip_now;
 
             if (data_size) {
-                validate_virt(worker, (unsigned long)chunk->data, buf->slot_id, data_size,
+                validate_virt(&worker->mem_slots, (unsigned long)chunk->data, buf->slot_id, data_size,
                               buf->group_id);
                 size += data_size;
                 vec[*vec_index].iov_base = chunk->data + skip_now;
@@ -6742,7 +6597,7 @@ static inline uint32_t __fill_iovec(RedWorker *worker, BufDescriptor *buf, int s
                 (*vec_index)++;
             }
             chunk = chunk->next_chunk ?
-                    (QXLDataChunk *)get_virt(worker, chunk->next_chunk, sizeof(QXLDataChunk),
+                    (QXLDataChunk *)get_virt(&worker->mem_slots, chunk->next_chunk, sizeof(QXLDataChunk),
                                              buf->group_id) :
                     NULL;
         } while (chunk && *vec_index < MAX_SEND_VEC);
@@ -6930,10 +6785,10 @@ static inline uint8_t *red_get_image_line(RedWorker *worker, QXLDataChunk **chun
     uint8_t *ret;
     uint32_t data_size;
 
-    validate_virt(worker, (unsigned long)*chunk, memslot_id, sizeof(QXLDataChunk),
+    validate_virt(&worker->mem_slots, (unsigned long)*chunk, memslot_id, sizeof(QXLDataChunk),
                   group_id);
     data_size = (*chunk)->data_size;
-    validate_virt(worker, (unsigned long)(*chunk)->data, memslot_id, data_size, group_id);
+    validate_virt(&worker->mem_slots, (unsigned long)(*chunk)->data, memslot_id, data_size, group_id);
 
     if (data_size == *offset) {
         if ((*chunk)->next_chunk == 0) {
@@ -7119,7 +6974,7 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
 
     channel = &display_channel->base;
     worker = channel->worker;
-    qxl_image = (QXLImage *)get_virt(worker,  drawable->qxl_drawable->u.copy.src_bitmap,
+    qxl_image = (QXLImage *)get_virt(&worker->mem_slots,  drawable->qxl_drawable->u.copy.src_bitmap,
                                      sizeof(QXLImage), drawable->group_id);
 
     if (qxl_image->descriptor.type != SPICE_IMAGE_TYPE_BITMAP ||
@@ -7142,8 +6997,8 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
     case SPICE_BITMAP_FMT_32BIT:
         if (!red_rgb32bpp_to_24(worker, &drawable->qxl_drawable->u.copy.src_area,
                                 &qxl_image->bitmap, frame, frame_stride,
-                                get_virt_delta(worker, data, drawable->group_id),
-                                get_memslot_id(worker, data),
+                                get_virt_delta(&worker->mem_slots, data, drawable->group_id),
+                                get_memslot_id(&worker->mem_slots, data),
                                 stream - worker->streams_buf, stream, drawable->group_id)) {
             return FALSE;
         }
@@ -7151,8 +7006,8 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
     case SPICE_BITMAP_FMT_16BIT:
         if (!red_rgb16bpp_to_24(worker, &drawable->qxl_drawable->u.copy.src_area,
                                 &qxl_image->bitmap, frame, frame_stride,
-                                get_virt_delta(worker, data, drawable->group_id),
-                                get_memslot_id(worker, data),
+                                get_virt_delta(&worker->mem_slots, data, drawable->group_id),
+                                get_memslot_id(&worker->mem_slots, data),
                                 stream - worker->streams_buf, stream, drawable->group_id)) {
             return FALSE;
         }
@@ -7160,8 +7015,8 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
     case SPICE_BITMAP_FMT_24BIT:
         if (!red_rgb24bpp_to_24(worker, &drawable->qxl_drawable->u.copy.src_area,
                                 &qxl_image->bitmap, frame, frame_stride,
-                                get_virt_delta(worker, data, drawable->group_id),
-                                get_memslot_id(worker, data),
+                                get_virt_delta(&worker->mem_slots, data, drawable->group_id),
+                                get_memslot_id(&worker->mem_slots, data),
                                 stream - worker->streams_buf, stream, drawable->group_id)) {
             return FALSE;
         }
@@ -7395,7 +7250,7 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
     compress_send_data_t comp_send_data;
 
     if (red_quic_compress_image(display_channel, red_image, &bitmap, &comp_send_data,
-                                worker->internal_groupslot_id)) {
+                                worker->mem_slots.internal_groupslot_id)) {
         add_buf(channel, BUF_TYPE_RAW, red_image, comp_send_data.raw_size, 0, 0);
         add_buf(channel, BUF_TYPE_COMPRESS_BUF, comp_send_data.comp_buf,
                 comp_send_data.comp_buf_size, 0, 0);
@@ -8950,7 +8805,7 @@ static void red_cursor_flush(RedWorker *worker)
 
     cursor_cmd = worker->cursor->qxl_cursor;
     ASSERT(cursor_cmd->type == QXL_CURSOR_SET);
-    qxl_cursor = (QXLCursor *)get_virt(worker, cursor_cmd->u.set.shape, sizeof(QXLCursor),
+    qxl_cursor = (QXLCursor *)get_virt(&worker->mem_slots, cursor_cmd->u.set.shape, sizeof(QXLCursor),
                                        worker->cursor->group_id);
 
     local = _new_local_cursor(&qxl_cursor->header, qxl_cursor->data_size,
@@ -8967,8 +8822,8 @@ static void red_cursor_flush(RedWorker *worker)
         data_size -= chunk->data_size;
         dest += chunk->data_size;
         chunk = chunk->next_chunk ?
-                (QXLDataChunk *)get_virt(worker, chunk->next_chunk, sizeof(QXLDataChunk),
-                                         worker->internal_groupslot_id) : NULL;
+                (QXLDataChunk *)get_virt(&worker->mem_slots, chunk->next_chunk, sizeof(QXLDataChunk),
+                                         worker->mem_slots.internal_groupslot_id) : NULL;
     }
     red_set_cursor(worker, &local->base);
     red_release_cursor(worker, &local->base);
@@ -9057,13 +8912,9 @@ static inline void handle_dev_add_memslot(RedWorker *worker)
 
     receive_data(worker->channel, &dev_slot, sizeof(QXLDevMemSlot));
 
-    ASSERT(worker->num_memslots_groups > dev_slot.slot_group_id);
-    ASSERT(worker->num_memslots > dev_slot.slot_id);
-    worker->mem_slots[dev_slot.slot_group_id][dev_slot.slot_id].address_delta = dev_slot.addr_delta;
-    worker->mem_slots[dev_slot.slot_group_id][dev_slot.slot_id].virt_start_addr =
-                                                                                dev_slot.virt_start;
-    worker->mem_slots[dev_slot.slot_group_id][dev_slot.slot_id].virt_end_addr = dev_slot.virt_end;
-    worker->mem_slots[dev_slot.slot_group_id][dev_slot.slot_id].generation = dev_slot.generation;
+    red_memslot_info_add_slot(&worker->mem_slots, dev_slot.slot_group_id, dev_slot.slot_id,
+                              dev_slot.addr_delta, dev_slot.virt_start, dev_slot.virt_end,
+                              dev_slot.generation);
 
     message = RED_WORKER_MESSAGE_READY;
     write_message(worker->channel, &message);
@@ -9077,11 +8928,7 @@ static inline void handle_dev_del_memslot(RedWorker *worker)
     receive_data(worker->channel, &slot_group_id, sizeof(uint32_t));
     receive_data(worker->channel, &slot_id, sizeof(uint32_t));
 
-    ASSERT(worker->num_memslots_groups > slot_group_id);
-    ASSERT(worker->num_memslots > slot_id);
-
-    worker->mem_slots[slot_group_id][slot_id].virt_start_addr = 0;
-    worker->mem_slots[slot_group_id][slot_id].virt_end_addr = 0;
+    red_memslot_info_del_slot(&worker->mem_slots, slot_group_id, slot_id);
 }
 
 static inline void destroy_surface_wait(RedWorker *worker, int surface_id)
@@ -9182,7 +9029,7 @@ static inline void handle_dev_create_primary_surface(RedWorker *worker)
     PANIC_ON(((uint64_t)abs(surface.stride) * (uint64_t)surface.height) !=
              abs(surface.stride) * surface.height);
 
-    line_0 = (uint8_t*)get_virt(worker, surface.mem, surface.height * abs(surface.stride),
+    line_0 = (uint8_t*)get_virt(&worker->mem_slots, surface.mem, surface.height * abs(surface.stride),
                                 surface.group_id);
     if (surface.stride < 0) {
         line_0 -= (int32_t)(surface.stride * (surface.height -1));
@@ -9241,25 +9088,6 @@ static inline void handle_dev_destroy_primary_surface(RedWorker *worker)
 
     message = RED_WORKER_MESSAGE_READY;
     write_message(worker->channel, &message);
-}
-
-static void inline red_create_mem_slots(RedWorker *worker)
-{
-    uint32_t i;
-
-    ASSERT(worker->num_memslots > 0);
-    ASSERT(worker->num_memslots_groups > 0);
-    worker->mem_slots = spice_new(MemSlot *, worker->num_memslots_groups);
-
-    for (i = 0; i <  worker->num_memslots_groups; ++i) {
-        worker->mem_slots[i] = spice_new0(MemSlot, worker->num_memslots);
-    }
-
-    worker->memslot_id_shift = 64 - worker->mem_slot_bits;
-    worker->memslot_gen_shift = 64 - (worker->mem_slot_bits + worker->generation_bits);
-    worker->memslot_gen_mask = ~((unsigned long)-1 << worker->generation_bits);
-    worker->memslot_clean_virt_mask = (((unsigned long)(-1)) >>
-                                       (worker->mem_slot_bits + worker->generation_bits));
 }
 
 static void handle_dev_input(EventListener *listener, uint32_t events)
@@ -9470,13 +9298,9 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
     case RED_WORKER_MESSAGE_DEL_MEMSLOT:
         handle_dev_del_memslot(worker);
         break;
-    case RED_WORKER_MESSAGE_RESET_MEMSLOTS: {
-        uint32_t i;
-        for (i = 0; i <  worker->num_memslots_groups; ++i) {
-            memset(worker->mem_slots[i], 0, sizeof(MemSlot) * worker->num_memslots);
-        }
+    case RED_WORKER_MESSAGE_RESET_MEMSLOTS:
+        red_memslot_info_reset(&worker->mem_slots);
         break;
-    }
     default:
         red_error("message error");
     }
@@ -9537,14 +9361,15 @@ static void red_init(RedWorker *worker, WorkerInitData *init_data)
         red_error("add channel failed, %s", strerror(errno));
     }
 
-    worker->num_memslots_groups = init_data->num_memslots_groups;
-    worker->num_memslots = init_data->num_memslots;
-    worker->generation_bits = init_data->memslot_gen_bits;
-    worker->mem_slot_bits = init_data->memslot_id_bits;
-    worker->internal_groupslot_id = init_data->internal_groupslot_id;
+    red_memslot_info_init(&worker->mem_slots,
+                          init_data->num_memslots_groups,
+                          init_data->num_memslots,
+                          init_data->memslot_gen_bits,
+                          init_data->memslot_id_bits,
+                          init_data->internal_groupslot_id);
+
     PANIC_ON(init_data->n_surfaces > NUM_SURFACES);
     worker->n_surfaces = init_data->n_surfaces;
-    red_create_mem_slots(worker);
 
     worker->preload_group_virt_mapping.ops = &preload_group_virt_mapping_ops;
 
@@ -9704,7 +9529,7 @@ static void dump_bitmap(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_i
         if (!bitmap->palette) {
             return; // dont dump masks.
         }
-        plt = (SpicePalette *)get_virt(worker, bitmap->palette, sizeof(SpicePalette), group_id);
+        plt = (SpicePalette *)get_virt(&worker->mem_slots, bitmap->palette, sizeof(SpicePalette), group_id);
     }
     row_size = (((bitmap->x * n_pixel_bits) + 31) / 32) * 4;
     bitmap_data_offset = header_size;
@@ -9760,7 +9585,7 @@ static void dump_bitmap(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_i
     }
     /* writing the data */
     if ((bitmap->flags & QXL_BITMAP_DIRECT)) {
-        uint8_t *lines = (uint8_t*)get_virt(worker, bitmap->data, bitmap->stride * bitmap->y,
+        uint8_t *lines = (uint8_t*)get_virt(&worker->mem_slots, bitmap->data, bitmap->stride * bitmap->y,
                                             group_id);
         int i;
         for (i = 0; i < bitmap->y; i++) {
@@ -9773,9 +9598,9 @@ static void dump_bitmap(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_i
 
         while (relative_address) {
             int i;
-            chunk = (QXLDataChunk *)get_virt(worker, relative_address, sizeof(QXLDataChunk),
+            chunk = (QXLDataChunk *)get_virt(&worker->mem_slots, relative_address, sizeof(QXLDataChunk),
                                              group_id);
-            validate_virt(worker, chunk->data, get_memslot_id(worker, relative_address),
+            validate_virt(&worker->mem_slots, chunk->data, get_memslot_id(&worker->mem_slots, relative_address),
                           chunk->data_size, group_id);
             num_lines = chunk->data_size / bitmap->stride;
             for (i = 0; i < num_lines; i++) {

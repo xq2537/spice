@@ -74,6 +74,8 @@ libspice_server_la_SOURCES =			\
 	red_common.h				\
 	red_dispatcher.c			\
 	red_dispatcher.h			\
+	red_memslots.c				\
+	red_memslots.h				\
 	reds.c					\
 	reds.h					\
 	stat.h					\
