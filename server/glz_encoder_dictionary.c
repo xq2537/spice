@@ -332,7 +332,7 @@ static WindowImage *__glz_dictionary_window_alloc_image(SharedDictionary *dict)
     return ret;
 }
 
-/* NOTE - it also updates the used_segs_list*/
+/* NOTE - it doesn't update the used_segs list*/
 static uint32_t __glz_dictionary_window_alloc_image_seg(SharedDictionary *dict)
 {
     uint32_t seg_id;
@@ -348,18 +348,6 @@ static uint32_t __glz_dictionary_window_alloc_image_seg(SharedDictionary *dict)
     seg_id = dict->window.free_segs_head;
     seg = dict->window.segs + seg_id;
     dict->window.free_segs_head = seg->next;
-
-    // first segment
-    if (dict->window.used_segs_tail == NULL_IMAGE_SEG_ID) {
-        dict->window.used_segs_head = seg_id;
-        dict->window.used_segs_tail = seg_id;
-    } else {
-        int prev_tail = dict->window.used_segs_tail;
-        dict->window.segs[prev_tail].next = seg_id;
-        dict->window.used_segs_tail = seg_id;
-    }
-
-    seg->next = NULL_IMAGE_SEG_ID;
 
     return seg_id;
 }
@@ -467,9 +455,9 @@ static void glz_dictionary_window_remove_head(SharedDictionary *dict, uint32_t e
     }
 }
 
-static uint32_t glz_dictionary_window_add_image_seg(SharedDictionary *dict, WindowImage* image,
-                                                    int size, int stride,
-                                                    uint8_t *lines, unsigned int num_lines)
+static uint32_t glz_dictionary_window_alloc_image_seg(SharedDictionary *dict, WindowImage* image,
+                                                      int size, int stride,
+                                                      uint8_t *lines, unsigned int num_lines)
 {
     uint32_t seg_id = __glz_dictionary_window_alloc_image_seg(dict);
     WindowImageSegment *seg = &dict->window.segs[seg_id];
@@ -480,6 +468,8 @@ static uint32_t glz_dictionary_window_add_image_seg(SharedDictionary *dict, Wind
     seg->pixels_num = size;
     seg->pixels_so_far = dict->window.pixels_so_far;
     dict->window.pixels_so_far += seg->pixels_num;
+
+    seg->next = NULL_IMAGE_SEG_ID;
 
     return seg_id;
 }
@@ -492,7 +482,7 @@ static WindowImage *glz_dictionary_window_add_image(SharedDictionary *dict, LzIm
 {
     unsigned int num_lines = num_first_lines;
     unsigned int row;
-    uint32_t seg_id;
+    uint32_t seg_id, prev_seg_id;
     uint8_t* lines = first_lines;
     // alloc image info,update used head tail,  if used_head null - update  head
     WindowImage *image = __glz_dictionary_window_alloc_image(dict);
@@ -509,13 +499,16 @@ static WindowImage *glz_dictionary_window_add_image(SharedDictionary *dict, LzIm
     }
 
     for (row = 0;;) {
-        seg_id = glz_dictionary_window_add_image_seg(dict, image,
-                                                     image_size * num_lines / image_height,
-                                                     image_stride,
-                                                     lines, num_lines);
+        seg_id = glz_dictionary_window_alloc_image_seg(dict, image,
+                                                       image_size * num_lines / image_height,
+                                                       image_stride,
+                                                       lines, num_lines);
         if (row == 0) {
             image->first_seg = seg_id;
+        } else {
+            dict->window.segs[prev_seg_id].next = seg_id;
         }
+
         row += num_lines;
         if (row < (uint32_t)image_height) {
             num_lines = dict->cur_usr->more_lines(dict->cur_usr, &lines);
@@ -525,6 +518,26 @@ static WindowImage *glz_dictionary_window_add_image(SharedDictionary *dict, LzIm
         } else {
             break;
         }
+        prev_seg_id = seg_id;
+    }
+
+    if (dict->window.used_segs_tail == NULL_IMAGE_SEG_ID) {
+        dict->window.used_segs_head = image->first_seg;
+        dict->window.used_segs_tail = seg_id;
+    } else {
+        int prev_tail = dict->window.used_segs_tail;
+
+        // The used segs may be in use by another thread which is during encoding
+        // (read-only use - when going over the segs of an image,
+        // see glz_encode_tmpl::compress).
+        // Thus, the 'next' field of the list's tail can be accessed only
+        // after all the new tail's data was set. Note that we are relying on
+        // an atomic assignment (32 bit varaible).
+        // For the other thread that may read 'next' of the old tail, NULL_IMAGE_SEG_ID
+        // is equivalent to a segment with an image id that is different
+        // from the image id of the tail, so we don't need to further protect this field.
+        dict->window.segs[prev_tail].next = image->first_seg;
+        dict->window.used_segs_tail = seg_id;
     }
     image->is_alive = TRUE;
 
