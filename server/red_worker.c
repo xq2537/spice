@@ -1799,14 +1799,14 @@ static void red_clear_surface_glz_drawables(RedWorker *worker, int surface_id)
         return;
     }
 
-    pthread_mutex_lock(&worker->display_channel->glz_drawables_inst_to_free_lock);
+    pthread_rwlock_wrlock(&worker->display_channel->glz_dict->encode_lock);
 
     while ((ring_item = ring_get_head(&worker->surfaces[surface_id].glz_drawables))) {
         RedGlzDrawable *now = SPICE_CONTAINEROF(ring_item, RedGlzDrawable, surface_link);
         red_display_free_glz_drawable(worker->display_channel, now);
     }
 
-    pthread_mutex_unlock(&worker->display_channel->glz_drawables_inst_to_free_lock);
+    pthread_rwlock_unlock(&worker->display_channel->glz_dict->encode_lock);
 }
 
 static void red_clear_surface_drawables_from_pipe(RedWorker *worker, int surface_id)
