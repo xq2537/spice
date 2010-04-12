@@ -521,7 +521,7 @@ void spice_pixman_blit(pixman_image_t *dest,
                        int width, int height)
 {
     uint32_t *bits, *src_bits;
-    int stride, depth;
+    int stride, depth, src_depth;
     int src_width, src_height, src_stride;
     uint8_t *byte_line;
     uint8_t *src_line;
@@ -532,10 +532,19 @@ void spice_pixman_blit(pixman_image_t *dest,
     depth = pixman_image_get_depth(dest);
     /* stride is in bytes, depth in bits */
 
+    if (depth == 24) {
+        depth = 32; /* Needed for pixman_blt */
+    }
+
     src_bits = pixman_image_get_data(src);
     src_stride = pixman_image_get_stride(src);
     src_width = pixman_image_get_width(src);
     src_height = pixman_image_get_height(src);
+    src_depth = pixman_image_get_depth(src);
+
+    if (src_depth == 24) {
+        src_depth = 32; /* Needed for pixman_blt */
+    }
 
     /* Clip source */
     if (src_x < 0) {
@@ -569,11 +578,7 @@ void spice_pixman_blit(pixman_image_t *dest,
     ASSERT(dest_y + height <= pixman_image_get_height(dest));
     ASSERT(src_x + width <= pixman_image_get_width(src));
     ASSERT(src_y + height <= pixman_image_get_height(src));
-    ASSERT(depth == pixman_image_get_depth(src));
-
-    if (depth == 24) {
-        depth = 32; /* Needed for pixman_blt */
-    }
+    ASSERT(depth == src_depth);
 
     if (pixman_blt(src_bits,
                    bits,
@@ -616,7 +621,7 @@ void spice_pixman_blit_rop (pixman_image_t *dest,
                             SpiceROP rop)
 {
     uint32_t *bits, *src_bits;
-    int stride, depth;
+    int stride, depth, src_depth;
     int src_width, src_height, src_stride;
     uint8_t *byte_line;
     uint8_t *src_line;
@@ -626,10 +631,19 @@ void spice_pixman_blit_rop (pixman_image_t *dest,
     depth = pixman_image_get_depth(dest);
     /* stride is in bytes, depth in bits */
 
+    if (depth == 24) {
+        depth = 32; /* Needed for pixman_blt */
+    }
+
     src_bits = pixman_image_get_data(src);
     src_stride = pixman_image_get_stride(src);
     src_width = pixman_image_get_width(src);
     src_height = pixman_image_get_height(src);
+    src_depth = pixman_image_get_depth(src);
+
+    if (src_depth == 24) {
+        src_depth = 32; /* Needed for pixman_blt */
+    }
 
     /* Clip source */
     if (src_x < 0) {
@@ -663,7 +677,7 @@ void spice_pixman_blit_rop (pixman_image_t *dest,
     ASSERT(dest_y + height <= pixman_image_get_height(dest));
     ASSERT(src_x + width <= pixman_image_get_width(src));
     ASSERT(src_y + height <= pixman_image_get_height(src));
-    ASSERT(depth == pixman_image_get_depth(src));
+    ASSERT(depth == src_depth);
 
     if (depth == 8) {
         copy_rop_8_func_t rop_func = copy_rops_8[rop];
