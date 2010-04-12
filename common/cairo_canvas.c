@@ -156,6 +156,33 @@ static void copy_region(SpiceCanvas *spice_canvas,
     }
 }
 
+static inline uint8_t get_converted_color(uint8_t color)
+{
+    uint8_t msb;
+
+    msb = color & 0xE0;
+    msb = msb >> 5;
+    color |= msb;
+    return color;
+}
+
+static inline uint32_t get_color(CairoCanvas *canvas, uint32_t color)
+{
+    int shift = canvas->base.color_shift == 8 ? 0 : 3;
+    uint32_t ret;
+
+    if (!shift) {
+        return color;
+    }
+
+    ret = ((color & 0x001f) << 3) | ((color & 0x001c) >> 2);
+    ret |= ((color & 0x03e0) << 6) | ((color & 0x0380) << 1);
+    ret |= ((color & 0x7c00) << 9) | ((color & 0x7000) << 4);
+
+    return ret;
+}
+
+
 static void fill_solid_spans(SpiceCanvas *spice_canvas,
                              SpicePoint *points,
                              int *widths,
@@ -170,7 +197,7 @@ static void fill_solid_spans(SpiceCanvas *spice_canvas,
                                points[i].x, points[i].y,
                                widths[i],
                                1,
-                               color);
+                               get_color(canvas, color));
     }
 }
 
@@ -187,7 +214,7 @@ static void fill_solid_rects(SpiceCanvas *spice_canvas,
                                rects[i].x1, rects[i].y1,
                                rects[i].x2 - rects[i].x1,
                                rects[i].y2 - rects[i].y1,
-                               color);
+                               get_color(canvas, color));
     }
 }
 
@@ -205,7 +232,7 @@ static void fill_solid_rects_rop(SpiceCanvas *spice_canvas,
                                    rects[i].x1, rects[i].y1,
                                    rects[i].x2 - rects[i].x1,
                                    rects[i].y2 - rects[i].y1,
-                                   color, rop);
+                                   get_color(canvas, color), rop);
     }
 }
 
