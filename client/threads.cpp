@@ -41,7 +41,7 @@ static inline void rel_time(struct timespec& time, uint64_t delta_nano)
 #ifdef WIN32
     struct _timeb now;
     _ftime_s(&now);
-    time.tv_sec = now.time;
+    time.tv_sec = (long)now.time;
     time.tv_nsec = now.millitm * 1000 * 1000;
 #else
     clock_gettime(CLOCK_MONOTONIC, &time);
