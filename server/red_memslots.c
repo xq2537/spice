@@ -145,6 +145,7 @@ void *validate_chunk (RedMemSlotInfo *info, QXLPHYSICAL data, uint32_t group_id,
     validate_virt(info, (unsigned long)chunk->data, get_memslot_id(info, data),
                   data_size, group_id);
     *next_out = chunk->next_chunk;
+    *data_size_out = data_size;
 
     return chunk->data;
 }
