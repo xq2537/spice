@@ -105,6 +105,7 @@ int mjpeg_encoder_encode_frame(MJpegEncoder *encoder,
     encoder->cinfo.in_color_space   = JCS_RGB;
 
     jpeg_set_defaults(&encoder->cinfo);
+    encoder->cinfo.dct_method       = JDCT_IFAST;
     jpeg_set_quality(&encoder->cinfo, encoder->quality, TRUE);
     jpeg_start_compress(&encoder->cinfo, encoder->first_frame);
 
