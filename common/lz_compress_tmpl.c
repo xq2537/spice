@@ -3,13 +3,15 @@
 
  Copyright 2009 Red Hat, Inc. and/or its affiliates.
 
- This program is licensed to you under the GNU General Public License,
- version 2 or (at your option) any later version published by the Free
- Software Foundation.  See the file COPYING for details.
+   This library is free software; you can redistribute it and/or
+   modify it under the terms of the GNU Lesser General Public
+   License as published by the Free Software Foundation; either
+   version 2.1 of the License, or (at your option) any later version.
 
- There is NO WARRANTY for this software, not even the implied
- warranties of MERCHANTABILITY, NONINFRINGEMENT, or FITNESS FOR A
- PARTICULAR PURPOSE.
+   This library is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   Lesser General Public License for more details.
 
  This file incorporates work covered by the following copyright and
  permission notice:
