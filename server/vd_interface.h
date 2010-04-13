@@ -311,61 +311,61 @@ typedef struct VDICmdArg {
 typedef void (*VDICmdHandler)(const VDICmdArg* args);
 typedef void (*VDIInfoCmdHandler)(void);
 
-#define VD_INTERFACE_PLAYBACK "playback"
-#define VD_INTERFACE_PLAYBACK_MAJOR 1
-#define VD_INTERFACE_PLAYBACK_MINOR 1
-typedef struct PlaybackInterface PlaybackInterface;
+#define SPICE_INTERFACE_PLAYBACK "playback"
+#define SPICE_INTERFACE_PLAYBACK_MAJOR 1
+#define SPICE_INTERFACE_PLAYBACK_MINOR 1
+typedef struct SpicePlaybackInterface SpicePlaybackInterface;
+typedef struct SpicePlaybackInstance SpicePlaybackInstance;
+typedef struct SpicePlaybackState SpicePlaybackState;
 
 enum {
-    VD_INTERFACE_AUDIO_FMT_S16 = 1,
+    SPICE_INTERFACE_AUDIO_FMT_S16 = 1,
 };
 
-#define VD_INTERFACE_PLAYBACK_FREQ 44100
-#define VD_INTERFACE_PLAYBACK_CHAN 2
-#define VD_INTERFACE_PLAYBACK_FMT VD_INTERFACE_AUDIO_FMT_S16
+#define SPICE_INTERFACE_PLAYBACK_FREQ  44100
+#define SPICE_INTERFACE_PLAYBACK_CHAN  2
+#define SPICE_INTERFACE_PLAYBACK_FMT   SPICE_INTERFACE_AUDIO_FMT_S16
 
-typedef struct PlaybackPlug PlaybackPlug;
-struct PlaybackPlug {
-    uint32_t minor_version;
-    uint32_t major_version;
-    void (*start)(PlaybackPlug *plug);
-    void (*stop)(PlaybackPlug *plug);
-    void (*get_frame)(PlaybackPlug *plug, uint32_t **frame, uint32_t *samples);
-    void (*put_frame)(PlaybackPlug *plug, uint32_t *frame);
-};
-
-struct PlaybackInterface {
+struct SpicePlaybackInterface {
     SpiceBaseInterface base;
-
-    VDObjectRef (*plug)(PlaybackInterface *playback, PlaybackPlug* plug, int *enable);
-    void (*unplug)(PlaybackInterface *playback, VDObjectRef);
 };
 
-#define VD_INTERFACE_RECORD "record"
-#define VD_INTERFACE_RECORD_MAJOR 2
-#define VD_INTERFACE_RECORD_MINOR 1
-typedef struct RecordInterface RecordInterface;
-
-#define VD_INTERFACE_RECORD_FREQ 44100
-#define VD_INTERFACE_RECORD_CHAN 2
-#define VD_INTERFACE_RECORD_FMT VD_INTERFACE_AUDIO_FMT_S16
-
-
-typedef struct RecordPlug RecordPlug;
-struct RecordPlug {
-    uint32_t minor_version;
-    uint32_t major_version;
-    void (*start)(RecordPlug *plug);
-    void (*stop)(RecordPlug *plug);
-    uint32_t (*read)(RecordPlug *plug, uint32_t num_samples, uint32_t *samples);
+struct SpicePlaybackInstance {
+    SpiceBaseInstance  base;
+    SpicePlaybackState *st;
 };
 
-struct RecordInterface {
+void spice_server_playback_start(SpicePlaybackInstance *sin);
+void spice_server_playback_stop(SpicePlaybackInstance *sin);
+void spice_server_playback_get_buffer(SpicePlaybackInstance *sin,
+                                      uint32_t **samples, uint32_t *nsamples);
+void spice_server_playback_put_samples(SpicePlaybackInstance *sin,
+                                       uint32_t *samples);
+
+#define SPICE_INTERFACE_RECORD "record"
+#define SPICE_INTERFACE_RECORD_MAJOR 2
+#define SPICE_INTERFACE_RECORD_MINOR 1
+typedef struct SpiceRecordInterface SpiceRecordInterface;
+typedef struct SpiceRecordInstance SpiceRecordInstance;
+typedef struct SpiceRecordState SpiceRecordState;
+
+#define SPICE_INTERFACE_RECORD_FREQ  44100
+#define SPICE_INTERFACE_RECORD_CHAN  2
+#define SPICE_INTERFACE_RECORD_FMT   SPICE_INTERFACE_AUDIO_FMT_S16
+
+struct SpiceRecordInterface {
     SpiceBaseInterface base;
-
-    VDObjectRef (*plug)(RecordInterface *recorder, RecordPlug* plug, int *enable);
-    void (*unplug)(RecordInterface *recorder, VDObjectRef);
 };
+
+struct SpiceRecordInstance {
+    SpiceBaseInstance base;
+    SpiceRecordState  *st;
+};
+
+void spice_server_record_start(SpiceRecordInstance *sin);
+void spice_server_record_stop(SpiceRecordInstance *sin);
+uint32_t spice_server_record_get_samples(SpiceRecordInstance *sin,
+                                         uint32_t *samples, uint32_t bufsize);
 
 #define VD_INTERFACE_VDI_PORT "vdi_port"
 #define VD_INTERFACE_VDI_PORT_MAJOR 1

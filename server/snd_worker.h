@@ -20,11 +20,11 @@
 
 #include "vd_interface.h"
 
-void snd_attach_playback(PlaybackInterface *interface);
-void snd_detach_playback(PlaybackInterface *interface);
+void snd_attach_playback(SpicePlaybackInstance *sin);
+void snd_detach_playback(SpicePlaybackInstance *sin);
 
-void snd_attach_record(RecordInterface *interface);
-void snd_detach_record(RecordInterface *interface);
+void snd_attach_record(SpiceRecordInstance *sin);
+void snd_detach_record(SpiceRecordInstance *sin);
 
 void snd_set_playback_compression(int on);
 int snd_get_playback_compression();

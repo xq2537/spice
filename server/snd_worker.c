@@ -37,7 +37,7 @@
 #define PLAYBACK_BUF_SIZE (FRAME_SIZE * 4)
 
 #define CELT_BIT_RATE (64 * 1024)
-#define CELT_COMPRESSED_FRAME_BYTES (FRAME_SIZE * CELT_BIT_RATE / VD_INTERFACE_PLAYBACK_FREQ / 8)
+#define CELT_COMPRESSED_FRAME_BYTES (FRAME_SIZE * CELT_BIT_RATE / SPICE_INTERFACE_PLAYBACK_FREQ / 8)
 
 #define RECORD_SAMPLES_SIZE (RECIVE_BUF_SIZE >> 2)
 
@@ -121,7 +121,6 @@ struct AudioFrame {
 typedef struct PlaybackChannel {
     SndChannel base;
     AudioFrame frames[3];
-    PlaybackPlug plug;
     VDObjectRef plug_ref;
     AudioFrame *free_frames;
     AudioFrame *in_progress;
@@ -147,6 +146,14 @@ struct SndWorker {
     SndWorker *next;
 };
 
+struct SpicePlaybackState {
+    struct SndWorker worker;
+};
+
+struct SpiceRecordState {
+    struct SndWorker worker;
+};
+
 #define RECORD_MIG_VERSION 1
 
 typedef struct __attribute__ ((__packed__)) RecordMigrateData {
@@ -165,7 +172,6 @@ typedef struct __attribute__ ((__packed__)) RecordMigrateMessage {
 
 typedef struct RecordChannel {
     SndChannel base;
-    RecordPlug plug;
     VDObjectRef plug_ref;
     uint32_t samples[RECORD_SAMPLES_SIZE];
     uint32_t write_pos;
@@ -551,9 +557,9 @@ static int snd_playback_send_start(PlaybackChannel *playback_channel)
     }
 
     start = &playback_channel->send_data.u.start;
-    start->channels = VD_INTERFACE_PLAYBACK_CHAN;
-    start->frequency = VD_INTERFACE_PLAYBACK_FREQ;
-    ASSERT(VD_INTERFACE_PLAYBACK_FMT == VD_INTERFACE_AUDIO_FMT_S16);
+    start->channels = SPICE_INTERFACE_PLAYBACK_CHAN;
+    start->frequency = SPICE_INTERFACE_PLAYBACK_FREQ;
+    ASSERT(SPICE_INTERFACE_PLAYBACK_FMT == SPICE_INTERFACE_AUDIO_FMT_S16);
     start->format = SPICE_AUDIO_FMT_S16;
     start->time = reds_get_mm_time();
     snd_add_buf(channel, start, sizeof(*start));
@@ -592,9 +598,9 @@ static int snd_record_send_start(RecordChannel *record_channel)
     }
 
     start = &record_channel->send_data.u.start;
-    start->channels = VD_INTERFACE_RECORD_CHAN;
-    start->frequency = VD_INTERFACE_RECORD_FREQ;
-    ASSERT(VD_INTERFACE_RECORD_FMT == VD_INTERFACE_AUDIO_FMT_S16);
+    start->channels = SPICE_INTERFACE_RECORD_CHAN;
+    start->frequency = SPICE_INTERFACE_RECORD_FREQ;
+    ASSERT(SPICE_INTERFACE_RECORD_FMT == SPICE_INTERFACE_AUDIO_FMT_S16);
     start->format = SPICE_AUDIO_FMT_S16;
     snd_add_buf(channel, start, sizeof(*start));
 
@@ -846,10 +852,13 @@ static void snd_set_command(SndChannel *channel, uint32_t command)
     channel->command |= command;
 }
 
-static void snd_playback_start(PlaybackPlug *plug)
+__visible__ void spice_server_playback_start(SpicePlaybackInstance *sin)
 {
-    PlaybackChannel *playback_channel = SPICE_CONTAINEROF(plug, PlaybackChannel, plug);
+    SndChannel *channel = sin->st->worker.connection;
+    PlaybackChannel *playback_channel = SPICE_CONTAINEROF(channel, PlaybackChannel, base);
 
+    if (!channel)
+        return;
     ASSERT(!playback_channel->base.active);
     reds_desable_mm_timer();
     playback_channel->base.active = TRUE;
@@ -861,10 +870,13 @@ static void snd_playback_start(PlaybackPlug *plug)
     }
 }
 
-static void snd_playback_stop(PlaybackPlug *plug)
+__visible__ void spice_server_playback_stop(SpicePlaybackInstance *sin)
 {
-    PlaybackChannel *playback_channel = SPICE_CONTAINEROF(plug, PlaybackChannel, plug);
+    SndChannel *channel = sin->st->worker.connection;
+    PlaybackChannel *playback_channel = SPICE_CONTAINEROF(channel, PlaybackChannel, base);
 
+    if (!channel)
+        return;
     ASSERT(playback_channel->base.active);
     reds_enable_mm_timer();
     playback_channel->base.active = FALSE;
@@ -884,27 +896,32 @@ static void snd_playback_stop(PlaybackPlug *plug)
     }
 }
 
-static void snd_playback_get_frame(PlaybackPlug *plug, uint32_t **frame, uint32_t *num_samples)
+__visible__ void spice_server_playback_get_buffer(SpicePlaybackInstance *sin,
+                                                  uint32_t **frame, uint32_t *num_samples)
 {
-    PlaybackChannel *playback_channel = SPICE_CONTAINEROF(plug, PlaybackChannel, plug);
+    SndChannel *channel = sin->st->worker.connection;
+    PlaybackChannel *playback_channel = SPICE_CONTAINEROF(channel, PlaybackChannel, base);
 
-    ASSERT(playback_channel->base.active);
-    if (!playback_channel->free_frames) {
+    if (!channel || !playback_channel->free_frames) {
         *frame = NULL;
         *num_samples = 0;
         return;
     }
+    ASSERT(playback_channel->base.active);
 
     *frame = playback_channel->free_frames->samples;
     playback_channel->free_frames = playback_channel->free_frames->next;
     *num_samples = FRAME_SIZE;
 }
 
-static void snd_playback_put_frame(PlaybackPlug *plug, uint32_t *samples)
+__visible__ void spice_server_playback_put_samples(SpicePlaybackInstance *sin, uint32_t *samples)
 {
-    PlaybackChannel *playback_channel = SPICE_CONTAINEROF(plug, PlaybackChannel, plug);
+    SndChannel *channel = sin->st->worker.connection;
+    PlaybackChannel *playback_channel = SPICE_CONTAINEROF(channel, PlaybackChannel, base);
     AudioFrame *frame;
 
+    if (!channel)
+        return;
     ASSERT(playback_channel->base.active);
 
     if (playback_channel->pending_frame) {
@@ -920,12 +937,11 @@ static void snd_playback_put_frame(PlaybackPlug *plug, uint32_t *samples)
 
 static void on_new_playback_channel(SndWorker *worker)
 {
-    PlaybackChannel *playback_channel = (PlaybackChannel *)worker->connection;
-    PlaybackInterface *interface = (PlaybackInterface *)worker->interface;
+    PlaybackChannel *playback_channel =
+        SPICE_CONTAINEROF(worker->connection, PlaybackChannel, base);
+
     ASSERT(playback_channel);
 
-    playback_channel->plug_ref = interface->plug(interface, &playback_channel->plug,
-                                                 &playback_channel->base.active);
     snd_set_command((SndChannel *)playback_channel, SND_PLAYBACK_MODE_MASK);
     if (!playback_channel->base.migrate && playback_channel->base.active) {
         snd_set_command((SndChannel *)playback_channel, SND_PLAYBACK_CTRL_MASK);
@@ -937,13 +953,11 @@ static void on_new_playback_channel(SndWorker *worker)
 
 static void snd_playback_cleanup(SndChannel *channel)
 {
-    PlaybackChannel *playback_channel = (PlaybackChannel *)channel;
-    PlaybackInterface *interface = (PlaybackInterface *)channel->worker->interface;
+    PlaybackChannel *playback_channel = SPICE_CONTAINEROF(channel, PlaybackChannel, base);
 
     if (playback_channel->base.active) {
         reds_enable_mm_timer();
     }
-    interface->unplug(interface, playback_channel->plug_ref);
 
     celt051_encoder_destroy(playback_channel->celt_encoder);
     celt051_mode_destroy(playback_channel->celt_mode);
@@ -961,7 +975,8 @@ static void snd_set_playback_peer(Channel *channel, RedsStreamContext *peer, int
 
     snd_disconnect_channel(worker->connection);
 
-    if (!(celt_mode = celt051_mode_create(VD_INTERFACE_PLAYBACK_FREQ, VD_INTERFACE_PLAYBACK_CHAN,
+    if (!(celt_mode = celt051_mode_create(SPICE_INTERFACE_PLAYBACK_FREQ,
+                                          SPICE_INTERFACE_PLAYBACK_CHAN,
                                           FRAME_SIZE, &celt_error))) {
         red_printf("create celt mode failed %d", celt_error);
         return;
@@ -987,12 +1002,6 @@ static void snd_set_playback_peer(Channel *channel, RedsStreamContext *peer, int
     snd_playback_free_frame(playback_channel, &playback_channel->frames[1]);
     snd_playback_free_frame(playback_channel, &playback_channel->frames[2]);
 
-    playback_channel->plug.major_version = VD_INTERFACE_PLAYBACK_MAJOR;
-    playback_channel->plug.minor_version = VD_INTERFACE_PLAYBACK_MINOR;
-    playback_channel->plug.start = snd_playback_start;
-    playback_channel->plug.stop = snd_playback_stop;
-    playback_channel->plug.get_frame = snd_playback_get_frame;
-    playback_channel->plug.put_frame = snd_playback_put_frame;
     playback_channel->celt_mode = celt_mode;
     playback_channel->celt_encoder = celt_encoder;
     playback_channel->celt_allowed = num_caps > 0 && (caps[0] & (1 << SPICE_PLAYBACK_CAP_CELT_0_5_1));
@@ -1019,10 +1028,13 @@ static void snd_record_migrate(Channel *channel)
     }
 }
 
-static void snd_record_start(RecordPlug *plug)
+__visible__ void spice_server_record_start(SpiceRecordInstance *sin)
 {
-    RecordChannel *record_channel = SPICE_CONTAINEROF(plug, RecordChannel, plug);
+    SndChannel *channel = sin->st->worker.connection;
+    RecordChannel *record_channel = SPICE_CONTAINEROF(channel, RecordChannel, base);
 
+    if (!channel)
+        return;
     ASSERT(!record_channel->base.active);
     record_channel->base.active = TRUE;
     record_channel->read_pos = record_channel->write_pos = 0;   //todo: improve by
@@ -1035,10 +1047,13 @@ static void snd_record_start(RecordPlug *plug)
     }
 }
 
-static void snd_record_stop(RecordPlug *plug)
+__visible__ void spice_server_record_stop(SpiceRecordInstance *sin)
 {
-    RecordChannel *record_channel = SPICE_CONTAINEROF(plug, RecordChannel, plug);
+    SndChannel *channel = sin->st->worker.connection;
+    RecordChannel *record_channel = SPICE_CONTAINEROF(channel, RecordChannel, base);
 
+    if (!channel)
+        return;
     ASSERT(record_channel->base.active);
     record_channel->base.active = FALSE;
     if (record_channel->base.client_active) {
@@ -1049,28 +1064,32 @@ static void snd_record_stop(RecordPlug *plug)
     }
 }
 
-static uint32_t snd_record_read(RecordPlug *plug, uint32_t num_samples, uint32_t *samples)
+__visible__ uint32_t spice_server_record_get_samples(SpiceRecordInstance *sin,
+                                                     uint32_t *samples, uint32_t bufsize)
 {
-    RecordChannel *record_channel = SPICE_CONTAINEROF(plug, RecordChannel, plug);
+    SndChannel *channel = sin->st->worker.connection;
+    RecordChannel *record_channel = SPICE_CONTAINEROF(channel, RecordChannel, base);
     uint32_t read_pos;
     uint32_t now;
     uint32_t len;
 
+    if (!channel)
+        return 0;
     ASSERT(record_channel->base.active);
 
     if (record_channel->write_pos < RECORD_SAMPLES_SIZE / 2) {
         return 0;
     }
 
-    len = MIN(record_channel->write_pos - record_channel->read_pos, num_samples);
+    len = MIN(record_channel->write_pos - record_channel->read_pos, bufsize);
 
-    if (len < num_samples) {
+    if (len < bufsize) {
         SndWorker *worker = record_channel->base.worker;
         snd_receive(record_channel);
         if (!worker->connection) {
             return 0;
         }
-        len = MIN(record_channel->write_pos - record_channel->read_pos, num_samples);
+        len = MIN(record_channel->write_pos - record_channel->read_pos, bufsize);
     }
 
     read_pos = record_channel->read_pos % RECORD_SAMPLES_SIZE;
@@ -1086,11 +1105,8 @@ static uint32_t snd_record_read(RecordPlug *plug, uint32_t num_samples, uint32_t
 static void on_new_record_channel(SndWorker *worker)
 {
     RecordChannel *record_channel = (RecordChannel *)worker->connection;
-    RecordInterface *interface = (RecordInterface *)worker->interface;
     ASSERT(record_channel);
 
-    record_channel->plug_ref = interface->plug(interface, &record_channel->plug,
-                                               &record_channel->base.active);
     if (!record_channel->base.migrate) {
         if (record_channel->base.active) {
             snd_set_command((SndChannel *)record_channel, SND_RECORD_CTRL_MASK);
@@ -1101,8 +1117,6 @@ static void on_new_record_channel(SndWorker *worker)
 static void snd_record_cleanup(SndChannel *channel)
 {
     RecordChannel *record_channel = (RecordChannel *)channel;
-    RecordInterface *interface = (RecordInterface *)channel->worker->interface;
-    interface->unplug(interface, record_channel->plug_ref);
 
     celt051_decoder_destroy(record_channel->celt_decoder);
     celt051_mode_destroy(record_channel->celt_mode);
@@ -1120,7 +1134,8 @@ static void snd_set_record_peer(Channel *channel, RedsStreamContext *peer, int m
 
     snd_disconnect_channel(worker->connection);
 
-    if (!(celt_mode = celt051_mode_create(VD_INTERFACE_RECORD_FREQ, VD_INTERFACE_RECORD_CHAN,
+    if (!(celt_mode = celt051_mode_create(SPICE_INTERFACE_RECORD_FREQ,
+                                          SPICE_INTERFACE_RECORD_CHAN,
                                           FRAME_SIZE, &celt_error))) {
         red_printf("create celt mode failed %d", celt_error);
         return;
@@ -1144,11 +1159,6 @@ static void snd_set_record_peer(Channel *channel, RedsStreamContext *peer, int m
 
     worker->connection = &record_channel->base;
 
-    record_channel->plug.major_version = VD_INTERFACE_RECORD_MAJOR;
-    record_channel->plug.minor_version = VD_INTERFACE_RECORD_MINOR;
-    record_channel->plug.start = snd_record_start;
-    record_channel->plug.stop = snd_record_stop;
-    record_channel->plug.read = snd_record_read;
     record_channel->celt_mode = celt_mode;
     record_channel->celt_decoder = celt_decoder;
 
@@ -1192,29 +1202,19 @@ static void remove_worker(SndWorker *worker)
     red_printf("not found");
 }
 
-static SndWorker *find_worker(SpiceBaseInterface *interface)
-{
-    SndWorker *worker = workers;
-    while (worker) {
-        if (worker->interface == interface) {
-            break;
-        }
-        worker = worker->next;
-    }
-    return worker;
-}
-
-void snd_attach_playback(PlaybackInterface *interface)
+void snd_attach_playback(SpicePlaybackInstance *sin)
 {
     SndWorker *playback_worker;
-    playback_worker = spice_new0(SndWorker, 1);
+
+    sin->st = spice_new0(SpicePlaybackState, 1);
+    playback_worker = &sin->st->worker;
+
     playback_worker->base.type = SPICE_CHANNEL_PLAYBACK;
     playback_worker->base.link = snd_set_playback_peer;
     playback_worker->base.shutdown = snd_shutdown;
     playback_worker->base.migrate = snd_playback_migrate;
     playback_worker->base.data = NULL;
 
-    playback_worker->interface = &interface->base;
     playback_worker->base.num_caps = 1;
     playback_worker->base.caps = spice_new(uint32_t, 1);
     playback_worker->base.caps[0] = (1 << SPICE_PLAYBACK_CAP_CELT_0_5_1);
@@ -1223,17 +1223,18 @@ void snd_attach_playback(PlaybackInterface *interface)
     reds_register_channel(&playback_worker->base);
 }
 
-void snd_attach_record(RecordInterface *interface)
+void snd_attach_record(SpiceRecordInstance *sin)
 {
     SndWorker *record_worker;
-    record_worker = spice_new0(SndWorker, 1);
+
+    sin->st = spice_new0(SpiceRecordState, 1);
+    record_worker = &sin->st->worker;
+
     record_worker->base.type = SPICE_CHANNEL_RECORD;
     record_worker->base.link = snd_set_record_peer;
     record_worker->base.shutdown = snd_shutdown;
     record_worker->base.migrate = snd_record_migrate;
     record_worker->base.data = NULL;
-
-    record_worker->interface = &interface->base;
 
     record_worker->base.num_caps = 1;
     record_worker->base.caps = spice_new(uint32_t, 1);
@@ -1242,10 +1243,8 @@ void snd_attach_record(RecordInterface *interface)
     reds_register_channel(&record_worker->base);
 }
 
-static void snd_detach_common(SpiceBaseInterface *interface)
+static void snd_detach_common(SndWorker *worker)
 {
-    SndWorker *worker = find_worker(interface);
-
     if (!worker) {
         return;
     }
@@ -1255,17 +1254,18 @@ static void snd_detach_common(SpiceBaseInterface *interface)
 
     free(worker->base.common_caps);
     free(worker->base.caps);
-    free(worker);
 }
 
-void snd_detach_playback(PlaybackInterface *interface)
+void snd_detach_playback(SpicePlaybackInstance *sin)
 {
-    snd_detach_common(&interface->base);
+    snd_detach_common(&sin->st->worker);
+    free(sin->st);
 }
 
-void snd_detach_record(RecordInterface *interface)
+void snd_detach_record(SpiceRecordInstance *sin)
 {
-    snd_detach_common(&interface->base);
+    snd_detach_common(&sin->st->worker);
+    free(sin->st);
 }
 
 void snd_set_playback_compression(int on)

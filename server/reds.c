@@ -4126,23 +4126,23 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
                                   reds->monitor_mode.y_res);
         }
 
-    } else if (strcmp(interface->type, VD_INTERFACE_PLAYBACK) == 0) {
-        red_printf("VD_INTERFACE_PLAYBACK");
-        if (interface->major_version != VD_INTERFACE_PLAYBACK_MAJOR ||
-            interface->minor_version < VD_INTERFACE_PLAYBACK_MINOR) {
+    } else if (strcmp(interface->type, SPICE_INTERFACE_PLAYBACK) == 0) {
+        red_printf("SPICE_INTERFACE_PLAYBACK");
+        if (interface->major_version != SPICE_INTERFACE_PLAYBACK_MAJOR ||
+            interface->minor_version < SPICE_INTERFACE_PLAYBACK_MINOR) {
             red_printf("unsuported playback interface");
             return -1;
         }
-        snd_attach_playback((PlaybackInterface *)interface);
+        snd_attach_playback(SPICE_CONTAINEROF(sin, SpicePlaybackInstance, base));
 
-    } else if (strcmp(interface->type, VD_INTERFACE_RECORD) == 0) {
+    } else if (strcmp(interface->type, SPICE_INTERFACE_RECORD) == 0) {
         red_printf("VD_INTERFACE_RECORD");
-        if (interface->major_version != VD_INTERFACE_RECORD_MAJOR ||
-            interface->minor_version < VD_INTERFACE_RECORD_MINOR) {
+        if (interface->major_version != SPICE_INTERFACE_RECORD_MAJOR ||
+            interface->minor_version < SPICE_INTERFACE_RECORD_MINOR) {
             red_printf("unsuported record interface");
             return -1;
         }
-        snd_attach_record((RecordInterface *)interface);
+        snd_attach_record(SPICE_CONTAINEROF(sin, SpiceRecordInstance, base));
 
     } else if (strcmp(interface->type, VD_INTERFACE_VDI_PORT) == 0) {
         red_printf("VD_INTERFACE_VDI_PORT");
@@ -4191,13 +4191,13 @@ __visible__ int spice_server_remove_interface(SpiceBaseInstance *sin)
             reds_update_mouse_mode();
         }
 
-    } else if (strcmp(interface->type, VD_INTERFACE_PLAYBACK) == 0) {
-        red_printf("remove VD_INTERFACE_PLAYBACK");
-        snd_detach_playback((PlaybackInterface *)interface);
+    } else if (strcmp(interface->type, SPICE_INTERFACE_PLAYBACK) == 0) {
+        red_printf("remove SPICE_INTERFACE_PLAYBACK");
+        snd_detach_playback(SPICE_CONTAINEROF(sin, SpicePlaybackInstance, base));
 
-    } else if (strcmp(interface->type, VD_INTERFACE_RECORD) == 0) {
-        red_printf("remove VD_INTERFACE_RECORD");
-        snd_detach_record((RecordInterface *)interface);
+    } else if (strcmp(interface->type, SPICE_INTERFACE_RECORD) == 0) {
+        red_printf("remove SPICE_INTERFACE_RECORD");
+        snd_detach_record(SPICE_CONTAINEROF(sin, SpiceRecordInstance, base));
 
     } else if (strcmp(interface->type, VD_INTERFACE_VDI_PORT) == 0) {
         red_printf("remove VD_INTERFACE_VDI_PORT");
