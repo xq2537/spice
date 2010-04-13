@@ -479,42 +479,37 @@ static inline void combine_to_pixmap_from_pixmap(const RedDrawable_p* dest,
 
 
     if (pixman_image_get_depth (src_surface) == 1) {
+        pixman_color_t white = { 0xffff, 0xffff, 0xffff, 0xffff };
+        pixman_image_t *solid;
         pixman_image_t *temp;
 
+        /* Create a temporary rgb32 image that is black where mask is 0
+           and white where mask is 1 */
         temp = pixman_image_create_bits(pixman_image_get_depth(dest_surface) == 24 ?
                                         PIXMAN_x8r8g8b8 : PIXMAN_a8r8g8b8,
                                         area.right - area.left,
                                         area.bottom - area.top, NULL, 0);
-
-        /* Copy from dest to temp */
+        solid = pixman_image_create_solid_fill(&white);
         pixman_image_composite32(PIXMAN_OP_SRC,
-                                 dest_surface, NULL, temp,
-                                 area.left + offset.x,
-                                 area.top + offset.y,
-                                 0, 0,
-                                 0, 0,
-                                 area.right - area.left,
-                                 area.bottom - area.top);
-
-        /* rop white over temp */
-        spice_pixman_fill_rect_rop(temp,
-                                   0, 0,
-                                   area.right - area.left,
-                                   area.bottom - area.top,
-                                   0xffffff,
-                                   rop);
-
-        /* copy back using a1 mask */
-        pixman_image_composite32(PIXMAN_OP_SRC,
-                                 temp, src_surface, dest_surface,
+                                 solid, src_surface, temp,
                                  0, 0,
                                  src_x + offset.x,
                                  src_y + offset.y,
-                                 area.left + offset.x,
-                                 area.top + offset.y,
+                                 0, 0,
                                  area.right - area.left,
                                  area.bottom - area.top);
+        pixman_image_unref(solid);
 
+        /* ROP the temp image on the destination */
+        spice_pixman_blit_rop(dest_surface,
+                              temp,
+                              0,
+                              0,
+                              area.left + offset.x,
+                              area.top + offset.y,
+                              area.right - area.left,
+                              area.bottom - area.top,
+                              rop);
         pixman_image_unref(temp);
 
     } else {
