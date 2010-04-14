@@ -36,6 +36,7 @@ void region_clear(QRegion *rgn);
 void region_destroy(QRegion *rgn);
 void region_clone(QRegion *dest, const QRegion *src);
 SpiceRect *region_dup_rects(const QRegion *rgn, uint32_t *num_rects);
+void region_ret_rects(const QRegion *rgn, SpiceRect *rects, uint32_t num_rects);
 
 int region_test(const QRegion *rgn, const QRegion *other_rgn, int query);
 int region_is_valid(const QRegion *rgn);

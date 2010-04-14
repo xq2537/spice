@@ -199,12 +199,19 @@ static void update_client_mouse_allowed()
     }
 }
 
-static void qxl_worker_update_area(QXLWorker *qxl_worker)
+static void qxl_worker_update_area(QXLWorker *qxl_worker, uint32_t surface_id,
+                                   SpiceRect *area, SpiceRect *dirty_rects,
+                                   uint32_t num_dirty_rects, uint32_t clear_dirty_region)
 {
     RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
     RedWorkeMessage message = RED_WORKER_MESSAGE_UPDATE;
 
     write_message(dispatcher->channel, &message);
+    send_data(dispatcher->channel, &surface_id, sizeof(uint32_t));
+    send_data(dispatcher->channel, &area, sizeof(SpiceRect *));
+    send_data(dispatcher->channel, &dirty_rects, sizeof(SpiceRect *));
+    send_data(dispatcher->channel, &num_dirty_rects, sizeof(uint32_t));
+    send_data(dispatcher->channel, &clear_dirty_region, sizeof(uint32_t));
     read_message(dispatcher->channel, &message);
     ASSERT(message == RED_WORKER_MESSAGE_READY);
 }

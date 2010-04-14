@@ -363,6 +363,31 @@ SpiceRect *region_dup_rects(const QRegion *rgn, uint32_t *num_rects)
     return rects;
 }
 
+void region_ret_rects(const QRegion *rgn, SpiceRect *rects, uint32_t num_rects)
+{
+    pixman_box32_t *boxes;
+    int n, i;
+
+    boxes = pixman_region32_rectangles((pixman_region32_t *)rgn, &n);
+    for (i = 0; i < n && i < num_rects; i++) {
+        rects[i].left = boxes[i].x1;
+        rects[i].top = boxes[i].y1;
+        rects[i].right = boxes[i].x2;
+        rects[i].bottom = boxes[i].y2;
+    }
+
+    if (i && i != n) {
+        int x;
+
+        for (x = 0; x < (n - num_rects); ++x) {
+            rects[i - 1].left = MIN(rects[i - 1].left, boxes[i + x].x1);
+            rects[i - 1].top = MIN(rects[i - 1].top, boxes[i + x].y1);
+            rects[i - 1].right = MAX(rects[i - 1].right, boxes[i + x].x2);
+            rects[i - 1].bottom = MAX(rects[i - 1].bottom, boxes[i + x].y2);
+        }
+    }
+}
+
 
 int region_is_equal(const QRegion *rgn1, const QRegion *rgn2)
 {

@@ -885,6 +885,7 @@ typedef struct RedSurface {
     DrawContext context;
 
     Ring depend_on_me;
+    QRegion draw_dirty_region;
 
     //fix me - better handling here
     QXLReleaseInfo *release_info;
@@ -1505,6 +1506,7 @@ static inline void red_destroy_surface(RedWorker *worker, uint32_t surface_id)
                 worker->qxl->release_resource(worker->qxl, release_info_ext);
             }
 
+            region_destroy(&surface->draw_dirty_region);
             surface->context.canvas = NULL;
             red_destroy_surface_item(worker, surface_id);
         }
@@ -4314,6 +4316,8 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
     image_cache_eaging(&worker->image_cache);
 
     worker->preload_group_id = drawable->group_id;
+
+    region_add(&surface->draw_dirty_region, &drawable->qxl_drawable->bbox);
 
     localize_clip(worker, &clip, drawable->group_id);
     switch (drawable->qxl_drawable->type) {
@@ -7961,6 +7965,7 @@ static inline void red_create_surface(RedWorker *worker, uint32_t surface_id, ui
     ring_init(&surface->current_list);
     ring_init(&surface->depend_on_me);
     ring_init(&surface->glz_drawables);
+    region_init(&surface->draw_dirty_region);
     surface->refs = 1;
     if (worker->renderer != RED_RENDERER_INVALID) {
         surface->context.canvas = create_canvas_for_surface(worker, surface, worker->renderer,
@@ -8890,16 +8895,32 @@ static inline void handle_dev_update(RedWorker *worker)
 {
     RedWorkeMessage message;
     const SpiceRect *rect;
-    uint32_t *surface_id;
-    uint32_t _surface_id;
+    SpiceRect *dirty_rects;
+    RedSurface *surface;
+    uint32_t num_dirty_rects;
+    uint32_t surface_id;
+    uint32_t clear_dirty_region;
+
+    receive_data(worker->channel, &surface_id, sizeof(uint32_t));
+    receive_data(worker->channel, &rect, sizeof(SpiceRect *));
+    receive_data(worker->channel, &dirty_rects, sizeof(SpiceRect *));
+    receive_data(worker->channel, &num_dirty_rects, sizeof(uint32_t));
+    receive_data(worker->channel, &clear_dirty_region, sizeof(uint32_t));
 
     flush_display_commands(worker);
 
-    worker->qxl->get_update_area(worker->qxl, &rect, &surface_id);
     ASSERT(worker->running);
-    _surface_id = *surface_id;
-    validate_surface(worker, _surface_id);
-    red_update_area(worker, rect, _surface_id);
+
+    validate_surface(worker, surface_id);
+    red_update_area(worker, rect, surface_id);
+
+    surface = &worker->surfaces[surface_id];
+    region_ret_rects(&surface->draw_dirty_region, dirty_rects, num_dirty_rects);
+
+    if (clear_dirty_region) {
+        region_clear(&surface->draw_dirty_region);
+    }
+
     message = RED_WORKER_MESSAGE_READY;
     write_message(worker->channel, &message);
 }

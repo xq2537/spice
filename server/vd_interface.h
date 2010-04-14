@@ -104,6 +104,7 @@ union QXLReleaseInfo;
 struct QXLReleaseInfoExt;
 struct QXLCommand;
 struct QXLCommandExt;
+struct SpiceRect;
 struct QXLWorker {
     uint32_t minor_version;
     uint32_t major_version;
@@ -113,7 +114,9 @@ struct QXLWorker {
     void (*load)(QXLWorker *worker);
     void (*start)(QXLWorker *worker);
     void (*stop)(QXLWorker *worker);
-    void (*update_area)(QXLWorker *worker);
+    void (*update_area)(QXLWorker *qxl_worker, uint32_t surface_id,
+                       struct SpiceRect *area, struct SpiceRect *dirty_rects,
+                       uint32_t num_dirty_rects, uint32_t clear_dirty_region);
     void (*add_memslot)(QXLWorker *worker, QXLDevMemSlot *slot);
     void (*del_memslot)(QXLWorker *worker, uint32_t slot_group_id, uint32_t slot_id);
     void (*reset_memslots)(QXLWorker *worker);
@@ -199,7 +202,6 @@ struct QXLInterface {
     void (*release_resource)(QXLInterface *qxl, struct QXLReleaseInfoExt release_info);
     int (*get_cursor_command)(QXLInterface *qxl, struct QXLCommandExt *cmd);
     int (*req_cursor_notification)(QXLInterface *qxl);
-    void (*get_update_area)(QXLInterface *qxl, const struct SpiceRect **rect, uint32_t **surface_id);
     void (*notify_update)(QXLInterface *qxl, uint32_t update_id);
     void (*set_save_data)(QXLInterface *qxl, void *data, int size);
     void *(*get_save_data)(QXLInterface *qxl);
