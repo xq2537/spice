@@ -127,28 +127,17 @@ void MJpegDecoder::convert_scanline(void)
     }
 }
 
-bool MJpegDecoder::decode_data(uint8_t *data, size_t length)
+void MJpegDecoder::append_data(uint8_t *data, size_t length)
 {
     uint8_t *new_data;
     size_t data_len;
-    int res;
-    bool got_picture;
 
-    got_picture = false;
-
-    if (_extra_skip > 0) {
-        if (_extra_skip >= length) {
-            _extra_skip -= length;
-            return false;
-        } else {
-            data += _extra_skip;
-            length -= _extra_skip;
-            _extra_skip = 0;
-        }
+    if (length == 0) {
+        return;
     }
 
     if (_data_size - _data_end < length) {
-        /* Can't fit in tail */
+        /* Can't fits in tail, need to make space */
 
         data_len = _data_end - _data_start;
         if (_data_size - data_len < length) {
@@ -168,9 +157,38 @@ bool MJpegDecoder::decode_data(uint8_t *data, size_t length)
 
     memcpy (_data + _data_end, data, length);
     _data_end += length;
+}
 
-    _jsrc.next_input_byte = _data + _data_start;
-    _jsrc.bytes_in_buffer = _data_end - _data_start;
+bool MJpegDecoder::decode_data(uint8_t *data, size_t length)
+{
+    bool got_picture;
+    int res;
+
+    got_picture = false;
+
+    if (_extra_skip > 0) {
+        if (_extra_skip >= length) {
+            _extra_skip -= length;
+            return false;
+        } else {
+            data += _extra_skip;
+            length -= _extra_skip;
+            _extra_skip = 0;
+        }
+    }
+
+    if (_data_end - _data_start == 0) {
+        /* No current data, pass in without copy */
+
+        _jsrc.next_input_byte = data;
+        _jsrc.bytes_in_buffer = length;
+    } else {
+        /* Need to combine the new and old data */
+        append_data(data, length);
+
+        _jsrc.next_input_byte = _data + _data_start;
+        _jsrc.bytes_in_buffer = _data_end - _data_start;
+    }
 
     switch (_state) {
     case STATE_READ_HEADER:
@@ -232,8 +250,16 @@ bool MJpegDecoder::decode_data(uint8_t *data, size_t length)
         break;
     }
 
-    _data_start = _jsrc.next_input_byte - _data;
-    _data_end = _data_start + _jsrc.bytes_in_buffer;
+    if (_jsrc.next_input_byte == data) {
+        /* We read directly from the user, store remaining data in
+           buffer for next time */
+        size_t read_size = _jsrc.next_input_byte - data;
+
+        append_data(data + read_size, length - read_size);
+    } else {
+        _data_start = _jsrc.next_input_byte - _data;
+        _data_end = _data_start + _jsrc.bytes_in_buffer;
+    }
 
     return got_picture;
 }
