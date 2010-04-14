@@ -47,6 +47,7 @@ private:
     friend void mjpeg_skip_input_data(j_decompress_ptr cinfo, long num_bytes);
 
     void convert_scanline(void);
+    void append_data(uint8_t *data, size_t length);
 
     struct jpeg_decompress_struct _cinfo;
     struct jpeg_error_mgr _jerr;
