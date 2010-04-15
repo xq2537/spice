@@ -3230,7 +3230,7 @@ static void reds_init_ssl()
     return_code = SSL_CTX_use_PrivateKey_file(reds->ctx, ssl_parameters.private_key_file,
                                               SSL_FILETYPE_PEM);
     if (return_code != 1) {
-        red_error("Could not user private key file");
+        red_error("Could not use private key file");
     }
 
     /* Load the CAs we trust*/
