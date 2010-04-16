@@ -47,7 +47,7 @@ struct SpiceBaseInterface {
     uint32_t minor_version;
 };
 struct SpiceBaseInstance {
-    SpiceBaseInterface *sif;
+    const SpiceBaseInterface *sif;
 };
 
 #define SPICE_INTERFACE_CORE "core"

@@ -4039,7 +4039,7 @@ static void attach_to_red_agent(VDIPortInterface *interface)
 __visible__ int spice_server_add_interface(SpiceServer *s,
                                            SpiceBaseInstance *sin)
 {
-    SpiceBaseInterface *interface = sin->sif;
+    const SpiceBaseInterface *interface = sin->sif;
 
     ASSERT(reds == s);
 
@@ -4182,7 +4182,7 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
 
 __visible__ int spice_server_remove_interface(SpiceBaseInstance *sin)
 {
-    SpiceBaseInterface *interface = sin->sif;
+    const SpiceBaseInterface *interface = sin->sif;
 
     if (strcmp(interface->type, SPICE_INTERFACE_TABLET) == 0) {
         red_printf("remove SPICE_INTERFACE_TABLET");
