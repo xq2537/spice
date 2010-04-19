@@ -2016,7 +2016,9 @@ static void cleanup(void)
     }
     if (fb_config) {
         for (i = 0; i < ScreenCount(x_display); ++i) {
-            XFree(fb_config[i]);
+            if (fb_config[i]) {
+                XFree(fb_config[i]);
+            }
         }
         delete fb_config;
         fb_config = NULL;
@@ -2209,22 +2211,29 @@ void Platform::init()
         };
 
         for (int i = 0; i < ScreenCount(x_display); ++i) {
-            if (!(fb_config[i] = glXChooseFBConfig(x_display, i, attrlist, &num_configs))) {
-                vinfo[i] = get_x_vis_info(i);
-            } else {
+            fb_config[i] = glXChooseFBConfig(x_display, i, attrlist, &num_configs);
+            if (fb_config[i] != NULL) {
                 ASSERT(num_configs > 0);
                 vinfo[i] = glXGetVisualFromFBConfig(x_display, fb_config[i][0]);
             }
 
-            if (!vinfo[i]) {
-                THROW("XGetVisualInfo failed");
+            if (vinfo[i] == NULL) {
+                if (fb_config[i]) {
+                    XFree(fb_config[i]);
+                    fb_config[i] = NULL;
+                }
+                vinfo[i] = get_x_vis_info(i);
             }
         }
     } else {
         for (int i = 0; i < ScreenCount(x_display); ++i) {
-            if (!(vinfo[i] = get_x_vis_info(i))) {
-                THROW("XGetVisualInfo failed");
-            }
+            vinfo[i] = get_x_vis_info(i);
+        }
+    }
+
+    for (int i = 0; i < ScreenCount(x_display); ++i) {
+        if (vinfo[i] == NULL) {
+            THROW("Unable to find a visual for screen");
         }
     }
 
