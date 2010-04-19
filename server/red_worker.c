@@ -6698,7 +6698,7 @@ static inline uint32_t __fill_iovec(RedWorker *worker, BufDescriptor *buf, int s
 
 static inline void fill_iovec(RedChannel *channel, struct iovec *vec, int *vec_size)
 {
-    int vec_index = 0;
+    int rc, vec_index = 0;
     uint32_t pos = channel->send_data.pos;
 
     ASSERT(channel->send_data.size != pos && channel->send_data.size > pos);
@@ -6709,7 +6709,13 @@ static inline void fill_iovec(RedChannel *channel, struct iovec *vec, int *vec_s
 
         buf = find_buf(channel, pos, &buf_offset);
         ASSERT(buf);
-        pos += __fill_iovec(channel->worker, buf, buf_offset, vec, &vec_index);
+        rc = __fill_iovec(channel->worker, buf, buf_offset, vec, &vec_index);
+        if (rc == 0) {
+            fprintf(stderr, "%s: got only %d of %d bytes\n", __FUNCTION__, 
+                    pos, channel->send_data.size);
+            abort();
+        }
+        pos += rc;
     } while (vec_index < MAX_SEND_VEC && pos != channel->send_data.size);
     *vec_size = vec_index;
 }
