@@ -20,6 +20,13 @@
 
 #include "rop3.h"
 
+#ifndef ASSERT
+#define ASSERT(x) if (!(x)) {                               \
+    printf("%s: ASSERT %s failed\n", __FUNCTION__, #x);     \
+    abort();                                                \
+}
+#endif
+
 #ifndef WARN
 #define WARN(x) printf("warning: %s\n", x)
 #endif
@@ -35,9 +42,12 @@ typedef void (*rop3_test_handler_t)();
 
 #define ROP3_NUM_OPS 256
 
-static rop3_with_pattern_handler_t rop3_with_pattern_handlers[ROP3_NUM_OPS];
-static rop3_with_color_handler_t rop3_with_color_handlers[ROP3_NUM_OPS];
-static rop3_test_handler_t rop3_test_handlers[ROP3_NUM_OPS];
+static rop3_with_pattern_handler_t rop3_with_pattern_handlers_32[ROP3_NUM_OPS];
+static rop3_with_pattern_handler_t rop3_with_pattern_handlers_16[ROP3_NUM_OPS];
+static rop3_with_color_handler_t rop3_with_color_handlers_32[ROP3_NUM_OPS];
+static rop3_with_color_handler_t rop3_with_color_handlers_16[ROP3_NUM_OPS];
+static rop3_test_handler_t rop3_test_handlers_32[ROP3_NUM_OPS];
+static rop3_test_handler_t rop3_test_handlers_16[ROP3_NUM_OPS];
 
 
 static void default_rop3_with_pattern_handler(pixman_image_t *d, pixman_image_t *s,
@@ -57,13 +67,14 @@ static void default_rop3_test_handler()
 {
 }
 
-#define ROP3_HANDLERS(name, formula, index)                                                     \
-static void rop3_handle_p_##name(pixman_image_t *d, pixman_image_t *s, SpicePoint *src_pos,     \
-                                      pixman_image_t *p, SpicePoint *pat_pos)                   \
+#define ROP3_HANDLERS_DEPTH(name, formula, index, depth)                            \
+static void rop3_handle_p##depth##_##name(pixman_image_t *d, pixman_image_t *s,                 \
+                                          SpicePoint *src_pos,                                  \
+                                          pixman_image_t *p, SpicePoint *pat_pos)               \
 {                                                                                               \
     int width = pixman_image_get_width(d);                                                      \
     int height = pixman_image_get_height(d);                                                    \
-    uint8_t *dest_line = (uint8_t *)pixman_image_get_data(d);		                        \
+    uint8_t *dest_line = (uint8_t *)pixman_image_get_data(d);                                   \
     int dest_stride = pixman_image_get_stride(d);                                               \
     uint8_t *end_line = dest_line + height * dest_stride;                                       \
                                                                                                 \
@@ -75,18 +86,19 @@ static void rop3_handle_p_##name(pixman_image_t *d, pixman_image_t *s, SpicePoin
                                                                                                 \
     int src_stride = pixman_image_get_stride(s);                                                \
     uint8_t *src_line;                                                                          \
-    src_line = (uint8_t *)pixman_image_get_data(s) + src_pos->y * src_stride + (src_pos->x << 2); \
+    src_line = (uint8_t *)pixman_image_get_data(s) + src_pos->y * src_stride + (src_pos->x * depth / 8); \
                                                                                                 \
     for (; dest_line < end_line; dest_line += dest_stride, src_line += src_stride) {            \
-        uint32_t *dest = (uint32_t *)dest_line;                                                 \
-        uint32_t *end = dest + width;                                                           \
-        uint32_t *src = (uint32_t *)src_line;                                                   \
+        uint##depth##_t *dest = (uint##depth##_t *)dest_line;                                   \
+        uint##depth##_t *end = dest + width;                                                    \
+        uint##depth##_t *src = (uint##depth##_t *)src_line;                                     \
                                                                                                 \
         int pat_h_offset = pat_pos->x;                                                          \
                                                                                                 \
         for (; dest < end; dest++, src++) {                                                     \
-            uint32_t *pat;                                                                      \
-            pat  = (uint32_t *)(pat_base + pat_v_offset * pat_stride + (pat_h_offset << 2));    \
+            uint##depth##_t *pat;                                                               \
+            pat  = (uint##depth##_t *)                                                          \
+                        (pat_base + pat_v_offset * pat_stride + (pat_h_offset * depth / 8));    \
             *dest = formula;                                                                    \
             pat_h_offset = (pat_h_offset + 1) % pat_width;                                      \
         }                                                                                       \
@@ -95,31 +107,34 @@ static void rop3_handle_p_##name(pixman_image_t *d, pixman_image_t *s, SpicePoin
     }                                                                                           \
 }                                                                                               \
                                                                                                 \
-static void rop3_handle_c_##name(pixman_image_t *d, pixman_image_t *s, SpicePoint *src_pos,     \
-                                   uint32_t rgb)                                                \
+static void rop3_handle_c##depth##_##name(pixman_image_t *d, pixman_image_t *s,                 \
+                                          SpicePoint *src_pos,                                  \
+                                          uint32_t rgb)                                         \
 {                                                                                               \
     int width = pixman_image_get_width(d);                                                      \
     int height = pixman_image_get_height(d);                                                    \
     uint8_t *dest_line = (uint8_t *)pixman_image_get_data(d);                                   \
     int dest_stride = pixman_image_get_stride(d);                                               \
     uint8_t *end_line = dest_line + height * dest_stride;                                       \
-    uint32_t *pat = &rgb;                                                                       \
+    uint##depth##_t _pat = rgb;                                                                \
+    uint##depth##_t *pat = &_pat;                                                               \
                                                                                                 \
     int src_stride = pixman_image_get_stride(s);                                                \
     uint8_t *src_line;                                                                          \
-    src_line = (uint8_t *)pixman_image_get_data(s) + src_pos->y * src_stride + (src_pos->x << 2); \
+    src_line = (uint8_t *)                                                                      \
+        pixman_image_get_data(s) + src_pos->y * src_stride + (src_pos->x * depth / 8);          \
                                                                                                 \
     for (; dest_line < end_line; dest_line += dest_stride, src_line += src_stride) {            \
-        uint32_t *dest = (uint32_t *)dest_line;                                                 \
-        uint32_t *end = dest + width;                                                           \
-        uint32_t *src = (uint32_t *)src_line;                                                   \
+        uint##depth##_t *dest = (uint##depth##_t *)dest_line;                                   \
+        uint##depth##_t *end = dest + width;                                                    \
+        uint##depth##_t *src = (uint##depth##_t *)src_line;                                     \
         for (; dest < end; dest++, src++) {                                                     \
             *dest = formula;                                                                    \
         }                                                                                       \
     }                                                                                           \
 }                                                                                               \
                                                                                                 \
-static void rop3_test_##name()                                                                  \
+static void rop3_test##depth##_##name()                                                         \
 {                                                                                               \
     uint8_t d = 0xaa;                                                                           \
     uint8_t s = 0xcc;                                                                           \
@@ -133,6 +148,10 @@ static void rop3_test_##name()                                                  
         printf("%s: failed, result is 0x%x expect 0x%x\n", __FUNCTION__, d, index);             \
     }                                                                                           \
 }
+
+#define ROP3_HANDLERS(name, formula, index) \
+    ROP3_HANDLERS_DEPTH(name, formula, index, 32)  \
+    ROP3_HANDLERS_DEPTH(name, formula, index, 16)
 
 ROP3_HANDLERS(DPSoon, ~(*pat | *src | *dest), 0x01);
 ROP3_HANDLERS(DPSona, ~(*pat | *src) & *dest, 0x02);
@@ -354,11 +373,13 @@ ROP3_HANDLERS(PSDnoo, ~*dest | *src | *pat, 0xfd);
 ROP3_HANDLERS(DPSoo, *src | *pat | *dest, 0xfe);
 
 
-
 #define ROP3_FILL_HANDLERS(op, index)                       \
-    rop3_with_pattern_handlers[index] = rop3_handle_p_##op; \
-    rop3_with_color_handlers[index] = rop3_handle_c_##op;   \
-    rop3_test_handlers[index] = rop3_test_##op;
+    rop3_with_pattern_handlers_32[index] = rop3_handle_p32_##op; \
+    rop3_with_pattern_handlers_16[index] = rop3_handle_p16_##op; \
+    rop3_with_color_handlers_32[index] = rop3_handle_c32_##op;   \
+    rop3_with_color_handlers_16[index] = rop3_handle_c16_##op;   \
+    rop3_test_handlers_32[index] = rop3_test32_##op;             \
+    rop3_test_handlers_16[index] = rop3_test16_##op;
 
 void rop3_init()
 {
@@ -371,9 +392,12 @@ void rop3_init()
     need_init = 0;
 
     for (i = 0; i < ROP3_NUM_OPS; i++) {
-        rop3_with_pattern_handlers[i] = default_rop3_with_pattern_handler;
-        rop3_with_color_handlers[i] = default_rop3_withe_color_handler;
-        rop3_test_handlers[i] = default_rop3_test_handler;
+        rop3_with_pattern_handlers_32[i] = default_rop3_with_pattern_handler;
+        rop3_with_pattern_handlers_16[i] = default_rop3_with_pattern_handler;
+        rop3_with_color_handlers_32[i] = default_rop3_withe_color_handler;
+        rop3_with_color_handlers_16[i] = default_rop3_withe_color_handler;
+        rop3_test_handlers_32[i] = default_rop3_test_handler;
+        rop3_test_handlers_16[i] = default_rop3_test_handler;
     }
 
     ROP3_FILL_HANDLERS(DPSoon, 0x01);
@@ -596,19 +620,38 @@ void rop3_init()
     ROP3_FILL_HANDLERS(DPSoo, 0xfe);
 
     for (i = 0; i < ROP3_NUM_OPS; i++) {
-        rop3_test_handlers[i]();
+        rop3_test_handlers_32[i]();
+        rop3_test_handlers_16[i]();
     }
 }
 
 void do_rop3_with_pattern(uint8_t rop3, pixman_image_t *d, pixman_image_t *s, SpicePoint *src_pos,
                           pixman_image_t *p, SpicePoint *pat_pos)
 {
-    rop3_with_pattern_handlers[rop3](d, s, src_pos, p, pat_pos);
+    int bpp;
+
+    bpp = spice_pixman_image_get_bpp(d);
+    ASSERT (bpp == spice_pixman_image_get_bpp(s));
+    ASSERT (bpp == spice_pixman_image_get_bpp(p));
+
+    if (bpp == 32) {
+        rop3_with_pattern_handlers_32[rop3](d, s, src_pos, p, pat_pos);
+    } else {
+        rop3_with_pattern_handlers_16[rop3](d, s, src_pos, p, pat_pos);
+    }
 }
 
 void do_rop3_with_color(uint8_t rop3, pixman_image_t *d, pixman_image_t *s, SpicePoint *src_pos,
                         uint32_t rgb)
 {
-    rop3_with_color_handlers[rop3](d, s, src_pos, rgb);
-}
+    int bpp;
 
+    bpp = spice_pixman_image_get_bpp(d);
+    ASSERT (bpp == spice_pixman_image_get_bpp(s));
+
+    if (bpp == 32) {
+        rop3_with_color_handlers_32[rop3](d, s, src_pos, rgb);
+    } else {
+        rop3_with_color_handlers_16[rop3](d, s, src_pos, rgb);
+    }
+}
