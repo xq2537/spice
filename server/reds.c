@@ -59,7 +59,7 @@ static MigrationInterface *mig = NULL;
 static SpiceKbdInstance *keyboard = NULL;
 static SpiceMouseInstance *mouse = NULL;
 static SpiceTabletInstance *tablet = NULL;
-static VDIPortInterface *vdagent = NULL;
+static SpiceVDIPortInstance *vdagent = NULL;
 
 #define MIGRATION_NOTIFY_SPICE_KEY "spice_mig_ext"
 
@@ -176,8 +176,7 @@ typedef struct __attribute__ ((__packed__)) VDIChunkHeader {
 } VDIChunkHeader;
 
 typedef struct VDIPortState {
-    VDIPortPlug plug;
-    VDObjectRef plug_ref;
+    int connected;
     uint32_t plug_generation;
 
     uint32_t num_tokens;
@@ -743,10 +742,13 @@ static void reds_disconnect()
     reds->disconnecting = TRUE;
     reds_reset_outgoing();
 
-    if (reds->agent_state.plug_ref != INVALID_VD_OBJECT_REF) {
-        ASSERT(vdagent);
-        vdagent->unplug(vdagent, reds->agent_state.plug_ref);
-        reds->agent_state.plug_ref = INVALID_VD_OBJECT_REF;
+    if (reds->agent_state.connected) {
+        SpiceVDIPortInterface *sif;
+        sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceVDIPortInterface, base);
+        reds->agent_state.connected = 0;
+        if (sif->state) {
+            sif->state(vdagent, reds->agent_state.connected);
+        }
         reds_reset_vdp();
     }
 
@@ -1122,18 +1124,22 @@ static void reds_send_agent_disconnected()
 
 static void reds_agent_remove()
 {
-    VDIPortInterface *interface = vdagent;
+    SpiceVDIPortInstance *sin = vdagent;
+    SpiceVDIPortInterface *sif;
 
     vdagent = NULL;
     reds_update_mouse_mode();
 
-    if (!reds->peer || !interface) {
+    if (!reds->peer || !sin) {
         return;
     }
 
-    ASSERT(reds->agent_state.plug_ref != INVALID_VD_OBJECT_REF);
-    interface->unplug(interface, reds->agent_state.plug_ref);
-    reds->agent_state.plug_ref = INVALID_VD_OBJECT_REF;
+    ASSERT(reds->agent_state.connected)
+    sif = SPICE_CONTAINEROF(sin->base.sif, SpiceVDIPortInterface, base);
+    reds->agent_state.connected = 0;
+    if (sif->state) {
+        sif->state(sin, reds->agent_state.connected);
+    }
 
     if (reds->mig_target) {
         return;
@@ -1164,21 +1170,23 @@ static void reds_send_tokens()
 static int write_to_vdi_port()
 {
     VDIPortState *state = &reds->agent_state;
+    SpiceVDIPortInterface *sif;
     RingItem *ring_item;
     VDIPortBuf *buf;
     int total = 0;
     int n;
 
-    if (reds->agent_state.plug_ref == INVALID_VD_OBJECT_REF || reds->mig_target) {
+    if (!reds->agent_state.connected || reds->mig_target) {
         return 0;
     }
 
-    for (;;) {
+    sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceVDIPortInterface, base);
+    while (reds->agent_state.connected) {
         if (!(ring_item = ring_get_tail(&state->write_queue))) {
             break;
         }
         buf = (VDIPortBuf *)ring_item;
-        n = vdagent->write(vdagent, state->plug_ref, buf->now, buf->write_len);
+        n = sif->write(vdagent, buf->now, buf->write_len);
         if (n == 0) {
             break;
         }
@@ -1217,18 +1225,20 @@ static void dispatch_vdi_port_data(int port, VDIReadBuf *buf)
 static int read_from_vdi_port()
 {
     VDIPortState *state = &reds->agent_state;
+    SpiceVDIPortInterface *sif;
     VDIReadBuf *dispatch_buf;
     int total = 0;
     int n;
 
-    if (reds->mig_target) {
+    if (!reds->agent_state.connected || reds->mig_target) {
         return 0;
     }
 
-    while (reds->agent_state.plug_ref != INVALID_VD_OBJECT_REF) {
+    sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceVDIPortInterface, base);
+    while (reds->agent_state.connected) {
         switch (state->read_state) {
         case VDI_PORT_READ_STATE_READ_HADER:
-            n = vdagent->read(vdagent, state->plug_ref, state->recive_pos, state->recive_len);
+            n = sif->read(vdagent, state->recive_pos, state->recive_len);
             if (!n) {
                 return total;
             }
@@ -1262,7 +1272,7 @@ static int read_from_vdi_port()
             state->read_state = VDI_PORT_READ_STATE_READ_DATA;
         }
         case VDI_PORT_READ_STATE_READ_DATA:
-            n = vdagent->read(vdagent, state->plug_ref, state->recive_pos, state->recive_len);
+            n = sif->read(vdagent, state->recive_pos, state->recive_len);
             if (!n) {
                 return total;
             }
@@ -1287,7 +1297,7 @@ static int read_from_vdi_port()
     return total;
 }
 
-static void reds_agent_wakeup(VDIPortPlug *plug)
+__visible__ void spice_server_vdi_port_wakeup(SpiceVDIPortInstance *sin)
 {
     while (write_to_vdi_port() || read_from_vdi_port());
 }
@@ -1385,7 +1395,7 @@ static void main_channel_send_migrate_data_item(RedsOutItem *in_item, struct iov
     item->data.serial = reds->serial;
     item->data.ping_id = reds->ping_id;
 
-    item->data.agent_connected = !!state->plug_ref;
+    item->data.agent_connected = !!state->connected;
     item->data.client_agent_started = state->client_agent_started;
     item->data.num_client_tokens = state->num_client_tokens;
     item->data.send_tokens = state->send_tokens;
@@ -1634,13 +1644,13 @@ static void main_channel_recive_migrate_data(MainMigrateData *data, uint8_t *end
 
 
     if (!data->agent_connected) {
-        if (state->plug_ref) {
+        if (state->connected) {
             reds_send_agent_connected();
         }
         return;
     }
 
-    if (state->plug_ref == INVALID_VD_OBJECT_REF) {
+    if (!state->connected) {
         reds_send_agent_disconnected();
         return;
     }
@@ -2054,9 +2064,11 @@ static void reds_handle_main_link(RedLinkInfo *link)
     reds_show_new_channel(link);
     __reds_release_link(link);
     if (vdagent) {
-        reds->agent_state.plug_ref = vdagent->plug(vdagent, &reds->agent_state.plug);
-        if (reds->agent_state.plug_ref == INVALID_VD_OBJECT_REF) {
-            PANIC("vdagent plug failed");
+        SpiceVDIPortInterface *sif;
+        sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceVDIPortInterface, base);
+        reds->agent_state.connected = 1;
+        if (sif->state) {
+            sif->state(vdagent, reds->agent_state.connected);
         }
         reds->agent_state.plug_generation++;
     }
@@ -4017,16 +4029,21 @@ static void mm_timer_proc(void *opaque)
     core->timer_start(reds->mm_timer, MM_TIMER_GRANULARITY_MS);
 }
 
-static void attach_to_red_agent(VDIPortInterface *interface)
+static void attach_to_red_agent(SpiceVDIPortInstance *sin)
 {
     VDIPortState *state = &reds->agent_state;
+    SpiceVDIPortInterface *sif;
 
-    vdagent = interface;
+    vdagent = sin;
     reds_update_mouse_mode();
     if (!reds->peer) {
         return;
     }
-    state->plug_ref = vdagent->plug(vdagent, &state->plug);
+    sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceVDIPortInterface, base);
+    state->connected = 1;
+    if (sif->state) {
+        sif->state(vdagent, state->connected);
+    }
     reds->agent_state.plug_generation++;
 
     if (reds->mig_target) {
@@ -4144,18 +4161,18 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
         }
         snd_attach_record(SPICE_CONTAINEROF(sin, SpiceRecordInstance, base));
 
-    } else if (strcmp(interface->type, VD_INTERFACE_VDI_PORT) == 0) {
-        red_printf("VD_INTERFACE_VDI_PORT");
+    } else if (strcmp(interface->type, SPICE_INTERFACE_VDI_PORT) == 0) {
+        red_printf("SPICE_INTERFACE_VDI_PORT");
         if (vdagent) {
             red_printf("vdi port already attached");
             return -1;
         }
-        if (interface->major_version != VD_INTERFACE_VDI_PORT_MAJOR ||
-            interface->minor_version < VD_INTERFACE_VDI_PORT_MINOR) {
+        if (interface->major_version != SPICE_INTERFACE_VDI_PORT_MAJOR ||
+            interface->minor_version < SPICE_INTERFACE_VDI_PORT_MINOR) {
             red_printf("unsuported vdi port interface");
             return -1;
         }
-        attach_to_red_agent((VDIPortInterface *)interface);
+        attach_to_red_agent(SPICE_CONTAINEROF(sin, SpiceVDIPortInstance, base));
 
     } else if (strcmp(interface->type, VD_INTERFACE_NET_WIRE) == 0) {
 #ifdef HAVE_SLIRP
@@ -4199,9 +4216,9 @@ __visible__ int spice_server_remove_interface(SpiceBaseInstance *sin)
         red_printf("remove SPICE_INTERFACE_RECORD");
         snd_detach_record(SPICE_CONTAINEROF(sin, SpiceRecordInstance, base));
 
-    } else if (strcmp(interface->type, VD_INTERFACE_VDI_PORT) == 0) {
-        red_printf("remove VD_INTERFACE_VDI_PORT");
-        if (interface == (SpiceBaseInterface *)vdagent) {
+    } else if (strcmp(interface->type, SPICE_INTERFACE_VDI_PORT) == 0) {
+        red_printf("remove SPICE_INTERFACE_VDI_PORT");
+        if (sin == &vdagent->base) {
             reds_agent_remove();
         }
 
@@ -4294,10 +4311,6 @@ static void init_vd_agent_resources()
         ring_item_init(&buf->out_item.link);
         ring_add(&reds->agent_state.read_bufs, &buf->out_item.link);
     }
-
-    state->plug.major_version = VD_INTERFACE_VDI_PORT_MAJOR;
-    state->plug.minor_version = VD_INTERFACE_VDI_PORT_MINOR;
-    state->plug.wakeup = reds_agent_wakeup;
 }
 
 const char *version_string = VERSION;

@@ -367,26 +367,27 @@ void spice_server_record_stop(SpiceRecordInstance *sin);
 uint32_t spice_server_record_get_samples(SpiceRecordInstance *sin,
                                          uint32_t *samples, uint32_t bufsize);
 
-#define VD_INTERFACE_VDI_PORT "vdi_port"
-#define VD_INTERFACE_VDI_PORT_MAJOR 1
-#define VD_INTERFACE_VDI_PORT_MINOR 1
-typedef struct VDIPortInterface VDIPortInterface;
+#define SPICE_INTERFACE_VDI_PORT "vdi_port"
+#define SPICE_INTERFACE_VDI_PORT_MAJOR 1
+#define SPICE_INTERFACE_VDI_PORT_MINOR 1
+typedef struct SpiceVDIPortInterface SpiceVDIPortInterface;
+typedef struct SpiceVDIPortInstance SpiceVDIPortInstance;
+typedef struct SpiceVDIPortState SpiceVDIPortState;
 
-typedef struct VDIPortPlug VDIPortPlug;
-struct VDIPortPlug {
-    uint32_t minor_version;
-    uint32_t major_version;
-    void (*wakeup)(VDIPortPlug *plug);
-};
-
-struct VDIPortInterface {
+struct SpiceVDIPortInterface {
     SpiceBaseInterface base;
 
-    VDObjectRef (*plug)(VDIPortInterface *port, VDIPortPlug* plug);
-    void (*unplug)(VDIPortInterface *port, VDObjectRef plug);
-    int (*write)(VDIPortInterface *port, VDObjectRef plug, const uint8_t *buf, int len);
-    int (*read)(VDIPortInterface *port, VDObjectRef plug, uint8_t *buf, int len);
+    void (*state)(SpiceVDIPortInstance *sin, int connected);
+    int (*write)(SpiceVDIPortInstance *sin, const uint8_t *buf, int len);
+    int (*read)(SpiceVDIPortInstance *sin, uint8_t *buf, int len);
 };
+
+struct SpiceVDIPortInstance {
+    SpiceBaseInstance base;
+    SpiceVDIPortState *st;
+};
+
+void spice_server_vdi_port_wakeup(SpiceVDIPortInstance *sin);
 
 #define VD_INTERFACE_NET_WIRE "net_wire"
 #define VD_INTERFACE_NET_WIRE_MAJOR 1
