@@ -21,11 +21,11 @@
 #include "utils.h"
 
 RedPixmap::RedPixmap(int width, int height, RedPixmap::Format format,
-                     bool top_bottom, rgb32_t* pallet)
+                     bool top_bottom)
     : _format (format)
     , _width (width)
     , _height (height)
-    , _stride (SPICE_ALIGN(width * (_format == RedPixmap::A1 ? 1: 32), 32) / 8)
+    , _stride (SPICE_ALIGN(width * format_to_bpp(format), 32) / 8)
     , _top_bottom (top_bottom)
     , _data (NULL)
 {

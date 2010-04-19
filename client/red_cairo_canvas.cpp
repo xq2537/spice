@@ -25,42 +25,52 @@
 #include "region.h"
 #include "red_pixmap_cairo.h"
 
-CCanvas::CCanvas(PixmapCache& pixmap_cache, PaletteCache& palette_cache,
+CCanvas::CCanvas(bool onscreen,
+                 int width, int height, uint32_t format, RedWindow *win,
+                 PixmapCache& pixmap_cache, PaletteCache& palette_cache,
                  GlzDecoderWindow &glz_decoder_window, CSurfaces& csurfaces)
     : Canvas (pixmap_cache, palette_cache, glz_decoder_window, csurfaces)
     , _pixmap (0)
 {
+    if (onscreen) {
+        _pixmap = new RedPixmapCairo(width, height,
+                                     RedPixmap::format_from_surface(format),
+                                     true, win);
+        _canvas = canvas_create_for_data(width, height, format,
+                                         _pixmap->get_data(),
+                                         _pixmap->get_stride(),
+                                         &pixmap_cache.base,
+                                         &palette_cache.base,
+                                         &csurfaces.base,
+                                         &glz_decoder());
+    } else {
+        _canvas = canvas_create(width, height, format,
+                                &pixmap_cache.base,
+                                &palette_cache.base,
+                                &csurfaces.base,
+                                &glz_decoder());
+    }
+    if (_canvas == NULL) {
+        THROW("create canvas failed");
+    }
 }
 
 CCanvas::~CCanvas()
 {
-    destroy();
-}
-
-void CCanvas::destroy()
-{
-    if (_canvas) {
-        _canvas->ops->destroy(_canvas);
-        _canvas = NULL;
+    _canvas->ops->destroy(_canvas);
+    _canvas = NULL;
+    if (_pixmap) {
+        delete _pixmap;
+        _pixmap = NULL;
     }
-    destroy_pixmap();
-}
-
-void CCanvas::destroy_pixmap()
-{
-    delete _pixmap;
-    _pixmap = NULL;
-}
-
-void CCanvas::create_pixmap(int width, int height, RedWindow *win)
-{
-    _pixmap = new RedPixmapCairo(width, height, RedPixmap::RGB32, true, NULL, win);
 }
 
 void CCanvas::copy_pixels(const QRegion& region, RedDrawable& dest_dc)
 {
     pixman_box32_t *rects;
     int num_rects;
+
+    ASSERT(_pixmap != NULL);
 
     rects = pixman_region32_rectangles((pixman_region32_t *)&region, &num_rects);
     for (int i = 0; i < num_rects; i++) {
@@ -77,29 +87,6 @@ void CCanvas::copy_pixels(const QRegion& region, RedDrawable& dest_dc)
 void CCanvas::copy_pixels(const QRegion& region, RedDrawable* dest_dc, const PixmapHeader* pixmap)
 {
     copy_pixels(region, *dest_dc);
-}
-
-void CCanvas::set_mode(int width, int height, int depth, RedWindow *win)
-{
-    pixman_image_t *surface;
-
-    destroy();
-    create_pixmap(width, height, win);
-    surface = pixman_image_create_bits(PIXMAN_x8r8g8b8, width, height,
-                                       (uint32_t *)_pixmap->get_data(),
-                                       _pixmap->get_stride());
-    if (surface == NULL) {
-        THROW("create surface failed, out of memory");
-    }
-
-    if (!(_canvas = canvas_create(surface, depth,
-                                  &pixmap_cache().base,
-                                  &palette_cache().base,
-                                  &csurfaces().base,
-                                  &glz_decoder()))) {
-        THROW("create canvas failed");
-    }
-    pixman_image_unref (surface);
 }
 
 CanvasType CCanvas::get_pixmap_type()

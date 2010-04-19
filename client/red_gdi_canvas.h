@@ -27,22 +27,17 @@ class RedPixmap;
 
 class GDICanvas: public Canvas {
 public:
-    GDICanvas(PixmapCache& pixmap_cache, PaletteCache& palette_cache,
+    GDICanvas(int width, int height, uint32_t format,
+	      PixmapCache& pixmap_cache, PaletteCache& palette_cache,
               GlzDecoderWindow &glz_decoder_window, CSurfaces &csurfaces);
     virtual ~GDICanvas();
 
-    virtual void set_mode(int x, int y, int bits);
     virtual void thread_touch() {}
     virtual void copy_pixels(const QRegion& region, RedDrawable* dc,
                              const PixmapHeader* pixmap);
     virtual void copy_pixels(const QRegion& region, RedDrawable& dc);
 
     virtual CanvasType get_pixmap_type();
-
-private:
-    void create_pixmap(int width, int height);
-    void destroy_pixmap();
-    void destroy();
 
 private:
     RedPixmapGdi *_pixmap;

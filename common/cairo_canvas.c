@@ -1074,7 +1074,8 @@ static void canvas_destroy(SpiceCanvas *spice_canvas)
 static int need_init = 1;
 static SpiceCanvasOps cairo_canvas_ops;
 
-SpiceCanvas *canvas_create(pixman_image_t *image, int bits
+static SpiceCanvas *canvas_create_common(pixman_image_t *image,
+                                         uint32_t format
 #ifdef CAIRO_CANVAS_CACHE
                            , SpiceImageCache *bits_cache
                            , SpicePaletteCache *palette_cache
@@ -1098,7 +1099,7 @@ SpiceCanvas *canvas_create(pixman_image_t *image, int bits
     init_ok = canvas_base_init(&canvas->base, &cairo_canvas_ops,
                                pixman_image_get_width (image),
                                pixman_image_get_height (image),
-                               bits
+                               format
 #ifdef CAIRO_CANVAS_CACHE
                                , bits_cache
                                , palette_cache
@@ -1114,9 +1115,78 @@ SpiceCanvas *canvas_create(pixman_image_t *image, int bits
     canvas->private_data = NULL;
     canvas->private_data_size = 0;
 
-    canvas->image = pixman_image_ref(image);
+    canvas->image = image;
 
     return (SpiceCanvas *)canvas;
+}
+
+SpiceCanvas *canvas_create(int width, int height, uint32_t format
+#ifdef CAIRO_CANVAS_CACHE
+                           , SpiceImageCache *bits_cache
+                           , SpicePaletteCache *palette_cache
+#elif defined(CAIRO_CANVAS_IMAGE_CACHE)
+                           , SpiceImageCache *bits_cache
+#endif
+                           , SpiceImageSurfaces *surfaces
+                           , SpiceGlzDecoder *glz_decoder
+#ifndef CAIRO_CANVAS_NO_CHUNKS
+                           , SpiceVirtMapping *virt_mapping
+#endif
+                           )
+{
+    pixman_image_t *image;
+
+    image = pixman_image_create_bits(spice_surface_format_to_pixman (format),
+                                     width, height, NULL, 0);
+
+    return canvas_create_common(image, format
+#ifdef CAIRO_CANVAS_CACHE
+                                , bits_cache
+                                , palette_cache
+#elif defined(CAIRO_CANVAS_IMAGE_CACHE)
+                                , bits_cache
+#endif
+                                , surfaces
+                                , glz_decoder
+#ifndef CAIRO_CANVAS_NO_CHUNKS
+                                , virt_mapping
+#endif
+                                );
+}
+
+SpiceCanvas *canvas_create_for_data(int width, int height, uint32_t format,
+                                    uint8_t *data, size_t stride
+#ifdef CAIRO_CANVAS_CACHE
+                           , SpiceImageCache *bits_cache
+                           , SpicePaletteCache *palette_cache
+#elif defined(CAIRO_CANVAS_IMAGE_CACHE)
+                           , SpiceImageCache *bits_cache
+#endif
+			   , SpiceImageSurfaces *surfaces
+                           , SpiceGlzDecoder *glz_decoder
+#ifndef CAIRO_CANVAS_NO_CHUNKS
+                           , SpiceVirtMapping *virt_mapping
+#endif
+                           )
+{
+    pixman_image_t *image;
+
+    image = pixman_image_create_bits(spice_surface_format_to_pixman (format),
+                                     width, height, (uint32_t *)data, stride);
+
+    return canvas_create_common(image, format
+#ifdef CAIRO_CANVAS_CACHE
+                                , bits_cache
+                                , palette_cache
+#elif defined(CAIRO_CANVAS_IMAGE_CACHE)
+                                , bits_cache
+#endif
+                                , surfaces
+                                , glz_decoder
+#ifndef CAIRO_CANVAS_NO_CHUNKS
+                                , virt_mapping
+#endif
+                                );
 }
 
 void cairo_canvas_init() //unsafe global function

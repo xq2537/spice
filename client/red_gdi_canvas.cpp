@@ -23,36 +23,31 @@
 #include "region.h"
 #include "red_pixmap_gdi.h"
 
-GDICanvas::GDICanvas(PixmapCache& pixmap_cache, PaletteCache& palette_cache,
+GDICanvas::GDICanvas(int width, int height, uint32_t format,
+		     PixmapCache& pixmap_cache, PaletteCache& palette_cache,
                      GlzDecoderWindow &glz_decoder_window, CSurfaces &csurfaces)
     : Canvas (pixmap_cache, palette_cache, glz_decoder_window, csurfaces)
     , _pixmap (0)
 {
+    _pixmap = new RedPixmapGdi(width, height,
+                               RedPixmap::format_from_surface(format),
+                               true, NULL);
+    if (!(_canvas = gdi_canvas_create(width, height, _pixmap->get_dc(),
+                                      &_pixmap->get_mutex(),
+                                      depth, &pixmap_cache().base,
+                                      &palette_cache().base,
+                                      &csurfaces().base,
+                                      &glz_decoder()))) {
+        THROW("create canvas failed");
+    }
 }
 
 GDICanvas::~GDICanvas()
 {
-    destroy();
-}
-
-void GDICanvas::destroy()
-{
-    if (_canvas) {
-        _canvas->ops->destroy(_canvas);
-        _canvas = NULL;
-    }
-    destroy_pixmap();
-}
-
-void GDICanvas::destroy_pixmap()
-{
+  _canvas->ops->destroy(_canvas);
+  _canvas = NULL;
     delete _pixmap;
     _pixmap = NULL;
-}
-
-void GDICanvas::create_pixmap(int width, int height)
-{
-    _pixmap = new RedPixmapGdi(width, height, RedPixmap::RGB32, true, NULL);
 }
 
 void GDICanvas::copy_pixels(const QRegion& region, RedDrawable& dest_dc)
@@ -80,15 +75,6 @@ void GDICanvas::copy_pixels(const QRegion& region, RedDrawable* dest_dc, const P
 void GDICanvas::set_mode(int width, int height, int depth)
 {
     destroy();
-    create_pixmap(width, height);
-    if (!(_canvas = gdi_canvas_create(width, height, _pixmap->get_dc(),
-                                      &_pixmap->get_mutex(),
-                                      depth, &pixmap_cache().base,
-                                      &palette_cache().base,
-                                      &csurfaces().base,
-                                      &glz_decoder()))) {
-        THROW("create canvas failed");
-    }
 }
 
 CanvasType GDICanvas::get_pixmap_type()

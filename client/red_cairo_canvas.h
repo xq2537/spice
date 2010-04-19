@@ -26,22 +26,18 @@ class RedPixmap;
 
 class CCanvas: public Canvas {
 public:
-    CCanvas(PixmapCache& pixmap_cache, PaletteCache& palette_cache,
+    CCanvas(bool onscreen,
+            int width, int height, uint32_t format, RedWindow *win,
+            PixmapCache& pixmap_cache, PaletteCache& palette_cache,
             GlzDecoderWindow &glz_decoder_window, CSurfaces &csurfaces);
     virtual ~CCanvas();
 
-    virtual void set_mode(int x, int y, int bits, RedWindow *win);
     virtual void thread_touch() {}
     virtual void copy_pixels(const QRegion& region, RedDrawable* dc,
                              const PixmapHeader* pixmap);
     virtual void copy_pixels(const QRegion& region, RedDrawable& dc);
 
     virtual CanvasType get_pixmap_type();
-
-private:
-    void create_pixmap(int width, int height, RedWindow *win);
-    void destroy_pixmap();
-    void destroy();
 
 private:
     RedPixmap *_pixmap;

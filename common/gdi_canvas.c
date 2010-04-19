@@ -1884,7 +1884,7 @@ static int need_init = 1;
 static SpiceCanvasOps gdi_canvas_ops;
 
 SpiceCanvas *gdi_canvas_create(int width, int height,
-                               HDC dc, RecurciveMutex* lock, int bits
+                               HDC dc, RecurciveMutex* lock, uint32_t format
 #ifdef CAIRO_CANVAS_CACHE
                              , SpiceImageCache *bits_cache
                              , SpicePaletteCache *palette_cache
@@ -1903,7 +1903,7 @@ SpiceCanvas *gdi_canvas_create(int width, int height,
     }
     canvas = spice_new0(GdiCanvas, 1);
     init_ok = canvas_base_init(&canvas->base, &gdi_canvas_ops,
-                               width, height, bits
+                               width, height, format
 #ifdef CAIRO_CANVAS_CACHE
                                ,bits_cache
                                ,palette_cache

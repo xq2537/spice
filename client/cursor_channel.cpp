@@ -112,7 +112,7 @@ void UnsupportedCursor::draw(RedDrawable& dest, int x, int y, const SpiceRect& a
 
 AlphaCursor::AlphaCursor(const SpiceCursorHeader& header, const uint8_t* data)
     : _pixmap (new RedPixmapCairo(header.width, header.height,
-                                  RedPixmap::ARGB32, true, NULL, NULL))
+                                  RedPixmap::ARGB32, true, NULL))
 {
     int stride = _pixmap->get_stride();
     uint8_t* dest = _pixmap->get_data();
@@ -131,9 +131,8 @@ MonoCursor::MonoCursor(const SpiceCursorHeader& header, const uint8_t* data)
     : _pixmap (NULL)
     , _height (header.height)
 {
-    rgb32_t pallete[2] = { rgb32_make(0x00, 0x00, 0x00), rgb32_make(0xff, 0xff, 0xff)};
     _pixmap.reset(new RedPixmapCairo(header.width, _height * 2, RedPixmap::A1,
-                                     true, pallete, NULL));
+                                     true, NULL));
 
     int dest_stride = _pixmap->get_stride();
     uint8_t *dest_line = _pixmap->get_data();
@@ -177,12 +176,11 @@ private:
 
 ColorCursor::ColorCursor(const SpiceCursorHeader& header)
     : _pixmap (new RedPixmapCairo(header.width, header.height,
-                                  RedPixmap::ARGB32, true, NULL, NULL))
+                                  RedPixmap::ARGB32, true, NULL))
     , _invers (NULL)
 {
-    rgb32_t pallete[2] = { rgb32_make(0x00, 0x00, 0x00), rgb32_make(0xff, 0xff, 0xff)};
     _invers.reset(new RedPixmapCairo(header.width, header.height, RedPixmap::A1,
-                                     true, pallete, NULL));
+                                     true, NULL));
 }
 
 void ColorCursor::init_pixels(const SpiceCursorHeader& header, const uint8_t* pixels,

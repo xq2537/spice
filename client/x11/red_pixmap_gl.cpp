@@ -31,9 +31,9 @@
 
 
 RedPixmapGL::RedPixmapGL(int width, int height, RedPixmap::Format format,
-                         bool top_bottom, rgb32_t* pallet, RedWindow *win,
+                         bool top_bottom, RedWindow *win,
                          RenderType rendertype)
-    : RedPixmap(width, height, format, top_bottom, pallet)
+    : RedPixmap(width, height, format, top_bottom)
 {
     GLuint fbo;
     GLuint tex;

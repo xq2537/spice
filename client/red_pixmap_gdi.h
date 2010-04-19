@@ -25,8 +25,7 @@ class RecurciveMutex;
 
 class RedPixmapGdi: public RedPixmap {
 public:
-    RedPixmapGdi(int width, int height, Format format, bool top_bottom,
-                 rgb32_t *pallete);
+    RedPixmapGdi(int width, int height, Format format, bool top_bottom);
     HDC get_dc();
     void *get_memptr();
     ~RedPixmapGdi();

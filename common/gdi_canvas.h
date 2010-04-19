@@ -34,7 +34,7 @@ typedef struct {
 } GdiImage;
 
 SpiceCanvas *gdi_canvas_create(int width, int height,
-                               HDC dc, class RecurciveMutex *lock, int bits,
+                               HDC dc, class RecurciveMutex *lock, uint32_t format,
                                SpiceImageCache *bits_cache,
                                SpicePaletteCache *palette_cache,
 			       SpiceImageSurfaces *surfaces,

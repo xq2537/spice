@@ -1079,12 +1079,13 @@ void DisplayChannel::on_disconnect()
     (*sync_event)->wait();
 }
 
-bool DisplayChannel::create_cairo_canvas(int surface_id, int width, int height, int depth)
+bool DisplayChannel::create_cairo_canvas(int surface_id, int width, int height, uint32_t format)
 {
     try {
-        CCanvas *canvas = new CCanvas(_pixmap_cache, _palette_cache, _glz_window,
+        CCanvas *canvas = new CCanvas(surface_id == 0, width, height, format,
+                                      screen()->get_window(),
+                                      _pixmap_cache, _palette_cache, _glz_window,
                                       surfaces_mngr.get_surfaces());
-        canvas->set_mode(width, height, depth, screen()->get_window());
         surfaces_mngr.add_canvas(surface_id, canvas);
         surfaces_mngr.add_surface(surface_id, canvas->get_internal_canvas());
         if (surface_id == 0) {
@@ -1097,20 +1098,18 @@ bool DisplayChannel::create_cairo_canvas(int surface_id, int width, int height, 
 }
 
 #ifdef USE_OGL
-bool DisplayChannel::create_ogl_canvas(int surface_id, int width, int height, int depth,
+bool DisplayChannel::create_ogl_canvas(int surface_id, int width, int height, uint32_t format,
                                        bool recreate, RenderType rendertype)
 {
     try {
         RedWindow *win;
 
-        GCanvas *canvas = new GCanvas(_pixmap_cache,
+        win = screen()->get_window();
+        GCanvas *canvas = new GCanvas(width, height, format, win, rendertype,
+                                      _pixmap_cache,
                                       _palette_cache,
                                       _glz_window,
                                       surfaces_mngr.get_surfaces());
-
-        win = screen()->get_window();
-
-        canvas->set_mode(width, height, depth, win, rendertype);
 
         screen()->untouch_context();
 
@@ -1129,12 +1128,12 @@ bool DisplayChannel::create_ogl_canvas(int surface_id, int width, int height, in
 #endif
 
 #ifdef WIN32
-bool DisplayChannel::create_gdi_canvas(int surface_id, int width, int height, int depth)
+bool DisplayChannel::create_gdi_canvas(int surface_id, int width, int height, uint32_t format)
 {
     try {
-        GDICanvas *canvas = new GDICanvas(_pixmap_cache, _palette_cache, _glz_window,
+        GDICanvas *canvas = new GDICanvas(width, height, format,
+                                          _pixmap_cache, _palette_cache, _glz_window,
                                           surfaces_mngr.get_surfaces());
-        canvas->set_mode(width, height, depth);
         surfaces_mngr.add_canvas(surface_id, canvas);
         surfaces_mngr.add_surface(surface_id, canvas->get_internal_canvas());
         if (surface_id == 0) {
@@ -1155,7 +1154,7 @@ void DisplayChannel::destroy_canvas(int surface_id)
     if (!surfaces_mngr.is_present_canvas(surface_id)) {
         return;
     }
-    
+
     canvas = surfaces_mngr.get_canvas(surface_id);
 
 #ifdef USE_OGL
@@ -1171,7 +1170,7 @@ void DisplayChannel::destroy_canvas(int surface_id)
 }
 
 void DisplayChannel::create_canvas(int surface_id, const std::vector<int>& canvas_types, int width,
-                                   int height, int depth)
+                                   int height, uint32_t format)
 {
 #ifdef USE_OGL
     bool recreate = true;
@@ -1417,7 +1416,7 @@ void DisplayChannel::handle_stream_destroy_all(RedPeer::InMessage* message)
     destroy_strams();
 }
 
-void DisplayChannel::create_primary_surface(int width, int height, int depth)
+void DisplayChannel::create_primary_surface(int width, int height, uint32_t format)
 {
    Canvas *canvas;
    _mark = false;

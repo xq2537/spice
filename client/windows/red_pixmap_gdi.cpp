@@ -29,13 +29,7 @@ struct RedPixmap_p {
     HBITMAP prev_bitmap;
 };
 
-static inline int format_to_bpp(RedPixmap::Format format)
-{
-    return ((format == RedPixmap::A1) ? 1 : 32);
-}
-
-RedPixmapGdi::RedPixmapGdi(int width, int height, RedPixmap::Format format, bool top_bottom,
-                           rgb32_t* pallet)
+RedPixmapGdi::RedPixmapGdi(int width, int height, RedPixmap::Format format, bool top_bottom)
     : RedPixmap(width, height, format, top_bottom, pallet)
 {
     ASSERT(format == RedPixmap::ARGB32 || format == RedPixmap::RGB32 || format == RedPixmap::A1);
@@ -52,15 +46,16 @@ RedPixmapGdi::RedPixmapGdi(int width, int height, RedPixmap::Format format, bool
     bitmap_info.inf.bmiHeader.biHeight = top_bottom ? -_height : _height;
 
     bitmap_info.inf.bmiHeader.biPlanes = 1;
-    bitmap_info.inf.bmiHeader.biBitCount = format_to_bpp(format);
+    bitmap_info.inf.bmiHeader.biBitCount = RedPixmap::format_to_bpp(format);
     bitmap_info.inf.bmiHeader.biCompression = BI_RGB;
     switch (format) {
     case RedPixmap::A1:
-        for (int i = 0; i < (1 << format_to_bpp(format)); i++) {
-            bitmap_info.inf.bmiColors[i].rgbRed = rgb32_get_red(pallet[i]);
-            bitmap_info.inf.bmiColors[i].rgbGreen = rgb32_get_green(pallet[i]);
-            bitmap_info.inf.bmiColors[i].rgbBlue = rgb32_get_blue(pallet[i]);
-        }
+        bitmap_info.inf.bmiColors[0].rgbRed = 0;
+        bitmap_info.inf.bmiColors[0].rgbGreen = 0;
+        bitmap_info.inf.bmiColors[0].rgbBlue = 0;
+        bitmap_info.inf.bmiColors[1].rgbRed = 0xff;
+        bitmap_info.inf.bmiColors[1].rgbGreen = 0xff;
+        bitmap_info.inf.bmiColors[1].rgbBlue = 0xff;
         break;
     }
     AutoDC dc(create_compatible_dc());

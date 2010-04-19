@@ -176,6 +176,7 @@ typedef struct CanvasBase {
     unsigned long max;
 #endif
 
+    uint32_t format;
     int width;
     int height;
     pixman_region32_t canvas_region;
@@ -3175,7 +3176,7 @@ inline static void canvas_base_init_ops(SpiceCanvasOps *ops)
 }
 
 static int canvas_base_init(CanvasBase *canvas, SpiceCanvasOps *ops,
-                            int width, int height, int depth
+                            int width, int height, uint32_t format
 #ifdef CAIRO_CANVAS_CACHE
                             , SpiceImageCache *bits_cache
                             , SpicePaletteCache *palette_cache
@@ -3218,7 +3219,10 @@ static int canvas_base_init(CanvasBase *canvas, SpiceCanvasOps *ops,
     canvas->surfaces = surfaces;
     canvas->glz_data.decoder = glz_decoder;
 
-    if (depth == 16) {
+    canvas->format = format;
+
+    /* TODO: This is all wrong now */
+    if (SPICE_SURFACE_FMT_DEPTH(format) == 16) {
         canvas->color_shift = 5;
         canvas->color_mask = 0x1f;
     } else {

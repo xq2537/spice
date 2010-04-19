@@ -24,40 +24,34 @@
 #include "red_pixmap_gl.h"
 #include <GL/glx.h>
 
-GCanvas::GCanvas(PixmapCache& pixmap_cache, PaletteCache& palette_cache,
+GCanvas::GCanvas(int width, int height, uint32_t format, RedWindow *win,
+                 RenderType rendertype,
+                 PixmapCache& pixmap_cache, PaletteCache& palette_cache,
                  GlzDecoderWindow &glz_decoder_window, CSurfaces &csurfaces)
     : Canvas(pixmap_cache, palette_cache, glz_decoder_window, csurfaces)
     , _pixmap (0)
     , _textures_lost (false)
 {
+    _pixmap = new RedPixmapGL(width, height,
+                              RedPixmap::format_from_surface(format),
+                              true, win, rendertype);
+    if (!(_canvas = gl_canvas_create(width, height,
+                                     SPICE_SURFACE_FMT_DEPTH(format),
+                                     &pixmap_cache.base,
+                                     &palette_cache.base,
+                                     &csurfaces.base,
+                                     &glz_decoder()))) {
+        THROW("create canvas failed");
+    }
 }
 
 GCanvas::~GCanvas()
 {
-    destroy();
-}
-
-void GCanvas::destroy()
-{
-    if (_canvas) {
-        gl_canvas_set_textures_lost (_canvas, (int)_textures_lost);
-        _canvas->ops->destroy(_canvas);
-        _canvas = NULL;
-    }
-    destroy_pixmap();
-}
-
-void GCanvas::destroy_pixmap()
-{
+    gl_canvas_set_textures_lost (_canvas, (int)_textures_lost);
+    _canvas->ops->destroy(_canvas);
+    _canvas = NULL;
     delete _pixmap;
     _pixmap = NULL;
-}
-
-void GCanvas::create_pixmap(int width, int height, RedWindow *win,
-                            RenderType rendertype)
-{
-    _pixmap = new RedPixmapGL(width, height, RedPixmap::RGB32, true, NULL,
-                              win, rendertype);
 }
 
 void GCanvas::copy_pixels(const QRegion& region, RedDrawable& dest_dc)
@@ -81,21 +75,6 @@ void GCanvas::copy_pixels(const QRegion& region, RedDrawable& dest_dc)
 void GCanvas::copy_pixels(const QRegion& region, RedDrawable* dest_dc, const PixmapHeader* pixmap)
 {
     copy_pixels(region, *dest_dc);
-}
-
-void GCanvas::set_mode(int width, int height, int depth, RedWindow *win,
-                       RenderType rendertype)
-{
-    destroy();
-
-    create_pixmap(width, height, win, rendertype);
-    if (!(_canvas = gl_canvas_create(width, height, depth,
-                                     &pixmap_cache().base,
-                                     &palette_cache().base,
-                                     &csurfaces().base,
-                                     &glz_decoder()))) {
-        THROW("create canvas failed");
-    }
 }
 
 void GCanvas::touched_bbox(const SpiceRect *bbox)

@@ -21,7 +21,7 @@
 #include "canvas_base.h"
 #include "region.h"
 
-SpiceCanvas *gl_canvas_create(int width, int height, int depth
+SpiceCanvas *gl_canvas_create(int width, int height, uint32_t format
 #ifdef CAIRO_CANVAS_CACHE
                            , SpiceImageCache *bits_cache
                            , SpicePaletteCache *palette_cache

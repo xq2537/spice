@@ -28,12 +28,13 @@ class RedPixmapGL;
 
 class GCanvas: public Canvas {
 public:
-    GCanvas(PixmapCache& pixmap_cache, PaletteCache& palette_cache,
+    GCanvas(int width, int height, uint32_t format, RedWindow *win,
+            RenderType rendertype,
+            PixmapCache& pixmap_cache, PaletteCache& palette_cache,
             GlzDecoderWindow &glz_decoder_window, CSurfaces &csurfaces);
     virtual ~GCanvas();
 
-    void set_mode(int width, int height, int depth, RedWindow *win,
-                  RenderType rendertype);
+    void set_mode();
     void clear();
     void thread_touch() {}
     void copy_pixels(const QRegion& region, RedDrawable* dc,

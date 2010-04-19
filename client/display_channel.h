@@ -133,13 +133,13 @@ protected:
 private:
     void set_draw_handlers();
     void clear_draw_handlers();
-    bool create_cairo_canvas(int surface_id, int width, int height, int depth);
+    bool create_cairo_canvas(int surface_id, int width, int height, uint32_t format);
 #ifdef USE_OGL
-    bool create_ogl_canvas(int surface_id, int width, int height, int depth, bool recreate,
+    bool create_ogl_canvas(int surface_id, int width, int height, uint32_t format, bool recreate,
                            RenderType rendertype);
 #endif
 #ifdef WIN32
-    bool create_gdi_canvas(int surface_id, int width, int height, int depth);
+    bool create_gdi_canvas(int surface_id, int width, int height, uint32_t format);
 #endif
     void destroy_canvas(int surface_id);
     void create_canvas(int surface_id, const std::vector<int>& canvas_type, int width, int height,

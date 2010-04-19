@@ -29,7 +29,7 @@ enum RenderType {
 class RedPixmapGL: public RedPixmap {
 public:
     RedPixmapGL(int width, int height, Format format, bool top_bottom,
-                rgb32_t *pallete, RedWindow *win, RenderType rendertype);
+                RedWindow *win, RenderType rendertype);
 
     void textures_lost();
     void touch_context();

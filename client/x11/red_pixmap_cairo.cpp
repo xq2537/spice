@@ -26,10 +26,12 @@
 
 
 RedPixmapCairo::RedPixmapCairo(int width, int height, RedPixmap::Format format,
-                               bool top_bottom, rgb32_t* pallet, RedWindow *win)
-    : RedPixmap(width, height, format, top_bottom, pallet)
+                               bool top_bottom, RedWindow *win)
+    : RedPixmap(width, height, format, top_bottom)
 {
-    ASSERT(format == RedPixmap::ARGB32 || format == RedPixmap::RGB32 || format == RedPixmap::A1);
+    ASSERT(format == RedPixmap::ARGB32 || format == RedPixmap::RGB32 ||
+	   format == RedPixmap::RGB16_555 || format == RedPixmap::RGB16_565 ||
+	   format == RedPixmap::A1);
     ASSERT(sizeof(RedDrawable_p) <= PIXELES_SOURCE_OPAQUE_SIZE);
     pixman_image_t *pixman_image;
     XImage *image = NULL;
@@ -49,22 +51,8 @@ RedPixmapCairo::RedPixmapCairo(int width, int height, RedPixmap::Format format,
         using_shm = vinfo && XPlatform::is_x_shm_avail();
 
         if (using_shm) {
-            int depth;
-
-            switch (format) {
-            case RedPixmap::ARGB32:
-            case RedPixmap::RGB32:
-                depth = XPlatform::get_vinfo()[0]->depth;
-                pixman_format = format == RedPixmap::ARGB32 ? PIXMAN_a8r8g8b8 :
-                                                             PIXMAN_x8r8g8b8;
-                break;
-            case RedPixmap::A1:
-                depth = 1;
-                pixman_format = PIXMAN_a1;
-                break;
-            default:
-                THROW("unsupported format %d", format);
-            }
+            int depth = RedPixmap::format_to_bpp(format);
+            pixman_format = RedPixmap::format_to_pixman(format);
 
             shminfo = new XShmSegmentInfo;
             shminfo->shmid = -1;

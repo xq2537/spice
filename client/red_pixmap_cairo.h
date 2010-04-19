@@ -23,8 +23,7 @@
 
 class RedPixmapCairo: public RedPixmap {
 public:
-    RedPixmapCairo(int width, int height, Format format, bool top_bottom,
-                   rgb32_t *pallete, RedWindow *win);
+    RedPixmapCairo(int width, int height, Format format, bool top_bottom, RedWindow *win);
     ~RedPixmapCairo();
 };
 
