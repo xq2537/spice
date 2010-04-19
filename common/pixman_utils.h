@@ -20,6 +20,7 @@
 #define _H__PIXMAN_UTILS
 
 #include <spice/types.h>
+#include <stdlib.h>
 #define PIXMAN_DONT_DEFINE_STDINT
 #include <pixman.h>
 
@@ -50,6 +51,28 @@ typedef enum {
     SPICE_ROP_SET            /* 0xf    1 */
 } SpiceROP;
 
+
+int spice_pixman_image_get_bpp(pixman_image_t *image);
+
+pixman_format_code_t spice_surface_format_to_pixman(uint32_t surface_format);
+pixman_format_code_t spice_bitmap_format_to_pixman(int bitmap_format,
+                                                   uint32_t palette_surface_format);
+pixman_image_t *spice_bitmap_try_as_pixman(int src_format, int flags,
+                                           int width, int height,
+                                           uint8_t *data, int stride);
+pixman_image_t *spice_bitmap_to_pixman(pixman_image_t *dest_image,
+                                       int src_format, int flags,
+                                       int width, int height,
+                                       uint8_t *src, int src_stride,
+                                       uint32_t palette_surface_format,
+                                       SpicePalette *palette);
+pixman_image_t *spice_bitmap_convert_to_pixman(pixman_format_code_t dest_format,
+                                               pixman_image_t *dest_image,
+                                               int src_format, int flags,
+                                               int width, int height,
+                                               uint8_t *src, int src_stride,
+                                               uint32_t palette_surface_format,
+                                               SpicePalette *palette);
 
 void spice_pixman_region32_init_from_bitmap(pixman_region32_t *region,
                                             uint32_t *data,
