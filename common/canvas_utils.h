@@ -62,6 +62,7 @@ typedef struct LzDecodeUsrData {
 } LzDecodeUsrData;
 
 
-pixman_image_t *alloc_lz_image_surface(LzDecodeUsrData *canvas_data, LzImageType type, int width,
+pixman_image_t *alloc_lz_image_surface(LzDecodeUsrData *canvas_data,
+                                       pixman_format_code_t pixman_format, int width,
                                        int height, int gross_pixels, int top_down);
 #endif

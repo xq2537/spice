@@ -872,7 +872,7 @@ typedef struct DrawContext {
     uint32_t width;
     uint32_t height;
     int32_t stride;
-    uint8_t depth;
+    uint32_t format;
     void *line_0;
 } DrawContext;
 
@@ -3573,6 +3573,7 @@ static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
     uint8_t *dest;
     int dest_stride;
     RedSurface *surface;
+    int bpp;
 
     if (!drawable->qxl_drawable->self_bitmap) {
         return TRUE;
@@ -3581,9 +3582,11 @@ static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
 
     surface = &worker->surfaces[drawable->surface_id];
 
+    bpp = SPICE_SURFACE_FMT_DEPTH(surface->context.format) / 8;
+
     width = drawable->qxl_drawable->bbox.right - drawable->qxl_drawable->bbox.left;
     height = drawable->qxl_drawable->bbox.bottom - drawable->qxl_drawable->bbox.top;
-    dest_stride = width * sizeof(uint32_t);
+    dest_stride = SPICE_ALIGN(width * bpp, 4);
 
     image = spice_malloc_n_m(height, dest_stride, sizeof(QXLImage));
     dest = (uint8_t *)(image + 1);
@@ -3594,7 +3597,19 @@ static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
     QXL_SET_IMAGE_ID(image, QXL_IMAGE_GROUP_RED, ++worker->bits_unique);
     image->bitmap.flags = QXL_BITMAP_DIRECT | (surface->context.top_down ?
                                                QXL_BITMAP_TOP_DOWN : 0);
-    image->bitmap.format = SPICE_BITMAP_FMT_32BIT;
+    switch (surface->context.format) {
+    case SPICE_SURFACE_FMT_32_xRGB:
+        image->bitmap.format = SPICE_BITMAP_FMT_32BIT;
+        break;
+    case SPICE_SURFACE_FMT_32_ARGB:
+        image->bitmap.format = SPICE_BITMAP_FMT_RGBA;
+        break;
+    case SPICE_SURFACE_FMT_16_555:
+        image->bitmap.format = SPICE_BITMAP_FMT_16BIT;
+        break;
+    default:
+        ASSERT(0); /* not supported yet */
+    }
     image->bitmap.stride = dest_stride;
     image->descriptor.width = image->bitmap.x = width;
     image->descriptor.height = image->bitmap.y = height;
@@ -3801,7 +3816,8 @@ static inline void red_process_drawable(RedWorker *worker, QXLDrawable *drawable
 }
 
 static inline void red_create_surface(RedWorker *worker, uint32_t surface_id,uint32_t width,
-                                      uint32_t height, int32_t stride, uint8_t depth, void *line_0);
+                                      uint32_t height, int32_t stride, uint32_t format,
+                                      void *line_0);
 
 static inline void red_process_surface(RedWorker *worker, QXLSurfaceCmd *surface, uint32_t group_id)
 {
@@ -3820,13 +3836,13 @@ static inline void red_process_surface(RedWorker *worker, QXLSurfaceCmd *surface
         uint32_t height = surface->u.surface_create.height;
         int32_t stride = surface->u.surface_create.stride;
         QXLReleaseInfoExt release_info_ext;
-        
+
         data = (uint8_t *)get_virt(&worker->mem_slots, saved_data, height * abs(stride), group_id);
         if (stride < 0) {
             data -= (int32_t)(stride * (height - 1));
         }
         red_create_surface(worker, surface_id, surface->u.surface_create.width,
-                           height, stride, surface->u.surface_create.depth, data);
+                           height, stride, surface->u.surface_create.format, data);
         release_info_ext.group_id = group_id;
         release_info_ext.info = &surface->release_info;
         worker->qxl->release_resource(worker->qxl, release_info_ext);
@@ -7881,7 +7897,7 @@ static inline void *create_canvas_for_surface(RedWorker *worker, RedSurface *sur
 }
 
 static SurfaceCreateItem *get_surface_create_item(uint32_t surface_id, uint32_t width,
-                                                  uint32_t height, uint8_t depth, uint32_t flags)
+                                                  uint32_t height, uint32_t format, uint32_t flags)
 {
     SurfaceCreateItem *create;
 
@@ -7892,7 +7908,7 @@ static SurfaceCreateItem *get_surface_create_item(uint32_t surface_id, uint32_t 
     create->surface_create.width = width;
     create->surface_create.height = height;
     create->surface_create.flags = flags;
-    create->surface_create.depth = depth;
+    create->surface_create.format = format;
 
     red_pipe_item_init(&create->pipe_item, PIPE_ITEM_TYPE_CREATE_SURFACE);
 
@@ -7911,7 +7927,7 @@ static inline void __red_create_surface_item(RedWorker *worker, int surface_id, 
     surface = &worker->surfaces[surface_id];
 
     create = get_surface_create_item(surface_id, surface->context.width, surface->context.height,
-                                     surface->context.depth, flags);
+                                     surface->context.format, flags);
 
     worker->display_channel->surface_client_created[surface_id] = TRUE;
 
@@ -7924,26 +7940,24 @@ static inline void red_create_surface_item(RedWorker *worker, int surface_id)
         __red_create_surface_item(worker, surface_id, SPICE_SURFACE_FLAGS_PRIMARY);
     } else {
         __red_create_surface_item(worker, surface_id, 0);
-    } 
+    }
 }
 
 static inline void red_create_surface(RedWorker *worker, uint32_t surface_id, uint32_t width,
-                                      uint32_t height, int32_t stride, uint8_t depth, void *line_0)
+                                      uint32_t height, int32_t stride, uint32_t format,
+                                      void *line_0)
 {
     uint32_t i;
     RedSurface *surface = &worker->surfaces[surface_id];
     if (stride >= 0) {
         PANIC("Untested path stride >= 0");
     }
-    if (depth != 16 && depth != 32) {
-        PANIC("As for now support just 32/16 depth surfaces");
-    }
     PANIC_ON(surface->context.canvas);
 
     surface->context.canvas_draws_on_surface = FALSE;
     surface->context.width = width;
     surface->context.height = height;
-    surface->context.depth = depth;
+    surface->context.format = format;
     surface->context.stride = stride;
     surface->context.line_0 = line_0;
     memset(line_0 + (int32_t)(stride * (height - 1)), 0, height*abs(stride));
@@ -7957,7 +7971,7 @@ static inline void red_create_surface(RedWorker *worker, uint32_t surface_id, ui
     if (worker->renderer != RED_RENDERER_INVALID) {
         surface->context.canvas = create_canvas_for_surface(worker, surface, worker->renderer,
                                                             width, height, stride,
-                                                            surface->context.depth, line_0);
+                                                            surface->context.format, line_0);
         if (!surface->context.canvas) {
             PANIC("drawing canvas creating failed - can`t create same type canvas");
         }
@@ -7969,7 +7983,7 @@ static inline void red_create_surface(RedWorker *worker, uint32_t surface_id, ui
     for (i = 0; i < worker->num_renderers; i++) {
         surface->context.canvas = create_canvas_for_surface(worker, surface, worker->renderers[i],
                                                             width, height, stride,
-                                                            surface->context.depth, line_0);
+                                                            surface->context.format, line_0);
         if (surface->context.canvas) { //no need canvas check
             worker->renderer = worker->renderers[i];
             red_create_surface_item(worker, surface_id);
@@ -9043,7 +9057,7 @@ static inline void handle_dev_create_primary_surface(RedWorker *worker)
         line_0 -= (int32_t)(surface.stride * (surface.height -1));
     }
 
-    red_create_surface(worker, 0, surface.width, surface.height, surface.stride, surface.depth,
+    red_create_surface(worker, 0, surface.width, surface.height, surface.stride, surface.format,
                        line_0);
 
     if (worker->display_channel) {

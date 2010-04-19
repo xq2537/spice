@@ -45,11 +45,11 @@
 
 class CreatePrimarySurfaceEvent: public SyncEvent {
 public:
-   CreatePrimarySurfaceEvent(DisplayChannel& channel, int width, int height, int depth)
+   CreatePrimarySurfaceEvent(DisplayChannel& channel, int width, int height, uint32_t format)
         : _channel (channel)
         , _width (width)
         , _height (height)
-        , _depth (depth)
+        , _format (format)
     {
     }
 
@@ -58,14 +58,14 @@ public:
         Application* app = (Application*)events_loop.get_owner();
         _channel.screen()->lock_size();
         _channel.screen()->resize(_width, _height);
-        _channel.create_canvas(0, app->get_canvas_types(), _width, _height, _depth);
+        _channel.create_canvas(0, app->get_canvas_types(), _width, _height, _format);
     }
 
 private:
     DisplayChannel& _channel;
     int _width;
     int _height;
-    int _depth;
+    uint32_t _format;
 };
 
 class DestroyPrimarySurfaceEvent: public SyncEvent {
@@ -86,19 +86,20 @@ private:
 
 class CreateSurfaceEvent: public SyncEvent {
 public:
-   CreateSurfaceEvent(DisplayChannel& channel, int surface_id, int width, int height, int depth)
+   CreateSurfaceEvent(DisplayChannel& channel, int surface_id, int width, int height,
+                      uint32_t format)
         : _channel (channel)
         , _surface_id (surface_id)
         , _width (width)
         , _height (height)
-        , _depth (depth)
+        , _format (format)
     {
     }
 
     virtual void do_response(AbstractProcessLoop& events_loop)
     {
         Application* app = (Application*)events_loop.get_owner();
-        _channel.create_canvas(_surface_id, app->get_canvas_types(), _width, _height, _depth);
+        _channel.create_canvas(_surface_id, app->get_canvas_types(), _width, _height, _format);
     }
 
 private:
@@ -106,7 +107,7 @@ private:
     int _surface_id;
     int _width;
     int _height;
-    int _depth;
+    uint32_t _format;
 };
 
 class DestroySurfaceEvent: public SyncEvent {
@@ -562,7 +563,7 @@ void DisplaySurfacesManger::del_canvas(int surface_id)
 }
 
 CSurfaces& DisplaySurfacesManger::get_surfaces()
-{ 
+{
     return surfaces;
 }
 
@@ -753,7 +754,7 @@ void DisplayChannel::recreate_ogl_context_interrupt()
         delete canvas;
     }
 
-    if (!create_ogl_canvas(0, _x_res, _y_res, _depth, 0, _rendertype)) {
+    if (!create_ogl_canvas(0, _x_res, _y_res, _format, 0, _rendertype)) {
         THROW("create_ogl_canvas failed");
     }
 
@@ -1187,23 +1188,23 @@ void DisplayChannel::create_canvas(int surface_id, const std::vector<int>& canva
 
     for (i = 0; i < canvas_types.size(); i++) {
 
-        if (canvas_types[i] == CANVAS_OPTION_CAIRO && create_cairo_canvas(surface_id, width, height, depth)) {
+        if (canvas_types[i] == CANVAS_OPTION_CAIRO && create_cairo_canvas(surface_id, width, height, format)) {
             break;
         }
 #ifdef USE_OGL
-        if (canvas_types[i] == CANVAS_OPTION_OGL_FBO && create_ogl_canvas(surface_id, width, height, depth,
+        if (canvas_types[i] == CANVAS_OPTION_OGL_FBO && create_ogl_canvas(surface_id, width, height, format,
                                                                           recreate,
                                                                           RENDER_TYPE_FBO)) {
             break;
         }
-        if (canvas_types[i] == CANVAS_OPTION_OGL_PBUFF && create_ogl_canvas(surface_id, width, height, depth,
+        if (canvas_types[i] == CANVAS_OPTION_OGL_PBUFF && create_ogl_canvas(surface_id, width, height, format,
                                                                             recreate,
                                                                             RENDER_TYPE_PBUFF)) {
             break;
         }
 #endif
 #ifdef WIN32
-        if (canvas_types[i] == CANVAS_OPTION_GDI && create_gdi_canvas(surface_id, width, height, depth)) {
+        if (canvas_types[i] == CANVAS_OPTION_GDI && create_gdi_canvas(surface_id, width, height, format)) {
             break;
         }
 #endif
@@ -1424,7 +1425,7 @@ void DisplayChannel::create_primary_surface(int width, int height, uint32_t form
     clear_area();
 
     AutoRef<CreatePrimarySurfaceEvent> event(new CreatePrimarySurfaceEvent(*this, width, height,
-                                                                           depth));
+                                                                           format));
     get_client().push_event(*event);
     (*event)->wait();
     if (!(*event)->success()) {
@@ -1433,7 +1434,7 @@ void DisplayChannel::create_primary_surface(int width, int height, uint32_t form
 
     _x_res = width;
     _y_res = height;
-    _depth = depth;
+    _format = format;
 
     canvas = surfaces_mngr.get_canvas(0);
 
@@ -1446,12 +1447,12 @@ void DisplayChannel::create_primary_surface(int width, int height, uint32_t form
 #endif
 }
 
-void DisplayChannel::create_surface(int surface_id, int width, int height, int depth)
+void DisplayChannel::create_surface(int surface_id, int width, int height, uint32_t format)
 {
    Canvas *canvas;
 
     AutoRef<CreateSurfaceEvent> event(new CreateSurfaceEvent(*this, surface_id, width, height,
-                                                             depth));
+                                                             format));
     get_client().push_event(*event);
     (*event)->wait();
     if (!(*event)->success()) {
@@ -1508,10 +1509,11 @@ void DisplayChannel::handle_surface_create(RedPeer::InMessage* message)
 {
     SpiceMsgSurfaceCreate* surface_create = (SpiceMsgSurfaceCreate*)message->data();
     if (surface_create->flags == SPICE_SURFACE_FLAGS_PRIMARY) {
-        create_primary_surface(surface_create->width, surface_create->height, surface_create->depth);
+        create_primary_surface(surface_create->width, surface_create->height,
+                               surface_create->format);
     } else {
         create_surface(surface_create->surface_id, surface_create->width, surface_create->height,
-                       surface_create->depth);
+                       surface_create->format);
     }
 }
 

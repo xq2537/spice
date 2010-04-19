@@ -51,7 +51,7 @@ static pixman_image_t *canvas_get_pixman_brush(CairoCanvas *canvas,
 
         return pixman_image_create_solid_fill(&c);
     }
-    case SPICE_BRUSH_TYPE_PATTERN: { 
+    case SPICE_BRUSH_TYPE_PATTERN: {
         CairoCanvas *surface_canvas;
         pixman_image_t* surface;
         pixman_transform_t t;
@@ -61,7 +61,7 @@ static pixman_image_t *canvas_get_pixman_brush(CairoCanvas *canvas,
             surface = surface_canvas->image;
             surface = pixman_image_ref(surface);
         } else {
-            surface = canvas_get_image(&canvas->base, brush->u.pattern.pat);
+            surface = canvas_get_image(&canvas->base, brush->u.pattern.pat, FALSE);
         }
         pixman_transform_init_translate(&t,
                                         pixman_int_to_fixed(-brush->u.pattern.pos.x),
@@ -156,33 +156,6 @@ static void copy_region(SpiceCanvas *spice_canvas,
     }
 }
 
-static inline uint8_t get_converted_color(uint8_t color)
-{
-    uint8_t msb;
-
-    msb = color & 0xE0;
-    msb = msb >> 5;
-    color |= msb;
-    return color;
-}
-
-static inline uint32_t get_color(CairoCanvas *canvas, uint32_t color)
-{
-    int shift = canvas->base.color_shift == 8 ? 0 : 3;
-    uint32_t ret;
-
-    if (!shift) {
-        return color;
-    }
-
-    ret = ((color & 0x001f) << 3) | ((color & 0x001c) >> 2);
-    ret |= ((color & 0x03e0) << 6) | ((color & 0x0380) << 1);
-    ret |= ((color & 0x7c00) << 9) | ((color & 0x7000) << 4);
-
-    return ret;
-}
-
-
 static void fill_solid_spans(SpiceCanvas *spice_canvas,
                              SpicePoint *points,
                              int *widths,
@@ -197,7 +170,7 @@ static void fill_solid_spans(SpiceCanvas *spice_canvas,
                                points[i].x, points[i].y,
                                widths[i],
                                1,
-                               get_color(canvas, color));
+                               color);
     }
 }
 
@@ -214,7 +187,7 @@ static void fill_solid_rects(SpiceCanvas *spice_canvas,
                                rects[i].x1, rects[i].y1,
                                rects[i].x2 - rects[i].x1,
                                rects[i].y2 - rects[i].y1,
-                               get_color(canvas, color));
+                               color);
     }
 }
 
@@ -232,7 +205,7 @@ static void fill_solid_rects_rop(SpiceCanvas *spice_canvas,
                                    rects[i].x1, rects[i].y1,
                                    rects[i].x2 - rects[i].x1,
                                    rects[i].y2 - rects[i].y1,
-                                   get_color(canvas, color), rop);
+                                   color, rop);
     }
 }
 
@@ -504,7 +477,7 @@ static void __scale_image_rop(SpiceCanvas *spice_canvas,
     sx = (double)(src_width) / (dest_width);
     sy = (double)(src_height) / (dest_height);
 
-    scaled = pixman_image_create_bits(PIXMAN_x8r8g8b8,
+    scaled = pixman_image_create_bits(spice_pixman_image_get_format(src),
                                       dest_width,
                                       dest_height,
                                       NULL, 0);
@@ -802,7 +775,7 @@ static void __colorkey_scale_image(SpiceCanvas *spice_canvas,
     sx = (double)(src_width) / (dest_width);
     sy = (double)(src_height) / (dest_height);
 
-    scaled = pixman_image_create_bits(PIXMAN_x8r8g8b8,
+    scaled = pixman_image_create_bits(spice_pixman_image_get_format (src),
                                       dest_width,
                                       dest_height,
                                       NULL, 0);
@@ -1026,16 +999,20 @@ static void canvas_read_bits(SpiceCanvas *spice_canvas, uint8_t *dest, int dest_
     uint8_t *src;
     int src_stride;
     uint8_t *dest_end;
+    int bpp;
 
     ASSERT(canvas && area);
 
     surface = canvas->image;
+
+    bpp = spice_pixman_image_get_bpp(surface) / 8;
+
     src_stride = pixman_image_get_stride(surface);
     src = (uint8_t *)pixman_image_get_data(surface) +
-        area->top * src_stride + area->left * sizeof(uint32_t);
+        area->top * src_stride + area->left * bpp;
     dest_end = dest + (area->bottom - area->top) * dest_stride;
     for (; dest != dest_end; dest += dest_stride, src += src_stride) {
-        memcpy(dest, src, dest_stride);
+        memcpy(dest, src, (area->right - area->left) * bpp);
     }
 }
 
@@ -1095,6 +1072,9 @@ static SpiceCanvas *canvas_create_common(pixman_image_t *image,
     if (need_init) {
         return NULL;
     }
+    spice_pixman_image_set_format(image,
+                                  spice_surface_format_to_pixman (format));
+
     canvas = spice_new0(CairoCanvas, 1);
     init_ok = canvas_base_init(&canvas->base, &cairo_canvas_ops,
                                pixman_image_get_width (image),

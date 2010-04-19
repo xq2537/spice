@@ -283,11 +283,11 @@ pixman_image_t *surface_create_stride(pixman_format_code_t format, int width, in
     return __surface_create_stride(format, width, height, stride);
 }
 
-pixman_image_t *alloc_lz_image_surface(LzDecodeUsrData *canvas_data, LzImageType type, int width,
+pixman_image_t *alloc_lz_image_surface(LzDecodeUsrData *canvas_data,
+                                       pixman_format_code_t pixman_format, int width,
                                        int height, int gross_pixels, int top_down)
 {
     int stride;
-    int alpha;
     pixman_image_t *surface = NULL;
 
     stride = (gross_pixels / height) * 4;
@@ -296,18 +296,11 @@ pixman_image_t *alloc_lz_image_surface(LzDecodeUsrData *canvas_data, LzImageType
         stride = -stride;
     }
 
-    if (type == LZ_IMAGE_TYPE_RGB32) {
-        alpha = 0;
-    } else if (type == LZ_IMAGE_TYPE_RGBA) {
-        alpha = 1;
-    } else {
-        CANVAS_ERROR("unexpected image type");
-    }
-    surface = surface_create_stride(
+   surface = surface_create_stride(
 #ifdef WIN32
             canvas_data->dc,
 #endif
-            alpha ? PIXMAN_a8r8g8b8 : PIXMAN_x8r8g8b8, width, height, stride);
+            pixman_format, width, height, stride);
     canvas_data->out_surface = surface;
     return surface;
 }

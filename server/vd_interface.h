@@ -173,7 +173,7 @@ struct QXLDevSurfaceCreate {
     uint32_t width;
     uint32_t height;
     int32_t stride;
-    uint32_t depth;
+    uint32_t format;
     uint32_t position;
     uint32_t mouse_mode;
     uint32_t flags;

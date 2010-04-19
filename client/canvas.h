@@ -342,9 +342,12 @@ public:
                                          int width, int height, int gross_pixels,
                                          int n_bytes_per_pixel, bool top_down)
     {
-        pixman_image_t *surface = alloc_lz_image_surface((LzDecodeUsrData *)opaque_usr_info,
-                                                         type, width, height, gross_pixels,
-                                                         top_down);
+        ASSERT(type == LZ_IMAGE_TYPE_RGB32 || type == LZ_IMAGE_TYPE_RGBA);
+
+        pixman_image_t *surface =
+            alloc_lz_image_surface((LzDecodeUsrData *)opaque_usr_info,
+                                   type == LZ_IMAGE_TYPE_RGBA ? PIXMAN_a8r8g8b8 : PIXMAN_x8r8g8b8,
+                                   width, height, gross_pixels, top_down);
         uint8_t *data = (uint8_t *)pixman_image_get_data(surface);
         if (!top_down) {
             data = data - (gross_pixels / height) * n_bytes_per_pixel * (height - 1);

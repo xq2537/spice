@@ -275,7 +275,7 @@ static void set_brush(GLCanvas *canvas, SpiceBrush *brush)
         GLCPattern pattern;
         pixman_image_t *surface;
 
-        surface = canvas_get_image(&canvas->base, brush->u.pattern.pat);
+        surface = canvas_get_image(&canvas->base, brush->u.pattern.pat, FALSE);
         surface_to_image(canvas, surface, &image, 0);
 
         pattern = glc_pattern_create(canvas->glc, -brush->u.pattern.pos.x,
@@ -379,7 +379,7 @@ static void gl_canvas_draw_copy(SpiceCanvas *spice_canvas, SpiceRect *bbox, Spic
     set_op(canvas, copy->rop_decriptor);
 
     //todo: optimize get_imag (use ogl conversion + remove unnecessary copy of 32bpp)
-    surface = canvas_get_image(&canvas->base, copy->src_bitmap);
+    surface = canvas_get_image(&canvas->base, copy->src_bitmap, FALSE);
     surface_to_image(canvas, surface, &image, 0);
     SET_GLC_RECT(&dest, bbox);
     SET_GLC_RECT(&src, &copy->src_area);
@@ -403,7 +403,7 @@ static void gl_canvas_draw_opaque(SpiceCanvas *spice_canvas, SpiceRect *bbox, Sp
 
     glc_set_op(canvas->glc, (opaque->rop_decriptor & SPICE_ROPD_INVERS_SRC) ? GLC_OP_COPY_INVERTED :
                GLC_OP_COPY);
-    surface = canvas_get_image(&canvas->base, opaque->src_bitmap);
+    surface = canvas_get_image(&canvas->base, opaque->src_bitmap, FALSE);
     surface_to_image(canvas, surface, &image, 0);
     SET_GLC_RECT(&dest, bbox);
     SET_GLC_RECT(&src, &opaque->src_area);
@@ -430,7 +430,7 @@ static void gl_canvas_draw_alpha_blend(SpiceCanvas *spice_canvas, SpiceRect *bbo
     glc_clear_mask(canvas->glc, GLC_MASK_A);
     glc_set_op(canvas->glc, GLC_OP_COPY);
 
-    surface = canvas_get_image(&canvas->base, alpha_blend->src_bitmap);
+    surface = canvas_get_image(&canvas->base, alpha_blend->src_bitmap, FALSE);
     surface_to_image(canvas, surface, &image, 0);
     SET_GLC_RECT(&dest, bbox);
     SET_GLC_RECT(&src, &alpha_blend->src_area);
@@ -452,7 +452,7 @@ static void gl_canvas_draw_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, Spi
     set_mask(canvas, &blend->mask, bbox->left, bbox->top);
     set_op(canvas, blend->rop_decriptor);
 
-    surface = canvas_get_image(&canvas->base, blend->src_bitmap);
+    surface = canvas_get_image(&canvas->base, blend->src_bitmap, FALSE);
     SET_GLC_RECT(&dest, bbox);
     SET_GLC_RECT(&src, &blend->src_area);
     surface_to_image(canvas, surface, &image, 0);
@@ -475,7 +475,7 @@ static void gl_canvas_draw_transparent(SpiceCanvas *spice_canvas, SpiceRect *bbo
     glc_clear_mask(canvas->glc, GLC_MASK_A);
     glc_set_op(canvas->glc, GLC_OP_COPY);
 
-    surface = canvas_get_image(&canvas->base, transparent->src_bitmap);
+    surface = canvas_get_image(&canvas->base, transparent->src_bitmap, FALSE);
     surface_to_image(canvas, surface, &image, 0);
 
     trans_surf = canvas_surf_to_trans_surf(&image, transparent->true_color);
@@ -554,7 +554,7 @@ static void gl_canvas_draw_rop3(SpiceCanvas *spice_canvas, SpiceRect *bbox, Spic
     memcpy(image.pixels, data_opp,
            image.stride * pixman_image_get_height(d));
 
-    s = canvas_get_image(&canvas->base, rop3->src_bitmap);
+    s = canvas_get_image(&canvas->base, rop3->src_bitmap, FALSE);
     src_stride = pixman_image_get_stride(s);
     if (src_stride > 0) {
         data_opp = copy_opposite_image(canvas, (uint8_t *)pixman_image_get_data(s),
@@ -581,7 +581,7 @@ static void gl_canvas_draw_rop3(SpiceCanvas *spice_canvas, SpiceRect *bbox, Spic
     }
 
     if (rop3->brush.type == SPICE_BRUSH_TYPE_PATTERN) {
-        pixman_image_t *p = canvas_get_image(&canvas->base, rop3->brush.u.pattern.pat);
+        pixman_image_t *p = canvas_get_image(&canvas->base, rop3->brush.u.pattern.pat, FALSE);
         SpicePoint pat_pos;
 
         pat_pos.x = (bbox->left - rop3->brush.u.pattern.pos.x) % pixman_image_get_width(p);

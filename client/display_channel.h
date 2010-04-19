@@ -143,12 +143,12 @@ private:
 #endif
     void destroy_canvas(int surface_id);
     void create_canvas(int surface_id, const std::vector<int>& canvas_type, int width, int height,
-                       int depth);
+                       uint32_t format);
     void destroy_strams();
     void update_cursor();
 
-    void create_primary_surface(int width, int height, int depth);
-    void create_surface(int surface_id, int width, int height, int depth);
+    void create_primary_surface(int width, int height, uint32_t format);
+    void create_surface(int surface_id, int width, int height, uint32_t format);
     void destroy_primary_surface();
     void destroy_surface(int surface_id);
 
@@ -199,7 +199,7 @@ private:
     bool _mark;
     int _x_res;
     int _y_res;
-    int _depth;
+    uint32_t _format;
 #ifdef USE_OGL
     RenderType _rendertype;
 #endif
