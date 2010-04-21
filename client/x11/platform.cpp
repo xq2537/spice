@@ -2169,9 +2169,8 @@ void Platform::init()
 {
     int err, ev;
     int threads_enable;
-    int connection_fd;
-    socklen_t sock_len;
-    struct sockaddr sock_addr;
+    int major, minor;
+    Bool pixmaps;
 
     DBG(0, "");
 
@@ -2184,9 +2183,8 @@ void Platform::init()
         THROW("open X display failed");
     }
 
-    connection_fd = ConnectionNumber(x_display);
-    if (!getsockname(connection_fd, &sock_addr, &sock_len) &&
-        XShmQueryExtension(x_display) && sock_addr.sa_family == AF_UNIX ) {
+    if (XShmQueryExtension (x_display) &&
+        XShmQueryVersion (x_display, &major, &minor, &pixmaps)) {
         x_shm_avail = true;
     }
 
