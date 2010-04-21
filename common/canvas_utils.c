@@ -82,6 +82,29 @@ pixman_image_add_data(pixman_image_t *image)
     return data;
 }
 
+void
+spice_pixman_image_set_format(pixman_image_t *image,
+                              pixman_format_code_t format)
+{
+    PixmanData *data;
+
+    data = pixman_image_add_data(image);
+    data->format = format;
+}
+
+pixman_format_code_t
+spice_pixman_image_get_format(pixman_image_t *image)
+{
+    PixmanData *data;
+
+    data = (PixmanData *)pixman_image_get_destroy_data(image);
+    if (data != NULL &&
+        data->format != 0)
+        return data->format;
+
+    CANVAS_ERROR("Unknown pixman image type");
+}
+
 static inline pixman_image_t *__surface_create_stride(pixman_format_code_t format, int width, int height,
                                                       int stride)
 {
@@ -106,6 +129,7 @@ static inline pixman_image_t *__surface_create_stride(pixman_format_code_t forma
 
     pixman_data = pixman_image_add_data(surface);
     pixman_data->data = data;
+    pixman_data->format = format;
 
     return surface;
 }
@@ -190,6 +214,7 @@ pixman_image_t * surface_create(pixman_format_code_t format, int width, int heig
             CANVAS_ERROR("create surface failed, out of memory");
         }
         pixman_data = pixman_image_add_data(surface);
+        pixman_data->format = format;
         pixman_data->bitmap = bitmap;
         pixman_data->mutex = mutex;
         gdi_handlers++;
@@ -197,7 +222,13 @@ pixman_image_t * surface_create(pixman_format_code_t format, int width, int heig
     } else {
 #endif
     if (top_down) {
-        return pixman_image_create_bits(format, width, height, NULL, 0);
+        pixman_image_t *surface;
+        PixmanData *data;
+
+        surface = pixman_image_create_bits(format, width, height, NULL, 0);
+        data = pixman_image_add_data(surface);
+        data->format = format;
+        return surface;
     } else {
         // NOTE: we assume here that the lz decoders always decode to RGB32.
         int stride = 0;

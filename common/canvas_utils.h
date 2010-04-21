@@ -30,7 +30,13 @@ typedef struct PixmanData {
     HANDLE mutex;
 #endif
     uint8_t *data;
+    pixman_format_code_t format;
 } PixmanData;
+
+void spice_pixman_image_set_format(pixman_image_t *image,
+                                   pixman_format_code_t format);
+pixman_format_code_t spice_pixman_image_get_format(pixman_image_t *image);
+
 
 #ifdef WIN32
 pixman_image_t *surface_create(HDC dc, pixman_format_code_t format,
