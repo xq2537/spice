@@ -18,10 +18,14 @@
 #ifndef _H_XPLATFORM
 #define _H_XPLATFORM
 
+#include "red_drawable.h"
+#include <X11/extensions/XShm.h>
+
 class XPlatform {
 public:
     static Display* get_display();
     static XVisualInfo** get_vinfo();
+    static RedDrawable::Format get_screen_format(int screen);
     static GLXFBConfig** get_fbconfig();
     static XIC get_input_context();
 

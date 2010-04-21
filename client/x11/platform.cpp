@@ -67,6 +67,7 @@
 static Display* x_display = NULL;
 static bool x_shm_avail = false;
 static XVisualInfo **vinfo = NULL;
+static RedDrawable::Format *screen_format = NULL;
 static GLXFBConfig **fb_config = NULL;
 static XIM x_input_method = NULL;
 static XIC x_input_context = NULL;
@@ -200,6 +201,11 @@ bool XPlatform::is_x_shm_avail()
 XVisualInfo** XPlatform::get_vinfo()
 {
     return vinfo;
+}
+
+RedDrawable::Format XPlatform::get_screen_format(int screen)
+{
+    return screen_format[screen];
 }
 
 GLXFBConfig** XPlatform::get_fbconfig()
@@ -2194,6 +2200,8 @@ void Platform::init()
     memset(vinfo, 0, sizeof(XVisualInfo *) * ScreenCount(x_display));
     fb_config = new GLXFBConfig *[ScreenCount(x_display)];
     memset(fb_config, 0, sizeof(GLXFBConfig *) * ScreenCount(x_display));
+    screen_format = new RedDrawable::Format[ScreenCount(x_display)];
+    memset(screen_format, 0, sizeof(RedDrawable::Format) * ScreenCount(x_display));
 
     if (threads_enable && glXQueryExtension(x_display, &err, &ev)) {
         int num_configs;
@@ -2234,6 +2242,24 @@ void Platform::init()
     for (int i = 0; i < ScreenCount(x_display); ++i) {
         if (vinfo[i] == NULL) {
             THROW("Unable to find a visual for screen");
+        }
+        if ((vinfo[i]->depth == 32  || vinfo[i]->depth == 24) &&
+            vinfo[i]->red_mask == 0xff0000 &&
+            vinfo[i]->green_mask == 0x00ff00 &&
+            vinfo[i]->blue_mask == 0x0000ff) {
+            screen_format[i] = RedDrawable::RGB32;
+        } else if (vinfo[i]->depth == 16 &&
+                   vinfo[i]->red_mask == 0xf800 &&
+                   vinfo[i]->green_mask == 0x7e0 &&
+                   vinfo[i]->blue_mask == 0x1f) {
+            screen_format[i] = RedDrawable::RGB16_565;
+        } else if (vinfo[i]->depth == 15 &&
+                   vinfo[i]->red_mask == 0x7c00 &&
+                   vinfo[i]->green_mask == 0x3e0 &&
+                   vinfo[i]->blue_mask == 0x1f) {
+            screen_format[i] = RedDrawable::RGB16_555;
+        } else {
+            THROW("Unsupported visual for screen");
         }
     }
 
