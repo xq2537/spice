@@ -255,10 +255,51 @@ err1:
     return NULL;
 }
 
-void XPlatform::free_x_image(XImage *image,
-			     XShmSegmentInfo *shminfo)
+XImage *XPlatform::create_x_image(RedDrawable::Format format,
+                                  int width, int height, int depth,
+                                  Visual *visual,
+                                  XShmSegmentInfo **shminfo_out)
 {
-    char *data = image->data;
+    XImage *image;
+    uint8_t *data;
+    size_t stride;
+
+    *shminfo_out = NULL;
+
+    if (XPlatform::is_x_shm_avail()) {
+        image = XPlatform::create_x_shm_image(format, width, height,
+                                              depth, visual,
+                                              shminfo_out);
+    }
+
+    if (image != NULL) {
+        return image;
+    }
+
+    stride = SPICE_ALIGN(width * RedDrawable::format_to_bpp (format), 32) / 8;
+    /* Must use malloc here, not new, because XDestroyImage will free() it */
+    data = (uint8_t *)malloc(height * stride);
+    if (data == NULL) {
+        THROW("Out of memory");
+    }
+
+    if (format == RedDrawable::A1) {
+        image = XCreateImage(XPlatform::get_display(),
+                             NULL, 1, XYBitmap,
+                             0, (char *)data, width, height, 32, stride);
+    } else {
+        image = XCreateImage(XPlatform::get_display(),
+                             visual, depth, ZPixmap,
+                             0, (char *)data, width, height, 32, stride);
+    }
+
+    return image;
+}
+
+
+void XPlatform::free_x_image(XImage *image,
+                             XShmSegmentInfo *shminfo)
+{
     if (shminfo) {
         XShmDetach(XPlatform::get_display(), shminfo);
     }
@@ -269,8 +310,6 @@ void XPlatform::free_x_image(XImage *image,
         XSync(XPlatform::get_display(), False);
         shmdt(shminfo->shmaddr);
         delete shminfo;
-    } else {
-        delete[] data;
     }
 }
 
