@@ -22,156 +22,70 @@
 #include "utils.h"
 #include "pixels_source_p.h"
 #include "x_platform.h"
-#include <sys/shm.h>
 
-
-RedPixmapCairo::RedPixmapCairo(int width, int height, RedPixmap::Format format,
+RedPixmapCairo::RedPixmapCairo(int width, int height, RedDrawable::Format format,
                                bool top_bottom, RedWindow *win)
     : RedPixmap(width, height, format, top_bottom)
 {
-    ASSERT(format == RedPixmap::ARGB32 || format == RedPixmap::RGB32 ||
-	   format == RedPixmap::RGB16_555 || format == RedPixmap::RGB16_565 ||
-	   format == RedPixmap::A1);
+    ASSERT(format == RedDrawable::ARGB32 || format == RedDrawable::RGB32 ||
+	   format == RedDrawable::RGB16_555 || format == RedDrawable::RGB16_565 ||
+	   format == RedDrawable::A1);
     ASSERT(sizeof(RedDrawable_p) <= PIXELES_SOURCE_OPAQUE_SIZE);
     pixman_image_t *pixman_image;
-    XImage *image = NULL;
-    XShmSegmentInfo *shminfo = NULL;
+    XImage *image;
+    XShmSegmentInfo *shminfo;
     _data = NULL;
-    XVisualInfo *vinfo = NULL;
-    bool using_shm = false;
+    XVisualInfo *vinfo;
+    int screen_num;
+    RedDrawable::Format screen_format;
 
+    screen_num = win ? win->get_screen_num() : 0;
+    vinfo = XPlatform::get_vinfo()[screen_num];
+    screen_format = XPlatform::get_screen_format(screen_num);
 
-    try {
-        pixman_format_code_t pixman_format;
+    image = NULL;
+    shminfo = NULL;
 
-        if (win) {
-            vinfo = XPlatform::get_vinfo()[win->get_screen_num()];
-        }
-
-        using_shm = vinfo && XPlatform::is_x_shm_avail();
-
-        if (using_shm) {
-            int depth = RedPixmap::format_to_bpp(format);
-            pixman_format = RedPixmap::format_to_pixman(format);
-
-            shminfo = new XShmSegmentInfo;
-            shminfo->shmid = -1;
-            shminfo->shmaddr = 0;
-            ((PixelsSource_p*)get_opaque())->type = PIXELS_SOURCE_TYPE_XSHM_DRAWABLE;
-            memset(shminfo, 0, sizeof(XShmSegmentInfo));
-            image = XShmCreateImage(XPlatform::get_display(), vinfo->visual,
-                                    depth, ZPixmap, NULL, shminfo, width, height);
-            if (!image) {
-                THROW("XShmCreateImage failed");
-            }
-
-            shminfo->shmid = shmget(IPC_PRIVATE, height * _stride, IPC_CREAT | 0777);
-            if (shminfo->shmid < 0) {
-                THROW("shmget failed");
-            }
-            shminfo->shmaddr = (char *)shmat(shminfo->shmid, 0, 0);
-            if (shmctl(shminfo->shmid, IPC_RMID, NULL) == -1) {
-                LOG_WARN("shmctl IPC_RMID failed %s (%d)", strerror(errno), errno);
-            }
-            if (!shminfo->shmaddr) {
-                THROW("shmat failed");
-            }
-            shminfo->readOnly = False;
-            if (!XShmAttach(XPlatform::get_display(), shminfo)) {
-                THROW("XShmAttach failed");
-            }
-
-            ((PixelsSource_p*)get_opaque())->x_shm_drawable.x_image = image;
-            ((PixelsSource_p*)get_opaque())->x_shm_drawable.shminfo = shminfo;
-            _data = (uint8_t *)shminfo->shmaddr;
-            image->data = (char *)_data;
-        } else {
-            image = new XImage;
-            _data = new uint8_t[height * _stride];
-            ((PixelsSource_p*)get_opaque())->type = PIXELS_SOURCE_TYPE_PIXMAP;
-            ((PixelsSource_p*)get_opaque())->pixmap.x_image = image;
-            memset(image, 0, sizeof(*image));
-            image->width = _width;
-            image->height = _height;
-
-            image->data = (char*)_data;
-            image->byte_order = LSBFirst;
-            image->bitmap_unit = 32;
-            image->bitmap_bit_order = LSBFirst;
-            image->bitmap_pad = 32;
-
-            image->bytes_per_line = _stride;
-            switch (format) {
-            case RedPixmap::ARGB32:
-            case RedPixmap::RGB32:
-                image->depth = XPlatform::get_vinfo()[0]->depth;
-                image->format = ZPixmap;
-                image->bits_per_pixel = 32;
-                image->red_mask = 0x00ff0000;
-                image->green_mask = 0x0000ff00;
-                image->blue_mask = 0x000000ff;
-                pixman_format = format == RedPixmap::ARGB32 ? PIXMAN_a8r8g8b8 :
-                                                             PIXMAN_x8r8g8b8;
-                break;
-            case RedPixmap::A1:
-                image->depth = 1;
-                image->format = XYBitmap;
-                pixman_format = PIXMAN_a1;
-                break;
-            default:
-                THROW("unsupported format %d", format);
-            }
-
-            if (!XInitImage(image)) {
-                THROW("init image failed");
-            }
-        }
-        pixman_image = pixman_image_create_bits(pixman_format, _width, _height,
-                                                (uint32_t *)_data, _stride);
-        if (pixman_image == NULL) {
-            THROW("surf create failed");
-        }
-
-        if (!using_shm) {
-            ((PixelsSource_p*)get_opaque())->pixmap.pixman_image = pixman_image;
-        } else {
-            ((PixelsSource_p*)get_opaque())->x_shm_drawable.pixman_image = pixman_image;
-        }
-    } catch (...) {
-        if (using_shm) {
-            if (image) {
-                XDestroyImage(image);
-            }
-            if (shminfo) {
-                if (shminfo->shmid >= 0) {
-                    shmctl(shminfo->shmid, IPC_RMID, NULL);
-                }
-                if (shminfo->shmaddr) {
-                    shmdt(shminfo->shmaddr);
-                }
-            }
-        } else {
-            delete image;
-            delete _data;
-        }
-        throw;
+    /* Only create XImage if same format as screen (needs re-verifying at
+       draw time!)  */
+    if (RedDrawable::format_copy_compatible(format, screen_format) ||
+        format == A1) {
+        image = XPlatform::create_x_image(format, width, height,
+                                          vinfo->depth, vinfo->visual,
+                                          &shminfo);
+        _stride = image->bytes_per_line;
+        _data = (uint8_t *)image->data;
+    } else {
+        _data = new uint8_t[height * _stride];
     }
+
+    pixman_image = pixman_image_create_bits(RedDrawable::format_to_pixman(format),
+                                            _width, _height,
+                                            (uint32_t *)_data, _stride);
+    if (pixman_image == NULL) {
+        THROW("surf create failed");
+    }
+
+    ((PixelsSource_p*)get_opaque())->type = PIXELS_SOURCE_TYPE_PIXMAP;
+    ((PixelsSource_p*)get_opaque())->pixmap.shminfo = shminfo;
+    ((PixelsSource_p*)get_opaque())->pixmap.x_image = image;
+    ((PixelsSource_p*)get_opaque())->pixmap.pixman_image = pixman_image;
+    ((PixelsSource_p*)get_opaque())->pixmap.format = format;
 }
 
 RedPixmapCairo::~RedPixmapCairo()
 {
-    if (((PixelsSource_p*)get_opaque())->type == PIXELS_SOURCE_TYPE_PIXMAP) {
-        pixman_image_unref(((PixelsSource_p*)get_opaque())->pixmap.pixman_image);
-        delete ((PixelsSource_p*)get_opaque())->pixmap.x_image;
-        delete[] _data;
+    ASSERT(((PixelsSource_p*)get_opaque())->type == PIXELS_SOURCE_TYPE_PIXMAP);
+
+    XShmSegmentInfo *shminfo = ((PixelsSource_p*)get_opaque())->pixmap.shminfo;
+    XImage *image = ((PixelsSource_p*)get_opaque())->pixmap.x_image;
+
+    pixman_image_unref(((PixelsSource_p*)get_opaque())->pixmap.pixman_image);
+
+    if (image) {
+        XPlatform::free_x_image(image, shminfo);
     } else {
-        pixman_image_unref(((PixelsSource_p*)get_opaque())->x_shm_drawable.pixman_image);
-        XShmSegmentInfo *shminfo = ((PixelsSource_p*)get_opaque())->x_shm_drawable.shminfo;
-        XShmDetach(XPlatform::get_display(), shminfo);
-        XDestroyImage(((PixelsSource_p*)get_opaque())->x_shm_drawable.x_image);
-        XSync(XPlatform::get_display(), False);
-        shmdt(shminfo->shmaddr);
-        delete shminfo;
+        delete[] _data;
     }
 }
 

@@ -1164,6 +1164,7 @@ void RedWindow_p::create(RedWindow& red_window, PixelsSource_p& pix_source, int 
     _expect_parent = false;
     pix_source.type = PIXELS_SOURCE_TYPE_X_DRAWABLE;
     pix_source.x_drawable.drawable = window;
+    pix_source.x_drawable.screen = _screen;
     pix_source.x_drawable.gc = gc;
     set_minmax(pix_source, width, height);
     sync();

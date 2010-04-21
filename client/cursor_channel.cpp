@@ -112,7 +112,7 @@ void UnsupportedCursor::draw(RedDrawable& dest, int x, int y, const SpiceRect& a
 
 AlphaCursor::AlphaCursor(const SpiceCursorHeader& header, const uint8_t* data)
     : _pixmap (new RedPixmapCairo(header.width, header.height,
-                                  RedPixmap::ARGB32, true, NULL))
+                                  RedDrawable::ARGB32, true, NULL))
 {
     int stride = _pixmap->get_stride();
     uint8_t* dest = _pixmap->get_data();
@@ -131,7 +131,7 @@ MonoCursor::MonoCursor(const SpiceCursorHeader& header, const uint8_t* data)
     : _pixmap (NULL)
     , _height (header.height)
 {
-    _pixmap.reset(new RedPixmapCairo(header.width, _height * 2, RedPixmap::A1,
+    _pixmap.reset(new RedPixmapCairo(header.width, _height * 2, RedDrawable::A1,
                                      true, NULL));
 
     int dest_stride = _pixmap->get_stride();
@@ -176,10 +176,10 @@ private:
 
 ColorCursor::ColorCursor(const SpiceCursorHeader& header)
     : _pixmap (new RedPixmapCairo(header.width, header.height,
-                                  RedPixmap::ARGB32, true, NULL))
+                                  RedDrawable::ARGB32, true, NULL))
     , _invers (NULL)
 {
-    _invers.reset(new RedPixmapCairo(header.width, header.height, RedPixmap::A1,
+    _invers.reset(new RedPixmapCairo(header.width, header.height, RedDrawable::A1,
                                      true, NULL));
 }
 

@@ -888,7 +888,7 @@ GUI::GUI(Application& app, Application::State state)
     : ScreenLayer (SCREEN_LAYER_GUI, false)
     , _app (app)
     , _state (state)
-    , _pixmap (new RedPixmapCairo(MAIN_GUI_WIDTH, MAIN_GUI_HEIGHT, RedDrawable::RGB32, true, NULL))
+    , _pixmap (new RedPixmapCairo(MAIN_GUI_WIDTH, MAIN_GUI_HEIGHT, RedDrawable::RGB32, true, 0))
     , _renderer (new CEGUI::SoftRenderer(_pixmap->get_data(), MAIN_GUI_WIDTH, MAIN_GUI_HEIGHT,
                                          _pixmap->get_stride()))
     , _gui_system (new CEGUI::System(_renderer, new CEGUIResourceProvider()))

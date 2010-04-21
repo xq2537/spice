@@ -111,11 +111,11 @@ static inline void copy_to_gldrawable_from_pixmap(const RedDrawable_p* dest,
         glDisable(GL_TEXTURE_2D);
     }
 
-    glPixelStorei(GL_UNPACK_ROW_LENGTH, source->pixmap.x_image->bytes_per_line / 4);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, pixman_image_get_stride(source->pixmap.pixman_image) / 4);
 
     glPixelZoom(1, -1);
-    addr = (uint8_t *)source->pixmap.x_image->data;
-    addr += (src_x * 4 + src_y * source->pixmap.x_image->bytes_per_line);
+    addr = (uint8_t *)pixman_image_get_data(source->pixmap.pixman_image);
+    addr += (src_x * 4 + src_y * pixman_image_get_stride(source->pixmap.pixman_image));
     glWindowPos2i(area.left + offset.x, dest->source.x_drawable.height -
                   (area.top + offset.y));  //+ (area.bottom - area.top)));
     glDrawPixels(area.right - area.left, area.bottom - area.top,
@@ -149,37 +149,106 @@ static inline void copy_to_drawable_from_drawable(const RedDrawable_p* dest,
               area.left + offset.x, area.top + offset.y);
 }
 
+static XImage *create_temp_image(int screen, int width, int height,
+                                 pixman_image_t **pixman_image_out,
+                                 XShmSegmentInfo **shminfo_out)
+{
+    XImage *image;
+    XShmSegmentInfo *shminfo;
+    RedDrawable::Format format;
+    pixman_image_t *pixman_image;
+    XVisualInfo *vinfo;
+
+    image = NULL;
+    shminfo = NULL;
+
+    vinfo = XPlatform::get_vinfo()[screen];
+    format = XPlatform::get_screen_format(screen);
+
+    image = XPlatform::create_x_image(format, width, height, vinfo->depth,
+					  vinfo->visual, &shminfo);
+
+    pixman_image = pixman_image_create_bits(RedDrawable::format_to_pixman(format),
+                                            width, height,
+                                            (uint32_t *)image->data, image->bytes_per_line);
+    if (pixman_image == NULL) {
+        THROW("surf create failed");
+    }
+    *pixman_image_out = pixman_image;
+    *shminfo_out = shminfo;
+    return image;
+}
+
+static void free_temp_image(XImage *image, XShmSegmentInfo *shminfo, pixman_image_t *pixman_image)
+{
+    XPlatform::free_x_image(image, shminfo);
+    pixman_image_unref(pixman_image);
+}
+
+
 static inline void copy_to_drawable_from_pixmap(const RedDrawable_p* dest,
                                                 const SpiceRect& area,
                                                 const SpicePoint& offset,
                                                 const PixelsSource_p* source,
                                                 int src_x, int src_y)
 {
+    pixman_image_t *src_surface = source->pixmap.pixman_image;
     XGCValues gc_vals;
     gc_vals.function = GXcopy;
+    RedDrawable::Format screen_format;
+    XImage *image;
+    XShmSegmentInfo *shminfo;
+    pixman_image_t *pixman_image;
+    int screen;
+
+    screen = dest->source.x_drawable.screen;
+    screen_format = XPlatform::get_screen_format(screen);
 
     XChangeGC(XPlatform::get_display(), dest->source.x_drawable.gc, GCFunction, &gc_vals);
-    XPutImage(XPlatform::get_display(), dest->source.x_drawable.drawable,
-              dest->source.x_drawable.gc, source->pixmap.x_image, src_x,
-              src_y, area.left + offset.x, area.top + offset.y,
-              area.right - area.left, area.bottom - area.top);
-}
 
-static inline void copy_to_drawable_from_shmdrawable(const RedDrawable_p* dest,
-                                                     const SpiceRect& area,
-                                                     const SpicePoint& offset,
-                                                     const PixelsSource_p* source,
-                                                     int src_x, int src_y)
-{
-    XGCValues gc_vals;
-    gc_vals.function = GXcopy;
+    if (source->pixmap.x_image != NULL &&
+        RedDrawable::format_copy_compatible(source->pixmap.format, screen_format)) {
+        if (source->pixmap.shminfo) {
+            XShmPutImage(XPlatform::get_display(), dest->source.x_drawable.drawable,
+                         dest->source.x_drawable.gc, source->pixmap.x_image,
+                         src_x, src_y, area.left + offset.x, area.top + offset.y,
+                         area.right - area.left, area.bottom - area.top, false);
+            XSync(XPlatform::get_display(), 0);
+        } else {
+            XPutImage(XPlatform::get_display(), dest->source.x_drawable.drawable,
+                      dest->source.x_drawable.gc, source->pixmap.x_image, src_x,
+                      src_y, area.left + offset.x, area.top + offset.y,
+                      area.right - area.left, area.bottom - area.top);
+        }
+    } else {
+        image = create_temp_image(screen,
+                                  area.right - area.left, area.bottom - area.top,
+                                  &pixman_image, &shminfo);
 
-    XChangeGC(XPlatform::get_display(), dest->source.x_drawable.gc, GCFunction, &gc_vals);
-    XShmPutImage(XPlatform::get_display(), dest->source.x_drawable.drawable,
-                 dest->source.x_drawable.gc, source->x_shm_drawable.x_image,
-                 src_x, src_y, area.left + offset.x, area.top + offset.y,
-                 area.right - area.left, area.bottom - area.top, false);
-    XSync(XPlatform::get_display(), 0);
+        pixman_image_composite32(PIXMAN_OP_SRC,
+                                 src_surface, NULL, pixman_image,
+                                 src_x + offset.x,
+                                 src_y + offset.y,
+                                 0, 0,
+                                 0, 0,
+                                 area.right - area.left,
+                                 area.bottom - area.top);
+
+        if (shminfo) {
+            XShmPutImage(XPlatform::get_display(), dest->source.x_drawable.drawable,
+                         dest->source.x_drawable.gc, image,
+                         0, 0, area.left + offset.x, area.top + offset.y,
+                         area.right - area.left, area.bottom - area.top, false);
+            XSync(XPlatform::get_display(), 0);
+        } else {
+            XPutImage(XPlatform::get_display(), dest->source.x_drawable.drawable,
+                      dest->source.x_drawable.gc, image,
+                      0, 0, area.left + offset.x, area.top + offset.y,
+                      area.right - area.left, area.bottom - area.top);
+        }
+
+        free_temp_image(image, shminfo, pixman_image);
+    }
 }
 
 static inline void copy_to_x_drawable(const RedDrawable_p* dest,
@@ -194,9 +263,6 @@ static inline void copy_to_x_drawable(const RedDrawable_p* dest,
         break;
     case PIXELS_SOURCE_TYPE_PIXMAP:
         copy_to_drawable_from_pixmap(dest, area, offset, source, src_x, src_y);
-        break;
-    case PIXELS_SOURCE_TYPE_XSHM_DRAWABLE:
-        copy_to_drawable_from_shmdrawable(dest, area, offset, source, src_x, src_y);
         break;
     default:
         THROW("invalid source type %d", source->type);
@@ -228,26 +294,6 @@ static inline void copy_to_pixmap_from_drawable(const RedDrawable_p* dest,
                                                 int src_x, int src_y)
 {
     LOG_WARN("not implemented");
-}
-
-static inline void copy_to_pixmap_from_shmdrawable(const RedDrawable_p* dest,
-                                                   const SpiceRect& area,
-                                                   const SpicePoint& offset,
-                                                   const PixelsSource_p* source,
-                                                   int src_x, int src_y)
-{
-    pixman_image_t *dest_surface =  dest->source.pixmap.pixman_image;
-    pixman_image_t *src_surface = source->x_shm_drawable.pixman_image;
-
-    pixman_image_composite32(PIXMAN_OP_SRC,
-                             src_surface, NULL, dest_surface,
-                             src_x + offset.x,
-                             src_y + offset.y,
-                             0, 0,
-                             area.left + offset.x,
-                             area.top + offset.y,
-                             area.right - area.left,
-                             area.bottom - area.top);
 }
 
 static inline void copy_to_pixmap_from_pixmap(const RedDrawable_p* dest,
@@ -297,15 +343,15 @@ static inline void copy_to_pixmap_from_gltexture(const RedDrawable_p* dest,
     }
     glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
     glPixelStorei(GL_PACK_ROW_LENGTH,
-                  dest->source.pixmap.x_image->bytes_per_line / 4);
+                  pixman_image_get_stride(dest->source.pixmap.pixman_image) / 4);
 
     while (height > 0) {
         glReadPixels(src_x, y - height, area.right - area.left, 1,
                      GL_BGRA, GL_UNSIGNED_BYTE,
-                     dest->source.pixmap.x_image->data +
+                     (uint8_t *)pixman_image_get_stride(dest->source.pixmap.pixman_image) +
                      (area.left + offset.x) * 4 +
                      (area.top + offset.y + height - 1) *
-                     dest->source.pixmap.x_image->bytes_per_line);
+                     pixman_image_get_stride(dest->source.pixmap.pixman_image));
         height--;
     }
     if (rendertype != RENDER_TYPE_FBO) {
@@ -329,9 +375,6 @@ static inline void copy_to_pixmap(const RedDrawable_p* dest,
         break;
     case PIXELS_SOURCE_TYPE_PIXMAP:
         copy_to_pixmap_from_pixmap(dest, area, offset, source, src_x, src_y);
-        break;
-    case PIXELS_SOURCE_TYPE_XSHM_DRAWABLE:
-        copy_to_pixmap_from_shmdrawable(dest, area, offset, source, src_x, src_y);
         break;
     default:
         THROW("invalid source type %d", source->type);

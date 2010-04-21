@@ -29,7 +29,7 @@ struct RedPixmap_p {
     HBITMAP prev_bitmap;
 };
 
-RedPixmapCairo::RedPixmapCairo(int width, int height, RedPixmap::Format format,
+RedPixmapCairo::RedPixmapCairo(int width, int height, RedDrawable::Format format,
                                bool top_bottom, RedWindow *win)
     : RedPixmap(width, height, format, top_bottom)
 {

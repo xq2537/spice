@@ -34,7 +34,7 @@ CCanvas::CCanvas(bool onscreen,
 {
     if (onscreen) {
         _pixmap = new RedPixmapCairo(width, height,
-                                     RedPixmap::format_from_surface(format),
+                                     RedDrawable::format_from_surface(format),
                                      true, win);
         _canvas = canvas_create_for_data(width, height, format,
                                          _pixmap->get_data(),

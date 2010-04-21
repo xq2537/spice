@@ -28,7 +28,6 @@
 enum {
     PIXELS_SOURCE_TYPE_INVALID,
     PIXELS_SOURCE_TYPE_X_DRAWABLE,
-    PIXELS_SOURCE_TYPE_XSHM_DRAWABLE,
     PIXELS_SOURCE_TYPE_PIXMAP,
     PIXELS_SOURCE_TYPE_GL_TEXTURE,
     PIXELS_SOURCE_TYPE_GL_DRAWABLE,
@@ -39,6 +38,7 @@ struct PixelsSource_p {
     union {
         struct {
             Drawable drawable;
+            int screen;
             GC gc;
             int width, height;
             RenderType rendertype;
@@ -53,11 +53,7 @@ struct PixelsSource_p {
             XImage* x_image;
             XShmSegmentInfo *shminfo;
             pixman_image_t* pixman_image;
-        } x_shm_drawable;
-
-        struct {
-            XImage* x_image;
-            pixman_image_t* pixman_image;
+            RedDrawable::Format format;
         } pixmap;
 
         struct {
