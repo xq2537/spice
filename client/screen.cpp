@@ -171,8 +171,8 @@ void RedScreen::destroy_composit_area()
 void RedScreen::create_composit_area()
 {
     destroy_composit_area();
-    _composit_area = new RedPixmapCairo(_size.x, _size.y, RedPixmap::RGB32,
-                                        false, NULL);
+    _composit_area = new RedPixmapCairo(_size.x, _size.y, _window.get_format(),
+                                        false, -1);
 }
 
 void RedScreen::adjust_window_rect(int x, int y)
