@@ -2111,7 +2111,7 @@ static void init_XIM()
     x_input_method = XOpenIM(x_display, NULL, app_name, app_name);
 
     if (!x_input_method) {
-        THROW("open IM failed");
+        return;
     }
 
     x_input_context = XCreateIC(x_input_method, XNInputStyle, XIMPreeditNone | XIMStatusNone, NULL);

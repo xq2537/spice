@@ -714,7 +714,6 @@ static inline SpiceMouseButton to_red_button(unsigned int botton, unsigned int& 
 void RedWindow_p::handle_key_press_event(RedWindow& window, XKeyEvent* event)
 {
     static int buf_size = 0;
-    static char* utf8_buf = NULL;
     static wchar_t* utf32_buf = NULL;
 
     KeySym key_sym;
@@ -722,35 +721,47 @@ void RedWindow_p::handle_key_press_event(RedWindow& window, XKeyEvent* event)
     int len;
 
     window.get_listener().on_key_press(to_red_key_code(event->keycode));
-    for (;;) {
-        len = XwcLookupString(x_input_context, event, utf32_buf, buf_size, &key_sym, &status);
-        if (status != XBufferOverflow) {
+
+    if (x_input_context != NULL) {
+        for (;;) {
+            len = XwcLookupString(x_input_context, event, utf32_buf, buf_size, &key_sym, &status);
+            if (status != XBufferOverflow) {
+                break;
+            }
+
+            if (utf32_buf) {
+                delete [] utf32_buf;
+            }
+            utf32_buf = new wchar_t[len];
+            buf_size = len;
+        }
+
+        switch (status) {
+        case XLookupChars:
+        case XLookupBoth: {
+            uint32_t* now = (uint32_t*)utf32_buf;
+            uint32_t* end = now + len;
+
+            for (; now < end; now++) {
+                window.get_listener().on_char(*now);
+            }
             break;
         }
 
-        free(utf32_buf);
-        free(utf32_buf);
-        utf8_buf = new char[len];
-        utf32_buf = new wchar_t[len];
-        buf_size = len;
-    }
-
-    switch (status) {
-    case XLookupChars:
-    case XLookupBoth: {
-        uint32_t* now = (uint32_t*)utf32_buf;
-        uint32_t* end = now + len;
-
-        for (; now < end; now++) {
-            window.get_listener().on_char(*now);
+        case XLookupNone:
+        case XLookupKeySym:
+            break;
+        default:
+            THROW("unexpected status %d", status);
         }
-        break;
-    }
-    case XLookupNone:
-    case XLookupKeySym:
-        break;
-    default:
-        THROW("unexpected status %d", status);
+    } else { /* no XIM */
+        unsigned char buffer[16];
+        int i;
+
+        len = XLookupString(event, (char *)buffer, sizeof(buffer), NULL, NULL);
+        for (i = 0; i < len; i++) {
+            window.get_listener().on_char((uint32_t)buffer[i]);
+        }
     }
 }
 
@@ -1962,7 +1973,9 @@ void RedWindow::on_focus_in()
         return;
     }
     _focused = true;
-    XwcResetIC(x_input_context);
+    if (x_input_context) {
+        XwcResetIC(x_input_context);
+    }
     XPlatform::on_focus_in();
     get_listener().on_activate();
     if (_trace_key_interception && _pointer_in_window) {
