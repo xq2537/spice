@@ -37,6 +37,12 @@ public:
     static void on_focus_out();
 
     static bool is_x_shm_avail();
+    static XImage *create_x_shm_image(RedDrawable::Format format,
+				      int width, int height, int depth,
+				      Visual *visual,
+				      XShmSegmentInfo **shminfo_out);
+    static void free_x_image(XImage *image,
+			     XShmSegmentInfo *shminfo);
 };
 
 #endif

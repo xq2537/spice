@@ -39,6 +39,7 @@
 #include <values.h>
 #include <signal.h>
 #include <config.h>
+#include <sys/shm.h>
 
 #include "platform.h"
 #include "application.h"
@@ -197,6 +198,82 @@ bool XPlatform::is_x_shm_avail()
 {
     return x_shm_avail;
 }
+
+XImage *XPlatform::create_x_shm_image(RedDrawable::Format format,
+                                      int width, int height, int depth,
+                                      Visual *visual,
+                                      XShmSegmentInfo **shminfo_out)
+{
+    XImage *image;
+    XShmSegmentInfo *shminfo;
+
+    shminfo = new XShmSegmentInfo;
+    shminfo->shmid = -1;
+    shminfo->shmaddr = NULL;
+
+    image = XShmCreateImage(XPlatform::get_display(),
+                            format == RedDrawable::A1 ? NULL : visual,
+                            format == RedDrawable::A1 ? 1 : depth,
+                            format == RedDrawable::A1 ? XYBitmap : ZPixmap,
+                            NULL, shminfo, width, height);
+    if (image == NULL) {
+        goto err1;
+    }
+
+    shminfo->shmid = shmget(IPC_PRIVATE, height * image->bytes_per_line,
+                            IPC_CREAT | 0777);
+    if (shminfo->shmid < 0) {
+        goto err2;
+    }
+
+    shminfo->shmaddr = (char *)shmat(shminfo->shmid, 0, 0);
+    if (!shminfo->shmaddr) {
+        goto err2;
+    }
+
+    shminfo->readOnly = False;
+    if (!XShmAttach(XPlatform::get_display(), shminfo)) {
+        goto err2;
+    }
+
+    image->data = (char *)shminfo->shmaddr;
+
+    *shminfo_out = shminfo;
+    return image;
+
+err2:
+    XDestroyImage(image);
+    if (shminfo->shmaddr != NULL) {
+        shmdt(shminfo->shmaddr);
+    }
+    if (shminfo->shmid != -1) {
+        shmctl(shminfo->shmid, IPC_RMID, 0);
+    }
+
+err1:
+    delete shminfo;
+    return NULL;
+}
+
+void XPlatform::free_x_image(XImage *image,
+			     XShmSegmentInfo *shminfo)
+{
+    char *data = image->data;
+    if (shminfo) {
+        XShmDetach(XPlatform::get_display(), shminfo);
+    }
+    if (image) {
+        XDestroyImage(image);
+    }
+    if (shminfo) {
+        XSync(XPlatform::get_display(), False);
+        shmdt(shminfo->shmaddr);
+        delete shminfo;
+    } else {
+        delete[] data;
+    }
+}
+
 
 XVisualInfo** XPlatform::get_vinfo()
 {
