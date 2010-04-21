@@ -105,6 +105,7 @@ public:
         OP_XOR,
     };
 
+    virtual RedDrawable::Format get_format() = 0;
     void copy_pixels(const PixelsSource& src, int src_x, int src_y, const SpiceRect& dest);
     void blend_pixels(const PixelsSource& src, int src_x, int src_y, const SpiceRect& dest);
     void combine_pixels(const PixelsSource& src, int src_x, int src_y, const SpiceRect& dest,

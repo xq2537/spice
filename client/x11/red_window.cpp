@@ -1930,6 +1930,11 @@ int RedWindow::get_screen_num()
     return _screen;
 }
 
+RedDrawable::Format RedWindow::get_format()
+{
+  return XPlatform::get_screen_format(_screen);
+}
+
 void RedWindow::set_type_gl()
 {
     PixelsSource_p *pix_source = (PixelsSource_p*)get_opaque();

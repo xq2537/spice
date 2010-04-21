@@ -50,6 +50,7 @@ public:
     void activate();
     void set_title(std::wstring& title);
     void set_icon(Icon *icon);
+    virtual RedDrawable::Format get_format();
 
     enum Type {
         TYPE_INVALID,

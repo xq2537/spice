@@ -34,6 +34,7 @@ public:
     int get_stride() { return _stride;}
     uint8_t* get_data() { return _data;}
     bool is_big_endian_bits();
+    virtual RedDrawable::Format get_format() { return _format; }
 
 protected:
     Format _format;
