@@ -57,6 +57,10 @@ public:
         A1,
     };
 
+    static int format_copy_compatible(Format src, Format dest) {
+        return src == dest || (src == ARGB32 && dest == RGB32);
+    }
+
     static int format_to_bpp(Format format) {
         if (format == RedDrawable::A1) {
             return 1;
