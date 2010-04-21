@@ -1267,83 +1267,33 @@ static inline pixman_image_t *canvas_A1_invers(pixman_image_t *src_surf)
 {
     int width = pixman_image_get_width(src_surf);
     int height = pixman_image_get_height(src_surf);
+    pixman_image_t * invers;
+    uint8_t *src_line, *end_line,  *dest_line;
+    int src_stride, line_size, dest_stride;
 
-    pixman_image_t * invers = pixman_image_create_bits(PIXMAN_a1, width, height, NULL, 0);
-    if (invers != NULL) {
-        uint8_t *src_line = (uint8_t *)pixman_image_get_data(src_surf);
-        int src_stride = pixman_image_get_stride(src_surf);
-        uint8_t *end_line = src_line + (height * src_stride);
-        int line_size = SPICE_ALIGN(width, 8) >> 3;
-        uint8_t *dest_line = (uint8_t *)pixman_image_get_data(invers);
-        int dest_stride = pixman_image_get_stride(invers);
+    ASSERT(pixman_image_get_depth(src_surf) == 1);
 
-        for (; src_line != end_line; src_line += src_stride, dest_line += dest_stride) {
-            uint8_t *dest = dest_line;
-            uint8_t *now = src_line;
-            uint8_t *end = now + line_size;
-            while (now < end) {
-                *(dest++) = ~*(now++);
-            }
-        }
-    }
-    return invers;
-}
-
-static pixman_image_t *canvas_surf_to_invers(pixman_image_t *surf)
-{
-    int width = pixman_image_get_width(surf);
-    int height = pixman_image_get_height(surf);
-    uint8_t *dest_line;
-    uint8_t *dest_line_end;
-    uint8_t *src_line;
-    int dest_stride;
-    int src_stride;
-
-    ASSERT(pixman_image_get_depth(surf) == 24);
-    pixman_image_t *invers = pixman_image_create_bits (PIXMAN_x8r8g8b8, width, height, NULL, 0);
-
+    invers = pixman_image_create_bits(PIXMAN_a1, width, height, NULL, 0);
     if (invers == NULL) {
         CANVAS_ERROR("create surface failed");
     }
 
+    src_line = (uint8_t *)pixman_image_get_data(src_surf);
+    src_stride = pixman_image_get_stride(src_surf);
+    end_line = src_line + (height * src_stride);
+    line_size = SPICE_ALIGN(width, 8) >> 3;
     dest_line = (uint8_t *)pixman_image_get_data(invers);
     dest_stride = pixman_image_get_stride(invers);
-    dest_line_end = dest_line + dest_stride * height;
-    src_line = (uint8_t *)pixman_image_get_data(surf);
-    src_stride = pixman_image_get_stride(surf);
 
-    for (; dest_line != dest_line_end; dest_line += dest_stride, src_line += src_stride) {
-        uint32_t *src = (uint32_t *)src_line;
-        uint32_t *dest = (uint32_t *)dest_line;
-        uint32_t *end = dest + width;
-        while (dest < end) {
-            *(dest++) = ~*(src++) & 0x00ffffff;
+    for (; src_line != end_line; src_line += src_stride, dest_line += dest_stride) {
+        uint8_t *dest = dest_line;
+        uint8_t *now = src_line;
+        uint8_t *end = now + line_size;
+        while (now < end) {
+            *(dest++) = ~*(now++);
         }
     }
     return invers;
-}
-
-/*
-* Return the inversed surface and assigns it to the user data of the given surface.
-* The routine also handles the reference count of the inversed surface. It you don't use
-* the returned reference, you must call cairo_surface_destroy.
-* Thread safe with respect to the user data.
-*/
-static inline pixman_image_t* canvas_handle_inverse_user_data(pixman_image_t* surface)
-{
-    pixman_image_t *inv_surf = NULL;
-
-    if (pixman_image_get_depth(surface) == 1) {
-        inv_surf = canvas_A1_invers(surface);
-    } else {
-        inv_surf = canvas_surf_to_invers(surface);
-    }
-
-    if (inv_surf == NULL) {
-        CANVAS_ERROR("create surface failed");
-    }
-
-    return inv_surf;
 }
 
 static pixman_image_t *canvas_get_mask(CanvasBase *canvas, SpiceQMask *mask, int *needs_invert_out)
@@ -1396,7 +1346,7 @@ static pixman_image_t *canvas_get_mask(CanvasBase *canvas, SpiceQMask *mask, int
             *needs_invert_out = TRUE;
         } else {
             pixman_image_t *inv_surf;
-            inv_surf = canvas_handle_inverse_user_data(surface);
+            inv_surf = canvas_A1_invers(surface);
             pixman_image_unref(surface);
             surface = inv_surf;
         }
