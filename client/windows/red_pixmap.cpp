@@ -20,7 +20,7 @@
 #include "debug.h"
 #include "utils.h"
 
-RedPixmap::RedPixmap(int width, int height, RedPixmap::Format format,
+RedPixmap::RedPixmap(int width, int height, RedDrawable::Format format,
                      bool top_bottom)
     : _format (format)
     , _width (width)
@@ -37,6 +37,6 @@ RedPixmap::~RedPixmap()
 
 bool RedPixmap::is_big_endian_bits()
 {
-    return _format == RedPixmap::A1;
+    return _format == RedDrawable::A1;
 }
 

@@ -29,10 +29,10 @@ struct RedPixmap_p {
     HBITMAP prev_bitmap;
 };
 
-RedPixmapGdi::RedPixmapGdi(int width, int height, RedPixmap::Format format, bool top_bottom)
+RedPixmapGdi::RedPixmapGdi(int width, int height, RedDrawable::Format format, bool top_bottom)
     : RedPixmap(width, height, format, top_bottom, pallet)
 {
-    ASSERT(format == RedPixmap::ARGB32 || format == RedPixmap::RGB32 || format == RedPixmap::A1);
+    ASSERT(format == RedDrawable::ARGB32 || format == RedDrawable::RGB32 || format == RedDrawable::A1);
     ASSERT(sizeof(RedPixmap_p) <= PIXELES_SOURCE_OPAQUE_SIZE);
 
     struct {
@@ -46,10 +46,10 @@ RedPixmapGdi::RedPixmapGdi(int width, int height, RedPixmap::Format format, bool
     bitmap_info.inf.bmiHeader.biHeight = top_bottom ? -_height : _height;
 
     bitmap_info.inf.bmiHeader.biPlanes = 1;
-    bitmap_info.inf.bmiHeader.biBitCount = RedPixmap::format_to_bpp(format);
+    bitmap_info.inf.bmiHeader.biBitCount = RedDrawable::format_to_bpp(format);
     bitmap_info.inf.bmiHeader.biCompression = BI_RGB;
     switch (format) {
-    case RedPixmap::A1:
+    case RedDrawable::A1:
         bitmap_info.inf.bmiColors[0].rgbRed = 0;
         bitmap_info.inf.bmiColors[0].rgbGreen = 0;
         bitmap_info.inf.bmiColors[0].rgbBlue = 0;

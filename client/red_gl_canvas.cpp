@@ -33,7 +33,7 @@ GCanvas::GCanvas(int width, int height, uint32_t format, RedWindow *win,
     , _textures_lost (false)
 {
     _pixmap = new RedPixmapGL(width, height,
-                              RedPixmap::format_from_surface(format),
+                              RedDrawable::format_from_surface(format),
                               true, win, rendertype);
     if (!(_canvas = gl_canvas_create(width, height,
                                      SPICE_SURFACE_FMT_DEPTH(format),

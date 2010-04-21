@@ -30,7 +30,7 @@
 #include "red_window_p.h"
 
 
-RedPixmapGL::RedPixmapGL(int width, int height, RedPixmap::Format format,
+RedPixmapGL::RedPixmapGL(int width, int height, RedDrawable::Format format,
                          bool top_bottom, RedWindow *win,
                          RenderType rendertype)
     : RedPixmap(width, height, format, top_bottom)
@@ -41,7 +41,7 @@ RedPixmapGL::RedPixmapGL(int width, int height, RedPixmap::Format format,
     Win xwin;
     //GLint max_texture_size;
 
-    ASSERT(format == RedPixmap::ARGB32 || format == RedPixmap::RGB32 || format == RedPixmap::A1);
+    ASSERT(format == RedDrawable::ARGB32 || format == RedDrawable::RGB32 || format == RedDrawable::A1);
     ASSERT(sizeof(RedDrawable_p) <= PIXELES_SOURCE_OPAQUE_SIZE);
 
     ((PixelsSource_p*)get_opaque())->type = PIXELS_SOURCE_TYPE_GL_TEXTURE;

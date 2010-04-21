@@ -18,7 +18,9 @@
 #ifndef _H_RED_DRAWABLE
 #define _H_RED_DRAWABLE
 
+#include <pixman_utils.h>
 #include "pixels_source.h"
+#include "utils.h"
 
 typedef uint32_t rgb32_t;
 
@@ -46,6 +48,56 @@ class RedDrawable: public PixelsSource {
 public:
     RedDrawable() {}
     virtual ~RedDrawable() {}
+
+    enum Format {
+        ARGB32,
+        RGB32,
+        RGB16_555,
+        RGB16_565,
+        A1,
+    };
+
+    static int format_to_bpp(Format format) {
+        if (format == RedDrawable::A1) {
+            return 1;
+        } else if (format == RGB16_555 || format == RGB16_565) {
+            return 16;
+        } else {
+            return 32;
+        }
+    }
+
+    static pixman_format_code_t format_to_pixman(Format format) {
+            switch (format) {
+            case RedDrawable::ARGB32:
+                return PIXMAN_a8r8g8b8;
+            case RedDrawable::RGB32:
+                return PIXMAN_x8r8g8b8;
+            case RedDrawable::RGB16_555:
+                return PIXMAN_x1r5g5b5;
+            case RedDrawable::RGB16_565:
+                return PIXMAN_r5g6b5;
+            case RedDrawable::A1:
+                return PIXMAN_a1;
+            default:
+                THROW("unsupported format %d", format);
+            }
+    }
+
+    static Format format_from_surface(uint32_t format) {
+        switch (format) {
+        case SPICE_SURFACE_FMT_16_555:
+            return RedDrawable::RGB16_555;
+        case SPICE_SURFACE_FMT_16_565:
+            return RedDrawable::RGB16_565;
+        case SPICE_SURFACE_FMT_32_xRGB:
+            return RedDrawable::RGB32;
+        case SPICE_SURFACE_FMT_32_ARGB:
+            return RedDrawable::ARGB32;
+        default:
+            THROW("Unsupported RedPixman format");
+        }
+    }
 
     enum CombineOP {
         OP_COPY,

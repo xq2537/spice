@@ -30,7 +30,7 @@ GDICanvas::GDICanvas(int width, int height, uint32_t format,
     , _pixmap (0)
 {
     _pixmap = new RedPixmapGdi(width, height,
-                               RedPixmap::format_from_surface(format),
+                               RedDrawable::format_from_surface(format),
                                true, NULL);
     if (!(_canvas = gdi_canvas_create(width, height, _pixmap->get_dc(),
                                       &_pixmap->get_mutex(),
