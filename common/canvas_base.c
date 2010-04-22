@@ -572,7 +572,7 @@ static pixman_image_t *canvas_bitmap_to_surface(CanvasBase *canvas, SpiceBitmap*
 
 #ifdef CAIRO_CANVAS_CACHE
 
-static inline SpicePalette *canvas_get_palett(CanvasBase *canvas, SPICE_ADDRESS base_palette, uint8_t flags)
+static inline SpicePalette *canvas_get_palette(CanvasBase *canvas, SPICE_ADDRESS base_palette, uint8_t flags)
 {
     SpicePalette *palette;
     if (!base_palette) {
@@ -592,6 +592,42 @@ static inline SpicePalette *canvas_get_palett(CanvasBase *canvas, SPICE_ADDRESS 
     return palette;
 }
 
+static inline SpicePalette *canvas_get_localized_palette(CanvasBase *canvas, SPICE_ADDRESS base_palette, uint8_t flags, int *free_palette)
+{
+    SpicePalette *palette = canvas_get_palette(canvas, base_palette, flags);
+    SpicePalette *copy;
+    uint32_t *now, *end;
+    size_t size;
+
+    if (canvas->format == SPICE_SURFACE_FMT_32_xRGB ||
+        canvas->format == SPICE_SURFACE_FMT_32_ARGB) {
+        return palette;
+    }
+
+    size = sizeof(SpicePalette) + palette->num_ents * 4;
+    copy = (SpicePalette *)spice_malloc(size);
+    memcpy(copy, palette, size);
+
+    switch (canvas->format) {
+    case SPICE_SURFACE_FMT_32_xRGB:
+    case SPICE_SURFACE_FMT_32_ARGB:
+        /* Won't happen */
+        break;
+    case SPICE_SURFACE_FMT_16_555:
+        now = copy->ents;
+        end = now + copy->num_ents;
+        for (; now < end; now++) {
+            *now = canvas_16bpp_to_32bpp(*now);
+        }
+        break;
+    case SPICE_SURFACE_FMT_16_565:
+    default:
+        PANIC("Unsupported palette depth");
+    }
+    *free_palette = TRUE;
+    return copy;
+}
+
 static pixman_image_t *canvas_get_lz(CanvasBase *canvas, LZImage *image, int invers,
                                      int want_original)
 {
@@ -608,6 +644,7 @@ static pixman_image_t *canvas_get_lz(CanvasBase *canvas, LZImage *image, int inv
     int height;
     int top_down;
     int stride;
+    int free_palette;
 
     if (setjmp(lz_data->jmp_env)) {
         if (decomp_buf) {
@@ -616,6 +653,7 @@ static pixman_image_t *canvas_get_lz(CanvasBase *canvas, LZImage *image, int inv
         CANVAS_ERROR("lz error, %s", lz_data->message_buf);
     }
 
+    free_palette = FALSE;
     if (image->descriptor.type == SPICE_IMAGE_TYPE_LZ_RGB) {
         comp_buf = image->lz_rgb.data;
         comp_size = image->lz_rgb.data_size;
@@ -623,7 +661,7 @@ static pixman_image_t *canvas_get_lz(CanvasBase *canvas, LZImage *image, int inv
     } else if (image->descriptor.type == SPICE_IMAGE_TYPE_LZ_PLT) {
         comp_buf = image->lz_plt.data;
         comp_size = image->lz_plt.data_size;
-        palette = canvas_get_palett(canvas, image->lz_plt.palette, image->lz_plt.flags);
+        palette = canvas_get_localized_palette(canvas, image->lz_plt.palette, image->lz_plt.flags, &free_palette);
     } else {
         CANVAS_ERROR("unexpected image type");
     }
@@ -700,6 +738,10 @@ static pixman_image_t *canvas_get_lz(CanvasBase *canvas, LZImage *image, int inv
         }
     }
 
+    if (free_palette)  {
+        free(palette);
+    }
+
     return lz_data->decode_data.out_surface;
 }
 
@@ -770,7 +812,7 @@ static pixman_image_t *canvas_get_bits(CanvasBase *canvas, SpiceBitmap *bitmap,
     pixman_image_t* surface;
     SpicePalette *palette;
 
-    palette = canvas_get_palett(canvas, bitmap->palette, bitmap->flags);
+    palette = canvas_get_palette(canvas, bitmap->palette, bitmap->flags);
 #ifdef DEBUG_DUMP_BITMAP
     if (palette) {
         dump_bitmap(bitmap, palette);
