@@ -399,6 +399,7 @@ typedef struct ImageItem {
     int stride;
     int top_down;
     int surface_id;
+    int image_format;
     uint8_t data[0];
 } ImageItem;
 
@@ -3565,6 +3566,21 @@ static void red_get_area(RedWorker *worker, int surface_id, const SpiceRect *are
     canvas->ops->read_bits(canvas, dest, dest_stride, area);
 }
 
+static int surface_format_to_image_type(uint32_t surface_format)
+{
+    switch (surface_format) {
+    case SPICE_SURFACE_FMT_16_555:
+        return SPICE_BITMAP_FMT_16BIT;
+    case SPICE_SURFACE_FMT_32_xRGB:
+        return SPICE_BITMAP_FMT_32BIT;
+    case SPICE_SURFACE_FMT_32_ARGB:
+        return SPICE_BITMAP_FMT_RGBA;
+    default:
+        PANIC("Unsupported surface format");
+    }
+    return 0;
+}
+
 static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
 {
     QXLImage *image;
@@ -3597,19 +3613,7 @@ static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
     QXL_SET_IMAGE_ID(image, QXL_IMAGE_GROUP_RED, ++worker->bits_unique);
     image->bitmap.flags = QXL_BITMAP_DIRECT | (surface->context.top_down ?
                                                QXL_BITMAP_TOP_DOWN : 0);
-    switch (surface->context.format) {
-    case SPICE_SURFACE_FMT_32_xRGB:
-        image->bitmap.format = SPICE_BITMAP_FMT_32BIT;
-        break;
-    case SPICE_SURFACE_FMT_32_ARGB:
-        image->bitmap.format = SPICE_BITMAP_FMT_RGBA;
-        break;
-    case SPICE_SURFACE_FMT_16_555:
-        image->bitmap.format = SPICE_BITMAP_FMT_16BIT;
-        break;
-    default:
-        ASSERT(0); /* not supported yet */
-    }
+    image->bitmap.format = surface_format_to_image_type(surface->context.format);
     image->bitmap.stride = dest_stride;
     image->descriptor.width = image->bitmap.x = width;
     image->descriptor.height = image->bitmap.y = height;
@@ -4908,29 +4912,34 @@ static void red_add_surface_image(RedWorker *worker, int surface_id)
     int stride;
     SpiceRect area;
     SpiceCanvas *canvas = worker->surfaces[surface_id].context.canvas;
+    RedSurface *surface;
 
-    if (!worker->display_channel || !worker->surfaces[surface_id].context.canvas) {
+    surface = &worker->surfaces[surface_id];
+
+    if (!worker->display_channel || !surface->context.canvas) {
         return;
     }
 
-    stride = abs(worker->surfaces[surface_id].context.stride);
+    stride = abs(surface->context.stride);
 
-    item = (ImageItem *)spice_malloc_n_m(worker->surfaces[surface_id].context.height, stride,
+    item = (ImageItem *)spice_malloc_n_m(surface->context.height, stride,
                                          sizeof(ImageItem));
 
     red_pipe_item_init(&item->link, PIPE_ITEM_TYPE_IMAGE);
 
     item->refs = 1;
     item->surface_id = surface_id;
+    item->image_format =
+        surface_format_to_image_type(surface->context.format);
     item->pos.x = item->pos.y = 0;
-    item->width = worker->surfaces[surface_id].context.width;
-    item->height = worker->surfaces[surface_id].context.height;
+    item->width = surface->context.width;
+    item->height = surface->context.height;
     item->stride = stride;
-    item->top_down = worker->surfaces[surface_id].context.top_down;
+    item->top_down = surface->context.top_down;
 
     area.top = area.left = 0;
-    area.right = worker->surfaces[surface_id].context.width;
-    area.bottom = worker->surfaces[surface_id].context.height;
+    area.right = surface->context.width;
+    area.bottom = surface->context.height;
     canvas->ops->read_bits(canvas, item->data, stride, &area);
     red_pipe_add_image_item(worker, item);
     release_image_item(item);
@@ -7239,7 +7248,7 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
     red_image->descriptor.width = item->width;
     red_image->descriptor.height = item->height;
 
-    bitmap.format = SPICE_BITMAP_FMT_32BIT;
+    bitmap.format = item->image_format;
     bitmap.flags = QXL_BITMAP_DIRECT;
     bitmap.flags |= item->top_down ? QXL_BITMAP_TOP_DOWN : 0;
     bitmap.x = item->width;
