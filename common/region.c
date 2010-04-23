@@ -366,9 +366,9 @@ SpiceRect *region_dup_rects(const QRegion *rgn, uint32_t *num_rects)
 void region_ret_rects(const QRegion *rgn, SpiceRect *rects, uint32_t num_rects)
 {
     pixman_box32_t *boxes;
-    int n, i;
+    unsigned int n, i;
 
-    boxes = pixman_region32_rectangles((pixman_region32_t *)rgn, &n);
+    boxes = pixman_region32_rectangles((pixman_region32_t *)rgn, (int *)&n);
     for (i = 0; i < n && i < num_rects; i++) {
         rects[i].left = boxes[i].x1;
         rects[i].top = boxes[i].y1;
@@ -377,7 +377,7 @@ void region_ret_rects(const QRegion *rgn, SpiceRect *rects, uint32_t num_rects)
     }
 
     if (i && i != n) {
-        int x;
+        unsigned int x;
 
         for (x = 0; x < (n - num_rects); ++x) {
             rects[i - 1].left = MIN(rects[i - 1].left, boxes[i + x].x1);
