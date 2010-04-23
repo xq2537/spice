@@ -3169,58 +3169,6 @@ typedef struct OptionsMap {
     int val;
 } OptionsMap;
 
-static int find_option(const char *str, OptionsMap *options_map)
-{
-    int i = 0;
-
-    for (i = 0; options_map[i].name != NULL; i++) {
-        if (strcmp(str, options_map[i].name) == 0) {
-            return options_map[i].val;
-        }
-    }
-    return SPICE_OPTION_INVALID;
-}
-
-static void clear_blanks(char **ptr)
-{
-    char *str = *ptr;
-    while (isspace(*str)) {
-        str++;
-    }
-    while (isspace(str[strlen(str) - 1])) {
-        str[strlen(str) - 1] = 0;
-    }
-    *ptr = str;
-}
-
-static int get_option(char **args, char **out_val, OptionsMap *map, char seperator)
-{
-    char *p;
-    char *next;
-    char *val;
-
-    ASSERT(args && out_val);
-
-    p = *args;
-    if ((next = strchr(p, seperator))) {
-        *next = 0;
-        *args = next + 1;
-    } else {
-        *args = NULL;
-    }
-
-    if ((val = strchr(p, '='))) {
-        *(val++) = 0;
-        clear_blanks(&val);
-        *out_val = (strlen(val) == 0) ? NULL : val;
-    } else {
-        *out_val = NULL;
-    }
-
-    clear_blanks(&p);
-    return find_option(p, map);
-}
-
 enum {
     SPICE_TICKET_OPTION_INVALID,
     SPICE_TICKET_OPTION_EXPIRATION,
@@ -3261,41 +3209,9 @@ static void set_one_channel_security(int id, uint32_t security)
 
 #define REDS_SAVE_VERSION 1
 
-static OptionsMap spice_mig_options[] = {
-    {"spicesport", SPICE_OPTION_SPORT},
-    {"spiceport", SPICE_OPTION_PORT},
-    {"spicehost", SPICE_OPTION_HOST},
-    {NULL, 0},
-};
-
-struct RedsMigSpice;
-
-typedef struct RedsMigRead {
-    uint8_t buf[RECIVE_BUF_SIZE];
-    uint32_t end_pos;
-    uint32_t size;
-
-    void (*handle_data)(struct RedsMigSpice *message);
-} RedsMigRead;
-
-typedef struct RedsMigWrite {
-    uint8_t buf[SEND_BUF_SIZE];
-    uint8_t *now;
-    uint32_t length;
-
-    void (*handle_done)(struct RedsMigSpice *s);
-} RedsMigWrite;
-
 typedef struct RedsMigSpice {
-    int fd;
-    SpiceWatch *watch;
-    RedsMigWrite write;
-    RedsMigRead read;
-
     char pub_key[SPICE_TICKET_PUBKEY_BYTES];
     uint32_t mig_key;
-
-    char *local_args;
     char *host;
     int port;
     int sport;
@@ -3313,104 +3229,6 @@ typedef struct RedsMigCertPubKeyInfo {
     uint32_t len;
 } RedsMigCertPubKeyInfo;
 
-static int reds_mig_actual_read(RedsMigSpice *s)
-{
-    for (;;) {
-        uint8_t *buf = s->read.buf;
-        uint32_t pos = s->read.end_pos;
-        int n;
-        n = read(s->fd, buf + pos, s->read.size - pos);
-        if (n <= 0) {
-            if (n == 0) {
-                return -1;
-            }
-            switch (errno) {
-            case EAGAIN:
-                return 0;
-            case EINTR:
-                break;
-            case EPIPE:
-                return -1;
-            default:
-                red_printf("%s", strerror(errno));
-                return -1;
-            }
-        } else {
-            s->read.end_pos += n;
-            if (s->read.end_pos == s->read.size) {
-                s->read.handle_data(s);
-                return 0;
-            }
-        }
-    }
-}
-
-static int reds_mig_actual_write(RedsMigSpice *s)
-{
-    if (!s->write.length) {
-        return 0;
-    }
-
-    while (s->write.length) {
-        int n;
-
-        n = write(s->fd, s->write.now, s->write.length);
-        if (n <= 0) {
-            if (n == 0) {
-                return -1;
-            }
-            switch (errno) {
-            case EAGAIN:
-                return 0;
-            case EINTR:
-                break;
-            case EPIPE:
-                return -1;
-            default:
-                red_printf("%s", strerror(errno));
-                return -1;
-            }
-        } else {
-            s->write.now += n;
-            s->write.length -= n;
-        }
-    }
-
-    s->write.handle_done(s);
-    return 0;
-}
-
-static void reds_mig_failed(RedsMigSpice *s)
-{
-    red_printf("");
-    core->watch_remove(s->watch);
-    s->watch = NULL;
-    if (s->local_args) {
-        free(s->local_args);
-    }
-    free(s);
-
-    reds_mig_disconnect();
-}
-
-static void reds_mig_event(int fd, int event, void *data)
-{
-    RedsMigSpice *s = data;
-
-    if (event & SPICE_WATCH_EVENT_READ) {
-        if (reds_mig_actual_read((RedsMigSpice *)data)) {
-            red_printf("read error cannot continue spice migration");
-            reds_mig_failed(s);
-        }
-    }
-    if (event & SPICE_WATCH_EVENT_WRITE) {
-        if (reds_mig_actual_write((RedsMigSpice *)data)) {
-            red_printf("write error cannot continue spice migration");
-            reds_mig_failed(s);
-        }
-    }
-}
-
 static void reds_mig_continue(RedsMigSpice *s)
 {
     SpiceMsgMainMigrationBegin *migrate;
@@ -3418,8 +3236,6 @@ static void reds_mig_continue(RedsMigSpice *s)
     int host_len;
 
     red_printf("");
-    core->watch_remove(s->watch);
-    s->watch = NULL;
     host_len = strlen(s->host) + 1;
     item = new_simple_out_item(SPICE_MSG_MAIN_MIGRATE_BEGIN,
                                sizeof(SpiceMsgMainMigrationBegin) + host_len + s->cert_pub_key_len);
@@ -3435,174 +3251,15 @@ static void reds_mig_continue(RedsMigSpice *s)
     memcpy((uint8_t*)(migrate) + migrate->pub_key_offset, s->cert_pub_key, s->cert_pub_key_len);
     reds_push_pipe_item(&item->base);
 
-    free(s->local_args);
     free(s);
     reds->mig_wait_connect = TRUE;
     core->timer_start(reds->mig_timer, MIGRATE_TIMEOUT);
 }
 
-static void reds_mig_receive_ack(RedsMigSpice *s)
-{
-    s->read.size = sizeof(uint32_t);
-    s->read.end_pos = 0;
-    s->read.handle_data = reds_mig_continue;
-
-    core->watch_update_mask(s->watch, SPICE_WATCH_EVENT_READ);
-}
-
-static void reds_mig_send_link_id(RedsMigSpice *s)
-{
-    RedsMigSpiceMessage *data = (RedsMigSpiceMessage *)s->write.buf;
-
-    memcpy(&data->link_id, &reds->link_id, sizeof(reds->link_id));
-
-    s->write.now = s->write.buf;
-    s->write.length = sizeof(RedsMigSpiceMessage);
-    s->write.handle_done = reds_mig_receive_ack;
-
-    core->watch_update_mask(s->watch, SPICE_WATCH_EVENT_READ | SPICE_WATCH_EVENT_WRITE);
-}
-
-static void reds_mig_send_ticket(RedsMigSpice *s)
-{
-    EVP_PKEY *pubkey = NULL;
-    BIO *bio_key;
-    RSA *rsa;
-    int rsa_size = 0;
-
-    red_printf("");
-
-    bio_key = BIO_new(BIO_s_mem());
-    if (bio_key != NULL) {
-        BIO_write(bio_key, s->read.buf, SPICE_TICKET_PUBKEY_BYTES);
-        pubkey = d2i_PUBKEY_bio(bio_key, NULL);
-        rsa = pubkey->pkey.rsa;
-        rsa_size = RSA_size(rsa);
-        if (RSA_public_encrypt(strlen(reds->taTicket.password) + 1,
-                               (unsigned char *)reds->taTicket.password,
-                               (uint8_t *)(s->write.buf),
-                               rsa, RSA_PKCS1_OAEP_PADDING) > 0) {
-            s->write.length = RSA_size(rsa);
-            s->write.now = s->write.buf;
-            s->write.handle_done = reds_mig_send_link_id;
-            core->watch_update_mask(s->watch, SPICE_WATCH_EVENT_READ | SPICE_WATCH_EVENT_WRITE);
-        } else {
-            reds_mig_failed(s);
-        }
-    } else {
-        reds_mig_failed(s);
-    }
-
-    EVP_PKEY_free(pubkey);
-    BIO_free(bio_key);
-}
-
-static void reds_mig_receive_cert_public_key(RedsMigSpice *s)
-{
-    s->cert_pub_key = spice_memdup(s->read.buf, s->cert_pub_key_len);
-
-    s->read.size = SPICE_TICKET_PUBKEY_BYTES;
-    s->read.end_pos = 0;
-    s->read.handle_data = reds_mig_send_ticket;
-
-    core->watch_update_mask(s->watch, SPICE_WATCH_EVENT_READ);
-}
-
-static void reds_mig_receive_cert_public_key_info(RedsMigSpice *s)
-{
-    RedsMigCertPubKeyInfo* pubkey_info = (RedsMigCertPubKeyInfo*)s->read.buf;
-    s->cert_pub_key_type = pubkey_info->type;
-    s->cert_pub_key_len = pubkey_info->len;
-
-    if (s->cert_pub_key_len > RECIVE_BUF_SIZE) {
-        red_printf("certificate public key length exceeds buffer size");
-        reds_mig_failed(s);
-        return;
-    }
-
-    if (s->cert_pub_key_len) {
-        s->read.size = s->cert_pub_key_len;
-        s->read.end_pos = 0;
-        s->read.handle_data = reds_mig_receive_cert_public_key;
-    } else {
-        s->cert_pub_key = NULL;
-        s->read.size = SPICE_TICKET_PUBKEY_BYTES;
-        s->read.end_pos = 0;
-        s->read.handle_data = reds_mig_send_ticket;
-    }
-
-    core->watch_update_mask(s->watch, SPICE_WATCH_EVENT_READ);
-}
-
-static void reds_mig_handle_send_abort_done(RedsMigSpice *s)
-{
-    reds_mig_failed(s);
-}
-
-static void reds_mig_receive_version(RedsMigSpice *s)
-{
-    uint32_t* dest_version;
-    uint32_t resault;
-    dest_version = (uint32_t*)s->read.buf;
-    resault = REDS_MIG_ABORT;
-    memcpy(s->write.buf, &resault, sizeof(resault));
-    s->write.length = sizeof(resault);
-    s->write.now = s->write.buf;
-    s->write.handle_done = reds_mig_handle_send_abort_done;
-    core->watch_update_mask(s->watch, SPICE_WATCH_EVENT_READ | SPICE_WATCH_EVENT_WRITE);
-}
-
-static void reds_mig_control(RedsMigSpice *spice_migration)
-{
-    uint32_t *control;
-
-    core->watch_update_mask(spice_migration->watch, 0);
-    control = (uint32_t *)spice_migration->read.buf;
-
-    switch (*control) {
-    case REDS_MIG_CONTINUE:
-        spice_migration->read.size = sizeof(RedsMigCertPubKeyInfo);
-        spice_migration->read.end_pos = 0;
-        spice_migration->read.handle_data = reds_mig_receive_cert_public_key_info;
-
-        core->watch_update_mask(spice_migration->watch, SPICE_WATCH_EVENT_READ);
-        break;
-    case REDS_MIG_ABORT:
-        red_printf("abort");
-        reds_mig_failed(spice_migration);
-        break;
-    case REDS_MIG_DIFF_VERSION:
-        red_printf("different versions");
-        spice_migration->read.size = sizeof(uint32_t);
-        spice_migration->read.end_pos = 0;
-        spice_migration->read.handle_data = reds_mig_receive_version;
-
-        core->watch_update_mask(spice_migration->watch, SPICE_WATCH_EVENT_READ);
-        break;
-    default:
-        red_printf("invalid control");
-        reds_mig_failed(spice_migration);
-    }
-}
-
-static void reds_mig_receive_control(RedsMigSpice *spice_migration)
-{
-    spice_migration->read.size = sizeof(uint32_t);
-    spice_migration->read.end_pos = 0;
-    spice_migration->read.handle_data = reds_mig_control;
-
-    core->watch_update_mask(spice_migration->watch, SPICE_WATCH_EVENT_READ);
-}
-
-static void reds_mig_started(void *opaque, const char *in_args)
+static void reds_mig_started(void *opaque)
 {
     RedsMigSpice *spice_migration = NULL;
-    uint32_t *version;
-    char *val;
-    char *args;
-    int option;
 
-    ASSERT(in_args);
     red_printf("");
 
     reds->mig_inprogress = TRUE;
@@ -3630,48 +3287,7 @@ static void reds_mig_started(void *opaque, const char *in_args)
     spice_migration->port = -1;
     spice_migration->sport = -1;
 
-    spice_migration->local_args = spice_strdup(in_args);
-
-    args = spice_migration->local_args;
-    do {
-        switch (option = get_option(&args, &val, spice_mig_options, ',')) {
-        case SPICE_OPTION_SPORT: {
-            char *endptr;
-
-            if (!val) {
-                goto error;
-            }
-            spice_migration->sport = strtol(val, &endptr, 0);
-            if (endptr != val + strlen(val) || spice_migration->sport < 0 ||
-                                                                  spice_migration->sport > 0xffff) {
-                goto error;
-            }
-            break;
-        }
-        case SPICE_OPTION_PORT: {
-            char *endptr;
-
-            if (!val) {
-                goto error;
-            }
-            spice_migration->port = strtol(val, &endptr, 0);
-            if (
-                endptr != val + strlen(val) ||
-                spice_migration->port < 0 ||
-                spice_migration->port > 0xffff
-                ) {
-                goto error;
-            }
-            break;
-        }
-        case SPICE_OPTION_HOST:
-            if (!val) {
-                goto error;
-            }
-            spice_migration->host = val;
-            break;
-        }
-    } while (args);
+    /* FIXME */
 
     if ((spice_migration->sport == -1 && spice_migration->port == -1) || !spice_migration->host) {
         red_printf("invalid args port %d sport %d host %s",
@@ -3681,31 +3297,12 @@ static void reds_mig_started(void *opaque, const char *in_args)
         goto error;
     }
 
-    spice_migration->fd = mig->begin_hook(mig, reds->mig_notifier);
-
-    if (spice_migration->fd == -1) {
-        goto error;
-    }
-
-    spice_migration->write.now = spice_migration->write.buf;
-    spice_migration->write.length = sizeof(uint32_t);
-    version = (uint32_t *)spice_migration->write.buf;
-    *version = REDS_MIG_VERSION;
-    spice_migration->write.handle_done = reds_mig_receive_control;
-    spice_migration->watch = core->watch_add(spice_migration->fd,
-                                             SPICE_WATCH_EVENT_READ | SPICE_WATCH_EVENT_WRITE,
-                                             reds_mig_event,
-                                             spice_migration);
+    /* FIXME: send SPICE_MSG_MAIN_MIGRATE_BEGIN ??? */
+    reds_mig_continue(spice_migration);
     return;
 
 error:
-    if (spice_migration) {
-        if (spice_migration->local_args) {
-            free(spice_migration->local_args);
-        }
-        free(spice_migration);
-    }
-
+    free(spice_migration);
     reds_mig_disconnect();
 }
 
@@ -3750,228 +3347,6 @@ static void reds_mig_finished(void *opaque, int completed)
         reds_push_pipe_item(&item->base);
         reds_mig_cleanup();
     }
-}
-
-static int write_all(int fd, const void *in_buf, int len1)
-{
-    int ret, len;
-    uint8_t *buf = (uint8_t *)in_buf;
-
-    len = len1;
-    while (len > 0) {
-        ret = write(fd, buf, len);
-        if (ret < 0) {
-            if (errno != EINTR && errno != EAGAIN) {
-                return -1;
-            }
-        } else if (ret == 0) {
-            break;
-        } else {
-            buf += ret;
-            len -= ret;
-        }
-    }
-    return len1 - len;
-}
-
-static int read_all(int fd, void *in_nuf, int lenl)
-{
-    int ret, len;
-    uint8_t *buf = in_nuf;
-
-    len = lenl;
-    while (len > 0) {
-        ret = read(fd, buf, len);
-        if (ret < 0) {
-            if (errno != EINTR && errno != EAGAIN) {
-                return -1;
-            }
-        } else if (ret == 0) {
-            break;
-        } else {
-            buf += ret;
-            len -= ret;
-        }
-    }
-    return lenl - len;
-}
-
-static void reds_mig_read_all(int fd, void *buf, int len, const char *name)
-{
-    int n = read_all(fd, buf, len);
-    if (n != len) {
-        red_error("read %s failed, n=%d (%s)", name, n, strerror(errno));
-    }
-}
-
-static void reds_mig_write_all(int fd, void *buf, int len, const char *name)
-{
-    int n = write_all(fd, buf, len);
-    if (n != len) {
-        red_error("write %s faile, n=%d (%s)", name, n, strerror(errno));
-    }
-}
-
-static void reds_mig_send_cert_public_key(int fd)
-{
-    FILE* cert_file;
-    X509* x509;
-    EVP_PKEY* pub_key;
-    unsigned char* pp = NULL;
-    int length;
-    BIO* mem_bio;
-    RedsMigCertPubKeyInfo pub_key_info_msg;
-
-    if (spice_secure_port == -1) {
-        pub_key_info_msg.type = SPICE_PUBKEY_TYPE_INVALID;
-        pub_key_info_msg.len = 0;
-        reds_mig_write_all(fd, &pub_key_info_msg, sizeof(pub_key_info_msg), "cert public key info");
-        return;
-    }
-
-    cert_file =  fopen(ssl_parameters.certs_file, "r");
-    if (!cert_file) {
-        red_error("opening certificate failed");
-    }
-
-    x509 = PEM_read_X509_AUX(cert_file, NULL, NULL, NULL);
-    if (!x509) {
-        red_error("reading x509 cert failed");
-    }
-    pub_key = X509_get_pubkey(x509);
-    if (!pub_key) {
-        red_error("reading public key failed");
-    }
-
-    mem_bio = BIO_new(BIO_s_mem());
-    i2d_PUBKEY_bio(mem_bio, pub_key);
-    if (BIO_flush(mem_bio) != 1) {
-        red_error("bio flush failed");
-    }
-    length = BIO_get_mem_data(mem_bio, &pp);
-
-    switch(pub_key->type) {
-    case EVP_PKEY_RSA:
-        pub_key_info_msg.type = SPICE_PUBKEY_TYPE_RSA;
-        break;
-    case EVP_PKEY_RSA2:
-        pub_key_info_msg.type = SPICE_PUBKEY_TYPE_RSA2;
-        break;
-    case EVP_PKEY_DSA:
-        pub_key_info_msg.type = SPICE_PUBKEY_TYPE_DSA;
-        break;
-    case EVP_PKEY_DSA1:
-        pub_key_info_msg.type = SPICE_PUBKEY_TYPE_DSA1;
-        break;
-    case EVP_PKEY_DSA2:
-        pub_key_info_msg.type = SPICE_PUBKEY_TYPE_DSA2;
-        break;
-    case EVP_PKEY_DSA3:
-        pub_key_info_msg.type = SPICE_PUBKEY_TYPE_DSA3;
-        break;
-    case EVP_PKEY_DSA4:
-        pub_key_info_msg.type = SPICE_PUBKEY_TYPE_DSA4;
-        break;
-    case EVP_PKEY_DH:
-        pub_key_info_msg.type = SPICE_PUBKEY_TYPE_DH;
-        break;
-    case EVP_PKEY_EC:
-        pub_key_info_msg.type = SPICE_PUBKEY_TYPE_EC;
-        break;
-    default:
-        red_error("invalid public key type");
-    }
-    pub_key_info_msg.len = length;
-    reds_mig_write_all(fd, &pub_key_info_msg, sizeof(pub_key_info_msg), "cert public key info");
-    reds_mig_write_all(fd, pp, length, "cert public key");
-
-    BIO_free(mem_bio);
-    fclose(cert_file);
-    EVP_PKEY_free(pub_key);
-    X509_free(x509);
-}
-
-static void reds_mig_recv(void *opaque, int fd)
-{
-    uint32_t ack_message = *(uint32_t *)"ack_";
-    char password[SPICE_MAX_PASSWORD_LENGTH];
-    RedsMigSpiceMessage mig_message;
-    unsigned long f4 = RSA_F4;
-    TicketInfo ticketing_info;
-    uint32_t version;
-    uint32_t resault;
-    BIO *bio;
-
-    BUF_MEM *buff;
-
-    reds_mig_read_all(fd, &version, sizeof(version), "version");
-    // starting from version 3, if the version of the src is bigger
-    // than ours, we send our version to the src.
-    if (version < REDS_MIG_VERSION) {
-        resault = REDS_MIG_ABORT;
-        reds_mig_write_all(fd, &resault, sizeof(resault), "resault");
-        mig->notifier_done(mig, reds->mig_notifier);
-        return;
-    } else if (version > REDS_MIG_VERSION) {
-        uint32_t src_resault;
-        uint32_t self_version = REDS_MIG_VERSION;
-        resault = REDS_MIG_DIFF_VERSION;
-        reds_mig_write_all(fd, &resault, sizeof(resault), "resault");
-        reds_mig_write_all(fd, &self_version, sizeof(self_version), "dest-version");
-        reds_mig_read_all(fd, &src_resault, sizeof(src_resault), "src resault");
-
-        if (src_resault == REDS_MIG_ABORT) {
-            red_printf("abort (response to REDS_MIG_DIFF_VERSION)");
-            mig->notifier_done(mig, reds->mig_notifier);
-            return;
-        } else if (src_resault != REDS_MIG_CONTINUE) {
-            red_printf("invalid response to REDS_MIG_DIFF_VERSION");
-            mig->notifier_done(mig, reds->mig_notifier);
-            return;
-        }
-    } else {
-        resault = REDS_MIG_CONTINUE;
-        reds_mig_write_all(fd, &resault, sizeof(resault), "resault");
-    }
-
-    reds_mig_send_cert_public_key(fd);
-
-    ticketing_info.bn = BN_new();
-    if (!ticketing_info.bn) {
-        red_error("OpenSSL BIGNUMS alloc failed");
-    }
-
-    BN_set_word(ticketing_info.bn, f4);
-    if (!(ticketing_info.rsa = RSA_new())) {
-        red_error("OpenSSL RSA alloc failed");
-    }
-
-    RSA_generate_key_ex(ticketing_info.rsa, SPICE_TICKET_KEY_PAIR_LENGTH, ticketing_info.bn, NULL);
-    ticketing_info.rsa_size = RSA_size(ticketing_info.rsa);
-
-    if (!(bio = BIO_new(BIO_s_mem()))) {
-        red_error("OpenSSL BIO alloc failed");
-    }
-
-    i2d_RSA_PUBKEY_bio(bio, ticketing_info.rsa);
-    BIO_get_mem_ptr(bio, &buff);
-
-    reds_mig_write_all(fd, buff->data, SPICE_TICKET_PUBKEY_BYTES, "publick key");
-    reds_mig_read_all(fd, ticketing_info.encrypted_ticket.encrypted_data, ticketing_info.rsa_size,
-                      "ticket");
-
-    RSA_private_decrypt(ticketing_info.rsa_size, ticketing_info.encrypted_ticket.encrypted_data,
-                        (unsigned char *)password, ticketing_info.rsa, RSA_PKCS1_OAEP_PADDING);
-
-    BN_free(ticketing_info.bn);
-    BIO_free(bio);
-    RSA_free(ticketing_info.rsa);
-
-    memcpy(reds->taTicket.password, password, sizeof(reds->taTicket.password));
-    reds_mig_read_all(fd, &mig_message, sizeof(mig_message), "mig data");
-    reds->link_id = mig_message.link_id;
-    reds_mig_write_all(fd, &ack_message, sizeof(uint32_t), "ack");
-    mig->notifier_done(mig, reds->mig_notifier);
 }
 
 static void migrate_timout(void *opaque)
@@ -4100,9 +3475,10 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
             return -1;
         }
         mig = (MigrationInterface *)interface;
-        reds->mig_notifier = mig->register_notifiers(mig, MIGRATION_NOTIFY_SPICE_KEY,
-                                                     reds_mig_started, reds_mig_finished,
-                                                     reds_mig_recv, NULL);
+        reds->mig_notifier = mig->register_notifiers(mig,
+                                                     reds_mig_started,
+                                                     reds_mig_finished,
+                                                     NULL);
         if (reds->mig_notifier == INVALID_VD_OBJECT_REF) {
             red_error("migration register failed");
         }
