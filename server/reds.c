@@ -241,6 +241,8 @@ typedef struct RedsStatValue {
 
 #endif
 
+typedef struct RedsMigSpice RedsMigSpice;
+
 typedef struct RedsState {
     int listen_socket;
     int secure_listen_socket;
@@ -258,6 +260,7 @@ typedef struct RedsState {
     int mig_wait_disconnect;
     int mig_inprogress;
     int mig_target;
+    RedsMigSpice *mig_spice;
     int num_of_channels;
     IncomingHandler in_handler;
     RedsOutgoingData outgoing;
@@ -3209,7 +3212,7 @@ static void set_one_channel_security(int id, uint32_t security)
 
 #define REDS_SAVE_VERSION 1
 
-typedef struct RedsMigSpice {
+struct RedsMigSpice {
     char pub_key[SPICE_TICKET_PUBKEY_BYTES];
     uint32_t mig_key;
     char *host;
@@ -3218,7 +3221,7 @@ typedef struct RedsMigSpice {
     uint16_t cert_pub_key_type;
     uint32_t cert_pub_key_len;
     uint8_t* cert_pub_key;
-} RedsMigSpice;
+};
 
 typedef struct RedsMigSpiceMessage {
     uint32_t link_id;
@@ -3229,8 +3232,9 @@ typedef struct RedsMigCertPubKeyInfo {
     uint32_t len;
 } RedsMigCertPubKeyInfo;
 
-static void reds_mig_continue(RedsMigSpice *s)
+static void reds_mig_continue(void)
 {
+    RedsMigSpice *s = reds->mig_spice;
     SpiceMsgMainMigrationBegin *migrate;
     SimpleOutItem *item;
     int host_len;
@@ -3251,15 +3255,16 @@ static void reds_mig_continue(RedsMigSpice *s)
     memcpy((uint8_t*)(migrate) + migrate->pub_key_offset, s->cert_pub_key, s->cert_pub_key_len);
     reds_push_pipe_item(&item->base);
 
-    free(s);
+    free(reds->mig_spice->host);
+    free(reds->mig_spice);
+    reds->mig_spice = NULL;
+
     reds->mig_wait_connect = TRUE;
     core->timer_start(reds->mig_timer, MIGRATE_TIMEOUT);
 }
 
-static void reds_mig_started(void *opaque)
+static void reds_mig_started(void)
 {
-    RedsMigSpice *spice_migration = NULL;
-
     red_printf("");
 
     reds->mig_inprogress = TRUE;
@@ -3283,30 +3288,19 @@ static void reds_mig_started(void *opaque)
         goto error;
     }
 
-    spice_migration = spice_new0(RedsMigSpice, 1);
-    spice_migration->port = -1;
-    spice_migration->sport = -1;
-
-    /* FIXME */
-
-    if ((spice_migration->sport == -1 && spice_migration->port == -1) || !spice_migration->host) {
-        red_printf("invalid args port %d sport %d host %s",
-                   spice_migration->port,
-                   spice_migration->sport,
-                   (spice_migration->host) ? spice_migration->host : "NULL");
-        goto error;
-    }
-
-    /* FIXME: send SPICE_MSG_MAIN_MIGRATE_BEGIN ??? */
-    reds_mig_continue(spice_migration);
+    reds_mig_continue();
     return;
 
 error:
-    free(spice_migration);
+    if (reds->mig_spice) {
+        free(reds->mig_spice->host);
+        free(reds->mig_spice);
+        reds->mig_spice = NULL;
+    }
     reds_mig_disconnect();
 }
 
-static void reds_mig_finished(void *opaque, int completed)
+static void reds_mig_finished(int completed)
 {
     SimpleOutItem *item;
 
@@ -3475,13 +3469,6 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
             return -1;
         }
         mig = (MigrationInterface *)interface;
-        reds->mig_notifier = mig->register_notifiers(mig,
-                                                     reds_mig_started,
-                                                     reds_mig_finished,
-                                                     NULL);
-        if (reds->mig_notifier == INVALID_VD_OBJECT_REF) {
-            red_error("migration register failed");
-        }
 
     } else if (strcmp(interface->type, SPICE_INTERFACE_QXL) == 0) {
         QXLInstance *qxl;
@@ -3965,5 +3952,61 @@ __visible__ int spice_server_add_renderer(SpiceServer *s, const char *name)
 __visible__ int spice_server_kbd_leds(SpiceKbdInstance *sin, int leds)
 {
     reds_on_keyboard_leds_change(NULL, leds);
+    return 0;
+}
+
+__visible__ int spice_server_migrate_info(SpiceServer *s, const char* dest,
+                                          int port, int secure_port,
+                                          const char* cert_subject)
+{
+    RedsMigSpice *spice_migration = NULL;
+
+    ASSERT(reds == s);
+
+    if ((port == -1 && secure_port == -1) || !dest)
+        return -1;
+
+    spice_migration = spice_new0(RedsMigSpice, 1);
+    spice_migration->port = port;
+    spice_migration->sport = secure_port;
+    spice_migration->host = strdup(dest);
+
+    if (cert_subject) {
+        /* TODO */
+    }
+
+    reds->mig_spice = spice_migration;
+    return 0;
+}
+
+__visible__ int spice_server_migrate_start(SpiceServer *s)
+{
+    ASSERT(reds == s);
+
+    if (!reds->mig_spice) {
+        return -1;
+    }
+    reds_mig_started();
+    return 0;
+}
+
+__visible__ int spice_server_migrate_client_state(SpiceServer *s)
+{
+    ASSERT(reds == s);
+
+    if (!reds->peer) {
+        return SPICE_MIGRATE_CLIENT_NONE;
+    } else if (reds->mig_wait_connect) {
+        return SPICE_MIGRATE_CLIENT_WAITING;
+    } else {
+        return SPICE_MIGRATE_CLIENT_READY;
+    }
+    return 0;
+}
+
+__visible__ int spice_server_migrate_end(SpiceServer *s, int completed)
+{
+    ASSERT(reds == s);
+    reds_mig_finished(completed);
     return 0;
 }

@@ -268,17 +268,10 @@ struct SpiceTabletInstance {
 #define VD_INTERFACE_MIGRATION_MAJOR 1
 #define VD_INTERFACE_MIGRATION_MINOR 1
 typedef struct MigrationInterface MigrationInterface;
-typedef void (*migration_notify_started_t)(void *opaque);
-typedef void (*migration_notify_finished_t)(void *opaque, int completed);
 
 struct MigrationInterface {
     SpiceBaseInterface base;
 
-    VDObjectRef (*register_notifiers)(MigrationInterface* mig,
-                                      migration_notify_started_t,
-                                      migration_notify_finished_t,
-                                      void *opaque);
-    void (*unregister_notifiers)(MigrationInterface* mig, VDObjectRef notifier);
     void (*notifier_done)(MigrationInterface *mig, VDObjectRef notifier);
 };
 

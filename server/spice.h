@@ -69,4 +69,16 @@ int spice_server_add_renderer(SpiceServer *s, const char *name);
 int spice_server_get_sock_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen);
 int spice_server_get_peer_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen);
 
+enum {
+    SPICE_MIGRATE_CLIENT_NONE = 1,
+    SPICE_MIGRATE_CLIENT_WAITING,
+    SPICE_MIGRATE_CLIENT_READY,
+};
+
+int spice_server_migrate_info(SpiceServer *s, const char* dest, int port, int secure_port,
+                              const char* cert_subject);
+int spice_server_migrate_start(SpiceServer *s);
+int spice_server_migrate_client_state(SpiceServer *s);
+int spice_server_migrate_end(SpiceServer *s, int completed);
+
 #endif
