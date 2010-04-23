@@ -3581,6 +3581,25 @@ static int surface_format_to_image_type(uint32_t surface_format)
     return 0;
 }
 
+static int rgb32_data_has_alpha(int width, int height, size_t stride,
+                                uint8_t *data)
+{
+    uint32_t *line, *end;
+
+    while (height-- > 0) {
+        line = (uint32_t *)data;
+        end = line + width;
+        data += stride;
+        while (line != end) {
+            if ((*line & 0xff000000) != 0) {
+                return 1;
+            }
+            line++;
+        }
+    }
+    return 0;
+}
+
 static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
 {
     QXLImage *image;
@@ -3622,6 +3641,11 @@ static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
 
     red_get_area(worker, drawable->surface_id,
                  &drawable->qxl_drawable->self_bitmap_area, dest, dest_stride, TRUE);
+
+    if (image->bitmap.format == SPICE_BITMAP_FMT_32BIT &&
+        rgb32_data_has_alpha(width, height, dest_stride, dest)) {
+        image->bitmap.format = SPICE_BITMAP_FMT_RGBA;
+    }
 
     drawable->self_bitmap = (uint8_t *)image;
     return TRUE;
@@ -4941,6 +4965,12 @@ static void red_add_surface_image(RedWorker *worker, int surface_id)
     area.right = surface->context.width;
     area.bottom = surface->context.height;
     canvas->ops->read_bits(canvas, item->data, stride, &area);
+
+    if (item->image_format == SPICE_BITMAP_FMT_32BIT &&
+        rgb32_data_has_alpha(item->width, item->height, item->stride, item->data)) {
+        item->image_format = SPICE_BITMAP_FMT_RGBA;
+    }
+
     red_pipe_add_image_item(worker, item);
     release_image_item(item);
     display_channel_push(worker);
