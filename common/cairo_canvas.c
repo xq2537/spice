@@ -1162,9 +1162,6 @@ SpiceCanvas *canvas_create(int width, int height, uint32_t format
 {
     pixman_image_t *image;
 
-    if (format == SPICE_SURFACE_FMT_32_ARGB) {
-        format = SPICE_SURFACE_FMT_32_xRGB;
-    }
     image = pixman_image_create_bits(spice_surface_format_to_pixman (format),
                                      width, height, NULL, 0);
 
@@ -1199,10 +1196,6 @@ SpiceCanvas *canvas_create_for_data(int width, int height, uint32_t format,
                            )
 {
     pixman_image_t *image;
-
-    if (format == SPICE_SURFACE_FMT_32_ARGB) {
-        format = SPICE_SURFACE_FMT_32_xRGB;
-    }
 
     image = pixman_image_create_bits(spice_surface_format_to_pixman (format),
                                      width, height, (uint32_t *)data, stride);
