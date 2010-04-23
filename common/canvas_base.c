@@ -414,10 +414,26 @@ static pixman_format_code_t canvas_get_target_format(CanvasBase *canvas,
     /* Convert to target surface format */
     format = spice_surface_format_to_pixman (canvas->format);
 
-    if (!source_has_alpha) {
+    if (source_has_alpha) {
+        /* Even though the destination has no alpha, we make the source
+         * remember there are alpha bits instead of throwing away this
+         * information. The results are the same if alpha is not
+         * interpreted, and if need to interpret alpha, don't use
+         * conversion to target format.
+         * This is needed for instance when doing the final
+         * canvas_get_target_format() in canvas_get_image_internal
+         * as otherwise we wouldn't know if the bitmap source
+         * really had alpha.
+         */
+        if (format == PIXMAN_x8r8g8b8) {
+            format = PIXMAN_a8r8g8b8;
+        }
+    } else { /* !source_has_alpha */
         /* If the source doesn't have alpha, but the destination has,
-           don't convert to alpha, since that would fill the alpha bytes
-           with 0xff which is not expected if we just use the raw bits */
+           don't convert to alpha, since that would just do an unnecessary
+           copy to fill the alpha bytes with 0xff which is not expected if
+           we just use the raw bits, (and handled implicitly by pixman if
+           we're interpreting data) */
         if (format == PIXMAN_a8r8g8b8) {
             format = PIXMAN_x8r8g8b8;
         }
@@ -914,7 +930,7 @@ static SpiceCanvas *canvas_get_surface_internal(CanvasBase *canvas, SPICE_ADDRES
 static SpiceCanvas *canvas_get_surface_mask_internal(CanvasBase *canvas, SPICE_ADDRESS addr)
 {
     SpiceImageDescriptor *descriptor;
- 
+
     descriptor = (SpiceImageDescriptor *)SPICE_GET_ADDRESS(addr);
     access_test(canvas, descriptor, sizeof(SpiceImageDescriptor));
 
@@ -2222,7 +2238,9 @@ static void canvas_draw_alpha_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, 
     if (surface_canvas) {
         if (rect_is_same_size(bbox, &alpha_blend->src_area)) {
             spice_canvas->ops->blend_image_from_surface(spice_canvas, &dest_region,
+                                                        alpha_blend->alpha_flags & SPICE_ALPHA_FLAGS_DEST_HAS_ALPHA,
                                                         surface_canvas,
+                                                        alpha_blend->alpha_flags & SPICE_ALPHA_FLAGS_SRC_SURFACE_HAS_ALPHA,
                                                         alpha_blend->src_area.left,
                                                         alpha_blend->src_area.top,
                                                         bbox->left,
@@ -2232,7 +2250,9 @@ static void canvas_draw_alpha_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, 
                                                         alpha_blend->alpha);
         } else {
             spice_canvas->ops->blend_scale_image_from_surface(spice_canvas, &dest_region,
+                                                              alpha_blend->alpha_flags & SPICE_ALPHA_FLAGS_DEST_HAS_ALPHA,
                                                               surface_canvas,
+                                                              alpha_blend->alpha_flags & SPICE_ALPHA_FLAGS_SRC_SURFACE_HAS_ALPHA,
                                                               alpha_blend->src_area.left,
                                                               alpha_blend->src_area.top,
                                                               alpha_blend->src_area.right - alpha_blend->src_area.left,
@@ -2248,6 +2268,7 @@ static void canvas_draw_alpha_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, 
         src_image = canvas_get_image(canvas, alpha_blend->src_bitmap, TRUE);
         if (rect_is_same_size(bbox, &alpha_blend->src_area)) {
             spice_canvas->ops->blend_image(spice_canvas, &dest_region,
+                                           alpha_blend->alpha_flags & SPICE_ALPHA_FLAGS_DEST_HAS_ALPHA,
                                            src_image,
                                            alpha_blend->src_area.left,
                                            alpha_blend->src_area.top,
@@ -2258,6 +2279,7 @@ static void canvas_draw_alpha_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, 
                                            alpha_blend->alpha);
         } else {
             spice_canvas->ops->blend_scale_image(spice_canvas, &dest_region,
+                                                 alpha_blend->alpha_flags & SPICE_ALPHA_FLAGS_DEST_HAS_ALPHA,
                                                  src_image,
                                                  alpha_blend->src_area.left,
                                                  alpha_blend->src_area.top,
@@ -2270,7 +2292,7 @@ static void canvas_draw_alpha_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, 
                                                  SPICE_IMAGE_SCALE_MODE_NEAREST,
                                                  alpha_blend->alpha);
         }
- 
+
         pixman_image_unref(src_image);
     }
 

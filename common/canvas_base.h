@@ -206,6 +206,7 @@ typedef struct {
 					 int scale_mode, SpiceROP rop);
     void (*blend_image)(SpiceCanvas *canvas,
                         pixman_region32_t *region,
+                        int dest_has_alpha,
                         pixman_image_t *src_image,
                         int src_x, int src_y,
                         int dest_x, int dest_y,
@@ -213,13 +214,16 @@ typedef struct {
                         int overall_alpha);
     void (*blend_image_from_surface)(SpiceCanvas *canvas,
 				     pixman_region32_t *region,
+                                     int dest_has_alpha,
 				     SpiceCanvas *src_image,
+                                     int src_has_alpha,
 				     int src_x, int src_y,
 				     int dest_x, int dest_y,
 				     int width, int height,
 				     int overall_alpha);
     void (*blend_scale_image)(SpiceCanvas *canvas,
                               pixman_region32_t *region,
+                              int dest_has_alpha,
                               pixman_image_t *src_image,
                               int src_x, int src_y,
                               int src_width, int src_height,
@@ -229,7 +233,9 @@ typedef struct {
                               int overall_alpha);
     void (*blend_scale_image_from_surface)(SpiceCanvas *canvas,
 					   pixman_region32_t *region,
+                                           int dest_has_alpha,
 					   SpiceCanvas *src_image,
+                                           int src_has_alpha,
 					   int src_x, int src_y,
 					   int src_width, int src_height,
 					   int dest_x, int dest_y,

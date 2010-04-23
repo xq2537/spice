@@ -555,8 +555,28 @@ static void scale_image_rop_from_surface(SpiceCanvas *spice_canvas,
                       src_height, dest_x, dest_y, dest_width, dest_height, scale_mode, rop);
 }
 
+static pixman_image_t *canvas_get_as_surface(CairoCanvas *canvas,
+                                          int with_alpha)
+{
+    pixman_image_t *target;
+
+    if (with_alpha &&
+        canvas->base.format == SPICE_SURFACE_FMT_32_xRGB) {
+        target = pixman_image_create_bits(PIXMAN_a8r8g8b8,
+                                          pixman_image_get_width(canvas->image),
+                                          pixman_image_get_height(canvas->image),
+                                          pixman_image_get_data(canvas->image),
+                                          pixman_image_get_stride(canvas->image));
+    } else {
+        target = pixman_image_ref(canvas->image);
+    }
+
+    return target;
+}
+
 static void __blend_image(SpiceCanvas *spice_canvas,
                           pixman_region32_t *region,
+                          int dest_has_alpha,
                           pixman_image_t *src,
                           int src_x, int src_y,
                           int dest_x, int dest_y,
@@ -564,9 +584,11 @@ static void __blend_image(SpiceCanvas *spice_canvas,
                           int overall_alpha)
 {
     CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
-    pixman_image_t *mask;
+    pixman_image_t *mask, *dest;
 
-    pixman_image_set_clip_region32(canvas->image, region);
+    dest = canvas_get_as_surface(canvas, dest_has_alpha);
+
+    pixman_image_set_clip_region32(dest, region);
 
     mask = NULL;
     if (overall_alpha != 0xff) {
@@ -578,7 +600,7 @@ static void __blend_image(SpiceCanvas *spice_canvas,
     pixman_image_set_repeat(src, PIXMAN_REPEAT_NONE);
 
     pixman_image_composite32(PIXMAN_OP_OVER,
-                             src, mask, canvas->image,
+                             src, mask, dest,
                              src_x, src_y, /* src */
                              0, 0, /* mask */
                              dest_x, dest_y, /* dst */
@@ -589,36 +611,48 @@ static void __blend_image(SpiceCanvas *spice_canvas,
         pixman_image_unref(mask);
     }
 
-    pixman_image_set_clip_region32(canvas->image, NULL);
+    pixman_image_set_clip_region32(dest, NULL);
+    pixman_image_unref(dest);
 }
 
 static void blend_image(SpiceCanvas *spice_canvas,
                         pixman_region32_t *region,
+                        int dest_has_alpha,
                         pixman_image_t *src,
                         int src_x, int src_y,
                         int dest_x, int dest_y,
                         int width, int height,
                         int overall_alpha)
 {
-    __blend_image(spice_canvas, region, src, src_x, src_y, dest_x, dest_y, width, height,
+    __blend_image(spice_canvas, region, dest_has_alpha, src, src_x, src_y,
+                  dest_x, dest_y, width, height,
                   overall_alpha);
 }
 
 static void blend_image_from_surface(SpiceCanvas *spice_canvas,
                                      pixman_region32_t *region,
+                                     int dest_has_alpha,
                                      SpiceCanvas *surface_canvas,
+                                     int src_has_alpha,
                                      int src_x, int src_y,
                                      int dest_x, int dest_y,
                                      int width, int height,
                                      int overall_alpha)
 {
     CairoCanvas *cairo_surface_canvas = (CairoCanvas *)surface_canvas;
-    __blend_image(spice_canvas, region, cairo_surface_canvas->image, src_x, src_y, dest_x, dest_y,
+    pixman_image_t *src;
+
+    src = canvas_get_as_surface(cairo_surface_canvas, src_has_alpha);
+    __blend_image(spice_canvas, region, dest_has_alpha,
+                  src, src_x, src_y,
+                  dest_x, dest_y,
                   width, height, overall_alpha);
+    pixman_image_unref(src);
 }
 
 static void __blend_scale_image(SpiceCanvas *spice_canvas,
                                 pixman_region32_t *region,
+                                int dest_has_alpha,
                                 pixman_image_t *src,
                                 int src_x, int src_y,
                                 int src_width, int src_height,
@@ -629,13 +663,15 @@ static void __blend_scale_image(SpiceCanvas *spice_canvas,
 {
     CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_transform_t transform;
-    pixman_image_t *mask;
+    pixman_image_t *mask, *dest;
     double sx, sy;
 
     sx = (double)(src_width) / (dest_width);
     sy = (double)(src_height) / (dest_height);
 
-    pixman_image_set_clip_region32(canvas->image, region);
+    dest = canvas_get_as_surface(canvas, dest_has_alpha);
+
+    pixman_image_set_clip_region32(dest, region);
 
     pixman_transform_init_scale(&transform,
                                 pixman_double_to_fixed(sx),
@@ -658,7 +694,7 @@ static void __blend_scale_image(SpiceCanvas *spice_canvas,
                             NULL, 0);
 
     pixman_image_composite32(PIXMAN_OP_OVER,
-                             src, mask, canvas->image,
+                             src, mask, dest,
                              ROUND(src_x / sx), ROUND(src_y / sy), /* src */
                              0, 0, /* mask */
                              dest_x, dest_y, /* dst */
@@ -671,11 +707,13 @@ static void __blend_scale_image(SpiceCanvas *spice_canvas,
         pixman_image_unref(mask);
     }
 
-    pixman_image_set_clip_region32(canvas->image, NULL);
+    pixman_image_set_clip_region32(dest, NULL);
+    pixman_image_unref(dest);
 }
 
 static void blend_scale_image(SpiceCanvas *spice_canvas,
                               pixman_region32_t *region,
+                              int dest_has_alpha,
                               pixman_image_t *src,
                               int src_x, int src_y,
                               int src_width, int src_height,
@@ -684,13 +722,17 @@ static void blend_scale_image(SpiceCanvas *spice_canvas,
                               int scale_mode,
                               int overall_alpha)
 {
-    __blend_scale_image(spice_canvas, region, src, src_x, src_y, src_width, src_height, dest_x,
-                        dest_y, dest_width, dest_height, scale_mode, overall_alpha);
+    __blend_scale_image(spice_canvas, region, dest_has_alpha,
+                        src, src_x, src_y, src_width, src_height,
+                        dest_x, dest_y, dest_width, dest_height,
+                        scale_mode, overall_alpha);
 }
 
 static void blend_scale_image_from_surface(SpiceCanvas *spice_canvas,
                                            pixman_region32_t *region,
+                                           int dest_has_alpha,
                                            SpiceCanvas *surface_canvas,
+                                           int src_has_alpha,
                                            int src_x, int src_y,
                                            int src_width, int src_height,
                                            int dest_x, int dest_y,
@@ -699,9 +741,13 @@ static void blend_scale_image_from_surface(SpiceCanvas *spice_canvas,
                                            int overall_alpha)
 {
     CairoCanvas *cairo_surface_canvas = (CairoCanvas *)surface_canvas;
-    __blend_scale_image(spice_canvas, region, cairo_surface_canvas->image, src_x, src_y, src_width,
+    pixman_image_t *src;
+
+    src = canvas_get_as_surface(cairo_surface_canvas, src_has_alpha);
+    __blend_scale_image(spice_canvas, region, dest_has_alpha, src, src_x, src_y, src_width,
                         src_height, dest_x, dest_y, dest_width, dest_height, scale_mode,
                         overall_alpha);
+    pixman_image_unref(src);
 }
 
 static void __colorkey_image(SpiceCanvas *spice_canvas,
@@ -1116,6 +1162,9 @@ SpiceCanvas *canvas_create(int width, int height, uint32_t format
 {
     pixman_image_t *image;
 
+    if (format == SPICE_SURFACE_FMT_32_ARGB) {
+        format = SPICE_SURFACE_FMT_32_xRGB;
+    }
     image = pixman_image_create_bits(spice_surface_format_to_pixman (format),
                                      width, height, NULL, 0);
 
@@ -1150,6 +1199,10 @@ SpiceCanvas *canvas_create_for_data(int width, int height, uint32_t format,
                            )
 {
     pixman_image_t *image;
+
+    if (format == SPICE_SURFACE_FMT_32_ARGB) {
+        format = SPICE_SURFACE_FMT_32_xRGB;
+    }
 
     image = pixman_image_create_bits(spice_surface_format_to_pixman (format),
                                      width, height, (uint32_t *)data, stride);
