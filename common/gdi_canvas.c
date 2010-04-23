@@ -664,7 +664,7 @@ static HBRUSH get_brush(GdiCanvas *canvas, SpiceBrush *brush, RecurciveMutex **b
             }
             *brush_lock = gdi_surface->lock;
         } else {
-            surface = canvas_get_image(&canvas->base, brush->u.pattern.pat);
+            surface = canvas_get_image(&canvas->base, brush->u.pattern.pat, FALSE);
             surface_to_image(surface, &image);
     
             if (!create_bitmap(&bitmap, &prev_bitmap, &dc, image.pixels, image.width,
@@ -1076,7 +1076,7 @@ static void gdi_canvas_draw_copy(SpiceCanvas *spice_canvas, SpiceRect *bbox, Spi
         gdi_draw_bitmap_redrop(canvas->dc, &copy->src_area, bbox, gdi_surface->dc,
                                &bitmapmask, copy->rop_decriptor, 0);
     } else {
-        surface = canvas_get_image(&canvas->base, copy->src_bitmap);
+        surface = canvas_get_image(&canvas->base, copy->src_bitmap, FALSE);
         pixman_data = (PixmanData *)pixman_image_get_destroy_data(surface);
     
         RecurciveLock lock(*canvas->lock);
@@ -1217,7 +1217,7 @@ static void gdi_canvas_draw_transparent(SpiceCanvas *spice_canvas, SpiceRect *bb
         gdi_draw_bitmap_transparent(canvas, canvas->dc, &transparent->src_area, bbox,
                                     gdi_surface->dc, transparent->true_color);
     } else {
-        surface = canvas_get_image(&canvas->base, transparent->src_bitmap);
+        surface = canvas_get_image(&canvas->base, transparent->src_bitmap, FALSE);
         pixman_data = (PixmanData *)pixman_image_get_destroy_data(surface);
         RecurciveLock lock(*canvas->lock);
         set_clip(canvas, clip);
@@ -1297,11 +1297,11 @@ static void gdi_canvas_draw_alpha_blend(SpiceCanvas *spice_canvas, SpiceRect *bb
         RecurciveLock lock(*canvas->lock);
         RecurciveLock s_lock(*gdi_surface->lock);
         set_clip(canvas, clip);
-        use_bitmap_alpha = 0;
+        use_bitmap_alpha = alpha_blend->alpha_flags & SPICE_ALPHA_FLAGS_SRC_SURFACE_HAS_ALPHA;
         gdi_draw_bitmap_alpha(canvas->dc, &alpha_blend->src_area, bbox, gdi_surface->dc,
                               alpha_blend->alpha, use_bitmap_alpha);
     } else {
-        surface = canvas_get_image(&canvas->base, alpha_blend->src_bitmap);
+        surface = canvas_get_image(&canvas->base, alpha_blend->src_bitmap, TRUE);
         use_bitmap_alpha = pixman_image_get_depth(surface) == 32;
         pixman_data = (PixmanData *)pixman_image_get_destroy_data(surface);
     
@@ -1361,7 +1361,7 @@ static void gdi_canvas_draw_opaque(SpiceCanvas *spice_canvas, SpiceRect *bbox, S
         }
         unset_brush(canvas->dc, prev_hbrush);
     } else {
-        surface = canvas_get_image(&canvas->base, opaque->src_bitmap);
+        surface = canvas_get_image(&canvas->base, opaque->src_bitmap, FALSE);
         pixman_data = (PixmanData *)pixman_image_get_destroy_data(surface);
     
         RecurciveLock lock(*canvas->lock);
@@ -1423,7 +1423,7 @@ static void gdi_canvas_draw_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, Sp
         gdi_draw_bitmap_redrop(canvas->dc, &blend->src_area, bbox, gdi_surface->dc,
                                &bitmapmask, blend->rop_decriptor, 0);
     }  else {
-        surface = canvas_get_image(&canvas->base, blend->src_bitmap);
+        surface = canvas_get_image(&canvas->base, blend->src_bitmap, FALSE);
         pixman_data = (PixmanData *)pixman_image_get_destroy_data(surface);
     
         RecurciveLock lock(*canvas->lock);
@@ -1524,7 +1524,7 @@ static void gdi_canvas_draw_rop3(SpiceCanvas *spice_canvas, SpiceRect *bbox, Spi
         }
         unset_brush(canvas->dc, prev_hbrush);
     } else {
-        surface = canvas_get_image(&canvas->base, rop3->src_bitmap);
+        surface = canvas_get_image(&canvas->base, rop3->src_bitmap, FALSE);
         pixman_data = (PixmanData *)pixman_image_get_destroy_data(surface);
         RecurciveLock lock(*canvas->lock);
         hbrush = get_brush(canvas, &rop3->brush, &brush_lock);
@@ -1706,7 +1706,7 @@ static void gdi_canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox, S
     pixman_image_t *surface = NULL;
 
     if (stroke->brush.type == SPICE_BRUSH_TYPE_PATTERN) {
-        surface = canvas_get_image(&canvas->base, stroke->brush.u.pattern.pat);
+        surface = canvas_get_image(&canvas->base, stroke->brush.u.pattern.pat, FALSE);
     }
 
     RecurciveLock lock(*canvas->lock);
