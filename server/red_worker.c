@@ -9282,7 +9282,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         worker->running = FALSE;
         red_display_clear_glz_drawables(worker->display_channel);
         for (x = 0; x < NUM_SURFACES; ++x) {
-            if (worker->surfaces->context.canvas) {
+            if (worker->surfaces[x].context.canvas) {
                 red_current_flush(worker, x);
             }
         }
