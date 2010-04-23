@@ -31,12 +31,12 @@ GDICanvas::GDICanvas(int width, int height, uint32_t format,
 {
     _pixmap = new RedPixmapGdi(width, height,
                                RedDrawable::format_from_surface(format),
-                               true, NULL);
+                               true);
     if (!(_canvas = gdi_canvas_create(width, height, _pixmap->get_dc(),
                                       &_pixmap->get_mutex(),
-                                      depth, &pixmap_cache().base,
-                                      &palette_cache().base,
-                                      &csurfaces().base,
+                                      format, &pixmap_cache.base,
+                                      &palette_cache.base,
+                                      &csurfaces.base,
                                       &glz_decoder()))) {
         THROW("create canvas failed");
     }
@@ -44,8 +44,8 @@ GDICanvas::GDICanvas(int width, int height, uint32_t format,
 
 GDICanvas::~GDICanvas()
 {
-  _canvas->ops->destroy(_canvas);
-  _canvas = NULL;
+    _canvas->ops->destroy(_canvas);
+    _canvas = NULL;
     delete _pixmap;
     _pixmap = NULL;
 }
@@ -72,10 +72,6 @@ void GDICanvas::copy_pixels(const QRegion& region, RedDrawable* dest_dc, const P
     copy_pixels(region, *dest_dc);
 }
 
-void GDICanvas::set_mode(int width, int height, int depth)
-{
-    destroy();
-}
 
 CanvasType GDICanvas::get_pixmap_type()
 {

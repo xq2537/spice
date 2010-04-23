@@ -30,7 +30,7 @@ struct RedPixmap_p {
 };
 
 RedPixmapGdi::RedPixmapGdi(int width, int height, RedDrawable::Format format, bool top_bottom)
-    : RedPixmap(width, height, format, top_bottom, pallet)
+    : RedPixmap(width, height, format, top_bottom	)
 {
     ASSERT(format == RedDrawable::ARGB32 || format == RedDrawable::RGB32 || format == RedDrawable::A1);
     ASSERT(sizeof(RedPixmap_p) <= PIXELES_SOURCE_OPAQUE_SIZE);

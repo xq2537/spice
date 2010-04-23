@@ -364,6 +364,15 @@ void RedWindow_p::destroy(PixelsSource_p& pixels_source)
     DestroyWindow(_win);
 }
 
+RedDrawable::Format RedWindow::get_format()
+{
+  /* TODO: Windows will convert types when
+     blitting, so this works (and is what we did before).
+     but it would be better to return the right format here */
+    return RedDrawable::RGB32;
+}
+
+
 void RedWindow_p::on_pos_changing(RedWindow& red_window)
 {
     if (_minimized || IsIconic(_win)) {
