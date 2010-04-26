@@ -260,7 +260,7 @@ XImage *XPlatform::create_x_image(RedDrawable::Format format,
                                   Visual *visual,
                                   XShmSegmentInfo **shminfo_out)
 {
-    XImage *image;
+    XImage *image = NULL;
     uint8_t *data;
     size_t stride;
 

@@ -2164,6 +2164,8 @@ static void canvas_draw_transparent(SpiceCanvas *spice_canvas, SpiceRect *bbox, 
     case SPICE_SURFACE_FMT_16_565:
         transparent_color = rgb_32_to_16_565(transparent->true_color);
         break;
+    default:
+        transparent_color = 0;
     }
 
     surface_canvas = canvas_get_surface(canvas, transparent->src_bitmap);
