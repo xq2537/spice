@@ -113,7 +113,9 @@ static void copy_region(SpiceCanvas *spice_canvas,
 
             while (i >= 0) {
                 /* Copy all rects with same y in forward order */
-                for (end_line = i - 1; end_line >= 0 && dest_rects[end_line].y1 == dest_rects[i].y1; end_line--) {
+                for (end_line = i - 1;
+                     end_line >= 0 && dest_rects[end_line].y1 == dest_rects[i].y1;
+                     end_line--) {
                 }
                 for (j = end_line + 1; j <= i; j++) {
                     spice_pixman_copy_rect(canvas->image,
@@ -132,7 +134,9 @@ static void copy_region(SpiceCanvas *spice_canvas,
 
             while (i < n_rects) {
                 /* Copy all rects with same y in reverse order */
-                for (end_line = i; end_line < n_rects && dest_rects[end_line].y1 == dest_rects[i].y1; end_line++) {
+                for (end_line = i;
+                     end_line < n_rects && dest_rects[end_line].y1 == dest_rects[i].y1;
+                     end_line++) {
                 }
                 for (j = end_line - 1; j >= i; j--) {
                     spice_pixman_copy_rect(canvas->image,
@@ -956,7 +960,8 @@ static void canvas_put_image(SpiceCanvas *spice_canvas,
 }
 
 
-static void canvas_draw_text(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceText *text)
+static void canvas_draw_text(SpiceCanvas *spice_canvas, SpiceRect *bbox,
+                             SpiceClip *clip, SpiceText *text)
 {
     CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_region32_t dest_region;
@@ -1038,7 +1043,8 @@ static void canvas_draw_text(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceCl
     pixman_region32_fini(&dest_region);
 }
 
-static void canvas_read_bits(SpiceCanvas *spice_canvas, uint8_t *dest, int dest_stride, const SpiceRect *area)
+static void canvas_read_bits(SpiceCanvas *spice_canvas, uint8_t *dest,
+                             int dest_stride, const SpiceRect *area)
 {
     CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
     pixman_image_t* surface;
@@ -1072,7 +1078,8 @@ static void canvas_clear(SpiceCanvas *spice_canvas)
                            0);
 }
 
-static void canvas_set_access_params(SpiceCanvas *spice_canvas, unsigned long base, unsigned long max)
+static void canvas_set_access_params(SpiceCanvas *spice_canvas,
+                                     unsigned long base, unsigned long max)
 {
 #ifdef CAIRO_CANVAS_ACCESS_TEST
     CairoCanvas *canvas = (CairoCanvas *)spice_canvas;
@@ -1188,7 +1195,7 @@ SpiceCanvas *canvas_create_for_data(int width, int height, uint32_t format,
 #elif defined(CAIRO_CANVAS_IMAGE_CACHE)
                            , SpiceImageCache *bits_cache
 #endif
-			   , SpiceImageSurfaces *surfaces
+                           , SpiceImageSurfaces *surfaces
                            , SpiceGlzDecoder *glz_decoder
 #ifndef CAIRO_CANVAS_NO_CHUNKS
                            , SpiceVirtMapping *virt_mapping
