@@ -292,6 +292,57 @@ static void fill_tiled_rects_rop_from_surface(SpiceCanvas *spice_canvas,
                            offset_y, rop);
 }
 
+/* Some pixman implementations of OP_OVER on xRGB32 sets
+   the high bit to 0xff (which is the right value if the
+   destination was ARGB32, and it should be ignored for
+   xRGB32. However, this fills our alpha bits with
+   data that is not wanted or expected by windows, and its
+   causing us to send rgba images rather than rgb images to
+   the client. So, we manually clear these bytes. */
+static void clear_dest_alpha(pixman_image_t *dest,
+                             int x, int y,
+                             int width, int height)
+{
+    uint32_t *data;
+    int stride;
+    int w, h;
+
+    w = pixman_image_get_width(dest);
+    h = pixman_image_get_height(dest);
+
+    if (x + width <= 0 || x >= w ||
+        y + height <= 0 || y >= h ||
+        width == 0 || height == 0) {
+        return;
+    }
+
+    if (x < 0) {
+        width += x;
+        x = 0;
+    }
+    if (x + width > w) {
+        width = w - x;
+    }
+
+    if (y < 0) {
+        height += y;
+        y = 0;
+    }
+    if (y + height > h) {
+        height = h - y;
+    }
+
+    stride = pixman_image_get_stride(dest);
+    data = (uint32_t *) (
+        (uint8_t *)pixman_image_get_data(dest) + y * stride + 4 * x);
+
+    if ((*data & 0xff000000U) == 0xff000000U) {
+        spice_pixman_fill_rect_rop(dest,
+                                   x, y, width, height,
+                                   0x00ffffff, SPICE_ROP_AND);
+    }
+}
+
 static void __blit_image(SpiceCanvas *spice_canvas,
                          pixman_region32_t *region,
                          pixman_image_t *src_image,
@@ -611,6 +662,11 @@ static void __blend_image(SpiceCanvas *spice_canvas,
                              width,
                              height);
 
+    if (canvas->base.format == SPICE_SURFACE_FMT_32_xRGB &&
+        !dest_has_alpha) {
+        clear_dest_alpha(dest, dest_x, dest_y, width, height);
+    }
+
     if (mask) {
         pixman_image_unref(mask);
     }
@@ -703,6 +759,11 @@ static void __blend_scale_image(SpiceCanvas *spice_canvas,
                              0, 0, /* mask */
                              dest_x, dest_y, /* dst */
                              dest_width, dest_height);
+
+    if (canvas->base.format == SPICE_SURFACE_FMT_32_xRGB &&
+        !dest_has_alpha) {
+        clear_dest_alpha(dest, dest_x, dest_y, dest_width, dest_height);
+    }
 
     pixman_transform_init_identity(&transform);
     pixman_image_set_transform(src, &transform);
@@ -1035,6 +1096,11 @@ static void canvas_draw_text(SpiceCanvas *spice_canvas, SpiceRect *bbox,
                                  pos.x, pos.y,
                                  pixman_image_get_width(str_mask),
                                  pixman_image_get_height(str_mask));
+        if (canvas->base.format == SPICE_SURFACE_FMT_32_xRGB) {
+            clear_dest_alpha(canvas->image, pos.x, pos.y,
+                             pixman_image_get_width(str_mask),
+                             pixman_image_get_height(str_mask));
+        }
         pixman_image_unref(brush);
 
         pixman_image_set_clip_region32(canvas->image, NULL);
