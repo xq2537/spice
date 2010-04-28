@@ -1025,6 +1025,18 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
         CANVAS_ERROR("invalid image type");
     }
 
+    surface_format = spice_pixman_image_get_format(surface);
+
+    if (descriptor->flags & SPICE_IMAGE_FLAGS_HIGH_BITS_SET &&
+        descriptor->type != SPICE_IMAGE_TYPE_FROM_CACHE &&
+        surface_format == PIXMAN_x8r8g8b8) {
+        spice_pixman_fill_rect_rop(surface,
+                                   0, 0,
+                                   pixman_image_get_width(surface),
+                                   pixman_image_get_height(surface),
+                                   0xff000000U, SPICE_ROP_OR);
+    }
+
     if (descriptor->flags & SPICE_IMAGE_FLAGS_CACHE_ME &&
         descriptor->type != SPICE_IMAGE_TYPE_FROM_CACHE) {
         canvas->bits_cache->ops->put(canvas->bits_cache, descriptor->id, surface);
@@ -1041,8 +1053,6 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
         pixman_image_unref(surface);
         return NULL;
     }
-
-    surface_format = spice_pixman_image_get_format(surface);
 
     if (!saved_want_original) {
         /* Conversion to canvas format was requested, but maybe it didn't

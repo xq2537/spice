@@ -400,6 +400,7 @@ typedef struct ImageItem {
     int top_down;
     int surface_id;
     int image_format;
+    uint32_t image_flags;
     uint8_t data[0];
 } ImageItem;
 
@@ -3582,22 +3583,31 @@ static int surface_format_to_image_type(uint32_t surface_format)
 }
 
 static int rgb32_data_has_alpha(int width, int height, size_t stride,
-                                uint8_t *data)
+                                uint8_t *data, int *all_set_out)
 {
-    uint32_t *line, *end;
+    uint32_t *line, *end, alpha;
+    int has_alpha;
 
+    has_alpha = FALSE;
     while (height-- > 0) {
         line = (uint32_t *)data;
         end = line + width;
         data += stride;
         while (line != end) {
-            if ((*line & 0xff000000) != 0) {
-                return 1;
+            alpha = *line & 0xff000000U;
+            if (alpha != 0) {
+                has_alpha = TRUE;
+                if (alpha != 0xff000000U) {
+                    *all_set_out = FALSE;
+                    return TRUE;
+                }
             }
             line++;
         }
     }
-    return 0;
+
+    *all_set_out = has_alpha;
+    return has_alpha;
 }
 
 static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
@@ -3609,6 +3619,7 @@ static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
     int dest_stride;
     RedSurface *surface;
     int bpp;
+    int all_set;
 
     if (!drawable->qxl_drawable->self_bitmap) {
         return TRUE;
@@ -3643,8 +3654,12 @@ static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
                  &drawable->qxl_drawable->self_bitmap_area, dest, dest_stride, TRUE);
 
     if (image->bitmap.format == SPICE_BITMAP_FMT_32BIT &&
-        rgb32_data_has_alpha(width, height, dest_stride, dest)) {
-        image->bitmap.format = SPICE_BITMAP_FMT_RGBA;
+        rgb32_data_has_alpha(width, height, dest_stride, dest, &all_set)) {
+        if (all_set) {
+            image->descriptor.flags |= SPICE_IMAGE_FLAGS_HIGH_BITS_SET;
+        } else {
+            image->bitmap.format = SPICE_BITMAP_FMT_RGBA;
+        }
     }
 
     drawable->self_bitmap = (uint8_t *)image;
@@ -4190,6 +4205,10 @@ static void localize_bitmap(RedWorker *worker, QXLPHYSICAL *in_bitmap, uint32_t 
     if (image_cache_hit(&worker->image_cache, local_image->descriptor.id)) {
         local_image->descriptor.type = SPICE_IMAGE_TYPE_FROM_CACHE;
         return;
+    }
+
+    if (image->descriptor.flags & QXL_IMAGE_HIGH_BITS_SET) {
+        local_image->descriptor.flags |= SPICE_IMAGE_FLAGS_HIGH_BITS_SET;
     }
 
     switch (local_image->descriptor.type) {
@@ -4937,6 +4956,7 @@ static void red_add_surface_image(RedWorker *worker, int surface_id)
     SpiceRect area;
     SpiceCanvas *canvas = worker->surfaces[surface_id].context.canvas;
     RedSurface *surface;
+    int all_set;
 
     surface = &worker->surfaces[surface_id];
 
@@ -4955,6 +4975,7 @@ static void red_add_surface_image(RedWorker *worker, int surface_id)
     item->surface_id = surface_id;
     item->image_format =
         surface_format_to_image_type(surface->context.format);
+    item->image_flags = 0;
     item->pos.x = item->pos.y = 0;
     item->width = surface->context.width;
     item->height = surface->context.height;
@@ -4967,8 +4988,12 @@ static void red_add_surface_image(RedWorker *worker, int surface_id)
     canvas->ops->read_bits(canvas, item->data, stride, &area);
 
     if (item->image_format == SPICE_BITMAP_FMT_32BIT &&
-        rgb32_data_has_alpha(item->width, item->height, item->stride, item->data)) {
-        item->image_format = SPICE_BITMAP_FMT_RGBA;
+        rgb32_data_has_alpha(item->width, item->height, item->stride, item->data, &all_set)) {
+        if (all_set) {
+            item->image_flags |= SPICE_IMAGE_FLAGS_HIGH_BITS_SET;
+        } else {
+            item->image_format = SPICE_BITMAP_FMT_RGBA;
+        }
     }
 
     red_pipe_add_image_item(worker, item);
@@ -6287,6 +6312,9 @@ static void fill_bits(DisplayChannel *display_channel, QXLPHYSICAL *in_bitmap, D
     image->descriptor.id = qxl_image->descriptor.id;
     image->descriptor.type = qxl_image->descriptor.type;
     image->descriptor.flags = 0;
+    if (qxl_image->descriptor.flags & QXL_IMAGE_HIGH_BITS_SET) {
+        image->descriptor.flags |= SPICE_IMAGE_FLAGS_HIGH_BITS_SET;
+    }
     image->descriptor.width = qxl_image->descriptor.width;
     image->descriptor.height = qxl_image->descriptor.height;
 
@@ -7279,7 +7307,7 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
     red_image->descriptor.height = item->height;
 
     bitmap.format = item->image_format;
-    bitmap.flags = QXL_BITMAP_DIRECT;
+    bitmap.flags = QXL_BITMAP_DIRECT | item->image_flags;
     bitmap.flags |= item->top_down ? QXL_BITMAP_TOP_DOWN : 0;
     bitmap.x = item->width;
     bitmap.y = item->height;
