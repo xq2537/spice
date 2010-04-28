@@ -57,6 +57,7 @@
 //#define RED_WORKER_STAT
 //#define DRAW_ALL
 //#define COMPRESS_DEBUG
+//#define ACYCLIC_SURFACE_DEBUG
 
 //#define UPDATE_AREA_BY_TREE
 
@@ -883,7 +884,9 @@ typedef struct RedSurface {
     Ring current;
     Ring current_list;
     Ring glz_drawables;
+#ifdef ACYCLIC_SURFACE_DEBUG
     int current_gn;
+#endif
     DrawContext context;
 
     Ring depend_on_me;
@@ -3767,8 +3770,12 @@ static inline int red_handle_surfaces_dependencies(RedWorker *worker, Drawable *
     int x;
 
     for (x = 0; x < 3; ++x) {
-        add_to_surface_dependency(worker, drawable->surfaces_dest[x],
-                                  &drawable->depend_items[x], drawable);
+        // surface self dependency is handled by shadows in "current", or by
+        // handle_self_bitmap
+        if (drawable->surfaces_dest[x] != drawable->surface_id) {
+            add_to_surface_dependency(worker, drawable->surfaces_dest[x],
+                                      &drawable->depend_items[x], drawable);
+        }
     }
 
     return TRUE;
@@ -3824,7 +3831,12 @@ static inline void red_process_drawable(RedWorker *worker, QXLDrawable *drawable
         printf("TEST: DRAWABLE: QXL_CLIP_TYPE_PATH\n");
 #endif
     }
-
+    /*
+        surface->refs is affected by a drawable (that is
+        dependent on the surface) as long as the drawable is alive.
+        However, surfce->depend_on_me is affected by a drawable only
+        as long as it is in the current tree (hasn't been rendered yet).
+    */
     red_inc_surfaces_drawable_dependencies(worker, item);
 
     if (region_is_empty(&item->tree_item.base.rgn)) {
@@ -4649,13 +4661,16 @@ static void red_update_area(RedWorker *worker, const SpiceRect *area, int surfac
     QRegion rgn;
     Drawable *last;
     Drawable *now;
+#ifdef ACYCLIC_SURFACE_DEBUG
     int gn;
+#endif
 
     surface = &worker->surfaces[surface_id];
 
-start_again:
     last = NULL;
+#ifdef ACYCLIC_SURFACE_DEBUG
     gn = ++surface->current_gn;
+#endif
     ring = &surface->current_list;
     ring_item = ring;
 
@@ -4686,9 +4701,11 @@ start_again:
         container_cleanup(worker, container);
         red_draw_drawable(worker, now);
         release_drawable(worker, now);
+#ifdef ACYCLIC_SURFACE_DEBUG
         if (gn != surface->current_gn) {
-            goto start_again;
+            red_error("cyclic surface dependencies");
         }
+#endif
     } while (now != last);
     validate_area(worker, area, surface_id);
 }
