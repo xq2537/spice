@@ -26,13 +26,6 @@
 #include "canvas_base.h"
 #include "region.h"
 
-typedef struct {
-    int width;
-    int height;
-    int stride;
-    uint8_t *pixels;
-} GdiImage;
-
 SpiceCanvas *gdi_canvas_create(int width, int height,
                                HDC dc, class RecurciveMutex *lock, uint32_t format,
                                SpiceImageCache *bits_cache,
