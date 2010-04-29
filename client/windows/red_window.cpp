@@ -348,6 +348,17 @@ void RedWindow_p::create(RedWindow& red_window, PixelsSource_p& pixels_source)
     }
     _win = window;
     pixels_source.dc = dc;
+
+    int depth = GetDeviceCaps(dc, BITSPIXEL);
+    switch (depth) {
+    case 16:
+        _format = RedDrawable::RGB16_555;
+        break;
+    case 32:
+    default:
+        _format = RedDrawable::RGB32;
+        break;
+    }
     SetWindowLong(window, GWL_USERDATA, (LONG)&red_window);
     SetWindowLong(window, GWL_WNDPROC, (LONG)WindowProc);
 }
@@ -366,10 +377,7 @@ void RedWindow_p::destroy(PixelsSource_p& pixels_source)
 
 RedDrawable::Format RedWindow::get_format()
 {
-  /* TODO: Windows will convert types when
-     blitting, so this works (and is what we did before).
-     but it would be better to return the right format here */
-    return RedDrawable::RGB32;
+    return _format;
 }
 
 

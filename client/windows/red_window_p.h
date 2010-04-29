@@ -19,6 +19,7 @@
 #define _H_RED_WINDOW_P
 
 #include <map>
+#include <red_drawable.h>
 
 class RedWindow;
 class Menu;
@@ -53,6 +54,7 @@ public:
 
 protected:
     HWND _win;
+    RedDrawable::Format _format;
     uint32_t _modal_refs;
     HMODULE _no_taskmgr_dll;
     HHOOK _no_taskmgr_hook;
