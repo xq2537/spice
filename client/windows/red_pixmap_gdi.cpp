@@ -30,9 +30,12 @@ struct RedPixmap_p {
 };
 
 RedPixmapGdi::RedPixmapGdi(int width, int height, RedDrawable::Format format, bool top_bottom)
-    : RedPixmap(width, height, format, top_bottom	)
+    : RedPixmap(width, height, format, top_bottom)
 {
-    ASSERT(format == RedDrawable::ARGB32 || format == RedDrawable::RGB32 || format == RedDrawable::A1);
+    DWORD *pixel_format;
+    ASSERT(format == RedDrawable::ARGB32 || format == RedDrawable::RGB32
+           || format == RedDrawable::RGB16_555 || format == RedDrawable::RGB16_565
+           || format == RedDrawable::A1);
     ASSERT(sizeof(RedPixmap_p) <= PIXELES_SOURCE_OPAQUE_SIZE);
 
     struct {
@@ -47,7 +50,12 @@ RedPixmapGdi::RedPixmapGdi(int width, int height, RedDrawable::Format format, bo
 
     bitmap_info.inf.bmiHeader.biPlanes = 1;
     bitmap_info.inf.bmiHeader.biBitCount = RedDrawable::format_to_bpp(format);
-    bitmap_info.inf.bmiHeader.biCompression = BI_RGB;
+    if (format == RedDrawable::RGB16_565) {
+        bitmap_info.inf.bmiHeader.biCompression = BI_BITFIELDS;
+
+    } else {
+        bitmap_info.inf.bmiHeader.biCompression = BI_RGB;
+    }
     switch (format) {
     case RedDrawable::A1:
         bitmap_info.inf.bmiColors[0].rgbRed = 0;
@@ -57,7 +65,13 @@ RedPixmapGdi::RedPixmapGdi(int width, int height, RedDrawable::Format format, bo
         bitmap_info.inf.bmiColors[1].rgbGreen = 0xff;
         bitmap_info.inf.bmiColors[1].rgbBlue = 0xff;
         break;
-    }
+     case RedDrawable::RGB16_565:
+        pixel_format = (DWORD *)bitmap_info.inf.bmiColors;
+        pixel_format[0] = 0xf800;
+        pixel_format[1] = 0x07e0;
+        pixel_format[2] = 0x001f;
+        break;
+   }
     AutoDC dc(create_compatible_dc());
     AutoGDIObject bitmap(CreateDIBSection(dc.get(), &bitmap_info.inf, 0,
                                           (VOID **)&_data, NULL, 0));
