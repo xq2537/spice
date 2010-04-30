@@ -3653,7 +3653,10 @@ static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
     red_get_area(worker, drawable->surface_id,
                  &drawable->qxl_drawable->self_bitmap_area, dest, dest_stride, TRUE);
 
-    if (image->bitmap.format == SPICE_BITMAP_FMT_32BIT &&
+    /* For 32bit non-primary surfaces we need to keep any non-zero
+       high bytes as the surface may be used as source to an alpha_blend */
+    if (!is_primary_surface(worker, drawable->surface_id) &&
+        image->bitmap.format == SPICE_BITMAP_FMT_32BIT &&
         rgb32_data_has_alpha(width, height, dest_stride, dest, &all_set)) {
         if (all_set) {
             image->descriptor.flags |= SPICE_IMAGE_FLAGS_HIGH_BITS_SET;
@@ -4987,7 +4990,10 @@ static void red_add_surface_image(RedWorker *worker, int surface_id)
     area.bottom = surface->context.height;
     canvas->ops->read_bits(canvas, item->data, stride, &area);
 
-    if (item->image_format == SPICE_BITMAP_FMT_32BIT &&
+    /* For 32bit non-primary surfaces we need to keep any non-zero
+       high bytes as the surface may be used as source to an alpha_blend */
+    if (!is_primary_surface(worker, surface_id) &&
+        item->image_format == SPICE_BITMAP_FMT_32BIT &&
         rgb32_data_has_alpha(item->width, item->height, item->stride, item->data, &all_set)) {
         if (all_set) {
             item->image_flags |= SPICE_IMAGE_FLAGS_HIGH_BITS_SET;
