@@ -19,7 +19,7 @@
 #define _H_GCANVAS
 
 #include "canvas.h"
-#include "cairo_canvas.h"
+#include "sw_canvas.h"
 #include "gl_canvas.h"
 #include "red_pixmap_gl.h"
 #include "red_window.h"

@@ -22,15 +22,15 @@
 #include "region.h"
 
 SpiceCanvas *gl_canvas_create(int width, int height, uint32_t format
-#ifdef CAIRO_CANVAS_CACHE
+#ifdef SW_CANVAS_CACHE
                            , SpiceImageCache *bits_cache
                            , SpicePaletteCache *palette_cache
-#elif defined(CAIRO_CANVAS_IMAGE_CACHE)
+#elif defined(SW_CANVAS_IMAGE_CACHE)
                            , SpiceImageCache *bits_cache
 #endif
 			   , SpiceImageSurfaces *surfaces
                            , SpiceGlzDecoder *glz_decoder
-#ifndef CAIRO_CANVAS_NO_CHUNKS
+#ifndef SW_CANVAS_NO_CHUNKS
                             , SpiceVirtMapping *virt_mapping
 #endif
                            );

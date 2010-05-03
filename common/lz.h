@@ -62,9 +62,8 @@ void lz_decode_begin(LzContext *lz, uint8_t *io_ptr, unsigned int num_io_bytes,
         Improtant: if the image is plt1/4 and to_type is rgb32, the image
         will decompressed including the last bits in each line. This means buffer should be
         larger than width*height if neede and you shoud use stride to fix it.
-        Note: If the image is down to top, set the stride in the cairo surface to negative.
-        use cairo_image_surface_create_for_data to create the surface and
-        cairo_surface_set_user_data in order to free the data in the destroy callback.
+        Note: If the image is down to top, set the stride in the sw surface to negative.
+        use alloc_lz_image_surface create the surface.
 */
 void lz_decode(LzContext *lz, LzImageType to_type, uint8_t *buf);
 

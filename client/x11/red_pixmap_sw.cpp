@@ -17,19 +17,19 @@
 */
 
 #include "common.h"
-#include "red_pixmap_cairo.h"
+#include "red_pixmap_sw.h"
 #include "debug.h"
 #include "utils.h"
 #include "pixels_source_p.h"
 #include "x_platform.h"
 
-RedPixmapCairo::RedPixmapCairo(int width, int height, RedDrawable::Format format,
-                               bool top_bottom, RedWindow *win)
+RedPixmapSw::RedPixmapSw(int width, int height, RedDrawable::Format format,
+                         bool top_bottom, RedWindow *win)
     : RedPixmap(width, height, format, top_bottom)
 {
     ASSERT(format == RedDrawable::ARGB32 || format == RedDrawable::RGB32 ||
-	   format == RedDrawable::RGB16_555 || format == RedDrawable::RGB16_565 ||
-	   format == RedDrawable::A1);
+           format == RedDrawable::RGB16_555 || format == RedDrawable::RGB16_565 ||
+           format == RedDrawable::A1);
     ASSERT(sizeof(RedDrawable_p) <= PIXELES_SOURCE_OPAQUE_SIZE);
     pixman_image_t *pixman_image;
     XImage *image;
@@ -73,7 +73,7 @@ RedPixmapCairo::RedPixmapCairo(int width, int height, RedDrawable::Format format
     ((PixelsSource_p*)get_opaque())->pixmap.format = format;
 }
 
-RedPixmapCairo::~RedPixmapCairo()
+RedPixmapSw::~RedPixmapSw()
 {
     ASSERT(((PixelsSource_p*)get_opaque())->type == PIXELS_SOURCE_TYPE_PIXMAP);
 

@@ -3,20 +3,20 @@ NULL =
 SUBDIRS = $(red_target)
 DIST_SUBDIRS = x11 #windows
 
-RED_COMMON_SRCS =	 		\
+RED_COMMON_SRCS =			\
 	application.cpp			\
 	application.h			\
 	audio_channels.h		\
 	audio_devices.h			\
 	cache.hpp			\
-	cairo_canvas.cpp		\
+	sw_canvas.cpp			\
 	pixman_utils.cpp		\
 	lines.cpp			\
 	canvas.cpp			\
 	canvas.h			\
 	canvas_utils.cpp		\
-	red_cairo_canvas.cpp		\
-	red_cairo_canvas.h		\
+	red_sw_canvas.cpp		\
+	red_sw_canvas.h			\
 	client_net_socket.cpp		\
 	client_net_socket.h		\
 	cmd_line_parser.cpp		\
@@ -66,7 +66,7 @@ RED_COMMON_SRCS =	 		\
 	red_key.h			\
 	red_peer.cpp			\
 	red_peer.h			\
-	red_pixmap_cairo.h		\
+	red_pixmap_sw.h			\
 	red_pixmap_gl.h			\
 	red_pixmap.h			\
 	red_types.h			\
@@ -82,8 +82,8 @@ RED_COMMON_SRCS =	 		\
 	tunnel_channel.h		\
 	hot_keys.cpp			\
 	hot_keys.h			\
-        threads.cpp			\
-        threads.h			\
+	threads.cpp			\
+	threads.h			\
 	utils.cpp			\
 	utils.h				\
 	$(NULL)

@@ -28,7 +28,7 @@
 #include "vd_interface.h"
 #include "red_worker.h"
 #include "quic.h"
-#include "cairo_canvas.h"
+#include "sw_canvas.h"
 #include "gl_canvas.h"
 #include "reds.h"
 #include "red_dispatcher.h"
@@ -131,7 +131,7 @@ typedef struct RendererInfo {
 } RendererInfo;
 
 static RendererInfo renderers_info[] = {
-    {RED_RENDERER_CAIRO, "cairo"},
+    {RED_RENDERER_SW, "sw"},
     {RED_RENDERER_OGL_PBUF, "oglpbuf"},
     {RED_RENDERER_OGL_PIXMAP, "oglpixmap"},
     {RED_RENDERER_INVALID, NULL},
@@ -483,7 +483,7 @@ RedDispatcher *red_dispatcher_init(QXLInterface *qxl_interface)
     }
 
     quic_init();
-    cairo_canvas_init();
+    sw_canvas_init();
     gl_canvas_init();
 
     if (socketpair(AF_LOCAL, SOCK_STREAM, 0, channels) == -1) {

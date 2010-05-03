@@ -6,7 +6,7 @@
 #include "inputs_handler.h"
 #include "application.h"
 
-class RedPixmapCairo;
+class RedPixmapSw;
 
 class GUI : public ScreenLayer, public KeyHandler {
 public:
@@ -86,7 +86,7 @@ private:
 private:
     Application& _app;
     Application::State _state;
-    RedPixmapCairo* _pixmap;
+    RedPixmapSw* _pixmap;
     CEGUI::SoftRenderer* _renderer;
     CEGUI::System* _gui_system;
     Dialog* _dialog;

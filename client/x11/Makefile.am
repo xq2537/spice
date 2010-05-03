@@ -6,9 +6,9 @@ CLIENT_DIR=$(top_srcdir)/client
 SUBDIRS = images
 
 INCLUDES = \
-	-DCAIRO_CANVAS_ACCESS_TEST			\
-	-DCAIRO_CANVAS_CACHE				\
-	-DCAIRO_CANVAS_NO_CHUNKS			\
+	-DSW_CANVAS_ACCESS_TEST				\
+	-DSW_CANVAS_CACHE				\
+	-DSW_CANVAS_NO_CHUNKS				\
 	-DUSE_GLZ					\
 	-DUSE_OGL					\
 	-D__STDC_LIMIT_MACROS				\
@@ -38,12 +38,12 @@ RED_COMMON_SRCS =					\
 	$(CLIENT_DIR)/audio_channels.h			\
 	$(CLIENT_DIR)/audio_devices.h			\
 	$(CLIENT_DIR)/cache.hpp				\
-	$(CLIENT_DIR)/cairo_canvas.cpp			\
+	$(CLIENT_DIR)/sw_canvas.cpp			\
 	$(CLIENT_DIR)/canvas.cpp			\
 	$(CLIENT_DIR)/canvas.h				\
 	$(CLIENT_DIR)/canvas_utils.cpp			\
-	$(CLIENT_DIR)/red_cairo_canvas.cpp		\
-	$(CLIENT_DIR)/red_cairo_canvas.h		\
+	$(CLIENT_DIR)/red_sw_canvas.cpp			\
+	$(CLIENT_DIR)/red_sw_canvas.h			\
 	$(CLIENT_DIR)/cmd_line_parser.cpp		\
 	$(CLIENT_DIR)/cmd_line_parser.h			\
 	$(CLIENT_DIR)/client_net_socket.cpp		\
@@ -93,7 +93,7 @@ RED_COMMON_SRCS =					\
 	$(CLIENT_DIR)/red_key.h				\
 	$(CLIENT_DIR)/red_peer.cpp			\
 	$(CLIENT_DIR)/red_peer.h			\
-	$(CLIENT_DIR)/red_pixmap_cairo.h		\
+	$(CLIENT_DIR)/red_pixmap_sw.h			\
 	$(CLIENT_DIR)/red_pixmap_gl.h			\
 	$(CLIENT_DIR)/red_pixmap.h			\
 	$(CLIENT_DIR)/red_types.h			\
@@ -142,7 +142,7 @@ spicec_SOURCES =			\
 	record.h			\
 	red_drawable.cpp		\
 	red_pixmap.cpp			\
-	red_pixmap_cairo.cpp		\
+	red_pixmap_sw.cpp		\
 	red_pixmap_gl.cpp		\
 	red_window.cpp			\
 	red_window_p.h			\

@@ -81,7 +81,7 @@ static int spice_port = -1;
 static int spice_secure_port = -1;
 static char spice_addr[256];
 static int spice_family = PF_UNSPEC;
-static char *default_renderer = "cairo";
+static char *default_renderer = "sw";
 
 static int ticketing_enabled = 1; //Ticketing is enabled by default
 static pthread_mutex_t *lock_cs;
@@ -4038,7 +4038,7 @@ int __attribute__ ((visibility ("default"))) spice_parse_args(const char *in_arg
         }
     } while (args);
 
-    if (!renderers_opt && !red_dispatcher_add_renderer("cairo")) {
+    if (!renderers_opt && !red_dispatcher_add_renderer("sw")) {
         goto error;
     }
 
@@ -4061,7 +4061,7 @@ const char *spice_usage_str[] __attribute__ ((visibility ("default"))) = {
     "[,ic=on|auto_glz|auto_lz|quic|glz|lz|off]",
     "[,playback-compression=on|off]",
     "[,password=password][,disable-ticketing]",
-    "[,renderer=oglpbuf+oglpixmap+cairo]",
+    "[,renderer=oglpbuf+oglpixmap+sw]",
     "[,sslkeys=key directory,sslcerts=certs directory,sslpassword=pem password,",
     "                                              sslciphersuite=cipher suite]",
     "[,secure-channels=all|channel+channel+...]",

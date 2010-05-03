@@ -1,7 +1,7 @@
 NULL =
 
 INCLUDES = \
-	-I. 					\
+	-I.					\
 	-I$(top_srcdir)/common			\
 	-I$(top_srcdir)/common/linux	\
 	$(PROTOCOL_CFLAGS)			\
@@ -12,14 +12,14 @@ INCLUDES = \
 	$(SSL_CFLAGS)				\
 	$(CELT051_CFLAGS)			\
 	$(SLIRP_CFLAGS)				\
-	-DCAIRO_CANVAS_IMAGE_CACHE		\
+	-DSW_CANVAS_IMAGE_CACHE			\
 	-DRED_STATISTICS			\
 	$(WARN_CFLAGS)                          \
 	$(VISIBILITY_HIDDEN_CFLAGS)		\
 	$(NULL)
 
-COMMON_SRCS = 						\
-	$(top_srcdir)/common/cairo_canvas.c		\
+COMMON_SRCS =						\
+	$(top_srcdir)/common/sw_canvas.c		\
 	$(top_srcdir)/common/pixman_utils.c		\
 	$(top_srcdir)/common/lines.c			\
 	$(top_srcdir)/common/gl_canvas.c		\

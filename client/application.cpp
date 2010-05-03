@@ -35,7 +35,7 @@
 #include "red_gdi_canvas.h"
 #endif
 #include "platform.h"
-#include "cairo_canvas.h"
+#include "sw_canvas.h"
 #include "gl_canvas.h"
 #include "quic.h"
 #include "mutex.h"
@@ -378,7 +378,7 @@ Application::Application()
 #ifdef WIN32
     _canvas_types[0] = CANVAS_OPTION_GDI;
 #else
-    _canvas_types[0] = CANVAS_OPTION_CAIRO;
+    _canvas_types[0] = CANVAS_OPTION_SW;
 #endif
 
     _host_auth_opt.type_flags = RedPeer::HostAuthOptions::HOST_AUTH_OP_NAME;
@@ -1793,7 +1793,7 @@ bool Application::set_canvas_option(CmdLineParser& parser, char *val, const char
     typedef std::map< std::string, CanvasOption> CanvasNamesMap;
     CanvasNamesMap canvas_types;
 
-    canvas_types["cairo"] = CANVAS_OPTION_CAIRO;
+    canvas_types["sw"] = CANVAS_OPTION_SW;
 #ifdef WIN32
     canvas_types["gdi"] = CANVAS_OPTION_GDI;
 #endif
@@ -2130,7 +2130,7 @@ void Application::init_globals()
     SSL_library_init();
     SSL_load_error_strings();
 
-    cairo_canvas_init();
+    sw_canvas_init();
 #ifdef USE_OGL
     gl_canvas_init();
 #endif

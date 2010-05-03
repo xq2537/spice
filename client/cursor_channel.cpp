@@ -24,7 +24,7 @@
 #include "debug.h"
 #include "utils.h"
 #include "screen.h"
-#include "red_pixmap_cairo.h"
+#include "red_pixmap_sw.h"
 #include "rect.h"
 
 static inline uint8_t revers_bits(uint8_t byte)
@@ -111,8 +111,8 @@ void UnsupportedCursor::draw(RedDrawable& dest, int x, int y, const SpiceRect& a
 }
 
 AlphaCursor::AlphaCursor(const SpiceCursorHeader& header, const uint8_t* data)
-    : _pixmap (new RedPixmapCairo(header.width, header.height,
-                                  RedDrawable::ARGB32, true, NULL))
+    : _pixmap (new RedPixmapSw(header.width, header.height,
+                               RedDrawable::ARGB32, true, NULL))
 {
     int stride = _pixmap->get_stride();
     uint8_t* dest = _pixmap->get_data();
@@ -131,8 +131,8 @@ MonoCursor::MonoCursor(const SpiceCursorHeader& header, const uint8_t* data)
     : _pixmap (NULL)
     , _height (header.height)
 {
-    _pixmap.reset(new RedPixmapCairo(header.width, _height * 2, RedDrawable::A1,
-                                     true, NULL));
+    _pixmap.reset(new RedPixmapSw(header.width, _height * 2, RedDrawable::A1,
+                                  true, NULL));
 
     int dest_stride = _pixmap->get_stride();
     uint8_t *dest_line = _pixmap->get_data();
@@ -175,12 +175,12 @@ private:
 };
 
 ColorCursor::ColorCursor(const SpiceCursorHeader& header)
-    : _pixmap (new RedPixmapCairo(header.width, header.height,
-                                  RedDrawable::ARGB32, true, NULL))
+    : _pixmap (new RedPixmapSw(header.width, header.height,
+                               RedDrawable::ARGB32, true, NULL))
     , _invers (NULL)
 {
-    _invers.reset(new RedPixmapCairo(header.width, header.height, RedDrawable::A1,
-                                     true, NULL));
+    _invers.reset(new RedPixmapSw(header.width, header.height, RedDrawable::A1,
+                                  true, NULL));
 }
 
 void ColorCursor::init_pixels(const SpiceCursorHeader& header, const uint8_t* pixels,

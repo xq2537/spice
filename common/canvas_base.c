@@ -43,7 +43,7 @@
 }
 #endif
 
-#ifdef CAIRO_CANVAS_ACCESS_TEST
+#ifdef SW_CANVAS_ACCESS_TEST
 #define access_test(cancas, ptr, size)                                                         \
     if ((unsigned long)(ptr) < (cancas)->base ||                                               \
                                             (unsigned long)(ptr) + (size) > (cancas)->max) {   \
@@ -163,7 +163,7 @@ typedef struct QuicData {
     QuicUsrContext usr;
     QuicContext *quic;
     jmp_buf jmp_env;
-#ifndef CAIRO_CANVAS_NO_CHUNKS
+#ifndef SW_CANVAS_NO_CHUNKS
     SPICE_ADDRESS next;
     SpiceVirtMapping *virt_mapping;
 #endif
@@ -175,7 +175,7 @@ typedef struct CanvasBase {
     uint32_t color_shift;
     uint32_t color_mask;
     QuicData quic_data;
-#ifdef CAIRO_CANVAS_ACCESS_TEST
+#ifdef SW_CANVAS_ACCESS_TEST
     unsigned long base;
     unsigned long max;
 #endif
@@ -185,10 +185,10 @@ typedef struct CanvasBase {
     int height;
     pixman_region32_t canvas_region;
 
-#if defined(CAIRO_CANVAS_CACHE) || defined(CAIRO_CANVAS_IMAGE_CACHE)
+#if defined(SW_CANVAS_CACHE) || defined(SW_CANVAS_IMAGE_CACHE)
     SpiceImageCache *bits_cache;
 #endif
-#ifdef CAIRO_CANVAS_CACHE
+#ifdef SW_CANVAS_CACHE
     SpicePaletteCache *palette_cache;
 #endif
 #ifdef WIN32
@@ -205,7 +205,7 @@ typedef struct CanvasBase {
 } CanvasBase;
 
 
-#ifndef CAIRO_CANVAS_NO_CHUNKS
+#ifndef SW_CANVAS_NO_CHUNKS
 
 #ifdef __GNUC__
 #define ATTR_PACKED __attribute__ ((__packed__))
@@ -453,7 +453,7 @@ static pixman_image_t *canvas_get_quic(CanvasBase *canvas, SpiceQUICImage *image
     int stride;
     int width;
     int height;
-#ifndef CAIRO_CANVAS_NO_CHUNKS
+#ifndef SW_CANVAS_NO_CHUNKS
     DataChunk **tmp;
     DataChunk *chunk;
 #endif
@@ -463,7 +463,7 @@ static pixman_image_t *canvas_get_quic(CanvasBase *canvas, SpiceQUICImage *image
         CANVAS_ERROR("quic error, %s", quic_data->message_buf);
     }
 
-#ifdef CAIRO_CANVAS_NO_CHUNKS
+#ifdef SW_CANVAS_NO_CHUNKS
     if (quic_decode_begin(quic_data->quic, (uint32_t *)image->quic.data,
                           image->quic.data_size >> 2, &type, &width, &height) == QUIC_ERROR) {
         CANVAS_ERROR("quic decode begin failed");
@@ -586,7 +586,7 @@ static pixman_image_t *canvas_bitmap_to_surface(CanvasBase *canvas, SpiceBitmap*
 }
 
 
-#ifdef CAIRO_CANVAS_CACHE
+#ifdef SW_CANVAS_CACHE
 
 static inline SpicePalette *canvas_get_palette(CanvasBase *canvas, SPICE_ADDRESS base_palette, uint8_t flags)
 {
@@ -942,7 +942,7 @@ static SpiceCanvas *canvas_get_surface_mask_internal(CanvasBase *canvas, SPICE_A
     return NULL;
 }
 
-#if defined(CAIRO_CANVAS_CACHE) || defined(CAIRO_CANVAS_IMAGE_CACHE)
+#if defined(SW_CANVAS_CACHE) || defined(SW_CANVAS_IMAGE_CACHE)
 
 //#define DEBUG_LZ
 
@@ -987,7 +987,7 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
         surface = canvas_get_quic(canvas, image, 0, want_original);
         break;
     }
-#ifdef CAIRO_CANVAS_NO_CHUNKS
+#ifdef SW_CANVAS_NO_CHUNKS
     case SPICE_IMAGE_TYPE_LZ_PLT: {
         access_test(canvas, descriptor, sizeof(SpiceLZPLTImage));
         LZImage *image = (LZImage *)descriptor;
@@ -1002,7 +1002,7 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
     }
 #endif
 
-#if defined(CAIRO_CANVAS_CACHE)
+#if defined(SW_CANVAS_CACHE)
     case SPICE_IMAGE_TYPE_GLZ_RGB: {
         access_test(canvas, descriptor, sizeof(SpiceLZRGBImage));
         LZImage *image = (LZImage *)descriptor;
@@ -1340,7 +1340,7 @@ static pixman_image_t *canvas_get_mask(CanvasBase *canvas, SpiceQMask *mask, int
     access_test(canvas, descriptor, sizeof(SpiceImageDescriptor));
     need_invers = mask->flags & SPICE_MASK_FLAGS_INVERS;
 
-#ifdef CAIRO_CANVAS_CACHE
+#ifdef SW_CANVAS_CACHE
     cache_me = descriptor->flags & SPICE_IMAGE_FLAGS_CACHE_ME;
 #else
     cache_me = 0;
@@ -1354,7 +1354,7 @@ static pixman_image_t *canvas_get_mask(CanvasBase *canvas, SpiceQMask *mask, int
         surface = canvas_get_bitmap_mask(canvas, &bitmap->bitmap, is_invers);
         break;
     }
-#if defined(CAIRO_CANVAS_CACHE) || defined(CAIRO_CANVAS_IMAGE_CACHE)
+#if defined(SW_CANVAS_CACHE) || defined(SW_CANVAS_IMAGE_CACHE)
     case SPICE_IMAGE_TYPE_FROM_CACHE:
         surface = canvas->bits_cache->ops->get(canvas->bits_cache, descriptor->id);
         is_invers = 0;
@@ -1364,7 +1364,7 @@ static pixman_image_t *canvas_get_mask(CanvasBase *canvas, SpiceQMask *mask, int
         CANVAS_ERROR("invalid image type");
     }
 
-#if defined(CAIRO_CANVAS_CACHE) || defined(CAIRO_CANVAS_IMAGE_CACHE)
+#if defined(SW_CANVAS_CACHE) || defined(SW_CANVAS_IMAGE_CACHE)
     if (cache_me) {
         canvas->bits_cache->ops->put(canvas->bits_cache, descriptor->id, surface);
     }
@@ -1658,7 +1658,7 @@ static void quic_usr_free(QuicUsrContext *usr, void *ptr)
     free(ptr);
 }
 
-#ifdef CAIRO_CANVAS_NO_CHUNKS
+#ifdef SW_CANVAS_NO_CHUNKS
 
 static int quic_usr_more_space(QuicUsrContext *usr, uint32_t **io_ptr, int rows_completed)
 {
@@ -1736,7 +1736,7 @@ static int quic_usr_more_lines(QuicUsrContext *usr, uint8_t **lines)
     return 0;
 }
 
-#ifdef CAIRO_CANVAS_ACCESS_TEST
+#ifdef SW_CANVAS_ACCESS_TEST
 static void __canvas_set_access_params(CanvasBase *canvas, unsigned long base, unsigned long max)
 {
     canvas->base = base;
@@ -1747,7 +1747,7 @@ static void __canvas_set_access_params(CanvasBase *canvas, unsigned long base, u
 static void canvas_base_destroy(CanvasBase *canvas)
 {
     quic_destroy(canvas->quic_data.quic);
-#ifdef CAIRO_CANVAS_NO_CHUNKS
+#ifdef SW_CANVAS_NO_CHUNKS
     lz_destroy(canvas->lz_data.lz);
 #endif
 #ifdef GDI_CANVAS
@@ -3226,15 +3226,15 @@ inline static void canvas_base_init_ops(SpiceCanvasOps *ops)
 
 static int canvas_base_init(CanvasBase *canvas, SpiceCanvasOps *ops,
                             int width, int height, uint32_t format
-#ifdef CAIRO_CANVAS_CACHE
+#ifdef SW_CANVAS_CACHE
                             , SpiceImageCache *bits_cache
                             , SpicePaletteCache *palette_cache
-#elif defined(CAIRO_CANVAS_IMAGE_CACHE)
+#elif defined(SW_CANVAS_IMAGE_CACHE)
                             , SpiceImageCache *bits_cache
 #endif
                             , SpiceImageSurfaces *surfaces
                             , SpiceGlzDecoder *glz_decoder
-#ifndef CAIRO_CANVAS_NO_CHUNKS
+#ifndef SW_CANVAS_NO_CHUNKS
                             , SpiceVirtMapping *virt_mapping
 #endif
                             )
@@ -3247,13 +3247,13 @@ static int canvas_base_init(CanvasBase *canvas, SpiceCanvasOps *ops,
     canvas->quic_data.usr.free = quic_usr_free;
     canvas->quic_data.usr.more_space = quic_usr_more_space;
     canvas->quic_data.usr.more_lines = quic_usr_more_lines;
-#ifndef CAIRO_CANVAS_NO_CHUNKS
+#ifndef SW_CANVAS_NO_CHUNKS
     canvas->quic_data.virt_mapping = virt_mapping;
 #endif
     if (!(canvas->quic_data.quic = quic_create(&canvas->quic_data.usr))) {
             return 0;
     }
-#ifdef CAIRO_CANVAS_NO_CHUNKS
+#ifdef SW_CANVAS_NO_CHUNKS
     canvas->lz_data.usr.error = lz_usr_error;
     canvas->lz_data.usr.warn = lz_usr_warn;
     canvas->lz_data.usr.info = lz_usr_warn;
@@ -3286,10 +3286,10 @@ static int canvas_base_init(CanvasBase *canvas, SpiceCanvasOps *ops,
                               canvas->width,
                               canvas->height);
 
-#if defined(CAIRO_CANVAS_CACHE) || defined(CAIRO_CANVAS_IMAGE_CACHE)
+#if defined(SW_CANVAS_CACHE) || defined(SW_CANVAS_IMAGE_CACHE)
     canvas->bits_cache = bits_cache;
 #endif
-#ifdef CAIRO_CANVAS_CACHE
+#ifdef SW_CANVAS_CACHE
     canvas->palette_cache = palette_cache;
 #endif
 

@@ -36,7 +36,7 @@
 #include "region.h"
 #include <spice/protocol.h>
 #include "red_worker.h"
-#include "cairo_canvas.h"
+#include "sw_canvas.h"
 #include "gl_canvas.h"
 #include "ogl_ctx.h"
 #include "quic.h"
@@ -7951,7 +7951,7 @@ static inline void *create_canvas_for_surface(RedWorker *worker, RedSurface *sur
     SpiceCanvas *canvas;
 
     switch (renderer) {
-    case RED_RENDERER_CAIRO:
+    case RED_RENDERER_SW:
         canvas = canvas_create_for_data(width, height, format,
                                         line_0, stride,
                                         &worker->image_cache.base,

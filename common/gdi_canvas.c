@@ -1837,7 +1837,7 @@ static void gdi_canvas_clear(SpiceCanvas *spice_canvas)
 
 static void gdi_canvas_set_access_params(SpiceCanvas *spice_canvas, unsigned long base, unsigned long max)
 {
-#ifdef CAIRO_CANVAS_ACCESS_TEST
+#ifdef SW_CANVAS_ACCESS_TEST
     GdiCanvas *canvas = (GdiCanvas *)spice_canvas;
     __canvas_set_access_params(&canvas->base, base, max);
 #endif
@@ -1858,10 +1858,10 @@ static SpiceCanvasOps gdi_canvas_ops;
 
 SpiceCanvas *gdi_canvas_create(int width, int height,
                                HDC dc, RecurciveMutex* lock, uint32_t format
-#ifdef CAIRO_CANVAS_CACHE
+#ifdef SW_CANVAS_CACHE
                              , SpiceImageCache *bits_cache
                              , SpicePaletteCache *palette_cache
-#elif defined(CAIRO_CANVAS_IMAGE_CACHE)
+#elif defined(SW_CANVAS_IMAGE_CACHE)
                              , SpiceImageCache *bits_cache
 #endif
                             , SpiceImageSurfaces *surfaces
@@ -1877,10 +1877,10 @@ SpiceCanvas *gdi_canvas_create(int width, int height,
     canvas = spice_new0(GdiCanvas, 1);
     init_ok = canvas_base_init(&canvas->base, &gdi_canvas_ops,
                                width, height, format
-#ifdef CAIRO_CANVAS_CACHE
+#ifdef SW_CANVAS_CACHE
                                ,bits_cache
                                ,palette_cache
-#elif defined(CAIRO_CANVAS_IMAGE_CACHE)
+#elif defined(SW_CANVAS_IMAGE_CACHE)
                                , bits_cache
 #endif
                                , surfaces

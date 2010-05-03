@@ -27,34 +27,34 @@
 #include "region.h"
 
 SpiceCanvas *canvas_create(int width, int height, uint32_t format
-#ifdef CAIRO_CANVAS_CACHE
+#ifdef SW_CANVAS_CACHE
                            , SpiceImageCache *bits_cache
                            , SpicePaletteCache *palette_cache
-#elif defined(CAIRO_CANVAS_IMAGE_CACHE)
+#elif defined(SW_CANVAS_IMAGE_CACHE)
                            , SpiceImageCache *bits_cache
 #endif
 			   , SpiceImageSurfaces *surfaces
                            , SpiceGlzDecoder *glz_decoder
-#ifndef CAIRO_CANVAS_NO_CHUNKS
+#ifndef SW_CANVAS_NO_CHUNKS
                            , SpiceVirtMapping *virt_mapping
 #endif
                            );
 
 SpiceCanvas *canvas_create_for_data(int width, int height, uint32_t format, uint8_t *data, size_t stride
-#ifdef CAIRO_CANVAS_CACHE
+#ifdef SW_CANVAS_CACHE
                            , SpiceImageCache *bits_cache
                            , SpicePaletteCache *palette_cache
-#elif defined(CAIRO_CANVAS_IMAGE_CACHE)
+#elif defined(SW_CANVAS_IMAGE_CACHE)
                            , SpiceImageCache *bits_cache
 #endif
 			   , SpiceImageSurfaces *surfaces
                            , SpiceGlzDecoder *glz_decoder
-#ifndef CAIRO_CANVAS_NO_CHUNKS
+#ifndef SW_CANVAS_NO_CHUNKS
                            , SpiceVirtMapping *virt_mapping
 #endif
                            );
 
 
-void cairo_canvas_init();
+void sw_canvas_init();
 
 #endif

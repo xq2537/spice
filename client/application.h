@@ -100,7 +100,7 @@ private:
 
 enum CanvasOption {
     CANVAS_OPTION_INVALID,
-    CANVAS_OPTION_CAIRO,
+    CANVAS_OPTION_SW,
 #ifdef WIN32
     CANVAS_OPTION_GDI,
 #endif

@@ -19,13 +19,13 @@
 #include "common.h"
 #include <stdint.h>
 #include "red_window.h"
-#include "red_cairo_canvas.h"
+#include "red_sw_canvas.h"
 #include "utils.h"
 #include "debug.h"
 #include "region.h"
-#include "red_pixmap_cairo.h"
+#include "red_pixmap_sw.h"
 
-CCanvas::CCanvas(bool onscreen,
+SCanvas::SCanvas(bool onscreen,
                  int width, int height, uint32_t format, RedWindow *win,
                  PixmapCache& pixmap_cache, PaletteCache& palette_cache,
                  GlzDecoderWindow &glz_decoder_window, CSurfaces& csurfaces)
@@ -33,9 +33,9 @@ CCanvas::CCanvas(bool onscreen,
     , _pixmap (0)
 {
     if (onscreen) {
-        _pixmap = new RedPixmapCairo(width, height,
-                                     RedDrawable::format_from_surface(format),
-                                     true, win);
+        _pixmap = new RedPixmapSw(width, height,
+                                  RedDrawable::format_from_surface(format),
+                                  true, win);
         _canvas = canvas_create_for_data(width, height, format,
                                          _pixmap->get_data(),
                                          _pixmap->get_stride(),
@@ -55,7 +55,7 @@ CCanvas::CCanvas(bool onscreen,
     }
 }
 
-CCanvas::~CCanvas()
+SCanvas::~SCanvas()
 {
     _canvas->ops->destroy(_canvas);
     _canvas = NULL;
@@ -65,7 +65,7 @@ CCanvas::~CCanvas()
     }
 }
 
-void CCanvas::copy_pixels(const QRegion& region, RedDrawable& dest_dc)
+void SCanvas::copy_pixels(const QRegion& region, RedDrawable& dest_dc)
 {
     pixman_box32_t *rects;
     int num_rects;
@@ -84,13 +84,13 @@ void CCanvas::copy_pixels(const QRegion& region, RedDrawable& dest_dc)
     }
 }
 
-void CCanvas::copy_pixels(const QRegion& region, RedDrawable* dest_dc, const PixmapHeader* pixmap)
+void SCanvas::copy_pixels(const QRegion& region, RedDrawable* dest_dc, const PixmapHeader* pixmap)
 {
     copy_pixels(region, *dest_dc);
 }
 
-CanvasType CCanvas::get_pixmap_type()
+CanvasType SCanvas::get_pixmap_type()
 {
-    return CANVAS_TYPE_CAIRO;
+    return CANVAS_TYPE_SW;
 }
 

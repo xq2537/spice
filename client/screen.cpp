@@ -22,7 +22,7 @@
 #include "utils.h"
 #include "debug.h"
 #include "monitor.h"
-#include "red_pixmap_cairo.h"
+#include "red_pixmap_sw.h"
 #include "resource.h"
 #include "icon.h"
 
@@ -171,8 +171,8 @@ void RedScreen::destroy_composit_area()
 void RedScreen::create_composit_area()
 {
     destroy_composit_area();
-    _composit_area = new RedPixmapCairo(_size.x, _size.y, _window.get_format(),
-                                        false, &_window);
+    _composit_area = new RedPixmapSw(_size.x, _size.y, _window.get_format(),
+                                     false, &_window);
 }
 
 void RedScreen::adjust_window_rect(int x, int y)

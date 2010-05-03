@@ -31,7 +31,7 @@
 #ifdef USE_OGL
 #include "red_gl_canvas.h"
 #endif
-#include "red_cairo_canvas.h"
+#include "red_sw_canvas.h"
 #include "red_client.h"
 #include "utils.h"
 #include "debug.h"
@@ -1080,17 +1080,17 @@ void DisplayChannel::on_disconnect()
     (*sync_event)->wait();
 }
 
-bool DisplayChannel::create_cairo_canvas(int surface_id, int width, int height, uint32_t format)
+bool DisplayChannel::create_sw_canvas(int surface_id, int width, int height, uint32_t format)
 {
     try {
-        CCanvas *canvas = new CCanvas(surface_id == 0, width, height, format,
+        SCanvas *canvas = new SCanvas(surface_id == 0, width, height, format,
                                       screen()->get_window(),
                                       _pixmap_cache, _palette_cache, _glz_window,
                                       surfaces_mngr.get_surfaces());
         surfaces_mngr.add_canvas(surface_id, canvas);
         surfaces_mngr.add_surface(surface_id, canvas->get_internal_canvas());
         if (surface_id == 0) {
-            LOG_INFO("display %d: using cairo", get_id());
+            LOG_INFO("display %d: using sw", get_id());
         }
     } catch (...) {
         return false;
@@ -1188,7 +1188,7 @@ void DisplayChannel::create_canvas(int surface_id, const std::vector<int>& canva
 
     for (i = 0; i < canvas_types.size(); i++) {
 
-        if (canvas_types[i] == CANVAS_OPTION_CAIRO && create_cairo_canvas(surface_id, width, height, format)) {
+        if (canvas_types[i] == CANVAS_OPTION_SW && create_sw_canvas(surface_id, width, height, format)) {
             break;
         }
 #ifdef USE_OGL

@@ -20,17 +20,17 @@
 #define _H_CCANVAS
 
 #include "canvas.h"
-#include "cairo_canvas.h"
+#include "sw_canvas.h"
 
 class RedPixmap;
 
-class CCanvas: public Canvas {
+class SCanvas: public Canvas {
 public:
-    CCanvas(bool onscreen,
+    SCanvas(bool onscreen,
             int width, int height, uint32_t format, RedWindow *win,
             PixmapCache& pixmap_cache, PaletteCache& palette_cache,
             GlzDecoderWindow &glz_decoder_window, CSurfaces &csurfaces);
-    virtual ~CCanvas();
+    virtual ~SCanvas();
 
     virtual void thread_touch() {}
     virtual void copy_pixels(const QRegion& region, RedDrawable* dc,

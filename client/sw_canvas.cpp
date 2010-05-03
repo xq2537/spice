@@ -15,17 +15,10 @@
    License along with this library; if not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef _H_RED_PIXMAP_CAIRO
-#define _H_RED_PIXMAP_CAIRO
+#include "common.h"
+#include "utils.h"
 
-#include "red_pixmap.h"
-#include "red_window.h"
+#define CANVAS_ERROR(format, ...) THROW(format, ## __VA_ARGS__)
 
-class RedPixmapCairo: public RedPixmap {
-public:
-    RedPixmapCairo(int width, int height, Format format, bool top_bottom, RedWindow *window);
-    ~RedPixmapCairo();
-};
-
-#endif
+#include "../common/sw_canvas.c"
 

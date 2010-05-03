@@ -16,8 +16,8 @@
    License along with this library; if not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef _H_RED_PIXMAP_CAIRO
-#define _H_RED_PIXMAP_CAIRO
+#ifndef _H_RED_PIXMAP_GDI
+#define _H_RED_PIXMAP_GDI
 
 #include "red_pixmap.h"
 

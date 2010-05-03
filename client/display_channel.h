@@ -133,7 +133,7 @@ protected:
 private:
     void set_draw_handlers();
     void clear_draw_handlers();
-    bool create_cairo_canvas(int surface_id, int width, int height, uint32_t format);
+    bool create_sw_canvas(int surface_id, int width, int height, uint32_t format);
 #ifdef USE_OGL
     bool create_ogl_canvas(int surface_id, int width, int height, uint32_t format, bool recreate,
                            RenderType rendertype);

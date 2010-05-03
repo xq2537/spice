@@ -77,7 +77,7 @@ typedef uint32_t RedWorkeMessage;
 
 enum {
     RED_RENDERER_INVALID,
-    RED_RENDERER_CAIRO,
+    RED_RENDERER_SW,
     RED_RENDERER_OGL_PBUF,
     RED_RENDERER_OGL_PIXMAP,
 };

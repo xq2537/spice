@@ -32,7 +32,7 @@
 
 enum CanvasType {
     CANVAS_TYPE_INVALID,
-    CANVAS_TYPE_CAIRO,
+    CANVAS_TYPE_SW,
     CANVAS_TYPE_GL,
     CANVAS_TYPE_GDI,
 };

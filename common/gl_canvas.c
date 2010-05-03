@@ -812,7 +812,7 @@ static void gl_canvas_group_end(SpiceCanvas *spice_canvas)
 
 static void gl_canvas_set_access_params(SpiceCanvas *spice_canvas, unsigned long base, unsigned long max)
 {
-#ifdef CAIRO_CANVAS_ACCESS_TEST
+#ifdef SW_CANVAS_ACCESS_TEST
     GLCanvas *canvas = (GLCanvas *)spice_canvas;
     __canvas_set_access_params(&canvas->base, base, max);
 #endif
@@ -822,15 +822,15 @@ static int need_init = 1;
 static SpiceCanvasOps gl_canvas_ops;
 
 SpiceCanvas *gl_canvas_create(int width, int height, uint32_t format
-#ifdef CAIRO_CANVAS_CACHE
+#ifdef SW_CANVAS_CACHE
                               , SpiceImageCache *bits_cache
                               , SpicePaletteCache *palette_cache
-#elif defined(CAIRO_CANVAS_IMAGE_CACHE)
+#elif defined(SW_CANVAS_IMAGE_CACHE)
                               , SpiceImageCache *bits_cache
 #endif
                               , SpiceImageSurfaces *surfaces
                               , SpiceGlzDecoder *glz_decoder
-#ifndef CAIRO_CANVAS_NO_CHUNKS
+#ifndef SW_CANVAS_NO_CHUNKS
                               , SpiceVirtMapping *virt_mapping
 #endif
                            )
@@ -849,15 +849,15 @@ SpiceCanvas *gl_canvas_create(int width, int height, uint32_t format
     canvas->private_data = NULL;
     init_ok = canvas_base_init(&canvas->base, &gl_canvas_ops,
                                width, height, format
-#ifdef CAIRO_CANVAS_CACHE
+#ifdef SW_CANVAS_CACHE
                                , bits_cache
                                , palette_cache
-#elif defined(CAIRO_CANVAS_IMAGE_CACHE)
+#elif defined(SW_CANVAS_IMAGE_CACHE)
                                , bits_cache
 #endif
                                , surfaces
                                , glz_decoder
-#ifndef CAIRO_CANVAS_NO_CHUNKS
+#ifndef SW_CANVAS_NO_CHUNKS
                                , virt_mapping
 #endif
                                );

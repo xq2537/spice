@@ -17,7 +17,7 @@
 */
 
 #include "common.h"
-#include "red_pixmap_cairo.h"
+#include "red_pixmap_sw.h"
 #include "red_pixmap.h"
 #include "debug.h"
 #include "utils.h"
@@ -29,8 +29,8 @@ struct RedPixmap_p {
     HBITMAP prev_bitmap;
 };
 
-RedPixmapCairo::RedPixmapCairo(int width, int height, RedDrawable::Format format,
-                               bool top_bottom, RedWindow *win)
+RedPixmapSw::RedPixmapSw(int width, int height, RedDrawable::Format format,
+                         bool top_bottom, RedWindow *win)
     : RedPixmap(width, height, format, top_bottom)
 {
     DWORD *pixel_format;
@@ -98,7 +98,7 @@ RedPixmapCairo::RedPixmapCairo(int width, int height, RedDrawable::Format format
     ((RedPixmap_p*)get_opaque())->pixels_source_p.dc = dc.release();
 }
 
-RedPixmapCairo::~RedPixmapCairo()
+RedPixmapSw::~RedPixmapSw()
 {
     HDC dc = ((RedPixmap_p*)get_opaque())->pixels_source_p.dc;
     if (dc) {

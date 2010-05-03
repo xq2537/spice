@@ -1,8 +1,8 @@
 NULL =
 
 COMMON_SRCS = 				\
-	cairo_canvas.h			\
-	cairo_canvas.c			\
+	sw_canvas.h			\
+	sw_canvas.c			\
 	pixman_utils.h			\
 	pixman_utils.c			\
 	canvas_base.h			\

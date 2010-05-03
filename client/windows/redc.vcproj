@@ -43,7 +43,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories=".;..;..\..\common;..\..\..\spice-protocol;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;"
-				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;CAIRO_CANVAS_ACCESS_TEST;CAIRO_CANVAS_CACHE;RED_DEBUG;CAIRO_CANVAS_NO_CHUNKS;_WIN32_WINNT=0x0500;LOG4CPLUS_STATIC;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC"
+				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;SW_CANVAS_ACCESS_TEST;SW_CANVAS_CACHE;RED_DEBUG;SW_CANVAS_NO_CHUNKS;_WIN32_WINNT=0x0500;LOG4CPLUS_STATIC;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC"
 				MinimalRebuild="false"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="1"
@@ -125,7 +125,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				AdditionalIncludeDirectories=".;..;..\..\..\spice-protocol;..\..\common;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;"
-				PreprocessorDefinitions="WIN32;_WINDOWS;CAIRO_CANVAS_ACCESS_TEST;CAIRO_CANVAS_CACHE;CAIRO_CANVAS_NO_CHUNKS;_WIN32_WINNT=0x0500;LOG4CPLUS_STATIC;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC"
+				PreprocessorDefinitions="WIN32;_WINDOWS;SW_CANVAS_ACCESS_TEST;SW_CANVAS_CACHE;SW_CANVAS_NO_CHUNKS;_WIN32_WINNT=0x0500;LOG4CPLUS_STATIC;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
 				WarningLevel="3"
@@ -192,7 +192,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\cairo_canvas.cpp"
+				RelativePath="..\sw_canvas.cpp"
 				>
 			</File>
 			<File
@@ -346,7 +346,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\red_cairo_canvas.cpp"
+				RelativePath="..\red_sw_canvas.cpp"
 				>
 			</File>
 			<File
@@ -374,7 +374,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\red_pixmap_cairo.cpp"
+				RelativePath=".\red_pixmap_sw.cpp"
 				>
 			</File>
 			<File
@@ -564,7 +564,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\red_cairo_canvas.h"
+				RelativePath="..\red_sw_canvas.h"
 				>
 			</File>
 			<File
