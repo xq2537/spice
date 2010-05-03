@@ -60,7 +60,7 @@ found:
     return r + 1;
 }
 
-#else
+#elif defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
 static inline int find_msb(unsigned int val)
 {
     int ret;
@@ -71,6 +71,25 @@ static inline int find_msb(unsigned int val)
          "1:"
          : "=r"(ret) : "r"(val));
     return ret + 1;
+}
+
+#else
+static inline int find_msb(unsigned int val)
+{
+    signed char index = 31;
+
+    if(val == 0) {
+        return 0;
+    }
+
+    do {
+        if(val & 0x80000000) {
+            break;
+        }
+        val <<= 1;
+    } while(--index >= 0);
+
+    return index+1;
 }
 
 #endif
