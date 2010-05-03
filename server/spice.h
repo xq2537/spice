@@ -64,8 +64,6 @@ spice_image_compression_t spice_server_get_image_compression(SpiceServer *s);
 
 int spice_server_set_channel_security(SpiceServer *s, const char *channel, int security);
 
-int spice_server_set_mouse_absolute(SpiceServer *s, int absolute);
-
 int spice_server_add_renderer(SpiceServer *s, const char *name);
 
 int spice_server_get_sock_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen);

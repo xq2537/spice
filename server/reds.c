@@ -4552,15 +4552,6 @@ __visible__ int spice_server_set_channel_security(SpiceServer *s, const char *ch
     return -1;
 }
 
-__visible__ int spice_server_set_mouse_absolute(SpiceServer *s, int absolute)
-{
-    uint32_t mode = absolute ? SPICE_MOUSE_MODE_CLIENT : SPICE_MOUSE_MODE_SERVER;
-
-    ASSERT(reds == s);
-    reds_set_mouse_mode(mode);
-    return 0;
-}
-
 __visible__ int spice_server_get_sock_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen)
 {
     ASSERT(reds == s);
