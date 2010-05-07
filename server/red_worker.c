@@ -893,8 +893,7 @@ typedef struct RedSurface {
     QRegion draw_dirty_region;
 
     //fix me - better handling here
-    QXLReleaseInfo *release_info;
-    uint32_t release_group_id;
+    QXLReleaseInfoExt create, destroy;
 } RedSurface;
 
 #ifdef STREAM_TRACE
@@ -1503,12 +1502,11 @@ static inline void red_destroy_surface(RedWorker *worker, uint32_t surface_id)
 #endif
         if (surface->context.canvas) {
             surface->context.canvas->ops->destroy(surface->context.canvas);
-            if (surface->release_info) {
-                QXLReleaseInfoExt release_info_ext;
-
-                release_info_ext.group_id = surface->release_group_id;
-                release_info_ext.info = surface->release_info;
-                worker->qxl->st->qif->release_resource(worker->qxl, release_info_ext);
+            if (surface->create.info) {
+                worker->qxl->st->qif->release_resource(worker->qxl, surface->create);
+            }
+            if (surface->destroy.info) {
+                worker->qxl->st->qif->release_resource(worker->qxl, surface->destroy);
             }
 
             region_destroy(&surface->draw_dirty_region);
@@ -1520,15 +1518,20 @@ static inline void red_destroy_surface(RedWorker *worker, uint32_t surface_id)
     }
 }
 
-static inline void set_surface_release_info(RedWorker *worker, uint32_t surface_id,
+static inline void set_surface_release_info(RedWorker *worker, uint32_t surface_id, int is_create, 
                                             QXLReleaseInfo *release_info, uint32_t group_id)
 {
     RedSurface *surface;
 
     surface = &worker->surfaces[surface_id];
 
-    surface->release_info = release_info;
-    surface->release_group_id = group_id;
+    if (is_create) {
+        surface->create.info = release_info;
+        surface->create.group_id = group_id;
+    } else {
+        surface->destroy.info = release_info;
+        surface->destroy.group_id = group_id;
+    }
 }
 
 static inline void free_qxl_drawable(RedWorker *worker, QXLDrawable *drawable, uint32_t group_id,
@@ -3893,7 +3896,6 @@ static inline void red_process_surface(RedWorker *worker, QXLSurfaceCmd *surface
         unsigned long saved_data = (unsigned long)surface->u.surface_create.data;
         uint32_t height = surface->u.surface_create.height;
         int32_t stride = surface->u.surface_create.stride;
-        QXLReleaseInfoExt release_info_ext;
 
         data = (uint8_t *)get_virt(&worker->mem_slots, saved_data, height * abs(stride), group_id);
         if (stride < 0) {
@@ -3901,14 +3903,12 @@ static inline void red_process_surface(RedWorker *worker, QXLSurfaceCmd *surface
         }
         red_create_surface(worker, surface_id, surface->u.surface_create.width,
                            height, stride, surface->u.surface_create.format, data);
-        release_info_ext.group_id = group_id;
-        release_info_ext.info = &surface->release_info;
-        worker->qxl->st->qif->release_resource(worker->qxl, release_info_ext);
+        set_surface_release_info(worker, surface_id, 1, &surface->release_info, group_id);
         break;
     }
     case QXL_SURFACE_CMD_DESTROY:
         PANIC_ON(!red_surface->context.canvas);
-        set_surface_release_info(worker, surface_id, &surface->release_info, group_id);
+        set_surface_release_info(worker, surface_id, 0, &surface->release_info, group_id);
         red_handle_depends_on_target_surface(worker, surface_id);
         red_current_clear(worker, surface_id);
         red_clear_surface_glz_drawables(worker, surface_id);
@@ -8057,7 +8057,8 @@ static inline void red_create_surface(RedWorker *worker, uint32_t surface_id, ui
     surface->context.stride = stride;
     surface->context.line_0 = line_0;
     memset(line_0 + (int32_t)(stride * (height - 1)), 0, height*abs(stride));
-    surface->release_info = NULL;
+    surface->create.info = NULL;
+    surface->destroy.info = NULL;
     ring_init(&surface->current);
     ring_init(&surface->current_list);
     ring_init(&surface->depend_on_me);
