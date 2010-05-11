@@ -3878,9 +3878,9 @@ static inline void red_process_drawable(RedWorker *worker, QXLDrawable *drawable
 
 static inline void red_create_surface(RedWorker *worker, uint32_t surface_id,uint32_t width,
                                       uint32_t height, int32_t stride, uint32_t format,
-                                      void *line_0);
+                                      void *line_0, int data_is_valid);
 
-static inline void red_process_surface(RedWorker *worker, QXLSurfaceCmd *surface, uint32_t group_id)
+static inline void red_process_surface(RedWorker *worker, QXLSurfaceCmd *surface, uint32_t group_id, int data_is_valid)
 {
     int surface_id;
     RedSurface *red_surface;
@@ -3902,7 +3902,8 @@ static inline void red_process_surface(RedWorker *worker, QXLSurfaceCmd *surface
             data -= (int32_t)(stride * (height - 1));
         }
         red_create_surface(worker, surface_id, surface->u.surface_create.width,
-                           height, stride, surface->u.surface_create.format, data);
+                           height, stride, surface->u.surface_create.format, data,
+                           data_is_valid);
         set_surface_release_info(worker, surface_id, 1, &surface->release_info, group_id);
         break;
     }
@@ -4923,7 +4924,7 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size)
         case QXL_CMD_SURFACE: {
             QXLSurfaceCmd *surface = (QXLSurfaceCmd *)get_virt(&worker->mem_slots, ext_cmd.cmd.data,
                                                                sizeof(QXLSurfaceCmd), ext_cmd.group_id);
-            red_process_surface(worker, surface, ext_cmd.group_id);
+            red_process_surface(worker, surface, ext_cmd.group_id, 0);
             break;
         }
         default:
@@ -8041,7 +8042,7 @@ static inline void red_create_surface_item(RedWorker *worker, int surface_id)
 
 static inline void red_create_surface(RedWorker *worker, uint32_t surface_id, uint32_t width,
                                       uint32_t height, int32_t stride, uint32_t format,
-                                      void *line_0)
+                                      void *line_0, int data_is_valid)
 {
     uint32_t i;
     RedSurface *surface = &worker->surfaces[surface_id];
@@ -8056,7 +8057,9 @@ static inline void red_create_surface(RedWorker *worker, uint32_t surface_id, ui
     surface->context.format = format;
     surface->context.stride = stride;
     surface->context.line_0 = line_0;
-    memset(line_0 + (int32_t)(stride * (height - 1)), 0, height*abs(stride));
+    if (!data_is_valid) {
+        memset(line_0 + (int32_t)(stride * (height - 1)), 0, height*abs(stride));
+    }
     surface->create.info = NULL;
     surface->destroy.info = NULL;
     ring_init(&surface->current);
@@ -8850,29 +8853,6 @@ typedef struct __attribute__ ((__packed__)) CursorData {
     SpiceCursor _cursor;
 } CursorData;
 
-static void red_save_cursor(RedWorker *worker)
-{
-    CursorData *cursor_data;
-    LocalCursor *local;
-    int size;
-
-    ASSERT(worker->cursor);
-    ASSERT(worker->cursor->type == CURSOR_TYPE_LOCAL);
-
-    local = (LocalCursor *)worker->cursor;
-    size = sizeof(CursorData) + sizeof(SpiceCursor) + local->data_size;
-    cursor_data = spice_malloc(size);
-
-    cursor_data->position = worker->cursor_position;
-    cursor_data->visible = worker->cursor_visible;
-    cursor_data->trail_frequency = worker->cursor_trail_frequency;
-    cursor_data->trail_length = worker->cursor_trail_length;
-    cursor_data->data_size = local->data_size;
-    cursor_data->_cursor.header = local->red_cursor.header;
-    memcpy(cursor_data->_cursor.data, local->red_cursor.data, local->data_size);
-    worker->qxl->st->qif->set_save_data(worker->qxl, cursor_data, size);
-}
-
 static LocalCursor *_new_local_cursor(SpiceCursorHeader *header, int data_size, SpicePoint16 position)
 {
     LocalCursor *local;
@@ -8928,37 +8908,6 @@ static void red_cursor_flush(RedWorker *worker)
                 (QXLDataChunk *)get_virt(&worker->mem_slots, chunk->next_chunk, sizeof(QXLDataChunk),
                                          worker->mem_slots.internal_groupslot_id) : NULL;
     }
-    red_set_cursor(worker, &local->base);
-    red_release_cursor(worker, &local->base);
-}
-
-static void red_save(RedWorker *worker)
-{
-    if (!worker->cursor) {
-        worker->qxl->st->qif->set_save_data(worker->qxl, NULL, 0);
-        return;
-    }
-    red_save_cursor(worker);
-}
-
-static void red_cursor_load(RedWorker *worker)
-{
-    CursorData *cursor_data = worker->qxl->st->qif->get_save_data(worker->qxl);
-    LocalCursor *local;
-
-    if (!cursor_data) {
-        return;
-    }
-
-    worker->cursor_position = cursor_data->position;
-    worker->cursor_visible = cursor_data->visible;
-    worker->cursor_trail_frequency = cursor_data->trail_frequency;
-    worker->cursor_trail_length = cursor_data->trail_length;
-
-    local = _new_local_cursor(&cursor_data->_cursor.header, cursor_data->data_size,
-                              cursor_data->position);
-    ASSERT(local);
-    memcpy(local->red_cursor.data, cursor_data->_cursor.data, cursor_data->data_size);
     red_set_cursor(worker, &local->base);
     red_release_cursor(worker, &local->base);
 }
@@ -9155,7 +9104,7 @@ static inline void handle_dev_create_primary_surface(RedWorker *worker)
     }
 
     red_create_surface(worker, 0, surface.width, surface.height, surface.stride, surface.format,
-                       line_0);
+                       line_0, surface.flags & QXL_SURF_FLAG_KEEP_DATA);
 
     if (worker->display_channel) {
         red_pipe_add_verb(&worker->display_channel->base, SPICE_MSG_DISPLAY_MARK);
@@ -9289,22 +9238,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         red_printf("disconnect");
         red_disconnect_display((RedChannel *)worker->display_channel);
         break;
-    case RED_WORKER_MESSAGE_SAVE:
-        red_printf("save");
-        ASSERT(!worker->running);
-        red_save(worker);
-        message = RED_WORKER_MESSAGE_READY;
-        write_message(worker->channel, &message);
-        break;
-    case RED_WORKER_MESSAGE_LOAD:
-        red_printf("load");
-        ASSERT(!worker->running);
-        red_add_surface_image(worker, 0);
-        red_cursor_load(worker);
-        message = RED_WORKER_MESSAGE_READY;
-        write_message(worker->channel, &message);
-        break;
-        case RED_WORKER_MESSAGE_STOP: {
+    case RED_WORKER_MESSAGE_STOP: {
         int x;
 
         red_printf("stop");
@@ -9420,6 +9354,41 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
     case RED_WORKER_MESSAGE_RESET_MEMSLOTS:
         red_memslot_info_reset(&worker->mem_slots);
         break;
+    case RED_WORKER_MESSAGE_LOADVM_COMMANDS: {
+        uint32_t count;
+        QXLCommandExt ext;
+        QXLCursorCmd *cursor_cmd;
+        QXLSurfaceCmd *surface_cmd;
+
+        red_printf("loadvm_commands");
+        receive_data(worker->channel, &count, sizeof(uint32_t));
+        while (count > 0) {
+            receive_data(worker->channel, &ext, sizeof(QXLCommandExt));
+            switch (ext.cmd.type) {
+            case QXL_CMD_CURSOR:
+                cursor_cmd = (QXLCursorCmd *)get_virt(&worker->mem_slots,
+                                                      ext.cmd.data,
+                                                      sizeof(QXLCursorCmd),
+                                                      ext.group_id);
+                qxl_process_cursor(worker, cursor_cmd, ext.group_id);
+                break;
+            case QXL_CMD_SURFACE:
+                surface_cmd = (QXLSurfaceCmd *)get_virt(&worker->mem_slots,
+                                                        ext.cmd.data,
+                                                        sizeof(QXLSurfaceCmd),
+                                                        ext.group_id);
+                red_process_surface(worker, surface_cmd, ext.group_id, 1);
+                break;
+            default:
+                red_printf("unhandled loadvm command type (%d)", ext.cmd.type);
+                break;
+            }
+            count--;
+        }
+        message = RED_WORKER_MESSAGE_READY;
+        write_message(worker->channel, &message);
+        break;
+    }
     default:
         red_error("message error");
     }

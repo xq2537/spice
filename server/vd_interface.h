@@ -103,8 +103,6 @@ struct QXLWorker {
     uint32_t major_version;
     void (*wakeup)(QXLWorker *worker);
     void (*oom)(QXLWorker *worker);
-    void (*save)(QXLWorker *worker);
-    void (*load)(QXLWorker *worker);
     void (*start)(QXLWorker *worker);
     void (*stop)(QXLWorker *worker);
     void (*update_area)(QXLWorker *qxl_worker, uint32_t surface_id,
@@ -120,6 +118,7 @@ struct QXLWorker {
     void (*reset_image_cache)(QXLWorker *worker);
     void (*reset_cursor)(QXLWorker *worker);
     void (*destroy_surface_wait)(QXLWorker *worker, uint32_t surface_id);
+    void (*loadvm_commands)(QXLWorker *worker, struct QXLCommandExt *ext, uint32_t count);
 };
 
 typedef struct DrawArea {
@@ -196,8 +195,6 @@ struct QXLInterface {
     int (*get_cursor_command)(QXLInstance *qin, struct QXLCommandExt *cmd);
     int (*req_cursor_notification)(QXLInstance *qin);
     void (*notify_update)(QXLInstance *qin, uint32_t update_id);
-    void (*set_save_data)(QXLInstance *qin, void *data, int size);
-    void *(*get_save_data)(QXLInstance *qin);
     int (*flush_resources)(QXLInstance *qin);
 };
 

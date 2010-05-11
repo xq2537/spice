@@ -345,26 +345,6 @@ static void qxl_worker_oom(QXLWorker *qxl_worker)
     }
 }
 
-static void qxl_worker_save(QXLWorker *qxl_worker)
-{
-    RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
-    RedWorkeMessage message = RED_WORKER_MESSAGE_SAVE;
-
-    write_message(dispatcher->channel, &message);
-    read_message(dispatcher->channel, &message);
-    ASSERT(message == RED_WORKER_MESSAGE_READY);
-}
-
-static void qxl_worker_load(QXLWorker *qxl_worker)
-{
-    RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
-    RedWorkeMessage message = RED_WORKER_MESSAGE_LOAD;
-
-    write_message(dispatcher->channel, &message);
-    read_message(dispatcher->channel, &message);
-    ASSERT(message == RED_WORKER_MESSAGE_READY);
-}
-
 static void qxl_worker_start(QXLWorker *qxl_worker)
 {
     RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
@@ -379,6 +359,20 @@ static void qxl_worker_stop(QXLWorker *qxl_worker)
     RedWorkeMessage message = RED_WORKER_MESSAGE_STOP;
 
     write_message(dispatcher->channel, &message);
+    read_message(dispatcher->channel, &message);
+    ASSERT(message == RED_WORKER_MESSAGE_READY);
+}
+
+void qxl_worker_loadvm_commands(QXLWorker *qxl_worker,
+                                struct QXLCommandExt *ext, uint32_t count)
+{
+    RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
+    RedWorkeMessage message = RED_WORKER_MESSAGE_LOADVM_COMMANDS;
+
+    red_printf("");
+    write_message(dispatcher->channel, &message);
+    send_data(dispatcher->channel, &count, sizeof(uint32_t));
+    send_data(dispatcher->channel, ext, sizeof(QXLCommandExt) * count);
     read_message(dispatcher->channel, &message);
     ASSERT(message == RED_WORKER_MESSAGE_READY);
 }
@@ -506,8 +500,6 @@ RedDispatcher *red_dispatcher_init(QXLInstance *qxl)
     dispatcher->base.minor_version = SPICE_INTERFACE_QXL_MINOR;
     dispatcher->base.wakeup = qxl_worker_wakeup;
     dispatcher->base.oom = qxl_worker_oom;
-    dispatcher->base.save = qxl_worker_save;
-    dispatcher->base.load = qxl_worker_load;
     dispatcher->base.start = qxl_worker_start;
     dispatcher->base.stop = qxl_worker_stop;
     dispatcher->base.update_area = qxl_worker_update_area;
@@ -521,6 +513,7 @@ RedDispatcher *red_dispatcher_init(QXLInstance *qxl)
     dispatcher->base.reset_image_cache = qxl_worker_reset_image_cache;
     dispatcher->base.reset_cursor = qxl_worker_reset_cursor;
     dispatcher->base.destroy_surface_wait = qxl_worker_destroy_surface_wait;
+    dispatcher->base.loadvm_commands = qxl_worker_loadvm_commands;
 
     qxl->st->qif->get_init_info(qxl, &init_info);
 
