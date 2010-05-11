@@ -264,17 +264,6 @@ struct SpiceTabletInstance {
     SpiceTabletState  *st;
 };
 
-#define VD_INTERFACE_MIGRATION "migration"
-#define VD_INTERFACE_MIGRATION_MAJOR 1
-#define VD_INTERFACE_MIGRATION_MINOR 1
-typedef struct MigrationInterface MigrationInterface;
-
-struct MigrationInterface {
-    SpiceBaseInterface base;
-
-    void (*notifier_done)(MigrationInterface *mig, VDObjectRef notifier);
-};
-
 enum VDIArgType{
     ARG_TYPE_INVALID,
     ARG_TYPE_INT,

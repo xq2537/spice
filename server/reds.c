@@ -55,7 +55,6 @@
 #endif
 
 SpiceCoreInterface *core = NULL;
-static MigrationInterface *mig = NULL;
 static SpiceKbdInstance *keyboard = NULL;
 static SpiceMouseInstance *mouse = NULL;
 static SpiceTabletInstance *tablet = NULL;
@@ -688,7 +687,6 @@ static void reds_mig_cleanup()
         reds->mig_wait_connect = FALSE;
         reds->mig_wait_disconnect = FALSE;
         core->timer_cancel(reds->mig_timer);
-        mig->notifier_done(mig, reds->mig_notifier);
     }
 }
 
@@ -3315,7 +3313,6 @@ static void reds_mig_finished(int completed)
 
     if (reds->peer == NULL) {
         red_printf("no peer connected");
-        mig->notifier_done(mig, reds->mig_notifier);
         return;
     }
     reds->mig_inprogress = TRUE;
@@ -3456,19 +3453,6 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
         }
         mouse = SPICE_CONTAINEROF(sin, SpiceMouseInstance, base);
         mouse->st = spice_new0(SpiceMouseState, 1);
-
-    } else if (strcmp(interface->type, VD_INTERFACE_MIGRATION) == 0) {
-        red_printf("VD_INTERFACE_MIGRATION");
-        if (mig) {
-            red_printf("already have migration");
-            return -1;
-        }
-        if (interface->major_version != VD_INTERFACE_MIGRATION_MAJOR ||
-            interface->minor_version < VD_INTERFACE_MIGRATION_MINOR) {
-            red_printf("unsuported migration interface");
-            return -1;
-        }
-        mig = (MigrationInterface *)interface;
 
     } else if (strcmp(interface->type, SPICE_INTERFACE_QXL) == 0) {
         QXLInstance *qxl;
