@@ -32,7 +32,7 @@
 #include <openssl/ssl.h>
 
 #include <spice/qxl_dev.h>
-#include "vd_interface.h"
+#include "spice.h"
 #include "region.h"
 #include <spice/protocol.h>
 #include "red_worker.h"

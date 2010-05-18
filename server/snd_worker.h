@@ -18,7 +18,7 @@
 #ifndef _H_SND_WORKER
 #define _H_SND_WORKER
 
-#include "vd_interface.h"
+#include "spice.h"
 
 void snd_attach_playback(SpicePlaybackInstance *sin);
 void snd_detach_playback(SpicePlaybackInstance *sin);

@@ -25,7 +25,7 @@
 #include <signal.h>
 
 #include <spice/qxl_dev.h>
-#include "vd_interface.h"
+#include "spice.h"
 #include "red_worker.h"
 #include "quic.h"
 #include "sw_canvas.h"

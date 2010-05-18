@@ -18,10 +18,349 @@
 #ifndef _H_SPICE
 #define _H_SPICE
 
+#include <stdint.h>
 #include <sys/socket.h>
-#include "vd_interface.h"
 
-/* new interface */
+/* interface base type */
+
+typedef struct SpiceBaseInterface SpiceBaseInterface;
+typedef struct SpiceBaseInstance SpiceBaseInstance;
+
+struct SpiceBaseInterface {
+    const char *type;
+    const char *description;
+    uint32_t major_version;
+    uint32_t minor_version;
+};
+struct SpiceBaseInstance {
+    const SpiceBaseInterface *sif;
+};
+
+/* core interface */
+
+#define SPICE_INTERFACE_CORE "core"
+#define SPICE_INTERFACE_CORE_MAJOR 1
+#define SPICE_INTERFACE_CORE_MINOR 2
+typedef struct SpiceCoreInterface SpiceCoreInterface;
+
+#define SPICE_WATCH_EVENT_READ  (1 << 0)
+#define SPICE_WATCH_EVENT_WRITE (1 << 1)
+
+typedef struct SpiceWatch SpiceWatch;
+typedef void (*SpiceWatchFunc)(int fd, int event, void *opaque);
+
+typedef struct SpiceTimer SpiceTimer;
+typedef void (*SpiceTimerFunc)(void *opaque);
+
+struct SpiceCoreInterface {
+    SpiceBaseInterface base;
+
+    SpiceTimer *(*timer_add)(SpiceTimerFunc func, void *opaque);
+    void (*timer_start)(SpiceTimer *timer, uint32_t ms);
+    void (*timer_cancel)(SpiceTimer *timer);
+    void (*timer_remove)(SpiceTimer *timer);
+
+    SpiceWatch *(*watch_add)(int fd, int event_mask, SpiceWatchFunc func, void *opaque);
+    void (*watch_update_mask)(SpiceWatch *watch, int event_mask);
+    void (*watch_remove)(SpiceWatch *watch);
+
+};
+
+/* qxl interface */
+
+#define SPICE_INTERFACE_QXL "qxl"
+#define SPICE_INTERFACE_QXL_MAJOR 3
+#define SPICE_INTERFACE_QXL_MINOR 0
+typedef struct QXLInterface QXLInterface;
+typedef struct QXLInstance QXLInstance;
+typedef struct QXLState QXLState;
+typedef struct QXLWorker QXLWorker;
+typedef struct QXLDevMemSlot QXLDevMemSlot;
+typedef struct QXLDevSurfaceCreate QXLDevSurfaceCreate;
+union QXLReleaseInfo;
+struct QXLReleaseInfoExt;
+struct QXLCommand;
+struct QXLCommandExt;
+struct SpiceRect;
+struct QXLWorker {
+    uint32_t minor_version;
+    uint32_t major_version;
+    void (*wakeup)(QXLWorker *worker);
+    void (*oom)(QXLWorker *worker);
+    void (*start)(QXLWorker *worker);
+    void (*stop)(QXLWorker *worker);
+    void (*update_area)(QXLWorker *qxl_worker, uint32_t surface_id,
+                       struct SpiceRect *area, struct SpiceRect *dirty_rects,
+                       uint32_t num_dirty_rects, uint32_t clear_dirty_region);
+    void (*add_memslot)(QXLWorker *worker, QXLDevMemSlot *slot);
+    void (*del_memslot)(QXLWorker *worker, uint32_t slot_group_id, uint32_t slot_id);
+    void (*reset_memslots)(QXLWorker *worker);
+    void (*destroy_surfaces)(QXLWorker *worker);
+    void (*destroy_primary_surface)(QXLWorker *worker, uint32_t surface_id);
+    void (*create_primary_surface)(QXLWorker *worker, uint32_t surface_id,
+                                   QXLDevSurfaceCreate *surface);
+    void (*reset_image_cache)(QXLWorker *worker);
+    void (*reset_cursor)(QXLWorker *worker);
+    void (*destroy_surface_wait)(QXLWorker *worker, uint32_t surface_id);
+    void (*loadvm_commands)(QXLWorker *worker, struct QXLCommandExt *ext, uint32_t count);
+};
+
+typedef struct QXLDrawArea {
+    uint8_t *buf;
+    uint32_t size;
+    uint8_t *line_0;
+    uint32_t width;
+    uint32_t heigth;
+    int stride;
+} QXLDrawArea;
+
+typedef struct QXLDevInfo {
+    uint32_t x_res;
+    uint32_t y_res;
+    uint32_t bits;
+    uint32_t use_hardware_cursor;
+
+    QXLDrawArea draw_area;
+
+    uint32_t ram_size;
+} QXLDevInfo;
+
+typedef struct QXLDevInitInfo {
+    uint32_t num_memslots_groups;
+    uint32_t num_memslots;
+    uint8_t memslot_gen_bits;
+    uint8_t memslot_id_bits;
+    uint32_t qxl_ram_size;
+    uint8_t internal_groupslot_id;
+    uint32_t n_surfaces;
+} QXLDevInitInfo;
+
+struct QXLDevMemSlot {
+    uint32_t slot_group_id;
+    uint32_t slot_id;
+    uint32_t generation;
+    unsigned long virt_start;
+    unsigned long virt_end;
+    uint64_t addr_delta;
+    uint32_t qxl_ram_size;
+};
+
+struct QXLDevSurfaceCreate {
+    uint32_t width;
+    uint32_t height;
+    int32_t stride;
+    uint32_t format;
+    uint32_t position;
+    uint32_t mouse_mode;
+    uint32_t flags;
+    uint32_t type;
+    uint64_t mem;
+    uint32_t group_id;
+};
+
+struct SpiceRect;
+
+struct QXLInterface {
+    SpiceBaseInterface base;
+
+    uint16_t pci_vendor;
+    uint16_t pci_id;
+    uint8_t pci_revision;
+
+    void (*attache_worker)(QXLInstance *qin, QXLWorker *qxl_worker);
+    void (*set_compression_level)(QXLInstance *qin, int level);
+    void (*set_mm_time)(QXLInstance *qin, uint32_t mm_time);
+
+    void (*get_init_info)(QXLInstance *qin, QXLDevInitInfo *info);
+    int (*get_command)(QXLInstance *qin, struct QXLCommandExt *cmd);
+    int (*req_cmd_notification)(QXLInstance *qin);
+    int (*has_command)(QXLInstance *qin);
+    void (*release_resource)(QXLInstance *qin, struct QXLReleaseInfoExt release_info);
+    int (*get_cursor_command)(QXLInstance *qin, struct QXLCommandExt *cmd);
+    int (*req_cursor_notification)(QXLInstance *qin);
+    void (*notify_update)(QXLInstance *qin, uint32_t update_id);
+    int (*flush_resources)(QXLInstance *qin);
+};
+
+struct QXLInstance {
+    SpiceBaseInstance  base;
+    int                id;
+    QXLState           *st;
+};
+
+/* input interfaces */
+
+#define SPICE_INTERFACE_KEYBOARD "keyboard"
+#define SPICE_INTERFACE_KEYBOARD_MAJOR 1
+#define SPICE_INTERFACE_KEYBOARD_MINOR 1
+typedef struct SpiceKbdInterface SpiceKbdInterface;
+typedef struct SpiceKbdInstance SpiceKbdInstance;
+typedef struct SpiceKbdState SpiceKbdState;
+
+struct SpiceKbdInterface {
+    SpiceBaseInterface base;
+
+    void (*push_scan_freg)(SpiceKbdInstance *sin, uint8_t frag);
+    uint8_t (*get_leds)(SpiceKbdInstance *sin);
+};
+
+struct SpiceKbdInstance {
+    SpiceBaseInstance base;
+    SpiceKbdState     *st;
+};
+
+int spice_server_kbd_leds(SpiceKbdInstance *sin, int leds);
+
+#define SPICE_INTERFACE_MOUSE "mouse"
+#define SPICE_INTERFACE_MOUSE_MAJOR 1
+#define SPICE_INTERFACE_MOUSE_MINOR 1
+typedef struct SpiceMouseInterface SpiceMouseInterface;
+typedef struct SpiceMouseInstance SpiceMouseInstance;
+typedef struct SpiceMouseState SpiceMouseState;
+
+struct SpiceMouseInterface {
+    SpiceBaseInterface base;
+
+    void (*motion)(SpiceMouseInstance *sin, int dx, int dy, int dz,
+                   uint32_t buttons_state);
+    void (*buttons)(SpiceMouseInstance *sin, uint32_t buttons_state);
+};
+
+struct SpiceMouseInstance {
+    SpiceBaseInstance base;
+    SpiceMouseState   *st;
+};
+
+#define SPICE_INTERFACE_TABLET "tablet"
+#define SPICE_INTERFACE_TABLET_MAJOR 1
+#define SPICE_INTERFACE_TABLET_MINOR 1
+typedef struct SpiceTabletInterface SpiceTabletInterface;
+typedef struct SpiceTabletInstance SpiceTabletInstance;
+typedef struct SpiceTabletState SpiceTabletState;
+
+struct SpiceTabletInterface {
+    SpiceBaseInterface base;
+
+    void (*set_logical_size)(SpiceTabletInstance* tablet, int width, int height);
+    void (*position)(SpiceTabletInstance* tablet, int x, int y, uint32_t buttons_state);
+    void (*wheel)(SpiceTabletInstance* tablet, int wheel_moution, uint32_t buttons_state);
+    void (*buttons)(SpiceTabletInstance* tablet, uint32_t buttons_state);
+};
+
+struct SpiceTabletInstance {
+    SpiceBaseInstance base;
+    SpiceTabletState  *st;
+};
+
+/* sound interfaces */
+
+#define SPICE_INTERFACE_PLAYBACK "playback"
+#define SPICE_INTERFACE_PLAYBACK_MAJOR 1
+#define SPICE_INTERFACE_PLAYBACK_MINOR 1
+typedef struct SpicePlaybackInterface SpicePlaybackInterface;
+typedef struct SpicePlaybackInstance SpicePlaybackInstance;
+typedef struct SpicePlaybackState SpicePlaybackState;
+
+enum {
+    SPICE_INTERFACE_AUDIO_FMT_S16 = 1,
+};
+
+#define SPICE_INTERFACE_PLAYBACK_FREQ  44100
+#define SPICE_INTERFACE_PLAYBACK_CHAN  2
+#define SPICE_INTERFACE_PLAYBACK_FMT   SPICE_INTERFACE_AUDIO_FMT_S16
+
+struct SpicePlaybackInterface {
+    SpiceBaseInterface base;
+};
+
+struct SpicePlaybackInstance {
+    SpiceBaseInstance  base;
+    SpicePlaybackState *st;
+};
+
+void spice_server_playback_start(SpicePlaybackInstance *sin);
+void spice_server_playback_stop(SpicePlaybackInstance *sin);
+void spice_server_playback_get_buffer(SpicePlaybackInstance *sin,
+                                      uint32_t **samples, uint32_t *nsamples);
+void spice_server_playback_put_samples(SpicePlaybackInstance *sin,
+                                       uint32_t *samples);
+
+#define SPICE_INTERFACE_RECORD "record"
+#define SPICE_INTERFACE_RECORD_MAJOR 2
+#define SPICE_INTERFACE_RECORD_MINOR 1
+typedef struct SpiceRecordInterface SpiceRecordInterface;
+typedef struct SpiceRecordInstance SpiceRecordInstance;
+typedef struct SpiceRecordState SpiceRecordState;
+
+#define SPICE_INTERFACE_RECORD_FREQ  44100
+#define SPICE_INTERFACE_RECORD_CHAN  2
+#define SPICE_INTERFACE_RECORD_FMT   SPICE_INTERFACE_AUDIO_FMT_S16
+
+struct SpiceRecordInterface {
+    SpiceBaseInterface base;
+};
+
+struct SpiceRecordInstance {
+    SpiceBaseInstance base;
+    SpiceRecordState  *st;
+};
+
+void spice_server_record_start(SpiceRecordInstance *sin);
+void spice_server_record_stop(SpiceRecordInstance *sin);
+uint32_t spice_server_record_get_samples(SpiceRecordInstance *sin,
+                                         uint32_t *samples, uint32_t bufsize);
+
+/* vdi port interface */
+
+#define SPICE_INTERFACE_VDI_PORT "vdi_port"
+#define SPICE_INTERFACE_VDI_PORT_MAJOR 1
+#define SPICE_INTERFACE_VDI_PORT_MINOR 1
+typedef struct SpiceVDIPortInterface SpiceVDIPortInterface;
+typedef struct SpiceVDIPortInstance SpiceVDIPortInstance;
+typedef struct SpiceVDIPortState SpiceVDIPortState;
+
+struct SpiceVDIPortInterface {
+    SpiceBaseInterface base;
+
+    void (*state)(SpiceVDIPortInstance *sin, int connected);
+    int (*write)(SpiceVDIPortInstance *sin, const uint8_t *buf, int len);
+    int (*read)(SpiceVDIPortInstance *sin, uint8_t *buf, int len);
+};
+
+struct SpiceVDIPortInstance {
+    SpiceBaseInstance base;
+    SpiceVDIPortState *st;
+};
+
+void spice_server_vdi_port_wakeup(SpiceVDIPortInstance *sin);
+
+/* tunnel interface */
+
+#define SPICE_INTERFACE_NET_WIRE "net_wire"
+#define SPICE_INTERFACE_NET_WIRE_MAJOR 1
+#define SPICE_INTERFACE_NET_WIRE_MINOR 1
+typedef struct SpiceNetWireInterface SpiceNetWireInterface;
+typedef struct SpiceNetWireInstance SpiceNetWireInstance;
+typedef struct SpiceNetWireState SpiceNetWireState;
+
+struct NetWireInterface {
+    SpiceBaseInterface base;
+
+    struct in_addr (*get_ip)(SpiceNetWireInterface *sin);
+    int (*can_send_packet)(SpiceNetWireInterface *sin);
+    void (*send_packet)(SpiceNetWireInterface *sin, const uint8_t *pkt, int len);
+};
+
+struct SpiceNetWireInstance {
+    SpiceBaseInstance base;
+    SpiceNetWireState *st;
+};
+
+void spice_server_net_wire_recv_packet(SpiceNetWireInstance *sin,
+                                       const uint8_t *pkt, int len);
+
+/* spice server setup */
+
 typedef struct RedsState SpiceServer;
 SpiceServer *spice_server_new(void);
 int spice_server_init(SpiceServer *s, SpiceCoreInterface *core);
@@ -43,7 +382,6 @@ int spice_server_set_tls(SpiceServer *s, int port,
 int spice_server_add_interface(SpiceServer *s,
                                SpiceBaseInstance *sin);
 int spice_server_remove_interface(SpiceBaseInstance *sin);
-int spice_server_kbd_leds(SpiceKbdInstance *sin, int leds);
 
 typedef enum {
     SPICE_IMAGE_COMPRESS_INVALID  = 0,
@@ -68,6 +406,8 @@ int spice_server_add_renderer(SpiceServer *s, const char *name);
 
 int spice_server_get_sock_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen);
 int spice_server_get_peer_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen);
+
+/* spice client migration */
 
 enum {
     SPICE_MIGRATE_CLIENT_NONE = 1,

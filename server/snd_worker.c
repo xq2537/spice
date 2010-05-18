@@ -22,7 +22,7 @@
 #include <netinet/tcp.h>
 #include <celt051/celt.h>
 
-#include "vd_interface.h"
+#include "spice.h"
 #include "red_common.h"
 #include "reds.h"
 #include "red_dispatcher.h"

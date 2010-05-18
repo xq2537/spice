@@ -24,7 +24,7 @@
 
 #include "red_common.h"
 #include "reds.h"
-#include "vd_interface.h"
+#include "spice.h"
 #include "ring.h"
 
 #define MAX_SEND_BUFS 1000
