@@ -75,6 +75,10 @@ struct QXLState {
     struct RedDispatcher  *dispatcher;
 };
 
+struct SpiceNetWireState {
+    int dummy;
+};
+
 void reds_desable_mm_timer();
 void reds_enable_mm_timer();
 void reds_update_mm_timer(uint32_t mm_time);

@@ -3521,20 +3521,22 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
         }
         attach_to_red_agent(SPICE_CONTAINEROF(sin, SpiceVDIPortInstance, base));
 
-    } else if (strcmp(interface->type, VD_INTERFACE_NET_WIRE) == 0) {
+    } else if (strcmp(interface->type, SPICE_INTERFACE_NET_WIRE) == 0) {
 #ifdef HAVE_SLIRP
-        NetWireInterface * net_wire = (NetWireInterface *)interface;
-        red_printf("VD_INTERFACE_NET_WIRE");
+        SpiceNetWireInstance *net;
+        red_printf("SPICE_INTERFACE_NET_WIRE");
         if (red_tunnel) {
             red_printf("net wire already attached");
             return -1;
         }
-        if (interface->major_version != VD_INTERFACE_NET_WIRE_MAJOR ||
-            interface->minor_version < VD_INTERFACE_NET_WIRE_MINOR) {
+        if (interface->major_version != SPICE_INTERFACE_NET_WIRE_MAJOR ||
+            interface->minor_version < SPICE_INTERFACE_NET_WIRE_MINOR) {
             red_printf("unsuported net wire interface");
             return -1;
         }
-        red_tunnel = red_tunnel_attach(core, net_wire);
+        net = SPICE_CONTAINEROF(sin, SpiceNetWireInstance, base);
+        net->st = spice_new0(SpiceNetWireState, 1);
+        red_tunnel = red_tunnel_attach(core, net);
 #else
         red_printf("unsupported net wire interface");
         return -1;
