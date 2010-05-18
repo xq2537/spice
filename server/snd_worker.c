@@ -121,7 +121,6 @@ struct AudioFrame {
 typedef struct PlaybackChannel {
     SndChannel base;
     AudioFrame frames[3];
-    VDObjectRef plug_ref;
     AudioFrame *free_frames;
     AudioFrame *in_progress;
     AudioFrame *pending_frame;
@@ -172,7 +171,6 @@ typedef struct __attribute__ ((__packed__)) RecordMigrateMessage {
 
 typedef struct RecordChannel {
     SndChannel base;
-    VDObjectRef plug_ref;
     uint32_t samples[RECORD_SAMPLES_SIZE];
     uint32_t write_pos;
     uint32_t read_pos;

@@ -33,10 +33,6 @@
 
 #include <stdint.h>
 
-#define VM_INTERFACE_VERSION 1
-typedef unsigned long VDObjectRef;
-#define INVALID_VD_OBJECT_REF 0
-
 typedef struct SpiceBaseInterface SpiceBaseInterface;
 typedef struct SpiceBaseInstance SpiceBaseInstance;
 
@@ -54,12 +50,6 @@ struct SpiceBaseInstance {
 #define SPICE_INTERFACE_CORE_MAJOR 1
 #define SPICE_INTERFACE_CORE_MINOR 2
 typedef struct SpiceCoreInterface SpiceCoreInterface;
-
-typedef enum {
-    VD_LOG_ERROR = 1,
-    VD_LOG_WARN,
-    VD_LOG_INFO,
-} LogLevel;
 
 #define SPICE_WATCH_EVENT_READ  (1 << 0)
 #define SPICE_WATCH_EVENT_WRITE (1 << 1)
@@ -121,14 +111,14 @@ struct QXLWorker {
     void (*loadvm_commands)(QXLWorker *worker, struct QXLCommandExt *ext, uint32_t count);
 };
 
-typedef struct DrawArea {
+typedef struct QXLDrawArea {
     uint8_t *buf;
     uint32_t size;
     uint8_t *line_0;
     uint32_t width;
     uint32_t heigth;
     int stride;
-} DrawArea;
+} QXLDrawArea;
 
 typedef struct QXLDevInfo {
     uint32_t x_res;
@@ -136,7 +126,7 @@ typedef struct QXLDevInfo {
     uint32_t bits;
     uint32_t use_hardware_cursor;
 
-    DrawArea draw_area;
+    QXLDrawArea draw_area;
 
     uint32_t ram_size;
 } QXLDevInfo;
@@ -263,29 +253,6 @@ struct SpiceTabletInstance {
     SpiceBaseInstance base;
     SpiceTabletState  *st;
 };
-
-enum VDIArgType{
-    ARG_TYPE_INVALID,
-    ARG_TYPE_INT,
-    ARG_TYPE_STRING,
-};
-
-typedef struct VDIArgDescriptor {
-    char* name;
-    int type;
-    int optional;
-} VDIArgDescriptor;
-
-typedef struct VDICmdArg {
-    VDIArgDescriptor descriptor;
-    union {
-        uint64_t int_val;
-        const char *string_val;
-    };
-} VDICmdArg;
-
-typedef void (*VDICmdHandler)(const VDICmdArg* args);
-typedef void (*VDIInfoCmdHandler)(void);
 
 #define SPICE_INTERFACE_PLAYBACK "playback"
 #define SPICE_INTERFACE_PLAYBACK_MAJOR 1

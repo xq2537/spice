@@ -254,7 +254,6 @@ typedef struct RedsState {
     VDIPortState agent_state;
     InputsState *inputs_state;
 
-    VDObjectRef mig_notifier;
     int mig_wait_connect;
     int mig_wait_disconnect;
     int mig_inprogress;
@@ -371,21 +370,6 @@ static int default_channel_security =
     SPICE_CHANNEL_SECURITY_NONE | SPICE_CHANNEL_SECURITY_SSL;
 
 static RedSSLParameters ssl_parameters;
-
-static int args_is_empty(const VDICmdArg* args)
-{
-    return !args || args[0].descriptor.type == ARG_TYPE_INVALID;
-}
-
-const int args_is_string(const VDICmdArg* args)
-{
-    return !args_is_empty(args) && args->descriptor.type == ARG_TYPE_STRING;
-}
-
-const int args_is_int(const VDICmdArg* args)
-{
-    return !args_is_empty(args) && args->descriptor.type == ARG_TYPE_INT;
-}
 
 static ChannelSecurityOptions *find_channel_security(int id)
 {
