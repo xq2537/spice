@@ -86,6 +86,7 @@ libspice_server_la_SOURCES =			\
 	red_channel.h				\
 	red_channel.c				\
 	spice.h					\
+	spice-experimental.h			\
 	$(TUNNEL_SRCS)				\
 	$(COMMON_SRCS)				\
 	$(NULL)
@@ -93,6 +94,7 @@ libspice_server_la_SOURCES =			\
 libspice_serverincludedir = $(includedir)/spice-server
 libspice_serverinclude_HEADERS =
 	spice.h					\
+	spice-experimental.h			\
 	$(NULL)
 
 EXTRA_DIST =					\

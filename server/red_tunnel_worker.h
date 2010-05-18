@@ -22,8 +22,6 @@
 #ifndef _H_RED_TUNNEL_WORKER
 #define _H_RED_TUNNEL_WORKER
 
-#include "spice.h"
-
 void *red_tunnel_attach(SpiceCoreInterface *core_interface, SpiceNetWireInstance *sin);
 
 #endif

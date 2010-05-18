@@ -39,6 +39,7 @@
 #include <openssl/err.h>
 
 #include "spice.h"
+#include "spice-experimental.h"
 #include "reds.h"
 #include <spice/protocol.h>
 #include <spice/vd_agent.h>
