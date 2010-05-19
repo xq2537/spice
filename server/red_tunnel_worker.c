@@ -28,6 +28,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
+#include "spice.h"
+#include "spice-experimental.h"
 #include "red_tunnel_worker.h"
 #include "red_common.h"
 #include <spice/protocol.h>
@@ -535,7 +537,8 @@ struct TunnelWorker {
     TunnelChannel *channel;
 
     SpiceCoreInterface *core_interface;
-    NetWireInterface *vlan_interface;
+    SpiceNetWireInstance *sin;
+    SpiceNetWireInterface *sif;
     RedSlirpNetworkInterface tunnel_interface;
     RedSlirpNetworkInterface null_interface;
 
@@ -958,9 +961,10 @@ static TunneledBufferProcessQueue *tunnel_socket_alloc_simple_print_reply_proces
                                                       PROCESS_DIRECTION_TYPE_REPLY);
 }
 
-static void tunnel_send_packet(void *opaque_tunnel, const uint8_t *pkt, int pkt_len)
+__visible__ void spice_server_net_wire_recv_packet(SpiceNetWireInstance *sin,
+                                                   const uint8_t *pkt, int pkt_len)
 {
-    TunnelWorker *worker = (TunnelWorker *)opaque_tunnel;
+    TunnelWorker *worker = sin->st->worker;
     ASSERT(worker);
 
     if (worker->channel && worker->channel->base.migrate) {
@@ -971,12 +975,14 @@ static void tunnel_send_packet(void *opaque_tunnel, const uint8_t *pkt, int pkt_
 }
 
 void *red_tunnel_attach(SpiceCoreInterface *core_interface,
-                        NetWireInterface *vlan_interface)
+                        SpiceNetWireInstance *sin)
 {
     TunnelWorker *worker = spice_new0(TunnelWorker, 1);
 
     worker->core_interface = core_interface;
-    worker->vlan_interface = vlan_interface;
+    worker->sin = sin;
+    worker->sin->st->worker = worker;
+    worker->sif = SPICE_CONTAINEROF(sin->base.sif, SpiceNetWireInterface, base);
 
     worker->tunnel_interface.base.slirp_can_output = qemu_can_output;
     worker->tunnel_interface.base.slirp_output = qemu_output;
@@ -1014,12 +1020,9 @@ void *red_tunnel_attach(SpiceCoreInterface *core_interface,
     ring_init(&worker->services);
     reds_register_channel(&worker->channel_interface);
 
-    net_slirp_init(worker->vlan_interface->get_ip(worker->vlan_interface),
+    net_slirp_init(worker->sif->get_ip(worker->sin),
                    TRUE,
                    &worker->null_interface.base);
-    if (!vlan_interface->register_route_packet(vlan_interface, tunnel_send_packet, worker)) {
-        red_error("register route packet failed");
-    }
     return worker;
 }
 
@@ -2892,13 +2895,13 @@ static void tunnel_channel_release_pipe_item(RedChannel *channel, PipeItem *item
 static int qemu_can_output(SlirpUsrNetworkInterface *usr_interface)
 {
     TunnelWorker *worker = ((RedSlirpNetworkInterface *)usr_interface)->worker;
-    return worker->vlan_interface->can_send_packet(worker->vlan_interface);
+    return worker->sif->can_send_packet(worker->sin);
 }
 
 static void qemu_output(SlirpUsrNetworkInterface *usr_interface, const uint8_t *pkt, int pkt_len)
 {
     TunnelWorker *worker = ((RedSlirpNetworkInterface *)usr_interface)->worker;
-    worker->vlan_interface->send_packet(worker->vlan_interface, pkt, pkt_len);
+    worker->sif->send_packet(worker->sin, pkt, pkt_len);
 }
 
 static int null_tunnel_socket_connect(SlirpUsrNetworkInterface *usr_interface,

@@ -75,8 +75,9 @@ struct QXLState {
     struct RedDispatcher  *dispatcher;
 };
 
+struct TunnelWorker;
 struct SpiceNetWireState {
-    int dummy;
+    struct TunnelWorker *worker;
 };
 
 void reds_desable_mm_timer();

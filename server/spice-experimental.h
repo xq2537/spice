@@ -31,12 +31,12 @@ typedef struct SpiceNetWireInterface SpiceNetWireInterface;
 typedef struct SpiceNetWireInstance SpiceNetWireInstance;
 typedef struct SpiceNetWireState SpiceNetWireState;
 
-struct NetWireInterface {
+struct SpiceNetWireInterface {
     SpiceBaseInterface base;
 
-    struct in_addr (*get_ip)(SpiceNetWireInterface *sin);
-    int (*can_send_packet)(SpiceNetWireInterface *sin);
-    void (*send_packet)(SpiceNetWireInterface *sin, const uint8_t *pkt, int len);
+    struct in_addr (*get_ip)(SpiceNetWireInstance *sin);
+    int (*can_send_packet)(SpiceNetWireInstance *sin);
+    void (*send_packet)(SpiceNetWireInstance *sin, const uint8_t *pkt, int len);
 };
 
 struct SpiceNetWireInstance {
