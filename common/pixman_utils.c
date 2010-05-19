@@ -1071,14 +1071,8 @@ pixman_image_t *spice_bitmap_try_as_pixman(int src_format,
 }
 
 #ifdef WORDS_BIGENDIAN
-#define UINT16_FROM_LE(x)  ((uint16_t) ( \
-    (uint16_t) ((uint16_t) (x) >> 8) |   \
-    (uint16_t) ((uint16_t) (x) << 8)))
-#define UINT32_FROM_LE(x) (x) ((uint32_t) ( \
-    (((uint32_t) (val) & (uint32_t) 0x000000ffU) << 24) | \
-    (((uint32_t) (val) & (uint32_t) 0x0000ff00U) <<  8) | \
-    (((uint32_t) (val) & (uint32_t) 0x00ff0000U) >>  8) | \
-    (((uint32_t) (val) & (uint32_t) 0xff000000U) >> 24)))
+#define UINT16_FROM_LE(x) SPICE_BYTESWAP16(x)
+#define UINT32_FROM_LE(x) SPICE_BYTESWAP32(x)
 #else
 #define UINT16_FROM_LE(x) (x)
 #define UINT32_FROM_LE(x) (x)
