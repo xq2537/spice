@@ -92,7 +92,7 @@ libspice_server_la_SOURCES =			\
 	$(NULL)
 
 libspice_serverincludedir = $(includedir)/spice-server
-libspice_serverinclude_HEADERS =
+libspice_serverinclude_HEADERS =		\
 	spice.h					\
 	spice-experimental.h			\
 	$(NULL)
