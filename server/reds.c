@@ -93,7 +93,7 @@ int agent_mouse = TRUE;
 
 static void openssl_init();
 
-#define MIGRATE_TIMEOUT (1000 * 100) /* 10sec */
+#define MIGRATE_TIMEOUT (1000 * 10) /* 10sec */
 #define PING_INTERVAL (1000 * 10)
 #define KEY_MODIFIERS_TTL (1000 * 2) /*2sec*/
 #define MM_TIMER_GRANULARITY_MS (1000 / 30)

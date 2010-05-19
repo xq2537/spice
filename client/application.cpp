@@ -2110,7 +2110,7 @@ void Application::init_logger()
     }
 
     log4cpp::Category& root = log4cpp::Category::getRoot();
-#if 1 // RED_DEBUG
+#ifdef RED_DEBUG
     root.setPriority(log4cpp::Priority::DEBUG);
     root.removeAllAppenders();
     root.addAppender(new log4cpp::FileAppender("_", fd));
