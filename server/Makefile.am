@@ -40,7 +40,7 @@ libspice_server_la_LDFLAGS =			\
 	-no-undefined				\
 	$(NULL)
 
-libspice_server_la_LIBADD = 			\
+libspice_server_la_LIBADD =			\
 	$(GL_LIBS)				\
 	$(JPEG_LIBS)				\
 	$(PIXMAN_LIBS)				\
@@ -92,7 +92,7 @@ libspice_server_la_SOURCES =			\
 	$(NULL)
 
 libspice_serverincludedir = $(includedir)/spice-server
-libspice_serverinclude_HEADERS =               	\
+libspice_serverinclude_HEADERS =
 	spice.h					\
 	vd_interface.h				\
 	$(NULL)
