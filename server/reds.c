@@ -3485,7 +3485,7 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
         snd_attach_playback(SPICE_CONTAINEROF(sin, SpicePlaybackInstance, base));
 
     } else if (strcmp(interface->type, SPICE_INTERFACE_RECORD) == 0) {
-        red_printf("VD_INTERFACE_RECORD");
+        red_printf("SPICE_INTERFACE_RECORD");
         if (interface->major_version != SPICE_INTERFACE_RECORD_MAJOR ||
             interface->minor_version < SPICE_INTERFACE_RECORD_MINOR) {
             red_printf("unsuported record interface");
