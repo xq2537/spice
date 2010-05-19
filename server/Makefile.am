@@ -51,12 +51,12 @@ libspice_server_la_LIBADD = 			\
 	$(NULL)
 
 if SUPPORT_TUNNEL
-	TUNNEL_SRCS =			\
-		red_tunnel_worker.c	\
-		red_tunnel_worker.h	\
-		$(NULL)
+TUNNEL_SRCS =			\
+	red_tunnel_worker.c	\
+	red_tunnel_worker.h	\
+	$(NULL)
 else
-	TUNNEL_SRCS =
+TUNNEL_SRCS =
 endif
 
 libspice_server_la_SOURCES =			\
