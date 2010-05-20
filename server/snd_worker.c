@@ -140,17 +140,19 @@ typedef struct PlaybackChannel {
 
 struct SndWorker {
     Channel base;
-    SpiceBaseInterface *interface;
     SndChannel *connection;
     SndWorker *next;
+    int active;
 };
 
 struct SpicePlaybackState {
     struct SndWorker worker;
+    SpicePlaybackInstance *sin;
 };
 
 struct SpiceRecordState {
     struct SndWorker worker;
+    SpiceRecordInstance *sin;
 };
 
 #define RECORD_MIG_VERSION 1
@@ -855,6 +857,7 @@ __visible__ void spice_server_playback_start(SpicePlaybackInstance *sin)
     SndChannel *channel = sin->st->worker.connection;
     PlaybackChannel *playback_channel = SPICE_CONTAINEROF(channel, PlaybackChannel, base);
 
+    sin->st->worker.active = 1;
     if (!channel)
         return;
     ASSERT(!playback_channel->base.active);
@@ -873,6 +876,7 @@ __visible__ void spice_server_playback_stop(SpicePlaybackInstance *sin)
     SndChannel *channel = sin->st->worker.connection;
     PlaybackChannel *playback_channel = SPICE_CONTAINEROF(channel, PlaybackChannel, base);
 
+    sin->st->worker.active = 0;
     if (!channel)
         return;
     ASSERT(playback_channel->base.active);
@@ -966,6 +970,7 @@ static void snd_set_playback_peer(Channel *channel, RedsStreamContext *peer, int
                                   uint32_t *caps)
 {
     SndWorker *worker = (SndWorker *)channel;
+    SpicePlaybackState *st = SPICE_CONTAINEROF(worker, SpicePlaybackState, worker);
     PlaybackChannel *playback_channel;
     CELTEncoder *celt_encoder;
     CELTMode *celt_mode;
@@ -1007,6 +1012,8 @@ static void snd_set_playback_peer(Channel *channel, RedsStreamContext *peer, int
                                                               SPICE_AUDIO_DATA_MODE_RAW;
 
     on_new_playback_channel(worker);
+    if (worker->active)
+        spice_server_playback_start(st->sin);
     snd_playback_send(worker->connection);
     return;
 
@@ -1031,6 +1038,7 @@ __visible__ void spice_server_record_start(SpiceRecordInstance *sin)
     SndChannel *channel = sin->st->worker.connection;
     RecordChannel *record_channel = SPICE_CONTAINEROF(channel, RecordChannel, base);
 
+    sin->st->worker.active = 1;
     if (!channel)
         return;
     ASSERT(!record_channel->base.active);
@@ -1050,6 +1058,7 @@ __visible__ void spice_server_record_stop(SpiceRecordInstance *sin)
     SndChannel *channel = sin->st->worker.connection;
     RecordChannel *record_channel = SPICE_CONTAINEROF(channel, RecordChannel, base);
 
+    sin->st->worker.active = 0;
     if (!channel)
         return;
     ASSERT(record_channel->base.active);
@@ -1125,6 +1134,7 @@ static void snd_set_record_peer(Channel *channel, RedsStreamContext *peer, int m
                                 uint32_t *caps)
 {
     SndWorker *worker = (SndWorker *)channel;
+    SpiceRecordState *st = SPICE_CONTAINEROF(worker, SpiceRecordState, worker);
     RecordChannel *record_channel;
     CELTDecoder *celt_decoder;
     CELTMode *celt_mode;
@@ -1161,6 +1171,8 @@ static void snd_set_record_peer(Channel *channel, RedsStreamContext *peer, int m
     record_channel->celt_decoder = celt_decoder;
 
     on_new_record_channel(worker);
+    if (worker->active)
+        spice_server_record_start(st->sin);
     snd_record_send(worker->connection);
     return;
 
@@ -1205,6 +1217,7 @@ void snd_attach_playback(SpicePlaybackInstance *sin)
     SndWorker *playback_worker;
 
     sin->st = spice_new0(SpicePlaybackState, 1);
+    sin->st->sin = sin;
     playback_worker = &sin->st->worker;
 
     playback_worker->base.type = SPICE_CHANNEL_PLAYBACK;
@@ -1226,6 +1239,7 @@ void snd_attach_record(SpiceRecordInstance *sin)
     SndWorker *record_worker;
 
     sin->st = spice_new0(SpiceRecordState, 1);
+    sin->st->sin = sin;
     record_worker = &sin->st->worker;
 
     record_worker->base.type = SPICE_CHANNEL_RECORD;
