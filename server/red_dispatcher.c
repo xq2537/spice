@@ -74,7 +74,7 @@ static void red_dispatcher_set_peer(Channel *channel, RedsStreamContext *peer, i
 
     red_printf("");
     dispatcher = (RedDispatcher *)channel->data;
-    RedWorkeMessage message = RED_WORKER_MESSAGE_DISPLAY_CONNECT;
+    RedWorkerMessage message = RED_WORKER_MESSAGE_DISPLAY_CONNECT;
     write_message(dispatcher->channel, &message);
     send_data(dispatcher->channel, &peer, sizeof(RedsStreamContext *));
     send_data(dispatcher->channel, &migration, sizeof(int));
@@ -84,7 +84,7 @@ static void red_dispatcher_shutdown_peer(Channel *channel)
 {
     RedDispatcher *dispatcher = (RedDispatcher *)channel->data;
     red_printf("");
-    RedWorkeMessage message = RED_WORKER_MESSAGE_DISPLAY_DISCONNECT;
+    RedWorkerMessage message = RED_WORKER_MESSAGE_DISPLAY_DISCONNECT;
     write_message(dispatcher->channel, &message);
 }
 
@@ -92,7 +92,7 @@ static void red_dispatcher_migrate(Channel *channel)
 {
     RedDispatcher *dispatcher = (RedDispatcher *)channel->data;
     red_printf("channel type %u id %u", channel->type, channel->id);
-    RedWorkeMessage message = RED_WORKER_MESSAGE_DISPLAY_MIGRATE;
+    RedWorkerMessage message = RED_WORKER_MESSAGE_DISPLAY_MIGRATE;
     write_message(dispatcher->channel, &message);
 }
 
@@ -103,7 +103,7 @@ static void red_dispatcher_set_cursor_peer(Channel *channel, RedsStreamContext *
 {
     RedDispatcher *dispatcher = (RedDispatcher *)channel->data;
     red_printf("");
-    RedWorkeMessage message = RED_WORKER_MESSAGE_CURSOR_CONNECT;
+    RedWorkerMessage message = RED_WORKER_MESSAGE_CURSOR_CONNECT;
     write_message(dispatcher->channel, &message);
     send_data(dispatcher->channel, &peer, sizeof(RedsStreamContext *));
     send_data(dispatcher->channel, &migration, sizeof(int));
@@ -113,7 +113,7 @@ static void red_dispatcher_shutdown_cursor_peer(Channel *channel)
 {
     RedDispatcher *dispatcher = (RedDispatcher *)channel->data;
     red_printf("");
-    RedWorkeMessage message = RED_WORKER_MESSAGE_CURSOR_DISCONNECT;
+    RedWorkerMessage message = RED_WORKER_MESSAGE_CURSOR_DISCONNECT;
     write_message(dispatcher->channel, &message);
 }
 
@@ -121,7 +121,7 @@ static void red_dispatcher_cursor_migrate(Channel *channel)
 {
     RedDispatcher *dispatcher = (RedDispatcher *)channel->data;
     red_printf("channel type %u id %u", channel->type, channel->id);
-    RedWorkeMessage message = RED_WORKER_MESSAGE_CURSOR_MIGRATE;
+    RedWorkerMessage message = RED_WORKER_MESSAGE_CURSOR_MIGRATE;
     write_message(dispatcher->channel, &message);
 }
 
@@ -204,7 +204,7 @@ static void qxl_worker_update_area(QXLWorker *qxl_worker, uint32_t surface_id,
                                    uint32_t num_dirty_rects, uint32_t clear_dirty_region)
 {
     RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
-    RedWorkeMessage message = RED_WORKER_MESSAGE_UPDATE;
+    RedWorkerMessage message = RED_WORKER_MESSAGE_UPDATE;
 
     write_message(dispatcher->channel, &message);
     send_data(dispatcher->channel, &surface_id, sizeof(uint32_t));
@@ -219,7 +219,7 @@ static void qxl_worker_update_area(QXLWorker *qxl_worker, uint32_t surface_id,
 static void qxl_worker_add_memslot(QXLWorker *qxl_worker, QXLDevMemSlot *mem_slot)
 {
     RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
-    RedWorkeMessage message = RED_WORKER_MESSAGE_ADD_MEMSLOT;
+    RedWorkerMessage message = RED_WORKER_MESSAGE_ADD_MEMSLOT;
 
     write_message(dispatcher->channel, &message);
     send_data(dispatcher->channel, mem_slot, sizeof(QXLDevMemSlot));
@@ -230,7 +230,7 @@ static void qxl_worker_add_memslot(QXLWorker *qxl_worker, QXLDevMemSlot *mem_slo
 static void qxl_worker_del_memslot(QXLWorker *qxl_worker, uint32_t slot_group_id, uint32_t slot_id)
 {
     RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
-    RedWorkeMessage message = RED_WORKER_MESSAGE_DEL_MEMSLOT;
+    RedWorkerMessage message = RED_WORKER_MESSAGE_DEL_MEMSLOT;
 
     write_message(dispatcher->channel, &message);
     send_data(dispatcher->channel, &slot_group_id, sizeof(uint32_t));
@@ -240,7 +240,7 @@ static void qxl_worker_del_memslot(QXLWorker *qxl_worker, uint32_t slot_group_id
 static void qxl_worker_destroy_surfaces(QXLWorker *qxl_worker)
 {
     RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
-    RedWorkeMessage message = RED_WORKER_MESSAGE_DESTROY_SURFACES;
+    RedWorkerMessage message = RED_WORKER_MESSAGE_DESTROY_SURFACES;
 
     write_message(dispatcher->channel, &message);
     read_message(dispatcher->channel, &message);
@@ -250,7 +250,7 @@ static void qxl_worker_destroy_surfaces(QXLWorker *qxl_worker)
 static void qxl_worker_destroy_primary(QXLWorker *qxl_worker, uint32_t surface_id)
 {
     RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
-    RedWorkeMessage message = RED_WORKER_MESSAGE_DESTROY_PRIMARY_SURFACE;
+    RedWorkerMessage message = RED_WORKER_MESSAGE_DESTROY_PRIMARY_SURFACE;
 
     write_message(dispatcher->channel, &message);
     send_data(dispatcher->channel, &surface_id, sizeof(uint32_t));
@@ -269,7 +269,7 @@ static void qxl_worker_create_primary(QXLWorker *qxl_worker, uint32_t surface_id
                                       QXLDevSurfaceCreate *surface)
 {
     RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
-    RedWorkeMessage message = RED_WORKER_MESSAGE_CREATE_PRIMARY_SURFACE;
+    RedWorkerMessage message = RED_WORKER_MESSAGE_CREATE_PRIMARY_SURFACE;
 
     dispatcher->x_res = surface->width;
     dispatcher->y_res = surface->height;
@@ -288,7 +288,7 @@ static void qxl_worker_create_primary(QXLWorker *qxl_worker, uint32_t surface_id
 static void qxl_worker_reset_image_cache(QXLWorker *qxl_worker)
 {
     RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
-    RedWorkeMessage message = RED_WORKER_MESSAGE_RESET_IMAGE_CACHE;
+    RedWorkerMessage message = RED_WORKER_MESSAGE_RESET_IMAGE_CACHE;
 
     write_message(dispatcher->channel, &message);
     read_message(dispatcher->channel, &message);
@@ -298,7 +298,7 @@ static void qxl_worker_reset_image_cache(QXLWorker *qxl_worker)
 static void qxl_worker_reset_cursor(QXLWorker *qxl_worker)
 {
     RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
-    RedWorkeMessage message = RED_WORKER_MESSAGE_RESET_CURSOR;
+    RedWorkerMessage message = RED_WORKER_MESSAGE_RESET_CURSOR;
 
     write_message(dispatcher->channel, &message);
     read_message(dispatcher->channel, &message);
@@ -308,7 +308,7 @@ static void qxl_worker_reset_cursor(QXLWorker *qxl_worker)
 static void qxl_worker_destroy_surface_wait(QXLWorker *qxl_worker, uint32_t surface_id)
 {
     RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
-    RedWorkeMessage message = RED_WORKER_MESSAGE_DESTROY_SURFACE_WAIT;
+    RedWorkerMessage message = RED_WORKER_MESSAGE_DESTROY_SURFACE_WAIT;
 
     write_message(dispatcher->channel, &message);
     send_data(dispatcher->channel, &surface_id, sizeof(uint32_t));
@@ -319,7 +319,7 @@ static void qxl_worker_destroy_surface_wait(QXLWorker *qxl_worker, uint32_t surf
 static void qxl_worker_reset_memslots(QXLWorker *qxl_worker)
 {
     RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
-    RedWorkeMessage message = RED_WORKER_MESSAGE_RESET_MEMSLOTS;
+    RedWorkerMessage message = RED_WORKER_MESSAGE_RESET_MEMSLOTS;
 
     write_message(dispatcher->channel, &message);
 }
@@ -329,7 +329,7 @@ static void qxl_worker_wakeup(QXLWorker *qxl_worker)
     RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
 
     if (!test_bit(RED_WORKER_PENDING_WAKEUP, dispatcher->pending)) {
-        RedWorkeMessage message = RED_WORKER_MESSAGE_WAKEUP;
+        RedWorkerMessage message = RED_WORKER_MESSAGE_WAKEUP;
         set_bit(RED_WORKER_PENDING_WAKEUP, &dispatcher->pending);
         write_message(dispatcher->channel, &message);
     }
@@ -339,7 +339,7 @@ static void qxl_worker_oom(QXLWorker *qxl_worker)
 {
     RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
     if (!test_bit(RED_WORKER_PENDING_OOM, dispatcher->pending)) {
-        RedWorkeMessage message = RED_WORKER_MESSAGE_OOM;
+        RedWorkerMessage message = RED_WORKER_MESSAGE_OOM;
         set_bit(RED_WORKER_PENDING_OOM, &dispatcher->pending);
         write_message(dispatcher->channel, &message);
     }
@@ -348,7 +348,7 @@ static void qxl_worker_oom(QXLWorker *qxl_worker)
 static void qxl_worker_start(QXLWorker *qxl_worker)
 {
     RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
-    RedWorkeMessage message = RED_WORKER_MESSAGE_START;
+    RedWorkerMessage message = RED_WORKER_MESSAGE_START;
 
     write_message(dispatcher->channel, &message);
 }
@@ -356,7 +356,7 @@ static void qxl_worker_start(QXLWorker *qxl_worker)
 static void qxl_worker_stop(QXLWorker *qxl_worker)
 {
     RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
-    RedWorkeMessage message = RED_WORKER_MESSAGE_STOP;
+    RedWorkerMessage message = RED_WORKER_MESSAGE_STOP;
 
     write_message(dispatcher->channel, &message);
     read_message(dispatcher->channel, &message);
@@ -367,7 +367,7 @@ void qxl_worker_loadvm_commands(QXLWorker *qxl_worker,
                                 struct QXLCommandExt *ext, uint32_t count)
 {
     RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
-    RedWorkeMessage message = RED_WORKER_MESSAGE_LOADVM_COMMANDS;
+    RedWorkerMessage message = RED_WORKER_MESSAGE_LOADVM_COMMANDS;
 
     red_printf("");
     write_message(dispatcher->channel, &message);
@@ -402,7 +402,7 @@ void red_dispatcher_on_ic_change()
     int compression_level = calc_compression_level();
     RedDispatcher *now = dispatchers;
     while (now) {
-        RedWorkeMessage message = RED_WORKER_MESSAGE_SET_COMPRESSION;
+        RedWorkerMessage message = RED_WORKER_MESSAGE_SET_COMPRESSION;
         now->qxl->st->qif->set_compression_level(now->qxl, compression_level);
         write_message(now->channel, &message);
         send_data(now->channel, &image_compression, sizeof(spice_image_compression_t));
@@ -415,7 +415,7 @@ void red_dispatcher_on_sv_change()
     int compression_level = calc_compression_level();
     RedDispatcher *now = dispatchers;
     while (now) {
-        RedWorkeMessage message = RED_WORKER_MESSAGE_SET_STREAMING_VIDEO;
+        RedWorkerMessage message = RED_WORKER_MESSAGE_SET_STREAMING_VIDEO;
         now->qxl->st->qif->set_compression_level(now->qxl, compression_level);
         write_message(now->channel, &message);
         send_data(now->channel, &streaming_video, sizeof(uint32_t));
@@ -427,7 +427,7 @@ void red_dispatcher_set_mouse_mode(uint32_t mode)
 {
     RedDispatcher *now = dispatchers;
     while (now) {
-        RedWorkeMessage message = RED_WORKER_MESSAGE_SET_MOUSE_MODE;
+        RedWorkerMessage message = RED_WORKER_MESSAGE_SET_MOUSE_MODE;
         write_message(now->channel, &message);
         send_data(now->channel, &mode, sizeof(uint32_t));
         now = now->next;
@@ -460,7 +460,7 @@ RedDispatcher *red_dispatcher_init(QXLInstance *qxl)
 {
     RedDispatcher *dispatcher;
     int channels[2];
-    RedWorkeMessage message;
+    RedWorkerMessage message;
     WorkerInitData init_data;
     QXLDevInitInfo init_info;
     int r;

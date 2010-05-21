@@ -8940,7 +8940,7 @@ static void red_wait_outgoiong_item(RedChannel *channel)
 
 static inline void handle_dev_update(RedWorker *worker)
 {
-    RedWorkeMessage message;
+    RedWorkerMessage message;
     const SpiceRect *rect;
     SpiceRect *dirty_rects;
     RedSurface *surface;
@@ -8975,7 +8975,7 @@ static inline void handle_dev_update(RedWorker *worker)
 
 static inline void handle_dev_add_memslot(RedWorker *worker)
 {
-    RedWorkeMessage message;
+    RedWorkerMessage message;
     QXLDevMemSlot dev_slot;
 
     receive_data(worker->channel, &dev_slot, sizeof(QXLDevMemSlot));
@@ -9016,7 +9016,7 @@ static inline void destroy_surface_wait(RedWorker *worker, int surface_id)
 
 static inline void handle_dev_destroy_surface_wait(RedWorker *worker)
 {
-    RedWorkeMessage message;
+    RedWorkerMessage message;
     uint32_t surface_id;
 
     receive_data(worker->channel, &surface_id, sizeof(uint32_t));
@@ -9035,7 +9035,7 @@ static inline void handle_dev_destroy_surface_wait(RedWorker *worker)
 static inline void handle_dev_destroy_surfaces(RedWorker *worker)
 {
     int i;
-    RedWorkeMessage message;
+    RedWorkerMessage message;
 
     flush_display_commands(worker);
     //to handle better
@@ -9084,7 +9084,7 @@ static inline void handle_dev_destroy_surfaces(RedWorker *worker)
 
 static inline void handle_dev_create_primary_surface(RedWorker *worker)
 {
-    RedWorkeMessage message;
+    RedWorkerMessage message;
     uint32_t surface_id;
     QXLDevSurfaceCreate surface;
     uint8_t *line_0;
@@ -9121,7 +9121,7 @@ static inline void handle_dev_create_primary_surface(RedWorker *worker)
 
 static inline void handle_dev_destroy_primary_surface(RedWorker *worker)
 {
-    RedWorkeMessage message;
+    RedWorkerMessage message;
     uint32_t surface_id;
 
     receive_data(worker->channel, &surface_id, sizeof(uint32_t));
@@ -9161,7 +9161,7 @@ static inline void handle_dev_destroy_primary_surface(RedWorker *worker)
 static void handle_dev_input(EventListener *listener, uint32_t events)
 {
     RedWorker *worker = SPICE_CONTAINEROF(listener, RedWorker, dev_listener);
-    RedWorkeMessage message;
+    RedWorkerMessage message;
 
     read_message(worker->channel, &message);
 
@@ -9397,7 +9397,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
 static void red_init(RedWorker *worker, WorkerInitData *init_data)
 {
     struct epoll_event event;
-    RedWorkeMessage message;
+    RedWorkerMessage message;
     int epoll;
     static SpiceVirtMappingOps preload_group_virt_mapping_ops = {
         op_get_virt_preload_group,

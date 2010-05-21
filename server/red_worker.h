@@ -70,7 +70,7 @@ enum {
     RED_WORKER_MESSAGE_LOADVM_COMMANDS,
 };
 
-typedef uint32_t RedWorkeMessage;
+typedef uint32_t RedWorkerMessage;
 
 #define RED_MAX_RENDERERS 4
 
@@ -116,9 +116,9 @@ static inline void send_data(int fd, void *in_buf, int n)
     } while (n);
 }
 
-static inline void write_message(int fd, RedWorkeMessage *message)
+static inline void write_message(int fd, RedWorkerMessage *message)
 {
-    send_data(fd, message, sizeof(RedWorkeMessage));
+    send_data(fd, message, sizeof(RedWorkerMessage));
 }
 
 static inline void receive_data(int fd, void *in_buf, int n)
@@ -137,9 +137,9 @@ static inline void receive_data(int fd, void *in_buf, int n)
     } while (n);
 }
 
-static inline void read_message(int fd, RedWorkeMessage *message)
+static inline void read_message(int fd, RedWorkerMessage *message)
 {
-    receive_data(fd, message, sizeof(RedWorkeMessage));
+    receive_data(fd, message, sizeof(RedWorkerMessage));
 }
 
 #endif
