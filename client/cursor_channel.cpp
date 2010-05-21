@@ -580,8 +580,8 @@ void CursorChannel::handle_reset(RedPeer::InMessage *message)
 void CursorChannel::handle_cursor_set(RedPeer::InMessage* message)
 {
     SpiceMsgCursorSet* set = (SpiceMsgCursorSet*)message->data();
-    set_cursor(set->cursor, message->size() - sizeof(SpiceMsgCursorSet), set->postition.x,
-               set->postition.y, set->visible != 0);
+    set_cursor(set->cursor, message->size() - sizeof(SpiceMsgCursorSet), set->position.x,
+               set->position.y, set->visible != 0);
 }
 
 void CursorChannel::handle_cursor_move(RedPeer::InMessage* message)
@@ -594,8 +594,8 @@ void CursorChannel::handle_cursor_move(RedPeer::InMessage* message)
 
     Lock lock(_update_lock);
     _cursor_visible = true;
-    int dx = move->postition.x - _hot_pos.x;
-    int dy = move->postition.y - _hot_pos.y;
+    int dx = move->position.x - _hot_pos.x;
+    int dy = move->position.y - _hot_pos.y;
     _hot_pos.x += dx;
     _hot_pos.y += dy;
     _cursor_rect.left += dx;

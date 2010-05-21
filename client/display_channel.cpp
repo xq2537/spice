@@ -158,7 +158,7 @@ public:
                 SpiceRect* dest, int clip_type, uint32_t num_clip_rects, SpiceRect* clip_rects);
     ~VideoStream();
 
-    void push_data(uint32_t mm_time, uint32_t length, uint8_t* data, uint32_t ped_size);
+    void push_data(uint32_t mm_time, uint32_t length, uint8_t* data, uint32_t pad_size);
     void set_clip(int type, uint32_t num_clip_rects, SpiceRect* clip_rects);
     const SpiceRect& get_dest() {return _dest;}
     void handle_update_mark(uint64_t update_mark);
@@ -445,7 +445,7 @@ uint32_t VideoStream::alloc_frame_slot()
     return frame_slot(_frames_head++);
 }
 
-void VideoStream::push_data(uint32_t mm_time, uint32_t length, uint8_t* data, uint32_t ped_size)
+void VideoStream::push_data(uint32_t mm_time, uint32_t length, uint8_t* data, uint32_t pad_size)
 {
     maintenance();
     uint32_t frame_slot = alloc_frame_slot();
@@ -622,7 +622,7 @@ DisplayChannel::DisplayChannel(RedClient& client, uint32_t id,
 
     handler->set_handler(SPICE_MSG_DISPLAY_INVAL_LIST,
                          &DisplayChannel::handle_inval_list,
-                         sizeof(SpiceResorceList));
+                         sizeof(SpiceResourceList));
     handler->set_handler(SPICE_MSG_DISPLAY_INVAL_ALL_PIXMAPS,
                          &DisplayChannel::handle_inval_all_pixmaps,
                          sizeof(SpiceMsgWaitForChannels));
@@ -1251,19 +1251,19 @@ void DisplayChannel::handle_reset(RedPeer::InMessage *message)
 
 void DisplayChannel::handle_inval_list(RedPeer::InMessage* message)
 {
-    SpiceResorceList *inval_list = (SpiceResorceList *)message->data();
+    SpiceResourceList *inval_list = (SpiceResourceList *)message->data();
 
     if (message->size() <
-                        sizeof(*inval_list) + inval_list->count * sizeof(inval_list->resorces[0])) {
+                        sizeof(*inval_list) + inval_list->count * sizeof(inval_list->resources[0])) {
         THROW("access violation");
     }
 
     for (int i = 0; i < inval_list->count; i++) {
-        if (inval_list->resorces[i].type != SPICE_RES_TYPE_PIXMAP) {
+        if (inval_list->resources[i].type != SPICE_RES_TYPE_PIXMAP) {
             THROW("invalid res type");
         }
 
-        _pixmap_cache.remove(inval_list->resorces[i].id);
+        _pixmap_cache.remove(inval_list->resources[i].id);
     }
 }
 
@@ -1357,12 +1357,12 @@ void DisplayChannel::handle_stream_data(RedPeer::InMessage* message)
         THROW("invalid stream");
     }
 
-    if (message->size() < sizeof(SpiceMsgDisplayStreamData) + stream_data->data_size + stream_data->ped_size) {
+    if (message->size() < sizeof(SpiceMsgDisplayStreamData) + stream_data->data_size + stream_data->pad_size) {
         THROW("access violation");
     }
 
     stream->push_data(stream_data->multi_media_time, stream_data->data_size, stream_data->data,
-                      stream_data->ped_size);
+                      stream_data->pad_size);
 }
 
 void DisplayChannel::handle_stream_clip(RedPeer::InMessage* message)

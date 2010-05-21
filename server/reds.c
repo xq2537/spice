@@ -2527,7 +2527,7 @@ static void reds_handle_other_links(RedLinkInfo *link)
 
         notify = (SpiceMsgNotify *)item->data;
         notify->time_stamp = get_time_stamp();
-        notify->severty = SPICE_NOTIFY_SEVERITY_WARN;
+        notify->severity = SPICE_NOTIFY_SEVERITY_WARN;
         notify->visibilty = SPICE_NOTIFY_VISIBILITY_HIGH;
         notify->what = SPICE_WARN_GENERAL;
         notify->message_len = mess_len;

@@ -521,7 +521,7 @@ typedef struct WaitForChannels {
 
 typedef struct FreeList {
     int res_size;
-    SpiceResorceList *res;
+    SpiceResourceList *res;
     uint64_t sync[MAX_CACHE_CLIENTS];
     WaitForChannels wait;
 } FreeList;
@@ -6807,17 +6807,17 @@ static void display_channel_push_release(DisplayChannel *channel, uint8_t type, 
     }
 
     if (free_list->res->count == free_list->res_size) {
-        SpiceResorceList *new_list;
-        new_list = spice_malloc(sizeof(*new_list) + free_list->res_size * sizeof(SpiceResorceID) * 2);
+        SpiceResourceList *new_list;
+        new_list = spice_malloc(sizeof(*new_list) + free_list->res_size * sizeof(SpiceResourceID) * 2);
         new_list->count = free_list->res->count;
-        memcpy(new_list->resorces, free_list->res->resorces,
-               new_list->count * sizeof(SpiceResorceID));
+        memcpy(new_list->resources, free_list->res->resources,
+               new_list->count * sizeof(SpiceResourceID));
         free(free_list->res);
         free_list->res = new_list;
         free_list->res_size *= 2;
     }
-    free_list->res->resorces[free_list->res->count].type = type;
-    free_list->res->resorces[free_list->res->count++].id = id;
+    free_list->res->resources[free_list->res->count].type = type;
+    free_list->res->resources[free_list->res->count++].id = id;
 }
 
 static inline void red_begin_send_massage(RedChannel *channel, void *item)
@@ -6869,7 +6869,7 @@ static inline void display_begin_send_massage(DisplayChannel *channel, void *ite
         }
         sub_header[sub_index].type = SPICE_MSG_DISPLAY_INVAL_LIST;
         sub_header[sub_index].size = sizeof(*free_list->res) + free_list->res->count *
-                                     sizeof(free_list->res->resorces[0]);
+                                     sizeof(free_list->res->resources[0]);
         add_buf((RedChannel*)channel, BUF_TYPE_RAW, &sub_header[sub_index], sizeof(*sub_header), 0,
                 0);
         add_buf((RedChannel*)channel, BUF_TYPE_RAW, free_list->res, sub_header[sub_index].size, 0,
@@ -7169,7 +7169,7 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
     stream_data->id = stream - worker->streams_buf;
     stream_data->multi_media_time = drawable->qxl_drawable->mm_time;
     stream_data->data_size = n;
-    stream_data->ped_size = PADDING;
+    stream_data->pad_size = PADDING;
     display_begin_send_massage(display_channel, NULL);
     agent->lats_send_time = time_now;
     return TRUE;
@@ -7520,7 +7520,7 @@ static void red_send_local_cursor(CursorChannel *cursor_channel, LocalCursor *cu
 
     channel = &cursor_channel->base;
     channel->send_data.header.type = SPICE_MSG_CURSOR_SET;
-    cursor_channel->send_data.u.cursor_set.postition = cursor->position;
+    cursor_channel->send_data.u.cursor_set.position = cursor->position;
     cursor_channel->send_data.u.cursor_set.visible = channel->worker->cursor_visible;
     add_buf(channel, BUF_TYPE_RAW, &cursor_channel->send_data.u.cursor_set,
             sizeof(SpiceMsgCursorSet), 0, 0);
@@ -7553,13 +7553,13 @@ static void red_send_cursor(CursorChannel *cursor_channel, CursorItem *cursor)
     switch (cmd->type) {
     case QXL_CURSOR_MOVE:
         channel->send_data.header.type = SPICE_MSG_CURSOR_MOVE;
-        cursor_channel->send_data.u.cursor_move.postition = cmd->u.position;
+        cursor_channel->send_data.u.cursor_move.position = cmd->u.position;
         add_buf(channel, BUF_TYPE_RAW, &cursor_channel->send_data.u.cursor_move,
                 sizeof(SpiceMsgCursorMove), 0, 0);
         break;
     case QXL_CURSOR_SET:
         channel->send_data.header.type = SPICE_MSG_CURSOR_SET;
-        cursor_channel->send_data.u.cursor_set.postition = cmd->u.set.position;
+        cursor_channel->send_data.u.cursor_set.position = cmd->u.set.position;
         cursor_channel->send_data.u.cursor_set.visible = channel->worker->cursor_visible;
         add_buf(channel, BUF_TYPE_RAW, &cursor_channel->send_data.u.cursor_set,
                 sizeof(SpiceMsgCursorSet), 0, 0);
@@ -8763,8 +8763,8 @@ static void handle_new_display_channel(RedWorker *worker, RedsStreamContext *pee
 
 
     display_channel->send_data.free_list.res =
-        spice_malloc(sizeof(SpiceResorceList) +
-                     DISPLAY_FREE_LIST_DEFAULT_SIZE * sizeof(SpiceResorceID));
+        spice_malloc(sizeof(SpiceResourceList) +
+                     DISPLAY_FREE_LIST_DEFAULT_SIZE * sizeof(SpiceResourceID));
     display_channel->send_data.free_list.res_size = DISPLAY_FREE_LIST_DEFAULT_SIZE;
     red_ref_channel((RedChannel*)display_channel);
     on_new_display_channel(worker);

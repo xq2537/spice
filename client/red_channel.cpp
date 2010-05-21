@@ -675,10 +675,10 @@ void RedChannel::handle_notify(RedPeer::InMessage* message)
     static const char* visibility_strings[] = {"!", "!!", "!!!"};
 
 
-    if (notify->severty > SPICE_NOTIFY_SEVERITY_ERROR) {
+    if (notify->severity > SPICE_NOTIFY_SEVERITY_ERROR) {
         THROW("bad severity");
     }
-    sevirity = sevirity_strings[notify->severty];
+    sevirity = sevirity_strings[notify->severity];
 
     if (notify->visibilty > SPICE_NOTIFY_VISIBILITY_HIGH) {
         THROW("bad visibility");
