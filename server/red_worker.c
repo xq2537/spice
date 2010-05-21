@@ -584,7 +584,7 @@ typedef struct {
 
 typedef struct RedGlzDrawable RedGlzDrawable;
 
-/* for each qxl drawable, there may be serveral instances of lz drawables */
+/* for each qxl drawable, there may be several instances of lz drawables */
 typedef struct GlzDrawableInstanceItem {
     RingItem glz_link;
     RingItem free_link;
@@ -1185,7 +1185,7 @@ static void show_qxl_drawable(RedWorker *worker, QXLDrawable *drawable, const ch
     case QXL_DRAW_TEXT:
         break;
     default:
-        red_error("bad rawable type");
+        red_error("bad drawable type");
     }
     printf("\n");
 }
@@ -1601,7 +1601,7 @@ static inline void release_drawable(RedWorker *worker, Drawable *item)
 
         if (item->red_glz_drawable) {
             item->red_glz_drawable->drawable = NULL;
-        } else { // no refernce to the qxl drawable left
+        } else { // no reference to the qxl drawable left
             free_qxl_drawable(worker, item->qxl_drawable, item->group_id, item->self_bitmap,
                               item->surface_id);
         }
@@ -3837,7 +3837,7 @@ static inline void red_process_drawable(RedWorker *worker, QXLDrawable *drawable
     /*
         surface->refs is affected by a drawable (that is
         dependent on the surface) as long as the drawable is alive.
-        However, surfce->depend_on_me is affected by a drawable only
+        However, surface->depend_on_me is affected by a drawable only
         as long as it is in the current tree (hasn't been rendered yet).
     */
     red_inc_surfaces_drawable_dependencies(worker, item);
@@ -4521,7 +4521,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         break;
     }
     default:
-        red_printf("invlaid type");
+        red_printf("invalid type");
     }
     unlocalize_clip(&clip);
 }
@@ -5225,7 +5225,7 @@ static RedGlzDrawable *red_display_get_glz_drawable(DisplayChannel *channel, Dra
 static GlzDrawableInstanceItem *red_display_add_glz_drawable_instance(RedGlzDrawable *glz_drawable)
 {
     ASSERT(glz_drawable->instances_count < MAX_GLZ_DRAWABLE_INSTANCES);
-    // NOTE: We assume the addtions are performed consecutively, without removals in the middle
+    // NOTE: We assume the additions are performed consecutively, without removals in the middle
     GlzDrawableInstanceItem *ret = glz_drawable->instances_pool + glz_drawable->instances_count;
     glz_drawable->instances_count++;
 
@@ -5239,10 +5239,10 @@ static GlzDrawableInstanceItem *red_display_add_glz_drawable_instance(RedGlzDraw
 }
 
 /* Remove from the to_free list and the instances_list.
-   When no instance is left - the RedGlzDrawable is released too. (and the qxl drawblae too, if
+   When no instance is left - the RedGlzDrawable is released too. (and the qxl drawable too, if
    it is not used by Drawable).
    NOTE - 1) can be called only by the display channel that created the drawable
-          2) it is assumed that the instance was already removed from the dicitonary*/
+          2) it is assumed that the instance was already removed from the dictionary*/
 static void red_display_free_glz_drawable_instance(DisplayChannel *channel,
                                                    GlzDrawableInstanceItem *glz_drawable_instance)
 {
@@ -5258,7 +5258,7 @@ static void red_display_free_glz_drawable_instance(DisplayChannel *channel,
 
     ring_remove(&glz_drawable_instance->glz_link);
     glz_drawable->instances_count--;
-    // whan the remove callback is performed from the channel that the
+    // when the remove callback is performed from the channel that the
     // drawable belongs to, the instance is not added to the 'to_free' list
     if (ring_item_is_linked(&glz_drawable_instance->free_link)) {
         ring_remove(&glz_drawable_instance->free_link);
@@ -5303,7 +5303,7 @@ static void red_display_handle_glz_drawables_to_free(DisplayChannel* channel)
 /* releases all the instances of the drawable from the dictionary and the display channel.
    The release of the last instance will also release the drawable itself and the qxl drawable
    if possible.
-   NOTE - the caller should prevent encoding using the dicitonary during this operation*/
+   NOTE - the caller should prevent encoding using the dictionary during this operation*/
 static void red_display_free_glz_drawable(DisplayChannel *channel, RedGlzDrawable *drawable)
 {
     RingItem *head_instance = ring_get_head(&drawable->instances);
@@ -5332,7 +5332,7 @@ static void red_display_free_glz_drawable(DisplayChannel *channel, RedGlzDrawabl
 }
 
 /* Clear all lz drawables - enforce their removal from the global dictionary.
-   NOTE - prevents encoding using the dicitonary during the operation*/
+   NOTE - prevents encoding using the dictionary during the operation*/
 static void red_display_clear_glz_drawables(DisplayChannel *channel)
 {
     RingItem *ring_link;
@@ -5356,7 +5356,7 @@ static void red_display_clear_glz_drawables(DisplayChannel *channel)
 
 /* Remove from the global lz dictionary some glz_drawables that have no reference to
    Drawable (their qxl drawables are released too).
-   NOTE - the caller should prevent encoding using the dicitonary during the operation*/
+   NOTE - the caller should prevent encoding using the dictionary during the operation*/
 static int red_display_free_some_independent_glz_drawables(DisplayChannel *channel)
 {
     int n = 0;
@@ -6916,7 +6916,7 @@ static inline uint8_t *red_get_image_line(RedWorker *worker, QXLDataChunk **chun
     }
 
     if (data_size - *offset < stride) {
-        red_printf("bad chunk aligment");
+        red_printf("bad chunk alignment");
         return NULL;
     }
     ret = (*chunk)->data + *offset;
@@ -8126,7 +8126,7 @@ static inline void flush_display_commands(RedWorker *worker)
             red_receive(channel);
             red_send_data(channel, NULL);
             if (red_now() >= end_time) {
-                red_printf("update timout");
+                red_printf("update timeout");
                 red_disconnect_display((RedChannel *)worker->display_channel);
             } else {
                 sleep_count++;
@@ -9497,7 +9497,7 @@ void *red_worker_main(void *arg)
         if (worker.display_channel && worker.display_channel->glz_dict) {
             /* during migration, in the dest, the display channel can be initialized
                while the global lz data not since migrate data msg hasn't been
-               recieved yet */
+               received yet */
             red_display_handle_glz_drawables_to_free(worker.display_channel);
         }
 

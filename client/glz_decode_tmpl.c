@@ -22,7 +22,7 @@
 /*
     For each output pixel type the following macros are defined:
     OUT_PIXEL                      - the output pixel type
-    COPY_PIXEL(p, out)              - assignes the pixel to the place pointed by out and
+    COPY_PIXEL(p, out)              - assigns the pixel to the place pointed by out and
                                       increases out. Used in RLE.
                                       Need special handling because in alpha we copy only
                                       the pad byte.
@@ -168,8 +168,8 @@
 #define COPY_COMP_PIXEL(in, out) {out->pad = *(in++); out++;}
 #endif
 
-// TODO: seperate into routines that decode to dist,len. and to a routine that
-// actualy copies the data.
+// TODO: separate into routines that decode to dist,len. and to a routine that
+// actually copies the data.
 
 /* returns num of bytes read from in buf.
    size should be in PIXEL */

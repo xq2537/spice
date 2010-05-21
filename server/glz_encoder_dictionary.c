@@ -363,7 +363,7 @@ static INLINE void __glz_dictionary_window_free_image(SharedDictionary *dict, Wi
     dict->window.free_images = image;
 }
 
-/* moves all the segments that were associaed with the images to the free segments */
+/* moves all the segments that were associated with the images to the free segments */
 static INLINE void __glz_dictionary_window_free_image_segs(SharedDictionary *dict,
                                                            WindowImage *image)
 {
@@ -436,7 +436,7 @@ static INLINE int glz_dictionary_is_in_use(SharedDictionary *dict)
 static void glz_dictionary_window_remove_head(SharedDictionary *dict, uint32_t encoder_id,
                                               WindowImage *end_image)
 {
-    // note that the segs list heads (one per econder) may be different than the
+    // note that the segs list heads (one per encoder) may be different than the
     // used_segs_head and it is updated somewhere else
     while (dict->window.used_images_head != end_image) {
         WindowImage *image = dict->window.used_images_head;
@@ -532,7 +532,7 @@ static WindowImage *glz_dictionary_window_add_image(SharedDictionary *dict, LzIm
         // see glz_encode_tmpl::compress).
         // Thus, the 'next' field of the list's tail can be accessed only
         // after all the new tail's data was set. Note that we are relying on
-        // an atomic assignment (32 bit varaible).
+        // an atomic assignment (32 bit variable).
         // For the other thread that may read 'next' of the old tail, NULL_IMAGE_SEG_ID
         // is equivalent to a segment with an image id that is different
         // from the image id of the tail, so we don't need to further protect this field.

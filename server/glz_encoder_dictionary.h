@@ -24,7 +24,7 @@
 /*
     Interface for maintaining lz dictionary that is shared among several encoders.
     The interface for accessing the dictionary for encoding purposes is located in
-    glz_encoder_diciotnary_protected.h
+    glz_encoder_dictionary_protected.h
 */
 
 typedef void GlzEncDictContext;
@@ -38,7 +38,7 @@ typedef struct GlzEncDictRestoreData {
 } GlzEncDictRestoreData;
 
 /* size        : maximal number of pixels occupying the window
-   max_encoders: maximal number of encoders that use the dicitionary
+   max_encoders: maximal number of encoders that use the dictionary
    usr         : callbacks */
 GlzEncDictContext *glz_enc_dictionary_create(uint32_t size, uint32_t max_encoders,
                                              GlzEncoderUsrContext *usr);
@@ -49,7 +49,7 @@ void glz_enc_dictionary_destroy(GlzEncDictContext *opaque_dict, GlzEncoderUsrCon
 uint32_t glz_enc_dictionary_get_size(GlzEncDictContext *);
 
 /* returns the current state of the dictionary.
-   NOTE - you should use it only when no encoder uses the dicitonary. */
+   NOTE - you should use it only when no encoder uses the dictionary. */
 void glz_enc_dictionary_get_restore_data(GlzEncDictContext *opaque_dict,
                                          GlzEncDictRestoreData *out_data,
                                          GlzEncoderUsrContext *usr);
@@ -58,11 +58,11 @@ void glz_enc_dictionary_get_restore_data(GlzEncDictContext *opaque_dict,
 GlzEncDictContext *glz_enc_dictionary_restore(GlzEncDictRestoreData *restore_data,
                                               GlzEncoderUsrContext *usr);
 
-/*  NOTE - you should use this routine only when no encoder uses the dicitonary. */
+/*  NOTE - you should use this routine only when no encoder uses the dictionary. */
 void glz_enc_dictionary_reset(GlzEncDictContext *opaque_dict, GlzEncoderUsrContext *usr);
 
 /* image: the context returned by the encoder when the image was encoded.
-   NOTE - you should use this routine only when no encoder uses the dicitonary.*/
+   NOTE - you should use this routine only when no encoder uses the dictionary.*/
 void glz_enc_dictionary_remove_image(GlzEncDictContext *opaque_dict,
                                      GlzEncDictImageContext *image, GlzEncoderUsrContext *usr);
 

@@ -56,7 +56,7 @@ struct WindowImage {
 #define NULL_IMAGE_SEG_ID MAX_IMAGE_SEGS_NUM
 #define INIT_IMAGE_SEGS_NUM 1000
 
-/* Images can be seperated into several chunks. The basic unit of the
+/* Images can be separated into several chunks. The basic unit of the
    dictionary window is one image segment. Each segment is encoded separately.
    An encoded match can refer to only one segment.*/
 struct WindowImageSegment {
@@ -66,7 +66,7 @@ struct WindowImageSegment {
     uint32_t pixels_num;            // Number of pixels in the segment
     uint64_t pixels_so_far;         // Total no. pixels passed through the window till this segment.
                                     // NOTE - never use size delta independently. It should
-                                    // always be used with respect to a previouse size delta
+                                    // always be used with respect to a previous size delta
     uint32_t next;
 };
 
@@ -80,7 +80,7 @@ struct  __attribute__ ((__packed__)) HashEntry {
 struct SharedDictionary {
     struct {
         /* The segments storage. A dynamic array.
-           By reffering to a segment by its index, insetad of address,
+           By referring to a segment by its index, instead of address,
            we save space in the hash entries (32bit instead of 64bit) */
         WindowImageSegment  *segs;
         uint32_t segs_quota;
@@ -89,8 +89,8 @@ struct SharedDictionary {
            array in order to keep the indices of the segments consistent
            after reallocation */
 
-        /* the window in a resultion of image segments */
-        uint32_t used_segs_head;             // the lateset head
+        /* the window in a resolution of image segments */
+        uint32_t used_segs_head;             // the latest head
         uint32_t used_segs_tail;
         uint32_t free_segs_head;
 
@@ -99,7 +99,7 @@ struct SharedDictionary {
                                              // The head is NULL_IMAGE_SEG_ID when the encoder is
                                              // not encoding.
 
-        /* the window in a resultion of images. But here the head contains the oldest head*/
+        /* the window in a resolution of images. But here the head contains the oldest head*/
         WindowImage*        used_images_tail;
         WindowImage*        used_images_head;
         WindowImage*        free_images;
@@ -108,7 +108,7 @@ struct SharedDictionary {
         uint32_t size_limit;                 // max number of pixels in a window (per encoder)
     } window;
 
-    /* Concurrency issues: the reading/wrting of each entry field should be atomic.
+    /* Concurrency issues: the reading/writing of each entry field should be atomic.
        It is allowed that the reading/writing of the whole entry won't be atomic,
        since before we access a reference we check its validity*/
 #ifdef CHAINED_HASH
@@ -130,8 +130,8 @@ struct SharedDictionary {
     If possible, release images from the head of the window.
     Also perform concurrency related operations.
 
-    usr_image_context: when an image is released from the window due to capicity overflow,
-                       usr_image_context is given as a parmater to the free_image callback.
+    usr_image_context: when an image is released from the window due to capacity overflow,
+                       usr_image_context is given as a parameter to the free_image callback.
 
     image_head_dist  : the number of images between the current image and the head of the
                        window that is associated with the encoder.

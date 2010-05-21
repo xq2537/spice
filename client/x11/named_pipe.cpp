@@ -75,7 +75,7 @@ int32_t Session::read(uint8_t *buf, int32_t size)
         int now;
         if ((now = recv(_fd_client, (char *)pos, size, 0)) <= 0) {
             if (now == 0) {
-                DBG(0, "read error, connetion shutdown");
+                DBG(0, "read error, connection shutdown");
                 return -1;
             }
             if (errno == EAGAIN) {

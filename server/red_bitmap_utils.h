@@ -108,7 +108,7 @@ static inline double FNAME(pixels_square_score)(PIXEL *line1, PIXEL *line2)
     all_ident = all_ident && (!cmp_res);
     ret += FNAME(PIX_PAIR_SCORE)[cmp_res];
 
-    // ignore squares where al pixels are identical
+    // ignore squares where all pixels are identical
     if (all_ident) {
         ret -= (FNAME(PIX_PAIR_SCORE)[0]) * 3;
     }

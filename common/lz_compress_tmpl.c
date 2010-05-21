@@ -146,8 +146,8 @@
 
 // when encoding, the ref can be in previous segment, and we should check that it doesn't
 // exceeds its bounds.
-// TODO: optimization: when only one chunk exists or when the reference is in the same segement,
-//       don't make checks if we reach end of segements
+// TODO: optimization: when only one chunk exists or when the reference is in the same segment,
+//       don't make checks if we reach end of segments
 // TODO: optimize to continue match between segments?
 // TODO: check hash function
 // TODO: check times
@@ -286,7 +286,7 @@ match:        // RLE or dictionary (both are encoded by distance from ref (-1) a
         distance--;
 
         // ip is located now at the position of the second mismatch.
-        // later it will be substracted by 3
+        // later it will be subtracted by 3
 
         if (!distance) {
             /* zero distance means a run */
@@ -346,7 +346,7 @@ match:        // RLE or dictionary (both are encoded by distance from ref (-1) a
 #endif
         /* encode the match (like fastlz level 2)*/
         if (distance < MAX_DISTANCE) { // MAX_DISTANCE is 2^13 - 1
-            // when copy is pefrformed, the byte that holds the copy count is smaller than 32.
+            // when copy is performed, the byte that holds the copy count is smaller than 32.
             // When there is a reference, the first byte is always larger then 32
 
             // 3 bits = length, 5 bits = 5 MSB of distance, 8 bits = 8 LSB of distance
@@ -355,7 +355,7 @@ match:        // RLE or dictionary (both are encoded by distance from ref (-1) a
                 encode(encoder, (uint8_t)(distance & 255));
             } else { // more than 3 bits are needed for length
                     // 3 bits 7, 5 bits = 5 MSB of distance, next bytes are 255 till we
-                    // recieve a smaller number, last byte = 8 LSB of distance
+                    // receive a smaller number, last byte = 8 LSB of distance
                 encode(encoder, (uint8_t)((7 << 5) + (distance >> 8)));
                 for (len -= 7; len >= 255; len -= 255) {
                     encode(encoder, 255);

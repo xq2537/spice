@@ -156,11 +156,11 @@ static INLINE size_t FNAME(do_match)(SharedDictionary *dict,
     const PIXEL *tmp_ref = ref;
 
     if (ref > (ref_limit - MIN_REF_ENCODE_SIZE)) {
-        return 0; // in case the hash entry is not relvant
+        return 0; // in case the hash entry is not relevant
     }
 
 
-    /* min match lenght == MIN_REF_ENCODE_SIZE (depends on pixel type) */
+    /* min match length == MIN_REF_ENCODE_SIZE (depends on pixel type) */
 
     if (!SAME_PIXEL(*tmp_ref, *tmp_ip)) {
         return 0;

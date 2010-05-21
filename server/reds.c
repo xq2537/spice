@@ -99,7 +99,7 @@ static void openssl_init();
 #define MM_TIMER_GRANULARITY_MS (1000 / 30)
 #define MM_TIME_DELTA 400 /*ms*/
 
-// approximate max recive message size
+// approximate max receive message size
 #define RECIVE_BUF_SIZE \
     (4096 + (REDS_AGENT_WINDOW_SIZE + REDS_NUM_INTERNAL_AGENT_MESSAGES) * SPICE_AGENT_MAX_DATA_SIZE)
 
@@ -1467,7 +1467,7 @@ static int main_channel_restore_vdi_read_state(MainMigrateData *data, uint8_t **
     switch (state->read_state) {
     case VDI_PORT_READ_STATE_READ_HADER:
         if (data->read_buf_len) {
-            red_printf("unexpected recive buf");
+            red_printf("unexpected receive buf");
             reds_disconnect();
             return FALSE;
         }
@@ -1475,13 +1475,13 @@ static int main_channel_restore_vdi_read_state(MainMigrateData *data, uint8_t **
         break;
     case VDI_PORT_READ_STATE_GET_BUFF:
         if (state->message_recive_len > state->vdi_chunk_header.size) {
-            red_printf("invalid message recive len");
+            red_printf("invalid message receive len");
             reds_disconnect();
             return FALSE;
         }
 
         if (data->read_buf_len) {
-            red_printf("unexpected recive buf");
+            red_printf("unexpected receive buf");
             reds_disconnect();
             return FALSE;
         }
@@ -1497,7 +1497,7 @@ static int main_channel_restore_vdi_read_state(MainMigrateData *data, uint8_t **
         }
 
         if (state->message_recive_len > state->vdi_chunk_header.size) {
-            red_printf("invalid message recive len");
+            red_printf("invalid message receive len");
             reds_disconnect();
             return FALSE;
         }
@@ -1680,7 +1680,7 @@ static void reds_main_handle_message(void *opaque, SpiceDataHeader *message)
         VDAgentExtBuf *buf;
 
         if (!reds->agent_state.num_client_tokens) {
-            red_printf("token vailoation");
+            red_printf("token violation");
             reds_disconnect();
             break;
         }
@@ -1788,7 +1788,7 @@ static void reds_main_handle_message(void *opaque, SpiceDataHeader *message)
                     // probably high load on client or server result with incorrect values
                     letancy = 0;
                     red_printf("net test: invalid values, letancy %lu roundtrip %lu. assuming high"
-                               "bendwidth", letancy, roundtrip);
+                               "bandwidth", letancy, roundtrip);
                     break;
                 }
                 bitrate_per_sec = (uint64_t)(NET_TEST_BYTES * 8) * 1000000 / (roundtrip - letancy);
@@ -1991,7 +1991,7 @@ static int reds_send_link_error(RedLinkInfo *link, uint32_t error)
 
 static void reds_show_new_channel(RedLinkInfo *link)
 {
-    red_printf("channel %d:%d, connected sucessfully, over %s link",
+    red_printf("channel %d:%d, connected successfully, over %s link",
                link->link_mess->channel_type,
                link->link_mess->channel_id,
                link->peer->ssl == NULL ? "Non Secure" : "Secure");
@@ -2516,7 +2516,7 @@ static void reds_handle_other_links(RedLinkInfo *link)
     if (link_mess->channel_type == SPICE_CHANNEL_INPUTS && !link->peer->ssl) {
         SimpleOutItem *item;
         SpiceMsgNotify *notify;
-        char *mess = "keybord channel is unsecure";
+        char *mess = "keyboard channel is insecure";
         const int mess_len = strlen(mess);
 
         if (!(item = new_simple_out_item(SPICE_MSG_NOTIFY, sizeof(SpiceMsgNotify) + mess_len + 1))) {
@@ -3419,7 +3419,7 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
         }
         if (interface->major_version != SPICE_INTERFACE_KEYBOARD_MAJOR ||
             interface->minor_version < SPICE_INTERFACE_KEYBOARD_MINOR) {
-            red_printf("unsuported keyboard interface");
+            red_printf("unsupported keyboard interface");
             return -1;
         }
         keyboard = SPICE_CONTAINEROF(sin, SpiceKbdInstance, base);
@@ -3433,7 +3433,7 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
         }
         if (interface->major_version != SPICE_INTERFACE_MOUSE_MAJOR ||
             interface->minor_version < SPICE_INTERFACE_MOUSE_MINOR) {
-            red_printf("unsuported mouse interface");
+            red_printf("unsupported mouse interface");
             return -1;
         }
         mouse = SPICE_CONTAINEROF(sin, SpiceMouseInstance, base);
@@ -3445,7 +3445,7 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
         red_printf("SPICE_INTERFACE_QXL");
         if (interface->major_version != SPICE_INTERFACE_QXL_MAJOR ||
             interface->minor_version < SPICE_INTERFACE_QXL_MINOR) {
-            red_printf("unsuported qxl interface");
+            red_printf("unsupported qxl interface");
             return -1;
         }
 
@@ -3462,7 +3462,7 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
         }
         if (interface->major_version != SPICE_INTERFACE_TABLET_MAJOR ||
             interface->minor_version < SPICE_INTERFACE_TABLET_MINOR) {
-            red_printf("unsuported tablet interface");
+            red_printf("unsupported tablet interface");
             return -1;
         }
         tablet = SPICE_CONTAINEROF(sin, SpiceTabletInstance, base);
@@ -3479,7 +3479,7 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
         red_printf("SPICE_INTERFACE_PLAYBACK");
         if (interface->major_version != SPICE_INTERFACE_PLAYBACK_MAJOR ||
             interface->minor_version < SPICE_INTERFACE_PLAYBACK_MINOR) {
-            red_printf("unsuported playback interface");
+            red_printf("unsupported playback interface");
             return -1;
         }
         snd_attach_playback(SPICE_CONTAINEROF(sin, SpicePlaybackInstance, base));
@@ -3488,7 +3488,7 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
         red_printf("SPICE_INTERFACE_RECORD");
         if (interface->major_version != SPICE_INTERFACE_RECORD_MAJOR ||
             interface->minor_version < SPICE_INTERFACE_RECORD_MINOR) {
-            red_printf("unsuported record interface");
+            red_printf("unsupported record interface");
             return -1;
         }
         snd_attach_record(SPICE_CONTAINEROF(sin, SpiceRecordInstance, base));
@@ -3501,7 +3501,7 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
         }
         if (interface->major_version != SPICE_INTERFACE_VDI_PORT_MAJOR ||
             interface->minor_version < SPICE_INTERFACE_VDI_PORT_MINOR) {
-            red_printf("unsuported vdi port interface");
+            red_printf("unsupported vdi port interface");
             return -1;
         }
         attach_to_red_agent(SPICE_CONTAINEROF(sin, SpiceVDIPortInstance, base));
@@ -3516,7 +3516,7 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
         }
         if (interface->major_version != SPICE_INTERFACE_NET_WIRE_MAJOR ||
             interface->minor_version < SPICE_INTERFACE_NET_WIRE_MINOR) {
-            red_printf("unsuported net wire interface");
+            red_printf("unsupported net wire interface");
             return -1;
         }
         net = SPICE_CONTAINEROF(sin, SpiceNetWireInstance, base);

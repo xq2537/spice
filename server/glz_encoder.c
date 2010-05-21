@@ -234,12 +234,12 @@ int glz_encode(GlzEncoderContext *opaque_encoder,
         if (stride > (width / PLT_PIXELS_PER_BYTE[type])) {
             if (((width % PLT_PIXELS_PER_BYTE[type]) == 0) || (
                     (stride - (width / PLT_PIXELS_PER_BYTE[type])) > 1)) {
-                encoder->usr->error(encoder->usr, "sride overflows (plt)\n");
+                encoder->usr->error(encoder->usr, "stride overflows (plt)\n");
             }
         }
     } else {
         if (stride != width * RGB_BYTES_PER_PIXEL[type]) {
-            encoder->usr->error(encoder->usr, "sride != width*bytes_per_pixel (rgb)\n");
+            encoder->usr->error(encoder->usr, "stride != width*bytes_per_pixel (rgb)\n");
         }
     }
 

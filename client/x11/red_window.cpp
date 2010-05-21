@@ -1875,7 +1875,7 @@ bool RedWindow::get_mouse_anchor_point(SpicePoint& pt)
 
     while (!(vis_region = get_visibale_region(_win))) {
         if (!vis_region_retries) {
-            THROW("get visibale region failed");
+            THROW("get visible region failed");
         }
         --vis_region_retries;
         usleep(X_RETRY_DELAY_MICRO);

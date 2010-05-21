@@ -44,7 +44,7 @@ struct QuicUsrContext {
     void (*free)(QuicUsrContext *usr, void *ptr);
     int (*more_space)(QuicUsrContext *usr, uint32_t **io_ptr, int rows_completed);
     int (*more_lines)(QuicUsrContext *usr, uint8_t **lines); // on return the last line of previous
-                                                             // lines bunch must stil be valid
+                                                             // lines bunch must still be valid
 };
 
 int quic_encode(QuicContext *quic, QuicImageType type, int width, int height,

@@ -25,7 +25,7 @@
 #include "common.h"
 #include "process_loop.h"
 
-/* intterface for connenctions inside client LAN */
+/* interface for connections inside client LAN */
 
 typedef enum {
     SOCKET_STATUS_OPEN,

@@ -337,7 +337,7 @@ XIC XPlatform::get_input_context()
 void XPlatform::set_win_proc(Window win, win_proc_t proc)
 {
     if (XSaveContext(x_display, win, win_proc_context, (XPointer)proc)) {
-        THROW("set win proc pailed");
+        THROW("set win proc failed");
     }
 }
 
@@ -775,7 +775,7 @@ bool DynamicScreen::set_screen_size(int size_index)
     XRRScreenConfiguration* config;
 
     if (!(config = XRRGetScreenInfo(get_display(), root_window))) {
-        LOG_WARN("get scren info failed");
+        LOG_WARN("get screen info failed");
         return false;
     }
     Rotation rotation;
@@ -2592,7 +2592,7 @@ XLocalCursor::XLocalCursor(CursorData* cursor_data)
     int size;
 
     if (!get_size_bits(header, size)) {
-        THROW("invalid curosr type");
+        THROW("invalid cursor type");
     }
 
     uint32_t* cur_data = new uint32_t[cur_size];

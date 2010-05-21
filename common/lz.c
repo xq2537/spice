@@ -95,7 +95,7 @@ typedef struct Encoder {
     LzImageSegment *tail_image_segs;
     LzImageSegment *free_image_segs;
 
-    // the dicitionary hash table is composed (1) a pointer to the segment the word was found in
+    // the dictionary hash table is composed (1) a pointer to the segment the word was found in
     // (2) a pointer to the first byte in the segment that matches the word
     HashEntry htab[HASH_SIZE];
 
@@ -116,7 +116,7 @@ static int lz_read_image_segments(Encoder *encoder, uint8_t *first_lines,
                                   unsigned int num_first_lines);
 
 
-// return a free image segement if one exists. Make allocation if needed. adds it to the
+// return a free image segment if one exists. Make allocation if needed. adds it to the
 // tail of the image segments lists
 static INLINE LzImageSegment *lz_alloc_image_seg(Encoder *encoder)
 {
@@ -367,7 +367,7 @@ void lz_destroy(LzContext *lz)
     }
 
     if (encoder->head_image_segs) {
-        encoder->usr->error(encoder->usr, "%s: used_image_segements not empty\n", __FUNCTION__);
+        encoder->usr->error(encoder->usr, "%s: used_image_segments not empty\n", __FUNCTION__);
         lz_reset_image_seg(encoder);
     }
     lz_dealloc_free_segments(encoder);
@@ -517,12 +517,12 @@ int lz_encode(LzContext *lz, LzImageType type, int width, int height, int top_do
         if (encoder->stride > (width / PLT_PIXELS_PER_BYTE[encoder->type])) {
             if (((width % PLT_PIXELS_PER_BYTE[encoder->type]) == 0) || (
                     (encoder->stride - (width / PLT_PIXELS_PER_BYTE[encoder->type])) > 1)) {
-                encoder->usr->error(encoder->usr, "sride overflows (plt)\n");
+                encoder->usr->error(encoder->usr, "stride overflows (plt)\n");
             }
         }
     } else {
         if (encoder->stride != width * RGB_BYTES_PER_PIXEL[encoder->type]) {
-            encoder->usr->error(encoder->usr, "sride != width*bytes_per_pixel (rgb)\n");
+            encoder->usr->error(encoder->usr, "stride != width*bytes_per_pixel (rgb)\n");
         }
     }
 
@@ -616,7 +616,7 @@ void lz_decode_begin(LzContext *lz, uint8_t *io_ptr, unsigned int num_io_bytes,
     *out_type = encoder->type;
 
     // TODO: maybe instead of stride we can encode out_n_pixels
-    //       (if stride is not necssary in decoding).
+    //       (if stride is not necessary in decoding).
     if (IS_IMAGE_TYPE_PLT[encoder->type]) {
         encoder->palette = palette;
         *out_n_pixels = encoder->stride * PLT_PIXELS_PER_BYTE[encoder->type] * encoder->height;

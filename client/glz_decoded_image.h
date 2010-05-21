@@ -39,7 +39,7 @@ public:
 
     virtual ~GlzDecodedImage() {}
     uint8_t *get_data() {return _data;}
-    uint8_t *get_pixel_ref(int offset); // pallete pix_id = byte count
+    uint8_t *get_pixel_ref(int offset); // palette pix_id = byte count
     uint64_t get_id() {return _id;}
     uint64_t get_window_head_id() {return _win_head_id;}
     int      get_size() {return _size;}

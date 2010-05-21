@@ -33,7 +33,7 @@ void *spice_malloc_n_m(size_t n_blocks, size_t n_block_bytes, size_t extra_size)
 void *spice_malloc0_n(size_t n_blocks, size_t n_block_bytes) SPICE_GNUC_MALLOC SPICE_GNUC_ALLOC_SIZE2(1,2);
 void *spice_realloc_n(void *mem, size_t n_blocks, size_t n_block_bytes) SPICE_GNUC_WARN_UNUSED_RESULT;
 
-/* Optimise: avoid the call to the (slower) _n function if we can
+/* Optimize: avoid the call to the (slower) _n function if we can
  * determine at compile-time that no overflow happens.
  */
 #if defined (__GNUC__) && (__GNUC__ >= 2) && defined (__OPTIMIZE__)
@@ -67,7 +67,7 @@ void *spice_realloc_n(void *mem, size_t n_blocks, size_t n_block_bytes) SPICE_GN
     }))
 #else
 
-/* Unoptimised version: always call the _n() function. */
+/* Unoptimized version: always call the _n() function. */
 
 #define _SPICE_NEW(struct_type, n_structs, func)                        \
     ((struct_type *) spice_##func##_n ((n_structs), sizeof (struct_type)))

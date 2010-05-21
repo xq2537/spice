@@ -68,14 +68,14 @@ void GlzDecoderWindow::post_decode(GlzDecodedImage *image)
 
 /* index: the physical index in the images array. Note that it can't change between waits since
    the realloc mutex should be read locked.
-   No starvation for the realloc mutex can occure, since the image we wait for is located before us,
+   No starvation for the realloc mutex can occur, since the image we wait for is located before us,
    hence, when it arrives - no realloc is needed. */
 void GlzDecoderWindow::wait_for_image(int index)
 {
     Lock lock(_new_image_mutex);
     GlzDecodedImage *image = _images[index]; // can be performed without locking the _win_mutex,
-                                             // since it is called after pre and the rw mutex is                                                 // locked, hence, physical chnages to the window are
-                                             // not allowed. In addtion the reading of the image ptr
+                                             // since it is called after pre and the rw mutex is                                                 // locked, hence, physical changes to the window are
+                                             // not allowed. In addition the reading of the image ptr
                                              // is atomic, thus, even if the value changes we are
                                              // not affected.
 
@@ -146,7 +146,7 @@ inline bool GlzDecoderWindow::is_empty()
     return (!_n_images);
 }
 
-/* aprroximated overflow. Considers only the size that currently occupies the window and
+/* approximated overflow. Considers only the size that currently occupies the window and
    not the size of the missing images. TODO: consider other measures */
 inline bool GlzDecoderWindow::will_overflow(uint64_t image_id, uint64_t relative_head_id)
 {
@@ -302,7 +302,7 @@ void GlzDecoderWindow::narrow_window(GlzDecodedImage *last_added)
 
     _missing_list.pop_front();  // removing the last added image from the missing list
 
-    /* maintaing the missing list: removing front images that already arrived */
+    /* maintaining the missing list: removing front images that already arrived */
     while (!_missing_list.empty()) {
         int front_win_idx = calc_image_win_idx(_missing_list.front());
         if (_images[front_win_idx] == NULL) { // still missing

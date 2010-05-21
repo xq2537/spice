@@ -31,7 +31,7 @@ typedef struct RedsStreamContext {
     SpiceWatch *watch;
 
     /* set it to TRUE if you shutdown the socket. shutdown read doesn't work as accepted -
-       receive may return data afterwards. check the flag before calling receive*/
+       receive may return data afterward. check the flag before calling receive*/
     int shutdown;
     SSL *ssl;
 

@@ -378,7 +378,7 @@ static void gl_canvas_draw_copy(SpiceCanvas *spice_canvas, SpiceRect *bbox, Spic
     set_mask(canvas, &copy->mask, bbox->left, bbox->top);
     set_op(canvas, copy->rop_decriptor);
 
-    //todo: optimize get_imag (use ogl conversion + remove unnecessary copy of 32bpp)
+    //todo: optimize get_image (use ogl conversion + remove unnecessary copy of 32bpp)
     surface = canvas_get_image(&canvas->base, copy->src_bitmap, FALSE);
     surface_to_image(canvas, surface, &image, 0);
     SET_GLC_RECT(&dest, bbox);

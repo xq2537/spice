@@ -262,7 +262,7 @@ void PlaybackChannel::handle_start(RedPeer::InMessage* message)
                                                    start->channels);
         } catch (...) {
             LOG_WARN("create player failed");
-            //todo: support disconnecting singel channel
+            //todo: support disconnecting single channel
             disable();
             return;
         }

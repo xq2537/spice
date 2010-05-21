@@ -226,7 +226,7 @@ typedef struct RedSocketInData {
 
     uint32_t num_buffers;
 
-    int32_t num_tokens;   // No. tokens conusmed by slirp since the last token msg sent to the
+    int32_t num_tokens;   // No. tokens consumed by slirp since the last token msg sent to the
                           // client. can be negative if we loaned some to the client (when the
                           // ready queue is empty)
     uint32_t client_total_num_tokens;
@@ -474,13 +474,13 @@ static inline void tunnel_channel_activate_migrated_sockets(TunnelChannel *chann
 /*******************************************************************************************/
 
 /* use for signaling that 1) subroutines failed 2)routines in the interface for slirp
-   failed (which triggred from a call to slirp) */
+   failed (which triggered from a call to slirp) */
 #define SET_TUNNEL_ERROR(channel,format, ...) {   \
     channel->tunnel_error = TRUE;                 \
     red_printf(format, ## __VA_ARGS__);           \
 }
 
-/* should be checked after each subroutine that may cause error or fter calls to slirp routines */
+/* should be checked after each subroutine that may cause error or after calls to slirp routines */
 #define CHECK_TUNNEL_ERROR(channel) (channel->tunnel_error)
 
 struct TunnelChannel {
@@ -1542,7 +1542,7 @@ static int tunnel_channel_handle_socket_closed(TunnelChannel *channel, RedSocket
         net_slirp_socket_abort(sckt->slirp_sckt);
     } else if ((sckt->slirp_status != SLIRP_SCKT_STATUS_WAIT_CLOSE) ||
                (prev_client_status != CLIENT_SCKT_STATUS_SHUTDOWN_SEND)) {
-        // slirp can be in wait close if both slirp and client sent fin perviously
+        // slirp can be in wait close if both slirp and client sent fin previously
         // otherwise, the prev client status would also have been wait close, and this
         // case was handled above
         red_printf("unexpected slirp_status=%d", sckt->slirp_status);
@@ -1570,7 +1570,7 @@ static int tunnel_channel_handle_socket_closed_ack(TunnelChannel *channel, RedSo
     }
 
     if (sckt->slirp_status != SLIRP_SCKT_STATUS_CLOSED) {
-        red_printf("unexcpected SPICE_MSGC_TUNNEL_SOCKET_CLOSED_ACK slirp_status=%d",
+        red_printf("unexpected SPICE_MSGC_TUNNEL_SOCKET_CLOSED_ACK slirp_status=%d",
                    sckt->slirp_status);
         return FALSE;
     }
@@ -1584,12 +1584,12 @@ static int tunnel_channel_handle_socket_receive_data(TunnelChannel *channel, Red
 {
     if ((sckt->client_status == CLIENT_SCKT_STATUS_SHUTDOWN_SEND) ||
         (sckt->client_status == CLIENT_SCKT_STATUS_CLOSED)) {
-        red_printf("unexcpected SPICE_MSGC_TUNNEL_SOCKET_DATA clinet_status=%d",
+        red_printf("unexpected SPICE_MSGC_TUNNEL_SOCKET_DATA client_status=%d",
                    sckt->client_status);
         return FALSE;
     }
 
-    // handling a case where the client sent data before it recieved the close msg
+    // handling a case where the client sent data before it received the close msg
     if ((sckt->slirp_status != SLIRP_SCKT_STATUS_OPEN) &&
             (sckt->slirp_status != SLIRP_SCKT_STATUS_SHUTDOWN_SEND)) {
         __tunnel_worker_free_socket_rcv_buf(sckt->worker, recv_data);
@@ -1606,7 +1606,7 @@ static int tunnel_channel_handle_socket_receive_data(TunnelChannel *channel, Red
 
     tunnel_socket_assign_rcv_buf(sckt, recv_data, buf_size);
     if (!sckt->in_data.client_total_num_tokens) {
-        red_printf("token vailoation");
+        red_printf("token violation");
         return FALSE;
     }
 
@@ -1915,7 +1915,7 @@ static void __restore_ready_chunks_queue(RedSocket *sckt, ReadyTunneledChunkQueu
 }
 
 // not using the alloc_buf cb of the queue, since we may want to create the migrated buffers
-// with other properties (e.g., not releasing tokent)
+// with other properties (e.g., not releasing token)
 static void __restore_process_queue(RedSocket *sckt, TunneledBufferProcessQueue *queue,
                                     uint8_t *data, int size,
                                     socket_alloc_buffer_proc_t alloc_buf)
@@ -2711,7 +2711,7 @@ static void tunnel_channel_send_socket_out_data(TunnelChannel *channel, PipeItem
     }
 
     if (!sckt->out_data.num_tokens) {
-        return; // only when an we will recieve tokens, data will be sent again.
+        return; // only when an we will receive tokens, data will be sent again.
     }
 
     ASSERT(sckt->out_data.ready_chunks_queue.head);
@@ -2767,7 +2767,7 @@ static void tunnel_worker_release_socket_out_data(TunnelWorker *worker, PipeItem
 
     sckt_out_data->data_size -= sckt_out_data->push_tail_size;
 
-    // compansation. was substructed in the previous lines
+    // compensation. was subtracted in the previous lines
     sckt_out_data->data_size += sckt_out_data->ready_chunks_queue.offset;
 
     if (sckt_out_data->push_tail_size == sckt_out_data->push_tail->size) {
@@ -2784,8 +2784,8 @@ static void tunnel_worker_release_socket_out_data(TunnelWorker *worker, PipeItem
         // can still send data to socket
         if (__client_socket_can_receive(sckt)) {
             if (sckt_out_data->ready_chunks_queue.head) {
-                // the pipe item may alreay be linked, if for example the send was
-                // blocked and before it finshed and called release, tunnel_socket_send was called
+                // the pipe item may already be linked, if for example the send was
+                // blocked and before it finished and called release, tunnel_socket_send was called
                 if (!red_channel_pipe_item_is_linked(
                         &worker->channel->base, &sckt_out_data->data_pipe_item)) {
                     sckt_out_data->data_pipe_item.type = PIPE_ITEM_TYPE_SOCKET_DATA;
@@ -3097,7 +3097,7 @@ static int tunnel_socket_recv(SlirpUsrNetworkInterface *usr_interface, UserSocke
 
     if ((sckt->slirp_status == SLIRP_SCKT_STATUS_SHUTDOWN_RECV) ||
         (sckt->slirp_status == SLIRP_SCKT_STATUS_WAIT_CLOSE)) {
-        SET_TUNNEL_ERROR(worker->channel, "recieve was shutdown");
+        SET_TUNNEL_ERROR(worker->channel, "receive was shutdown");
         tunnel_shutdown(worker);
         errno = ECONNRESET;
         return -1;
@@ -3155,8 +3155,8 @@ static void null_tunnel_socket_shutdown_send(SlirpUsrNetworkInterface *usr_inter
 {
 }
 
-// can be called : 1) when a FIN is reqested from the guset 2) after shutdown rcv that was called
-//                  after recieved failed because the client socket was sent FIN
+// can be called : 1) when a FIN is requested from the guest 2) after shutdown rcv that was called
+//                  after received failed because the client socket was sent FIN
 static void tunnel_socket_shutdown_send(SlirpUsrNetworkInterface *usr_interface, UserSocket *opaque)
 {
     TunnelWorker *worker;
@@ -3269,7 +3269,7 @@ static void null_tunnel_socket_close(SlirpUsrNetworkInterface *usr_interface, Us
       // was caused by an error
 }
 
-// can be called during migration due to the channel diconnect. But it does not affect the
+// can be called during migration due to the channel disconnect. But it does not affect the
 // migrate data
 static void tunnel_socket_close(SlirpUsrNetworkInterface *usr_interface, UserSocket *opaque)
 {
@@ -3289,7 +3289,7 @@ static void tunnel_socket_close(SlirpUsrNetworkInterface *usr_interface, UserSoc
 
     sckt->slirp_status = SLIRP_SCKT_STATUS_CLOSED;
 
-    // if sckt is not opened yet, close will be sent when we recieve connect ack
+    // if sckt is not opened yet, close will be sent when we receive connect ack
     if ((sckt->client_status == CLIENT_SCKT_STATUS_OPEN) ||
         (sckt->client_status == CLIENT_SCKT_STATUS_SHUTDOWN_SEND)) {
         // check if there is still data to send. the close will be sent after data is released.

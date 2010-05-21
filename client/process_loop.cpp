@@ -36,7 +36,7 @@ void SyncEvent::response(AbstractProcessLoop& events_loop)
     try {
         do_response(events_loop);
     } catch (Exception& e) {
-        LOG_WARN("unhandle exception: %s", e.what());
+        LOG_WARN("unhandled exception: %s", e.what());
         _err = true;
     } catch (...) {
         _err = true;

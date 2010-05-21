@@ -1157,7 +1157,7 @@ void Application::on_key_down(RedKey key)
         }
 
         if (!_sticky_info.sticky_mode) {
-            // during tracing (traced key was pressed and no keyboard event has occured till now)
+            // during tracing (traced key was pressed and no keyboard event has occurred till now)
             if (_sticky_info.key_first_down) {
                 ASSERT(_sticky_info.key != REDKEY_INVALID);
                 if (key != _sticky_info.key) {
@@ -1939,8 +1939,8 @@ bool Application::process_cmd_line(int argc, char** argv)
     parser.add(SPICE_OPT_CA_FILE, "ca-file", "truststore file for secure connections",
                "ca-file", true);
     parser.add(SPICE_OPT_HOST_SUBJECT, "host-subject",
-               "subject of the host certifcate. Format: field=value pairs separated"
-               " by commmas. Commas and backslashes within values must be preceded by"
+               "subject of the host certificate. Format: field=value pairs separated"
+               " by commas. Commas and backslashes within values must be preceded by"
                " a backslash", "host-subject", true);
     parser.add(SPICE_OPT_PASSWORD, "password", "server password", "password", true, 'w');
     parser.add(SPICE_OPT_FULL_SCREEN, "full-screen", "open in full screen mode", "auto-conf",

@@ -486,7 +486,7 @@ void CursorChannel::create_native_cursor(CursorData* cursor)
         native_cursor = new UnsupportedCursor(cursor->header());
         break;
     default:
-        THROW("invalid curosr type");
+        THROW("invalid cursor type");
     }
     cursor->set_opaque(native_cursor);
 }

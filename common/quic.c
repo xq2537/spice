@@ -75,7 +75,7 @@ typedef uint8_t BYTE;
 
 typedef struct QuicFamily {
     unsigned int nGRcodewords[MAXNUMCODES];      /* indexed by code number, contains number of
-                                                    unmodofied GR codewords in the code */
+                                                    unmodified GR codewords in the code */
     unsigned int notGRcwlen[MAXNUMCODES];        /* indexed by code number, contains codeword
                                                     length of the not-GR codeword */
     unsigned int notGRprefixmask[MAXNUMCODES];   /* indexed by code number, contains mask to

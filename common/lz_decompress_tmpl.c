@@ -51,7 +51,7 @@
 /*
     For each output pixel type the following macros are defined:
     OUT_PIXEL                      - the output pixel type
-    COPY_PIXEL(p, out)              - assignes the pixel to the place pointed by out and increases
+    COPY_PIXEL(p, out)              - assigns the pixel to the place pointed by out and increases
                                       out. Used in RLE. Need special handling because in alpha we
                                       copy only the pad byte.
     COPY_REF_PIXEL(ref, out)      - copies the pixel pointed by ref to the pixel pointed by out.

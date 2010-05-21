@@ -55,7 +55,7 @@ unsigned long get_virt_delta(RedMemSlotInfo *info, unsigned long addr, int group
 
     slot_id = get_memslot_id(info, addr);
     if (slot_id > info->num_memslots) {
-        PANIC("slod_id %d too big", slot_id);
+        PANIC("slot_id %d too big", slot_id);
     }
 
     slot = &info->mem_slots[group_id][slot_id];

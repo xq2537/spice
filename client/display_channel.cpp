@@ -275,7 +275,7 @@ VideoStream::VideoStream(RedClient& client, Canvas& canvas, DisplayChannel& chan
     memset(_frames, 0, sizeof(_frames));
     region_init(&_clip_region);
     if (codec_type != SPICE_VIDEO_CODEC_TYPE_MJPEG) {
-      THROW("invalid vide codec type %u", codec_type);
+      THROW("invalid video codec type %u", codec_type);
     }
 
     try {
@@ -1398,7 +1398,7 @@ void DisplayChannel::handle_stream_destroy(RedPeer::InMessage* message)
     VideoStream **active_stream = &_active_streams;
     for (;;) {
         if (!*active_stream) {
-            THROW("not in actibe streams");
+            THROW("not in active streams");
         }
 
         if (*active_stream == _streams[stream_destroy->id]) {

@@ -37,7 +37,7 @@ struct LzUsrContext {
         TODO :	determine size limit for the first segment and each chunk. check validity
                         of the segment or go to literal copy.
         TODO :	currently support only rgb images in which width*bytes_per_pixel = stride OR
-                        paletter images in which stride eqauls the min number of bytes to
+                        palette images in which stride equals the min number of bytes to
                         hold a line. stride is not necessary for now. just for sanity check.
                         stride should be > 0
 */
@@ -59,9 +59,9 @@ void lz_decode_begin(LzContext *lz, uint8_t *io_ptr, unsigned int num_io_bytes,
         to_type = the image output type.
         We assume the buffer is consecutive. i.e. width = stride
 
-        Improtant: if the image is plt1/4 and to_type is rgb32, the image
+        Important: if the image is plt1/4 and to_type is rgb32, the image
         will decompressed including the last bits in each line. This means buffer should be
-        larger than width*height if neede and you shoud use stride to fix it.
+        larger than width*height if needed and you should use stride to fix it.
         Note: If the image is down to top, set the stride in the sw surface to negative.
         use alloc_lz_image_surface create the surface.
 */

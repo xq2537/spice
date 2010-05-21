@@ -34,8 +34,8 @@ void glz_encoder_destroy(GlzEncoderContext *opaque_encoder);
 
 /*
         assumes width is in pixels and stride is in bytes
-    usr_context       : when an image is released from the window due to capicity overflow,
-                        usr_context is given as a parmater to the free_image callback.
+    usr_context       : when an image is released from the window due to capacity overflow,
+                        usr_context is given as a parameter to the free_image callback.
     o_enc_dict_context: if glz_enc_dictionary_remove_image is called, it should be
                         called with the o_enc_dict_context that is associated with
                         the image.
@@ -43,7 +43,7 @@ void glz_encoder_destroy(GlzEncoderContext *opaque_encoder);
         return: the number of bytes in the compressed data and sets o_enc_dict_context
 
         NOTE  :	currently supports only rgb images in which width*bytes_per_pixel = stride OR
-                palette images in which stride eqauls the min number of bytes to hold a line.
+                palette images in which stride equals the min number of bytes to hold a line.
                 The stride should be > 0
 */
 int glz_encode(GlzEncoderContext *opaque_encoder, LzImageType type, int width, int height,

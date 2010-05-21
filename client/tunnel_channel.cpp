@@ -409,7 +409,7 @@ void TunnelChannel::handle_socket_close(RedPeer::InMessage* message)
     if (sckt->is_connected()) {
         sckt->push_disconnect();
     } else {
-        // close happend in the server side before it received the client
+        // close happened in the server side before it received the client
         // close msg. we should ack the server and free the socket
         on_socket_disconnect(*sckt);
     }
@@ -502,7 +502,7 @@ void TunnelChannel::on_socket_disconnect(ClientNetSocket& sckt)
 {
     TunnelChannel::TunnelSocket* tunnel_sckt = static_cast<TunnelChannel::TunnelSocket*>(&sckt);
     Message* out_msg;
-    // close intiated by server -> needs ack
+    // close initiated by server -> needs ack
     if (tunnel_sckt->get_guest_closed()) {
         DBG(0, "send close ack connection_id=%d", tunnel_sckt->id());
         out_msg = new Message(SPICE_MSGC_TUNNEL_SOCKET_CLOSED_ACK, sizeof(SpiceMsgcTunnelSocketClosedAck));

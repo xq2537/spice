@@ -35,10 +35,10 @@ int main(int argc, char** argv)
         exit_val = Application::main(argc, argv, version_str);
         LOG_INFO("Spice client terminated (exitcode = %d)", exit_val);
     } catch (Exception& e) {
-        LOG_ERROR("unhandle exception: %s", e.what());
+        LOG_ERROR("unhandled exception: %s", e.what());
         exit_val = e.get_error_code();
     } catch (std::exception& e) {
-        LOG_ERROR("unhandle exception: %s", e.what());
+        LOG_ERROR("unhandled exception: %s", e.what());
         exit_val = SPICEC_ERROR_CODE_ERROR;
     } catch (...) {
         LOG_ERROR("unhandled exception");

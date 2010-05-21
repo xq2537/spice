@@ -761,7 +761,7 @@ static pixman_image_t *canvas_get_lz(CanvasBase *canvas, LZImage *image, int inv
     return lz_data->decode_data.out_surface;
 }
 
-// don't handle plts since bitmaps with plt can be decoded globaly to RGB32 (because
+// don't handle plts since bitmaps with plt can be decoded globally to RGB32 (because
 // same byte sequence can be transformed to different RGB pixels by different plts)
 static pixman_image_t *canvas_get_glz(CanvasBase *canvas, LZImage *image,
                                       int want_original)
@@ -1760,7 +1760,7 @@ static void canvas_base_destroy(CanvasBase *canvas)
     }
 }
 
-/* This is kind of lame, but it protects against muliple
+/* This is kind of lame, but it protects against multiple
    instances of these functions. We really should stop including
    canvas_base.c and build it separately instead */
 #ifdef  CANVAS_SINGLE_INSTANCE

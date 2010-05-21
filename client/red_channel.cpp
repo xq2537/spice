@@ -273,9 +273,9 @@ void* RedChannel::worker_main(void *data)
         Platform::set_thread_priority(NULL, channel->get_worker_priority());
         channel->run();
     } catch (Exception& e) {
-        LOG_ERROR("unhandle exception: %s", e.what());
+        LOG_ERROR("unhandled exception: %s", e.what());
     } catch (std::exception& e) {
-        LOG_ERROR("unhandle exception: %s", e.what());
+        LOG_ERROR("unhandled exception: %s", e.what());
     } catch (...) {
         LOG_ERROR("unhandled exception");
     }
@@ -676,12 +676,12 @@ void RedChannel::handle_notify(RedPeer::InMessage* message)
 
 
     if (notify->severty > SPICE_NOTIFY_SEVERITY_ERROR) {
-        THROW("bad sevirity");
+        THROW("bad severity");
     }
     sevirity = sevirity_strings[notify->severty];
 
     if (notify->visibilty > SPICE_NOTIFY_VISIBILITY_HIGH) {
-        THROW("bad visibilty");
+        THROW("bad visibility");
     }
     visibility = visibility_strings[notify->visibilty];
 

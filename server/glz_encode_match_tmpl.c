@@ -24,7 +24,7 @@
 
 /* if image_distance = 0, pixel_distance is the distance between the matching pixels.
   Otherwise, it is the offset from the beginning of the referred image */
-#if defined(GLZ_ENCODE_MATCH) /* actually perfroming the encoding */
+#if defined(GLZ_ENCODE_MATCH) /* actually performing the encoding */
 static INLINE void encode_match(Encoder *encoder, uint32_t image_distance,
                                 size_t pixel_distance, size_t len)
 #elif defined(GLZ_ENCODE_SIZE) /* compute the size of the encoding except for the match length*/
@@ -59,7 +59,7 @@ static INLINE int get_encode_ref_size(uint32_t image_distance, size_t pixel_dist
 #endif
 
 
-    /* encoding the rest of the pixel ditsance and the image_dist and its 2 control bits */
+    /* encoding the rest of the pixel distance and the image_dist and its 2 control bits */
 
     /* The first 2 MSB bits indicate how many more bytes should be read for image dist */
     if (pixel_distance < MAX_PIXEL_SHORT_DISTANCE) {

@@ -228,7 +228,7 @@ static void free_tass_vertex_bufs(InternaCtx *ctx)
     }
 }
 
-//naiev bezier flattener
+//naive bezier flattener
 static TassVertex *bezier_flattener(InternaCtx *ctx, PathPoint *points)
 {
     double ax, bx, cx;
