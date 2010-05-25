@@ -452,7 +452,6 @@ private:
     void localalize_ptr(SPICE_ADDRESS* data);
     void localalize_image(SPICE_ADDRESS* in_bitmap);
     void localalize_brush(SpiceBrush& brush);
-    void localalize_attr(SpiceLineAttr& attr);
     void localalize_mask(SpiceQMask& mask);
     void begin_draw(SpiceMsgDisplayBase& base, int size, size_t min_size);
 

@@ -142,7 +142,6 @@ typedef struct {
     void (*read_bits)(SpiceCanvas *canvas, uint8_t *dest, int dest_stride, const SpiceRect *area);
     void (*group_start)(SpiceCanvas *canvas, QRegion *region);
     void (*group_end)(SpiceCanvas *canvas);
-    void (*set_access_params)(SpiceCanvas *canvas, unsigned long base, unsigned long max);
     void (*destroy)(SpiceCanvas *canvas);
 
     /* Implementation vfuncs */

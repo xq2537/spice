@@ -59,10 +59,10 @@ void RecordSamplesMessage::release()
 
 int RecordChannel::data_mode = SPICE_AUDIO_DATA_MODE_CELT_0_5_1;
 
-class RecordHandler: public MessageHandlerImp<RecordChannel, SPICE_MSGC_END_RECORD> {
+class RecordHandler: public MessageHandlerImp<RecordChannel, SPICE_CHANNEL_RECORD> {
 public:
     RecordHandler(RecordChannel& channel)
-        : MessageHandlerImp<RecordChannel, SPICE_MSGC_END_RECORD>(channel) {}
+        : MessageHandlerImp<RecordChannel, SPICE_CHANNEL_RECORD>(channel) {}
 };
 
 RecordChannel::RecordChannel(RedClient& client, uint32_t id)
@@ -78,16 +78,14 @@ RecordChannel::RecordChannel(RedClient& client, uint32_t id)
 
     RecordHandler* handler = static_cast<RecordHandler*>(get_message_handler());
 
-    handler->set_handler(SPICE_MSG_MIGRATE, &RecordChannel::handle_migrate, 0);
-    handler->set_handler(SPICE_MSG_SET_ACK, &RecordChannel::handle_set_ack, sizeof(SpiceMsgSetAck));
-    handler->set_handler(SPICE_MSG_PING, &RecordChannel::handle_ping, sizeof(SpiceMsgPing));
-    handler->set_handler(SPICE_MSG_WAIT_FOR_CHANNELS, &RecordChannel::handle_wait_for_channels,
-                         sizeof(SpiceMsgWaitForChannels));
-    handler->set_handler(SPICE_MSG_DISCONNECTING, &RecordChannel::handle_disconnect,
-                         sizeof(SpiceMsgDisconnect));
-    handler->set_handler(SPICE_MSG_NOTIFY, &RecordChannel::handle_notify, sizeof(SpiceMsgNotify));
+    handler->set_handler(SPICE_MSG_MIGRATE, &RecordChannel::handle_migrate);
+    handler->set_handler(SPICE_MSG_SET_ACK, &RecordChannel::handle_set_ack);
+    handler->set_handler(SPICE_MSG_PING, &RecordChannel::handle_ping);
+    handler->set_handler(SPICE_MSG_WAIT_FOR_CHANNELS, &RecordChannel::handle_wait_for_channels);
+    handler->set_handler(SPICE_MSG_DISCONNECTING, &RecordChannel::handle_disconnect);
+    handler->set_handler(SPICE_MSG_NOTIFY, &RecordChannel::handle_notify);
 
-    handler->set_handler(SPICE_MSG_RECORD_START, &RecordChannel::handle_start, sizeof(SpiceMsgRecordStart));
+    handler->set_handler(SPICE_MSG_RECORD_START, &RecordChannel::handle_start);
 
     set_capability(SPICE_RECORD_CAP_CELT_0_5_1);
 }
@@ -138,8 +136,8 @@ void RecordChannel::handle_start(RedPeer::InMessage* message)
     RecordHandler* handler = static_cast<RecordHandler*>(get_message_handler());
     SpiceMsgRecordStart* start = (SpiceMsgRecordStart*)message->data();
 
-    handler->set_handler(SPICE_MSG_RECORD_START, NULL, 0);
-    handler->set_handler(SPICE_MSG_RECORD_STOP, &RecordChannel::handle_stop, 0);
+    handler->set_handler(SPICE_MSG_RECORD_START, NULL);
+    handler->set_handler(SPICE_MSG_RECORD_STOP, &RecordChannel::handle_stop);
     ASSERT(!_wave_recorder && !_celt_mode && !_celt_encoder);
 
     // for now support only one setting
@@ -176,8 +174,8 @@ void RecordChannel::handle_start(RedPeer::InMessage* message)
 void RecordChannel::handle_stop(RedPeer::InMessage* message)
 {
     RecordHandler* handler = static_cast<RecordHandler*>(get_message_handler());
-    handler->set_handler(SPICE_MSG_RECORD_START, &RecordChannel::handle_start, sizeof(SpiceMsgRecordStart));
-    handler->set_handler(SPICE_MSG_RECORD_STOP, NULL, 0);
+    handler->set_handler(SPICE_MSG_RECORD_START, &RecordChannel::handle_start);
+    handler->set_handler(SPICE_MSG_RECORD_STOP, NULL);
     if (!_wave_recorder) {
         return;
     }

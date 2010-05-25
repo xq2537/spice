@@ -189,8 +189,7 @@ private:
     void activate_streams_timer();
     void stream_update_request(uint32_t update_time);
 
-    static void set_clip_rects(const SpiceClip& clip, uint32_t& num_clip_rects, SpiceRect*& clip_rects,
-                               unsigned long addr_offset, uint8_t *min, uint8_t *max);
+    static void set_clip_rects(const SpiceClip& clip, uint32_t& num_clip_rects, SpiceRect*& clip_rects);
 private:
     DisplaySurfacesManger surfaces_mngr;
     PixmapCache& _pixmap_cache;

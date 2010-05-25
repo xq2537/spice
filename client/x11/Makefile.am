@@ -6,7 +6,6 @@ CLIENT_DIR=$(top_srcdir)/client
 SUBDIRS = images
 
 INCLUDES = \
-	-DSW_CANVAS_ACCESS_TEST				\
 	-DSW_CANVAS_CACHE				\
 	-DSW_CANVAS_NO_CHUNKS				\
 	-DUSE_GLZ					\
@@ -38,6 +37,8 @@ RED_COMMON_SRCS =					\
 	$(CLIENT_DIR)/audio_channels.h			\
 	$(CLIENT_DIR)/audio_devices.h			\
 	$(CLIENT_DIR)/cache.hpp				\
+	$(CLIENT_DIR)/demarshallers.h			\
+	$(CLIENT_DIR)/generated_demarshallers.cpp	\
 	$(CLIENT_DIR)/sw_canvas.cpp			\
 	$(CLIENT_DIR)/canvas.cpp			\
 	$(CLIENT_DIR)/canvas.h				\

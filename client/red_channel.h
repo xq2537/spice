@@ -24,6 +24,7 @@
 #include "red_peer.h"
 #include "platform.h"
 #include "process_loop.h"
+#include "demarshallers.h"
 
 enum {
     PASSIVE_STATE,
@@ -230,67 +231,83 @@ public:
 };
 
 
-template <class HandlerClass, unsigned int end_message>
+template <class HandlerClass, unsigned int channel_id>
 class MessageHandlerImp: public RedChannel::MessageHandler {
 public:
     MessageHandlerImp(HandlerClass& obj);
-    virtual ~MessageHandlerImp() {}
+    ~MessageHandlerImp() { delete [] _handlers; };
     virtual void handle_message(RedPeer::CompundInMessage& message);
     typedef void (HandlerClass::*Handler)(RedPeer::InMessage* message);
-    void set_handler(unsigned int id, Handler handler, size_t mess_size);
+    void set_handler(unsigned int id, Handler handler);
 
 private:
     HandlerClass& _obj;
-    struct HandlerInfo {
-        Handler handler;
-        size_t mess_size;
-    };
-
-    HandlerInfo _handlers[end_message];
+    unsigned int _max_messages;
+    spice_parse_channel_func_t _parser;
+    Handler *_handlers;
 };
 
-template <class HandlerClass, unsigned int end_message>
-MessageHandlerImp<HandlerClass, end_message>::MessageHandlerImp(HandlerClass& obj)
+template <class HandlerClass, unsigned int channel_id>
+MessageHandlerImp<HandlerClass, channel_id>::MessageHandlerImp(HandlerClass& obj)
     : _obj (obj)
 {
-    memset(_handlers, 0, sizeof(_handlers));
+    _parser = spice_get_server_channel_parser(channel_id, &_max_messages);
+    _handlers = new Handler[_max_messages + 1];
+    memset(_handlers, 0, sizeof(Handler) * (_max_messages + 1));
 }
 
-template <class HandlerClass, unsigned int end_message>
-void MessageHandlerImp<HandlerClass, end_message>::handle_message(RedPeer::CompundInMessage&
-                                                                                            message)
+template <class HandlerClass, unsigned int channel_id>
+void MessageHandlerImp<HandlerClass, channel_id>::handle_message(RedPeer::CompundInMessage&
+                                                                 message)
 {
-    if (message.type() >= end_message || !_handlers[message.type()].handler) {
-        THROW("bad message type %d", message.type());
-    }
-    if (message.size() < _handlers[message.type()].mess_size) {
-        THROW("bad message size, type %d size %d expected %d",
-              message.type(),
-              message.size(),
-              _handlers[message.type()].mess_size);
-    }
+    uint8_t *msg;
+    uint8_t *parsed;
+    uint16_t type;
+    uint32_t size;
+    size_t parsed_size;
+
     if (message.sub_list()) {
         SpiceSubMessageList *sub_list;
         sub_list = (SpiceSubMessageList *)(message.data() + message.sub_list());
         for (int i = 0; i < sub_list->size; i++) {
             SpicedSubMessage *sub = (SpicedSubMessage *)(message.data() + sub_list->sub_messages[i]);
-            //todo: test size
-            RedPeer::InMessage sub_message(sub->type, sub->size, (uint8_t *)(sub + 1));
-            (_obj.*_handlers[sub_message.type()].handler)(&sub_message);
+            msg = (uint8_t *)(sub + 1);
+            type = sub->type;
+            size = sub->size;
+            parsed = _parser(msg, msg + size, type, _obj.get_peer_minor(), &parsed_size);
+
+            if (parsed == NULL) {
+                THROW("failed to parse message type %d", type);
+            }
+
+            RedPeer::InMessage sub_message(type, parsed_size, parsed);
+            (_obj.*_handlers[type])(&sub_message);
+
+            free(parsed);
         }
     }
-    (_obj.*_handlers[message.type()].handler)(&message);
+
+    msg = message.data();
+    type = message.type();
+    size = message.size();
+    parsed = _parser(msg, msg + size, type, _obj.get_peer_minor(), &parsed_size);
+    RedPeer::InMessage main_message(type, parsed_size, parsed);
+
+    if (parsed == NULL) {
+        THROW("failed to parse message channel %d type %d", channel_id, type);
+    }
+
+    (_obj.*_handlers[type])(&main_message);
+    free(parsed);
 }
 
-template <class HandlerClass, unsigned int end_message>
-void MessageHandlerImp<HandlerClass, end_message>::set_handler(unsigned int id, Handler handler,
-                                                               size_t mess_size)
+template <class HandlerClass, unsigned int channel_id>
+void MessageHandlerImp<HandlerClass, channel_id>::set_handler(unsigned int id, Handler handler)
 {
-    if (id >= end_message) {
+    if (id > _max_messages) {
         THROW("bad handler id");
     }
-    _handlers[id].handler = handler;
-    _handlers[id].mess_size = mess_size;
+    _handlers[id] = handler;
 }
 
 #endif

@@ -27,6 +27,8 @@ RED_COMMON_SRCS =			\
 	cmd_line_parser.cpp		\
 	cmd_line_parser.h		\
 	common.h			\
+	demarshallers.h			\
+	generated_demarshallers.cpp	\
 	cursor_channel.cpp		\
 	cursor_channel.h		\
 	cursor.cpp			\

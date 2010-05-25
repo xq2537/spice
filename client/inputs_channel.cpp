@@ -158,10 +158,10 @@ RedPeer::OutMessage& PositionMessage::peer_message()
     return *this;
 }
 
-class InputsMessHandler: public MessageHandlerImp<InputsChannel, SPICE_MSG_END_INPUTS> {
+class InputsMessHandler: public MessageHandlerImp<InputsChannel, SPICE_CHANNEL_INPUTS> {
 public:
     InputsMessHandler(InputsChannel& channel)
-        : MessageHandlerImp<InputsChannel, SPICE_MSG_END_INPUTS>(channel) {}
+        : MessageHandlerImp<InputsChannel, SPICE_CHANNEL_INPUTS>(channel) {}
 };
 
 InputsChannel::InputsChannel(RedClient& client, uint32_t id)
@@ -177,19 +177,16 @@ InputsChannel::InputsChannel(RedClient& client, uint32_t id)
     , _active_modifiers_event (false)
 {
     InputsMessHandler* handler = static_cast<InputsMessHandler*>(get_message_handler());
-    handler->set_handler(SPICE_MSG_MIGRATE, &InputsChannel::handle_migrate, 0);
-    handler->set_handler(SPICE_MSG_SET_ACK, &InputsChannel::handle_set_ack, sizeof(SpiceMsgSetAck));
-    handler->set_handler(SPICE_MSG_PING, &InputsChannel::handle_ping, sizeof(SpiceMsgPing));
-    handler->set_handler(SPICE_MSG_WAIT_FOR_CHANNELS, &InputsChannel::handle_wait_for_channels,
-                         sizeof(SpiceMsgWaitForChannels));
-    handler->set_handler(SPICE_MSG_DISCONNECTING, &InputsChannel::handle_disconnect,
-                         sizeof(SpiceMsgDisconnect));
-    handler->set_handler(SPICE_MSG_NOTIFY, &InputsChannel::handle_notify, sizeof(SpiceMsgNotify));
+    handler->set_handler(SPICE_MSG_MIGRATE, &InputsChannel::handle_migrate);
+    handler->set_handler(SPICE_MSG_SET_ACK, &InputsChannel::handle_set_ack);
+    handler->set_handler(SPICE_MSG_PING, &InputsChannel::handle_ping);
+    handler->set_handler(SPICE_MSG_WAIT_FOR_CHANNELS, &InputsChannel::handle_wait_for_channels);
+    handler->set_handler(SPICE_MSG_DISCONNECTING, &InputsChannel::handle_disconnect);
+    handler->set_handler(SPICE_MSG_NOTIFY, &InputsChannel::handle_notify);
 
-    handler->set_handler(SPICE_MSG_INPUTS_INIT, &InputsChannel::handle_init, sizeof(SpiceMsgInputsInit));
-    handler->set_handler(SPICE_MSG_INPUTS_KEY_MODIFIERS, &InputsChannel::handle_modifaiers,
-                         sizeof(SpiceMsgInputsKeyModifiers));
-    handler->set_handler(SPICE_MSG_INPUTS_MOUSE_MOTION_ACK, &InputsChannel::handle_motion_ack, 0);
+    handler->set_handler(SPICE_MSG_INPUTS_INIT, &InputsChannel::handle_init);
+    handler->set_handler(SPICE_MSG_INPUTS_KEY_MODIFIERS, &InputsChannel::handle_modifaiers);
+    handler->set_handler(SPICE_MSG_INPUTS_MOUSE_MOTION_ACK, &InputsChannel::handle_motion_ack);
 }
 
 InputsChannel::~InputsChannel()

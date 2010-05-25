@@ -219,10 +219,10 @@ TunnelChannel::TunnelSocket::TunnelSocket(uint16_t id, TunnelService& dst_servic
 {
 }
 
-class TunnelHandler: public MessageHandlerImp<TunnelChannel, SPICE_MSG_END_TUNNEL> {
+class TunnelHandler: public MessageHandlerImp<TunnelChannel, SPICE_CHANNEL_TUNNEL> {
 public:
     TunnelHandler(TunnelChannel& channel)
-        : MessageHandlerImp<TunnelChannel, SPICE_MSG_END_TUNNEL>(channel) {}
+        : MessageHandlerImp<TunnelChannel, SPICE_CHANNEL_TUNNEL>(channel) {}
 };
 
 TunnelChannel::TunnelChannel(RedClient& client, uint32_t id)
@@ -236,29 +236,27 @@ TunnelChannel::TunnelChannel(RedClient& client, uint32_t id)
 {
     TunnelHandler* handler = static_cast<TunnelHandler*>(get_message_handler());
 
-    handler->set_handler(SPICE_MSG_MIGRATE, &TunnelChannel::handle_migrate, 0);
-    handler->set_handler(SPICE_MSG_SET_ACK, &TunnelChannel::handle_set_ack, sizeof(SpiceMsgSetAck));
-    handler->set_handler(SPICE_MSG_PING, &TunnelChannel::handle_ping, sizeof(SpiceMsgPing));
-    handler->set_handler(SPICE_MSG_WAIT_FOR_CHANNELS, &TunnelChannel::handle_wait_for_channels,
-                         sizeof(SpiceMsgWaitForChannels));
+    handler->set_handler(SPICE_MSG_MIGRATE, &TunnelChannel::handle_migrate);
+    handler->set_handler(SPICE_MSG_SET_ACK, &TunnelChannel::handle_set_ack);
+    handler->set_handler(SPICE_MSG_PING, &TunnelChannel::handle_ping);
+    handler->set_handler(SPICE_MSG_WAIT_FOR_CHANNELS, &TunnelChannel::handle_wait_for_channels);
 
     handler->set_handler(SPICE_MSG_TUNNEL_INIT,
-                         &TunnelChannel::handle_init, sizeof(SpiceMsgTunnelInit));
+                         &TunnelChannel::handle_init);
     handler->set_handler(SPICE_MSG_TUNNEL_SERVICE_IP_MAP,
-                         &TunnelChannel::handle_service_ip_map, sizeof(SpiceMsgTunnelServiceIpMap));
+                         &TunnelChannel::handle_service_ip_map);
     handler->set_handler(SPICE_MSG_TUNNEL_SOCKET_OPEN,
-                         &TunnelChannel::handle_socket_open, sizeof(SpiceMsgTunnelSocketOpen));
+                         &TunnelChannel::handle_socket_open);
     handler->set_handler(SPICE_MSG_TUNNEL_SOCKET_CLOSE,
-                         &TunnelChannel::handle_socket_close, sizeof(SpiceMsgTunnelSocketClose));
+                         &TunnelChannel::handle_socket_close);
     handler->set_handler(SPICE_MSG_TUNNEL_SOCKET_FIN,
-                         &TunnelChannel::handle_socket_fin, sizeof(SpiceMsgTunnelSocketFin));
+                         &TunnelChannel::handle_socket_fin);
     handler->set_handler(SPICE_MSG_TUNNEL_SOCKET_TOKEN,
-                         &TunnelChannel::handle_socket_token, sizeof(SpiceMsgTunnelSocketTokens));
+                         &TunnelChannel::handle_socket_token);
     handler->set_handler(SPICE_MSG_TUNNEL_SOCKET_CLOSED_ACK,
-                         &TunnelChannel::handle_socket_closed_ack,
-                         sizeof(SpiceMsgTunnelSocketClosedAck));
+                         &TunnelChannel::handle_socket_closed_ack);
     handler->set_handler(SPICE_MSG_TUNNEL_SOCKET_DATA,
-                         &TunnelChannel::handle_socket_data, sizeof(SpiceMsgTunnelSocketData));
+                         &TunnelChannel::handle_socket_data);
 }
 
 TunnelChannel::~TunnelChannel()

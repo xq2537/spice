@@ -311,18 +311,14 @@ uint32_t raster_ops[] = {
 static void set_path(GdiCanvas *canvas, void *addr)
 {
     uint32_t* data_size = (uint32_t*)addr;
-    access_test(&canvas->base, data_size, sizeof(uint32_t));
     uint32_t more = *data_size;
 
     SpicePathSeg* seg = (SpicePathSeg*)(data_size + 1);
 
     do {
-        access_test(&canvas->base, seg, sizeof(SpicePathSeg));
-
         uint32_t flags = seg->flags;
         SpicePointFix* point = (SpicePointFix*)seg->data;
         SpicePointFix* end_point = point + seg->count;
-        access_test(&canvas->base, point, (unsigned long)end_point - (unsigned long)point);
         ASSERT(point < end_point);
         more -= ((unsigned long)end_point - (unsigned long)seg);
         seg = (SpicePathSeg*)end_point;
@@ -399,11 +395,9 @@ static void set_clip(GdiCanvas *canvas, SpiceClip *clip)
         break;
     case SPICE_CLIP_TYPE_RECTS: {
         uint32_t *n = (uint32_t *)SPICE_GET_ADDRESS(clip->data);
-        access_test(&canvas->base, n, sizeof(uint32_t));
 
         SpiceRect *now = (SpiceRect *)(n + 1);
         SpiceRect *end = now + *n;
-        access_test(&canvas->base, now, (unsigned long)end - (unsigned long)now);
 
         if (now < end) {
             HRGN main_hrgn;
@@ -1643,8 +1637,6 @@ static uint32_t *gdi_get_userstyle(GdiCanvas *canvas, uint8_t nseg, SPICE_ADDRES
     uint32_t *local_style;
     int i;
 
-    access_test(&canvas->base, style, nseg * sizeof(*style));
-
     if (nseg == 0) {
         CANVAS_ERROR("bad nseg");
     }
@@ -1835,14 +1827,6 @@ static void gdi_canvas_clear(SpiceCanvas *spice_canvas)
 {
 }
 
-static void gdi_canvas_set_access_params(SpiceCanvas *spice_canvas, unsigned long base, unsigned long max)
-{
-#ifdef SW_CANVAS_ACCESS_TEST
-    GdiCanvas *canvas = (GdiCanvas *)spice_canvas;
-    __canvas_set_access_params(&canvas->base, base, max);
-#endif
-}
-
 static void gdi_canvas_destroy(SpiceCanvas *spice_canvas)
 {
     GdiCanvas *canvas = (GdiCanvas *)spice_canvas;
@@ -1915,7 +1899,6 @@ void gdi_canvas_init() //unsafe global function
     gdi_canvas_ops.draw_alpha_blend = gdi_canvas_draw_alpha_blend;
     gdi_canvas_ops.put_image = gdi_canvas_put_image;
     gdi_canvas_ops.clear = gdi_canvas_clear;
-    gdi_canvas_ops.set_access_params = gdi_canvas_set_access_params;
     gdi_canvas_ops.destroy = gdi_canvas_destroy;
 
     rop3_init();

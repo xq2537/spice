@@ -137,10 +137,10 @@ static void end_wave()
 
 #endif
 
-class PlaybackHandler: public MessageHandlerImp<PlaybackChannel, SPICE_MSG_END_PLAYBACK> {
+class PlaybackHandler: public MessageHandlerImp<PlaybackChannel, SPICE_CHANNEL_PLAYBACK> {
 public:
     PlaybackHandler(PlaybackChannel& channel)
-        : MessageHandlerImp<PlaybackChannel, SPICE_MSG_END_PLAYBACK>(channel) {}
+        : MessageHandlerImp<PlaybackChannel, SPICE_CHANNEL_PLAYBACK>(channel) {}
 };
 
 PlaybackChannel::PlaybackChannel(RedClient& client, uint32_t id)
@@ -157,17 +157,14 @@ PlaybackChannel::PlaybackChannel(RedClient& client, uint32_t id)
 #endif
     PlaybackHandler* handler = static_cast<PlaybackHandler*>(get_message_handler());
 
-    handler->set_handler(SPICE_MSG_MIGRATE, &PlaybackChannel::handle_migrate, 0);
-    handler->set_handler(SPICE_MSG_SET_ACK, &PlaybackChannel::handle_set_ack, sizeof(SpiceMsgSetAck));
-    handler->set_handler(SPICE_MSG_PING, &PlaybackChannel::handle_ping, sizeof(SpiceMsgPing));
-    handler->set_handler(SPICE_MSG_WAIT_FOR_CHANNELS, &PlaybackChannel::handle_wait_for_channels,
-                         sizeof(SpiceMsgWaitForChannels));
-    handler->set_handler(SPICE_MSG_DISCONNECTING, &PlaybackChannel::handle_disconnect,
-                         sizeof(SpiceMsgDisconnect));
-    handler->set_handler(SPICE_MSG_NOTIFY, &PlaybackChannel::handle_notify, sizeof(SpiceMsgNotify));
+    handler->set_handler(SPICE_MSG_MIGRATE, &PlaybackChannel::handle_migrate);
+    handler->set_handler(SPICE_MSG_SET_ACK, &PlaybackChannel::handle_set_ack);
+    handler->set_handler(SPICE_MSG_PING, &PlaybackChannel::handle_ping);
+    handler->set_handler(SPICE_MSG_WAIT_FOR_CHANNELS, &PlaybackChannel::handle_wait_for_channels);
+    handler->set_handler(SPICE_MSG_DISCONNECTING, &PlaybackChannel::handle_disconnect);
+    handler->set_handler(SPICE_MSG_NOTIFY, &PlaybackChannel::handle_notify);
 
-    handler->set_handler(SPICE_MSG_PLAYBACK_MODE, &PlaybackChannel::handle_mode,
-                         sizeof(SpiceMsgPlaybackMode));
+    handler->set_handler(SPICE_MSG_PLAYBACK_MODE, &PlaybackChannel::handle_mode);
 
     set_capability(SPICE_PLAYBACK_CAP_CELT_0_5_1);
 }
@@ -195,9 +192,9 @@ void PlaybackChannel::set_data_handler()
     PlaybackHandler* handler = static_cast<PlaybackHandler*>(get_message_handler());
 
     if (_mode == SPICE_AUDIO_DATA_MODE_RAW) {
-        handler->set_handler(SPICE_MSG_PLAYBACK_DATA, &PlaybackChannel::handle_raw_data, 0);
+        handler->set_handler(SPICE_MSG_PLAYBACK_DATA, &PlaybackChannel::handle_raw_data);
     } else if (_mode == SPICE_AUDIO_DATA_MODE_CELT_0_5_1) {
-        handler->set_handler(SPICE_MSG_PLAYBACK_DATA, &PlaybackChannel::handle_celt_data, 0);
+        handler->set_handler(SPICE_MSG_PLAYBACK_DATA, &PlaybackChannel::handle_celt_data);
     } else {
         THROW("invalid mode");
     }
@@ -218,8 +215,7 @@ void PlaybackChannel::handle_mode(RedPeer::InMessage* message)
     }
 
     PlaybackHandler* handler = static_cast<PlaybackHandler*>(get_message_handler());
-    handler->set_handler(SPICE_MSG_PLAYBACK_START, &PlaybackChannel::handle_start,
-                         sizeof(SpiceMsgPlaybackStart));
+    handler->set_handler(SPICE_MSG_PLAYBACK_START, &PlaybackChannel::handle_start);
 }
 
 void PlaybackChannel::null_handler(RedPeer::InMessage* message)
@@ -230,10 +226,10 @@ void PlaybackChannel::disable()
 {
     PlaybackHandler* handler = static_cast<PlaybackHandler*>(get_message_handler());
 
-    handler->set_handler(SPICE_MSG_PLAYBACK_START, &PlaybackChannel::null_handler, 0);
-    handler->set_handler(SPICE_MSG_PLAYBACK_STOP, &PlaybackChannel::null_handler, 0);
-    handler->set_handler(SPICE_MSG_PLAYBACK_MODE, &PlaybackChannel::null_handler, 0);
-    handler->set_handler(SPICE_MSG_PLAYBACK_DATA, &PlaybackChannel::null_handler, 0);
+    handler->set_handler(SPICE_MSG_PLAYBACK_START, &PlaybackChannel::null_handler);
+    handler->set_handler(SPICE_MSG_PLAYBACK_STOP, &PlaybackChannel::null_handler);
+    handler->set_handler(SPICE_MSG_PLAYBACK_MODE, &PlaybackChannel::null_handler);
+    handler->set_handler(SPICE_MSG_PLAYBACK_DATA, &PlaybackChannel::null_handler);
 }
 
 void PlaybackChannel::handle_start(RedPeer::InMessage* message)
@@ -241,8 +237,8 @@ void PlaybackChannel::handle_start(RedPeer::InMessage* message)
     PlaybackHandler* handler = static_cast<PlaybackHandler*>(get_message_handler());
     SpiceMsgPlaybackStart* start = (SpiceMsgPlaybackStart*)message->data();
 
-    handler->set_handler(SPICE_MSG_PLAYBACK_START, NULL, 0);
-    handler->set_handler(SPICE_MSG_PLAYBACK_STOP, &PlaybackChannel::handle_stop, 0);
+    handler->set_handler(SPICE_MSG_PLAYBACK_START, NULL);
+    handler->set_handler(SPICE_MSG_PLAYBACK_STOP, &PlaybackChannel::handle_stop);
 
 #ifdef WAVE_CAPTURE
     start_wave();
@@ -285,10 +281,9 @@ void PlaybackChannel::handle_stop(RedPeer::InMessage* message)
 {
     PlaybackHandler* handler = static_cast<PlaybackHandler*>(get_message_handler());
 
-    handler->set_handler(SPICE_MSG_PLAYBACK_STOP, NULL, 0);
-    handler->set_handler(SPICE_MSG_PLAYBACK_DATA, NULL, 0);
-    handler->set_handler(SPICE_MSG_PLAYBACK_START, &PlaybackChannel::handle_start,
-                         sizeof(SpiceMsgPlaybackStart));
+    handler->set_handler(SPICE_MSG_PLAYBACK_STOP, NULL);
+    handler->set_handler(SPICE_MSG_PLAYBACK_DATA, NULL);
+    handler->set_handler(SPICE_MSG_PLAYBACK_START, &PlaybackChannel::handle_start);
 
 #ifdef WAVE_CAPTURE
     end_wave();

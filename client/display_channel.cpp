@@ -578,10 +578,10 @@ Canvas* DisplaySurfacesManger::get_canvas(int surface_id)
     return canvases.get(surface_id);
 }
 
-class DisplayHandler: public MessageHandlerImp<DisplayChannel, SPICE_MSG_END_DISPLAY> {
+class DisplayHandler: public MessageHandlerImp<DisplayChannel, SPICE_CHANNEL_DISPLAY> {
 public:
     DisplayHandler(DisplayChannel& channel)
-        : MessageHandlerImp<DisplayChannel, SPICE_MSG_END_DISPLAY>(channel) {}
+        : MessageHandlerImp<DisplayChannel, SPICE_CHANNEL_DISPLAY>(channel) {}
 };
 
 DisplayChannel::DisplayChannel(RedClient& client, uint32_t id,
@@ -608,42 +608,33 @@ DisplayChannel::DisplayChannel(RedClient& client, uint32_t id,
 {
     DisplayHandler* handler = static_cast<DisplayHandler*>(get_message_handler());
 
-    handler->set_handler(SPICE_MSG_MIGRATE, &DisplayChannel::handle_migrate, 0);
-    handler->set_handler(SPICE_MSG_SET_ACK, &DisplayChannel::handle_set_ack, sizeof(SpiceMsgSetAck));
-    handler->set_handler(SPICE_MSG_PING, &DisplayChannel::handle_ping, sizeof(SpiceMsgPing));
-    handler->set_handler(SPICE_MSG_WAIT_FOR_CHANNELS, &DisplayChannel::handle_wait_for_channels,
-                         sizeof(SpiceMsgWaitForChannels));
-    handler->set_handler(SPICE_MSG_DISCONNECTING, &DisplayChannel::handle_disconnect,
-                         sizeof(SpiceMsgDisconnect));
-    handler->set_handler(SPICE_MSG_NOTIFY, &DisplayChannel::handle_notify, sizeof(SpiceMsgNotify));
+    handler->set_handler(SPICE_MSG_MIGRATE, &DisplayChannel::handle_migrate);
+    handler->set_handler(SPICE_MSG_SET_ACK, &DisplayChannel::handle_set_ack);
+    handler->set_handler(SPICE_MSG_PING, &DisplayChannel::handle_ping);
+    handler->set_handler(SPICE_MSG_WAIT_FOR_CHANNELS, &DisplayChannel::handle_wait_for_channels);
+    handler->set_handler(SPICE_MSG_DISCONNECTING, &DisplayChannel::handle_disconnect);
+    handler->set_handler(SPICE_MSG_NOTIFY, &DisplayChannel::handle_notify);
 
-    handler->set_handler(SPICE_MSG_DISPLAY_MARK, &DisplayChannel::handle_mark, 0);
-    handler->set_handler(SPICE_MSG_DISPLAY_RESET, &DisplayChannel::handle_reset, 0);
+    handler->set_handler(SPICE_MSG_DISPLAY_MARK, &DisplayChannel::handle_mark);
+    handler->set_handler(SPICE_MSG_DISPLAY_RESET, &DisplayChannel::handle_reset);
 
     handler->set_handler(SPICE_MSG_DISPLAY_INVAL_LIST,
-                         &DisplayChannel::handle_inval_list,
-                         sizeof(SpiceResourceList));
+                         &DisplayChannel::handle_inval_list);
     handler->set_handler(SPICE_MSG_DISPLAY_INVAL_ALL_PIXMAPS,
-                         &DisplayChannel::handle_inval_all_pixmaps,
-                         sizeof(SpiceMsgWaitForChannels));
+                         &DisplayChannel::handle_inval_all_pixmaps);
     handler->set_handler(SPICE_MSG_DISPLAY_INVAL_PALETTE,
-                         &DisplayChannel::handle_inval_palette, sizeof(SpiceMsgDisplayInvalOne));
+                         &DisplayChannel::handle_inval_palette);
     handler->set_handler(SPICE_MSG_DISPLAY_INVAL_ALL_PALETTES,
-                         &DisplayChannel::handle_inval_all_palettes, 0);
+                         &DisplayChannel::handle_inval_all_palettes);
 
-    handler->set_handler(SPICE_MSG_DISPLAY_STREAM_CREATE, &DisplayChannel::handle_stream_create,
-                         sizeof(SpiceMsgDisplayStreamCreate));
-    handler->set_handler(SPICE_MSG_DISPLAY_STREAM_CLIP, &DisplayChannel::handle_stream_clip,
-                         sizeof(SpiceMsgDisplayStreamClip));
-    handler->set_handler(SPICE_MSG_DISPLAY_STREAM_DESTROY, &DisplayChannel::handle_stream_destroy,
-                         sizeof(SpiceMsgDisplayStreamDestroy));
+    handler->set_handler(SPICE_MSG_DISPLAY_STREAM_CREATE, &DisplayChannel::handle_stream_create);
+    handler->set_handler(SPICE_MSG_DISPLAY_STREAM_CLIP, &DisplayChannel::handle_stream_clip);
+    handler->set_handler(SPICE_MSG_DISPLAY_STREAM_DESTROY, &DisplayChannel::handle_stream_destroy);
     handler->set_handler(SPICE_MSG_DISPLAY_STREAM_DESTROY_ALL,
-                         &DisplayChannel::handle_stream_destroy_all, 0);
+                         &DisplayChannel::handle_stream_destroy_all);
 
-    handler->set_handler(SPICE_MSG_DISPLAY_SURFACE_CREATE, &DisplayChannel::handle_surface_create,
-                         sizeof(SpiceMsgSurfaceCreate));
-    handler->set_handler(SPICE_MSG_DISPLAY_SURFACE_DESTROY, &DisplayChannel::handle_surface_destroy,
-                         sizeof(SpiceMsgSurfaceDestroy));
+    handler->set_handler(SPICE_MSG_DISPLAY_SURFACE_CREATE, &DisplayChannel::handle_surface_create);
+    handler->set_handler(SPICE_MSG_DISPLAY_SURFACE_DESTROY, &DisplayChannel::handle_surface_destroy);
 
     get_process_loop().add_trigger(_streams_trigger);
 #ifdef USE_OGL
@@ -678,55 +669,43 @@ void DisplayChannel::set_draw_handlers()
 {
     DisplayHandler* handler = static_cast<DisplayHandler*>(get_message_handler());
 
-    handler->set_handler(SPICE_MSG_DISPLAY_COPY_BITS, &DisplayChannel::handle_copy_bits,
-                         sizeof(SpiceMsgDisplayCopyBits));
+    handler->set_handler(SPICE_MSG_DISPLAY_COPY_BITS, &DisplayChannel::handle_copy_bits);
 
-    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_FILL, &DisplayChannel::handle_draw_fill,
-                         sizeof(SpiceMsgDisplayDrawFill));
-    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_OPAQUE, &DisplayChannel::handle_draw_opaque,
-                         sizeof(SpiceMsgDisplayDrawOpaque));
-    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_COPY, &DisplayChannel::handle_draw_copy,
-                         sizeof(SpiceMsgDisplayDrawCopy));
-    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_BLEND, &DisplayChannel::handle_draw_blend,
-                         sizeof(SpiceMsgDisplayDrawBlend));
-    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_BLACKNESS, &DisplayChannel::handle_draw_blackness,
-                         sizeof(SpiceMsgDisplayDrawBlackness));
-    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_WHITENESS, &DisplayChannel::handle_draw_whiteness,
-                         sizeof(SpiceMsgDisplayDrawWhiteness));
-    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_INVERS, &DisplayChannel::handle_draw_invers,
-                         sizeof(SpiceMsgDisplayDrawInvers));
-    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_ROP3, &DisplayChannel::handle_draw_rop3,
-                         sizeof(SpiceMsgDisplayDrawRop3));
-    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_STROKE, &DisplayChannel::handle_draw_stroke,
-                         sizeof(SpiceMsgDisplayDrawStroke));
-    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_TEXT, &DisplayChannel::handle_draw_text,
-                         sizeof(SpiceMsgDisplayDrawText));
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_FILL, &DisplayChannel::handle_draw_fill);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_OPAQUE, &DisplayChannel::handle_draw_opaque);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_COPY, &DisplayChannel::handle_draw_copy);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_BLEND, &DisplayChannel::handle_draw_blend);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_BLACKNESS, &DisplayChannel::handle_draw_blackness);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_WHITENESS, &DisplayChannel::handle_draw_whiteness);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_INVERS, &DisplayChannel::handle_draw_invers);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_ROP3, &DisplayChannel::handle_draw_rop3);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_STROKE, &DisplayChannel::handle_draw_stroke);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_TEXT, &DisplayChannel::handle_draw_text);
     handler->set_handler(SPICE_MSG_DISPLAY_DRAW_TRANSPARENT,
-                         &DisplayChannel::handle_draw_transparent, sizeof(SpiceMsgDisplayDrawTransparent));
+                         &DisplayChannel::handle_draw_transparent);
     handler->set_handler(SPICE_MSG_DISPLAY_DRAW_ALPHA_BLEND,
-                         &DisplayChannel::handle_draw_alpha_blend, sizeof(SpiceMsgDisplayDrawAlphaBlend));
-    handler->set_handler(SPICE_MSG_DISPLAY_STREAM_DATA, &DisplayChannel::handle_stream_data,
-                         sizeof(SpiceMsgDisplayStreamData));
+                         &DisplayChannel::handle_draw_alpha_blend);
+    handler->set_handler(SPICE_MSG_DISPLAY_STREAM_DATA, &DisplayChannel::handle_stream_data);
 }
 
 void DisplayChannel::clear_draw_handlers()
 {
     DisplayHandler* handler = static_cast<DisplayHandler*>(get_message_handler());
 
-    handler->set_handler(SPICE_MSG_DISPLAY_COPY_BITS, NULL, 0);
-    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_FILL, NULL, 0);
-    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_OPAQUE, NULL, 0);
-    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_COPY, NULL, 0);
-    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_BLEND, NULL, 0);
-    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_BLACKNESS, NULL, 0);
-    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_WHITENESS, NULL, 0);
-    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_INVERS, NULL, 0);
-    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_ROP3, NULL, 0);
-    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_STROKE, NULL, 0);
-    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_TEXT, NULL, 0);
-    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_TRANSPARENT, NULL, 0);
-    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_ALPHA_BLEND, NULL, 0);
-    handler->set_handler(SPICE_MSG_DISPLAY_STREAM_DATA, NULL, 0);
+    handler->set_handler(SPICE_MSG_DISPLAY_COPY_BITS, NULL);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_FILL, NULL);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_OPAQUE, NULL);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_COPY, NULL);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_BLEND, NULL);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_BLACKNESS, NULL);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_WHITENESS, NULL);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_INVERS, NULL);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_ROP3, NULL);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_STROKE, NULL);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_TEXT, NULL);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_TRANSPARENT, NULL);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_ALPHA_BLEND, NULL);
+    handler->set_handler(SPICE_MSG_DISPLAY_STREAM_DATA, NULL);
 }
 
 void DisplayChannel::copy_pixels(const QRegion& dest_region,
@@ -1289,20 +1268,13 @@ void DisplayChannel::handle_inval_all_palettes(RedPeer::InMessage* message)
 }
 
 void DisplayChannel::set_clip_rects(const SpiceClip& clip, uint32_t& num_clip_rects,
-                                    SpiceRect*& clip_rects, unsigned long addr_offset,
-                                    uint8_t *min, uint8_t *max)
+                                    SpiceRect*& clip_rects)
 {
     switch (clip.type) {
     case SPICE_CLIP_TYPE_RECTS: {
-        uint32_t* n = (uint32_t*)SPICE_GET_ADDRESS(clip.data + addr_offset);
-        if (n < (uint32_t*)min || n + 1 > (uint32_t*)max) {
-            THROW("access violation");
-        }
+        uint32_t* n = (uint32_t*)SPICE_GET_ADDRESS(clip.data);
         num_clip_rects = *n;
         clip_rects = (SpiceRect *)(n + 1);
-        if (clip_rects + num_clip_rects > (SpiceRect*)max) {
-            THROW("access violation");
-        }
         break;
     }
     case SPICE_CLIP_TYPE_NONE:
@@ -1330,9 +1302,7 @@ void DisplayChannel::handle_stream_create(RedPeer::InMessage* message)
 
     uint32_t num_clip_rects;
     SpiceRect* clip_rects;
-    set_clip_rects(stream_create->clip, num_clip_rects, clip_rects,
-                   (unsigned long)message->data(), (uint8_t*)(stream_create + 1),
-                   message->data() + message->size());
+    set_clip_rects(stream_create->clip, num_clip_rects, clip_rects);
     _streams[stream_create->id] = new VideoStream(get_client(), *surfaces_mngr.get_canvas(surface_id),
                                                   *this, stream_create->codec_type,
                                                   !!(stream_create->flags & SPICE_STREAM_FLAGS_TOP_DOWN),
@@ -1379,9 +1349,7 @@ void DisplayChannel::handle_stream_clip(RedPeer::InMessage* message)
     if (message->size() < sizeof(SpiceMsgDisplayStreamClip)) {
         THROW("access violation");
     }
-    set_clip_rects(clip_data->clip, num_clip_rects, clip_rects,
-                   (unsigned long)message->data(), (uint8_t*)(clip_data + 1),
-                   message->data() + message->size());
+    set_clip_rects(clip_data->clip, num_clip_rects, clip_rects);
     Lock lock(_streams_lock);
     stream->set_clip(clip_data->clip.type, num_clip_rects, clip_rects);
 }

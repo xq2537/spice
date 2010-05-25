@@ -115,18 +115,14 @@ static GLCPath get_path(GLCanvas *canvas, void *addr)
 {
     GLCPath path = glc_path_create(canvas->glc);
     uint32_t* data_size = (uint32_t*)addr;
-    access_test(&canvas->base, data_size, sizeof(uint32_t));
     uint32_t more = *data_size;
 
     SpicePathSeg* seg = (SpicePathSeg*)(data_size + 1);
 
     do {
-        access_test(&canvas->base, seg, sizeof(SpicePathSeg));
-
         uint32_t flags = seg->flags;
         SpicePointFix* point = (SpicePointFix*)seg->data;
         SpicePointFix* end_point = point + seg->count;
-        access_test(&canvas->base, point, (unsigned long)end_point - (unsigned long)point);
         ASSERT(point < end_point);
         more -= ((unsigned long)end_point - (unsigned long)seg);
         seg = (SpicePathSeg*)end_point;
@@ -183,10 +179,8 @@ static void set_clip(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip)
         break;
     case SPICE_CLIP_TYPE_RECTS: {
         uint32_t *n = (uint32_t *)SPICE_GET_ADDRESS(clip->data);
-        access_test(&canvas->base, n, sizeof(uint32_t));
         SpiceRect *now = (SpiceRect *)(n + 1);
         SpiceRect *end = now + *n;
-        access_test(&canvas->base, now, (unsigned long)end - (unsigned long)now);
 
         if (*n == 0) {
             rect.x = rect.y = 0;
@@ -810,14 +804,6 @@ static void gl_canvas_group_end(SpiceCanvas *spice_canvas)
     glc_clear_mask(canvas->glc, GLC_MASK_B);
 }
 
-static void gl_canvas_set_access_params(SpiceCanvas *spice_canvas, unsigned long base, unsigned long max)
-{
-#ifdef SW_CANVAS_ACCESS_TEST
-    GLCanvas *canvas = (GLCanvas *)spice_canvas;
-    __canvas_set_access_params(&canvas->base, base, max);
-#endif
-}
-
 static int need_init = 1;
 static SpiceCanvasOps gl_canvas_ops;
 
@@ -926,7 +912,6 @@ void gl_canvas_init() //unsafe global function
     gl_canvas_ops.read_bits = gl_canvas_read_bits;
     gl_canvas_ops.group_start = gl_canvas_group_start;
     gl_canvas_ops.group_end = gl_canvas_group_end;
-    gl_canvas_ops.set_access_params = gl_canvas_set_access_params;
     gl_canvas_ops.destroy = gl_canvas_destroy;
 
     rop3_init();

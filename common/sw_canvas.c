@@ -1144,15 +1144,6 @@ static void canvas_clear(SpiceCanvas *spice_canvas)
                            0);
 }
 
-static void canvas_set_access_params(SpiceCanvas *spice_canvas,
-                                     unsigned long base, unsigned long max)
-{
-#ifdef SW_CANVAS_ACCESS_TEST
-    SwCanvas *canvas = (SwCanvas *)spice_canvas;
-    __canvas_set_access_params(&canvas->base, base, max);
-#endif
-}
-
 static void canvas_destroy(SpiceCanvas *spice_canvas)
 {
     SwCanvas *canvas = (SwCanvas *)spice_canvas;
@@ -1306,7 +1297,6 @@ void sw_canvas_init() //unsafe global function
     sw_canvas_ops.put_image = canvas_put_image;
     sw_canvas_ops.clear = canvas_clear;
     sw_canvas_ops.read_bits = canvas_read_bits;
-    sw_canvas_ops.set_access_params = canvas_set_access_params;
     sw_canvas_ops.destroy = canvas_destroy;
 
     sw_canvas_ops.fill_solid_spans = fill_solid_spans;

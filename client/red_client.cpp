@@ -293,9 +293,9 @@ void AgentTimer::response(AbstractProcessLoop& events_loop)
     THROW_ERR(SPICEC_ERROR_CODE_AGENT_TIMEOUT, "vdagent timeout");
 }
 
-class MainChannelLoop: public MessageHandlerImp<RedClient, SPICE_MSG_END_MAIN> {
+class MainChannelLoop: public MessageHandlerImp<RedClient, SPICE_CHANNEL_MAIN> {
 public:
-    MainChannelLoop(RedClient& client): MessageHandlerImp<RedClient, SPICE_MSG_END_MAIN>(client) {}
+    MainChannelLoop(RedClient& client): MessageHandlerImp<RedClient, SPICE_CHANNEL_MAIN>(client) {}
 };
 
 RedClient::RedClient(Application& application)
@@ -320,35 +320,26 @@ RedClient::RedClient(Application& application)
 {
     MainChannelLoop* message_loop = static_cast<MainChannelLoop*>(get_message_handler());
 
-    message_loop->set_handler(SPICE_MSG_MIGRATE, &RedClient::handle_migrate, 0);
-    message_loop->set_handler(SPICE_MSG_SET_ACK, &RedClient::handle_set_ack, sizeof(SpiceMsgSetAck));
-    message_loop->set_handler(SPICE_MSG_PING, &RedClient::handle_ping, sizeof(SpiceMsgPing));
-    message_loop->set_handler(SPICE_MSG_WAIT_FOR_CHANNELS, &RedClient::handle_wait_for_channels,
-                              sizeof(SpiceMsgWaitForChannels));
-    message_loop->set_handler(SPICE_MSG_DISCONNECTING, &RedClient::handle_disconnect,
-                              sizeof(SpiceMsgDisconnect));
-    message_loop->set_handler(SPICE_MSG_NOTIFY, &RedClient::handle_notify, sizeof(SpiceMsgNotify));
+    message_loop->set_handler(SPICE_MSG_MIGRATE, &RedClient::handle_migrate);
+    message_loop->set_handler(SPICE_MSG_SET_ACK, &RedClient::handle_set_ack);
+    message_loop->set_handler(SPICE_MSG_PING, &RedClient::handle_ping);
+    message_loop->set_handler(SPICE_MSG_WAIT_FOR_CHANNELS, &RedClient::handle_wait_for_channels);
+    message_loop->set_handler(SPICE_MSG_DISCONNECTING, &RedClient::handle_disconnect);
+    message_loop->set_handler(SPICE_MSG_NOTIFY, &RedClient::handle_notify);
 
-    message_loop->set_handler(SPICE_MSG_MAIN_MIGRATE_BEGIN, &RedClient::handle_migrate_begin,
-                              sizeof(SpiceMsgMainMigrationBegin));
-    message_loop->set_handler(SPICE_MSG_MAIN_MIGRATE_CANCEL, &RedClient::handle_migrate_cancel, 0);
+    message_loop->set_handler(SPICE_MSG_MAIN_MIGRATE_BEGIN, &RedClient::handle_migrate_begin);
+    message_loop->set_handler(SPICE_MSG_MAIN_MIGRATE_CANCEL, &RedClient::handle_migrate_cancel);
     message_loop->set_handler(SPICE_MSG_MAIN_MIGRATE_SWITCH_HOST,
-                              &RedClient::handle_migrate_switch_host,
-                              sizeof(SpiceMsgMainMigrationSwitchHost));
-    message_loop->set_handler(SPICE_MSG_MAIN_INIT, &RedClient::handle_init, sizeof(SpiceMsgMainInit));
-    message_loop->set_handler(SPICE_MSG_MAIN_CHANNELS_LIST, &RedClient::handle_channels,
-                              sizeof(SpiceMsgChannels));
-    message_loop->set_handler(SPICE_MSG_MAIN_MOUSE_MODE, &RedClient::handle_mouse_mode,
-                              sizeof(SpiceMsgMainMouseMode));
-    message_loop->set_handler(SPICE_MSG_MAIN_MULTI_MEDIA_TIME, &RedClient::handle_mm_time,
-                              sizeof(SpiceMsgMainMultiMediaTime));
+                              &RedClient::handle_migrate_switch_host);
+    message_loop->set_handler(SPICE_MSG_MAIN_INIT, &RedClient::handle_init);
+    message_loop->set_handler(SPICE_MSG_MAIN_CHANNELS_LIST, &RedClient::handle_channels);
+    message_loop->set_handler(SPICE_MSG_MAIN_MOUSE_MODE, &RedClient::handle_mouse_mode);
+    message_loop->set_handler(SPICE_MSG_MAIN_MULTI_MEDIA_TIME, &RedClient::handle_mm_time);
 
-    message_loop->set_handler(SPICE_MSG_MAIN_AGENT_CONNECTED, &RedClient::handle_agent_connected, 0);
-    message_loop->set_handler(SPICE_MSG_MAIN_AGENT_DISCONNECTED, &RedClient::handle_agent_disconnected,
-                              sizeof(SpiceMsgMainAgentDisconnect));
-    message_loop->set_handler(SPICE_MSG_MAIN_AGENT_DATA, &RedClient::handle_agent_data, 0);
-    message_loop->set_handler(SPICE_MSG_MAIN_AGENT_TOKEN, &RedClient::handle_agent_tokens,
-                              sizeof(SpiceMsgMainAgentTokens));
+    message_loop->set_handler(SPICE_MSG_MAIN_AGENT_CONNECTED, &RedClient::handle_agent_connected);
+    message_loop->set_handler(SPICE_MSG_MAIN_AGENT_DISCONNECTED, &RedClient::handle_agent_disconnected);
+    message_loop->set_handler(SPICE_MSG_MAIN_AGENT_DATA, &RedClient::handle_agent_data);
+    message_loop->set_handler(SPICE_MSG_MAIN_AGENT_TOKEN, &RedClient::handle_agent_tokens);
     start();
 }
 

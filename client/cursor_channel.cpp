@@ -348,10 +348,10 @@ private:
     CursorChannel& _channel;
 };
 
-class CursorHandler: public MessageHandlerImp<CursorChannel, SPICE_MSG_END_CURSOR> {
+class CursorHandler: public MessageHandlerImp<CursorChannel, SPICE_CHANNEL_CURSOR> {
 public:
     CursorHandler(CursorChannel& channel)
-        : MessageHandlerImp<CursorChannel, SPICE_MSG_END_CURSOR>(channel) {}
+      : MessageHandlerImp<CursorChannel, SPICE_CHANNEL_CURSOR>(channel) {}
 };
 
 CursorChannel::CursorChannel(RedClient& client, uint32_t id)
@@ -363,27 +363,21 @@ CursorChannel::CursorChannel(RedClient& client, uint32_t id)
 {
     CursorHandler* handler = static_cast<CursorHandler*>(get_message_handler());
 
-    handler->set_handler(SPICE_MSG_MIGRATE, &CursorChannel::handle_migrate, 0);
-    handler->set_handler(SPICE_MSG_SET_ACK, &CursorChannel::handle_set_ack, sizeof(SpiceMsgSetAck));
-    handler->set_handler(SPICE_MSG_PING, &CursorChannel::handle_ping, sizeof(SpiceMsgPing));
-    handler->set_handler(SPICE_MSG_WAIT_FOR_CHANNELS, &CursorChannel::handle_wait_for_channels,
-                         sizeof(SpiceMsgWaitForChannels));
-    handler->set_handler(SPICE_MSG_DISCONNECTING, &CursorChannel::handle_disconnect,
-                         sizeof(SpiceMsgDisconnect));
-    handler->set_handler(SPICE_MSG_NOTIFY, &CursorChannel::handle_notify, sizeof(SpiceMsgNotify));
+    handler->set_handler(SPICE_MSG_MIGRATE, &CursorChannel::handle_migrate);
+    handler->set_handler(SPICE_MSG_SET_ACK, &CursorChannel::handle_set_ack);
+    handler->set_handler(SPICE_MSG_PING, &CursorChannel::handle_ping);
+    handler->set_handler(SPICE_MSG_WAIT_FOR_CHANNELS, &CursorChannel::handle_wait_for_channels);
+    handler->set_handler(SPICE_MSG_DISCONNECTING, &CursorChannel::handle_disconnect);
+    handler->set_handler(SPICE_MSG_NOTIFY, &CursorChannel::handle_notify);
 
-    handler->set_handler(SPICE_MSG_CURSOR_INIT, &CursorChannel::handle_init, sizeof(SpiceMsgCursorInit));
-    handler->set_handler(SPICE_MSG_CURSOR_RESET, &CursorChannel::handle_reset, 0);
-    handler->set_handler(SPICE_MSG_CURSOR_SET, &CursorChannel::handle_cursor_set,
-                         sizeof(SpiceMsgCursorSet));
-    handler->set_handler(SPICE_MSG_CURSOR_MOVE, &CursorChannel::handle_cursor_move,
-                         sizeof(SpiceMsgCursorMove));
-    handler->set_handler(SPICE_MSG_CURSOR_HIDE, &CursorChannel::handle_cursor_hide, 0);
-    handler->set_handler(SPICE_MSG_CURSOR_TRAIL, &CursorChannel::handle_cursor_trail,
-                         sizeof(SpiceMsgCursorTrail));
-    handler->set_handler(SPICE_MSG_CURSOR_INVAL_ONE, &CursorChannel::handle_inval_one,
-                         sizeof(SpiceMsgDisplayInvalOne));
-    handler->set_handler(SPICE_MSG_CURSOR_INVAL_ALL, &CursorChannel::handle_inval_all, 0);
+    handler->set_handler(SPICE_MSG_CURSOR_INIT, &CursorChannel::handle_init);
+    handler->set_handler(SPICE_MSG_CURSOR_RESET, &CursorChannel::handle_reset);
+    handler->set_handler(SPICE_MSG_CURSOR_SET, &CursorChannel::handle_cursor_set);
+    handler->set_handler(SPICE_MSG_CURSOR_MOVE, &CursorChannel::handle_cursor_move);
+    handler->set_handler(SPICE_MSG_CURSOR_HIDE, &CursorChannel::handle_cursor_hide);
+    handler->set_handler(SPICE_MSG_CURSOR_TRAIL, &CursorChannel::handle_cursor_trail);
+    handler->set_handler(SPICE_MSG_CURSOR_INVAL_ONE, &CursorChannel::handle_inval_one);
+    handler->set_handler(SPICE_MSG_CURSOR_INVAL_ALL, &CursorChannel::handle_inval_all);
 }
 
 CursorChannel::~CursorChannel()

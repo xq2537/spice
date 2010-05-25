@@ -43,16 +43,6 @@
 }
 #endif
 
-#ifdef SW_CANVAS_ACCESS_TEST
-#define access_test(cancas, ptr, size)                                                         \
-    if ((unsigned long)(ptr) < (cancas)->base ||                                               \
-                                            (unsigned long)(ptr) + (size) > (cancas)->max) {   \
-        CANVAS_ERROR("access violation 0x%lx %lu", (unsigned long)ptr, (unsigned long)(size)); \
-    }
-#else
-#define access_test(cancas, base, size)
-#endif
-
 #ifndef ASSERT
 #define ASSERT(x) if (!(x)) {                               \
     printf("%s: ASSERT %s failed\n", __FUNCTION__, #x);     \
@@ -175,10 +165,6 @@ typedef struct CanvasBase {
     uint32_t color_shift;
     uint32_t color_mask;
     QuicData quic_data;
-#ifdef SW_CANVAS_ACCESS_TEST
-    unsigned long base;
-    unsigned long max;
-#endif
 
     uint32_t format;
     int width;
@@ -630,7 +616,6 @@ static pixman_image_t *canvas_bitmap_to_surface(CanvasBase *canvas, SpiceBitmap*
 
     src = (uint8_t *)SPICE_GET_ADDRESS(bitmap->data);
     src_stride = bitmap->stride;
-    access_test(canvas, src, bitmap->y * src_stride);
 
     if (want_original) {
         format = spice_bitmap_format_to_pixman(bitmap->format, canvas->format);
@@ -672,8 +657,6 @@ static inline SpicePalette *canvas_get_palette(CanvasBase *canvas, SPICE_ADDRESS
         palette = canvas->palette_cache->ops->get(canvas->palette_cache, base_palette);
     } else if (flags & SPICE_BITMAP_FLAGS_PAL_CACHE_ME) {
         palette = (SpicePalette *)SPICE_GET_ADDRESS(base_palette);
-        access_test(canvas, palette, sizeof(SpicePalette));
-        access_test(canvas, palette, sizeof(SpicePalette) + palette->num_ents * sizeof(uint32_t));
         canvas->palette_cache->ops->put(canvas->palette_cache, palette);
     } else {
         palette = (SpicePalette *)SPICE_GET_ADDRESS(base_palette);
@@ -990,11 +973,9 @@ static void dump_surface(pixman_image_t *surface, int cache)
 static SpiceCanvas *canvas_get_surface_internal(CanvasBase *canvas, SPICE_ADDRESS addr)
 {
     SpiceImageDescriptor *descriptor = (SpiceImageDescriptor *)SPICE_GET_ADDRESS(addr);
-    access_test(canvas, descriptor, sizeof(SpiceImageDescriptor));
 
     if (descriptor->type == SPICE_IMAGE_TYPE_SURFACE) {
         SpiceSurfaceImage *surface = (SpiceSurfaceImage *)descriptor;
-        access_test(canvas, descriptor, sizeof(SpiceSurfaceImage));
         return canvas->surfaces->ops->get(canvas->surfaces, surface->surface.surface_id);
     }
     return NULL;
@@ -1005,11 +986,9 @@ static SpiceCanvas *canvas_get_surface_mask_internal(CanvasBase *canvas, SPICE_A
     SpiceImageDescriptor *descriptor;
 
     descriptor = (SpiceImageDescriptor *)SPICE_GET_ADDRESS(addr);
-    access_test(canvas, descriptor, sizeof(SpiceImageDescriptor));
 
     if (descriptor->type == SPICE_IMAGE_TYPE_SURFACE) {
         SpiceSurfaceImage *surface = (SpiceSurfaceImage *)descriptor;
-        access_test(canvas, descriptor, sizeof(SpiceSurfaceImage));
         return canvas->surfaces->ops->get(canvas->surfaces, surface->surface.surface_id);
     }
     return NULL;
@@ -1034,7 +1013,6 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
     pixman_image_t *surface, *converted;
     pixman_format_code_t wanted_format, surface_format;
     int saved_want_original;
-    access_test(canvas, descriptor, sizeof(SpiceImageDescriptor));
 #ifdef DEBUG_LZ
     LOG_DEBUG("canvas_get_image image type: " << (int)descriptor->type);
 #endif
@@ -1063,19 +1041,16 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
     switch (descriptor->type) {
     case SPICE_IMAGE_TYPE_QUIC: {
         SpiceQUICImage *image = (SpiceQUICImage *)descriptor;
-        access_test(canvas, descriptor, sizeof(SpiceQUICImage));
         surface = canvas_get_quic(canvas, image, 0, want_original);
         break;
     }
 #ifdef SW_CANVAS_NO_CHUNKS
     case SPICE_IMAGE_TYPE_LZ_PLT: {
-        access_test(canvas, descriptor, sizeof(SpiceLZPLTImage));
         LZImage *image = (LZImage *)descriptor;
         surface = canvas_get_lz(canvas, image, 0, want_original);
         break;
     }
     case SPICE_IMAGE_TYPE_LZ_RGB: {
-        access_test(canvas, descriptor, sizeof(SpiceLZRGBImage));
         LZImage *image = (LZImage *)descriptor;
         surface = canvas_get_lz(canvas, image, 0, want_original);
         break;
@@ -1083,13 +1058,11 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
 #endif
     case SPICE_IMAGE_TYPE_JPEG: {
         SpiceJPEGImage *image = (SpiceJPEGImage *)descriptor;
-        access_test(canvas, descriptor, sizeof(SpiceJPEGImage));
         surface = canvas_get_jpeg(canvas, image, 0);
         break;
     }
 #if defined(SW_CANVAS_CACHE)
     case SPICE_IMAGE_TYPE_GLZ_RGB: {
-        access_test(canvas, descriptor, sizeof(SpiceLZRGBImage));
         LZImage *image = (LZImage *)descriptor;
         surface = canvas_get_glz(canvas, image, want_original);
         break;
@@ -1106,7 +1079,6 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
 #endif
     case SPICE_IMAGE_TYPE_BITMAP: {
         SpiceBitmapImage *bitmap = (SpiceBitmapImage *)descriptor;
-        access_test(canvas, descriptor, sizeof(SpiceBitmapImage));
         surface = canvas_get_bits(canvas, &bitmap->bitmap, want_original);
         break;
     }
@@ -1213,8 +1185,6 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
     SpiceImageDescriptor *descriptor = (SpiceImageDescriptor *)SPICE_GET_ADDRESS(addr);
     pixman_format_code_t format;
 
-    access_test(canvas, descriptor, sizeof(SpiceImageDescriptor));
-
     /* When touching, never load image. */
     if (!real_get) {
         return NULL;
@@ -1223,12 +1193,10 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
     switch (descriptor->type) {
     case SPICE_IMAGE_TYPE_QUIC: {
         SpiceQUICImage *image = (SpiceQUICImage *)descriptor;
-        access_test(canvas, descriptor, sizeof(SpiceQUICImage));
         return canvas_get_quic(canvas, image, 0);
     }
     case SPICE_IMAGE_TYPE_BITMAP: {
         SpiceBitmapImage *bitmap = (SpiceBitmapImage *)descriptor;
-        access_test(canvas, descriptor, sizeof(SpiceBitmapImage));
         return canvas_get_bits(canvas, &bitmap->bitmap, want_original, &format);
     }
     default:
@@ -1323,7 +1291,6 @@ static pixman_image_t *canvas_get_bitmap_mask(CanvasBase *canvas, SpiceBitmap* b
     src_line = (uint8_t *)SPICE_GET_ADDRESS(bitmap->data);
     src_stride = bitmap->stride;
     end_line = src_line + (bitmap->y * src_stride);
-    access_test(canvas, src_line, end_line - src_line);
     line_size = SPICE_ALIGN(bitmap->x, 8) >> 3;
 
     dest_stride = pixman_image_get_stride(surface);
@@ -1455,7 +1422,6 @@ static pixman_image_t *canvas_get_mask(CanvasBase *canvas, SpiceQMask *mask, int
     }
 
     descriptor = (SpiceImageDescriptor *)SPICE_GET_ADDRESS(mask->bitmap);
-    access_test(canvas, descriptor, sizeof(SpiceImageDescriptor));
     need_invers = mask->flags & SPICE_MASK_FLAGS_INVERS;
 
 #ifdef SW_CANVAS_CACHE
@@ -1467,7 +1433,6 @@ static pixman_image_t *canvas_get_mask(CanvasBase *canvas, SpiceQMask *mask, int
     switch (descriptor->type) {
     case SPICE_IMAGE_TYPE_BITMAP: {
         SpiceBitmapImage *bitmap = (SpiceBitmapImage *)descriptor;
-        access_test(canvas, descriptor, sizeof(SpiceBitmapImage));
         is_invers = need_invers && !cache_me;
         surface = canvas_get_bitmap_mask(canvas, &bitmap->bitmap, is_invers);
         break;
@@ -1668,18 +1633,14 @@ static pixman_image_t *canvas_get_str_mask(CanvasBase *canvas, SpiceString *str,
 
     ASSERT(str->length > 0);
 
-    access_test(canvas, glyph, sizeof(SpiceRasterGlyph));
     next_glyph = canvas_next_raster_glyph(glyph, bpp);
-    access_test(canvas, glyph, (uint8_t*)next_glyph - (uint8_t*)glyph);
     canvas_raster_glyph_box(glyph, &bounds);
 
     for (i = 1; i < str->length; i++) {
         SpiceRect glyph_box;
 
         glyph = next_glyph;
-        access_test(canvas, glyph, sizeof(SpiceRasterGlyph));
         next_glyph = canvas_next_raster_glyph(glyph, bpp);
-        access_test(canvas, glyph, (uint8_t*)next_glyph - (uint8_t*)glyph);
         canvas_raster_glyph_box(glyph, &glyph_box);
         rect_union(&bounds, &glyph_box);
     }
@@ -1860,14 +1821,6 @@ static int quic_usr_more_lines(QuicUsrContext *usr, uint8_t **lines)
     return 0;
 }
 
-#ifdef SW_CANVAS_ACCESS_TEST
-static void __canvas_set_access_params(CanvasBase *canvas, unsigned long base, unsigned long max)
-{
-    canvas->base = base;
-    canvas->max = max;
-}
-#endif
-
 static void canvas_base_destroy(CanvasBase *canvas)
 {
     quic_destroy(canvas->quic_data.quic);
@@ -1920,10 +1873,8 @@ static void canvas_clip_pixman(CanvasBase *canvas,
         break;
     case SPICE_CLIP_TYPE_RECTS: {
         uint32_t *n = (uint32_t *)SPICE_GET_ADDRESS(clip->data);
-        access_test(canvas, n, sizeof(uint32_t));
 
         SpiceRect *now = (SpiceRect *)(n + 1);
-        access_test(canvas, now, (unsigned long)(now + *n) - (unsigned long)now);
 
         pixman_region32_t clip;
 
@@ -3073,7 +3024,6 @@ static void canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox,
         gc.base.lineStyle = LineOnOffDash;
         gc.base.dash = (unsigned char *)spice_malloc(nseg);
         gc.base.numInDashList = nseg;
-        access_test(canvas, style, nseg * sizeof(*style));
 
         if (stroke->attr.flags & SPICE_LINE_FLAGS_START_WITH_GAP) {
             gc.base.dash[stroke->attr.style_nseg - 1] = fix_to_int(style[0]);
@@ -3118,19 +3068,15 @@ static void canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox,
     }
 
     data_size = (uint32_t*)SPICE_GET_ADDRESS(stroke->path);
-    access_test(canvas, data_size, sizeof(uint32_t));
     more = *data_size;
     seg = (SpicePathSeg*)(data_size + 1);
 
     stroke_lines_init(&lines);
 
     do {
-        access_test(canvas, seg, sizeof(SpicePathSeg));
-
         uint32_t flags = seg->flags;
         SpicePointFix* point = (SpicePointFix*)seg->data;
         SpicePointFix* end_point = point + seg->count;
-        access_test(canvas, point, (unsigned long)end_point - (unsigned long)point);
         ASSERT(point < end_point);
         more -= ((unsigned long)end_point - (unsigned long)seg);
         seg = (SpicePathSeg*)end_point;
