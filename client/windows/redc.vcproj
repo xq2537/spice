@@ -29,6 +29,10 @@
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
+				Description=""
+				CommandLine=""
+				AdditionalDependencies=""
+				Outputs=""
 			/>
 			<Tool
 				Name="VCXMLDataGeneratorTool"
@@ -192,10 +196,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\sw_canvas.cpp"
-				>
-			</File>
-			<File
 				RelativePath="..\canvas.cpp"
 				>
 			</File>
@@ -217,6 +217,10 @@
 			</File>
 			<File
 				RelativePath="..\cursor_channel.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\generated_demarshallers.cpp"
 				>
 			</File>
 			<File
@@ -350,10 +354,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\red_sw_canvas.cpp"
-				>
-			</File>
-			<File
 				RelativePath="..\red_channel.cpp"
 				>
 			</File>
@@ -378,11 +378,15 @@
 				>
 			</File>
 			<File
+				RelativePath=".\red_pixmap_gdi.cpp"
+				>
+			</File>
+			<File
 				RelativePath=".\red_pixmap_sw.cpp"
 				>
 			</File>
 			<File
-				RelativePath=".\red_pixmap_gdi.cpp"
+				RelativePath="..\red_sw_canvas.cpp"
 				>
 			</File>
 			<File
@@ -415,6 +419,10 @@
 			</File>
 			<File
 				RelativePath="..\gui\softtexture.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\sw_canvas.cpp"
 				>
 			</File>
 			<File
@@ -469,6 +477,10 @@
 			</File>
 			<File
 				RelativePath="..\debug.h"
+				>
+			</File>
+			<File
+				RelativePath="..\demarshallers.h"
 				>
 			</File>
 			<File
@@ -572,10 +584,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\red_sw_canvas.h"
-				>
-			</File>
-			<File
 				RelativePath="..\red_channel.h"
 				>
 			</File>
@@ -597,6 +605,10 @@
 			</File>
 			<File
 				RelativePath="..\red_peer.h"
+				>
+			</File>
+			<File
+				RelativePath="..\red_sw_canvas.h"
 				>
 			</File>
 			<File
@@ -674,6 +686,31 @@
 				>
 			</File>
 		</Filter>
+		<File
+			RelativePath="..\..\spice.proto"
+			>
+			<FileConfiguration
+				Name="Debug|Win32"
+				>
+				<Tool
+					Name="VCCustomBuildTool"
+					Description="Generating demarshaller"
+					CommandLine="python $(ProjectDir)\..\..\spice_codegen.py -d -c  -i common.h $(ProjectDir)\..\..\spice.proto $(ProjectDir)\..\generated_demarshallers.cpp&#x0D;&#x0A;"
+					AdditionalDependencies=""
+					Outputs="$(ProjectDir)/../generated_demarshallers.cpp"
+				/>
+			</FileConfiguration>
+			<FileConfiguration
+				Name="Release|Win32"
+				>
+				<Tool
+					Name="VCCustomBuildTool"
+					Description="Generating demarshaller"
+					CommandLine="python $(ProjectDir)\..\..\spice_codegen.py -d -c  -i common.h $(ProjectDir)\..\..\spice.proto $(ProjectDir)\..\generated_demarshallers.cpp"
+					Outputs="$(ProjectDir)/../generated_demarshallers.cpp"
+				/>
+			</FileConfiguration>
+		</File>
 	</Files>
 	<Globals>
 	</Globals>
