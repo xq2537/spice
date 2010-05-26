@@ -68,7 +68,7 @@ public:
 RecordChannel::RecordChannel(RedClient& client, uint32_t id)
     : RedChannel(client, SPICE_CHANNEL_RECORD, id, new RecordHandler(*this))
     , _wave_recorder (NULL)
-    , _mode (SPICE_AUDIO_DATA_MODE_INVALD)
+    , _mode (SPICE_AUDIO_DATA_MODE_INVALID)
     , _celt_mode (NULL)
     , _celt_encoder (NULL)
 {
