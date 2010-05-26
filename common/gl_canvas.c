@@ -630,8 +630,8 @@ static void gl_canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox, Sp
     set_op(canvas, stroke->fore_mode);
     set_brush(canvas, &stroke->brush);
 
-    if (stroke->attr.flags & SPICE_LINE_ATTR_STYLED) {
-        WARN("SPICE_LINE_ATTR_STYLED");
+    if (stroke->attr.flags & SPICE_LINE_FLAGS_STYLED) {
+        WARN("SPICE_LINE_FLAGS_STYLED");
     }
     glc_set_line_width(canvas->glc, fix_to_double(stroke->attr.width));
 

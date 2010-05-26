@@ -1799,10 +1799,10 @@ static void gdi_canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox, S
     SetMiterLimit(canvas->dc, (FLOAT)fix_to_double(stroke->attr.miter_limit), &old_miter);
 #endif
 
-    if (stroke->attr.flags & SPICE_LINE_ATTR_STYLED) {
+    if (stroke->attr.flags & SPICE_LINE_FLAGS_STYLED) {
         user_style = gdi_get_userstyle(canvas, stroke->attr.style_nseg,
                                        stroke->attr.style,
-                                       !!(stroke->attr.flags & SPICE_LINE_ATTR_STARTGAP));
+                                       !!(stroke->attr.flags & SPICE_LINE_FLAGS_START_WITH_GAP));
         hpen = ExtCreatePen(PS_GEOMETRIC | ps_join | line_cap | PS_USERSTYLE,
                             (uint32_t)fix_to_double(stroke->attr.width),
                             &logbrush, stroke->attr.style_nseg, (DWORD *)user_style);
