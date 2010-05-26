@@ -337,6 +337,7 @@ AC_OUTPUT([
 Makefile
 spice-server.pc
 common/Makefile
+python_modules/Makefile
 server/Makefile
 client/Makefile
 client/x11/Makefile

@@ -1,7 +1,9 @@
-SUBDIRS = common server client
+SUBDIRS = common server client python_modules
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = spice-server.pc
 
 DISTCLEANFILES =                                \
 	spice-server.pc
+
+EXTRA_DIST = spice.proto spice_codegen.py
