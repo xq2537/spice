@@ -1,7 +1,12 @@
 NULL =
 
-SUBDIRS = $(red_target)
+SUBDIRS = . $(red_target)
 DIST_SUBDIRS = x11 #windows
+
+spice_built_sources = generated_demarshallers.cpp
+
+generated_demarshallers.cpp: $(top_srcdir)/spice.proto
+	$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-demarshallers --client --include common.h $(top_srcdir)/spice.proto generated_demarshallers.cpp
 
 RED_COMMON_SRCS =			\
 	application.cpp			\
@@ -90,4 +95,8 @@ RED_COMMON_SRCS =			\
 	utils.h				\
 	$(NULL)
 
-EXTRA_DIST = $(RED_COMMON_SRCS)
+MAINTAINERCLEANFILES = $(spice_built_sources)
+
+EXTRA_DIST = $(RED_COMMON_SRCS) $(spice_built_sources)
+
+BUILT_SOURCES = $(spice_built_sources)
