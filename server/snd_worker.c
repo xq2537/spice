@@ -1012,8 +1012,9 @@ static void snd_set_playback_peer(Channel *channel, RedsStreamContext *peer, int
                                                               SPICE_AUDIO_DATA_MODE_RAW;
 
     on_new_playback_channel(worker);
-    if (worker->active)
+    if (worker->active) {
         spice_server_playback_start(st->sin);
+    }
     snd_playback_send(worker->connection);
     return;
 
@@ -1171,8 +1172,9 @@ static void snd_set_record_peer(Channel *channel, RedsStreamContext *peer, int m
     record_channel->celt_decoder = celt_decoder;
 
     on_new_record_channel(worker);
-    if (worker->active)
+    if (worker->active) {
         spice_server_record_start(st->sin);
+    }
     snd_record_send(worker->connection);
     return;
 
