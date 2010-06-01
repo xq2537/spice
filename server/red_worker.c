@@ -8965,6 +8965,7 @@ static void red_send_surface_create(DisplayChannel *display, SpiceMsgSurfaceCrea
     ASSERT(display);
     channel = &display->base;
 
+    region_init(&display->surface_client_lossy_region[surface_create->surface_id]);
     channel->send_data.header.type = SPICE_MSG_DISPLAY_SURFACE_CREATE;
     display->send_data.u.surface_create = *surface_create;
 
@@ -8981,6 +8982,7 @@ static void red_send_surface_destroy(DisplayChannel *display, uint32_t surface_i
     ASSERT(display);
     channel = &display->base;
 
+    region_destroy(&display->surface_client_lossy_region[surface_id]);
     channel->send_data.header.type = SPICE_MSG_DISPLAY_SURFACE_DESTROY;
     display->send_data.u.surface_destroy.surface_id = surface_id;
 
