@@ -6705,10 +6705,19 @@ static inline void red_display_add_image_to_pixmap_cache(DisplayChannel *display
     }
 }
 
+typedef enum {
+    FILL_BITS_TYPE_INVALID,
+    FILL_BITS_TYPE_CACHE,
+    FILL_BITS_TYPE_SURFACE,
+    FILL_BITS_TYPE_COMPRESS_LOSSLESS,
+    FILL_BITS_TYPE_COMPRESS_LOSSY,
+    FILL_BITS_TYPE_BITMAP,
+} FillBitsType;
+
 /* if the number of times fill_bits can be called per one qxl_drawable increases -
    MAX_LZ_DRAWABLE_INSTANCES must be increased as well */
-static void fill_bits(DisplayChannel *display_channel, QXLPHYSICAL *in_bitmap,
-                      Drawable *drawable, int can_lossy)
+static FillBitsType fill_bits(DisplayChannel *display_channel, QXLPHYSICAL *in_bitmap,
+                              Drawable *drawable, int can_lossy)
 {
     RedChannel *channel = &display_channel->base;
     RedWorker *worker = channel->worker;
@@ -6754,7 +6763,7 @@ static void fill_bits(DisplayChannel *display_channel, QXLPHYSICAL *in_bitmap,
                 }
                 add_buf(channel, BUF_TYPE_RAW, image, sizeof(SpiceImageDescriptor), 0, 0);
                 stat_inc_counter(display_channel->cache_hits_counter, 1);
-                return;
+                return FILL_BITS_TYPE_CACHE;
             } else {
                 pixmap_cache_set_lossy(display_channel->pixmap_cache, qxl_image->descriptor.id,
                                        FALSE);
@@ -6779,7 +6788,7 @@ static void fill_bits(DisplayChannel *display_channel, QXLPHYSICAL *in_bitmap,
 
         image->surface.surface_id = surface_id;
         add_buf(channel, BUF_TYPE_RAW, image, sizeof(SpiceSurfaceImage), 0, 0);
-        break;
+        return FILL_BITS_TYPE_SURFACE;
     }
     case SPICE_IMAGE_TYPE_BITMAP:
 #ifdef DUMP_BITMAP
@@ -6814,6 +6823,7 @@ static void fill_bits(DisplayChannel *display_channel, QXLPHYSICAL *in_bitmap,
                                            drawable->group_id);
                 add_buf(channel, BUF_TYPE_CHUNK, data, y * stride, memslot_id, drawable->group_id);
             }
+            return FILL_BITS_TYPE_BITMAP;
         } else {
             red_display_add_image_to_pixmap_cache(display_channel, qxl_image, image,
                                                   comp_send_data.is_lossy);
@@ -6827,6 +6837,9 @@ static void fill_bits(DisplayChannel *display_channel, QXLPHYSICAL *in_bitmap,
                 fill_palette(display_channel, comp_send_data.plt_ptr, comp_send_data.flags_ptr,
                              drawable->group_id);
             }
+            ASSERT(!comp_send_data.is_lossy || can_lossy);
+            return (comp_send_data.is_lossy ? FILL_BITS_TYPE_COMPRESS_LOSSY :
+                                              FILL_BITS_TYPE_COMPRESS_LOSSLESS);
         }
         break;
     case SPICE_IMAGE_TYPE_QUIC:
@@ -6835,7 +6848,7 @@ static void fill_bits(DisplayChannel *display_channel, QXLPHYSICAL *in_bitmap,
         add_buf(channel, BUF_TYPE_RAW, image, sizeof(SpiceQUICImage), 0, 0);
         add_buf(channel, BUF_TYPE_CHUNK, qxl_image->quic.data, qxl_image->quic.data_size,
                 memslot_id, drawable->group_id);
-        break;
+        return FILL_BITS_TYPE_COMPRESS_LOSSLESS;
     default:
         red_error("invalid image type %u", image->descriptor.type);
     }
@@ -7031,8 +7044,8 @@ static int is_bitmap_lossy(DisplayChannel *display_channel, SPICE_ADDRESS bitmap
     }
 }
 
-SPICE_GNUC_UNUSED static int is_brush_lossy(DisplayChannel *display_channel, SpiceBrush *brush,
-                                            Drawable *drawable, BitmapData *out_data)
+static int is_brush_lossy(DisplayChannel *display_channel, SpiceBrush *brush,
+                          Drawable *drawable, BitmapData *out_data)
 {
     if (brush->type == SPICE_BRUSH_TYPE_PATTERN) {
         return is_bitmap_lossy(display_channel, brush->u.pattern.pat, NULL,
@@ -7043,8 +7056,8 @@ SPICE_GNUC_UNUSED static int is_brush_lossy(DisplayChannel *display_channel, Spi
     }
 }
 
-SPICE_GNUC_UNUSED static void surface_lossy_region_update(RedWorker *worker, DisplayChannel *display_channel,
-                                                          Drawable *item, int has_mask, int lossy)
+static void surface_lossy_region_update(RedWorker *worker, DisplayChannel *display_channel,
+                                        Drawable *item, int has_mask, int lossy)
 {
     QRegion *surface_lossy_region;
     QXLDrawable *drawable;
@@ -7160,12 +7173,12 @@ static void red_pipe_replace_rendered_drawables_with_images(RedWorker *worker,
     }
 }
 
-SPICE_GNUC_UNUSED static void red_add_lossless_drawable_dependencies(RedWorker *worker,
-                                                                     DisplayChannel *display_channel,
-                                                                     Drawable *item,
-                                                                     int deps_surfaces_ids[],
-                                                                     SpiceRect *deps_areas[],
-                                                                     int num_deps)
+static void red_add_lossless_drawable_dependencies(RedWorker *worker,
+                                                   DisplayChannel *display_channel,
+                                                   Drawable *item,
+                                                   int deps_surfaces_ids[],
+                                                   SpiceRect *deps_areas[],
+                                                   int num_deps)
 {
     QXLDrawable *drawable = item->qxl_drawable;
     int sync_rendered = FALSE;
@@ -7225,6 +7238,613 @@ SPICE_GNUC_UNUSED static void red_add_lossless_drawable_dependencies(RedWorker *
 
         red_add_surface_area_image(worker, drawable->surface_id, &drawable->bbox,
                                    red_pipe_get_tail(worker), TRUE);
+    }
+}
+
+static inline void red_lossy_send_qxl_draw_fill(RedWorker *worker,
+                                                DisplayChannel *display_channel,
+                                                Drawable *item)
+{
+    QXLDrawable *drawable = item->qxl_drawable;
+
+    RedChannel *channel = &display_channel->base;
+    int dest_allowed_lossy = FALSE;
+    int dest_is_lossy = FALSE;
+    SpiceRect dest_lossy_area;
+    int brush_is_lossy;
+    BitmapData brush_bitmap_data;
+    uint16_t rop;
+
+    rop = drawable->u.fill.rop_decriptor;
+
+    dest_allowed_lossy = !((rop & SPICE_ROPD_OP_OR) ||
+                           (rop & SPICE_ROPD_OP_AND) ||
+                           (rop & SPICE_ROPD_OP_XOR));
+    
+    brush_is_lossy = is_brush_lossy(display_channel, &drawable->u.fill.brush, item,
+                                    &brush_bitmap_data);
+    if (!dest_allowed_lossy) {
+        dest_is_lossy = is_surface_area_lossy(display_channel, item->surface_id, &drawable->bbox,
+                                              &dest_lossy_area);
+    }
+                  
+    if (!dest_is_lossy && 
+        !(brush_is_lossy && (brush_bitmap_data.type == BITMAP_DATA_TYPE_SURFACE))) {
+        int has_mask = !!drawable->u.fill.mask.bitmap;
+        channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_FILL;
+        fill_base(display_channel, &display_channel->send_data.u.fill.base, item,
+                  sizeof(SpiceMsgDisplayDrawFill), item->surface_id);
+        display_channel->send_data.u.fill.data = drawable->u.fill;
+        fill_brush(display_channel, &display_channel->send_data.u.fill.data.brush, item);
+        fill_mask(display_channel, &display_channel->send_data.u.fill.data.mask, item);
+
+        // eitehr the brush operation is opaque, or the dest is not lossy
+        surface_lossy_region_update(worker, display_channel, item, has_mask, FALSE);
+    } else {
+        int resend_surface_ids[2];
+        SpiceRect *resend_areas[2];
+        int num_resend = 0;
+
+        if (dest_is_lossy) {
+            resend_surface_ids[num_resend] = item->surface_id;
+            resend_areas[num_resend] = &dest_lossy_area;
+            num_resend++;
+        }
+
+        if (brush_is_lossy && (brush_bitmap_data.type == BITMAP_DATA_TYPE_SURFACE)) {
+            resend_surface_ids[num_resend] = brush_bitmap_data.id;
+            resend_areas[num_resend] = &brush_bitmap_data.lossy_rect;
+            num_resend++;
+        }
+
+        red_add_lossless_drawable_dependencies(worker, display_channel, item,
+                                               resend_surface_ids, resend_areas, num_resend);
+    }
+}
+
+static inline void red_lossy_send_qxl_draw_opaque(RedWorker *worker,
+                                                  DisplayChannel *display_channel,
+                                                  Drawable *item)
+{
+    QXLDrawable *drawable = item->qxl_drawable;
+    RedChannel *channel = &display_channel->base;
+
+    int src_allowed_lossy;
+    int rop;
+    int src_is_lossy = FALSE;
+    int brush_is_lossy = FALSE;
+    BitmapData src_bitmap_data;
+    BitmapData brush_bitmap_data;
+
+    rop = drawable->u.opaque.rop_decriptor;
+    src_allowed_lossy = !((rop & SPICE_ROPD_OP_OR) ||
+                          (rop & SPICE_ROPD_OP_AND) ||
+                          (rop & SPICE_ROPD_OP_XOR));
+
+    brush_is_lossy = is_brush_lossy(display_channel, &drawable->u.opaque.brush, item,
+                                    &brush_bitmap_data);
+
+    if (!src_allowed_lossy) {
+        src_is_lossy = is_bitmap_lossy(display_channel, drawable->u.opaque.src_bitmap,
+                                       &drawable->u.opaque.src_area,
+                                       item,
+                                       &src_bitmap_data);
+    }
+
+    if (!(brush_is_lossy && (brush_bitmap_data.type == SPICE_IMAGE_TYPE_SURFACE)) &&
+        !(src_is_lossy && (src_bitmap_data.type == SPICE_IMAGE_TYPE_SURFACE))) {
+        FillBitsType src_send_type;
+        int has_mask = !!drawable->u.opaque.mask.bitmap;
+
+        channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_OPAQUE;
+        fill_base(display_channel, &display_channel->send_data.u.opaque.base, item,
+                  sizeof(SpiceMsgDisplayDrawOpaque), item->surface_id);
+        display_channel->send_data.u.opaque.data = drawable->u.opaque;
+        src_send_type = fill_bits(display_channel,
+                                  &display_channel->send_data.u.opaque.data.src_bitmap,
+                                  item, src_allowed_lossy);
+        fill_brush(display_channel, &display_channel->send_data.u.opaque.data.brush, item);
+        fill_mask(display_channel, &display_channel->send_data.u.opaque.data.mask, item);
+
+        if (src_send_type == FILL_BITS_TYPE_COMPRESS_LOSSY) {
+            src_is_lossy = TRUE;
+        } else if (src_send_type == FILL_BITS_TYPE_COMPRESS_LOSSLESS) {
+            src_is_lossy = FALSE;
+        }
+
+        surface_lossy_region_update(worker, display_channel, item, has_mask, src_is_lossy);
+    } else {
+        int resend_surface_ids[2];
+        SpiceRect *resend_areas[2];
+        int num_resend = 0;      
+
+        if (src_is_lossy && (src_bitmap_data.type == BITMAP_DATA_TYPE_SURFACE)) {
+            resend_surface_ids[num_resend] = src_bitmap_data.id;
+            resend_areas[num_resend] = &src_bitmap_data.lossy_rect;
+            num_resend++;
+        }
+
+        if (brush_is_lossy && (brush_bitmap_data.type == BITMAP_DATA_TYPE_SURFACE)) {
+            resend_surface_ids[num_resend] = brush_bitmap_data.id;
+            resend_areas[num_resend] = &brush_bitmap_data.lossy_rect;
+            num_resend++;
+        }
+
+        red_add_lossless_drawable_dependencies(worker, display_channel, item,
+                                               resend_surface_ids, resend_areas, num_resend);
+    }
+}
+
+static inline void red_lossy_send_qxl_draw_copy(RedWorker *worker,
+                                                DisplayChannel *display_channel,
+                                                Drawable *item)
+{
+    QXLDrawable *drawable = item->qxl_drawable;
+    RedChannel *channel = &display_channel->base;
+    int has_mask = !!drawable->u.copy.mask.bitmap;
+    int src_is_lossy;
+    BitmapData src_bitmap_data;
+    FillBitsType src_send_type;
+
+    src_is_lossy = is_bitmap_lossy(display_channel, drawable->u.copy.src_bitmap,
+                                   &drawable->u.copy.src_area, item, &src_bitmap_data);
+
+    channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_COPY;
+    fill_base(display_channel, &display_channel->send_data.u.copy.base, item,
+              sizeof(SpiceMsgDisplayDrawCopy), item->surface_id);
+    display_channel->send_data.u.copy.data = drawable->u.copy;
+    src_send_type = fill_bits(display_channel, &display_channel->send_data.u.copy.data.src_bitmap,
+                              item, TRUE);
+    fill_mask(display_channel, &display_channel->send_data.u.copy.data.mask, item);
+
+    if (src_send_type == FILL_BITS_TYPE_COMPRESS_LOSSY) {
+        src_is_lossy = TRUE;
+    } else if (src_send_type == FILL_BITS_TYPE_COMPRESS_LOSSLESS) {
+        src_is_lossy = FALSE;
+    }
+
+    surface_lossy_region_update(worker, display_channel, item, has_mask,
+                                src_is_lossy);
+}
+
+static inline void red_lossy_send_qxl_draw_transparent(RedWorker *worker,
+                                                       DisplayChannel *display_channel,
+                                                       Drawable *item)
+{
+    QXLDrawable *drawable = item->qxl_drawable;
+    RedChannel *channel = &display_channel->base;
+    int src_is_lossy;
+    BitmapData src_bitmap_data;
+
+    src_is_lossy = is_bitmap_lossy(display_channel, drawable->u.transparent.src_bitmap,
+                                   &drawable->u.transparent.src_area, item, &src_bitmap_data);
+
+    if (!src_is_lossy || (src_bitmap_data.type != BITMAP_DATA_TYPE_SURFACE)) {  
+        channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_TRANSPARENT;
+        fill_base(display_channel, &display_channel->send_data.u.transparent.base, item,
+                  sizeof(SpiceMsgDisplayDrawTransparent), item->surface_id);
+        display_channel->send_data.u.transparent.data = drawable->u.transparent;
+        fill_bits(display_channel, &display_channel->send_data.u.transparent.data.src_bitmap,
+                  item, FALSE);
+
+        // don't update surface lossy region since transperent areas might be lossy
+    } else {
+        int resend_surface_ids[1];
+        SpiceRect *resend_areas[1];
+
+        resend_surface_ids[0] = src_bitmap_data.id;
+        resend_areas[0] = &src_bitmap_data.lossy_rect;
+
+        red_add_lossless_drawable_dependencies(worker, display_channel, item,
+                                               resend_surface_ids, resend_areas, 1);
+    }
+}
+
+static inline void red_lossy_send_qxl_draw_alpha_blend(RedWorker *worker,
+                                                       DisplayChannel *display_channel,
+                                                       Drawable *item)
+{
+    QXLDrawable *drawable = item->qxl_drawable;
+    RedChannel *channel = &display_channel->base;
+    int src_is_lossy;
+    BitmapData src_bitmap_data;
+    FillBitsType src_send_type;
+
+    src_is_lossy = is_bitmap_lossy(display_channel, drawable->u.alpha_blend.src_bitmap,
+                                   &drawable->u.alpha_blend.src_area, item, &src_bitmap_data);
+    
+    channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_ALPHA_BLEND;
+    fill_base(display_channel, &display_channel->send_data.u.alpha_blend.base, item,
+              sizeof(SpiceMsgDisplayDrawAlphaBlend), item->surface_id);
+    display_channel->send_data.u.alpha_blend.data = drawable->u.alpha_blend;
+    src_send_type = fill_bits(display_channel,
+                              &display_channel->send_data.u.alpha_blend.data.src_bitmap,
+                              item, TRUE);
+
+    if (src_send_type == FILL_BITS_TYPE_COMPRESS_LOSSY) {
+        src_is_lossy = TRUE;
+    } else if (src_send_type == FILL_BITS_TYPE_COMPRESS_LOSSLESS) {
+        src_is_lossy = FALSE;
+    }
+
+    if (src_is_lossy) {
+        surface_lossy_region_update(worker, display_channel, item, FALSE, src_is_lossy);
+    } // else, the area stays lossy/lossless as the destination
+}
+
+static inline void red_lossy_send_qxl_copy_bits(RedWorker *worker,
+                                                DisplayChannel *display_channel,
+                                                Drawable *item)
+{
+    QXLDrawable *drawable = item->qxl_drawable;
+    RedChannel *channel = &display_channel->base;
+    SpiceRect src_rect;
+    int horz_offset;
+    int vert_offset;
+    int src_is_lossy;
+    SpiceRect src_lossy_area;
+
+    channel->send_data.header.type = SPICE_MSG_DISPLAY_COPY_BITS;
+    fill_base(display_channel, &display_channel->send_data.u.copy_bits.base, item,
+              sizeof(SpiceMsgDisplayCopyBits), item->surface_id);
+    display_channel->send_data.u.copy_bits.src_pos = drawable->u.copy_bits.src_pos;
+    
+    horz_offset = drawable->u.copy_bits.src_pos.x - drawable->bbox.left;
+    vert_offset = drawable->u.copy_bits.src_pos.y - drawable->bbox.top;
+
+
+    src_rect.left = drawable->u.copy_bits.src_pos.x;
+    src_rect.top = drawable->u.copy_bits.src_pos.y;
+    src_rect.right = drawable->bbox.right + horz_offset;
+    src_rect.bottom = drawable->bbox.bottom + vert_offset;
+
+    src_is_lossy = is_surface_area_lossy(display_channel, item->surface_id,
+                                         &src_rect, &src_lossy_area);
+
+    surface_lossy_region_update(worker, display_channel, item, FALSE,
+                                src_is_lossy);
+}
+
+static inline void red_lossy_send_qxl_draw_blend(RedWorker *worker,
+                                                 DisplayChannel *display_channel,
+                                                 Drawable *item)
+{
+    QXLDrawable *drawable = item->qxl_drawable;
+    RedChannel *channel = &display_channel->base;
+    int src_is_lossy;
+    BitmapData src_bitmap_data;
+    int dest_is_lossy;
+    SpiceRect dest_lossy_area;
+
+    src_is_lossy = is_bitmap_lossy(display_channel, drawable->u.blend.src_bitmap,
+                                   &drawable->u.blend.src_area, item, &src_bitmap_data);
+    dest_is_lossy = is_surface_area_lossy(display_channel, drawable->surface_id,
+                                          &drawable->bbox, &dest_lossy_area);
+
+    if (!dest_is_lossy && (!src_is_lossy || (src_bitmap_data.type != BITMAP_DATA_TYPE_SURFACE))) {
+        channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_BLEND;
+        fill_base(display_channel, &display_channel->send_data.u.blend.base, item,
+                  sizeof(SpiceMsgDisplayDrawBlend), item->surface_id);
+        display_channel->send_data.u.blend.data = drawable->u.blend;
+        fill_bits(display_channel, &display_channel->send_data.u.blend.data.src_bitmap,
+                  item, FALSE);
+        fill_mask(display_channel, &display_channel->send_data.u.blend.data.mask, item);
+    } else {
+        int resend_surface_ids[2];
+        SpiceRect *resend_areas[2];
+        int num_resend = 0; 
+
+        if (src_is_lossy && (src_bitmap_data.type == BITMAP_DATA_TYPE_SURFACE)) {
+            resend_surface_ids[num_resend] = src_bitmap_data.id;
+            resend_areas[num_resend] = &src_bitmap_data.lossy_rect;
+            num_resend++;
+        }
+
+        if (dest_is_lossy) {
+            resend_surface_ids[num_resend] = item->surface_id;
+            resend_areas[num_resend] = &dest_lossy_area;
+            num_resend++;
+        }
+
+        red_add_lossless_drawable_dependencies(worker, display_channel, item,
+                                               resend_surface_ids, resend_areas, num_resend);
+    }
+}
+
+static inline void red_lossy_send_qxl_draw_blackness(RedWorker *worker,
+                                                     DisplayChannel *display_channel,
+                                                     Drawable *item)
+{
+    QXLDrawable *drawable = item->qxl_drawable;
+    RedChannel *channel = &display_channel->base;
+    int has_mask = !!drawable->u.blackness.mask.bitmap;
+
+    channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_BLACKNESS;
+    fill_base(display_channel, &display_channel->send_data.u.blackness.base, item,
+              sizeof(SpiceMsgDisplayDrawBlackness), item->surface_id);
+    display_channel->send_data.u.blackness.data = drawable->u.blackness;
+    fill_mask(display_channel, &display_channel->send_data.u.blackness.data.mask, item);
+
+    surface_lossy_region_update(worker, display_channel, item, has_mask, FALSE);
+}
+
+static inline void red_lossy_send_qxl_draw_whiteness(RedWorker *worker,
+                                                     DisplayChannel *display_channel,
+                                                     Drawable *item)
+{
+    QXLDrawable *drawable = item->qxl_drawable;
+    RedChannel *channel = &display_channel->base;
+    int has_mask = !!drawable->u.whiteness.mask.bitmap;
+
+    channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_WHITENESS;
+    fill_base(display_channel, &display_channel->send_data.u.whiteness.base, item,
+              sizeof(SpiceMsgDisplayDrawWhiteness), item->surface_id);
+    display_channel->send_data.u.whiteness.data = drawable->u.whiteness;
+    fill_mask(display_channel, &display_channel->send_data.u.whiteness.data.mask, item);
+
+    surface_lossy_region_update(worker, display_channel, item, has_mask, FALSE);
+}
+
+static inline void red_lossy_send_qxl_draw_inverse(RedWorker *worker,
+                                                   DisplayChannel *display_channel,
+                                                   Drawable *item)
+{
+    QXLDrawable *drawable = item->qxl_drawable;
+    RedChannel *channel = &display_channel->base;
+
+    channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_INVERS;
+    fill_base(display_channel, &display_channel->send_data.u.invers.base, item,
+              sizeof(SpiceMsgDisplayDrawInvers), item->surface_id);
+    display_channel->send_data.u.invers.data = drawable->u.invers;
+    fill_mask(display_channel, &display_channel->send_data.u.invers.data.mask, item);
+}
+
+static inline void red_lossy_send_qxl_draw_rop3(RedWorker *worker,
+                                                DisplayChannel *display_channel,
+                                                Drawable *item)
+{
+    QXLDrawable *drawable = item->qxl_drawable;
+    RedChannel *channel = &display_channel->base;
+
+    int src_is_lossy;
+    BitmapData src_bitmap_data;
+    int brush_is_lossy;
+    BitmapData brush_bitmap_data;
+    int dest_is_lossy;
+    SpiceRect dest_lossy_area;
+
+    src_is_lossy = is_bitmap_lossy(display_channel, drawable->u.rop3.src_bitmap,
+                                   &drawable->u.rop3.src_area, item, &src_bitmap_data);
+    brush_is_lossy = is_brush_lossy(display_channel, &drawable->u.rop3.brush, item,
+                                    &brush_bitmap_data);
+    dest_is_lossy = is_surface_area_lossy(display_channel, drawable->surface_id,
+                                          &drawable->bbox, &dest_lossy_area);
+
+    if ((!src_is_lossy || (src_bitmap_data.type != BITMAP_DATA_TYPE_SURFACE)) &&
+        (!brush_is_lossy || (brush_bitmap_data.type != BITMAP_DATA_TYPE_SURFACE)) &&
+        !dest_is_lossy) {
+        int has_mask = !!drawable->u.rop3.mask.bitmap;
+        channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_ROP3;
+        fill_base(display_channel, &display_channel->send_data.u.rop3.base, item,
+                  sizeof(SpiceMsgDisplayDrawRop3), item->surface_id);
+        display_channel->send_data.u.rop3.data = drawable->u.rop3;
+        fill_bits(display_channel, &display_channel->send_data.u.rop3.data.src_bitmap,
+                  item, FALSE);
+        fill_brush(display_channel, &display_channel->send_data.u.rop3.data.brush, item);
+        fill_mask(display_channel, &display_channel->send_data.u.rop3.data.mask, item);
+
+        surface_lossy_region_update(worker, display_channel, item, has_mask, FALSE);
+    } else {
+        int resend_surface_ids[3];
+        SpiceRect *resend_areas[3];
+        int num_resend = 0; 
+
+        if (src_is_lossy && (src_bitmap_data.type == BITMAP_DATA_TYPE_SURFACE)) {
+            resend_surface_ids[num_resend] = src_bitmap_data.id;
+            resend_areas[num_resend] = &src_bitmap_data.lossy_rect;
+            num_resend++;
+        }
+
+        if (brush_is_lossy && (brush_bitmap_data.type == BITMAP_DATA_TYPE_SURFACE)) {
+            resend_surface_ids[num_resend] = brush_bitmap_data.id;
+            resend_areas[num_resend] = &brush_bitmap_data.lossy_rect;
+            num_resend++;
+        }
+
+        if (dest_is_lossy) {
+            resend_surface_ids[num_resend] = item->surface_id;
+            resend_areas[num_resend] = &dest_lossy_area;
+            num_resend++;
+        }
+
+        red_add_lossless_drawable_dependencies(worker, display_channel, item,
+                                               resend_surface_ids, resend_areas, num_resend);
+    }
+}
+
+static inline void red_lossy_send_qxl_draw_stroke(RedWorker *worker,
+                                                  DisplayChannel *display_channel,
+                                                  Drawable *item)
+{
+    QXLDrawable *drawable = item->qxl_drawable;
+    RedChannel *channel = &display_channel->base;
+    int brush_is_lossy;
+    BitmapData brush_bitmap_data;
+    int dest_is_lossy = FALSE;
+    SpiceRect dest_lossy_area;
+    int rop;
+
+    brush_is_lossy = is_brush_lossy(display_channel, &drawable->u.stroke.brush, item,
+                                    &brush_bitmap_data);
+
+    // back_mode is not used at the client. Ignoring.
+    rop = drawable->u.stroke.fore_mode;
+
+    // assuming that if the brush type is solid, the destination can
+    // be lossy, no matter what the rop is. 
+    if (drawable->u.stroke.brush.type != SPICE_BRUSH_TYPE_SOLID &&
+        ((rop & SPICE_ROPD_OP_OR) || (rop & SPICE_ROPD_OP_AND) ||
+        (rop & SPICE_ROPD_OP_XOR))) {
+        dest_is_lossy = is_surface_area_lossy(display_channel, drawable->surface_id,
+                                              &drawable->bbox, &dest_lossy_area);
+    }
+    
+    if (!dest_is_lossy &&
+        (!brush_is_lossy || (brush_bitmap_data.type != BITMAP_DATA_TYPE_SURFACE)))
+    {
+        channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_STROKE;
+        fill_base(display_channel, &display_channel->send_data.u.stroke.base, item,
+                  sizeof(SpiceMsgDisplayDrawStroke), item->surface_id);
+        display_channel->send_data.u.stroke.data = drawable->u.stroke;
+        fill_path(display_channel, &display_channel->send_data.u.stroke.data.path, item->group_id);
+        fill_attr(display_channel, &display_channel->send_data.u.stroke.data.attr, item->group_id);
+        fill_brush(display_channel, &display_channel->send_data.u.stroke.data.brush, item);
+    } else {
+        int resend_surface_ids[2];
+        SpiceRect *resend_areas[2];
+        int num_resend = 0;
+
+        if (brush_is_lossy && (brush_bitmap_data.type == BITMAP_DATA_TYPE_SURFACE)) {
+            resend_surface_ids[num_resend] = brush_bitmap_data.id;
+            resend_areas[num_resend] = &brush_bitmap_data.lossy_rect;
+            num_resend++;
+        }
+
+        // TODO: use the path in order to resend smaller areas
+        if (dest_is_lossy) {
+            resend_surface_ids[num_resend] = drawable->surface_id;
+            resend_areas[num_resend] = &dest_lossy_area;
+            num_resend++;
+        }
+
+        red_add_lossless_drawable_dependencies(worker, display_channel, item,
+                                               resend_surface_ids, resend_areas, num_resend);
+    }
+
+}
+
+static inline void red_lossy_send_qxl_draw_text(RedWorker *worker,
+                                                DisplayChannel *display_channel,
+                                                Drawable *item)
+{
+    QXLDrawable *drawable = item->qxl_drawable;
+    RedChannel *channel = &display_channel->base;
+    int fg_is_lossy;
+    BitmapData fg_bitmap_data;
+    int bg_is_lossy;
+    BitmapData bg_bitmap_data;
+    int dest_is_lossy = FALSE;
+    SpiceRect dest_lossy_area;
+    int rop = 0;
+
+    fg_is_lossy = is_brush_lossy(display_channel, &drawable->u.text.fore_brush, item,
+                                 &fg_bitmap_data);
+    bg_is_lossy = is_brush_lossy(display_channel, &drawable->u.text.back_brush, item,
+                                 &bg_bitmap_data);
+
+    // assuming that if the brush type is solid, the destination can
+    // be lossy, no matter what the rop is.
+    if (drawable->u.text.fore_brush.type != SPICE_BRUSH_TYPE_SOLID) {
+        rop = drawable->u.text.fore_mode;
+    }
+
+    if (drawable->u.text.back_brush.type != SPICE_BRUSH_TYPE_SOLID) {
+        rop |= drawable->u.text.back_mode;
+    }
+
+    if ((rop & SPICE_ROPD_OP_OR) || (rop & SPICE_ROPD_OP_AND) ||
+        (rop & SPICE_ROPD_OP_XOR)) {
+        dest_is_lossy = is_surface_area_lossy(display_channel, drawable->surface_id,
+                                              &drawable->bbox, &dest_lossy_area);
+    }
+
+    if (!dest_is_lossy &&
+        (!fg_is_lossy || (fg_bitmap_data.type != BITMAP_DATA_TYPE_SURFACE)) &&
+        (!bg_is_lossy || (bg_bitmap_data.type != BITMAP_DATA_TYPE_SURFACE))) {
+        channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_TEXT;
+        fill_base(display_channel, &display_channel->send_data.u.text.base, item,
+                  sizeof(SpiceMsgDisplayDrawText), item->surface_id);
+        display_channel->send_data.u.text.data = drawable->u.text;
+        fill_brush(display_channel, &display_channel->send_data.u.text.data.fore_brush, item);
+        fill_brush(display_channel, &display_channel->send_data.u.text.data.back_brush, item);
+        fill_str(display_channel, &display_channel->send_data.u.text.data.str, item->group_id);
+    } else {
+        int resend_surface_ids[3];
+        SpiceRect *resend_areas[3];
+        int num_resend = 0;
+
+        if (fg_is_lossy && (fg_bitmap_data.type == BITMAP_DATA_TYPE_SURFACE)) {
+            resend_surface_ids[num_resend] = fg_bitmap_data.id;
+            resend_areas[num_resend] = &fg_bitmap_data.lossy_rect;
+            num_resend++;
+        }
+
+        if (bg_is_lossy && (bg_bitmap_data.type == BITMAP_DATA_TYPE_SURFACE)) {
+            resend_surface_ids[num_resend] = bg_bitmap_data.id;
+            resend_areas[num_resend] = &bg_bitmap_data.lossy_rect;
+            num_resend++;
+        }
+
+        if (dest_is_lossy) {
+            resend_surface_ids[num_resend] = drawable->surface_id;
+            resend_areas[num_resend] = &dest_lossy_area;
+            num_resend++;
+        }
+        red_add_lossless_drawable_dependencies(worker, display_channel, item,
+                                               resend_surface_ids, resend_areas, num_resend);
+    }
+}
+
+static void red_lossy_send_qxl_drawable(RedWorker *worker, DisplayChannel *display_channel,
+                                   Drawable *item)
+{
+    switch (item->qxl_drawable->type) {
+    case QXL_DRAW_FILL:
+        red_lossy_send_qxl_draw_fill(worker, display_channel, item);
+        break;
+    case QXL_DRAW_OPAQUE:
+        red_lossy_send_qxl_draw_opaque(worker, display_channel, item);
+        break;
+    case QXL_DRAW_COPY:
+        red_lossy_send_qxl_draw_copy(worker, display_channel, item);
+        break;
+    case QXL_DRAW_TRANSPARENT:
+        red_lossy_send_qxl_draw_transparent(worker, display_channel, item);
+        break;
+    case QXL_DRAW_ALPHA_BLEND:
+        red_lossy_send_qxl_draw_alpha_blend(worker, display_channel, item);
+        break;
+    case QXL_COPY_BITS:
+        red_lossy_send_qxl_copy_bits(worker, display_channel, item);
+        break;
+    case QXL_DRAW_BLEND:
+        red_lossy_send_qxl_draw_blend(worker, display_channel, item);
+        break;
+    case QXL_DRAW_BLACKNESS:
+        red_lossy_send_qxl_draw_blackness(worker, display_channel, item);
+        break;
+     case QXL_DRAW_WHITENESS:
+        red_lossy_send_qxl_draw_whiteness(worker, display_channel, item);
+        break;   
+    case QXL_DRAW_INVERS:
+        red_lossy_send_qxl_draw_inverse(worker, display_channel, item);
+        break;
+    case QXL_DRAW_ROP3:
+        red_lossy_send_qxl_draw_rop3(worker, display_channel, item);
+        break;
+    case QXL_DRAW_STROKE:
+        red_lossy_send_qxl_draw_stroke(worker, display_channel, item);
+        break;      
+    case QXL_DRAW_TEXT:
+        red_lossy_send_qxl_draw_text(worker, display_channel, item);
+        break;
+    default:
+        red_error("invalid type");
+    }
+
+    // a message is pending
+    if (display_channel->base.send_data.header.size) {
+        display_begin_send_massage(display_channel, &item->pipe_item);
     }
 }
 
@@ -7889,7 +8509,10 @@ static inline void send_qxl_drawable(DisplayChannel *display_channel, Drawable *
     if (item->stream && red_send_stream_data(display_channel, item)) {
         return;
     }
-    red_send_qxl_drawable(display_channel->base.worker, display_channel, item);
+    if (!display_channel->base.worker->enable_jpeg)
+        red_send_qxl_drawable(display_channel->base.worker, display_channel, item);
+    else
+        red_lossy_send_qxl_drawable(display_channel->base.worker, display_channel, item);
 }
 
 static void red_send_set_ack(RedChannel *channel)
