@@ -405,6 +405,7 @@ typedef struct ImageItem {
     int surface_id;
     int image_format;
     uint32_t image_flags;
+    int can_lossy;
     uint8_t data[0];
 } ImageItem;
 
@@ -5043,6 +5044,7 @@ static void red_add_surface_image(RedWorker *worker, int surface_id)
     item->height = surface->context.height;
     item->stride = stride;
     item->top_down = surface->context.top_down;
+    item->can_lossy = TRUE;
 
     area.top = area.left = 0;
     area.right = surface->context.width;
@@ -7746,6 +7748,11 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
     RedImage *red_image;
     RedWorker *worker;
     SpiceBitmap bitmap;
+    QRegion *surface_lossy_region;
+    int comp_succeeded;
+    int lossy_comp = FALSE;
+    int lz_comp = FALSE;
+    spice_image_compression_t comp_mode;
 
     ASSERT(display_channel && item);
     channel = &display_channel->base;
@@ -7790,11 +7797,54 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
 
     compress_send_data_t comp_send_data;
 
-    if (red_quic_compress_image(display_channel, red_image, &bitmap, &comp_send_data,
-                                worker->mem_slots.internal_groupslot_id)) {
+    comp_mode = display_channel->base.worker->image_compression;
+
+    if ((comp_mode == SPICE_IMAGE_COMPRESS_AUTO_LZ) ||
+        (comp_mode == SPICE_IMAGE_COMPRESS_AUTO_GLZ)) {
+        if (BITMAP_FMT_IS_RGB[item->image_format]) {
+            if (!_stride_is_extra(&bitmap)) {
+                BitmapGradualType grad_level;
+                grad_level = _get_bitmap_graduality_level(display_channel->base.worker,
+                                                          &bitmap,
+                                                          worker->mem_slots.internal_groupslot_id);
+                if (grad_level == BITMAP_GRADUAL_HIGH) {
+                    lossy_comp = worker->enable_jpeg && item->can_lossy &&
+                                 (item->image_format != SPICE_BITMAP_FMT_RGBA);
+                } else {
+                    lz_comp = TRUE;
+                }
+            }
+        } else {
+            lz_comp = TRUE;
+        }
+    }
+
+    if (lossy_comp) {
+        comp_succeeded = red_jpeg_compress_image(display_channel, red_image,
+                                                 &bitmap, &comp_send_data,
+                                                 worker->mem_slots.internal_groupslot_id);
+    } else {
+        if (!lz_comp) {
+            comp_succeeded = red_quic_compress_image(display_channel, red_image, &bitmap,
+                                                     &comp_send_data,
+                                                     worker->mem_slots.internal_groupslot_id);
+        } else {
+            comp_succeeded = red_lz_compress_image(display_channel, red_image, &bitmap,
+                                                   &comp_send_data,
+                                                   worker->mem_slots.internal_groupslot_id);
+        }
+    }
+  
+    surface_lossy_region = &display_channel->surface_client_lossy_region[item->surface_id];
+    if (comp_succeeded) {
         add_buf(channel, BUF_TYPE_RAW, red_image, comp_send_data.raw_size, 0, 0);
         add_buf(channel, BUF_TYPE_COMPRESS_BUF, comp_send_data.comp_buf,
                 comp_send_data.comp_buf_size, 0, 0);
+        if (lossy_comp) {
+            region_add(surface_lossy_region, &display_channel->send_data.u.copy.base.box);
+        } else {
+            region_remove(surface_lossy_region, &display_channel->send_data.u.copy.base.box);
+        }
     } else {
         red_image->descriptor.type = SPICE_IMAGE_TYPE_BITMAP;
         red_image->bitmap = bitmap;
@@ -7802,6 +7852,7 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
         add_buf(channel, BUF_TYPE_RAW, red_image, sizeof(SpiceBitmapImage), 0, 0);
         red_image->bitmap.data = channel->send_data.header.size;
         add_buf(channel, BUF_TYPE_RAW, item->data, bitmap.y * bitmap.stride, 0, 0);
+        region_remove(surface_lossy_region, &display_channel->send_data.u.copy.base.box);
     }
     display_begin_send_massage(display_channel, &item->link);
 }
