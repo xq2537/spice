@@ -49,6 +49,7 @@
 #include "mjpeg_encoder.h"
 #include "red_memslots.h"
 #include "jpeg_encoder.h"
+#include "rect.h"
 
 //#define COMPRESS_STAT
 //#define DUMP_BITMAP
@@ -1337,6 +1338,15 @@ static inline void red_pipe_add_drawable(RedWorker *worker, Drawable *drawable)
     red_pipe_add(&worker->display_channel->base, &drawable->pipe_item);
 }
 
+static inline void red_pipe_add_drawable_to_tail(RedWorker *worker, Drawable *drawable)
+{
+    if (!worker->display_channel) {
+        return;
+    }
+    drawable->refs++;
+    red_pipe_add_tail(&worker->display_channel->base, &drawable->pipe_item);
+}
+
 static inline void red_pipe_add_drawable_after(RedWorker *worker, Drawable *drawable,
                                                Drawable *pos_after)
 {
@@ -1350,6 +1360,15 @@ static inline void red_pipe_add_drawable_after(RedWorker *worker, Drawable *draw
     }
     drawable->refs++;
     red_pipe_add_after(&worker->display_channel->base, &drawable->pipe_item, &pos_after->pipe_item);
+}
+
+static inline PipeItem *red_pipe_get_tail(RedWorker *worker)
+{
+    if (!worker->display_channel) {
+        return NULL;
+    }
+
+    return (PipeItem*)ring_get_tail(&worker->display_channel->base.pipe);
 }
 
 static inline void red_destroy_surface(RedWorker *worker, uint32_t surface_id);
@@ -1370,6 +1389,16 @@ static inline void red_pipe_add_image_item(RedWorker *worker, ImageItem *item)
     }
     item->refs++;
     red_pipe_add(&worker->display_channel->base, &item->link);
+}
+
+static inline void red_pipe_add_image_item_after(RedWorker *worker, ImageItem *item,
+                                                 PipeItem *pos)
+{
+    if (!worker->display_channel) {
+        return;
+    }
+    item->refs++;
+    red_pipe_add_after(&worker->display_channel->base, &item->link, pos);
 }
 
 static inline uint64_t channel_message_serial(RedChannel *channel)
@@ -2335,12 +2364,6 @@ static int is_equal_line_attr(SpiceLineAttr *a1, SpiceLineAttr *a2)
            a1->end_style == a2->end_style && a1->style_nseg == a2->style_nseg &&
            a1->width == a2->width && a1->miter_limit == a2->miter_limit &&
            a1->style_nseg == 0;
-}
-
-static inline int rect_is_equal(const SpiceRect *r1, const SpiceRect *r2)
-{
-    return r1->top == r2->top && r1->left == r2->left &&
-           r1->bottom == r2->bottom && r1->right == r2->right;
 }
 
 // partial imp
@@ -4696,6 +4719,91 @@ static void red_update_area(RedWorker *worker, const SpiceRect *area, int surfac
 
 #else
 
+/*
+    Renders drawables for updating the requested area, but only drawables that are older
+    than 'last' (exclusive).
+*/
+static void red_update_area_till(RedWorker *worker, const SpiceRect *area, int surface_id,
+                                 Drawable *last)
+{
+    // TODO: if we use UPDATE_AREA_BY_TREE, a corresponding red_update_area_till
+    // should be implemented
+
+    RedSurface *surface;
+    Drawable *surface_last = NULL;
+    Ring *ring;
+    RingItem *ring_item;
+    Drawable *now;
+    QRegion rgn;
+
+    ASSERT(last);
+    ASSERT(ring_item_is_linked(&last->list_link));
+
+    surface = &worker->surfaces[surface_id];
+
+    if (surface_id != last->surface_id) {
+        // find the nearest older drawable from the appropriate surface
+        ring = &worker->current_list;
+        ring_item = &last->list_link;
+        while ((ring_item = ring_next(ring, ring_item))) {
+            now = SPICE_CONTAINEROF(ring_item, Drawable, list_link);
+            if (now->surface_id == surface_id) {
+                surface_last = now;
+                break;
+            }
+        }
+    } else {
+        ring_item = ring_next(&surface->current_list, &last->surface_list_link);
+        if (ring_item) {
+            surface_last = SPICE_CONTAINEROF(ring_item, Drawable, surface_list_link);
+        }
+    }
+
+    if (!surface_last) {
+        return;
+    }
+
+    ring = &surface->current_list;
+    ring_item = &surface_last->surface_list_link;
+
+    region_init(&rgn);
+    region_add(&rgn, area);
+
+    // find the first older drawable that intersects with the area 
+    do {
+        now = SPICE_CONTAINEROF(ring_item, Drawable, surface_list_link);
+        if (region_intersects(&rgn, &now->tree_item.base.rgn)) {
+            surface_last = now;
+            break;
+        }
+    } while ((ring_item = ring_next(ring, ring_item)));
+
+    region_destroy(&rgn);
+    
+    if (!surface_last) {
+        return;
+    }
+
+    do {
+        Container *container;
+
+        ring_item = ring_get_tail(&surface->current_list);
+        now = SPICE_CONTAINEROF(ring_item, Drawable, surface_list_link);
+        now->refs++;
+        container = now->tree_item.base.container;
+        current_remove_drawable(worker, now);
+        container_cleanup(worker, container);
+        /* red_draw_drawable may call red_update_area for the surfaces 'now' depends on. Notice,
+           that it is valid to call red_update_area in this case and not red_update_area_till:
+           It is impossible that there was newer item then 'last' in one of the surfaces
+           that red_update_area is called for, Otherwise, 'now' would have already been rendered.
+           See the call for red_handle_depends_on_target_surface in red_process_drawable */
+        red_draw_drawable(worker, now);
+        release_drawable(worker, now);
+    } while (now != surface_last);
+    validate_area(worker, area, surface_id);
+}
+
 static void red_update_area(RedWorker *worker, const SpiceRect *area, int surface_id)
 {
     RedSurface *surface;
@@ -5012,25 +5120,27 @@ static void red_current_flush(RedWorker *worker, int surface_id)
     red_current_clear(worker, surface_id);
 }
 
-static void red_add_surface_image(RedWorker *worker, int surface_id)
+// adding the pipe item after pos. If pos == NULL, adding to head.
+static ImageItem *red_add_surface_area_image(RedWorker *worker, int surface_id, SpiceRect *area,
+                                             PipeItem *pos, int can_lossy)
 {
     ImageItem *item;
     int stride;
-    SpiceRect area;
-    SpiceCanvas *canvas = worker->surfaces[surface_id].context.canvas;
-    RedSurface *surface;
+    int width;
+    int height;
+    RedSurface *surface = &worker->surfaces[surface_id];
+    SpiceCanvas *canvas = surface->context.canvas;
+    int bpp;
     int all_set;
 
-    surface = &worker->surfaces[surface_id];
+    ASSERT(area);
 
-    if (!worker->display_channel || !surface->context.canvas) {
-        return;
-    }
-
-    stride = abs(surface->context.stride);
-
-    item = (ImageItem *)spice_malloc_n_m(surface->context.height, stride,
-                                         sizeof(ImageItem));
+    width = area->right - area->left;
+    height = area->bottom - area->top;
+    bpp = SPICE_SURFACE_FMT_DEPTH(surface->context.format) / 8;
+    stride = SPICE_ALIGN(width * bpp, 4); 
+                                      
+    item = (ImageItem *)spice_malloc_n_m(height, stride, sizeof(ImageItem));
 
     red_pipe_item_init(&item->link, PIPE_ITEM_TYPE_IMAGE);
 
@@ -5039,17 +5149,15 @@ static void red_add_surface_image(RedWorker *worker, int surface_id)
     item->image_format =
         surface_format_to_image_type(surface->context.format);
     item->image_flags = 0;
-    item->pos.x = item->pos.y = 0;
-    item->width = surface->context.width;
-    item->height = surface->context.height;
+    item->pos.x = area->left;
+    item->pos.y = area->top;
+    item->width = width;
+    item->height = height;
     item->stride = stride;
     item->top_down = surface->context.top_down;
-    item->can_lossy = TRUE;
+    item->can_lossy = can_lossy;
 
-    area.top = area.left = 0;
-    area.right = surface->context.width;
-    area.bottom = surface->context.height;
-    canvas->ops->read_bits(canvas, item->data, stride, &area);
+    canvas->ops->read_bits(canvas, item->data, stride, area);
 
     /* For 32bit non-primary surfaces we need to keep any non-zero
        high bytes as the surface may be used as source to an alpha_blend */
@@ -5063,8 +5171,34 @@ static void red_add_surface_image(RedWorker *worker, int surface_id)
         }
     }
 
-    red_pipe_add_image_item(worker, item);
+    if (!pos) {
+        red_pipe_add_image_item(worker, item);
+    } else {
+        red_pipe_add_image_item_after(worker, item, pos);
+    }
+
     release_image_item(item);
+
+    return item;
+}
+
+static void red_add_surface_image(RedWorker *worker, int surface_id)
+{
+    SpiceRect area;
+    RedSurface *surface;
+    ImageItem *item;
+
+    surface = &worker->surfaces[surface_id];
+
+    if (!worker->display_channel || !surface->context.canvas) {
+        return;
+    }
+
+    area.top = area.left = 0;
+    area.right = surface->context.width;
+    area.bottom = surface->context.height;
+
+    item = red_add_surface_area_image(worker, surface_id, &area, NULL, TRUE);
     display_channel_push(worker);
 }
 
@@ -6948,6 +7082,150 @@ SPICE_GNUC_UNUSED static void surface_lossy_region_update(RedWorker *worker, Dis
         region_destroy(&clip_rgn);
         region_destroy(&draw_region);
     } // else SPICE_CLIP_TYPE_PATH and lossless: leave the area as is
+}
+
+static inline int drawable_intersects_with_areas(Drawable *drawable, int surface_ids[],
+                                                 SpiceRect *surface_areas[],
+                                                 int num_surfaces) 
+{   
+    int i;
+    for (i = 0; i < num_surfaces; i++) {
+        if (surface_ids[i] == drawable->qxl_drawable->surface_id) {
+            if (rect_intersects(surface_areas[i], &drawable->qxl_drawable->bbox)) {
+                return TRUE;
+            }
+        }
+    }
+    return FALSE;
+}
+
+static int pipe_rendered_drawables_intersect_with_areas(RedWorker *worker,
+                                                        DisplayChannel *display_channel,
+                                                        int surface_ids[],
+                                                        SpiceRect *surface_areas[],
+                                                        int num_surfaces)
+{
+    PipeItem *pipe_item;
+    Ring *pipe;
+
+    ASSERT(num_surfaces);
+    pipe = &display_channel->base.pipe;
+
+    for (pipe_item = (PipeItem *)ring_get_head(pipe);
+         pipe_item;
+         pipe_item = (PipeItem *)ring_next(pipe, &pipe_item->link))
+    {
+        Drawable *drawable;
+
+        if (pipe_item->type != PIPE_ITEM_TYPE_DRAW)
+            continue;
+        drawable = SPICE_CONTAINEROF(pipe_item, Drawable, pipe_item);
+      
+        if (ring_item_is_linked(&drawable->list_link))
+            continue; // item hasn't been rendered
+
+        if (drawable_intersects_with_areas(drawable, surface_ids, surface_areas, num_surfaces)) {
+            return TRUE;
+        }
+    }
+
+    return FALSE;
+}
+
+static void red_pipe_replace_rendered_drawables_with_images(RedWorker *worker,
+                                                            DisplayChannel *display_channel)
+{
+    PipeItem *pipe_item;
+    Ring *pipe;
+
+    pipe = &display_channel->base.pipe;
+    // going from the newest to oldest
+    for (pipe_item = (PipeItem *)ring_get_head(pipe);
+         pipe_item;
+         pipe_item = (PipeItem *)ring_next(pipe, &pipe_item->link)) {
+
+        Drawable *drawable;
+        ImageItem *image;
+        if (pipe_item->type != PIPE_ITEM_TYPE_DRAW)
+            continue;
+        drawable = SPICE_CONTAINEROF(pipe_item, Drawable, pipe_item);
+        if (ring_item_is_linked(&drawable->list_link))
+            continue; // item hasn't been rendered
+        image = red_add_surface_area_image(worker, drawable->qxl_drawable->surface_id,
+                                           &drawable->qxl_drawable->bbox, pipe_item, TRUE);
+
+        ASSERT(image);
+        red_pipe_remove_drawable(worker, drawable);
+        pipe_item = &image->link;
+    }
+}
+
+SPICE_GNUC_UNUSED static void red_add_lossless_drawable_dependencies(RedWorker *worker,
+                                                                     DisplayChannel *display_channel,
+                                                                     Drawable *item,
+                                                                     int deps_surfaces_ids[],
+                                                                     SpiceRect *deps_areas[],
+                                                                     int num_deps)
+{
+    QXLDrawable *drawable = item->qxl_drawable;
+    int sync_rendered = FALSE;
+    int i;
+
+
+    if (!ring_item_is_linked(&item->list_link)) {
+        /* drawable was already rendered, we may not be able to retrieve the lossless data
+           for the lossy areas */
+        sync_rendered = TRUE;
+
+        // checking if the drawable itself or one of the other commands
+        // that were rendered, affected the areas that need to be resent
+        if (!drawable_intersects_with_areas(item, deps_surfaces_ids,
+                                            deps_areas, num_deps)) {
+            if (pipe_rendered_drawables_intersect_with_areas(worker, display_channel,
+                                                             deps_surfaces_ids,
+                                                             deps_areas,
+                                                             num_deps)) {
+                sync_rendered = TRUE;
+            }
+        } else {
+            sync_rendered = TRUE;
+        }
+    } else {
+        sync_rendered = FALSE;
+        for (i = 0; i < num_deps; i++) {
+            red_update_area_till(worker, deps_areas[i], deps_surfaces_ids[i], item);
+        }
+    }
+
+    if (!sync_rendered) {
+        // pushing the pipe item back to the pipe
+        red_pipe_add_drawable_to_tail(worker, item);
+        // the surfaces areas will be sent as DRAW_COPY commands, that
+        // will be executed before the current drawable
+        for (i = 0; i < num_deps; i++) {
+            red_add_surface_area_image(worker, deps_surfaces_ids[i], deps_areas[i],
+                                       red_pipe_get_tail(worker), FALSE);
+
+        }
+    } else {
+        int drawable_surface_id[1];
+        SpiceRect *drawable_bbox[1];
+
+        drawable_surface_id[0] = drawable->surface_id;
+        drawable_bbox[0] = &drawable->bbox;
+
+        // check if the other rendered images in the pipe have updated the drawable bbox
+        if (pipe_rendered_drawables_intersect_with_areas(worker, display_channel,
+                                                         drawable_surface_id,
+                                                         drawable_bbox,
+                                                         1)) {
+            red_pipe_replace_rendered_drawables_with_images(worker, display_channel);
+        }
+
+
+        red_add_surface_area_image(worker, drawable->surface_id, &drawable->bbox,
+                                   red_pipe_get_tail(worker), TRUE);
+    }
 }
 
 static inline void red_send_qxl_drawable(RedWorker *worker, DisplayChannel *display_channel,
