@@ -268,6 +268,7 @@ struct NewCacheItem {
     uint64_t id;
     uint64_t sync[MAX_CACHE_CLIENTS];
     size_t size;
+    int lossy;
 };
 
 typedef struct CacheItem CacheItem;
@@ -5969,6 +5970,7 @@ typedef struct compress_send_data_t {
     uint32_t comp_buf_size;
     SPICE_ADDRESS  *plt_ptr;
     uint8_t    *flags_ptr;
+    int is_lossy;
 } compress_send_data_t;
 
 
@@ -6034,6 +6036,7 @@ static inline int red_glz_compress_image(DisplayChannel *display_channel,
     o_comp_data->comp_buf_size = size;
     o_comp_data->plt_ptr = NULL;
     o_comp_data->flags_ptr = NULL;
+    o_comp_data->is_lossy = FALSE;
 
     stat_compress_add(&display_channel->glz_stat, start_time, src->stride * src->y,
                       o_comp_data->comp_buf_size);
@@ -6121,6 +6124,8 @@ static inline int red_lz_compress_image(DisplayChannel *display_channel,
         o_comp_data->plt_ptr = &(dest->lz_plt.palette);
         o_comp_data->flags_ptr = &(dest->lz_plt.flags);
     }
+
+    o_comp_data->is_lossy = FALSE;
     stat_compress_add(&display_channel->lz_stat, start_time, src->stride * src->y,
                       o_comp_data->comp_buf_size);
     return TRUE;
@@ -6263,6 +6268,7 @@ static int red_jpeg_compress_image(DisplayChannel *display_channel, RedImage *de
     o_comp_data->comp_buf_size = size;
     o_comp_data->plt_ptr = NULL;
     o_comp_data->flags_ptr = NULL;
+    o_comp_data->is_lossy = TRUE;
     stat_compress_add(&display_channel->jpeg_stat, start_time, src->stride * src->y,
                       o_comp_data->comp_buf_size);
     return TRUE;
@@ -6409,6 +6415,7 @@ static inline int red_quic_compress_image(DisplayChannel *display_channel, RedIm
     o_comp_data->comp_buf_size = size << 2;
     o_comp_data->plt_ptr = NULL;
     o_comp_data->flags_ptr = NULL;
+    o_comp_data->is_lossy = FALSE;
 
     stat_compress_add(&display_channel->quic_stat, start_time, src->stride * src->y,
                       o_comp_data->comp_buf_size);
@@ -6419,6 +6426,7 @@ static inline int red_quic_compress_image(DisplayChannel *display_channel, RedIm
 #define MIN_DIMENSION_TO_QUIC 3
 static inline int red_compress_image(DisplayChannel *display_channel,
                                      RedImage *dest, SpiceBitmap *src, Drawable *drawable,
+                                     int can_lossy,
                                      compress_send_data_t* o_comp_data)
 {
     spice_image_compression_t image_compression =
@@ -6472,7 +6480,7 @@ static inline int red_compress_image(DisplayChannel *display_channel,
         red_printf("QUIC compress");
 #endif
         // if bitmaps is picture-like, compress it using jpeg
-        if (display_channel->base.worker->enable_jpeg &&
+        if (can_lossy && display_channel->base.worker->enable_jpeg &&
             ((image_compression == SPICE_IMAGE_COMPRESS_AUTO_LZ) ||
             (image_compression == SPICE_IMAGE_COMPRESS_AUTO_GLZ))) {
             if (src->format != SPICE_BITMAP_FMT_RGBA) {
@@ -6526,15 +6534,18 @@ static inline int red_compress_image(DisplayChannel *display_channel,
 }
 
 static inline void red_display_add_image_to_pixmap_cache(DisplayChannel *display_channel,
-                                                         QXLImage *qxl_image, RedImage *io_image)
+                                                         QXLImage *qxl_image, RedImage *io_image,
+                                                         int is_lossy)
 {
     if ((qxl_image->descriptor.flags & QXL_IMAGE_CACHE)) {
         ASSERT(qxl_image->descriptor.width * qxl_image->descriptor.height > 0);
-        if (pixmap_cache_add(display_channel->pixmap_cache, qxl_image->descriptor.id,
-                             qxl_image->descriptor.width * qxl_image->descriptor.height,
-                             display_channel)) {
-            io_image->descriptor.flags |= SPICE_IMAGE_FLAGS_CACHE_ME;
-            stat_inc_counter(display_channel->add_to_cache_counter, 1);
+        if (!(io_image->descriptor.flags & SPICE_IMAGE_FLAGS_CACHE_REPLACE_ME)) {
+            if (pixmap_cache_add(display_channel->pixmap_cache, qxl_image->descriptor.id,
+                                 qxl_image->descriptor.width * qxl_image->descriptor.height, is_lossy,
+                                 display_channel)) {
+                io_image->descriptor.flags |= SPICE_IMAGE_FLAGS_CACHE_ME;
+                stat_inc_counter(display_channel->add_to_cache_counter, 1);
+            }
         }
     }
 
@@ -6545,7 +6556,8 @@ static inline void red_display_add_image_to_pixmap_cache(DisplayChannel *display
 
 /* if the number of times fill_bits can be called per one qxl_drawable increases -
    MAX_LZ_DRAWABLE_INSTANCES must be increased as well */
-static void fill_bits(DisplayChannel *display_channel, QXLPHYSICAL *in_bitmap, Drawable *drawable)
+static void fill_bits(DisplayChannel *display_channel, QXLPHYSICAL *in_bitmap,
+                      Drawable *drawable, int can_lossy)
 {
     RedChannel *channel = &display_channel->base;
     RedWorker *worker = channel->worker;
@@ -6577,12 +6589,26 @@ static void fill_bits(DisplayChannel *display_channel, QXLPHYSICAL *in_bitmap, D
     memslot_id = get_memslot_id(&worker->mem_slots, *in_bitmap);
     *in_bitmap = channel->send_data.header.size;
     if ((qxl_image->descriptor.flags & QXL_IMAGE_CACHE)) {
+        int lossy_cache_item;
         if (pixmap_cache_hit(display_channel->pixmap_cache, image->descriptor.id,
-                             display_channel)) {
-            image->descriptor.type = SPICE_IMAGE_TYPE_FROM_CACHE;
-            add_buf(channel, BUF_TYPE_RAW, image, sizeof(SpiceImageDescriptor), 0, 0);
-            stat_inc_counter(display_channel->cache_hits_counter, 1);
-            return;
+                             &lossy_cache_item, display_channel)) {
+            if (can_lossy || !lossy_cache_item) {
+                if (!worker->enable_jpeg || lossy_cache_item) {
+                    image->descriptor.type = SPICE_IMAGE_TYPE_FROM_CACHE;
+                } else {
+                    // making sure, in multiple monitor scenario, that lossy items that
+                    // should have been replaced with lossless data by one display channel,
+                    // will be retrieved as lossless by another display channel.
+                    image->descriptor.type = SPICE_IMAGE_TYPE_FROM_CACHE_LOSSLESS;
+                }
+                add_buf(channel, BUF_TYPE_RAW, image, sizeof(SpiceImageDescriptor), 0, 0);
+                stat_inc_counter(display_channel->cache_hits_counter, 1);
+                return;
+            } else {
+                pixmap_cache_set_lossy(display_channel->pixmap_cache, qxl_image->descriptor.id,
+                                       FALSE);
+                image->descriptor.flags |= SPICE_IMAGE_FLAGS_CACHE_REPLACE_ME;
+            }
         }
     }
 
@@ -6612,12 +6638,12 @@ static void fill_bits(DisplayChannel *display_channel, QXLPHYSICAL *in_bitmap, D
            in order to prevent starvation in the client between pixmap_cache and
            global dictionary (in cases of multiple monitors) */
         if (!red_compress_image(display_channel, image, &qxl_image->bitmap,
-                                drawable, &comp_send_data)) {
+                                drawable, can_lossy, &comp_send_data)) {
             uint32_t y;
             uint32_t stride;
             SPICE_ADDRESS image_data;
 
-            red_display_add_image_to_pixmap_cache(display_channel, qxl_image, image);
+            red_display_add_image_to_pixmap_cache(display_channel, qxl_image, image, FALSE);
 
             image->bitmap = qxl_image->bitmap;
             y = image->bitmap.y;
@@ -6638,7 +6664,8 @@ static void fill_bits(DisplayChannel *display_channel, QXLPHYSICAL *in_bitmap, D
                 add_buf(channel, BUF_TYPE_CHUNK, data, y * stride, memslot_id, drawable->group_id);
             }
         } else {
-            red_display_add_image_to_pixmap_cache(display_channel, qxl_image, image);
+            red_display_add_image_to_pixmap_cache(display_channel, qxl_image, image,
+                                                  comp_send_data.is_lossy);
 
             add_buf((RedChannel *)display_channel, BUF_TYPE_RAW, image, comp_send_data.raw_size,
                     0, 0);
@@ -6652,7 +6679,7 @@ static void fill_bits(DisplayChannel *display_channel, QXLPHYSICAL *in_bitmap, D
         }
         break;
     case SPICE_IMAGE_TYPE_QUIC:
-        red_display_add_image_to_pixmap_cache(display_channel, qxl_image, image);
+        red_display_add_image_to_pixmap_cache(display_channel, qxl_image, image, FALSE);
         image->quic = qxl_image->quic;
         add_buf(channel, BUF_TYPE_RAW, image, sizeof(SpiceQUICImage), 0, 0);
         add_buf(channel, BUF_TYPE_CHUNK, qxl_image->quic.data, qxl_image->quic.data_size,
@@ -6666,7 +6693,7 @@ static void fill_bits(DisplayChannel *display_channel, QXLPHYSICAL *in_bitmap, D
 static void fill_brush(DisplayChannel *display_channel, SpiceBrush *brush, Drawable *drawable)
 {
     if (brush->type == SPICE_BRUSH_TYPE_PATTERN) {
-        fill_bits(display_channel, &brush->u.pattern.pat, drawable);
+        fill_bits(display_channel, &brush->u.pattern.pat, drawable, FALSE);
     }
 }
 
@@ -6677,10 +6704,10 @@ static void fill_mask(DisplayChannel *display_channel, SpiceQMask *mask, Drawabl
             spice_image_compression_t save_img_comp =
                 display_channel->base.worker->image_compression;
             display_channel->base.worker->image_compression = SPICE_IMAGE_COMPRESS_OFF;
-            fill_bits(display_channel, &mask->bitmap, drawable);
+            fill_bits(display_channel, &mask->bitmap, drawable, FALSE);
             display_channel->base.worker->image_compression = save_img_comp;
         } else {
-            fill_bits(display_channel, &mask->bitmap, drawable);
+            fill_bits(display_channel, &mask->bitmap, drawable, FALSE);
         }
     }
 }
@@ -6781,7 +6808,8 @@ static inline void red_send_qxl_drawable(RedWorker *worker, DisplayChannel *disp
         fill_base(display_channel, &display_channel->send_data.u.opaque.base, item,
                   sizeof(SpiceMsgDisplayDrawOpaque), item->surface_id);
         display_channel->send_data.u.opaque.data = drawable->u.opaque;
-        fill_bits(display_channel, &display_channel->send_data.u.opaque.data.src_bitmap, item);
+        fill_bits(display_channel, &display_channel->send_data.u.opaque.data.src_bitmap,
+                  item, FALSE);
         fill_brush(display_channel, &display_channel->send_data.u.opaque.data.brush, item);
         fill_mask(display_channel, &display_channel->send_data.u.opaque.data.mask, item);
         break;
@@ -6790,7 +6818,7 @@ static inline void red_send_qxl_drawable(RedWorker *worker, DisplayChannel *disp
         fill_base(display_channel, &display_channel->send_data.u.copy.base, item,
                   sizeof(SpiceMsgDisplayDrawCopy), item->surface_id);
         display_channel->send_data.u.copy.data = drawable->u.copy;
-        fill_bits(display_channel, &display_channel->send_data.u.copy.data.src_bitmap, item);
+        fill_bits(display_channel, &display_channel->send_data.u.copy.data.src_bitmap, item, FALSE);
         fill_mask(display_channel, &display_channel->send_data.u.copy.data.mask, item);
         break;
     case QXL_DRAW_TRANSPARENT:
@@ -6798,14 +6826,16 @@ static inline void red_send_qxl_drawable(RedWorker *worker, DisplayChannel *disp
         fill_base(display_channel, &display_channel->send_data.u.transparent.base, item,
                   sizeof(SpiceMsgDisplayDrawTransparent), item->surface_id);
         display_channel->send_data.u.transparent.data = drawable->u.transparent;
-        fill_bits(display_channel, &display_channel->send_data.u.transparent.data.src_bitmap, item);
+        fill_bits(display_channel, &display_channel->send_data.u.transparent.data.src_bitmap,
+                  item, FALSE);
         break;
     case QXL_DRAW_ALPHA_BLEND:
         channel->send_data.header.type = SPICE_MSG_DISPLAY_DRAW_ALPHA_BLEND;
         fill_base(display_channel, &display_channel->send_data.u.alpha_blend.base, item,
                   sizeof(SpiceMsgDisplayDrawAlphaBlend), item->surface_id);
         display_channel->send_data.u.alpha_blend.data = drawable->u.alpha_blend;
-        fill_bits(display_channel, &display_channel->send_data.u.alpha_blend.data.src_bitmap, item);
+        fill_bits(display_channel, &display_channel->send_data.u.alpha_blend.data.src_bitmap,
+                  item, FALSE);
         break;
     case QXL_COPY_BITS:
         channel->send_data.header.type = SPICE_MSG_DISPLAY_COPY_BITS;
@@ -6818,7 +6848,8 @@ static inline void red_send_qxl_drawable(RedWorker *worker, DisplayChannel *disp
         fill_base(display_channel, &display_channel->send_data.u.blend.base, item,
                   sizeof(SpiceMsgDisplayDrawBlend), item->surface_id);
         display_channel->send_data.u.blend.data = drawable->u.blend;
-        fill_bits(display_channel, &display_channel->send_data.u.blend.data.src_bitmap, item);
+        fill_bits(display_channel, &display_channel->send_data.u.blend.data.src_bitmap,
+                  item, FALSE);
         fill_mask(display_channel, &display_channel->send_data.u.blend.data.mask, item);
         break;
     case QXL_DRAW_BLACKNESS:
@@ -6847,7 +6878,8 @@ static inline void red_send_qxl_drawable(RedWorker *worker, DisplayChannel *disp
         fill_base(display_channel, &display_channel->send_data.u.rop3.base, item,
                   sizeof(SpiceMsgDisplayDrawRop3), item->surface_id);
         display_channel->send_data.u.rop3.data = drawable->u.rop3;
-        fill_bits(display_channel, &display_channel->send_data.u.rop3.data.src_bitmap, item);
+        fill_bits(display_channel, &display_channel->send_data.u.rop3.data.src_bitmap,
+                  item, FALSE);
         fill_brush(display_channel, &display_channel->send_data.u.rop3.data.brush, item);
         fill_mask(display_channel, &display_channel->send_data.u.rop3.data.mask, item);
         break;
@@ -7638,7 +7670,7 @@ static void red_display_send_upgrade(DisplayChannel *display_channel, UpgradeIte
     add_buf(channel, BUF_TYPE_RAW, &item->n_rects, sizeof(uint32_t), 0, 0);
     add_buf(channel, BUF_TYPE_RAW, item->rects, sizeof(SpiceRect) * item->n_rects, 0, 0);
     copy->data = qxl_drawable->u.copy;
-    fill_bits(display_channel, &copy->data.src_bitmap, item->drawable);
+    fill_bits(display_channel, &copy->data.src_bitmap, item->drawable, FALSE);
 
     display_begin_send_massage(display_channel, &item->base);
 }

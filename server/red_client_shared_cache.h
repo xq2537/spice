@@ -35,7 +35,7 @@
 #endif
 
 
-static int FUNC_NAME(hit)(CACHE *cache, uint64_t id, CHANNEL *channel)
+static int FUNC_NAME(hit)(CACHE *cache, uint64_t id, int *lossy, CHANNEL *channel)
 {
     NewCacheItem *item;
     uint64_t serial;
@@ -51,6 +51,7 @@ static int FUNC_NAME(hit)(CACHE *cache, uint64_t id, CHANNEL *channel)
             ASSERT(channel->base.id < MAX_CACHE_CLIENTS)
             item->sync[channel->base.id] = serial;
             cache->sync[channel->base.id] = serial;
+            *lossy = item->lossy;
             break;
         }
         item = item->next;
@@ -60,7 +61,25 @@ static int FUNC_NAME(hit)(CACHE *cache, uint64_t id, CHANNEL *channel)
     return !!item;
 }
 
-static int FUNC_NAME(add)(CACHE *cache, uint64_t id, uint32_t size, CHANNEL *channel)
+static int FUNC_NAME(set_lossy)(CACHE *cache, uint64_t id, int lossy)
+{
+    NewCacheItem *item;
+    pthread_mutex_lock(&cache->lock);
+
+    item = cache->hash_table[CACHE_HASH_KEY(id)];
+
+    while (item) {
+        if (item->id == id) {
+            item->lossy = lossy;
+            break;
+        }
+        item = item->next;
+   } 
+    pthread_mutex_unlock(&cache->lock);
+    return !!item;
+}
+
+static int FUNC_NAME(add)(CACHE *cache, uint64_t id, uint32_t size, int lossy, CHANNEL *channel)
 {
     NewCacheItem *item;
     uint64_t serial;
@@ -119,6 +138,7 @@ static int FUNC_NAME(add)(CACHE *cache, uint64_t id, uint32_t size, CHANNEL *cha
     ring_add(&cache->lru, &item->lru_link);
     item->id = id;
     item->size = size;
+    item->lossy = lossy;
     memset(item->sync, 0, sizeof(item->sync));
     item->sync[channel->base.id] = serial;
     cache->sync[channel->base.id] = serial;

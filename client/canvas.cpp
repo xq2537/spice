@@ -91,6 +91,7 @@ void Canvas::localalize_image(SPICE_ADDRESS* in_bitmap)
     case SPICE_IMAGE_TYPE_JPEG:
         break;
     case SPICE_IMAGE_TYPE_FROM_CACHE:
+    case SPICE_IMAGE_TYPE_FROM_CACHE_LOSSLESS:
         break;
     default:
         THROW("invalid image type %u", image->type);

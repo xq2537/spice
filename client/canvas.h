@@ -163,17 +163,38 @@ public:
         cache->add(id, surface);
     }
 
+    static void op_put_lossy(SpiceImageCache *c, uint64_t id, pixman_image_t *surface)
+    {
+        PixmapCache* cache = reinterpret_cast<PixmapCache*>(c);
+        cache->add(id, surface, TRUE);
+    }
+
+    static void op_replace_lossy(SpiceImageCache *c, uint64_t id, pixman_image_t *surface)
+    {
+        PixmapCache* cache = reinterpret_cast<PixmapCache*>(c);
+        cache->replace(id, surface);
+    }
+
     static pixman_image_t* op_get(SpiceImageCache *c, uint64_t id)
     {
         PixmapCache* cache = reinterpret_cast<PixmapCache*>(c);
         return cache->get(id);
     }
 
+    static pixman_image_t* op_get_lossless(SpiceImageCache *c, uint64_t id)
+    {
+        PixmapCache* cache = reinterpret_cast<PixmapCache*>(c);
+        return cache->get_lossless(id);
+    }
+
     SpiceImageCacheBase()
     {
         static SpiceImageCacheOps cache_ops = {
             op_put,
-            op_get
+            op_get,
+            op_put_lossy,
+            op_replace_lossy,
+            op_get_lossless
         };
         base.ops = &cache_ops;
     }

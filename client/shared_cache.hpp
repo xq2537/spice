@@ -41,7 +41,7 @@ public:
         clear();
     }
 
-    void add(uint64_t id, T* data)
+    void add(uint64_t id, T* data, bool is_lossy = FALSE)
     {
         Lock lock(_lock);
         Item** item = &_hash[key(id)];
@@ -53,7 +53,7 @@ public:
             }
             item = &(*item)->next;
         }
-        *item = new Item(id, data);
+        *item = new Item(id, data, is_lossy);
         _new_item_cond.notify_all();
     }
 
@@ -79,6 +79,68 @@ public:
 
             return Treat::get(item->data);
         }
+    }
+
+    T* get_lossless(uint64_t id)
+    {
+        Lock lock(_lock);
+        Item* item = _hash[key(id)];
+
+        for (;;) {
+            if (!item) {
+                if (_aborting) {
+                    THROW("%s aborting", Treat::name());
+                }
+                _new_item_cond.wait(lock);
+                item = _hash[key(id)];
+                continue;
+            }
+
+            if (item->id != id) {
+                item = item->next;
+                continue;
+            }
+            break;
+        }
+
+        // item has been retreived. Now checking if lossless
+        for (;;) {
+            if (item->lossy) {
+                if (_aborting) {
+                    THROW("%s aborting", Treat::name());
+                }
+                _replace_data_cond.wait(lock);
+                continue;
+            }
+
+            return Treat::get(item->data);
+        }
+    }
+
+    void replace(uint64_t id, T* data, bool is_lossy = FALSE)
+    {
+        Lock lock(_lock);
+        Item* item = _hash[key(id)];
+
+        for (;;) {
+            if (!item) {
+                if (_aborting) {
+                    THROW("%s aborting", Treat::name());
+                }
+                _new_item_cond.wait(lock);
+                item = _hash[key(id)];
+                continue;
+            }
+
+            if (item->id != id) {
+                item = item->next;
+                continue;
+            }
+
+            item->replace(data, is_lossy);
+            break;
+        }
+        _replace_data_cond.notify_all();
     }
 
     void remove(uint64_t id)
@@ -125,26 +187,36 @@ private:
 private:
     class Item {
     public:
-        Item(uint64_t in_id, T* data)
+        Item(uint64_t in_id, T* data, bool is_lossy = FALSE)
             : id (in_id)
             , refs (1)
             , next (NULL)
-            , data (Treat::get(data)) {}
+            , data (Treat::get(data))
+            , lossy (is_lossy) {}
 
         ~Item()
         {
             Treat::release(data);
         }
 
+        void replace(T* new_data, bool is_lossy = FALSE)
+        {
+            Treat::release(data);
+            data = Treat::get(new_data);
+            lossy = is_lossy;
+        }
+
         uint64_t id;
         int refs;
         Item* next;
         T* data;
+        bool lossy;
     };
 
     Item* _hash[HASH_SIZE];
     Mutex _lock;
     Condition _new_item_cond;
+    Condition _replace_data_cond;
     bool _aborting;
 };
 

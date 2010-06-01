@@ -41,6 +41,16 @@ typedef struct {
                 pixman_image_t *surface);
     pixman_image_t *(*get)(SpiceImageCache *cache,
                            uint64_t id);
+#ifdef SW_CANVAS_CACHE
+    void (*put_lossy)(SpiceImageCache *cache,
+                      uint64_t id,
+                      pixman_image_t *surface);
+    void (*replace_lossy)(SpiceImageCache *cache,
+                          uint64_t id,
+                          pixman_image_t *surface);
+    pixman_image_t *(*get_lossless)(SpiceImageCache *cache,
+                                    uint64_t id);
+#endif
 } SpiceImageCacheOps;
 
 struct _SpiceImageCache {

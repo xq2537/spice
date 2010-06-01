@@ -567,7 +567,7 @@ static void dump_jpeg(uint8_t* data, int data_size)
     if (!f) {
         return;
     }
-    
+
     fwrite(data, 1, data_size, f);
     fclose(f);
 }
@@ -1044,12 +1044,19 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
      * to happen which breaks if we don't. */
     if (!real_get &&
         !(descriptor->flags & SPICE_IMAGE_FLAGS_CACHE_ME) &&
+#ifdef SW_CANVAS_CACHE
+        !(descriptor->flags & SPICE_IMAGE_FLAGS_CACHE_REPLACE_ME) &&
+#endif
         (descriptor->type != SPICE_IMAGE_TYPE_GLZ_RGB)) {
         return NULL;
     }
 
     saved_want_original = want_original;
-    if (descriptor->flags & SPICE_IMAGE_FLAGS_CACHE_ME) {
+    if (descriptor->flags & SPICE_IMAGE_FLAGS_CACHE_ME
+#ifdef SW_CANVAS_CACHE
+        || descriptor->flags & SPICE_IMAGE_FLAGS_CACHE_REPLACE_ME
+#endif
+       ) {
         want_original = TRUE;
     }
 
@@ -1092,7 +1099,11 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
     case SPICE_IMAGE_TYPE_FROM_CACHE:
         surface = canvas->bits_cache->ops->get(canvas->bits_cache, descriptor->id);
         break;
-
+#ifdef SW_CANVAS_CACHE
+    case SPICE_IMAGE_TYPE_FROM_CACHE_LOSSLESS:
+        surface = canvas->bits_cache->ops->get_lossless(canvas->bits_cache, descriptor->id);
+        break;
+#endif
     case SPICE_IMAGE_TYPE_BITMAP: {
         SpiceBitmapImage *bitmap = (SpiceBitmapImage *)descriptor;
         access_test(canvas, descriptor, sizeof(SpiceBitmapImage));
@@ -1107,6 +1118,9 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
 
     if (descriptor->flags & SPICE_IMAGE_FLAGS_HIGH_BITS_SET &&
         descriptor->type != SPICE_IMAGE_TYPE_FROM_CACHE &&
+#ifdef SW_CANVAS_CACHE
+        descriptor->type != SPICE_IMAGE_TYPE_FROM_CACHE_LOSSLESS &&
+#endif
         surface_format == PIXMAN_x8r8g8b8) {
         spice_pixman_fill_rect_rop(surface,
                                    0, 0,
@@ -1116,13 +1130,39 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
     }
 
     if (descriptor->flags & SPICE_IMAGE_FLAGS_CACHE_ME &&
-        descriptor->type != SPICE_IMAGE_TYPE_FROM_CACHE) {
+#ifdef SW_CANVAS_CACHE
+        descriptor->type != SPICE_IMAGE_TYPE_FROM_CACHE_LOSSLESS &&
+#endif
+        descriptor->type != SPICE_IMAGE_TYPE_FROM_CACHE ) {
+#ifdef SW_CANVAS_CACHE
+       if (descriptor->type != SPICE_IMAGE_TYPE_JPEG) {
+            canvas->bits_cache->ops->put(canvas->bits_cache, descriptor->id, surface);
+        } else {
+            canvas->bits_cache->ops->put_lossy(canvas->bits_cache, descriptor->id, surface);
+        }
+#else
         canvas->bits_cache->ops->put(canvas->bits_cache, descriptor->id, surface);
+#endif
 #ifdef DEBUG_DUMP_SURFACE
         dump_surface(surface, 1);
 #endif
-    } else if (descriptor->type != SPICE_IMAGE_TYPE_FROM_CACHE) {
+#ifdef SW_CANVAS_CACHE
+    } else if (descriptor->flags & SPICE_IMAGE_FLAGS_CACHE_REPLACE_ME) {
+        if (descriptor->type == SPICE_IMAGE_TYPE_JPEG) {
+            CANVAS_ERROR("invalid cache replace request: the image is lossy");
+        }
+        canvas->bits_cache->ops->replace_lossy(canvas->bits_cache, descriptor->id, surface);
 #ifdef DEBUG_DUMP_SURFACE
+        dump_surface(surface, 1);
+#endif
+#endif
+#ifdef DEBUG_DUMP_SURFACE
+    } else if (descriptor->type != SPICE_IMAGE_TYPE_FROM_CACHE
+#ifdef SW_CANVAS_CACHE
+               && descriptor->type != SPICE_IMAGE_TYPE_FROM_CACHE_LOSSLESS
+#endif
+    ) {
+
         dump_surface(surface, 0);
 #endif
     }
@@ -1435,6 +1475,12 @@ static pixman_image_t *canvas_get_mask(CanvasBase *canvas, SpiceQMask *mask, int
 #if defined(SW_CANVAS_CACHE) || defined(SW_CANVAS_IMAGE_CACHE)
     case SPICE_IMAGE_TYPE_FROM_CACHE:
         surface = canvas->bits_cache->ops->get(canvas->bits_cache, descriptor->id);
+        is_invers = 0;
+        break;
+#endif
+#ifdef SW_CANVAS_CACHE
+    case SPICE_IMAGE_TYPE_FROM_CACHE_LOSSLESS:
+        surface = canvas->bits_cache->ops->get_lossless(canvas->bits_cache, descriptor->id);
         is_invers = 0;
         break;
 #endif
