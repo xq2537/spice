@@ -710,6 +710,8 @@ struct DisplayChannel {
         FreeList free_list;
     } send_data;
 
+    int enable_jpeg;
+    int jpeg_quality;
 #ifdef RED_STATISTICS
     StatNodeRef stat;
     uint64_t *cache_hits_counter;
@@ -1020,8 +1022,6 @@ typedef struct RedWorker {
 #endif
     SpiceVirtMapping preload_group_virt_mapping;
 
-    int enable_jpeg;
-    int jpeg_quality;
 } RedWorker;
 
 typedef enum {
@@ -5926,10 +5926,6 @@ static inline void red_init_jpeg(RedWorker *worker)
     if (!worker->jpeg) {
         PANIC("create jpeg encoder failed");
     }
-
-    // TODO: configure via qemu command line and monitor, and activate only on WAN
-    worker->enable_jpeg = TRUE;
-    worker->jpeg_quality = 85;
 }
 
 #ifdef __GNUC__
@@ -6359,13 +6355,13 @@ static int red_jpeg_compress_image(DisplayChannel *display_channel, RedImage *de
                                  sizeof(jpeg_data->data.u.unstable_lines_data.input_bufs[0]->buf) /
                                  jpeg_data->data.u.unstable_lines_data.dest_stride;
             jpeg_data->usr.more_lines = jpeg_usr_more_lines_unstable;
-            size = jpeg_encode(jpeg, worker->jpeg_quality, jpeg_in_type, src->x, src->y, NULL, 0, src->stride,
-                               (uint8_t*)jpeg_data->data.bufs_head->buf,
+            size = jpeg_encode(jpeg, display_channel->jpeg_quality, jpeg_in_type, src->x, src->y,
+                               NULL, 0, src->stride, (uint8_t*)jpeg_data->data.bufs_head->buf,
                                sizeof(jpeg_data->data.bufs_head->buf));
         } else {
             jpeg_data->usr.more_lines = jpeg_usr_no_more_lines;
-            size = jpeg_encode(jpeg, worker->jpeg_quality, jpeg_in_type, src->x, src->y, data, src->y, stride,
-                               (uint8_t*)jpeg_data->data.bufs_head->buf,
+            size = jpeg_encode(jpeg, display_channel->jpeg_quality, jpeg_in_type, src->x, src->y,
+                               data, src->y, stride, (uint8_t*)jpeg_data->data.bufs_head->buf,
                                sizeof(jpeg_data->data.bufs_head->buf));
         }
     } else {
@@ -6403,8 +6399,8 @@ static int red_jpeg_compress_image(DisplayChannel *display_channel, RedImage *de
             jpeg_data->usr.more_lines = jpeg_usr_more_lines_reverse;
             stride = -src->stride;
         }
-        size = jpeg_encode(jpeg, worker->jpeg_quality, jpeg_in_type, src->x, src->y, NULL, 0, stride,
-                           (uint8_t*)jpeg_data->data.bufs_head->buf,
+        size = jpeg_encode(jpeg, display_channel->jpeg_quality, jpeg_in_type, src->x, src->y, NULL,
+                           0, stride, (uint8_t*)jpeg_data->data.bufs_head->buf,
                            sizeof(jpeg_data->data.bufs_head->buf));
     }
 
@@ -6633,7 +6629,7 @@ static inline int red_compress_image(DisplayChannel *display_channel,
         red_printf("QUIC compress");
 #endif
         // if bitmaps is picture-like, compress it using jpeg
-        if (can_lossy && display_channel->base.worker->enable_jpeg &&
+        if (can_lossy && display_channel->enable_jpeg &&
             ((image_compression == SPICE_IMAGE_COMPRESS_AUTO_LZ) ||
             (image_compression == SPICE_IMAGE_COMPRESS_AUTO_GLZ))) {
             if (src->format != SPICE_BITMAP_FMT_RGBA) {
@@ -6755,7 +6751,7 @@ static FillBitsType fill_bits(DisplayChannel *display_channel, QXLPHYSICAL *in_b
         if (pixmap_cache_hit(display_channel->pixmap_cache, image->descriptor.id,
                              &lossy_cache_item, display_channel)) {
             if (can_lossy || !lossy_cache_item) {
-                if (!worker->enable_jpeg || lossy_cache_item) {
+                if (!display_channel->enable_jpeg || lossy_cache_item) {
                     image->descriptor.type = SPICE_IMAGE_TYPE_FROM_CACHE;
                 } else {
                     // making sure, in multiple monitor scenario, that lossy items that
@@ -8511,7 +8507,7 @@ static inline void send_qxl_drawable(DisplayChannel *display_channel, Drawable *
     if (item->stream && red_send_stream_data(display_channel, item)) {
         return;
     }
-    if (!display_channel->base.worker->enable_jpeg)
+    if (!display_channel->enable_jpeg)
         red_send_qxl_drawable(display_channel->base.worker, display_channel, item);
     else
         red_lossy_send_qxl_drawable(display_channel->base.worker, display_channel, item);
@@ -8711,7 +8707,7 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
                                                           &bitmap,
                                                           worker->mem_slots.internal_groupslot_id);
                 if (grad_level == BITMAP_GRADUAL_HIGH) {
-                    lossy_comp = worker->enable_jpeg && item->can_lossy &&
+                    lossy_comp = display_channel->enable_jpeg && item->can_lossy &&
                                  (item->image_format != SPICE_BITMAP_FMT_RGBA);
                 } else {
                     lz_comp = TRUE;
@@ -10035,6 +10031,7 @@ static RedChannel *__new_channel(RedWorker *worker, int size, RedsStreamContext 
     }
 
     channel->migrate = migrate;
+
     return channel;
 
 error2:
@@ -10144,6 +10141,10 @@ static void handle_new_display_channel(RedWorker *worker, RedsStreamContext *pee
         spice_malloc(sizeof(SpiceResourceList) +
                      DISPLAY_FREE_LIST_DEFAULT_SIZE * sizeof(SpiceResourceID));
     display_channel->send_data.free_list.res_size = DISPLAY_FREE_LIST_DEFAULT_SIZE;
+
+    display_channel->enable_jpeg = IS_LOW_BANDWIDTH();
+    display_channel->jpeg_quality = 85;
+
     red_ref_channel((RedChannel*)display_channel);
     on_new_display_channel(worker);
     red_unref_channel((RedChannel*)display_channel);
