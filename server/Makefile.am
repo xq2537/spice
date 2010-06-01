@@ -18,6 +18,15 @@ INCLUDES = \
 	$(VISIBILITY_HIDDEN_CFLAGS)		\
 	$(NULL)
 
+spice_built_sources = generated_marshallers.c generated_marshallers.h
+
+STRUCTS=-M String -M Rect -M Point -M DisplayBase -M Fill -M Opaque -M Copy -M Blend -M Blackness -M Whiteness -M Invers -M Rop3 -M Stroke -M Text -M Transparent -M AlphaBlnd -M PathSegment
+generated_marshallers.c: $(top_srcdir)/spice.proto
+	$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-marshallers $(STRUCTS) --server $(top_srcdir)/spice.proto generated_marshallers.c
+
+generated_marshallers.h: $(top_srcdir)/spice.proto
+	$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-marshallers $(STRUCTS) --server -H $(top_srcdir)/spice.proto generated_marshallers.h
+
 COMMON_SRCS =						\
 	$(top_srcdir)/common/sw_canvas.c		\
 	$(top_srcdir)/common/pixman_utils.c		\
@@ -90,6 +99,8 @@ libspice_server_la_SOURCES =			\
 	red_channel.c				\
 	spice.h					\
 	spice-experimental.h			\
+	generated_marshallers.c			\
+	generated_marshallers.h			\
 	$(TUNNEL_SRCS)				\
 	$(COMMON_SRCS)				\
 	$(NULL)
@@ -104,3 +115,5 @@ EXTRA_DIST =					\
 	glz_encode_match_tmpl.c			\
 	glz_encode_tmpl.c			\
 	$(NULL)
+
+BUILT_SOURCES = $(spice_built_sources)
