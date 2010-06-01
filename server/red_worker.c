@@ -657,6 +657,7 @@ struct DisplayChannel {
     pthread_mutex_t glz_drawables_inst_to_free_lock;
 
     uint8_t surface_client_created[NUM_SURFACES];
+    QRegion surface_client_lossy_region[NUM_SURFACES];
 
     struct {
         union {
@@ -1020,6 +1021,20 @@ typedef struct RedWorker {
     int enable_jpeg;
     int jpeg_quality;
 } RedWorker;
+
+typedef enum {
+    BITMAP_DATA_TYPE_INVALID,
+    BITMAP_DATA_TYPE_CACHE,
+    BITMAP_DATA_TYPE_SURFACE,
+    BITMAP_DATA_TYPE_BITMAP,
+    BITMAP_DATA_TYPE_BITMAP_TO_CACHE,
+} BitmapDataType;
+
+typedef struct BitmapData {
+    BitmapDataType type;
+    uint64_t id; // surface id or cache item id
+    SpiceRect lossy_rect;
+} BitmapData;
 
 static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable);
 static void red_current_flush(RedWorker *worker, int surface_id);
@@ -6786,6 +6801,151 @@ static inline void red_display_reset_send_data(DisplayChannel *channel)
     red_display_reset_compress_buf(channel);
     channel->send_data.free_list.res->count = 0;
     memset(channel->send_data.free_list.sync, 0, sizeof(channel->send_data.free_list.sync));
+}
+
+/* set area=NULL for testing the whole surface */
+static int is_surface_area_lossy(DisplayChannel *display_channel, uint32_t surface_id,
+                                 const SpiceRect *area, SpiceRect *out_lossy_area)
+{
+    RedSurface *surface;
+    QRegion *surface_lossy_region;
+    QRegion lossy_region;
+
+    validate_surface(display_channel->base.worker, surface_id);
+    surface = &display_channel->base.worker->surfaces[surface_id];
+    surface_lossy_region = &display_channel->surface_client_lossy_region[surface_id];
+
+    if (!area) {
+        if (region_is_empty(surface_lossy_region)) {
+            return FALSE;
+        } else {
+            out_lossy_area->top = 0;
+            out_lossy_area->left = 0;
+            out_lossy_area->bottom = surface->context.height;
+            out_lossy_area->right = surface->context.width;
+            return TRUE;
+        }
+    }
+
+    region_init(&lossy_region);
+    region_add(&lossy_region, area);
+    region_and(&lossy_region, surface_lossy_region);
+    if (!region_is_empty(&lossy_region)) {
+        out_lossy_area->left = lossy_region.extents.x1;
+        out_lossy_area->top = lossy_region.extents.y1;
+        out_lossy_area->right = lossy_region.extents.x2;
+        out_lossy_area->bottom = lossy_region.extents.y2;
+        region_destroy(&lossy_region);
+        return TRUE;
+    } else {
+        return FALSE;
+    }
+}
+/* returns if the bitmap was already sent lossy to the client. If the bitmap hasn't been sent yet
+   to the client, returns false. "area" is for surfaces. If area = NULL,
+   all the surface is considered. out_lossy_data will hold info about the bitmap, and its lossy
+   area in case it is lossy and part of a surface. */
+static int is_bitmap_lossy(DisplayChannel *display_channel, SPICE_ADDRESS bitmap, SpiceRect *area,
+                           Drawable *drawable, BitmapData *out_data)
+{
+    RedWorker *worker = display_channel->base.worker;
+    QXLImage *qxl_image;
+
+    if (bitmap == 0) {
+        // self bitmap
+        out_data->type = BITMAP_DATA_TYPE_BITMAP;
+        return FALSE;
+    }
+
+    qxl_image = (QXLImage *)get_virt(&worker->mem_slots, bitmap, sizeof(QXLImage),
+                                     drawable->group_id);
+
+    if ((qxl_image->descriptor.flags & QXL_IMAGE_CACHE)) {
+        int is_hit_lossy;
+
+        out_data->id = qxl_image->descriptor.id;
+        if (pixmap_cache_hit(display_channel->pixmap_cache, qxl_image->descriptor.id,
+                             &is_hit_lossy, display_channel)) {
+            out_data->type = BITMAP_DATA_TYPE_CACHE;
+            if (is_hit_lossy) {
+                return TRUE;
+            } else {
+                return FALSE;
+            }
+        } else {
+            out_data->type = BITMAP_DATA_TYPE_BITMAP_TO_CACHE;
+        }
+    } else {
+         out_data->type = BITMAP_DATA_TYPE_BITMAP;
+    }
+
+    if (qxl_image->descriptor.type != SPICE_IMAGE_TYPE_SURFACE) {
+        return FALSE;
+    }
+
+    out_data->type = BITMAP_DATA_TYPE_SURFACE;
+    out_data->id = qxl_image->surface_image.surface_id;
+
+    if (is_surface_area_lossy(display_channel, qxl_image->surface_image.surface_id,
+                              area, &out_data->lossy_rect))
+    {
+        return TRUE;
+    } else {
+        return FALSE;
+    }
+}
+
+SPICE_GNUC_UNUSED static int is_brush_lossy(DisplayChannel *display_channel, SpiceBrush *brush,
+                                            Drawable *drawable, BitmapData *out_data)
+{
+    if (brush->type == SPICE_BRUSH_TYPE_PATTERN) {
+        return is_bitmap_lossy(display_channel, brush->u.pattern.pat, NULL,
+                               drawable, out_data);
+    } else {
+        out_data->type = BITMAP_DATA_TYPE_INVALID;
+        return FALSE;
+    }
+}
+
+SPICE_GNUC_UNUSED static void surface_lossy_region_update(RedWorker *worker, DisplayChannel *display_channel,
+                                                          Drawable *item, int has_mask, int lossy)
+{
+    QRegion *surface_lossy_region;
+    QXLDrawable *drawable;
+
+    if (has_mask && !lossy) {
+        return;
+    }
+
+    surface_lossy_region = &display_channel->surface_client_lossy_region[item->surface_id];
+    drawable = item->qxl_drawable;
+
+    if ((drawable->clip.type == SPICE_CLIP_TYPE_NONE) ||
+        ((drawable->clip.type == SPICE_CLIP_TYPE_PATH) && lossy)) {
+        if (!lossy) {
+            region_remove(surface_lossy_region, &drawable->bbox);
+        } else {
+            region_add(surface_lossy_region, &drawable->bbox);
+        }
+    } else if (drawable->clip.type == SPICE_CLIP_TYPE_RECTS) {
+        QRegion clip_rgn;
+        QRegion draw_region;
+        region_init(&clip_rgn);
+        region_init(&draw_region);
+        region_add(&draw_region, &drawable->bbox);
+        add_clip_rects(worker, &clip_rgn,
+                       drawable->clip.data + SPICE_OFFSETOF(QXLClipRects, chunk),
+                       item->group_id);
+        region_and(&draw_region, &clip_rgn);
+        if (lossy) {
+            region_or(surface_lossy_region, &draw_region);
+        } else {
+            region_exclude(surface_lossy_region, &draw_region);
+        }
+
+        region_destroy(&clip_rgn);
+        region_destroy(&draw_region);
+    } // else SPICE_CLIP_TYPE_PATH and lossless: leave the area as is
 }
 
 static inline void red_send_qxl_drawable(RedWorker *worker, DisplayChannel *display_channel,
