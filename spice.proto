@@ -409,9 +409,9 @@ struct Clip {
     case NONE:
         uint64 data @zero;
       case RECTS:
-        ClipRects *data;
+        ClipRects *data @outvar(cliprects);
     case PATH:
-        Path *data;
+        Path *data @outvar(clippath);
     } u @anon;
 };
 
@@ -448,7 +448,7 @@ struct BitmapData {
     case PAL_FROM_CACHE:
 	uint64 palette;
     default:
-	Palette *palette;
+	Palette *palette @outvar(bitmap);
     } pal @anon;
     uint8 *data[image_size(8, stride, y)] @nocopy; /* pointer to array, not array of pointers as in C */
 } @ctype(SpiceBitmap);
@@ -465,7 +465,7 @@ struct LZPLTData {
     case PAL_FROM_CACHE:
 	uint64 palette;
     default:
-	Palette *palette @nonnull;
+	Palette *palette @nonnull @outvar(lzplt);
     } pal @anon;
     uint8 data[data_size] @end;
 };
@@ -632,9 +632,9 @@ channel DisplayChannel : BaseChannel {
     message {
 	DisplayBase base;
 	struct Fill {
-	    Brush brush;
+	    Brush brush @outvar(brush);
 	    uint16 rop_decriptor;
-	    QMask mask;
+	    QMask mask @outvar(mask);
 	} data;
     } draw_fill = 302;
 
@@ -646,7 +646,7 @@ channel DisplayChannel : BaseChannel {
 	    Brush brush;
 	    ropd rop_decriptor;
 	    image_scale_mode scale_mode;
-	    QMask mask;
+	    QMask mask @outvar(mask);
 	} data;
     } draw_opaque;
 
@@ -657,7 +657,7 @@ channel DisplayChannel : BaseChannel {
 	    Rect src_area;
 	    ropd rop_decriptor;
 	    image_scale_mode scale_mode;
-	    QMask mask;
+	    QMask mask @outvar(mask);
 	} data;
     } draw_copy;
 
@@ -668,28 +668,28 @@ channel DisplayChannel : BaseChannel {
 	    Rect src_area;
 	    ropd rop_decriptor;
 	    image_scale_mode scale_mode;
-	    QMask mask;
+	    QMask mask @outvar(mask);
 	} @ctype(SpiceCopy) data;
     } draw_blend;
 
     message {
 	DisplayBase base;
 	struct Blackness {
-	    QMask mask;
+	    QMask mask @outvar(mask);
 	} data;
     } draw_blackness;
 
     message {
 	DisplayBase base;
 	struct Whiteness {
-	    QMask mask;
+	    QMask mask @outvar(mask);
 	} data;
     } draw_whiteness;
 
     message {
 	DisplayBase base;
 	struct Invers {
-	    QMask mask;
+	    QMask mask @outvar(mask);
 	} data;
     } draw_invers;
 
@@ -701,7 +701,7 @@ channel DisplayChannel : BaseChannel {
 	    Brush brush;
 	    uint8 rop3;
 	    image_scale_mode scale_mode;
-	    QMask mask;
+	    QMask mask @outvar(mask);
 	} data;
     } draw_rop3;
 
@@ -721,8 +721,8 @@ channel DisplayChannel : BaseChannel {
 	struct Text {
 	    String *str;
 	    Rect back_area;
-	    Brush fore_brush;
-	    Brush back_brush;
+	    Brush fore_brush @outvar(fore_brush);
+	    Brush back_brush @outvar(back_brush);
 	    uint16 fore_mode;
 	    uint16 back_mode;
 	} data;
