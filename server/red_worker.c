@@ -5198,7 +5198,9 @@ static void red_add_surface_image(RedWorker *worker, int surface_id)
     area.right = surface->context.width;
     area.bottom = surface->context.height;
 
-    item = red_add_surface_area_image(worker, surface_id, &area, NULL, TRUE);
+    /* not allowing lossy compression because probably, especially if it is a primary surface,
+       it combines both "picture-like" areas with areas that are more "artificial"*/
+    item = red_add_surface_area_image(worker, surface_id, &area, NULL, FALSE);
     display_channel_push(worker);
 }
 
