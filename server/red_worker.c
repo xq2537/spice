@@ -7110,6 +7110,64 @@ static inline int drawable_intersects_with_areas(Drawable *drawable, int surface
     return FALSE;
 }
 
+static inline int drawable_depends_on_areas(Drawable *drawable,
+                                            int surface_ids[],
+                                            SpiceRect surface_areas[],
+                                            int num_surfaces)
+{   
+    int i;
+    QXLDrawable *qxl_drawable;
+    int drawable_has_shadow;
+    SpiceRect shadow_rect;
+
+    qxl_drawable = drawable->qxl_drawable;
+    drawable_has_shadow = has_shadow(qxl_drawable);
+
+    if (drawable_has_shadow) {
+       int delta_x = qxl_drawable->u.copy_bits.src_pos.x - qxl_drawable->bbox.left;
+       int delta_y = qxl_drawable->u.copy_bits.src_pos.y - qxl_drawable->bbox.top;
+
+       shadow_rect.left = qxl_drawable->u.copy_bits.src_pos.x;
+       shadow_rect.top = qxl_drawable->u.copy_bits.src_pos.y;
+       shadow_rect.right = qxl_drawable->bbox.right + delta_x;
+       shadow_rect.bottom = qxl_drawable->bbox.bottom + delta_y;
+    }
+
+    for (i = 0; i < num_surfaces; i++) {
+        int x;
+        int dep_surface_id;
+
+         for (x = 0; x < 3; ++x) {
+            dep_surface_id = drawable->surfaces_dest[x];
+            if (dep_surface_id == surface_ids[i]) {
+                if (rect_intersects(&surface_areas[i], &qxl_drawable->surfaces_rects[x])) {
+                    return TRUE;
+                }
+            }
+        }
+
+        if (surface_ids[i] == qxl_drawable->surface_id) {
+            if (drawable_has_shadow) {
+                if (rect_intersects(&surface_areas[i], &shadow_rect)) {
+                    return TRUE;
+                }
+            }
+
+            // not dependent on dest
+            if (qxl_drawable->effect == QXL_EFFECT_OPAQUE) {
+                continue;
+            }
+
+            if (rect_intersects(&surface_areas[i], &qxl_drawable->bbox)) {
+                return TRUE;
+            }
+        }
+
+    }
+    return FALSE;
+}
+
+
 static int pipe_rendered_drawables_intersect_with_areas(RedWorker *worker,
                                                         DisplayChannel *display_channel,
                                                         int surface_ids[],
@@ -7144,17 +7202,26 @@ static int pipe_rendered_drawables_intersect_with_areas(RedWorker *worker,
 }
 
 static void red_pipe_replace_rendered_drawables_with_images(RedWorker *worker,
-                                                            DisplayChannel *display_channel)
+                                                            DisplayChannel *display_channel,
+                                                            int first_surface_id,
+                                                            SpiceRect *first_area)
 {
+    static int resent_surface_ids[MAX_PIPE_SIZE];
+    static SpiceRect resent_areas[MAX_PIPE_SIZE]; // not pointers since drawbales may be released
+    int num_resent;
     PipeItem *pipe_item;
     Ring *pipe;
 
-    pipe = &display_channel->base.pipe;
-    // going from the newest to oldest
-    for (pipe_item = (PipeItem *)ring_get_head(pipe);
-         pipe_item;
-         pipe_item = (PipeItem *)ring_next(pipe, &pipe_item->link)) {
+    resent_surface_ids[0] = first_surface_id;
+    resent_areas[0] = *first_area;
+    num_resent = 1;
 
+    pipe = &display_channel->base.pipe;
+
+    // going from the oldest to the newest
+    for (pipe_item = (PipeItem *)ring_get_tail(pipe);
+         pipe_item;
+         pipe_item = (PipeItem *)ring_prev(pipe, &pipe_item->link)) {
         Drawable *drawable;
         ImageItem *image;
         if (pipe_item->type != PIPE_ITEM_TYPE_DRAW)
@@ -7162,8 +7229,23 @@ static void red_pipe_replace_rendered_drawables_with_images(RedWorker *worker,
         drawable = SPICE_CONTAINEROF(pipe_item, Drawable, pipe_item);
         if (ring_item_is_linked(&drawable->list_link))
             continue; // item hasn't been rendered
+
+        // When a drawable command, X, depends on bitmaps that were resent,
+        // these bitmaps state at the client might not be synchronized with X 
+        // (i.e., the bitmaps can be more futuristic w.r.t X). Thus, X shouldn't
+        // be rendered at the client, and we replace it with an image as well.
+        if (!drawable_depends_on_areas(drawable,
+                                       resent_surface_ids,
+                                       resent_areas,
+                                       num_resent)) {
+            continue;
+        }
+
         image = red_add_surface_area_image(worker, drawable->qxl_drawable->surface_id,
                                            &drawable->qxl_drawable->bbox, pipe_item, TRUE);
+        resent_surface_ids[num_resent] = drawable->qxl_drawable->surface_id;
+        resent_areas[num_resent] = drawable->qxl_drawable->bbox;
+        num_resent++;
 
         ASSERT(image);
         red_pipe_remove_drawable(worker, drawable);
@@ -7230,7 +7312,9 @@ static void red_add_lossless_drawable_dependencies(RedWorker *worker,
                                                          drawable_surface_id,
                                                          drawable_bbox,
                                                          1)) {
-            red_pipe_replace_rendered_drawables_with_images(worker, display_channel);
+            red_pipe_replace_rendered_drawables_with_images(worker, display_channel,
+                                                            drawable->surface_id,
+                                                            &drawable->bbox);
         }
 
 
