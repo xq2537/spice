@@ -7332,12 +7332,12 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
 
     QXL_SET_IMAGE_ID(red_image, QXL_IMAGE_GROUP_RED, ++worker->bits_unique);
     red_image->descriptor.type = SPICE_IMAGE_TYPE_BITMAP;
-    red_image->descriptor.flags = 0;
+    red_image->descriptor.flags = item->image_flags;
     red_image->descriptor.width = item->width;
     red_image->descriptor.height = item->height;
 
     bitmap.format = item->image_format;
-    bitmap.flags = QXL_BITMAP_DIRECT | item->image_flags;
+    bitmap.flags = QXL_BITMAP_DIRECT;
     bitmap.flags |= item->top_down ? QXL_BITMAP_TOP_DOWN : 0;
     bitmap.x = item->width;
     bitmap.y = item->height;
