@@ -37,7 +37,8 @@ GDICanvas::GDICanvas(int width, int height, uint32_t format,
                                       format, &pixmap_cache.base,
                                       &palette_cache.base,
                                       &csurfaces.base,
-                                      &glz_decoder()))) {
+                                      &glz_decoder(),
+                                      &jpeg_decoder()))) {
         THROW("create canvas failed");
     }
 }

@@ -48,6 +48,7 @@
 #include "ring.h"
 #include "mjpeg_encoder.h"
 #include "red_memslots.h"
+#include "jpeg_encoder.h"
 
 //#define COMPRESS_STAT
 //#define DUMP_BITMAP
@@ -167,6 +168,7 @@ static inline void stat_add(stat_info_t *info, stat_time_t start)
 static const char *lz_stat_name = "lz";
 static const char *glz_stat_name = "glz";
 static const char *quic_stat_name = "quic";
+static const char *jpeg_stat_name = "jpeg";
 
 static inline void stat_compress_init(stat_info_t *info, const char *name)
 {
@@ -464,6 +466,7 @@ typedef struct  __attribute__ ((__packed__)) RedImage {
         SpiceLZRGBData lz_rgb;
         SpiceLZPLTData lz_plt;
         SpiceSurface surface;
+        SpiceJPEGData jpeg;
     };
 } RedImage;
 
@@ -576,6 +579,11 @@ typedef struct {
     GlzEncoderUsrContext usr;
     EncoderData data;
 } GlzData;
+
+typedef struct {
+    JpegEncoderUsrContext usr;
+    EncoderData data;
+} JpegData;
 
 /**********************************/
 /* LZ dictionary related entities */
@@ -708,6 +716,7 @@ struct DisplayChannel {
     stat_info_t lz_stat;
     stat_info_t glz_stat;
     stat_info_t quic_stat;
+    stat_info_t jpeg_stat;
 #endif
 };
 
@@ -987,6 +996,9 @@ typedef struct RedWorker {
     LzData lz_data;
     LzContext  *lz;
 
+    JpegData jpeg_data;
+    JpegEncoderContext *jpeg;
+
 #ifdef PIPE_DEBUG
     uint32_t last_id;
 #endif
@@ -1003,6 +1015,9 @@ typedef struct RedWorker {
     uint64_t *command_counter;
 #endif
     SpiceVirtMapping preload_group_virt_mapping;
+
+    int enable_jpeg;
+    int jpeg_quality;
 } RedWorker;
 
 static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable);
@@ -1068,19 +1083,29 @@ static void print_compress_stats(DisplayChannel *display_channel)
                stat_byte_to_mega(display_channel->lz_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->lz_stat.total)
                );
+    red_printf("JPEG     \t%8d\t%13.2f\t%12.2f\t%12.2f",
+               display_channel->jpeg_stat.count,
+               stat_byte_to_mega(display_channel->jpeg_stat.orig_size),
+               stat_byte_to_mega(display_channel->jpeg_stat.comp_size),
+               stat_cpu_time_to_sec(display_channel->jpeg_stat.total)
+               );
     red_printf("-------------------------------------------------------------------");
     red_printf("Total    \t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->lz_stat.count + display_channel->glz_stat.count +
-                                                display_channel->quic_stat.count,
+                                                display_channel->quic_stat.count +
+                                                display_channel->jpeg_stat.count,
                stat_byte_to_mega(display_channel->lz_stat.orig_size +
                                  display_channel->glz_stat.orig_size +
-                                 display_channel->quic_stat.orig_size),
+                                 display_channel->quic_stat.orig_size +
+                                 display_channel->jpeg_stat.orig_size),
                stat_byte_to_mega(display_channel->lz_stat.comp_size +
                                  display_channel->glz_stat.comp_size +
-                                 display_channel->quic_stat.comp_size),
+                                 display_channel->quic_stat.comp_size +
+                                 display_channel->jpeg_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->lz_stat.total +
                                     display_channel->glz_stat.total +
-                                    display_channel->quic_stat.total)
+                                    display_channel->quic_stat.total +
+                                    display_channel->jpeg_stat.total)
                );
 }
 
@@ -5517,6 +5542,12 @@ static int glz_usr_more_space(GlzEncoderUsrContext *usr, uint8_t **io_ptr)
     return (encoder_usr_more_space(usr_data, (uint32_t **)io_ptr) << 2);
 }
 
+static int jpeg_usr_more_space(JpegEncoderUsrContext *usr, uint8_t **io_ptr)
+{
+    EncoderData *usr_data = &(((JpegData *)usr)->data);
+    return (encoder_usr_more_space(usr_data, (uint32_t **)io_ptr) << 2);
+}
+
 static inline int encoder_usr_more_lines(EncoderData *enc_data, uint8_t **lines)
 {
     uint32_t data_size;
@@ -5564,61 +5595,89 @@ static int glz_usr_more_lines(GlzEncoderUsrContext *usr, uint8_t **lines)
     return encoder_usr_more_lines(usr_data, lines);
 }
 
-static int quic_usr_more_lines_revers(QuicUsrContext *usr, uint8_t **lines)
+static int jpeg_usr_more_lines(JpegEncoderUsrContext *usr, uint8_t **lines)
+{
+    EncoderData *usr_data = &(((JpegData *)usr)->data);
+    return encoder_usr_more_lines(usr_data, lines);
+}
+
+static int encoder_usr_more_lines_reverse(EncoderData *enc_data, uint8_t **lines)
 {
     uint8_t *data;
     uint32_t data_size;
-    EncoderData *quic_data = &(((QuicData *)usr)->data);
 
-    if (!quic_data->u.lines_data.next) {
+    if (!enc_data->u.lines_data.next) {
         return 0;
     }
 
-    QXLDataChunk *chunk = (QXLDataChunk *)quic_data->u.lines_data.enc_get_virt(
-                          quic_data->u.lines_data.enc_get_virt_opaque,
-                          quic_data->u.lines_data.next,
-                          sizeof(QXLDataChunk), quic_data->u.lines_data.group_id);
+    QXLDataChunk *chunk = (QXLDataChunk *)enc_data->u.lines_data.enc_get_virt(
+                          enc_data->u.lines_data.enc_get_virt_opaque,
+                          enc_data->u.lines_data.next,
+                          sizeof(QXLDataChunk), enc_data->u.lines_data.group_id);
 
     data_size = chunk->data_size;
     data = chunk->data;
 
-    if (data_size % quic_data->u.lines_data.stride) {
+    if (data_size % enc_data->u.lines_data.stride) {
         return 0;
     }
 
-    quic_data->u.lines_data.enc_validate_virt(quic_data->u.lines_data.enc_validate_virt_opaque,
-                                              (unsigned long)data,
-                                              quic_data->u.lines_data.next, data_size,
-                                              quic_data->u.lines_data.group_id);
+    enc_data->u.lines_data.enc_validate_virt(enc_data->u.lines_data.enc_validate_virt_opaque,
+                                             (unsigned long)data,
+                                             enc_data->u.lines_data.next, data_size,
+                                             enc_data->u.lines_data.group_id);
 
-    quic_data->u.lines_data.next = chunk->prev_chunk;
-    *lines = data + data_size - quic_data->u.lines_data.stride;
-    return data_size / quic_data->u.lines_data.stride;
+    enc_data->u.lines_data.next = chunk->prev_chunk;
+    *lines = data + data_size - enc_data->u.lines_data.stride;
+    return data_size / enc_data->u.lines_data.stride;
 }
 
-static int quic_usr_more_lines_unstable(QuicUsrContext *usr, uint8_t **out_lines)
+static int quic_usr_more_lines_reverse(QuicUsrContext *usr, uint8_t **lines)
 {
-    EncoderData *quic_data = &(((QuicData *)usr)->data);
+    EncoderData *usr_data = &(((QuicData *)usr)->data);
+    return encoder_usr_more_lines_reverse(usr_data, lines);
 
-    if (!quic_data->u.unstable_lines_data.lines) {
+}
+
+static int jpeg_usr_more_lines_reverse(JpegEncoderUsrContext *usr, uint8_t **lines)
+{
+    EncoderData *usr_data = &(((JpegData *)usr)->data);
+    return encoder_usr_more_lines_reverse(usr_data, lines);
+}
+
+static int encoder_usr_more_lines_unstable(EncoderData *enc_data, uint8_t **out_lines)
+{
+    if (!enc_data->u.unstable_lines_data.lines) {
         return 0;
     }
-    uint8_t *src = quic_data->u.unstable_lines_data.next;
-    int lines = MIN(quic_data->u.unstable_lines_data.lines,
-                    quic_data->u.unstable_lines_data.max_lines_bunch);
-    quic_data->u.unstable_lines_data.lines -= lines;
-    uint8_t *end = src + lines * quic_data->u.unstable_lines_data.src_stride;
-    quic_data->u.unstable_lines_data.next = end;
+    uint8_t *src = enc_data->u.unstable_lines_data.next;
+    int lines = MIN(enc_data->u.unstable_lines_data.lines,
+                    enc_data->u.unstable_lines_data.max_lines_bunch);
+    enc_data->u.unstable_lines_data.lines -= lines;
+    uint8_t *end = src + lines * enc_data->u.unstable_lines_data.src_stride;
+    enc_data->u.unstable_lines_data.next = end;
 
-    uint8_t *out = (uint8_t *)quic_data->u.unstable_lines_data.input_bufs[
-            quic_data->u.unstable_lines_data.input_bufs_pos++ & 1]->buf;
+    uint8_t *out = (uint8_t *)enc_data->u.unstable_lines_data.input_bufs[
+                enc_data->u.unstable_lines_data.input_bufs_pos++ & 1]->buf;
     uint8_t *dest = out;
-    for (; src != end; src += quic_data->u.unstable_lines_data.src_stride,
-                       dest += quic_data->u.unstable_lines_data.dest_stride) {
-        memcpy(dest, src, quic_data->u.unstable_lines_data.dest_stride);
+    for (; src != end; src += enc_data->u.unstable_lines_data.src_stride,
+                       dest += enc_data->u.unstable_lines_data.dest_stride) {
+        memcpy(dest, src, enc_data->u.unstable_lines_data.dest_stride);
     }
     *out_lines = out;
     return lines;
+}
+
+static int quic_usr_more_lines_unstable(QuicUsrContext *usr, uint8_t **lines)
+{
+    EncoderData *usr_data = &(((QuicData *)usr)->data);
+    return encoder_usr_more_lines_unstable(usr_data, lines);
+}
+
+static int jpeg_usr_more_lines_unstable(JpegEncoderUsrContext *usr, uint8_t **lines)
+{
+    EncoderData *usr_data = &(((JpegData *)usr)->data);
+    return encoder_usr_more_lines_unstable(usr_data, lines);
 }
 
 static int quic_usr_no_more_lines(QuicUsrContext *usr, uint8_t **lines)
@@ -5632,6 +5691,11 @@ static int lz_usr_no_more_lines(LzUsrContext *usr, uint8_t **lines)
 }
 
 static int glz_usr_no_more_lines(GlzEncoderUsrContext *usr, uint8_t **lines)
+{
+    return 0;
+}
+
+static int jpeg_usr_no_more_lines(JpegEncoderUsrContext *usr, uint8_t **lines)
 {
     return 0;
 }
@@ -5696,6 +5760,22 @@ static inline void red_display_init_glz_data(DisplayChannel *display)
     display->glz_data.usr.more_space = glz_usr_more_space;
     display->glz_data.usr.more_lines = glz_usr_more_lines;
     display->glz_data.usr.free_image = glz_usr_free_image;
+}
+
+static inline void red_init_jpeg(RedWorker *worker)
+{
+    worker->jpeg_data.usr.more_space = jpeg_usr_more_space;
+    worker->jpeg_data.usr.more_lines = jpeg_usr_more_lines;
+
+    worker->jpeg = jpeg_encoder_create(&worker->jpeg_data.usr);
+
+    if (!worker->jpeg) {
+        PANIC("create jpeg encoder failed");
+    }
+
+    // TODO: configure via qemu command line and monitor, and activate only on WAN
+    worker->enable_jpeg = TRUE;
+    worker->jpeg_quality = 85;
 }
 
 #ifdef __GNUC__
@@ -6046,6 +6126,148 @@ static inline int red_lz_compress_image(DisplayChannel *display_channel,
     return TRUE;
 }
 
+static int red_jpeg_compress_image(DisplayChannel *display_channel, RedImage *dest,
+                                   SpiceBitmap *src, compress_send_data_t* o_comp_data,
+                                   uint32_t group_id)
+{
+    RedWorker *worker = display_channel->base.worker;
+    JpegData *jpeg_data = &worker->jpeg_data;
+    JpegEncoderContext *jpeg = worker->jpeg;
+    JpegEncoderImageType jpeg_in_type;
+    int size;
+#ifdef COMPRESS_STAT
+    stat_time_t start_time = stat_now();
+#endif
+    switch (src->format) {
+    case SPICE_BITMAP_FMT_32BIT:
+        jpeg_in_type = JPEG_IMAGE_TYPE_BGRX32;
+        break;
+    case SPICE_BITMAP_FMT_16BIT:
+        jpeg_in_type = JPEG_IMAGE_TYPE_RGB16;
+        break;
+    case SPICE_BITMAP_FMT_24BIT:
+        jpeg_in_type = JPEG_IMAGE_TYPE_BGR24;
+        break;
+    default:
+        return FALSE;
+    }
+
+    jpeg_data->data.bufs_tail = red_display_alloc_compress_buf(display_channel);
+    jpeg_data->data.bufs_head = jpeg_data->data.bufs_tail;
+
+    if (!jpeg_data->data.bufs_head) {
+        red_printf("failed to allocate compress buffer");
+        return FALSE;
+    }
+
+    jpeg_data->data.bufs_head->send_next = NULL;
+    jpeg_data->data.display_channel = display_channel;
+
+    if (setjmp(jpeg_data->data.jmp_env)) {
+        while (jpeg_data->data.bufs_head) {
+            RedCompressBuf *buf = jpeg_data->data.bufs_head;
+            jpeg_data->data.bufs_head = buf->send_next;
+            red_display_free_compress_buf(display_channel, buf);
+        }
+        return FALSE;
+    }
+
+    if ((src->flags & QXL_BITMAP_DIRECT)) {
+        int stride;
+        uint8_t *data;
+
+        if (!(src->flags & QXL_BITMAP_TOP_DOWN)) {
+            data = (uint8_t*)get_virt(&worker->mem_slots, src->data, src->stride * src->y, group_id) +
+                   src->stride * (src->y - 1);
+            stride = -src->stride;
+        } else {
+            data = (uint8_t*)get_virt(&worker->mem_slots, src->data, src->stride * src->y, group_id);
+            stride = src->stride;
+        }
+
+        if ((src->flags & QXL_BITMAP_UNSTABLE)) {
+            jpeg_data->data.u.unstable_lines_data.next = data;
+            jpeg_data->data.u.unstable_lines_data.src_stride = stride;
+            jpeg_data->data.u.unstable_lines_data.dest_stride = src->stride;
+            jpeg_data->data.u.unstable_lines_data.lines = src->y;
+            jpeg_data->data.u.unstable_lines_data.input_bufs_pos = 0;
+            if (!(jpeg_data->data.u.unstable_lines_data.input_bufs[0] =
+                                            red_display_alloc_compress_buf(display_channel)) ||
+                !(jpeg_data->data.u.unstable_lines_data.input_bufs[1] =
+                                            red_display_alloc_compress_buf(display_channel))) {
+                return FALSE;
+            }
+            jpeg_data->data.u.unstable_lines_data.max_lines_bunch =
+                                 sizeof(jpeg_data->data.u.unstable_lines_data.input_bufs[0]->buf) /
+                                 jpeg_data->data.u.unstable_lines_data.dest_stride;
+            jpeg_data->usr.more_lines = jpeg_usr_more_lines_unstable;
+            size = jpeg_encode(jpeg, worker->jpeg_quality, jpeg_in_type, src->x, src->y, NULL, 0, src->stride,
+                               (uint8_t*)jpeg_data->data.bufs_head->buf,
+                               sizeof(jpeg_data->data.bufs_head->buf));
+        } else {
+            jpeg_data->usr.more_lines = jpeg_usr_no_more_lines;
+            size = jpeg_encode(jpeg, worker->jpeg_quality, jpeg_in_type, src->x, src->y, data, src->y, stride,
+                               (uint8_t*)jpeg_data->data.bufs_head->buf,
+                               sizeof(jpeg_data->data.bufs_head->buf));
+        }
+    } else {
+        int stride;
+
+        if ((src->flags & QXL_BITMAP_UNSTABLE)) {
+            red_printf_once("unexpected unstable bitmap");
+            return FALSE;
+        }
+        jpeg_data->data.u.lines_data.enc_get_virt = cb_get_virt;
+        jpeg_data->data.u.lines_data.enc_get_virt_opaque = &worker->mem_slots;
+        jpeg_data->data.u.lines_data.enc_validate_virt = cb_validate_virt;
+        jpeg_data->data.u.lines_data.enc_validate_virt_opaque = &worker->mem_slots;
+        jpeg_data->data.u.lines_data.stride = src->stride;
+        jpeg_data->data.u.lines_data.group_id = group_id;
+
+        if ((src->flags & QXL_BITMAP_TOP_DOWN)) {
+            jpeg_data->data.u.lines_data.next = src->data;
+            jpeg_data->usr.more_lines = jpeg_usr_more_lines;
+            stride = src->stride;
+        } else {
+            SPICE_ADDRESS prev_addr = src->data;
+            QXLDataChunk *chunk = (QXLDataChunk *)get_virt(&worker->mem_slots, src->data,
+                                                           sizeof(QXLDataChunk), group_id);
+            while (chunk->next_chunk) {
+                prev_addr = chunk->next_chunk;
+                chunk = (QXLDataChunk *)get_virt(&worker->mem_slots, chunk->next_chunk, sizeof(QXLDataChunk),
+                                                 group_id);
+                ASSERT(chunk->prev_chunk);
+            }
+            jpeg_data->data.u.lines_data.next = (SPICE_ADDRESS)prev_addr -
+                                                get_virt_delta(&worker->mem_slots,
+                                                               get_memslot_id(&worker->mem_slots, src->data),
+                                                               group_id);
+            jpeg_data->usr.more_lines = jpeg_usr_more_lines_reverse;
+            stride = -src->stride;
+        }
+        size = jpeg_encode(jpeg, worker->jpeg_quality, jpeg_in_type, src->x, src->y, NULL, 0, stride,
+                           (uint8_t*)jpeg_data->data.bufs_head->buf,
+                           sizeof(jpeg_data->data.bufs_head->buf));
+    }
+
+    // the compressed buffer is bigger than the original data
+    if (size > (src->y * src->stride)) {
+        longjmp(jpeg_data->data.jmp_env, 1);
+    }
+
+    dest->descriptor.type = SPICE_IMAGE_TYPE_JPEG;
+    dest->jpeg.data_size = size;
+
+    o_comp_data->raw_size = sizeof(SpiceJPEGImage);
+    o_comp_data->comp_buf = jpeg_data->data.bufs_head;
+    o_comp_data->comp_buf_size = size;
+    o_comp_data->plt_ptr = NULL;
+    o_comp_data->flags_ptr = NULL;
+    stat_compress_add(&display_channel->jpeg_stat, start_time, src->stride * src->y,
+                      o_comp_data->comp_buf_size);
+    return TRUE;
+}
+
 static inline int red_quic_compress_image(DisplayChannel *display_channel, RedImage *dest,
                                           SpiceBitmap *src, compress_send_data_t* o_comp_data,
                                           uint32_t group_id)
@@ -6166,7 +6388,7 @@ static inline int red_quic_compress_image(DisplayChannel *display_channel, RedIm
                                                 get_virt_delta(&worker->mem_slots,
                                                                get_memslot_id(&worker->mem_slots, src->data),
                                                                group_id);
-            quic_data->usr.more_lines = quic_usr_more_lines_revers;
+            quic_data->usr.more_lines = quic_usr_more_lines_reverse;
             stride = -src->stride;
         }
         size = quic_encode(quic, type, src->x, src->y, NULL, 0, stride,
@@ -6249,7 +6471,17 @@ static inline int red_compress_image(DisplayChannel *display_channel,
 #ifdef COMPRESS_DEBUG
         red_printf("QUIC compress");
 #endif
-        return red_quic_compress_image(display_channel, dest, src, o_comp_data, drawable->group_id);
+        // if bitmaps is picture-like, compress it using jpeg
+        if (display_channel->base.worker->enable_jpeg &&
+            ((image_compression == SPICE_IMAGE_COMPRESS_AUTO_LZ) ||
+            (image_compression == SPICE_IMAGE_COMPRESS_AUTO_GLZ))) {
+            if (src->format != SPICE_BITMAP_FMT_RGBA) {
+                return red_jpeg_compress_image(display_channel, dest,
+                                               src, o_comp_data, drawable->group_id);
+            }
+        }
+        return red_quic_compress_image(display_channel, dest,
+                                       src, o_comp_data, drawable->group_id);
     } else {
         int glz;
         int ret;
@@ -7915,7 +8147,7 @@ static SpiceCanvas *create_ogl_context_common(RedWorker *worker, OGLCtx *ctx, ui
 
     oglctx_make_current(ctx);
     if (!(canvas = gl_canvas_create(width, height, depth, &worker->image_cache.base,
-                                    &worker->image_surfaces, NULL,
+                                    &worker->image_surfaces, NULL, NULL,
                                     &worker->preload_group_virt_mapping))) {
         return NULL;
     }
@@ -7973,7 +8205,7 @@ static inline void *create_canvas_for_surface(RedWorker *worker, RedSurface *sur
         canvas = canvas_create_for_data(width, height, format,
                                         line_0, stride,
                                         &worker->image_cache.base,
-                                        &worker->image_surfaces, NULL,
+                                        &worker->image_surfaces, NULL, NULL,
                                         &worker->preload_group_virt_mapping);
         surface->context.top_down = TRUE;
         surface->context.canvas_draws_on_surface = TRUE;
@@ -8773,6 +9005,7 @@ static void handle_new_display_channel(RedWorker *worker, RedsStreamContext *pee
     stat_compress_init(&display_channel->lz_stat, lz_stat_name);
     stat_compress_init(&display_channel->glz_stat, glz_stat_name);
     stat_compress_init(&display_channel->quic_stat, quic_stat_name);
+    stat_compress_init(&display_channel->jpeg_stat, jpeg_stat_name);
 }
 
 static void red_disconnect_cursor(RedChannel *channel)
@@ -9321,6 +9554,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
             stat_reset(&worker->display_channel->quic_stat);
             stat_reset(&worker->display_channel->lz_stat);
             stat_reset(&worker->display_channel->glz_stat);
+            stat_reset(&worker->display_channel->jpeg_stat);
         }
 #endif
         break;
@@ -9483,6 +9717,7 @@ void *red_worker_main(void *arg)
     red_init(&worker, (WorkerInitData *)arg);
     red_init_quic(&worker);
     red_init_lz(&worker);
+    red_init_jpeg(&worker);
     worker.epoll_timeout = INF_EPOLL_WAIT;
     for (;;) {
         struct epoll_event events[MAX_EPOLL_SOURCES];

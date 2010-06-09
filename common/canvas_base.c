@@ -199,6 +199,7 @@ typedef struct CanvasBase {
 
     LzData lz_data;
     GlzData glz_data;
+    SpiceJpegDecoder* jpeg;
 
     void *usr_data;
     spice_destroy_fn_t usr_data_destroy;
@@ -543,6 +544,78 @@ static pixman_image_t *canvas_get_quic(CanvasBase *canvas, SpiceQUICImage *image
 
 #ifdef DEBUG_DUMP_COMPRESS
     dump_surface(surface, 0);
+#endif
+    return surface;
+}
+
+
+//#define DUMP_JPEG
+#ifdef DUMP_JPEG
+static int jpeg_id = 0;
+static void dump_jpeg(uint8_t* data, int data_size)
+{
+    char file_str[200];
+    uint32_t id = ++jpeg_id;
+
+#ifdef WIN32
+    sprintf(file_str, "c:\\tmp\\spice_dump\\%u.jpg", id);
+#else
+    sprintf(file_str, "/tmp/spice_dump/%u.jpg", id);
+#endif
+
+    FILE *f = fopen(file_str, "wb");
+    if (!f) {
+        return;
+    }
+    
+    fwrite(data, 1, data_size, f);
+    fclose(f);
+}
+#endif
+
+static pixman_image_t *canvas_get_jpeg(CanvasBase *canvas, SpiceJPEGImage *image, int invers)
+{
+    pixman_image_t *surface = NULL;
+    int stride;
+    int width;
+    int height;
+    uint8_t *dest;
+
+    canvas->jpeg->ops->begin_decode(canvas->jpeg, image->jpeg.data, image->jpeg.data_size,
+                                    &width, &height);
+    ASSERT((uint32_t)width == image->descriptor.width);
+    ASSERT((uint32_t)height == image->descriptor.height);
+
+    surface = surface_create(
+#ifdef WIN32
+                             canvas->dc,
+#endif
+                             PIXMAN_x8r8g8b8,
+                             width, height, FALSE);
+    if (surface == NULL) {
+        CANVAS_ERROR("create surface failed");
+    }
+
+    dest = (uint8_t *)pixman_image_get_data(surface);
+    stride = pixman_image_get_stride(surface);
+
+    canvas->jpeg->ops->decode(canvas->jpeg, dest, stride, SPICE_BITMAP_FMT_32BIT);
+
+    if (invers) {
+        uint8_t *end = dest + height * stride;
+        for (; dest != end; dest += stride) {
+            uint32_t *pix;
+            uint32_t *end_pix;
+
+            pix = (uint32_t *)dest;
+            end_pix = pix + width;
+            for (; pix < end_pix; pix++) {
+                *pix ^= 0x00ffffff;
+            }
+        }
+    }
+#ifdef DUMP_JPEG
+    dump_jpeg(image->jpeg.data, image->jpeg.data_size);
 #endif
     return surface;
 }
@@ -1001,7 +1074,12 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
         break;
     }
 #endif
-
+    case SPICE_IMAGE_TYPE_JPEG: {
+        SpiceJPEGImage *image = (SpiceJPEGImage *)descriptor;
+        access_test(canvas, descriptor, sizeof(SpiceJPEGImage));
+        surface = canvas_get_jpeg(canvas, image, 0);
+        break;
+    }
 #if defined(SW_CANVAS_CACHE)
     case SPICE_IMAGE_TYPE_GLZ_RGB: {
         access_test(canvas, descriptor, sizeof(SpiceLZRGBImage));
@@ -3234,6 +3312,7 @@ static int canvas_base_init(CanvasBase *canvas, SpiceCanvasOps *ops,
 #endif
                             , SpiceImageSurfaces *surfaces
                             , SpiceGlzDecoder *glz_decoder
+                            , SpiceJpegDecoder *jpeg_decoder
 #ifndef SW_CANVAS_NO_CHUNKS
                             , SpiceVirtMapping *virt_mapping
 #endif
@@ -3267,6 +3346,7 @@ static int canvas_base_init(CanvasBase *canvas, SpiceCanvasOps *ops,
 #endif
     canvas->surfaces = surfaces;
     canvas->glz_data.decoder = glz_decoder;
+    canvas->jpeg = jpeg_decoder;
 
     canvas->format = format;
 

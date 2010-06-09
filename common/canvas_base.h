@@ -31,6 +31,7 @@ typedef struct _SpiceImageCache SpiceImageCache;
 typedef struct _SpiceImageSurfaces SpiceImageSurfaces;
 typedef struct _SpicePaletteCache SpicePaletteCache;
 typedef struct _SpiceGlzDecoder SpiceGlzDecoder;
+typedef struct _SpiceJpegDecoder SpiceJpegDecoder;
 typedef struct _SpiceVirtMapping SpiceVirtMapping;
 typedef struct _SpiceCanvas SpiceCanvas;
 
@@ -77,6 +78,23 @@ typedef struct {
 
 struct _SpiceGlzDecoder {
   SpiceGlzDecoderOps *ops;
+};
+
+
+typedef struct SpiceJpegDecoderOps {
+    void (*begin_decode)(SpiceJpegDecoder *decoder,
+                         uint8_t* data,
+                         int data_size,
+                         int* out_width,
+                         int* out_height);
+    void (*decode)(SpiceJpegDecoder *decoder,
+                   uint8_t* dest,
+                   int stride,
+                   int format);
+} SpiceJpegDecoderOps;
+
+struct _SpiceJpegDecoder {
+    SpiceJpegDecoderOps *ops;
 };
 
 typedef struct {

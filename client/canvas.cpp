@@ -88,6 +88,7 @@ void Canvas::localalize_image(SPICE_ADDRESS* in_bitmap)
     case SPICE_IMAGE_TYPE_LZ_RGB:
     case SPICE_IMAGE_TYPE_GLZ_RGB:
     case SPICE_IMAGE_TYPE_QUIC:
+    case SPICE_IMAGE_TYPE_JPEG:
         break;
     case SPICE_IMAGE_TYPE_FROM_CACHE:
         break;

@@ -29,6 +29,7 @@
 #include "canvas_utils.h"
 #include "glz_decoded_image.h"
 #include "glz_decoder.h"
+#include "jpeg_decoder.h"
 
 enum CanvasType {
     CANVAS_TYPE_INVALID,
@@ -423,6 +424,7 @@ protected:
     CSurfaces& csurfaces() { return _csurfaces; }
 
     GlzDecoder& glz_decoder() {return _glz_decoder;}
+    JpegDecoder& jpeg_decoder() { return _jpeg_decoder;}
 
 private:
     void access_test(void* ptr, size_t size);
@@ -444,6 +446,8 @@ private:
     GlzDecodeSurfaceHandler _glz_handler;
     GlzDecoderCanvasDebug _glz_debug;
     GlzDecoder _glz_decoder;
+
+    JpegDecoder _jpeg_decoder;
 
     CSurfaces& _csurfaces;
 

@@ -69,6 +69,8 @@ RED_COMMON_SRCS =					\
 	$(CLIENT_DIR)/inputs_channel.cpp		\
 	$(CLIENT_DIR)/inputs_channel.h			\
 	$(CLIENT_DIR)/inputs_handler.h			\
+	$(CLIENT_DIR)/jpeg_decoder.cpp			\
+	$(CLIENT_DIR)/jpeg_decoder.h			\
 	$(CLIENT_DIR)/lz.cpp				\
 	$(CLIENT_DIR)/lines.cpp				\
 	$(CLIENT_DIR)/monitor.cpp			\

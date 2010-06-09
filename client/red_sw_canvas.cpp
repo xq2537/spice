@@ -42,13 +42,15 @@ SCanvas::SCanvas(bool onscreen,
                                          &pixmap_cache.base,
                                          &palette_cache.base,
                                          &csurfaces.base,
-                                         &glz_decoder());
+                                         &glz_decoder(),
+                                         &jpeg_decoder());
     } else {
         _canvas = canvas_create(width, height, format,
                                 &pixmap_cache.base,
                                 &palette_cache.base,
                                 &csurfaces.base,
-                                &glz_decoder());
+                                &glz_decoder(),
+                                &jpeg_decoder());
     }
     if (_canvas == NULL) {
         THROW("create canvas failed");

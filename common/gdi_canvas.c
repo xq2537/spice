@@ -1866,6 +1866,7 @@ SpiceCanvas *gdi_canvas_create(int width, int height,
 #endif
                             , SpiceImageSurfaces *surfaces
                             , SpiceGlzDecoder *glz_decoder
+                            , SpiceJpegDecoder *jpeg_decoder
                             )
 {
     GdiCanvas *canvas;
@@ -1884,7 +1885,8 @@ SpiceCanvas *gdi_canvas_create(int width, int height,
                                , bits_cache
 #endif
                                , surfaces
-                               , glz_decoder);
+                               , glz_decoder
+                               , jpeg_decoder);
     canvas->dc = dc;
     canvas->lock = lock;
     return (SpiceCanvas *)canvas;

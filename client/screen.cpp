@@ -692,7 +692,7 @@ void RedScreen::on_mouse_button_release(SpiceMouseButton button, unsigned int bu
 
 void RedScreen::on_pointer_leave()
 {
-    ASSERT(!_mouse_captured);
+//    ASSERT(!_mouse_captured);
 
     if (_pointer_layer) {
         _pointer_layer->on_pointer_leave();

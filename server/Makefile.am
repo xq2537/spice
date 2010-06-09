@@ -66,6 +66,8 @@ libspice_server_la_SOURCES =			\
 	glz_encoder_dictionary.h		\
 	glz_encoder_dictionary_protected.h	\
 	glz_encoder.h				\
+	jpeg_encoder.c				\
+	jpeg_encoder.h				\
 	mjpeg_encoder.h				\
 	mjpeg_encoder.c				\
 	red_bitmap_utils.h			\

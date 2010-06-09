@@ -1180,6 +1180,7 @@ static SpiceCanvas *canvas_create_common(pixman_image_t *image,
 #endif
                            , SpiceImageSurfaces *surfaces
                            , SpiceGlzDecoder *glz_decoder
+                           , SpiceJpegDecoder *jpeg_decoder
 #ifndef SW_CANVAS_NO_CHUNKS
                            , SpiceVirtMapping *virt_mapping
 #endif
@@ -1207,6 +1208,7 @@ static SpiceCanvas *canvas_create_common(pixman_image_t *image,
 #endif
                                , surfaces
                                , glz_decoder
+                               , jpeg_decoder
 #ifndef SW_CANVAS_NO_CHUNKS
                                , virt_mapping
 #endif
@@ -1228,6 +1230,7 @@ SpiceCanvas *canvas_create(int width, int height, uint32_t format
 #endif
                            , SpiceImageSurfaces *surfaces
                            , SpiceGlzDecoder *glz_decoder
+                           , SpiceJpegDecoder *jpeg_decoder
 #ifndef SW_CANVAS_NO_CHUNKS
                            , SpiceVirtMapping *virt_mapping
 #endif
@@ -1247,6 +1250,7 @@ SpiceCanvas *canvas_create(int width, int height, uint32_t format
 #endif
                                 , surfaces
                                 , glz_decoder
+                                , jpeg_decoder
 #ifndef SW_CANVAS_NO_CHUNKS
                                 , virt_mapping
 #endif
@@ -1263,6 +1267,7 @@ SpiceCanvas *canvas_create_for_data(int width, int height, uint32_t format,
 #endif
                            , SpiceImageSurfaces *surfaces
                            , SpiceGlzDecoder *glz_decoder
+                           , SpiceJpegDecoder *jpeg_decoder
 #ifndef SW_CANVAS_NO_CHUNKS
                            , SpiceVirtMapping *virt_mapping
 #endif
@@ -1282,6 +1287,7 @@ SpiceCanvas *canvas_create_for_data(int width, int height, uint32_t format,
 #endif
                                 , surfaces
                                 , glz_decoder
+                                , jpeg_decoder
 #ifndef SW_CANVAS_NO_CHUNKS
                                 , virt_mapping
 #endif

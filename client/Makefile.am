@@ -43,6 +43,8 @@ RED_COMMON_SRCS =			\
 	inputs_channel.cpp		\
 	inputs_channel.h		\
 	inputs_handler.h		\
+	jpeg_decoder.cpp		\
+	jpeg_decoder.h			\
 	lz.cpp				\
 	monitor.cpp			\
 	monitor.h			\

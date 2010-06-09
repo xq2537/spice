@@ -252,6 +252,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\jpeg_decoder.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\lines.cpp"
 				>
 			</File>
@@ -521,6 +525,10 @@
 			</File>
 			<File
 				RelativePath="..\inputs_handler.h"
+				>
+			</File>
+			<File
+				RelativePath="..\jpeg_decoder.h"
 				>
 			</File>
 			<File
