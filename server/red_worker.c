@@ -10401,6 +10401,8 @@ static int display_channel_handle_migrate_data(DisplayChannel *channel, size_t s
         PANIC("restoring global lz dictionary failed");
     }
 
+    red_pipe_add_type((RedChannel *)channel, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
+
     channel->base.messages_window = 0;
     return TRUE;
 }
