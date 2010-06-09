@@ -1534,7 +1534,9 @@ void DisplayChannel::handle_surface_destroy(RedPeer::InMessage* message)
     PRE_DRAW;                                       \
     canvas->draw_##type(*type, message->size());    \
     POST_DRAW;                                      \
-    invalidate(type->base.box, false);              \
+    if (type->base.surface_id == 0) {               \
+        invalidate(type->base.box, false);          \
+    }                                               \
 }
 
 void DisplayChannel::handle_copy_bits(RedPeer::InMessage* message)
@@ -1545,7 +1547,9 @@ void DisplayChannel::handle_copy_bits(RedPeer::InMessage* message)
     canvas = surfaces_mngr.get_canvas(copy_bits->base.surface_id);
     canvas->copy_bits(*copy_bits, message->size());
     POST_DRAW;
-    invalidate(copy_bits->base.box, false);
+    if (copy_bits->base.surface_id == 0) {
+        invalidate(copy_bits->base.box, false);
+    }
 }
 
 void DisplayChannel::handle_draw_fill(RedPeer::InMessage* message)
