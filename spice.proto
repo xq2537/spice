@@ -130,8 +130,8 @@ channel BaseChannel {
 	notify_visibility visibilty;
 	uint32 what; /* error_code/warn_code/info_code */
 	uint32 message_len;
-	uint8 message[message_len] @end;
-	uint8 zero @end @ctype(uint8_t) @zero;
+	uint8 message[message_len] @end @nomarshal;
+	uint8 zero @end @ctype(uint8_t) @zero  @nomarshal;
     } notify;
 
  client:
@@ -171,8 +171,8 @@ channel MainChannel : BaseChannel {
 	pubkey_type pub_key_type @minor(2);
 	uint32 pub_key_offset @minor(2);
 	uint32 pub_key_size @minor(2);
-	uint8 host_data[host_size] @end @ctype(uint8_t) @zero_terminated;
-	uint8 pub_key_data[pub_key_size] @minor(2) @end @ctype(uint8_t) @zero_terminated;
+	uint8 host_data[host_size] @end @ctype(uint8_t) @zero_terminated @nomarshal;
+	uint8 pub_key_data[pub_key_size] @minor(2) @end @ctype(uint8_t) @zero_terminated @nomarshal;
     } @ctype(SpiceMsgMainMigrationBegin) migrate_begin = 101;
 
     Empty migrate_cancel;
@@ -455,7 +455,7 @@ struct BitmapData {
 
 struct BinaryData {
     uint32 data_size;
-    uint8 data[data_size] @end;
+    uint8 data[data_size] @end @nomarshal;
 } @ctype(SpiceQUICData);
 
 struct LZPLTData {
@@ -467,7 +467,7 @@ struct LZPLTData {
     default:
 	Palette *palette @nonnull @outvar(lzplt);
     } pal @anon;
-    uint8 data[data_size] @end;
+    uint8 data[data_size] @end @nomarshal;
 };
 
 struct Surface {
@@ -561,7 +561,7 @@ struct String {
 	RasterGlyphA4 glyphs[length] @ctype(SpiceRasterGlyph);
     case RASTER_A8:
 	RasterGlyphA8 glyphs[length] @ctype(SpiceRasterGlyph);
-    } u @end;
+    } u @end @nomarshal;
 };
 
 channel DisplayChannel : BaseChannel {
@@ -614,8 +614,8 @@ channel DisplayChannel : BaseChannel {
 	uint32 multi_media_time;
 	uint32 data_size;
 	uint32 pad_size;
-	uint8 data[data_size] @end;
-	uint8 padding[pad_size] @end @ctype(uint8_t); /* Uhm, why are we sending padding over network? */
+	uint8 data[data_size] @end  @nomarshal;
+	uint8 padding[pad_size] @end @ctype(uint8_t)  @nomarshal; /* Uhm, why are we sending padding over network? */
     } stream_data;
 
     message {
@@ -952,7 +952,7 @@ channel RecordChannel : BaseChannel {
  client:
     message {
 	uint32 time;
-	uint8 data[] @end;
+	uint8 data[] @end @nomarshal;
     } @ctype(SpiceMsgcRecordPacket) data = 101;
 
     message {
@@ -982,7 +982,7 @@ struct TunnelIpInfo {
     switch (type) {
     case IPv4:
 	uint8 ipv4[4] @ctype(uint8_t);
-    } u @end;
+    } u @end @nomarshal;
 } @ctype(SpiceMsgTunnelIpInfo);
 
 channel TunnelChannel : BaseChannel {
