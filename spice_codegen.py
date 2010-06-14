@@ -8,6 +8,7 @@ from python_modules import spice_parser
 from python_modules import ptypes
 from python_modules import codegen
 from python_modules import demarshal
+from python_modules import marshal
 
 def write_channel_enums(writer, channel, client):
     messages = filter(lambda m : m.channel == channel, \
@@ -82,9 +83,18 @@ parser.add_option("-e", "--generate-enums",
 parser.add_option("-d", "--generate-demarshallers",
                   action="store_true", dest="generate_demarshallers", default=False,
                   help="Generate demarshallers")
+parser.add_option("-m", "--generate-marshallers",
+                  action="store_true", dest="generate_marshallers", default=False,
+                  help="Generate message marshallers")
+parser.add_option("-M", "--generate-struct-marshaller",
+                  action="append", dest="struct_marshallers",
+                  help="Generate struct marshallers")
 parser.add_option("-a", "--assert-on-error",
                   action="store_true", dest="assert_on_error", default=False,
                   help="Assert on error")
+parser.add_option("-H", "--header",
+                  action="store_true", dest="header", default=False,
+                  help="Generate header")
 parser.add_option("-p", "--print-error",
                   action="store_true", dest="print_error", default=False,
                   help="Print errors")
@@ -118,6 +128,7 @@ if proto == None:
 
 codegen.set_prefix(proto.name)
 writer = codegen.CodeWriter()
+writer.header = codegen.CodeWriter()
 writer.set_option("source", os.path.basename(proto_file))
 
 if options.assert_on_error:
@@ -143,7 +154,30 @@ if options.generate_demarshallers:
     if options.client:
         demarshal.write_protocol_parser(writer, proto, True)
 
-content = writer.getvalue()
+if options.generate_marshallers or (options.struct_marshallers and len(options.struct_marshallers) > 0):
+    marshal.write_includes(writer)
+
+if options.generate_marshallers:
+    if not options.server and not options.client:
+        print >> sys.stderr, "Must specify client and/or server"
+        sys.exit(1)
+    if options.server:
+        marshal.write_protocol_marshaller(writer, proto, False)
+    if options.client:
+        marshal.write_protocol_marshaller(writer, proto, True)
+
+if options.struct_marshallers:
+    for structname in options.struct_marshallers:
+        t = ptypes.lookup_type(structname)
+        marshal.write_marshal_ptr_function(writer, t)
+
+if options.generate_marshallers or (options.struct_marshallers and len(options.struct_marshallers) > 0):
+    marshal.write_trailer(writer)
+
+if options.header:
+    content = writer.header.getvalue()
+else:
+    content = writer.getvalue()
 if options.keep_identical_file:
     try:
         f = open(dest_file, 'rb')
