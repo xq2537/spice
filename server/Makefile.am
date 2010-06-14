@@ -31,6 +31,7 @@ COMMON_SRCS =						\
 	$(top_srcdir)/common/lz.c			\
 	$(top_srcdir)/common/canvas_utils.c		\
 	$(top_srcdir)/common/mem.c			\
+	$(top_srcdir)/common/marshaller.c		\
 	$(NULL)
 
 lib_LTLIBRARIES = libspice-server.la

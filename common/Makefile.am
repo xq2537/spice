@@ -39,6 +39,8 @@ COMMON_SRCS = 				\
 	lz_config.h			\
 	lz_decompress_tmpl.c		\
 	lz.h				\
+	marshaller.h			\
+	marshaller.c			\
 	quic_family_tmpl.c		\
 	quic_rgb_tmpl.c			\
 	quic_tmpl.c			\
