@@ -8382,7 +8382,7 @@ static inline void display_begin_send_massage(DisplayChannel *channel, void *ite
 {
     FreeList *free_list = &channel->send_data.free_list;
 
-    if (0 && free_list->res->count) {
+    if (free_list->res->count) {
         int sub_list_len = 1;
         SpiceMarshaller *wait_m = NULL;
         SpiceMarshaller *inval_m;
