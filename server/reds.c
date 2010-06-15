@@ -1,3 +1,4 @@
+/* -*- Mode: C; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 /*
    Copyright (C) 2009 Red Hat, Inc.
 
@@ -51,6 +52,8 @@
 #include "stat.h"
 #include "ring.h"
 #include "config.h"
+#include "marshaller.h"
+#include "generated_marshallers.h"
 #ifdef HAVE_SLIRP
 #include "red_tunnel_worker.h"
 #endif
@@ -148,14 +151,13 @@ typedef struct MonitorMode {
 typedef struct RedsOutItem RedsOutItem;
 struct RedsOutItem {
     RingItem link;
-    void (*prepare)(RedsOutItem *item, struct iovec* vec, int *len);
-    void (*release)(RedsOutItem *item);
+    SpiceMarshaller *m;
+    SpiceDataHeader *header;
 };
 
 typedef struct VDIReadBuf {
-    RedsOutItem out_item;
+    RingItem link;
     int len;
-    SpiceDataHeader header;
     uint8_t data[SPICE_AGENT_MAX_DATA_SIZE];
 } VDIReadBuf;
 
@@ -353,18 +355,12 @@ struct ChannelSecurityOptions {
     ChannelSecurityOptions *next;
 };
 
-typedef struct PingItem {
-    RedsOutItem base;
-    SpiceDataHeader header;
-    SpiceMsgPing ping;
-    int size;
-} PingItem;
-
 #define ZERO_BUF_SIZE 4096
 
 static uint8_t zero_page[ZERO_BUF_SIZE] = {0};
 
 static void reds_push();
+static void reds_out_item_free(RedsOutItem *item);
 
 static ChannelSecurityOptions *channels_security = NULL;
 static int default_channel_security =
@@ -693,7 +689,7 @@ static void reds_reset_vdp()
     state->recive_len = sizeof(state->vdi_chunk_header);
     state->message_recive_len = 0;
     if (state->current_read_buf) {
-        ring_add(&state->read_bufs, &state->current_read_buf->out_item.link);
+        ring_add(&state->read_bufs, &state->current_read_buf->link);
         state->current_read_buf = NULL;
     }
     state->client_agent_started = FALSE;
@@ -706,13 +702,13 @@ static void reds_reset_outgoing()
     RingItem *ring_item;
 
     if (outgoing->item) {
-        outgoing->item->release(outgoing->item);
+        reds_out_item_free(outgoing->item);
         outgoing->item = NULL;
     }
     while ((ring_item = ring_get_tail(&outgoing->pipe))) {
         RedsOutItem *out_item = (RedsOutItem *)ring_item;
         ring_remove(ring_item);
-        out_item->release(out_item);
+        reds_out_item_free(out_item);
     }
     outgoing->vec_size = 0;
     outgoing->vec = outgoing->vec_buf;
@@ -881,47 +877,29 @@ static int outgoing_write(RedsStreamContext *peer, OutgoingHandler *handler, voi
     return OUTGOING_OK;
 }
 
-typedef struct SimpleOutItem {
-    RedsOutItem base;
-    SpiceDataHeader header;
-    uint8_t data[0];
-} SimpleOutItem;
-
-static void reds_prepare_basic_out_item(RedsOutItem *in_item, struct iovec* vec, int *len)
+static RedsOutItem *new_out_item(uint32_t type)
 {
-    SimpleOutItem *item = (SimpleOutItem *)in_item;
+    RedsOutItem *item;
 
-    vec[0].iov_base = &item->header;
-    vec[0].iov_len = sizeof(item->header);
-    if (item->header.size) {
-        vec[1].iov_base = item->data;
-        vec[1].iov_len = item->header.size;
-        *len = 2;
-    } else {
-        *len = 1;
-    }
-}
+    item = spice_new(RedsOutItem, 1);
+    ring_item_init(&item->link);
 
-static void reds_free_basic_out_item(RedsOutItem *item)
-{
-    free(item);
-}
+    item->m = spice_marshaller_new();
+    item->header = (SpiceDataHeader *)
+        spice_marshaller_reserve_space(item->m, sizeof(SpiceDataHeader));
+    spice_marshaller_set_base(item->m, sizeof(SpiceDataHeader));
 
-static SimpleOutItem *new_simple_out_item(uint32_t type, int message_size)
-{
-    SimpleOutItem *item;
-
-    item = (SimpleOutItem *)spice_malloc(sizeof(*item) + message_size);
-    ring_item_init(&item->base.link);
-    item->base.prepare = reds_prepare_basic_out_item;
-    item->base.release = reds_free_basic_out_item;
-
-    item->header.serial = ++reds->serial;
-    item->header.type = type;
-    item->header.size = message_size;
-    item->header.sub_list = 0;
+    item->header->serial = ++reds->serial;
+    item->header->type = type;
+    item->header->sub_list = 0;
 
     return item;
+}
+
+static void reds_out_item_free(RedsOutItem *item)
+{
+    spice_marshaller_destroy(item->m);
+    free(item);
 }
 
 static void reds_push_pipe_item(RedsOutItem *item)
@@ -933,14 +911,12 @@ static void reds_push_pipe_item(RedsOutItem *item)
 static void reds_send_channels()
 {
     SpiceMsgChannels* channels_info;
-    SimpleOutItem *item;
-    int message_size;
+    RedsOutItem *item;
     Channel *channel;
     int i;
 
-    message_size = sizeof(SpiceMsgChannels) + reds->num_of_channels * sizeof(SpiceChannelId);
-    item = new_simple_out_item(SPICE_MSG_MAIN_CHANNELS_LIST, message_size);
-    channels_info = (SpiceMsgChannels *)item->data;
+    item = new_out_item(SPICE_MSG_MAIN_CHANNELS_LIST);
+    channels_info = (SpiceMsgChannels *)spice_malloc(sizeof(SpiceMsgChannels) + reds->num_of_channels * sizeof(SpiceChannelId));
     channels_info->num_of_channels = reds->num_of_channels;
     channel = reds->channels;
 
@@ -950,59 +926,34 @@ static void reds_send_channels()
         channels_info->channels[i].id = channel->id;
         channel = channel->next;
     }
-    reds_push_pipe_item(&item->base);
-}
-
-static void reds_prepare_ping_item(RedsOutItem *in_item, struct iovec* vec, int *len)
-{
-    PingItem *item = (PingItem *)in_item;
-
-    vec[0].iov_base = &item->header;
-    vec[0].iov_len = sizeof(item->header);
-    vec[1].iov_base = &item->ping;
-    vec[1].iov_len = sizeof(item->ping);
-    int size = item->size;
-    int pos = 2;
-    while (size) {
-        ASSERT(pos < REDS_MAX_SEND_IOVEC);
-        int now = MIN(ZERO_BUF_SIZE, size);
-        size -= now;
-        vec[pos].iov_base = zero_page;
-        vec[pos].iov_len = now;
-        pos++;
-    }
-    *len = pos;
-}
-
-static void reds_free_ping_item(RedsOutItem *item)
-{
-    free(item);
+    spice_marshall_msg_main_channels_list(item->m, channels_info);
+    free(channels_info);
+    reds_push_pipe_item(item);
 }
 
 static int send_ping(int size)
 {
     struct timespec time_space;
-    PingItem *item;
+    RedsOutItem *item;
+    SpiceMsgPing ping;
 
     if (!reds->peer) {
         return FALSE;
     }
-    item = spice_new(PingItem, 1);
-    ring_item_init(&item->base.link);
-    item->base.prepare = reds_prepare_ping_item;
-    item->base.release = reds_free_ping_item;
-
-    item->header.serial = ++reds->serial;
-    item->header.type = SPICE_MSG_PING;
-    item->header.size = sizeof(item->ping) + size;
-    item->header.sub_list = 0;
-
-    item->ping.id = ++reds->ping_id;
+    item = new_out_item(SPICE_MSG_PING);
+    ping.id = ++reds->ping_id;
     clock_gettime(CLOCK_MONOTONIC, &time_space);
-    item->ping.timestamp = time_space.tv_sec * 1000000LL + time_space.tv_nsec / 1000LL;
+    ping.timestamp = time_space.tv_sec * 1000000LL + time_space.tv_nsec / 1000LL;
+    spice_marshall_msg_ping(item->m, &ping);
 
-    item->size = size;
-    reds_push_pipe_item(&item->base);
+    while (size > 0) {
+        int now = MIN(ZERO_BUF_SIZE, size);
+        size -= now;
+        spice_marshaller_add_ref(item->m, zero_page, now);
+    }
+
+    reds_push_pipe_item(item);
+
     return TRUE;
 }
 
@@ -1044,21 +995,23 @@ static void ping_timer_cb()
 
 static void reds_send_mouse_mode()
 {
-    SpiceMsgMainMouseMode *mouse_mode;
-    SimpleOutItem *item;
+    SpiceMsgMainMouseMode mouse_mode;
+    RedsOutItem *item;
 
     if (!reds->peer) {
         return;
     }
 
-    item = new_simple_out_item(SPICE_MSG_MAIN_MOUSE_MODE, sizeof(SpiceMsgMainMouseMode));
-    mouse_mode = (SpiceMsgMainMouseMode *)item->data;
-    mouse_mode->supported_modes = SPICE_MOUSE_MODE_SERVER;
+    item = new_out_item(SPICE_MSG_MAIN_MOUSE_MODE);
+    mouse_mode.supported_modes = SPICE_MOUSE_MODE_SERVER;
     if (reds->is_client_mouse_allowed) {
-        mouse_mode->supported_modes |= SPICE_MOUSE_MODE_CLIENT;
+        mouse_mode.supported_modes |= SPICE_MOUSE_MODE_CLIENT;
     }
-    mouse_mode->current_mode = reds->mouse_mode;
-    reds_push_pipe_item(&item->base);
+    mouse_mode.current_mode = reds->mouse_mode;
+
+    spice_marshall_msg_main_mouse_mode(item->m, &mouse_mode);
+
+    reds_push_pipe_item(item);
 }
 
 static void reds_set_mouse_mode(uint32_t mode)
@@ -1092,20 +1045,21 @@ static void reds_update_mouse_mode()
 
 static void reds_send_agent_connected()
 {
-    SimpleOutItem *item;
-    item = new_simple_out_item(SPICE_MSG_MAIN_AGENT_CONNECTED, 0);
-    reds_push_pipe_item(&item->base);
+    RedsOutItem *item;
+
+    item = new_out_item(SPICE_MSG_MAIN_AGENT_CONNECTED);
+    reds_push_pipe_item(item);
 }
 
 static void reds_send_agent_disconnected()
 {
-    SpiceMsgMainAgentDisconnect *disconnect;
-    SimpleOutItem *item;
+    SpiceMsgMainAgentDisconnect disconnect;
+    RedsOutItem *item;
 
-    item = new_simple_out_item(SPICE_MSG_MAIN_AGENT_DISCONNECTED, sizeof(SpiceMsgMainAgentDisconnect));
-    disconnect = (SpiceMsgMainAgentDisconnect *)item->data;
-    disconnect->error_code = SPICE_LINK_ERR_OK;
-    reds_push_pipe_item(&item->base);
+    item = new_out_item(SPICE_MSG_MAIN_AGENT_DISCONNECTED);
+    disconnect.error_code = SPICE_LINK_ERR_OK;
+    spice_marshall_msg_main_agent_disconnected(item->m, &disconnect);
+    reds_push_pipe_item(item);
 }
 
 static void reds_agent_remove()
@@ -1137,20 +1091,22 @@ static void reds_agent_remove()
 
 static void reds_send_tokens()
 {
-    SpiceMsgMainAgentTokens *tokens;
-    SimpleOutItem *item;
+    SpiceMsgMainAgentTokens tokens;
+    RedsOutItem *item;
 
     if (!reds->peer) {
         return;
     }
 
-    item = new_simple_out_item(SPICE_MSG_MAIN_AGENT_TOKEN, sizeof(SpiceMsgMainAgentTokens));
-    tokens = (SpiceMsgMainAgentTokens *)item->data;
-    tokens->num_tokens = reds->agent_state.num_tokens;
-    reds->agent_state.num_client_tokens += tokens->num_tokens;
+    item = new_out_item(SPICE_MSG_MAIN_AGENT_TOKEN);
+    tokens.num_tokens = reds->agent_state.num_tokens;
+    reds->agent_state.num_client_tokens += tokens.num_tokens;
     ASSERT(reds->agent_state.num_client_tokens <= REDS_AGENT_WINDOW_SIZE);
     reds->agent_state.num_tokens = 0;
-    reds_push_pipe_item(&item->base);
+
+    spice_marshall_msg_main_agent_token(item->m, &tokens);
+
+    reds_push_pipe_item(item);
 }
 
 static int write_to_vdi_port()
@@ -1188,27 +1144,41 @@ static int write_to_vdi_port()
     return total;
 }
 
+static int read_from_vdi_port(void);
+
+void vdi_read_buf_release(uint8_t *data, void *opaque)
+{
+    VDIReadBuf *buf = (VDIReadBuf *)opaque;
+
+    ring_add(&reds->agent_state.read_bufs, &buf->link);
+    read_from_vdi_port();
+}
+
 static void dispatch_vdi_port_data(int port, VDIReadBuf *buf)
 {
     VDIPortState *state = &reds->agent_state;
+    RedsOutItem *item;
+
     switch (port) {
     case VDP_CLIENT_PORT: {
-        buf->header.serial = ++reds->serial;
-        buf->header.size = buf->len;
-        reds_push_pipe_item(&buf->out_item);
+        item = new_out_item(SPICE_MSG_MAIN_AGENT_DATA);
+
+        spice_marshaller_add_ref_full(item->m, buf->data, buf->len,
+                                      vdi_read_buf_release, buf);
+        reds_push_pipe_item(item);
         break;
     }
     case VDP_SERVER_PORT:
-        ring_add(&state->read_bufs, &buf->out_item.link);
+        ring_add(&state->read_bufs, &buf->link);
         break;
     default:
-        ring_add(&state->read_bufs, &buf->out_item.link);
+        ring_add(&state->read_bufs, &buf->link);
         red_printf("invalid port");
         reds_agent_remove();
     }
 }
 
-static int read_from_vdi_port()
+static int read_from_vdi_port(void)
 {
     VDIPortState *state = &reds->agent_state;
     SpiceVDIPortInterface *sif;
@@ -1346,111 +1316,68 @@ typedef struct WriteQueueInfo {
     uint32_t len;
 } WriteQueueInfo;
 
-typedef struct SendMainMigrateItem {
-    RedsOutItem base;
-    SpiceDataHeader header;
-    MainMigrateData data;
-    WriteQueueInfo queue_info[REDS_AGENT_WINDOW_SIZE + REDS_NUM_INTERNAL_AGENT_MESSAGES];
-} SendMainMigrateItem;
-
-static void main_channel_send_migrate_data_item(RedsOutItem *in_item, struct iovec* vec_start,
-                                                int *len)
+static void main_channel_push_migrate_data_item()
 {
-    SendMainMigrateItem *item = (SendMainMigrateItem *)in_item;
+    RedsOutItem *item;
+    MainMigrateData *data;
     VDIPortState *state = &reds->agent_state;
-    struct iovec* vec;
     int buf_index;
     RingItem *now;
 
-    vec = vec_start;
+    item = new_out_item(SPICE_MSG_MIGRATE_DATA);
 
-    item->header.serial = ++reds->serial;
-    item->header.type = SPICE_MSG_MIGRATE_DATA;
-    item->header.size = sizeof(item->data);
-    item->header.sub_list = 0;
+    data = (MainMigrateData *)spice_marshaller_reserve_space(item->m, sizeof(MainMigrateData));
+    data->version = MAIN_CHANNEL_MIG_DATA_VERSION;
+    data->serial = reds->serial;
+    data->ping_id = reds->ping_id;
 
-    vec[0].iov_base = &item->header;
-    vec[0].iov_len = sizeof(item->header);
-    vec[1].iov_base = &item->data;
-    vec[1].iov_len = sizeof(item->data);
+    data->agent_connected = !!state->connected;
+    data->client_agent_started = state->client_agent_started;
+    data->num_client_tokens = state->num_client_tokens;
+    data->send_tokens = state->send_tokens;
 
-    vec += 2;
-    *len = 2;
-
-    item->data.version = MAIN_CHANNEL_MIG_DATA_VERSION;
-    item->data.serial = reds->serial;
-    item->data.ping_id = reds->ping_id;
-
-    item->data.agent_connected = !!state->connected;
-    item->data.client_agent_started = state->client_agent_started;
-    item->data.num_client_tokens = state->num_client_tokens;
-    item->data.send_tokens = state->send_tokens;
-
-    item->data.read_state = state->read_state;
-    item->data.vdi_chunk_header = state->vdi_chunk_header;
-    item->data.recive_len = state->recive_len;
-    item->data.message_recive_len = state->message_recive_len;
-
+    data->read_state = state->read_state;
+    data->vdi_chunk_header = state->vdi_chunk_header;
+    data->recive_len = state->recive_len;
+    data->message_recive_len = state->message_recive_len;
 
     if (state->current_read_buf) {
-        item->data.read_buf_len = state->current_read_buf->len;
-        if ((vec->iov_len = item->data.read_buf_len - item->data.recive_len)) {
-            vec->iov_base = state->current_read_buf->data;
-            item->header.size += vec->iov_len;
-            vec++;
-            (*len)++;
+        data->read_buf_len = state->current_read_buf->len;
+
+        if (data->read_buf_len - data->recive_len) {
+            spice_marshaller_add_ref(item->m,
+                                     state->current_read_buf->data,
+                                     data->read_buf_len - data->recive_len);
         }
     } else {
-        item->data.read_buf_len = 0;
+        data->read_buf_len = 0;
     }
 
     now = &state->write_queue;
-    item->data.write_queue_size = 0;
+    data->write_queue_size = 0;
     while ((now = ring_prev(&state->write_queue, now))) {
-        item->data.write_queue_size++;
+        data->write_queue_size++;
     }
-    if (!item->data.write_queue_size) {
-        return;
+    if (data->write_queue_size) {
+        WriteQueueInfo *queue_info;
+
+        queue_info = (WriteQueueInfo *)
+            spice_marshaller_reserve_space(item->m,
+                                           data->write_queue_size * sizeof(queue_info[0]));
+
+        buf_index = 0;
+        now = &state->write_queue;
+        while ((now = ring_prev(&state->write_queue, now))) {
+            VDIPortBuf *buf = (VDIPortBuf *)now;
+            queue_info[buf_index].port = buf->chunk_header.port;
+            queue_info[buf_index++].len = buf->write_len;
+            spice_marshaller_add_ref(item->m, buf->now, buf->write_len);
+        }
     }
-    ASSERT(item->data.write_queue_size <= sizeof(item->queue_info) / sizeof(item->queue_info[0]));
-    vec->iov_base = item->queue_info;
-    vec->iov_len = item->data.write_queue_size * sizeof(item->queue_info[0]);
-    item->header.size += vec->iov_len;
-    vec++;
-    (*len)++;
-
-    buf_index = 0;
-    now = &state->write_queue;
-    while ((now = ring_prev(&state->write_queue, now))) {
-        VDIPortBuf *buf = (VDIPortBuf *)now;
-        item->queue_info[buf_index].port = buf->chunk_header.port;
-        item->queue_info[buf_index++].len = buf->write_len;
-        ASSERT(vec - vec_start < REDS_MAX_SEND_IOVEC);
-        vec->iov_base = buf->now;
-        vec->iov_len = buf->write_len;
-        item->header.size += vec->iov_len;
-        vec++;
-        (*len)++;
-    }
-}
-
-static void main_channelrelease_migrate_data_item(RedsOutItem *in_item)
-{
-    SendMainMigrateItem *item = (SendMainMigrateItem *)in_item;
-    free(item);
-}
-
-static void main_channel_push_migrate_data_item()
-{
-    SendMainMigrateItem *item;
-
-    item = spice_new0(SendMainMigrateItem, 1);
-    ring_item_init(&item->base.link);
-    item->base.prepare = main_channel_send_migrate_data_item;
-    item->base.release = main_channelrelease_migrate_data_item;
 
     reds_push_pipe_item((RedsOutItem *)item);
 }
+
 
 static int main_channel_restore_vdi_read_state(MainMigrateData *data, uint8_t **in_pos,
                                                uint8_t *end)
@@ -1858,7 +1785,7 @@ static int reds_send_data()
         } else {
             outgoing->vec = reds_iovec_skip(outgoing->vec, n, &outgoing->vec_size);
             if (!outgoing->vec_size) {
-                outgoing->item->release(outgoing->item);
+                reds_out_item_free(outgoing->item);
                 outgoing->item = NULL;
                 outgoing->vec = outgoing->vec_buf;
                 return TRUE;
@@ -1870,15 +1797,22 @@ static int reds_send_data()
 static void reds_push()
 {
     RedsOutgoingData *outgoing = &reds->outgoing;
-    RingItem *item;
+    RingItem *ring_item;
+    RedsOutItem *item;
 
     for (;;) {
-        if (!reds->peer || outgoing->item || !(item = ring_get_tail(&outgoing->pipe))) {
+        if (!reds->peer || outgoing->item || !(ring_item = ring_get_tail(&outgoing->pipe))) {
             return;
         }
-        ring_remove(item);
-        outgoing->item = (RedsOutItem *)item;
-        outgoing->item->prepare(outgoing->item, outgoing->vec_buf, &outgoing->vec_size);
+        ring_remove(ring_item);
+        outgoing->item = item = (RedsOutItem *)ring_item;
+
+        spice_marshaller_flush(item->m);
+        item->header->size = spice_marshaller_get_total_size(item->m) - sizeof(SpiceDataHeader);
+
+        outgoing->vec_size = spice_marshaller_fill_iovec(item->m,
+                                                         outgoing->vec_buf,
+                                                         REDS_MAX_SEND_IOVEC, 0);
         reds_send_data();
     }
 }
@@ -2063,24 +1997,26 @@ static void reds_handle_main_link(RedLinkInfo *link)
                                         reds_main_event, NULL);
 
     if (!reds->mig_target) {
-        SimpleOutItem *item;
-        SpiceMsgMainInit *init;
+        RedsOutItem *item;
+        SpiceMsgMainInit init;
 
-        item = new_simple_out_item(SPICE_MSG_MAIN_INIT, sizeof(SpiceMsgMainInit));
-        init = (SpiceMsgMainInit *)item->data;
-        init->session_id = connection_id;
-        init->display_channels_hint = red_dispatcher_count();
-        init->current_mouse_mode = reds->mouse_mode;
-        init->supported_mouse_modes = SPICE_MOUSE_MODE_SERVER;
+        item = new_out_item(SPICE_MSG_MAIN_INIT);
+        init.session_id = connection_id;
+        init.display_channels_hint = red_dispatcher_count();
+        init.current_mouse_mode = reds->mouse_mode;
+        init.supported_mouse_modes = SPICE_MOUSE_MODE_SERVER;
         if (reds->is_client_mouse_allowed) {
-            init->supported_mouse_modes |= SPICE_MOUSE_MODE_CLIENT;
+            init.supported_mouse_modes |= SPICE_MOUSE_MODE_CLIENT;
         }
-        init->agent_connected = !!vdagent;
-        init->agent_tokens = REDS_AGENT_WINDOW_SIZE;
+        init.agent_connected = !!vdagent;
+        init.agent_tokens = REDS_AGENT_WINDOW_SIZE;
         reds->agent_state.num_client_tokens = REDS_AGENT_WINDOW_SIZE;
-        init->multi_media_time = reds_get_mm_time() - MM_TIME_DELTA;
-        init->ram_hint = red_dispatcher_qxl_ram_size();
-        reds_push_pipe_item(&item->base);
+        init.multi_media_time = reds_get_mm_time() - MM_TIME_DELTA;
+        init.ram_hint = red_dispatcher_qxl_ram_size();
+
+        spice_marshall_msg_main_init(item->m, &init);
+
+        reds_push_pipe_item(item);
         reds_start_net_test();
     }
 }
@@ -2516,25 +2452,23 @@ static void reds_handle_other_links(RedLinkInfo *link)
     reds_send_link_result(link, SPICE_LINK_ERR_OK);
     reds_show_new_channel(link);
     if (link_mess->channel_type == SPICE_CHANNEL_INPUTS && !link->peer->ssl) {
-        SimpleOutItem *item;
-        SpiceMsgNotify *notify;
+        RedsOutItem *item;
+        SpiceMsgNotify notify;
         char *mess = "keyboard channel is insecure";
         const int mess_len = strlen(mess);
 
-        if (!(item = new_simple_out_item(SPICE_MSG_NOTIFY, sizeof(SpiceMsgNotify) + mess_len + 1))) {
-            red_printf("alloc item failed");
-            reds_disconnect();
-            return;
-        }
+        item = new_out_item(SPICE_MSG_NOTIFY);
 
-        notify = (SpiceMsgNotify *)item->data;
-        notify->time_stamp = get_time_stamp();
-        notify->severity = SPICE_NOTIFY_SEVERITY_WARN;
-        notify->visibilty = SPICE_NOTIFY_VISIBILITY_HIGH;
-        notify->what = SPICE_WARN_GENERAL;
-        notify->message_len = mess_len;
-        memcpy(notify->message, mess, mess_len + 1);
-        reds_push_pipe_item(&item->base);
+        notify.time_stamp = get_time_stamp();
+        notify.severity = SPICE_NOTIFY_SEVERITY_WARN;
+        notify.visibilty = SPICE_NOTIFY_VISIBILITY_HIGH;
+        notify.what = SPICE_WARN_GENERAL;
+        notify.message_len = mess_len;
+
+        spice_marshall_msg_notify(item->m, &notify);
+        spice_marshaller_add(item->m, (uint8_t *)mess, mess_len + 1);
+
+        reds_push_pipe_item(item);
     }
     peer = link->peer;
     link->link_mess = NULL;
@@ -3220,25 +3154,26 @@ typedef struct RedsMigCertPubKeyInfo {
 static void reds_mig_continue(void)
 {
     RedsMigSpice *s = reds->mig_spice;
-    SpiceMsgMainMigrationBegin *migrate;
-    SimpleOutItem *item;
+    SpiceMsgMainMigrationBegin migrate;
+    RedsOutItem *item;
     int host_len;
 
     red_printf("");
     host_len = strlen(s->host) + 1;
-    item = new_simple_out_item(SPICE_MSG_MAIN_MIGRATE_BEGIN,
-                               sizeof(SpiceMsgMainMigrationBegin) + host_len + s->cert_pub_key_len);
-    migrate = (SpiceMsgMainMigrationBegin *)item->data;
-    migrate->port = s->port;
-    migrate->sport = s->sport;
-    migrate->host_offset = sizeof(SpiceMsgMainMigrationBegin);
-    migrate->host_size = host_len;
-    migrate->pub_key_type = s->cert_pub_key_type;
-    migrate->pub_key_offset = sizeof(SpiceMsgMainMigrationBegin) + host_len;
-    migrate->pub_key_size = s->cert_pub_key_len;
-    memcpy((uint8_t*)(migrate) + migrate->host_offset , s->host, host_len);
-    memcpy((uint8_t*)(migrate) + migrate->pub_key_offset, s->cert_pub_key, s->cert_pub_key_len);
-    reds_push_pipe_item(&item->base);
+    item = new_out_item(SPICE_MSG_MAIN_MIGRATE_BEGIN);
+
+    migrate.port = s->port;
+    migrate.sport = s->sport;
+    migrate.host_offset = sizeof(SpiceMsgMainMigrationBegin);
+    migrate.host_size = host_len;
+    migrate.pub_key_type = s->cert_pub_key_type;
+    migrate.pub_key_offset = sizeof(SpiceMsgMainMigrationBegin) + host_len;
+    migrate.pub_key_size = s->cert_pub_key_len;
+    spice_marshall_msg_main_migrate_begin(item->m, &migrate);
+    spice_marshaller_add(item->m, (uint8_t *)s->host, host_len);
+    spice_marshaller_add(item->m, s->cert_pub_key, s->cert_pub_key_len);
+
+    reds_push_pipe_item(item);
 
     free(reds->mig_spice->host);
     free(reds->mig_spice);
@@ -3287,7 +3222,7 @@ error:
 
 static void reds_mig_finished(int completed)
 {
-    SimpleOutItem *item;
+    RedsOutItem *item;
 
     red_printf("");
     if (reds->listen_watch != NULL) {
@@ -3306,23 +3241,24 @@ static void reds_mig_finished(int completed)
 
     if (completed) {
         Channel *channel;
-        SpiceMsgMigrate *migrate;
+        SpiceMsgMigrate migrate;
 
         reds->mig_wait_disconnect = TRUE;
         core->timer_start(reds->mig_timer, MIGRATE_TIMEOUT);
 
-        item = new_simple_out_item(SPICE_MSG_MIGRATE, sizeof(SpiceMsgMigrate));
-        migrate = (SpiceMsgMigrate *)item->data;
-        migrate->flags = SPICE_MIGRATE_NEED_FLUSH | SPICE_MIGRATE_NEED_DATA_TRANSFER;
-        reds_push_pipe_item(&item->base);
+        item = new_out_item(SPICE_MSG_MIGRATE);
+        migrate.flags = SPICE_MIGRATE_NEED_FLUSH | SPICE_MIGRATE_NEED_DATA_TRANSFER;
+        spice_marshall_msg_migrate(item->m, &migrate);
+
+        reds_push_pipe_item(item);
         channel = reds->channels;
         while (channel) {
             channel->migrate(channel);
             channel = channel->next;
         }
     } else {
-        item = new_simple_out_item(SPICE_MSG_MAIN_MIGRATE_CANCEL, 0);
-        reds_push_pipe_item(&item->base);
+        item = new_out_item(SPICE_MSG_MAIN_MIGRATE_CANCEL);
+        reds_push_pipe_item(item);
         reds_mig_cleanup();
     }
 }
@@ -3353,22 +3289,18 @@ void reds_update_mm_timer(uint32_t mm_time)
 
 void reds_enable_mm_timer()
 {
-    SpiceMsgMainMultiMediaTime *time_mes;
-    SimpleOutItem *item;
+    SpiceMsgMainMultiMediaTime time_mes;
+    RedsOutItem *item;
 
     core->timer_start(reds->mm_timer, MM_TIMER_GRANULARITY_MS);
     if (!reds->peer) {
         return;
     }
 
-    if (!(item = new_simple_out_item(SPICE_MSG_MAIN_MULTI_MEDIA_TIME, sizeof(SpiceMsgMainMultiMediaTime)))) {
-        red_printf("alloc item failed");
-        reds_disconnect();
-        return;
-    }
-    time_mes = (SpiceMsgMainMultiMediaTime *)item->data;
-    time_mes->time = reds_get_mm_time() - MM_TIME_DELTA;
-    reds_push_pipe_item(&item->base);
+    item = new_out_item(SPICE_MSG_MAIN_MULTI_MEDIA_TIME);
+    time_mes.time = reds_get_mm_time() - MM_TIME_DELTA;
+    spice_marshall_msg_main_multi_media_time(item->m, &time_mes);
+    reds_push_pipe_item(item);
 }
 
 void reds_desable_mm_timer()
@@ -3584,25 +3516,6 @@ static void free_internal_agent_buff(VDIPortBuf *in_buf)
     }
 }
 
-void reds_prepare_read_buf(RedsOutItem *in_nuf, struct iovec* vec, int *len)
-{
-    VDIReadBuf *buf = (VDIReadBuf *)in_nuf;
-
-    vec[0].iov_base = &buf->header;
-    vec[0].iov_len = sizeof(buf->header);
-    vec[1].iov_base = buf->data;
-    vec[1].iov_len = buf->len;
-    *len = 2;
-}
-
-void reds_release_read_buf(RedsOutItem *in_nuf)
-{
-    VDIReadBuf *buf = (VDIReadBuf *)in_nuf;
-
-    ring_add(&reds->agent_state.read_bufs, &buf->out_item.link);
-    read_from_vdi_port();
-}
-
 static void init_vd_agent_resources()
 {
     VDIPortState *state = &reds->agent_state;
@@ -3640,12 +3553,8 @@ static void init_vd_agent_resources()
 
     for (i = 0; i < REDS_VDI_PORT_NUM_RECIVE_BUFFS; i++) {
         VDIReadBuf *buf = spice_new0(VDIReadBuf, 1);
-        buf->out_item.prepare = reds_prepare_read_buf;
-        buf->out_item.release = reds_release_read_buf;
-        buf->header.type = SPICE_MSG_MAIN_AGENT_DATA;
-        buf->header.sub_list = 0;
-        ring_item_init(&buf->out_item.link);
-        ring_add(&reds->agent_state.read_bufs, &buf->out_item.link);
+        ring_item_init(&buf->link);
+        ring_add(&reds->agent_state.read_bufs, &buf->link);
     }
 }
 
