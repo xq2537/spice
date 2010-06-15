@@ -1,3 +1,4 @@
+/* -*- Mode: C; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 /*
    Copyright (C) 2009 Red Hat, Inc.
 
@@ -27,9 +28,10 @@
 #include "reds.h"
 #include "red_dispatcher.h"
 #include "snd_worker.h"
+#include "marshaller.h"
+#include "generated_marshallers.h"
 
 #define MAX_SEND_VEC 100
-#define MAX_SEND_BUFS 200
 
 #define RECIVE_BUF_SIZE (16 * 1024 * 2)
 
@@ -61,11 +63,6 @@ enum RecordCommand {
 #define SND_RECORD_MIGRATE_MASK (1 << SND_RECORD_MIGRATE)
 #define SND_RECORD_CTRL_MASK (1 << SND_RECORD_CTRL)
 
-typedef struct BufDescriptor {
-    uint32_t size;
-    uint8_t *data;
-} BufDescriptor;
-
 typedef struct SndChannel SndChannel;
 typedef void (*send_messages_proc)(void *in_channel);
 typedef int (*handle_message_proc)(SndChannel *channel, SpiceDataHeader *message);
@@ -90,10 +87,9 @@ struct SndChannel {
     uint32_t ack_messages;
 
     struct {
-        SpiceDataHeader header;
-        uint32_t n_bufs;
-        BufDescriptor bufs[MAX_SEND_BUFS];
-
+        uint64_t serial;
+        SpiceDataHeader *header;
+        SpiceMarshaller *marshaller;
         uint32_t size;
         uint32_t pos;
     } send_data;
@@ -129,12 +125,7 @@ typedef struct PlaybackChannel {
     int celt_allowed;
     uint32_t mode;
     struct {
-        union {
-            SpiceMsgPlaybackMode mode;
-            SpiceMsgPlaybackStart start;
-            SpiceMsgMigrate migrate;
-            uint8_t celt_buf[CELT_COMPRESSED_FRAME_BYTES];
-        } u;
+        uint8_t celt_buf[CELT_COMPRESSED_FRAME_BYTES];
     } send_data;
 } PlaybackChannel;
 
@@ -165,12 +156,6 @@ typedef struct __attribute__ ((__packed__)) RecordMigrateData {
     uint32_t mode_time;
 } RecordMigrateData;
 
-typedef struct __attribute__ ((__packed__)) RecordMigrateMessage {
-    SpiceMsgMigrate migrate;
-    SpiceDataHeader header;
-    RecordMigrateData data;
-} RecordMigrateMessage;
-
 typedef struct RecordChannel {
     SndChannel base;
     uint32_t samples[RECORD_SAMPLES_SIZE];
@@ -182,58 +167,12 @@ typedef struct RecordChannel {
     CELTDecoder *celt_decoder;
     CELTMode *celt_mode;
     uint32_t celt_buf[FRAME_SIZE];
-    struct {
-        union {
-            SpiceMsgRecordStart start;
-            RecordMigrateMessage migrate;
-        } u;
-    } send_data;
 } RecordChannel;
 
 static SndWorker *workers = NULL;
 static uint32_t playback_compression = SPICE_AUDIO_DATA_MODE_CELT_0_5_1;
 
 static void snd_receive(void* data);
-
-static inline BufDescriptor *snd_find_buf(SndChannel *channel, int buf_pos, int *buf_offset)
-{
-    BufDescriptor *buf;
-    int pos = 0;
-
-    for (buf = channel->send_data.bufs; buf_pos >= pos + buf->size; buf++) {
-        pos += buf->size;
-        ASSERT(buf != &channel->send_data.bufs[channel->send_data.n_bufs - 1]);
-    }
-    *buf_offset = buf_pos - pos;
-    return buf;
-}
-
-static inline uint32_t __snd_fill_iovec(BufDescriptor *buf, int skip, struct iovec *vec,
-                                        int *vec_index, long phys_delta)
-{
-    uint32_t size = 0;
-    vec[*vec_index].iov_base = buf->data + skip;
-    vec[*vec_index].iov_len = size = buf->size - skip;
-    (*vec_index)++;
-    return size;
-}
-
-static inline void snd_fill_iovec(SndChannel *channel, struct iovec *vec, int *vec_size)
-{
-    int vec_index = 0;
-    uint32_t pos = channel->send_data.pos;
-    ASSERT(channel->send_data.size != pos && channel->send_data.size > pos);
-
-    do {
-        BufDescriptor *buf;
-        int buf_offset;
-
-        buf = snd_find_buf(channel, pos, &buf_offset);
-        ASSERT(buf);
-        pos += __snd_fill_iovec(buf, buf_offset, vec, &vec_index, 0);
-    } while (vec_index < MAX_SEND_VEC && pos != channel->send_data.size);
-    *vec_size = vec_index;
-}
 
 static void snd_disconnect_channel(SndChannel *channel)
 {
@@ -248,6 +187,7 @@ static void snd_disconnect_channel(SndChannel *channel)
     core->watch_remove(channel->peer->watch);
     channel->peer->watch = NULL;
     channel->peer->cb_free(channel->peer);
+    spice_marshaller_destroy(channel->send_data.marshaller);
     free(channel);
 }
 
@@ -299,7 +239,8 @@ static int snd_send_data(SndChannel *channel)
             break;
         }
 
-        snd_fill_iovec(channel, vec, &vec_size);
+        vec_size = spice_marshaller_fill_iovec(channel->send_data.marshaller,
+                                               vec, MAX_SEND_VEC, channel->send_data.pos);
         if ((n = channel->peer->cb_writev(channel->peer->ctx, vec, vec_size)) == -1) {
             switch (errno) {
             case EAGAIN:
@@ -506,76 +447,75 @@ static void snd_event(int fd, int event, void *data)
     }
 }
 
-static inline void __snd_add_buf(SndChannel *channel, void *data, uint32_t size)
-{
-    int pos = channel->send_data.n_bufs++;
-    ASSERT(pos < MAX_SEND_BUFS);
-    channel->send_data.bufs[pos].size = size;
-    channel->send_data.bufs[pos].data = data;
-}
-
-static void snd_add_buf(SndChannel *channel, void *data, uint32_t size)
-{
-    __snd_add_buf(channel, data, size);
-    channel->send_data.header.size += size;
-}
-
 static inline int snd_reset_send_data(SndChannel *channel, uint16_t verb)
 {
     if (!channel) {
         return FALSE;
     }
 
+    spice_marshaller_reset(channel->send_data.marshaller);
+    channel->send_data.header = (SpiceDataHeader *)
+        spice_marshaller_reserve_space(channel->send_data.marshaller, sizeof(SpiceDataHeader));
+    spice_marshaller_set_base(channel->send_data.marshaller, sizeof(SpiceDataHeader));
     channel->send_data.pos = 0;
-    channel->send_data.n_bufs = 0;
-    channel->send_data.header.sub_list = 0;
-    channel->send_data.header.size = 0;
-    channel->send_data.header.type = verb;
-    ++channel->send_data.header.serial;
-    __snd_add_buf(channel, &channel->send_data.header, sizeof(SpiceDataHeader));
+    channel->send_data.header->sub_list = 0;
+    channel->send_data.header->size = 0;
+    channel->send_data.header->type = verb;
+    channel->send_data.header->serial = ++channel->send_data.serial;
     return TRUE;
 }
 
+static int snd_begin_send_message(SndChannel *channel)
+{
+    spice_marshaller_flush(channel->send_data.marshaller);
+    channel->send_data.size = spice_marshaller_get_total_size(channel->send_data.marshaller);
+    channel->send_data.header->size = channel->send_data.size - sizeof(SpiceDataHeader);
+    channel->send_data.header = NULL; /* avoid writing to this until we have a new message */
+    return snd_send_data(channel);
+}
+
+
 static int snd_playback_send_migrate(PlaybackChannel *channel)
 {
+    SpiceMsgMigrate migrate;
+
     if (!snd_reset_send_data((SndChannel *)channel, SPICE_MSG_MIGRATE)) {
         return FALSE;
     }
-    channel->send_data.u.migrate.flags = 0;
-    snd_add_buf((SndChannel *)channel, &channel->send_data.u.migrate,
-                sizeof(channel->send_data.u.migrate));
-    channel->base.send_data.size = channel->base.send_data.header.size + sizeof(SpiceDataHeader);
-    return snd_send_data((SndChannel *)channel);
+    migrate.flags = 0;
+    spice_marshall_msg_migrate(channel->base.send_data.marshaller, &migrate);
+
+    return snd_begin_send_message((SndChannel *)channel);
 }
 
 static int snd_playback_send_start(PlaybackChannel *playback_channel)
 {
     SndChannel *channel = (SndChannel *)playback_channel;
-    SpiceMsgPlaybackStart *start;
+    SpiceMsgPlaybackStart start;
+
     if (!snd_reset_send_data(channel, SPICE_MSG_PLAYBACK_START)) {
         return FALSE;
     }
 
-    start = &playback_channel->send_data.u.start;
-    start->channels = SPICE_INTERFACE_PLAYBACK_CHAN;
-    start->frequency = SPICE_INTERFACE_PLAYBACK_FREQ;
+    start.channels = SPICE_INTERFACE_PLAYBACK_CHAN;
+    start.frequency = SPICE_INTERFACE_PLAYBACK_FREQ;
     ASSERT(SPICE_INTERFACE_PLAYBACK_FMT == SPICE_INTERFACE_AUDIO_FMT_S16);
-    start->format = SPICE_AUDIO_FMT_S16;
-    start->time = reds_get_mm_time();
-    snd_add_buf(channel, start, sizeof(*start));
+    start.format = SPICE_AUDIO_FMT_S16;
+    start.time = reds_get_mm_time();
+    spice_marshall_msg_playback_start(channel->send_data.marshaller, &start);
 
-    channel->send_data.size = sizeof(SpiceDataHeader) + sizeof(*start);
-    return snd_send_data(channel);
+    return snd_begin_send_message(channel);
 }
 
 static int snd_playback_send_stop(PlaybackChannel *playback_channel)
 {
     SndChannel *channel = (SndChannel *)playback_channel;
+
     if (!snd_reset_send_data(channel, SPICE_MSG_PLAYBACK_STOP)) {
         return FALSE;
     }
-    channel->send_data.size = sizeof(SpiceDataHeader);
-    return snd_send_data(channel);
+
+    return snd_begin_send_message(channel);
 }
 
 static int snd_playback_send_ctl(PlaybackChannel *playback_channel)
@@ -592,30 +532,30 @@ static int snd_playback_send_ctl(PlaybackChannel *playback_channel)
 static int snd_record_send_start(RecordChannel *record_channel)
 {
     SndChannel *channel = (SndChannel *)record_channel;
-    SpiceMsgRecordStart *start;
+    SpiceMsgRecordStart start;
+
     if (!snd_reset_send_data(channel, SPICE_MSG_RECORD_START)) {
         return FALSE;
     }
 
-    start = &record_channel->send_data.u.start;
-    start->channels = SPICE_INTERFACE_RECORD_CHAN;
-    start->frequency = SPICE_INTERFACE_RECORD_FREQ;
+    start.channels = SPICE_INTERFACE_RECORD_CHAN;
+    start.frequency = SPICE_INTERFACE_RECORD_FREQ;
     ASSERT(SPICE_INTERFACE_RECORD_FMT == SPICE_INTERFACE_AUDIO_FMT_S16);
-    start->format = SPICE_AUDIO_FMT_S16;
-    snd_add_buf(channel, start, sizeof(*start));
+    start.format = SPICE_AUDIO_FMT_S16;
+    spice_marshall_msg_record_start(channel->send_data.marshaller, &start);
 
-    channel->send_data.size = sizeof(SpiceDataHeader) + sizeof(*start);
-    return snd_send_data(channel);
+    return snd_begin_send_message(channel);
 }
 
 static int snd_record_send_stop(RecordChannel *record_channel)
 {
     SndChannel *channel = (SndChannel *)record_channel;
+
     if (!snd_reset_send_data(channel, SPICE_MSG_RECORD_STOP)) {
         return FALSE;
     }
-    channel->send_data.size = sizeof(SpiceDataHeader);
-    return snd_send_data(channel);
+
+    return snd_begin_send_message(channel);
 }
 
 static int snd_record_send_ctl(RecordChannel *record_channel)
@@ -632,29 +572,35 @@ static int snd_record_send_ctl(RecordChannel *record_channel)
 static int snd_record_send_migrate(RecordChannel *record_channel)
 {
     SndChannel *channel = (SndChannel *)record_channel;
-    RecordMigrateMessage* migrate;
+    SpiceMsgMigrate migrate;
+    SpiceDataHeader *header;
+    RecordMigrateData *data;
 
     if (!snd_reset_send_data(channel, SPICE_MSG_MIGRATE)) {
         return FALSE;
     }
 
-    migrate = &record_channel->send_data.u.migrate;
-    migrate->migrate.flags = SPICE_MIGRATE_NEED_DATA_TRANSFER;
-    migrate->header.type = SPICE_MSG_MIGRATE_DATA;
-    migrate->header.size = sizeof(RecordMigrateData);
-    migrate->header.serial = ++channel->send_data.header.serial;
-    migrate->header.sub_list = 0;
+    migrate.flags = SPICE_MIGRATE_NEED_DATA_TRANSFER;
+    spice_marshall_msg_migrate(channel->send_data.marshaller, &migrate);
 
-    migrate->data.version = RECORD_MIG_VERSION;
-    migrate->data.serial = channel->send_data.header.serial;
-    migrate->data.start_time = record_channel->start_time;
-    migrate->data.mode = record_channel->mode;
-    migrate->data.mode_time = record_channel->mode_time;
+    header = (SpiceDataHeader *)spice_marshaller_reserve_space(channel->send_data.marshaller,
+                                                               sizeof(SpiceDataHeader));
+    header->type = SPICE_MSG_MIGRATE_DATA;
+    header->size = sizeof(RecordMigrateData);
+    header->serial = ++channel->send_data.serial;
+    header->sub_list = 0;
 
-    snd_add_buf(channel, migrate, sizeof(*migrate));
-    channel->send_data.size = channel->send_data.header.size + sizeof(SpiceDataHeader);
-    channel->send_data.header.size -= sizeof(migrate->header);
-    channel->send_data.header.size -= sizeof(migrate->data);
+    data = (RecordMigrateData *)spice_marshaller_reserve_space(channel->send_data.marshaller,
+                                                               sizeof(RecordMigrateData));
+    data->version = RECORD_MIG_VERSION;
+    data->serial = channel->send_data.serial;
+    data->start_time = record_channel->start_time;
+    data->mode = record_channel->mode;
+    data->mode_time = record_channel->mode_time;
+
+    channel->send_data.size = spice_marshaller_get_total_size(channel->send_data.marshaller);
+    channel->send_data.header->size = channel->send_data.size - sizeof(SpiceDataHeader) - sizeof(SpiceDataHeader) - sizeof(*data);
+
     return snd_send_data(channel);
 }
 
@@ -662,46 +608,48 @@ static int snd_playback_send_write(PlaybackChannel *playback_channel)
 {
     SndChannel *channel = (SndChannel *)playback_channel;
     AudioFrame *frame;
+    SpiceMsgPlaybackPacket msg;
 
     if (!snd_reset_send_data(channel, SPICE_MSG_PLAYBACK_DATA)) {
         return FALSE;
     }
 
     frame = playback_channel->in_progress;
-    snd_add_buf(channel, &frame->time, sizeof(frame->time));
+    msg.time = frame->time;
+
+    spice_marshall_msg_playback_data(channel->send_data.marshaller, &msg);
+
     if (playback_channel->mode == SPICE_AUDIO_DATA_MODE_CELT_0_5_1) {
         int n = celt051_encode(playback_channel->celt_encoder, (celt_int16_t *)frame->samples, NULL,
-                               playback_channel->send_data.u.celt_buf, CELT_COMPRESSED_FRAME_BYTES);
+                               playback_channel->send_data.celt_buf, CELT_COMPRESSED_FRAME_BYTES);
         if (n < 0) {
             red_printf("celt encode failed");
             snd_disconnect_channel(channel);
             return FALSE;
         }
-        snd_add_buf(channel, playback_channel->send_data.u.celt_buf, n);
+        spice_marshaller_add_ref(channel->send_data.marshaller,
+                                 playback_channel->send_data.celt_buf, n);
     } else {
-        snd_add_buf(channel, frame->samples, sizeof(frame->samples));
+        spice_marshaller_add_ref(channel->send_data.marshaller,
+                                 (uint8_t *)frame->samples, sizeof(frame->samples));
     }
 
-    channel->send_data.size = channel->send_data.header.size + sizeof(SpiceDataHeader);
-
-    return snd_send_data(channel);
+    return snd_begin_send_message(channel);
 }
 
 static int playback_send_mode(PlaybackChannel *playback_channel)
 {
     SndChannel *channel = (SndChannel *)playback_channel;
-    SpiceMsgPlaybackMode *mode;
+    SpiceMsgPlaybackMode mode;
 
     if (!snd_reset_send_data(channel, SPICE_MSG_PLAYBACK_MODE)) {
         return FALSE;
     }
-    mode = &playback_channel->send_data.u.mode;
-    mode->time = reds_get_mm_time();
-    mode->mode = playback_channel->mode;
-    snd_add_buf(channel, mode, sizeof(*mode));
+    mode.time = reds_get_mm_time();
+    mode.mode = playback_channel->mode;
+    spice_marshall_msg_playback_mode(channel->send_data.marshaller, &mode);
 
-    channel->send_data.size = channel->send_data.header.size + sizeof(SpiceDataHeader);
-    return snd_send_data(channel);
+    return snd_begin_send_message(channel);
 }
 
 static void snd_playback_send(void* data)
@@ -815,6 +763,7 @@ static SndChannel *__new_channel(SndWorker *worker, int size, RedsStreamContext 
     channel->recive_data.message = (SpiceDataHeader *)channel->recive_data.buf;
     channel->recive_data.now = channel->recive_data.buf;
     channel->recive_data.end = channel->recive_data.buf + sizeof(channel->recive_data.buf);
+    channel->send_data.marshaller = spice_marshaller_new();
 
     peer->watch = core->watch_add(peer->socket, SPICE_WATCH_EVENT_READ,
                                   snd_event, channel);
