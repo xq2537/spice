@@ -3,10 +3,17 @@ NULL =
 SUBDIRS = . $(red_target)
 DIST_SUBDIRS = x11 #windows
 
-spice_built_sources = generated_demarshallers.cpp
+spice_built_sources = generated_demarshallers.cpp generated_marshallers.cpp generated_marshallers.h
 
 generated_demarshallers.cpp: $(top_srcdir)/spice.proto
 	$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-demarshallers --client --include common.h $(top_srcdir)/spice.proto generated_demarshallers.cpp
+
+STRUCTS=
+generated_marshallers.cpp: $(top_srcdir)/spice.proto
+	$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-marshallers $(STRUCTS) --client $(top_srcdir)/spice.proto generated_marshallers.cpp
+
+generated_marshallers.h: $(top_srcdir)/spice.proto
+	$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-marshallers $(STRUCTS) --client -H $(top_srcdir)/spice.proto generated_marshallers.h
 
 RED_COMMON_SRCS =			\
 	application.cpp			\
@@ -29,6 +36,8 @@ RED_COMMON_SRCS =			\
 	common.h			\
 	demarshallers.h			\
 	generated_demarshallers.cpp	\
+	generated_marshallers.cpp	\
+	generated_marshallers.h		\
 	cursor_channel.cpp		\
 	cursor_channel.h		\
 	cursor.cpp			\
