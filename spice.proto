@@ -1031,8 +1031,8 @@ channel TunnelChannel : BaseChannel {
 	uint32 id;
 	uint32 group;
 	uint32 port;
-	uint32 name;
-	uint32 description;
+	uint8 *name[] @ptr32;
+	uint8 *description[] @ptr32;
 	switch (type) {
 	case IPP:
 	    TunnelIpInfo ip @ctype(SpiceMsgTunnelIpInfo);
