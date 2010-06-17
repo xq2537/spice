@@ -42,6 +42,7 @@
 #include "inputs_channel.h"
 #include "cursor_channel.h"
 #include "mjpeg_decoder.h"
+#include "generated_marshallers.h"
 
 class CreatePrimarySurfaceEvent: public SyncEvent {
 public:
@@ -1022,12 +1023,13 @@ private:
 
 void DisplayChannel::on_connect()
 {
-    Message* message = new Message(SPICE_MSGC_DISPLAY_INIT, sizeof(SpiceMsgcDisplayInit));
-    SpiceMsgcDisplayInit* init = (SpiceMsgcDisplayInit*)message->data();
-    init->pixmap_cache_id = 1;
-    init->pixmap_cache_size = get_client().get_pixmap_cache_size();
-    init->glz_dictionary_id = 1;
-    init->glz_dictionary_window_size = get_client().get_glz_window_size();
+    Message* message = new Message(SPICE_MSGC_DISPLAY_INIT);
+    SpiceMsgcDisplayInit init;
+    init.pixmap_cache_id = 1;
+    init.pixmap_cache_size = get_client().get_pixmap_cache_size();
+    init.glz_dictionary_id = 1;
+    init.glz_dictionary_window_size = get_client().get_glz_window_size();
+    spice_marshall_msgc_display_init(message->marshaller(), &init);
     post_message(message);
     AutoRef<AttachChannelsEvent> attach_channels(new AttachChannelsEvent(*this));
     get_client().push_event(*attach_channels);

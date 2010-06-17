@@ -21,6 +21,7 @@
 #include "application.h"
 #include "debug.h"
 #include "utils.h"
+#include "generated_marshallers.h"
 
 #include "openssl/rsa.h"
 #include "openssl/evp.h"
@@ -507,7 +508,7 @@ void RedChannel::on_send_trigger()
 void RedChannel::on_message_recived()
 {
     if (_message_ack_count && !--_message_ack_count) {
-        post_message(new Message(SPICE_MSGC_ACK, 0));
+        post_message(new Message(SPICE_MSGC_ACK));
         _message_ack_count = _message_ack_window;
     }
 }
@@ -547,8 +548,8 @@ void RedChannel::on_event()
 {
     if (_outgoing_message) {
         RedPeer::OutMessage& peer_message = _outgoing_message->peer_message();
-        _outgoing_pos += send(peer_message.base() + _outgoing_pos,
-                              peer_message.message_size() - _outgoing_pos);
+
+        _outgoing_pos += do_send(peer_message,  _outgoing_pos);
         if (_outgoing_pos == peer_message.message_size()) {
             _outgoing_message->release();
             _outgoing_message = NULL;
@@ -592,7 +593,7 @@ void RedChannel::send_migrate_flush_mark()
 {
     if (_outgoing_message) {
         RedPeer::OutMessage& peer_message = _outgoing_message->peer_message();
-        send(peer_message.base() + _outgoing_pos, peer_message.message_size() - _outgoing_pos);
+        do_send(peer_message, _outgoing_pos);
         _outgoing_message->release();
         _outgoing_message = NULL;
     }
@@ -605,7 +606,7 @@ void RedChannel::send_migrate_flush_mark()
         send(message.get()->peer_message());
     }
     lock.unlock();
-    std::auto_ptr<RedPeer::OutMessage> message(new RedPeer::OutMessage(SPICE_MSGC_MIGRATE_FLUSH_MARK, 0));
+    std::auto_ptr<RedPeer::OutMessage> message(new RedPeer::OutMessage(SPICE_MSGC_MIGRATE_FLUSH_MARK));
     send(*message);
 }
 
@@ -627,9 +628,8 @@ void RedChannel::handle_migrate(RedPeer::InMessage* message)
         if ((*data_message)->type() != SPICE_MSG_MIGRATE_DATA) {
             THROW("expect SPICE_MSG_MIGRATE_DATA");
         }
-        std::auto_ptr<RedPeer::OutMessage> message(new RedPeer::OutMessage(SPICE_MSGC_MIGRATE_DATA,
-                                                                          (*data_message)->size()));
-        memcpy(message->data(), (*data_message)->data(), (*data_message)->size());
+        std::auto_ptr<RedPeer::OutMessage> message(new RedPeer::OutMessage(SPICE_MSGC_MIGRATE_DATA));
+	spice_marshaller_add(message->marshaller(), (*data_message)->data(), (*data_message)->size());
         send(*message);
     }
     _loop.add_socket(*this);
@@ -643,16 +643,18 @@ void RedChannel::handle_set_ack(RedPeer::InMessage* message)
 {
     SpiceMsgSetAck* ack = (SpiceMsgSetAck*)message->data();
     _message_ack_window = _message_ack_count = ack->window;
-    Message *responce = new Message(SPICE_MSGC_ACK_SYNC, sizeof(uint32_t));
-    *(uint32_t *)responce->data() = ack->generation;
-    post_message(responce);
+    Message *response = new Message(SPICE_MSGC_ACK_SYNC);
+    SpiceMsgcAckSync sync;
+    sync.generation = ack->generation;
+    spice_marshall_msgc_ack_sync(response->marshaller(), &sync);
+    post_message(response);
 }
 
 void RedChannel::handle_ping(RedPeer::InMessage* message)
 {
     SpiceMsgPing *ping = (SpiceMsgPing *)message->data();
-    Message *pong = new Message(SPICE_MSGC_PONG, sizeof(SpiceMsgPing));
-    *(SpiceMsgPing *)pong->data() = *ping;
+    Message *pong = new Message(SPICE_MSGC_PONG);
+    spice_marshall_msgc_pong(pong->marshaller(), ping);
     post_message(pong);
 }
 

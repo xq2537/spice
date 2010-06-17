@@ -21,6 +21,7 @@
 
 #include "common.h"
 #include "tunnel_channel.h"
+#include "generated_marshallers.h"
 #include <spice/protocol.h>
 
 #define SOCKET_WINDOW_SIZE 60
@@ -93,13 +94,13 @@ public:
     virtual RedPeer::OutMessage& peer_message() { return *this;}
     virtual void release();
 
-    virtual uint8_t* buf();
+    virtual uint8_t* buf() { return _the_buf; };
     virtual uint32_t buf_max_size() {return _max_data_size;}
     virtual void set_buf_size(uint32_t size);
     virtual void release_buf();
 
     static void init(uint32_t max_data_size);
-    static OutSocketMessage& alloc_message();
+    static OutSocketMessage& alloc_message(uint16_t id);
     static void clear_free_messages();
 
 protected:
@@ -109,26 +110,22 @@ protected:
 private:
     static std::list<OutSocketMessage*> _free_messages;
     static uint32_t _max_data_size;
+    uint8_t *_the_buf;
 };
 
 std::list<OutSocketMessage*> OutSocketMessage::_free_messages;
 uint32_t OutSocketMessage::_max_data_size;
 
 OutSocketMessage::OutSocketMessage()
-    : RedPeer::OutMessage(SPICE_MSGC_TUNNEL_SOCKET_DATA, sizeof(SpiceMsgcTunnelSocketData) + _max_data_size)
+    : RedPeer::OutMessage(SPICE_MSGC_TUNNEL_SOCKET_DATA)
     , RedChannel::OutMessage()
     , ClientNetSocket::ReceiveBuffer()
 {
 }
 
-uint8_t* OutSocketMessage::buf()
-{
-    return ((SpiceMsgcTunnelSocketData*)RedPeer::OutMessage::data())->data;
-}
-
 void OutSocketMessage::set_buf_size(uint32_t size)
 {
-    RedPeer::OutMessage::header().size = size + sizeof(SpiceMsgcTunnelSocketData);
+    spice_marshaller_unreserve_space(_marshaller, _max_data_size - size);
 }
 
 void OutSocketMessage::release()
@@ -146,15 +143,21 @@ void OutSocketMessage::init(uint32_t max_data_size)
     _max_data_size = max_data_size;
 }
 
-OutSocketMessage& OutSocketMessage::alloc_message()
+OutSocketMessage& OutSocketMessage::alloc_message(uint16_t id)
 {
     OutSocketMessage* ret;
     if (!_free_messages.empty()) {
         ret = _free_messages.front();
         _free_messages.pop_front();
+	spice_marshaller_reset(ret->marshaller());
     } else {
         ret = new OutSocketMessage();
     }
+
+    SpiceMsgcTunnelSocketData data;
+    data.connection_id = id;
+    spice_marshall_msgc_tunnel_socket_data(ret->marshaller(), &data);
+    ret->_the_buf = spice_marshaller_reserve_space(ret->marshaller(), _max_data_size);
 
     return *ret;
 }
@@ -198,7 +201,7 @@ public:
     bool     get_guest_closed() {return _guest_closed;}
 
 protected:
-    virtual ReceiveBuffer& alloc_receive_buffer() {return OutSocketMessage::alloc_message();}
+    virtual ReceiveBuffer& alloc_receive_buffer() {return OutSocketMessage::alloc_message(id());}
 
 private:
     uint32_t _num_tokens;
@@ -275,45 +278,33 @@ void TunnelChannel::handle_init(RedPeer::InMessage* message)
 
 void TunnelChannel::send_service(TunnelService& service)
 {
-    int msg_size = 0;
-    msg_size += service.name.length() + 1;
-    msg_size += service.description.length() + 1;
-
-    if (service.type == SPICE_TUNNEL_SERVICE_TYPE_IPP) {
-        msg_size += sizeof(SpiceMsgcTunnelAddPrintService) + sizeof(SpiceTunnelIPv4);
-    } else if (service.type == SPICE_TUNNEL_SERVICE_TYPE_GENERIC) {
-        msg_size += sizeof(SpiceMsgcTunnelAddGenericService);
-    } else {
+    if (service.type != SPICE_TUNNEL_SERVICE_TYPE_IPP &&
+        service.type == SPICE_TUNNEL_SERVICE_TYPE_GENERIC) {
         THROW("%s: invalid service type", __FUNCTION__);
     }
-    Message* service_msg = new Message(SPICE_MSGC_TUNNEL_SERVICE_ADD, msg_size);
-    SpiceMsgcTunnelAddGenericService* out_service = (SpiceMsgcTunnelAddGenericService*)service_msg->data();
-    out_service->id = service.id;
-    out_service->group = service.group;
-    out_service->type = service.type;
-    out_service->port = service.port;
 
-    int cur_offset;
+    Message* service_msg = new Message(SPICE_MSGC_TUNNEL_SERVICE_ADD);
+    SpiceMsgcTunnelAddPrintService add;
+    SpiceMarshaller *name_out, *description_out;
+    add.base.id = service.id;
+    add.base.group = service.group;
+    add.base.type = service.type;
+    add.base.port = service.port;
+
     if (service.type == SPICE_TUNNEL_SERVICE_TYPE_IPP) {
-        cur_offset = sizeof(SpiceMsgcTunnelAddPrintService);
-        ((SpiceMsgcTunnelAddPrintService*)out_service)->ip.type = SPICE_TUNNEL_IP_TYPE_IPv4;
-        memcpy(((SpiceMsgcTunnelAddPrintService*)out_service)->ip.data, &(service.ip.s_addr),
-               sizeof(SpiceTunnelIPv4));
-        cur_offset += sizeof(SpiceTunnelIPv4);
-    } else {
-        cur_offset = sizeof(SpiceMsgcTunnelAddGenericService);
+        add.ip.type = SPICE_TUNNEL_IP_TYPE_IPv4;
     }
 
-    out_service->name = cur_offset;
-    service.name.copy((char*)(service_msg->data() + cur_offset), service.name.length());
-    (service_msg->data() + cur_offset)[service.name.length()] = '\0';
-    cur_offset += service.name.length() + 1;
+    spice_marshall_msgc_tunnel_service_add(service_msg->marshaller(), &add.base,
+                                           &name_out, &description_out);
 
-    out_service->description = cur_offset;
-    service.description.copy((char*)(service_msg->data() + cur_offset),
-                             service.description.length());
-    (service_msg->data() + cur_offset)[service.description.length()] = '\0';
-    cur_offset += service.description.length() + 1;
+    if (service.type == SPICE_TUNNEL_SERVICE_TYPE_IPP) {
+        spice_marshaller_add(service_msg->marshaller(), (uint8_t *)&(service.ip.s_addr),
+                             sizeof(SpiceTunnelIPv4));
+    }
+
+    spice_marshaller_add(name_out, (uint8_t *)service.name.c_str(), service.name.length() + 1);
+    spice_marshaller_add(description_out, (uint8_t *)service.description.c_str(), service.description.length() + 1);
 
     post_message(service_msg);
 }
@@ -361,15 +352,18 @@ void TunnelChannel::handle_socket_open(RedPeer::InMessage* message)
 
     if (sckt->connect(open_msg->tokens)) {
         _sockets[open_msg->connection_id] = sckt;
-        out_msg = new Message(SPICE_MSGC_TUNNEL_SOCKET_OPEN_ACK, sizeof(SpiceMsgcTunnelSocketOpenAck));
+        out_msg = new Message(SPICE_MSGC_TUNNEL_SOCKET_OPEN_ACK);
         sckt->set_num_tokens(0);
         sckt->set_server_num_tokens(SOCKET_WINDOW_SIZE);
-
-        ((SpiceMsgcTunnelSocketOpenAck*)out_msg->data())->connection_id = open_msg->connection_id;
-        ((SpiceMsgcTunnelSocketOpenAck*)out_msg->data())->tokens = SOCKET_WINDOW_SIZE;
+        SpiceMsgcTunnelSocketOpenAck ack;
+        ack.connection_id = open_msg->connection_id;
+        ack.tokens = SOCKET_WINDOW_SIZE;
+        spice_marshall_msgc_tunnel_socket_open_ack(out_msg->marshaller(), &ack);
     } else {
-        out_msg = new Message(SPICE_MSGC_TUNNEL_SOCKET_OPEN_NACK, sizeof(SpiceMsgcTunnelSocketOpenNack));
-        ((SpiceMsgcTunnelSocketOpenNack*)out_msg->data())->connection_id = open_msg->connection_id;
+        out_msg = new Message(SPICE_MSGC_TUNNEL_SOCKET_OPEN_NACK);
+        SpiceMsgcTunnelSocketOpenNack nack;
+        nack.connection_id = open_msg->connection_id;
+        spice_marshall_msgc_tunnel_socket_open_nack(out_msg->marshaller(), &nack);
         delete sckt;
     }
 
@@ -480,19 +474,19 @@ void TunnelChannel::handle_socket_token(RedPeer::InMessage* message)
 void TunnelChannel::on_socket_message_recv_done(ClientNetSocket& sckt,
                                                 ClientNetSocket::ReceiveBuffer& buf)
 {
-    TunnelChannel::TunnelSocket* tunnel_sckt = static_cast<TunnelChannel::TunnelSocket*>(&sckt);
     OutSocketMessage* out_msg = static_cast<OutSocketMessage*>(&buf);
 
-    ((SpiceMsgcTunnelSocketData*)(out_msg->data()))->connection_id = tunnel_sckt->id();
     post_message(out_msg);
 }
 
 void TunnelChannel::on_socket_fin_recv(ClientNetSocket& sckt)
 {
     TunnelChannel::TunnelSocket* tunnel_sckt = static_cast<TunnelChannel::TunnelSocket*>(&sckt);
-    Message* out_msg = new Message(SPICE_MSGC_TUNNEL_SOCKET_FIN, sizeof(SpiceMsgcTunnelSocketFin));
+    Message* out_msg = new Message(SPICE_MSGC_TUNNEL_SOCKET_FIN);
     DBG(0, "FIN from client coonection id=%d", tunnel_sckt->id());
-    ((SpiceMsgcTunnelSocketFin*)out_msg->data())->connection_id = tunnel_sckt->id();
+    SpiceMsgcTunnelSocketFin fin;
+    fin.connection_id = tunnel_sckt->id();
+    spice_marshall_msgc_tunnel_socket_fin(out_msg->marshaller(), &fin);
     post_message(out_msg);
 }
 
@@ -503,14 +497,18 @@ void TunnelChannel::on_socket_disconnect(ClientNetSocket& sckt)
     // close initiated by server -> needs ack
     if (tunnel_sckt->get_guest_closed()) {
         DBG(0, "send close ack connection_id=%d", tunnel_sckt->id());
-        out_msg = new Message(SPICE_MSGC_TUNNEL_SOCKET_CLOSED_ACK, sizeof(SpiceMsgcTunnelSocketClosedAck));
-        ((SpiceMsgcTunnelSocketClosedAck*)out_msg->data())->connection_id = tunnel_sckt->id();
+        out_msg = new Message(SPICE_MSGC_TUNNEL_SOCKET_CLOSED_ACK);
+        SpiceMsgcTunnelSocketClosedAck ack;
+        ack.connection_id = tunnel_sckt->id();
+        spice_marshall_msgc_tunnel_socket_closed_ack(out_msg->marshaller(), &ack);
         _sockets[tunnel_sckt->id()] = NULL;
         delete &sckt;
     } else { // close initiated by client
         DBG(0, "send close coonection_id=%d", tunnel_sckt->id());
-        out_msg = new Message(SPICE_MSGC_TUNNEL_SOCKET_CLOSED, sizeof(SpiceMsgcTunnelSocketClosed));
-        ((SpiceMsgcTunnelSocketClosed*)out_msg->data())->connection_id = tunnel_sckt->id();
+        out_msg = new Message(SPICE_MSGC_TUNNEL_SOCKET_CLOSED);
+        SpiceMsgcTunnelSocketClosed closed;
+        closed.connection_id = tunnel_sckt->id();
+        spice_marshall_msgc_tunnel_socket_closed(out_msg->marshaller(), &closed);
     }
 
     post_message(out_msg);
@@ -523,10 +521,11 @@ void TunnelChannel::on_socket_message_send_done(ClientNetSocket& sckt)
     num_tokens++;
 
     if (num_tokens == SOCKET_TOKENS_TO_SEND) {
-        Message* out_msg = new Message(SPICE_MSGC_TUNNEL_SOCKET_TOKEN, sizeof(SpiceMsgcTunnelSocketTokens));
-        SpiceMsgcTunnelSocketTokens* tokens_msg = (SpiceMsgcTunnelSocketTokens*)out_msg->data();
-        tokens_msg->connection_id = tunnel_sckt->id();
-        tokens_msg->num_tokens = num_tokens;
+        Message* out_msg = new Message(SPICE_MSGC_TUNNEL_SOCKET_TOKEN);
+        SpiceMsgcTunnelSocketTokens tokens_msg;
+        tokens_msg.connection_id = tunnel_sckt->id();
+        tokens_msg.num_tokens = num_tokens;
+        spice_marshall_msgc_tunnel_socket_token(out_msg->marshaller(), &tokens_msg);
         post_message(out_msg);
 
         tunnel_sckt->set_num_tokens(0);

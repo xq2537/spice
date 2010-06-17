@@ -19,6 +19,7 @@
 #include "red_client.h"
 #include "audio_channels.h"
 #include "audio_devices.h"
+#include "generated_marshallers.h"
 
 #define NUM_SAMPLES_MESSAGES 4
 
@@ -33,23 +34,23 @@ public:
     RecordSamplesMessage(RecordChannel& channel);
     virtual ~RecordSamplesMessage();
 
-    virtual RedPeer::OutMessage& peer_message() { return *_massage;}
+    virtual RedPeer::OutMessage& peer_message() { return *_message;}
     virtual void release();
 
 private:
     RecordChannel& _channel;
-    RedPeer::OutMessage *_massage;
+    RedPeer::OutMessage *_message;
 };
 
 RecordSamplesMessage::RecordSamplesMessage(RecordChannel& channel)
     : _channel (channel)
-    , _massage (new Message(SPICE_MSGC_RECORD_DATA, sizeof(SpiceMsgcRecordPacket) + 4096))
+    , _message (new Message(SPICE_MSGC_RECORD_DATA))
 {
 }
 
 RecordSamplesMessage::~RecordSamplesMessage()
 {
-    delete _massage;
+    delete _message;
 }
 
 void RecordSamplesMessage::release()
@@ -115,19 +116,22 @@ bool RecordChannel::abort(void)
 
 void RecordChannel::on_connect()
 {
-    Message* message = new Message(SPICE_MSGC_RECORD_MODE, sizeof(SpiceMsgcRecordMode));
-    SpiceMsgcRecordMode *mode = (SpiceMsgcRecordMode *)message->data();
-    mode->time = get_mm_time();
-    mode->mode = _mode = test_capability(SPICE_RECORD_CAP_CELT_0_5_1) ? RecordChannel::data_mode :
+    Message* message = new Message(SPICE_MSGC_RECORD_MODE);
+    SpiceMsgcRecordMode mode;
+    mode.time = get_mm_time();
+    mode.mode = _mode =
+      test_capability(SPICE_RECORD_CAP_CELT_0_5_1) ? RecordChannel::data_mode :
                                                                       SPICE_AUDIO_DATA_MODE_RAW;
+    spice_marshall_msgc_record_mode(message->marshaller(), &mode);
     post_message(message);
 }
 
 void RecordChannel::send_start_mark()
 {
-    Message* message = new Message(SPICE_MSGC_RECORD_START_MARK, sizeof(SpiceMsgcRecordStartMark));
-    SpiceMsgcRecordStartMark *start_mark = (SpiceMsgcRecordStartMark *)message->data();
-    start_mark->time = get_mm_time();
+    Message* message = new Message(SPICE_MSGC_RECORD_START_MARK);
+    SpiceMsgcRecordStartMark start_mark;
+    start_mark.time = get_mm_time();
+    spice_marshall_msgc_record_start_mark(message->marshaller(), &start_mark);
     post_message(message);
 }
 
@@ -253,10 +257,11 @@ void RecordChannel::push_frame(uint8_t *frame)
         n = _frame_bytes;
     }
     RedPeer::OutMessage& peer_message = message->peer_message();
-    peer_message.resize(n + sizeof(SpiceMsgcRecordPacket));
-    SpiceMsgcRecordPacket* packet = (SpiceMsgcRecordPacket*)peer_message.data();
-    packet->time = get_mm_time();
-    memcpy(packet->data, frame, n);
+    peer_message.reset(SPICE_MSGC_RECORD_DATA);
+    SpiceMsgcRecordPacket packet;
+    packet.time = get_mm_time();
+    spice_marshall_msgc_record_data(peer_message.marshaller(), &packet);
+    spice_marshaller_add(peer_message.marshaller(), frame, n);
     post_message(message);
 }
 

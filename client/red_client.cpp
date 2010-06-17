@@ -22,6 +22,7 @@
 #include "process_loop.h"
 #include "utils.h"
 #include "debug.h"
+#include "generated_marshallers.h"
 
 #ifdef __GNUC__
 typedef struct __attribute__ ((__packed__)) OldRedMigrationBegin {
@@ -190,10 +191,10 @@ void Migrate::run()
     Lock lock(_lock);
     _cond.notify_one();
     if (_connected) {
-        Message* message = new Message(SPICE_MSGC_MAIN_MIGRATE_CONNECTED, 0);
+        Message* message = new Message(SPICE_MSGC_MAIN_MIGRATE_CONNECTED);
         _client.post_message(message);
     } else {
-        Message* message = new Message(SPICE_MSGC_MAIN_MIGRATE_CONNECT_ERROR, 0);
+        Message* message = new Message(SPICE_MSGC_MAIN_MIGRATE_CONNECT_ERROR);
         _client.post_message(message);
     }
     _running = false;
@@ -593,16 +594,17 @@ void RedClient::send_agent_monitors_config()
         }
     }
 
-    Message* message = new Message(SPICE_MSGC_MAIN_AGENT_DATA,sizeof(VDAgentMessage) +
-                                   sizeof(VDAgentMonitorsConfig) +
-                                   monitors.size() * sizeof(VDAgentMonConfig));
-    VDAgentMessage* msg = (VDAgentMessage*)message->data();
+    Message* message = new Message(SPICE_MSGC_MAIN_AGENT_DATA);
+    VDAgentMessage* msg = (VDAgentMessage*)
+      spice_marshaller_reserve_space(message->marshaller(), sizeof(VDAgentMessage));
     msg->protocol = VD_AGENT_PROTOCOL;
     msg->type = VD_AGENT_MONITORS_CONFIG;
     msg->opaque = 0;
     msg->size = sizeof(VDAgentMonitorsConfig) + monitors.size() * sizeof(VDAgentMonConfig);
 
-    VDAgentMonitorsConfig* mon_config = (VDAgentMonitorsConfig*)msg->data;
+    VDAgentMonitorsConfig* mon_config = (VDAgentMonitorsConfig*)
+      spice_marshaller_reserve_space(message->marshaller(),
+				     sizeof(VDAgentMonitorsConfig) + monitors.size() * sizeof(VDAgentMonConfig));
     mon_config->num_of_monitors = monitors.size();
     mon_config->flags = 0;
     if (Platform::is_monitors_pos_valid()) {
@@ -696,9 +698,12 @@ void RedClient::set_mouse_mode(uint32_t supported_modes, uint32_t current_mode)
     }
     // FIXME: use configured mouse mode (currently, use client mouse mode if supported by server)
     if ((supported_modes & SPICE_MOUSE_MODE_CLIENT) && (current_mode != SPICE_MOUSE_MODE_CLIENT)) {
-        Message* message = new Message(SPICE_MSGC_MAIN_MOUSE_MODE_REQUEST, sizeof(SpiceMsgcMainMouseModeRequest));
-        SpiceMsgcMainMouseModeRequest* mouse_mode_request = (SpiceMsgcMainMouseModeRequest*)message->data();
-        mouse_mode_request->mode = SPICE_MOUSE_MODE_CLIENT;
+        Message* message = new Message(SPICE_MSGC_MAIN_MOUSE_MODE_REQUEST);
+        SpiceMsgcMainMouseModeRequest mouse_mode_request;
+        mouse_mode_request.mode = SPICE_MOUSE_MODE_CLIENT;
+	spice_marshall_msgc_main_mouse_mode_request(message->marshaller(),
+						    &mouse_mode_request);
+
         post_message(message);
     }
 }
@@ -714,9 +719,10 @@ void RedClient::handle_init(RedPeer::InMessage* message)
     _agent_tokens = init->agent_tokens;
     _agent_connected = !!init->agent_connected;
     if (_agent_connected) {
-        Message* msg = new Message(SPICE_MSGC_MAIN_AGENT_START, sizeof(SpiceMsgcMainAgentStart));
-        SpiceMsgcMainAgentStart* agent_start = (SpiceMsgcMainAgentStart *)msg->data();
-        agent_start->num_tokens = ~0;
+        Message* msg = new Message(SPICE_MSGC_MAIN_AGENT_START);
+        SpiceMsgcMainAgentStart agent_start;
+        agent_start.num_tokens = ~0;
+	spice_marshall_msgc_main_agent_start(msg->marshaller(), &agent_start);
         post_message(msg);
     }
     if (_auto_display_res) {
@@ -725,7 +731,7 @@ void RedClient::handle_init(RedPeer::InMessage* message)
             send_agent_monitors_config();
         }
     } else {
-        post_message(new Message(SPICE_MSGC_MAIN_ATTACH_CHANNELS, 0));
+        post_message(new Message(SPICE_MSGC_MAIN_ATTACH_CHANNELS));
     }
 }
 
@@ -754,9 +760,10 @@ void RedClient::handle_agent_connected(RedPeer::InMessage* message)
 {
     DBG(0, "");
     _agent_connected = true;
-    Message* msg = new Message(SPICE_MSGC_MAIN_AGENT_START, sizeof(SpiceMsgcMainAgentStart));
-    SpiceMsgcMainAgentStart* agent_start = (SpiceMsgcMainAgentStart *)msg->data();
-    agent_start->num_tokens = ~0;
+    Message* msg = new Message(SPICE_MSGC_MAIN_AGENT_START);
+    SpiceMsgcMainAgentStart agent_start;
+    agent_start.num_tokens = ~0;
+    spice_marshall_msgc_main_agent_start(msg->marshaller(), &agent_start);
     post_message(msg);
     if (_auto_display_res && !_agent_mon_config_sent) {
         send_agent_monitors_config();
@@ -781,7 +788,7 @@ void RedClient::on_agent_reply(VDAgentReply* reply)
     }
     switch (reply->type) {
     case VD_AGENT_MONITORS_CONFIG:
-        post_message(new Message(SPICE_MSGC_MAIN_ATTACH_CHANNELS, 0));
+        post_message(new Message(SPICE_MSGC_MAIN_ATTACH_CHANNELS));
         _application.deactivate_interval_timer(*_agent_timer);
         break;
     default:

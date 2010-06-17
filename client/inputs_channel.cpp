@@ -22,6 +22,7 @@
 #include "red_client.h"
 #include "application.h"
 #include "display_channel.h"
+#include "generated_marshallers.h"
 
 #define SYNC_REMOTH_MODIFIRES
 
@@ -114,7 +115,7 @@ private:
 
 MotionMessage::MotionMessage(InputsChannel& channel)
     : RedChannel::OutMessage()
-    , RedPeer::OutMessage(SPICE_MSGC_INPUTS_MOUSE_MOTION, sizeof(SpiceMsgcMouseMotion))
+    , RedPeer::OutMessage(SPICE_MSGC_INPUTS_MOUSE_MOTION)
     , _channel (channel)
 {
 }
@@ -126,7 +127,11 @@ void MotionMessage::release()
 
 RedPeer::OutMessage& MotionMessage::peer_message()
 {
-    _channel.set_motion_event(*(SpiceMsgcMouseMotion*)data());
+    SpiceMsgcMouseMotion motion;
+
+    _channel.set_motion_event(motion);
+    spice_marshall_msgc_inputs_mouse_motion(_marshaller, &motion);
+
     return *this;
 }
 
@@ -142,7 +147,7 @@ private:
 
 PositionMessage::PositionMessage(InputsChannel& channel)
     : RedChannel::OutMessage()
-    , RedPeer::OutMessage(SPICE_MSGC_INPUTS_MOUSE_POSITION, sizeof(SpiceMsgcMousePosition))
+    , RedPeer::OutMessage(SPICE_MSGC_INPUTS_MOUSE_POSITION)
     , _channel (channel)
 {
 }
@@ -154,7 +159,9 @@ void PositionMessage::release()
 
 RedPeer::OutMessage& PositionMessage::peer_message()
 {
-    _channel.set_position_event(*(SpiceMsgcMousePosition*)data());
+    SpiceMsgcMousePosition pos;
+    _channel.set_position_event(pos);
+    spice_marshall_msgc_inputs_mouse_position(_marshaller, &pos);
     return *this;
 }
 
@@ -311,10 +318,12 @@ void InputsChannel::on_mouse_down(int button, int buttons_state)
 {
     Message* message;
 
-    message = new Message(SPICE_MSGC_INPUTS_MOUSE_PRESS, sizeof(SpiceMsgcMouseRelease));
-    SpiceMsgcMousePress* event = (SpiceMsgcMousePress*)message->data();
-    event->button = button;
-    event->buttons_state = buttons_state;
+    message = new Message(SPICE_MSGC_INPUTS_MOUSE_PRESS);
+    SpiceMsgcMousePress event;
+    event.button = button;
+    event.buttons_state = buttons_state;
+    spice_marshall_msgc_inputs_mouse_press(message->marshaller(), &event);
+
     post_message(message);
 }
 
@@ -322,10 +331,11 @@ void InputsChannel::on_mouse_up(int button, int buttons_state)
 {
     Message* message;
 
-    message = new Message(SPICE_MSGC_INPUTS_MOUSE_RELEASE, sizeof(SpiceMsgcMouseRelease));
-    SpiceMsgcMouseRelease* event = (SpiceMsgcMouseRelease*)message->data();
-    event->button = button;
-    event->buttons_state = buttons_state;
+    message = new Message(SPICE_MSGC_INPUTS_MOUSE_RELEASE);
+    SpiceMsgcMouseRelease event;
+    event.button = button;
+    event.buttons_state = buttons_state;
+    spice_marshall_msgc_inputs_mouse_release(message->marshaller(), &event);
     post_message(message);
 }
 
@@ -349,9 +359,11 @@ void InputsChannel::on_key_down(RedKey key)
         return;
     }
 
-    Message* message = new Message(SPICE_MSGC_INPUTS_KEY_DOWN, sizeof(SpiceMsgcKeyDown));
-    SpiceMsgcKeyDown* event = (SpiceMsgcKeyDown*)message->data();
-    event->code = scan_code;
+    Message* message = new Message(SPICE_MSGC_INPUTS_KEY_DOWN);
+    SpiceMsgcKeyDown event;
+    event.code = scan_code;
+    spice_marshall_msgc_inputs_key_down(message->marshaller(), &event);
+
     post_message(message);
 }
 
@@ -363,9 +375,10 @@ void InputsChannel::on_key_up(RedKey key)
         return;
     }
 
-    Message* message = new Message(SPICE_MSGC_INPUTS_KEY_UP, sizeof(SpiceMsgcKeyUp));
-    SpiceMsgcKeyUp* event = (SpiceMsgcKeyUp*)message->data();
-    event->code = scan_code;
+    Message* message = new Message(SPICE_MSGC_INPUTS_KEY_UP);
+    SpiceMsgcKeyUp event;
+    event.code = scan_code;
+    spice_marshall_msgc_inputs_key_up(message->marshaller(), &event);
     post_message(message);
 }
 
@@ -391,9 +404,10 @@ void InputsChannel::set_local_modifiers()
 void InputsChannel::on_focus_in()
 {
 #ifdef SYNC_REMOTH_MODIFIRES
-    Message* message = new Message(SPICE_MSGC_INPUTS_KEY_MODIFIERS, sizeof(SpiceMsgcKeyDown));
-    SpiceMsgcKeyModifiers* modifiers = (SpiceMsgcKeyModifiers*)message->data();
-    modifiers->modifiers = Platform::get_keyboard_lock_modifiers();
+    Message* message = new Message(SPICE_MSGC_INPUTS_KEY_MODIFIERS);
+    SpiceMsgcKeyModifiers modifiers;
+    modifiers.modifiers = Platform::get_keyboard_lock_modifiers();
+    spice_marshall_msgc_inputs_key_modifiers(message->marshaller(), &modifiers);
     post_message(message);
 #else
     set_local_modifiers();

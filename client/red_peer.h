@@ -26,6 +26,7 @@
 #include "process_loop.h"
 #include "threads.h"
 #include "platform_utils.h"
+#include "marshaller.h"
 
 class RedPeer: protected EventSources::Socket {
 public:
@@ -111,6 +112,7 @@ public:
     void enable() { _shut = false;}
 
     virtual CompundInMessage* recive();
+    uint32_t do_send(OutMessage& message, uint32_t skip_bytes);
     uint32_t send(OutMessage& message);
 
     uint32_t recive(uint8_t* buf, uint32_t size);
@@ -194,20 +196,19 @@ private:
 
 class RedPeer::OutMessage {
 public:
-    OutMessage(uint32_t type, uint32_t size);
+    OutMessage(uint32_t type);
     virtual ~OutMessage();
 
-    SpiceDataHeader& header() { return *(SpiceDataHeader *)_data;}
-    uint8_t* data() { return _data + sizeof(SpiceDataHeader);}
-    void resize(uint32_t size);
+    SpiceMarshaller *marshaller() { return _marshaller;}
+    void reset(uint32_t type);
 
 private:
-    uint32_t message_size() { return header().size + sizeof(SpiceDataHeader);}
-    uint8_t* base() { return _data;}
+    uint32_t message_size() { return spice_marshaller_get_total_size(_marshaller);}
+    uint8_t* base() { return spice_marshaller_get_ptr(_marshaller);}
+    SpiceDataHeader& header() { return *(SpiceDataHeader *)base();}
 
-private:
-    uint8_t* _data;
-    uint32_t _size;
+protected:
+    SpiceMarshaller *_marshaller;
 
     friend class RedPeer;
     friend class RedChannel;

@@ -726,38 +726,59 @@ uint32_t RedPeer::send(uint8_t *buf, uint32_t size)
     return pos - buf;
 }
 
-uint32_t RedPeer::send(RedPeer::OutMessage& message)
+uint32_t RedPeer::do_send(RedPeer::OutMessage& message, uint32_t skip_bytes)
 {
-    message.header().serial = ++_serial;
-    return send(message.base(), message.message_size());
+    uint8_t *data;
+    int free_data;
+    size_t len;
+    uint32_t res;
+
+    data = spice_marshaller_linearize(message.marshaller(), skip_bytes,
+                                      &len, &free_data);
+
+    res = send(data, len);
+
+    if (free_data) {
+        free(data);
+    }
+    return res;
 }
 
-RedPeer::OutMessage::OutMessage(uint32_t type, uint32_t size)
-    : _data (new uint8_t[size + sizeof(SpiceDataHeader)])
-    , _size (size)
+uint32_t RedPeer::send(RedPeer::OutMessage& message)
 {
-    header().type = type;
-    header().size = size;
+
+    message.header().serial = ++_serial;
+    message.header().size = message.message_size() - sizeof(SpiceDataHeader);
+
+    return do_send(message, 0);
+}
+
+RedPeer::OutMessage::OutMessage(uint32_t type)
+    : _marshaller (spice_marshaller_new())
+{
+    SpiceDataHeader *header;
+    header = (SpiceDataHeader *)
+        spice_marshaller_reserve_space(_marshaller, sizeof(SpiceDataHeader));
+    spice_marshaller_set_base(_marshaller, sizeof(SpiceDataHeader));
+
+    header->type = type;
+    header->sub_list = 0;
+}
+
+void RedPeer::OutMessage::reset(uint32_t type)
+{
+    spice_marshaller_reset(_marshaller);
+
+    SpiceDataHeader *header;
+    header = (SpiceDataHeader *)
+        spice_marshaller_reserve_space(_marshaller, sizeof(SpiceDataHeader));
+    spice_marshaller_set_base(_marshaller, sizeof(SpiceDataHeader));
+
+    header->type = type;
+    header->sub_list = 0;
 }
 
 RedPeer::OutMessage::~OutMessage()
 {
-    delete[] _data;
+    spice_marshaller_destroy(_marshaller);
 }
-
-void RedPeer::OutMessage::resize(uint32_t size)
-{
-    if (size <= _size) {
-        header().size = size;
-        return;
-    }
-    uint32_t type = header().type;
-    delete[] _data;
-    _data = NULL;
-    _size = 0;
-    _data = new uint8_t[size + sizeof(SpiceDataHeader)];
-    _size = size;
-    header().type = type;
-    header().size = size;
-}
-

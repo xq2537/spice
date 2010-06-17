@@ -36,6 +36,7 @@ RED_COMMON_SRCS =			\
 	common.h			\
 	demarshallers.h			\
 	generated_demarshallers.cpp	\
+	marshaller.cpp			\
 	generated_marshallers.cpp	\
 	generated_marshallers.h		\
 	cursor_channel.cpp		\

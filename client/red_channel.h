@@ -212,9 +212,9 @@ public:
 
 class Message: public RedChannel::OutMessage, public RedPeer::OutMessage {
 public:
-    Message(uint32_t type, uint32_t size)
+    Message(uint32_t type)
         : RedChannel::OutMessage()
-        , RedPeer::OutMessage(type, size)
+        , RedPeer::OutMessage(type)
     {
     }
 
