@@ -33,6 +33,8 @@ void *spice_malloc_n_m(size_t n_blocks, size_t n_block_bytes, size_t extra_size)
 void *spice_malloc0_n(size_t n_blocks, size_t n_block_bytes) SPICE_GNUC_MALLOC SPICE_GNUC_ALLOC_SIZE2(1,2);
 void *spice_realloc_n(void *mem, size_t n_blocks, size_t n_block_bytes) SPICE_GNUC_WARN_UNUSED_RESULT;
 
+size_t spice_strnlen(const char *str, size_t max_len);
+
 /* Optimize: avoid the call to the (slower) _n function if we can
  * determine at compile-time that no overflow happens.
  */
