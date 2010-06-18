@@ -150,6 +150,8 @@ typedef struct SpiceMsgMainMouseMode {
 typedef struct SpiceMsgPing {
     uint32_t id;
     uint64_t timestamp;
+    void *data;
+    uint32_t data_len;
 } SpiceMsgPing;
 
 typedef struct SpiceMsgMainAgentDisconnect {

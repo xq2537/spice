@@ -111,7 +111,7 @@ channel BaseChannel {
     message {
 	uint32 id;
 	uint64 timestamp;
-	uint8 data[] @end @ctype(uint8_t);
+	uint8 data[] @end @ctype(uint8_t) @as_ptr(data_len);
     } ping;
 
     message {
