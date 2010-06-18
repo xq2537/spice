@@ -51,6 +51,7 @@
 #include "jpeg_encoder.h"
 #include "rect.h"
 #include "marshaller.h"
+#include "demarshallers.h"
 #include "generated_marshallers.h"
 
 //#define COMPRESS_STAT
@@ -348,11 +349,12 @@ typedef struct RedChannel RedChannel;
 typedef void (*disconnect_channel_proc)(RedChannel *channel);
 typedef void (*hold_item_proc)(void *item);
 typedef void (*release_item_proc)(RedChannel *channel, void *item);
-typedef int (*handle_message_proc)(RedChannel *channel, SpiceDataHeader *message);
+typedef int (*handle_message_proc)(RedChannel *channel, size_t size, uint32_t type, void *message);
 
 struct RedChannel {
     EventListener listener;
     uint32_t id;
+    spice_parse_channel_func_t parser;
     struct RedWorker *worker;
     RedsStreamContext *peer;
     int migrate;
@@ -9888,15 +9890,11 @@ static void on_new_display_channel(RedWorker *worker)
     }
 }
 
-static int channel_handle_message(RedChannel *channel, SpiceDataHeader *message)
+static int channel_handle_message(RedChannel *channel, size_t size, uint32_t type, void *message)
 {
-    switch (message->type) {
+    switch (type) {
     case SPICE_MSGC_ACK_SYNC:
-        if (message->size != sizeof(uint32_t)) {
-            red_printf("bad message size");
-            return FALSE;
-        }
-        channel->client_ack_generation = *(uint32_t *)(message + 1);
+        channel->client_ack_generation = *(uint32_t *)message;
         break;
     case SPICE_MSGC_ACK:
         if (channel->client_ack_generation == channel->ack_generation) {
@@ -9906,7 +9904,7 @@ static int channel_handle_message(RedChannel *channel, SpiceDataHeader *message)
     case SPICE_MSGC_DISCONNECTING:
         break;
     default:
-        red_printf("invalid message type %u", message->type);
+        red_printf("invalid message type %u", type);
         return FALSE;
     }
     return TRUE;
@@ -10146,7 +10144,7 @@ static int display_channel_handle_migrate_mark(DisplayChannel *channel)
     return TRUE;
 }
 
-static int display_channel_handle_migrate_data(DisplayChannel *channel, SpiceDataHeader *message)
+static int display_channel_handle_migrate_data(DisplayChannel *channel, size_t size, void *message)
 {
     DisplayChannelMigrateData *migrate_data;
     int i;
@@ -10156,11 +10154,11 @@ static int display_channel_handle_migrate_data(DisplayChannel *channel, SpiceDat
         return FALSE;
     }
     channel->expect_migrate_data = FALSE;
-    if (message->size < sizeof(*migrate_data)) {
+    if (size < sizeof(*migrate_data)) {
         red_printf("bad message size");
         return FALSE;
     }
-    migrate_data = (DisplayChannelMigrateData *)(message + 1);
+    migrate_data = (DisplayChannelMigrateData *)message;
     if (migrate_data->magic != DISPLAY_MIGRATE_DATA_MAGIC ||
                                             migrate_data->version != DISPLAY_MIGRATE_DATA_VERSION) {
         red_printf("invalid content");
@@ -10197,26 +10195,22 @@ static int display_channel_handle_migrate_data(DisplayChannel *channel, SpiceDat
     return TRUE;
 }
 
-static int display_channel_handle_message(RedChannel *channel, SpiceDataHeader *message)
+static int display_channel_handle_message(RedChannel *channel, size_t size, uint32_t type, void *message)
 {
-    switch (message->type) {
+    switch (type) {
     case SPICE_MSGC_DISPLAY_INIT:
-        if (message->size != sizeof(SpiceMsgcDisplayInit)) {
-            red_printf("bad message size");
-            return FALSE;
-        }
         if (!((DisplayChannel *)channel)->expect_init) {
             red_printf("unexpected SPICE_MSGC_DISPLAY_INIT");
             return FALSE;
         }
         ((DisplayChannel *)channel)->expect_init = FALSE;
-        return display_channel_init((DisplayChannel *)channel, (SpiceMsgcDisplayInit *)(message + 1));
+        return display_channel_init((DisplayChannel *)channel, (SpiceMsgcDisplayInit *)message);
     case SPICE_MSGC_MIGRATE_FLUSH_MARK:
         return display_channel_handle_migrate_mark((DisplayChannel *)channel);
     case SPICE_MSGC_MIGRATE_DATA:
-        return display_channel_handle_migrate_data((DisplayChannel *)channel, message);
+        return display_channel_handle_migrate_data((DisplayChannel *)channel, size, message);
     default:
-        return channel_handle_message(channel, message);
+        return channel_handle_message(channel, size, type, message);
     }
 }
 
@@ -10249,19 +10243,34 @@ static void red_receive(RedChannel *channel)
         } else {
             channel->recive_data.now += n;
             for (;;) {
-                SpiceDataHeader *message = channel->recive_data.message;
-                n = channel->recive_data.now - (uint8_t *)message;
+                SpiceDataHeader *header = channel->recive_data.message;
+                uint8_t *data = (uint8_t *)(header+1);
+                size_t parsed_size;
+                uint8_t *parsed;
+
+                n = channel->recive_data.now - (uint8_t *)header;
                 if (n < sizeof(SpiceDataHeader) ||
-                    n < sizeof(SpiceDataHeader) + message->size) {
+                    n < sizeof(SpiceDataHeader) + header->size) {
                     break;
                 }
-                if (!channel->handle_message(channel, message)) {
+                parsed = channel->parser((void *)data, data + header->size, header->type,
+                                         SPICE_VERSION_MINOR, &parsed_size);
+
+                if (parsed == NULL) {
+                    red_printf("failed to parse message type %d", header->type);
                     channel->disconnect(channel);
                     return;
                 }
-                channel->recive_data.message = (SpiceDataHeader *)((uint8_t *)message +
-                                                                 sizeof(SpiceDataHeader) +
-                                                                 message->size);
+
+                if (!channel->handle_message(channel, parsed_size, header->type, parsed)) {
+                    free(parsed);
+                    channel->disconnect(channel);
+                    return;
+                }
+                free(parsed);
+                channel->recive_data.message = (SpiceDataHeader *)((uint8_t *)header +
+                                                                   sizeof(SpiceDataHeader) +
+                                                                   header->size);
             }
 
             if (channel->recive_data.now == (uint8_t *)channel->recive_data.message) {
@@ -10276,7 +10285,8 @@ static void red_receive(RedChannel *channel)
     }
 }
 
-static RedChannel *__new_channel(RedWorker *worker, int size, RedsStreamContext *peer, int migrate,
+static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_id,
+                                 RedsStreamContext *peer, int migrate,
                                  event_listener_action_proc handler,
                                  disconnect_channel_proc disconnect,
                                  hold_item_proc hold_item,
@@ -10306,6 +10316,7 @@ static RedChannel *__new_channel(RedWorker *worker, int size, RedsStreamContext 
     ASSERT(size >= sizeof(*channel));
     channel = spice_malloc0(size);
     channel->id = worker->id;
+    channel->parser = spice_get_client_channel_parser(channel_id, NULL);
     channel->listener.refs = 1;
     channel->listener.action = handler;
     channel->disconnect = disconnect;
@@ -10408,7 +10419,8 @@ static void handle_new_display_channel(RedWorker *worker, RedsStreamContext *pee
 
     red_disconnect_display((RedChannel *)worker->display_channel);
 
-    if (!(display_channel = (DisplayChannel *)__new_channel(worker, sizeof(*display_channel), peer,
+    if (!(display_channel = (DisplayChannel *)__new_channel(worker, sizeof(*display_channel),
+                                                            SPICE_CHANNEL_DISPLAY, peer,
                                                             migrate, handle_channel_events,
                                                             red_disconnect_display,
                                                             display_channel_hold_item,
@@ -10508,7 +10520,8 @@ static void red_connect_cursor(RedWorker *worker, RedsStreamContext *peer, int m
 
     red_disconnect_cursor((RedChannel *)worker->cursor_channel);
 
-    if (!(channel = (CursorChannel *)__new_channel(worker, sizeof(*channel), peer, migrate,
+    if (!(channel = (CursorChannel *)__new_channel(worker, sizeof(*channel),
+                                                   SPICE_CHANNEL_CURSOR, peer, migrate,
                                                    handle_channel_events,
                                                    red_disconnect_cursor,
                                                    cursor_channel_hold_item,

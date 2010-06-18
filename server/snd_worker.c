@@ -30,6 +30,7 @@
 #include "snd_worker.h"
 #include "marshaller.h"
 #include "generated_marshallers.h"
+#include "demarshallers.h"
 
 #define MAX_SEND_VEC 100
 
@@ -65,7 +66,7 @@ enum RecordCommand {
 
 typedef struct SndChannel SndChannel;
 typedef void (*send_messages_proc)(void *in_channel);
-typedef int (*handle_message_proc)(SndChannel *channel, SpiceDataHeader *message);
+typedef int (*handle_message_proc)(SndChannel *channel, size_t size, uint32_t type, void *message);
 typedef void (*on_message_done_proc)(SndChannel *channel);
 typedef void (*cleanup_channel_proc)(SndChannel *channel);
 
@@ -74,6 +75,7 @@ typedef struct SndWorker SndWorker;
 struct SndChannel {
     RedsStreamContext *peer;
     SndWorker *worker;
+    spice_parse_channel_func_t parser;
 
     int active;
     int client_active;
@@ -266,12 +268,11 @@ static int snd_send_data(SndChannel *channel)
     return TRUE;
 }
 
-static int snd_record_handle_write(RecordChannel *record_channel, SpiceDataHeader *message)
+static int snd_record_handle_write(RecordChannel *record_channel, size_t size, void *message)
 {
     SpiceMsgcRecordPacket *packet;
     uint32_t write_pos;
     uint32_t* data;
-    uint32_t size;
     uint32_t len;
     uint32_t now;
 
@@ -279,8 +280,8 @@ static int snd_record_handle_write(RecordChannel *record_channel, SpiceDataHeade
         return FALSE;
     }
 
-    packet = (SpiceMsgcRecordPacket *)(message + 1);
-    size = message->size - sizeof(*packet);
+    packet = (SpiceMsgcRecordPacket *)message;
+    size = size - sizeof(*packet);
 
     if (record_channel->mode == SPICE_AUDIO_DATA_MODE_CELT_0_5_1) {
         int celt_err = celt051_decode(record_channel->celt_decoder, packet->data, size,
@@ -316,34 +317,34 @@ static int snd_record_handle_write(RecordChannel *record_channel, SpiceDataHeade
     return TRUE;
 }
 
-static int snd_playback_handle_message(SndChannel *channel, SpiceDataHeader *message)
+static int snd_playback_handle_message(SndChannel *channel, size_t size, uint32_t type, void *message)
 {
     if (!channel) {
         return FALSE;
     }
 
-    switch (message->type) {
+    switch (type) {
     case SPICE_MSGC_DISCONNECTING:
         break;
     default:
-        red_printf("invalid message type %u", message->type);
+        red_printf("invalid message type %u", type);
         return FALSE;
     }
     return TRUE;
 }
 
-static int snd_record_handle_message(SndChannel *channel, SpiceDataHeader *message)
+static int snd_record_handle_message(SndChannel *channel, size_t size, uint32_t type, void *message)
 {
     RecordChannel *record_channel = (RecordChannel *)channel;
 
     if (!channel) {
         return FALSE;
     }
-    switch (message->type) {
+    switch (type) {
     case SPICE_MSGC_RECORD_DATA:
-        return snd_record_handle_write((RecordChannel *)channel, message);
+        return snd_record_handle_write((RecordChannel *)channel, size, message);
     case SPICE_MSGC_RECORD_MODE: {
-        SpiceMsgcRecordMode *mode = (SpiceMsgcRecordMode *)(message + 1);
+        SpiceMsgcRecordMode *mode = (SpiceMsgcRecordMode *)message;
         record_channel->mode = mode->mode;
         record_channel->mode_time = mode->time;
         if (record_channel->mode != SPICE_AUDIO_DATA_MODE_CELT_0_5_1 &&
@@ -353,14 +354,14 @@ static int snd_record_handle_message(SndChannel *channel, SpiceDataHeader *messa
         break;
     }
     case SPICE_MSGC_RECORD_START_MARK: {
-        SpiceMsgcRecordStartMark *mark = (SpiceMsgcRecordStartMark *)(message + 1);
+        SpiceMsgcRecordStartMark *mark = (SpiceMsgcRecordStartMark *)message;
         record_channel->start_time = mark->time;
         break;
     }
     case SPICE_MSGC_DISCONNECTING:
         break;
     case SPICE_MSGC_MIGRATE_DATA: {
-        RecordMigrateData* mig_data = (RecordMigrateData *)(message + 1);
+        RecordMigrateData* mig_data = (RecordMigrateData *)message;
         if (mig_data->version != RECORD_MIG_VERSION) {
             red_printf("invalid mig version");
             break;
@@ -371,7 +372,7 @@ static int snd_record_handle_message(SndChannel *channel, SpiceDataHeader *messa
         break;
     }
     default:
-        red_printf("invalid message type %u", message->type);
+        red_printf("invalid message type %u", type);
         return FALSE;
     }
     return TRUE;
@@ -410,18 +411,31 @@ static void snd_receive(void* data)
         } else {
             channel->recive_data.now += n;
             for (;;) {
-                SpiceDataHeader *message = channel->recive_data.message;
-                n = channel->recive_data.now - (uint8_t *)message;
-                if (n < sizeof(SpiceDataHeader) || n < sizeof(SpiceDataHeader) + message->size) {
+                SpiceDataHeader *header = channel->recive_data.message;
+                uint8_t *data = (uint8_t *)(header+1);
+                size_t parsed_size;
+                uint8_t *parsed;
+
+                n = channel->recive_data.now - (uint8_t *)header;
+                if (n < sizeof(SpiceDataHeader) || n < sizeof(SpiceDataHeader) + header->size) {
                     break;
                 }
-                if (!channel->handle_message(channel, message)) {
+                parsed = channel->parser((void *)data, data + header->size, header->type,
+                                         SPICE_VERSION_MINOR, &parsed_size);
+                if (parsed == NULL) {
+                    red_printf("failed to parse message type %d", header->type);
                     snd_disconnect_channel(channel);
                     return;
                 }
-                channel->recive_data.message = (SpiceDataHeader *)((uint8_t *)message +
+                if (!channel->handle_message(channel, parsed_size, header->type, parsed)) {
+                    free(parsed);
+                    snd_disconnect_channel(channel);
+                    return;
+                }
+                free(parsed);
+                channel->recive_data.message = (SpiceDataHeader *)((uint8_t *)header +
                                                                  sizeof(SpiceDataHeader) +
-                                                                 message->size);
+                                                                 header->size);
             }
             if (channel->recive_data.now == (uint8_t *)channel->recive_data.message) {
                 channel->recive_data.now = channel->recive_data.buf;
@@ -718,7 +732,8 @@ static void snd_record_send(void* data)
     }
 }
 
-static SndChannel *__new_channel(SndWorker *worker, int size, RedsStreamContext *peer,
+static SndChannel *__new_channel(SndWorker *worker, int size, uint32_t channel_id,
+                                 RedsStreamContext *peer,
                                  int migrate, send_messages_proc send_messages,
                                  handle_message_proc handle_message,
                                  on_message_done_proc on_message_done,
@@ -758,6 +773,7 @@ static SndChannel *__new_channel(SndWorker *worker, int size, RedsStreamContext 
 
     ASSERT(size >= sizeof(*channel));
     channel = spice_malloc0(size);
+    channel->parser = spice_get_client_channel_parser(channel_id, NULL);
     channel->peer = peer;
     channel->worker = worker;
     channel->recive_data.message = (SpiceDataHeader *)channel->recive_data.buf;
@@ -941,6 +957,7 @@ static void snd_set_playback_peer(Channel *channel, RedsStreamContext *peer, int
 
     if (!(playback_channel = (PlaybackChannel *)__new_channel(worker,
                                                               sizeof(*playback_channel),
+                                                              SPICE_CHANNEL_PLAYBACK,
                                                               peer,
                                                               migration,
                                                               snd_playback_send,
@@ -1106,6 +1123,7 @@ static void snd_set_record_peer(Channel *channel, RedsStreamContext *peer, int m
 
     if (!(record_channel = (RecordChannel *)__new_channel(worker,
                                                           sizeof(*record_channel),
+                                                          SPICE_CHANNEL_RECORD,
                                                           peer,
                                                           migration,
                                                           snd_record_send,

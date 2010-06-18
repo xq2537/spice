@@ -52,6 +52,7 @@
 #include "stat.h"
 #include "ring.h"
 #include "config.h"
+#include "demarshallers.h"
 #include "marshaller.h"
 #include "generated_marshallers.h"
 #ifdef HAVE_SLIRP
@@ -113,11 +114,12 @@ static void openssl_init();
 #define CAPS_LOCK_SCAN_CODE 0x3a
 
 typedef struct IncomingHandler {
+    spice_parse_channel_func_t parser;
     void *opaque;
     int shut;
     uint8_t buf[RECIVE_BUF_SIZE];
     uint32_t end_pos;
-    void (*handle_message)(void *opaque, SpiceDataHeader *message);
+    void (*handle_message)(void *opaque, size_t size, uint32_t type, void *message);
 } IncomingHandler;
 
 typedef struct OutgoingHandler {
@@ -792,9 +794,19 @@ static int handle_incoming(RedsStreamContext *peer, IncomingHandler *handler)
             end = buf + pos;
             while (buf + sizeof(SpiceDataHeader) <= end &&
                    buf + sizeof(SpiceDataHeader) + (header = (SpiceDataHeader *)buf)->size <= end) {
-                buf += sizeof(SpiceDataHeader) + header->size;
-                handler->handle_message(handler->opaque, header);
+                uint8_t *data = (uint8_t *)(header+1);
+                size_t parsed_size;
+                uint8_t *parsed;
 
+                buf += sizeof(SpiceDataHeader) + header->size;
+                parsed = handler->parser(data, data + header->size, header->type,
+                                         SPICE_VERSION_MINOR, &parsed_size);
+                if (parsed == NULL) {
+                    red_printf("failed to parse message type %d", header->type);
+                    return -1;
+                }
+                handler->handle_message(handler->opaque, parsed_size, header->type, parsed);
+                free(parsed);
                 if (handler->shut) {
                     return -1;
                 }
@@ -1586,9 +1598,9 @@ static void main_channel_recive_migrate_data(MainMigrateData *data, uint8_t *end
     ASSERT(state->num_client_tokens + state->num_tokens == REDS_AGENT_WINDOW_SIZE);
 }
 
-static void reds_main_handle_message(void *opaque, SpiceDataHeader *message)
+static void reds_main_handle_message(void *opaque, size_t size, uint32_t type, void *message)
 {
-    switch (message->type) {
+    switch (type) {
     case SPICE_MSGC_MAIN_AGENT_START: {
         SpiceMsgcMainAgentTokens *agent_start;
 
@@ -1596,7 +1608,7 @@ static void reds_main_handle_message(void *opaque, SpiceDataHeader *message)
         if (!reds->peer) {
             return;
         }
-        agent_start = (SpiceMsgcMainAgentTokens *)(message + 1);
+        agent_start = (SpiceMsgcMainAgentTokens *)message;
         reds->agent_state.client_agent_started = TRUE;
         reds->agent_state.send_tokens = agent_start->num_tokens;
         read_from_vdi_port();
@@ -1624,7 +1636,7 @@ static void reds_main_handle_message(void *opaque, SpiceDataHeader *message)
             break;
         }
 
-        if (message->size > SPICE_AGENT_MAX_DATA_SIZE) {
+        if (size > SPICE_AGENT_MAX_DATA_SIZE) {
             red_printf("invalid agent message");
             reds_disconnect();
             break;
@@ -1638,9 +1650,9 @@ static void reds_main_handle_message(void *opaque, SpiceDataHeader *message)
         ring_remove(ring_item);
         buf = (VDAgentExtBuf *)ring_item;
         buf->base.now = (uint8_t *)&buf->base.chunk_header.port;
-        buf->base.write_len = message->size + sizeof(VDIChunkHeader);
-        buf->base.chunk_header.size = message->size;
-        memcpy(buf->buf, message + 1, message->size);
+        buf->base.write_len = size + sizeof(VDIChunkHeader);
+        buf->base.chunk_header.size = size;
+        memcpy(buf->buf, message, size);
         ring_add(&reds->agent_state.write_queue, ring_item);
         write_to_vdi_port();
         break;
@@ -1653,7 +1665,7 @@ static void reds_main_handle_message(void *opaque, SpiceDataHeader *message)
             break;
         }
 
-        token = (SpiceMsgcMainAgentTokens *)(message + 1);
+        token = (SpiceMsgcMainAgentTokens *)message;
         reds->agent_state.send_tokens += token->num_tokens;
         read_from_vdi_port();
         break;
@@ -1674,7 +1686,7 @@ static void reds_main_handle_message(void *opaque, SpiceDataHeader *message)
         }
         break;
     case SPICE_MSGC_MAIN_MOUSE_MODE_REQUEST: {
-        switch (((SpiceMsgcMainMouseModeRequest *)(message + 1))->mode) {
+        switch (((SpiceMsgcMainMouseModeRequest *)message)->mode) {
         case SPICE_MOUSE_MODE_CLIENT:
             if (reds->is_client_mouse_allowed) {
                 reds_set_mouse_mode(SPICE_MOUSE_MODE_CLIENT);
@@ -1691,7 +1703,7 @@ static void reds_main_handle_message(void *opaque, SpiceDataHeader *message)
         break;
     }
     case SPICE_MSGC_PONG: {
-        SpiceMsgPing *ping = (SpiceMsgPing *)(message + 1);
+        SpiceMsgPing *ping = (SpiceMsgPing *)message;
         uint64_t roundtrip;
         struct timespec ts;
 
@@ -1743,15 +1755,15 @@ static void reds_main_handle_message(void *opaque, SpiceDataHeader *message)
         main_channel_push_migrate_data_item();
         break;
     case SPICE_MSGC_MIGRATE_DATA:
-        main_channel_recive_migrate_data((MainMigrateData *)(message + 1),
-                                         (uint8_t *)(message + 1) + message->size);
+        main_channel_recive_migrate_data((MainMigrateData *)message,
+                                         ((uint8_t *)message) + size);
         reds->mig_target = FALSE;
         while (write_to_vdi_port() || read_from_vdi_port());
         break;
     case SPICE_MSGC_DISCONNECTING:
         break;
     default:
-        red_printf("unexpected type %d", message->type);
+        red_printf("unexpected type %d", type);
     }
 }
 
@@ -2058,12 +2070,12 @@ static uint8_t kbd_get_leds(SpiceKbdInstance *sin)
     return sif->get_leds(sin);
 }
 
-static void inputs_handle_input(void *opaque, SpiceDataHeader *header)
+static void inputs_handle_input(void *opaque, size_t size, uint32_t type, void *message)
 {
     InputsState *state = (InputsState *)opaque;
-    uint8_t *buf = (uint8_t *)(header + 1);
+    uint8_t *buf = (uint8_t *)message;
 
-    switch (header->type) {
+    switch (type) {
     case SPICE_MSGC_INPUTS_KEY_DOWN: {
         SpiceMsgcKeyDown *key_up = (SpiceMsgcKeyDown *)buf;
         if (key_up->code == CAPS_LOCK_SCAN_CODE || key_up->code == NUM_LOCK_SCAN_CODE ||
@@ -2216,7 +2228,7 @@ static void inputs_handle_input(void *opaque, SpiceDataHeader *header)
     case SPICE_MSGC_DISCONNECTING:
         break;
     default:
-        red_printf("unexpected type %d", header->type);
+        red_printf("unexpected type %d", type);
     }
 }
 
@@ -2344,6 +2356,7 @@ static void inputs_link(Channel *channel, RedsStreamContext *peer, int migration
     inputs_state->peer = peer;
     inputs_state->end_pos = 0;
     inputs_state->channel = channel;
+    inputs_state->in_handler.parser = spice_get_client_channel_parser(SPICE_CHANNEL_INPUTS, NULL);
     inputs_state->in_handler.opaque = inputs_state;
     inputs_state->in_handler.handle_message = inputs_handle_input;
     inputs_state->out_handler.length = 0;
@@ -3571,6 +3584,7 @@ static void do_spice_init(SpiceCoreInterface *core_interface)
     reds->listen_socket = -1;
     reds->secure_listen_socket = -1;
     reds->peer = NULL;
+    reds->in_handler.parser = spice_get_client_channel_parser(SPICE_CHANNEL_MAIN, NULL);
     reds->in_handler.handle_message = reds_main_handle_message;
     ring_init(&reds->outgoing.pipe);
     reds->outgoing.vec = reds->outgoing.vec_buf;
