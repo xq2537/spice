@@ -376,15 +376,15 @@ void InputsChannel::set_local_modifiers()
 {
     unsigned int modifiers = 0;
 
-    if (_modifiers & SPICE_SCROLL_LOCK_MODIFIER) {
+    if (_modifiers & SPICE_KEYBOARD_MODIFIER_FLAGS_SCROLL_LOCK) {
         modifiers |= Platform::SCROLL_LOCK_MODIFIER;
     }
 
-    if (_modifiers & SPICE_NUM_LOCK_MODIFIER) {
+    if (_modifiers & SPICE_KEYBOARD_MODIFIER_FLAGS_NUM_LOCK) {
         modifiers |= Platform::NUM_LOCK_MODIFIER;
     }
 
-    if (_modifiers & SPICE_CAPS_LOCK_MODIFIER) {
+    if (_modifiers & SPICE_KEYBOARD_MODIFIER_FLAGS_CAPS_LOCK) {
         modifiers |= Platform::CAPS_LOCK_MODIFIER;
     }
 

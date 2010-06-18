@@ -2259,16 +2259,18 @@ static void inputs_handle_input(void *opaque, SpiceDataHeader *header)
             break;
         }
         leds = kbd_get_leds(keyboard);
-        if ((modifiers->modifiers & SPICE_SCROLL_LOCK_MODIFIER) !=
-                                                                (leds & SPICE_SCROLL_LOCK_MODIFIER)) {
+        if ((modifiers->modifiers & SPICE_KEYBOARD_MODIFIER_FLAGS_SCROLL_LOCK) !=
+            (leds & SPICE_KEYBOARD_MODIFIER_FLAGS_SCROLL_LOCK)) {
             kbd_push_scan(keyboard, SCROLL_LOCK_SCAN_CODE);
             kbd_push_scan(keyboard, SCROLL_LOCK_SCAN_CODE | 0x80);
         }
-        if ((modifiers->modifiers & SPICE_NUM_LOCK_MODIFIER) != (leds & SPICE_NUM_LOCK_MODIFIER)) {
+        if ((modifiers->modifiers & SPICE_KEYBOARD_MODIFIER_FLAGS_NUM_LOCK) !=
+            (leds & SPICE_KEYBOARD_MODIFIER_FLAGS_NUM_LOCK)) {
             kbd_push_scan(keyboard, NUM_LOCK_SCAN_CODE);
             kbd_push_scan(keyboard, NUM_LOCK_SCAN_CODE | 0x80);
         }
-        if ((modifiers->modifiers & SPICE_CAPS_LOCK_MODIFIER) != (leds & SPICE_CAPS_LOCK_MODIFIER)) {
+        if ((modifiers->modifiers & SPICE_KEYBOARD_MODIFIER_FLAGS_CAPS_LOCK) !=
+            (leds & SPICE_KEYBOARD_MODIFIER_FLAGS_CAPS_LOCK)) {
             kbd_push_scan(keyboard, CAPS_LOCK_SCAN_CODE);
             kbd_push_scan(keyboard, CAPS_LOCK_SCAN_CODE | 0x80);
         }
