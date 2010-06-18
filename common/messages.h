@@ -442,8 +442,8 @@ typedef struct SpiceMsgcTunnelAddGenericService {
     uint32_t id;
     uint32_t group;
     uint32_t port;
-    uint32_t name;
-    uint32_t description;
+    uint64_t name;
+    uint64_t description;
 } SpiceMsgcTunnelAddGenericService;
 
 typedef struct SpiceMsgcTunnelAddPrintService {
