@@ -22,7 +22,7 @@
 #include "common.h"
 #include "debug.h"
 #include "region.h"
-#include <spice/protocol.h>
+#include "messages.h"
 #include "cache.hpp"
 #include "shared_cache.hpp"
 #include "canvas_base.h"

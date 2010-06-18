@@ -27,7 +27,7 @@
 #include "inputs_channel.h"
 #include "cursor_channel.h"
 #include "audio_channels.h"
-#include <spice/protocol.h>
+#include "messages.h"
 #include <spice/vd_agent.h>
 #include "process_loop.h"
 

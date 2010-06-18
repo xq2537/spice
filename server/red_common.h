@@ -23,7 +23,7 @@
 
 #include "spice.h"
 #include "mem.h"
-#include <spice/protocol.h>
+#include <messages.h>
 #include <spice/macros.h>
 
 #define ASSERT(x) if (!(x)) {                               \

@@ -25,7 +25,7 @@ generated_demarshallers.c: $(top_srcdir)/spice.proto
 
 STRUCTS=-M String -M Rect -M Point -M DisplayBase -M Fill -M Opaque -M Copy -M Blend -M Blackness -M Whiteness -M Invers -M Rop3 -M Stroke -M Text -M Transparent -M AlphaBlnd -M PathSegment
 generated_marshallers.c: $(top_srcdir)/spice.proto
-	$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-marshallers $(STRUCTS) --server $(top_srcdir)/spice.proto generated_marshallers.c
+	$(PYTHON) $(top_srcdir)/spice_codegen.py --include red_common.h --generate-marshallers $(STRUCTS) --server $(top_srcdir)/spice.proto generated_marshallers.c
 
 generated_marshallers.h: $(top_srcdir)/spice.proto
 	$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-marshallers $(STRUCTS) --server -H $(top_srcdir)/spice.proto generated_marshallers.h

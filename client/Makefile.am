@@ -6,11 +6,11 @@ DIST_SUBDIRS = x11 #windows
 spice_built_sources = generated_demarshallers.cpp generated_marshallers.cpp generated_marshallers.h
 
 generated_demarshallers.cpp: $(top_srcdir)/spice.proto
-	$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-demarshallers --client --include common.h $(top_srcdir)/spice.proto generated_demarshallers.cpp
+	$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-demarshallers --client --include common.h --include messages.h $(top_srcdir)/spice.proto generated_demarshallers.cpp
 
 STRUCTS=
 generated_marshallers.cpp: $(top_srcdir)/spice.proto
-	$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-marshallers $(STRUCTS) --client $(top_srcdir)/spice.proto generated_marshallers.cpp
+	$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-marshallers $(STRUCTS) --include messages.h --client $(top_srcdir)/spice.proto generated_marshallers.cpp
 
 generated_marshallers.h: $(top_srcdir)/spice.proto
 	$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-marshallers $(STRUCTS) --client -H $(top_srcdir)/spice.proto generated_marshallers.h
