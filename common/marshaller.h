@@ -20,7 +20,9 @@
 #define _H_MARSHALLER
 
 #include <spice/types.h>
+#ifndef WIN32
 #include <sys/uio.h>
+#endif
 
 typedef struct SpiceMarshaller SpiceMarshaller;
 typedef void (*spice_marshaller_item_free_func)(uint8_t *data, void *opaque);
@@ -44,8 +46,10 @@ size_t spice_marshaller_get_size(SpiceMarshaller *m);
 size_t spice_marshaller_get_total_size(SpiceMarshaller *m);
 SpiceMarshaller *spice_marshaller_get_submarshaller(SpiceMarshaller *m);
 SpiceMarshaller *spice_marshaller_get_ptr_submarshaller(SpiceMarshaller *m, int is_64bit);
+#ifndef WIN32
 int spice_marshaller_fill_iovec(SpiceMarshaller *m, struct iovec *vec,
                                 int n_vec, size_t skip_bytes);
+#endif
 void spice_marshaller_add_uint64(SpiceMarshaller *m, uint64_t v);
 void spice_marshaller_add_int64(SpiceMarshaller *m, int64_t v);
 void spice_marshaller_add_uint32(SpiceMarshaller *m, uint32_t v);

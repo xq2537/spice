@@ -18,6 +18,7 @@ def write_includes(writer):
     writer.newline()
     writer.writeln("#ifdef _MSC_VER")
     writer.writeln("#pragma warning(disable:4101)")
+    writer.writeln("#pragma warning(disable:4018)")
     writer.writeln("#endif")
     writer.newline()
 
