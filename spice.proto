@@ -867,7 +867,7 @@ struct CursorHeader {
 struct Cursor {
     cursor_flags flags;
     CursorHeader header;
-    uint8 data[] @end;
+    uint8 data[] @end @as_ptr(data_size);
 };
 
 channel CursorChannel : BaseChannel {

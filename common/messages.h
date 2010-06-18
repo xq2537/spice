@@ -173,7 +173,8 @@ typedef struct SpiceMsgcMainMouseModeRequest {
 typedef struct SpiceCursor {
     uint32_t flags;
     SpiceCursorHeader header;
-    uint8_t data[0];
+    uint32_t data_size;
+    uint8_t *data;
 } SpiceCursor;
 
 typedef struct SpiceMsgDisplayMode {

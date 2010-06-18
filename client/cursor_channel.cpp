@@ -485,7 +485,7 @@ void CursorChannel::create_native_cursor(CursorData* cursor)
     cursor->set_opaque(native_cursor);
 }
 
-void CursorChannel::set_cursor(SpiceCursor& red_cursor, int data_size, int x, int y, bool visible)
+void CursorChannel::set_cursor(SpiceCursor& red_cursor, int x, int y, bool visible)
 {
     CursorData *cursor;
 
@@ -497,7 +497,7 @@ void CursorChannel::set_cursor(SpiceCursor& red_cursor, int data_size, int x, in
     if (red_cursor.flags & SPICE_CURSOR_FLAGS_FROM_CACHE) {
         cursor = _cursor_cache.get(red_cursor.header.unique);
     } else {
-        cursor = new CursorData(red_cursor, data_size);
+        cursor = new CursorData(red_cursor, red_cursor.data_size);
         if (red_cursor.flags & SPICE_CURSOR_FLAGS_CACHE_ME) {
             ASSERT(red_cursor.header.unique);
             _cursor_cache.add(red_cursor.header.unique, cursor);
@@ -560,7 +560,7 @@ void CursorChannel::handle_init(RedPeer::InMessage *message)
     attach_to_screen(get_client().get_application(), get_id());
     remove_cursor();
     _cursor_cache.clear();
-    set_cursor(init->cursor, message->size() - sizeof(SpiceMsgCursorInit), init->position.x,
+    set_cursor(init->cursor, init->position.x,
                init->position.y, init->visible != 0);
 }
 
@@ -574,7 +574,7 @@ void CursorChannel::handle_reset(RedPeer::InMessage *message)
 void CursorChannel::handle_cursor_set(RedPeer::InMessage* message)
 {
     SpiceMsgCursorSet* set = (SpiceMsgCursorSet*)message->data();
-    set_cursor(set->cursor, message->size() - sizeof(SpiceMsgCursorSet), set->position.x,
+    set_cursor(set->cursor, set->position.x,
                set->position.y, set->visible != 0);
 }
 
