@@ -108,7 +108,7 @@ parser.add_option("-k", "--keep-identical-file",
                   action="store_true", dest="keep_identical_file", default=False,
                   help="Print errors")
 parser.add_option("-i", "--include",
-                  dest="include", default=None, metavar="FILE",
+                  action="append", dest="includes", metavar="FILE",
                   help="Include FILE in generated code")
 
 (options, args) = parser.parse_args()
@@ -137,8 +137,9 @@ if options.assert_on_error:
 if options.print_error:
     writer.set_option("print_error")
 
-if options.include:
-    writer.writeln('#include "%s"' % options.include)
+if options.includes:
+    for i in options.includes:
+        writer.writeln('#include "%s"' % i)
 
 if options.generate_enums:
     write_enums(writer)
