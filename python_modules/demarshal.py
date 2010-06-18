@@ -760,7 +760,19 @@ def write_member_parser(writer, container, member, dest, scope):
         #TODO validate e.g. flags and enums
     elif t.is_array():
         nelements = read_array_len(writer, member.name, t, dest, scope, handles_bytes = True)
-        write_array_parser(writer, nelements, t, dest, scope)
+        if member.has_attr("as_ptr") and t.element_type.is_fixed_nw_size():
+            writer.comment("use array as pointer").newline()
+            writer.assign(dest.get_ref(member.name), "(%s *)in" % t.element_type.c_type())
+            len_var = member.attributes["as_ptr"]
+            if len(len_var) > 0:
+                writer.assign(dest.get_ref(len_var[0]), nelements)
+            el_size = t.element_type.get_fixed_nw_size()
+            if el_size != 1:
+                writer.increment("in", "%s * %s" % (nelements, el_size))
+            else:
+                writer.increment("in", "%s" % (nelements))
+        else:
+            write_array_parser(writer, nelements, t, dest, scope)
     elif t.is_struct():
         if member.has_end_attr():
             dest2 = dest.child_at_end(writer, t)
