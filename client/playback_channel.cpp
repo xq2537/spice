@@ -295,8 +295,8 @@ void PlaybackChannel::handle_stop(RedPeer::InMessage* message)
 void PlaybackChannel::handle_raw_data(RedPeer::InMessage* message)
 {
     SpiceMsgPlaybackPacket* packet = (SpiceMsgPlaybackPacket*)message->data();
-    uint8_t* data = (uint8_t*)(packet + 1);
-    uint32_t size = message->size() - sizeof(*packet);
+    uint8_t* data = packet->data;
+    uint32_t size = packet->data_size;
 #ifdef WAVE_CAPTURE
     put_wave_data(data, size);
     return;
@@ -315,8 +315,8 @@ void PlaybackChannel::handle_raw_data(RedPeer::InMessage* message)
 void PlaybackChannel::handle_celt_data(RedPeer::InMessage* message)
 {
     SpiceMsgPlaybackPacket* packet = (SpiceMsgPlaybackPacket*)message->data();
-    uint8_t* data = (uint8_t*)(packet + 1);
-    uint32_t size = message->size() - sizeof(*packet);
+    uint8_t* data = packet->data;
+    uint32_t size = packet->data_size;
     celt_int16_t pcm[256 * 2];
 
     if (celt051_decode(_celt_decoder, data, size, pcm) != CELT_OK) {

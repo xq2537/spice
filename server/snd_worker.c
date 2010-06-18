@@ -281,7 +281,7 @@ static int snd_record_handle_write(RecordChannel *record_channel, size_t size, v
     }
 
     packet = (SpiceMsgcRecordPacket *)message;
-    size = size - sizeof(*packet);
+    size = packet->data_size;
 
     if (record_channel->mode == SPICE_AUDIO_DATA_MODE_CELT_0_5_1) {
         int celt_err = celt051_decode(record_channel->celt_decoder, packet->data, size,

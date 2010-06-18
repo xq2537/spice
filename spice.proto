@@ -921,13 +921,13 @@ channel PlaybackChannel : BaseChannel {
  server:
     message {
 	uint32 time;
-	uint8 data[] @end;
+	uint8 data[] @end @as_ptr(data_size);
     } @ctype(SpiceMsgPlaybackPacket) data = 101;
 
     message {
 	uint32 time;
 	audio_data_mode mode;
-	uint8 data[] @end;
+	uint8 data[] @end @as_ptr(data_size);
     } mode;
 
     message {
@@ -952,13 +952,13 @@ channel RecordChannel : BaseChannel {
  client:
     message {
 	uint32 time;
-	uint8 data[] @end @nomarshal;
+	uint8 data[] @end @nomarshal @as_ptr(data_size);
     } @ctype(SpiceMsgcRecordPacket) data = 101;
 
     message {
 	uint32 time;
 	audio_data_mode mode;
-	uint8 data[] @end;
+	uint8 data[] @end @as_ptr(data_size);
     } mode;
 
     message {

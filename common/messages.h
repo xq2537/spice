@@ -368,7 +368,8 @@ typedef struct SpiceMsgcMouseRelease {
 typedef struct SpiceMsgPlaybackMode {
     uint32_t time;
     uint32_t mode; //SPICE_AUDIO_DATA_MODE_?
-    uint8_t data[0];
+    uint8_t *data;
+    uint32_t data_size;
 } SpiceMsgPlaybackMode, SpiceMsgcRecordMode;
 
 typedef struct SpiceMsgPlaybackStart {
@@ -380,7 +381,8 @@ typedef struct SpiceMsgPlaybackStart {
 
 typedef struct SpiceMsgPlaybackPacket {
     uint32_t time;
-    uint8_t data[0];
+    uint8_t *data;
+    uint32_t data_size;
 } SpiceMsgPlaybackPacket, SpiceMsgcRecordPacket;
 
 typedef struct SpiceMsgRecordStart {
