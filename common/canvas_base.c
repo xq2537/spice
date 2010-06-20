@@ -65,6 +65,10 @@
 
 #define ROUND(_x) ((int)floor((_x) + 0.5))
 
+#define IS_IMAGE_LOSSY(descriptor)                         \
+    (((descriptor)->type == SPICE_IMAGE_TYPE_JPEG) ||      \
+    ((descriptor)->type == SPICE_IMAGE_TYPE_JPEG_ALPHA))
+
 #ifdef WIN32
 typedef struct  __declspec (align(1)) LZImage {
 #else
@@ -607,6 +611,85 @@ static pixman_image_t *canvas_get_jpeg(CanvasBase *canvas, SpiceJPEGImage *image
     return surface;
 }
 
+static pixman_image_t *canvas_get_jpeg_alpha(CanvasBase *canvas,
+                                             SpiceJPEGAlphaImage *image, int invers)
+{
+    pixman_image_t *surface = NULL;
+    int stride;
+    int width;
+    int height;
+    uint8_t *dest;
+    int alpha_top_down = FALSE;
+    LzData *lz_data = &canvas->lz_data;
+    LzImageType lz_alpha_type;
+    uint8_t *comp_alpha_buf = NULL;
+    uint8_t *decomp_alpha_buf = NULL;
+    int alpha_size;
+    int lz_alpha_width, lz_alpha_height, n_comp_pixels, lz_alpha_top_down;
+
+    canvas->jpeg->ops->begin_decode(canvas->jpeg, image->jpeg_alpha.data,
+                                    image->jpeg_alpha.jpeg_size,
+                                    &width, &height);
+    ASSERT((uint32_t)width == image->descriptor.width);
+    ASSERT((uint32_t)height == image->descriptor.height);
+
+    if (image->jpeg_alpha.flags & SPICE_JPEG_ALPHA_FLAGS_TOP_DOWN) {
+        alpha_top_down = TRUE;
+    }
+
+#ifdef WIN32
+    lz_data->decode_data.dc = canvas->dc;
+#endif
+    surface = alloc_lz_image_surface(&lz_data->decode_data, PIXMAN_a8r8g8b8,
+                                     width, height, width*height, alpha_top_down);
+ 
+    if (surface == NULL) {
+        CANVAS_ERROR("create surface failed");
+    }
+
+    dest = (uint8_t *)pixman_image_get_data(surface);
+    stride = pixman_image_get_stride(surface);
+
+    canvas->jpeg->ops->decode(canvas->jpeg, dest, stride, SPICE_BITMAP_FMT_32BIT);
+    
+    comp_alpha_buf = image->jpeg_alpha.data + image->jpeg_alpha.jpeg_size;
+    alpha_size = image->jpeg_alpha.data_size - image->jpeg_alpha.jpeg_size;
+
+    lz_decode_begin(lz_data->lz, comp_alpha_buf, alpha_size, &lz_alpha_type,
+                    &lz_alpha_width, &lz_alpha_height, &n_comp_pixels,
+                    &lz_alpha_top_down, NULL);
+    ASSERT(lz_alpha_type == LZ_IMAGE_TYPE_XXXA);
+    ASSERT(lz_alpha_top_down == alpha_top_down);
+    ASSERT(lz_alpha_width == width);
+    ASSERT(lz_alpha_height == height);
+    ASSERT(n_comp_pixels == width * height);
+
+    if (!alpha_top_down) {
+        decomp_alpha_buf = dest + stride * (height - 1);
+    } else {
+        decomp_alpha_buf = dest;
+    }
+    lz_decode(lz_data->lz, LZ_IMAGE_TYPE_XXXA, decomp_alpha_buf);
+    
+    if (invers) {
+        uint8_t *end = dest + height * stride;
+        for (; dest != end; dest += stride) {
+            uint32_t *pix;
+            uint32_t *end_pix;
+
+            pix = (uint32_t *)dest;
+            end_pix = pix + width;
+            for (; pix < end_pix; pix++) {
+                *pix ^= 0x00ffffff;
+            }
+        }
+    }
+#ifdef DUMP_JPEG
+    dump_jpeg(image->jpeg_alpha.data, image->jpeg_alpha.jpeg_size);
+#endif
+    return surface;
+}
+
 static pixman_image_t *canvas_bitmap_to_surface(CanvasBase *canvas, SpiceBitmap* bitmap,
                                                 SpicePalette *palette, int want_original)
 {
@@ -1088,6 +1171,11 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
         surface = canvas_get_jpeg(canvas, image, 0);
         break;
     }
+    case SPICE_IMAGE_TYPE_JPEG_ALPHA: {
+        SpiceJPEGAlphaImage *image = (SpiceJPEGAlphaImage *)descriptor;
+        surface = canvas_get_jpeg_alpha(canvas, image, 0);
+        break;
+    }
 #if defined(SW_CANVAS_CACHE)
     case SPICE_IMAGE_TYPE_GLZ_RGB: {
         LZImage *image = (LZImage *)descriptor;
@@ -1138,7 +1226,7 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
 #endif
         descriptor->type != SPICE_IMAGE_TYPE_FROM_CACHE ) {
 #ifdef SW_CANVAS_CACHE
-       if (descriptor->type != SPICE_IMAGE_TYPE_JPEG) {
+        if (!IS_IMAGE_LOSSY(descriptor)) {
             canvas->bits_cache->ops->put(canvas->bits_cache, descriptor->id, surface);
         } else {
             canvas->bits_cache->ops->put_lossy(canvas->bits_cache, descriptor->id, surface);
@@ -1151,7 +1239,7 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
 #endif
 #ifdef SW_CANVAS_CACHE
     } else if (descriptor->flags & SPICE_IMAGE_FLAGS_CACHE_REPLACE_ME) {
-        if (descriptor->type == SPICE_IMAGE_TYPE_JPEG) {
+        if (IS_IMAGE_LOSSY(descriptor)) {
             CANVAS_ERROR("invalid cache replace request: the image is lossy");
         }
         canvas->bits_cache->ops->replace_lossy(canvas->bits_cache, descriptor->id, surface);

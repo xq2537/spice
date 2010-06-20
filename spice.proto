@@ -294,6 +294,7 @@ enum8 image_type {
     JPEG,
     FROM_CACHE_LOSSLESS,
     ZLIB_GLZ_RGB,
+    JPEG_ALPHA,
 };
 
 flags8 image_flags {
@@ -318,6 +319,10 @@ enum8 bitmap_fmt {
 flags8 bitmap_flags {
     PAL_CACHE_ME,
     PAL_FROM_CACHE,
+    TOP_DOWN,
+};
+
+flags8 jpeg_alpha_flags {
     TOP_DOWN,
 };
 
@@ -477,6 +482,13 @@ struct ZlibGlzRGBData {
     uint8 data[data_size] @end @nomarshal;
 } @ctype(SpiceZlibGlzRGBData);
 
+struct JPEGAlphaData {
+    jpeg_alpha_flags flags;
+    uint32 jpeg_size;
+    uint32 data_size;
+    uint8 data[data_size] @end @nomarshal;
+} @ctype(SpiceJPEGAlphaData);
+
 struct Surface {
     uint32 surface_id;
 };
@@ -500,6 +512,8 @@ struct Image {
         LZPLTData lzplt_data @ctype(SpiceLZPLTData);
     case ZLIB_GLZ_RGB:
         ZlibGlzRGBData zlib_glz_data @ctype(SpiceZlibGlzRGBData);
+    case JPEG_ALPHA:
+        JPEGAlphaData jpeg_alpha_data  @ctype(SpiceJPEGAlphaData);
     case SURFACE:
         Surface surface_data;
     } u @end;

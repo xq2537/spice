@@ -177,6 +177,7 @@ static const char *glz_stat_name = "glz";
 static const char *quic_stat_name = "quic";
 static const char *jpeg_stat_name = "jpeg";
 static const char *zlib_stat_name = "zlib_glz";
+static const char *jpeg_alpha_stat_name = "jpeg_alpha";
 
 static inline void stat_compress_init(stat_info_t *info, const char *name)
 {
@@ -474,6 +475,7 @@ typedef struct  __attribute__ ((__packed__)) RedImage {
         SpiceSurface surface;
         SpiceJPEGData jpeg;
         SpiceZlibGlzRGBData zlib_glz;
+        SpiceJPEGAlphaData jpeg_alpha;
     };
 } RedImage;
 
@@ -700,6 +702,7 @@ struct DisplayChannel {
     stat_info_t quic_stat;
     stat_info_t jpeg_stat;
     stat_info_t zlib_glz_stat;
+    stat_info_t jpeg_alpha_stat;
 #endif
 };
 
@@ -1090,24 +1093,34 @@ static void print_compress_stats(DisplayChannel *display_channel)
                stat_byte_to_mega(display_channel->jpeg_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->jpeg_stat.total)
                );
+    red_printf("JPEG-RGBA\t%8d\t%13.2f\t%12.2f\t%12.2f",
+               display_channel->jpeg_alpha_stat.count,
+               stat_byte_to_mega(display_channel->jpeg_alpha_stat.orig_size),
+               stat_byte_to_mega(display_channel->jpeg_alpha_stat.comp_size),
+               stat_cpu_time_to_sec(display_channel->jpeg_alpha_stat.total)
+               );
     red_printf("-------------------------------------------------------------------");
     red_printf("Total    \t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->lz_stat.count + display_channel->glz_stat.count +
                                                 display_channel->quic_stat.count +
-                                                display_channel->jpeg_stat.count,
+                                                display_channel->jpeg_stat.count +
+                                                display_channel->jpeg_alpha_stat.count,
                stat_byte_to_mega(display_channel->lz_stat.orig_size +
                                  display_channel->glz_stat.orig_size +
                                  display_channel->quic_stat.orig_size +
-                                 display_channel->jpeg_stat.orig_size),
+                                 display_channel->jpeg_stat.orig_size +
+                                 display_channel->jpeg_alpha_stat.orig_size),
                stat_byte_to_mega(display_channel->lz_stat.comp_size +
                                  glz_enc_size +
                                  display_channel->quic_stat.comp_size +
-                                 display_channel->jpeg_stat.comp_size),
+                                 display_channel->jpeg_stat.comp_size +
+                                 display_channel->jpeg_alpha_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->lz_stat.total +
                                     display_channel->glz_stat.total +
                                     display_channel->zlib_glz_stat.total +
                                     display_channel->quic_stat.total +
-                                    display_channel->jpeg_stat.total)
+                                    display_channel->jpeg_stat.total +
+                                    display_channel->jpeg_alpha_stat.total)
                );
 }
 
@@ -6326,7 +6339,7 @@ static inline int red_glz_compress_image(DisplayChannel *display_channel,
 
     stat_compress_add(&display_channel->glz_stat, start_time, src->stride * src->y, glz_size);
 
-   if (!display_channel->enable_zlib_glz_wrap || (glz_size < MIN_GLZ_SIZE_FOR_ZLIB)) {
+    if (!display_channel->enable_zlib_glz_wrap || (glz_size < MIN_GLZ_SIZE_FOR_ZLIB)) {
         goto glz;
     }
 #ifdef COMPRESS_STAT
@@ -6471,21 +6484,33 @@ static int red_jpeg_compress_image(DisplayChannel *display_channel, RedImage *de
 {
     RedWorker *worker = display_channel->base.worker;
     JpegData *jpeg_data = &worker->jpeg_data;
+    LzData *lz_data = &worker->lz_data;
     JpegEncoderContext *jpeg = worker->jpeg;
+    LzContext *lz = worker->lz;
     JpegEncoderImageType jpeg_in_type;
-    int size;
+    int jpeg_size = 0;
+    int has_alpha = FALSE;
+    int alpha_lz_size = 0;
+    int comp_head_filled;
+    int comp_head_left;
+    uint8_t *lz_out_start_byte;
+
 #ifdef COMPRESS_STAT
     stat_time_t start_time = stat_now();
 #endif
     switch (src->format) {
-    case SPICE_BITMAP_FMT_32BIT:
-        jpeg_in_type = JPEG_IMAGE_TYPE_BGRX32;
-        break;
     case SPICE_BITMAP_FMT_16BIT:
         jpeg_in_type = JPEG_IMAGE_TYPE_RGB16;
         break;
     case SPICE_BITMAP_FMT_24BIT:
         jpeg_in_type = JPEG_IMAGE_TYPE_BGR24;
+        break;
+    case SPICE_BITMAP_FMT_32BIT:
+        jpeg_in_type = JPEG_IMAGE_TYPE_BGRX32;
+        break;
+    case SPICE_BITMAP_FMT_RGBA:
+        jpeg_in_type = JPEG_IMAGE_TYPE_BGRX32;
+        has_alpha = TRUE;
         break;
     default:
         return FALSE;
@@ -6525,6 +6550,7 @@ static int red_jpeg_compress_image(DisplayChannel *display_channel, RedImage *de
         }
 
         if ((src->flags & QXL_BITMAP_UNSTABLE)) {
+            ASSERT(!has_alpha);
             jpeg_data->data.u.unstable_lines_data.next = data;
             jpeg_data->data.u.unstable_lines_data.src_stride = stride;
             jpeg_data->data.u.unstable_lines_data.dest_stride = src->stride;
@@ -6540,14 +6566,16 @@ static int red_jpeg_compress_image(DisplayChannel *display_channel, RedImage *de
                                  sizeof(jpeg_data->data.u.unstable_lines_data.input_bufs[0]->buf) /
                                  jpeg_data->data.u.unstable_lines_data.dest_stride;
             jpeg_data->usr.more_lines = jpeg_usr_more_lines_unstable;
-            size = jpeg_encode(jpeg, display_channel->jpeg_quality, jpeg_in_type, src->x, src->y,
-                               NULL, 0, src->stride, (uint8_t*)jpeg_data->data.bufs_head->buf,
-                               sizeof(jpeg_data->data.bufs_head->buf));
+            jpeg_size = jpeg_encode(jpeg, display_channel->jpeg_quality, jpeg_in_type,
+                                    src->x, src->y, NULL, 0, src->stride,
+                                    (uint8_t*)jpeg_data->data.bufs_head->buf,
+                                    sizeof(jpeg_data->data.bufs_head->buf));
         } else {
             jpeg_data->usr.more_lines = jpeg_usr_no_more_lines;
-            size = jpeg_encode(jpeg, display_channel->jpeg_quality, jpeg_in_type, src->x, src->y,
-                               data, src->y, stride, (uint8_t*)jpeg_data->data.bufs_head->buf,
-                               sizeof(jpeg_data->data.bufs_head->buf));
+            jpeg_size = jpeg_encode(jpeg, display_channel->jpeg_quality, jpeg_in_type,
+                                    src->x, src->y, data, src->y, stride,
+                                    (uint8_t*)jpeg_data->data.bufs_head->buf,
+                                    sizeof(jpeg_data->data.bufs_head->buf));
         }
     } else {
         int stride;
@@ -6584,24 +6612,83 @@ static int red_jpeg_compress_image(DisplayChannel *display_channel, RedImage *de
             jpeg_data->usr.more_lines = jpeg_usr_more_lines_reverse;
             stride = -src->stride;
         }
-        size = jpeg_encode(jpeg, display_channel->jpeg_quality, jpeg_in_type, src->x, src->y, NULL,
-                           0, stride, (uint8_t*)jpeg_data->data.bufs_head->buf,
-                           sizeof(jpeg_data->data.bufs_head->buf));
+        jpeg_size = jpeg_encode(jpeg, display_channel->jpeg_quality, jpeg_in_type, src->x, src->y, NULL,
+                                0, stride, (uint8_t*)jpeg_data->data.bufs_head->buf,
+                                sizeof(jpeg_data->data.bufs_head->buf));
     }
 
     // the compressed buffer is bigger than the original data
-    if (size > (src->y * src->stride)) {
+    if (jpeg_size > (src->y * src->stride)) {
         longjmp(jpeg_data->data.jmp_env, 1);
     }
 
-    dest->descriptor.type = SPICE_IMAGE_TYPE_JPEG;
-    dest->jpeg.data_size = size;
+    if (!has_alpha) {
+        dest->descriptor.type = SPICE_IMAGE_TYPE_JPEG;
+        dest->jpeg.data_size = jpeg_size;
+
+        o_comp_data->comp_buf = jpeg_data->data.bufs_head;
+        o_comp_data->comp_buf_size = jpeg_size;
+        o_comp_data->is_lossy = TRUE;
+
+        stat_compress_add(&display_channel->jpeg_stat, start_time, src->stride * src->y,
+                          o_comp_data->comp_buf_size);
+        return TRUE;
+    }
+
+     lz_data->data.bufs_head = jpeg_data->data.bufs_tail;
+     lz_data->data.bufs_tail = lz_data->data.bufs_head;
+
+     comp_head_filled = jpeg_size % sizeof(lz_data->data.bufs_head->buf);
+     comp_head_left = sizeof(lz_data->data.bufs_head->buf) - comp_head_filled;
+     lz_out_start_byte = ((uint8_t *)lz_data->data.bufs_head->buf) + comp_head_filled;
+
+     lz_data->data.display_channel = display_channel;
+
+     if ((src->flags & QXL_BITMAP_DIRECT)) {
+         lz_data->usr.more_lines = lz_usr_no_more_lines;
+         alpha_lz_size = lz_encode(lz, LZ_IMAGE_TYPE_XXXA, src->x, src->y,
+                                   (src->flags & QXL_BITMAP_TOP_DOWN),
+                                   (uint8_t*)get_virt(&worker->mem_slots, src->data,
+                                                      src->stride * src->y, group_id),
+                                   src->y, src->stride,
+                                   lz_out_start_byte,
+                                   comp_head_left);
+    } else {
+        lz_data->data.u.lines_data.enc_get_virt = cb_get_virt;
+        lz_data->data.u.lines_data.enc_get_virt_opaque = &worker->mem_slots;
+        lz_data->data.u.lines_data.enc_validate_virt = cb_validate_virt;
+        lz_data->data.u.lines_data.enc_validate_virt_opaque = &worker->mem_slots;
+        lz_data->data.u.lines_data.stride = src->stride;
+        lz_data->data.u.lines_data.next = src->data;
+        lz_data->data.u.lines_data.group_id = group_id;
+        lz_data->usr.more_lines = lz_usr_more_lines;
+
+        alpha_lz_size = lz_encode(lz, LZ_IMAGE_TYPE_XXXA, src->x, src->y,
+                                  (src->flags & QXL_BITMAP_TOP_DOWN),
+                                  NULL, 0, src->stride,
+                                  lz_out_start_byte,
+                                  comp_head_left);
+    }
+   
+
+    // the compressed buffer is bigger than the original data
+    if ((jpeg_size + alpha_lz_size) > (src->y * src->stride)) {
+        longjmp(jpeg_data->data.jmp_env, 1);
+    }
+
+    dest->descriptor.type = SPICE_IMAGE_TYPE_JPEG_ALPHA;
+    dest->jpeg_alpha.flags = 0;
+    if (src->flags & QXL_BITMAP_TOP_DOWN) {
+        dest->jpeg_alpha.flags |= SPICE_JPEG_ALPHA_FLAGS_TOP_DOWN;
+    }
+
+    dest->jpeg_alpha.jpeg_size = jpeg_size;
+    dest->jpeg_alpha.data_size = jpeg_size + alpha_lz_size;
 
     o_comp_data->comp_buf = jpeg_data->data.bufs_head;
-    o_comp_data->comp_buf_size = size;
+    o_comp_data->comp_buf_size = jpeg_size + alpha_lz_size;
     o_comp_data->is_lossy = TRUE;
-
-    stat_compress_add(&display_channel->jpeg_stat, start_time, src->stride * src->y,
+    stat_compress_add(&display_channel->jpeg_alpha_stat, start_time, src->stride * src->y,
                       o_comp_data->comp_buf_size);
     return TRUE;
 }
@@ -6811,7 +6898,8 @@ static inline int red_compress_image(DisplayChannel *display_channel,
         if (can_lossy && display_channel->enable_jpeg &&
             ((image_compression == SPICE_IMAGE_COMPRESS_AUTO_LZ) ||
             (image_compression == SPICE_IMAGE_COMPRESS_AUTO_GLZ))) {
-            if (src->format != SPICE_BITMAP_FMT_RGBA) {
+            // if we use lz for alpha, the stride can't be extra 
+            if (src->format != SPICE_BITMAP_FMT_RGBA || !_stride_is_extra(src)) {
                 return red_jpeg_compress_image(display_channel, dest,
                                                src, o_comp_data, drawable->group_id);
             }
@@ -9073,8 +9161,8 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
                                                           &bitmap,
                                                           worker->mem_slots.internal_groupslot_id);
                 if (grad_level == BITMAP_GRADUAL_HIGH) {
-                    lossy_comp = display_channel->enable_jpeg && item->can_lossy &&
-                                 (item->image_format != SPICE_BITMAP_FMT_RGBA);
+                    // if we use lz for alpha, the stride can't be extra 
+                    lossy_comp = display_channel->enable_jpeg && item->can_lossy;
                 } else {
                     lz_comp = TRUE;
                 }
@@ -10593,6 +10681,7 @@ static void handle_new_display_channel(RedWorker *worker, RedsStreamContext *pee
     stat_compress_init(&display_channel->quic_stat, quic_stat_name);
     stat_compress_init(&display_channel->jpeg_stat, jpeg_stat_name);
     stat_compress_init(&display_channel->zlib_glz_stat, zlib_stat_name);
+    stat_compress_init(&display_channel->jpeg_alpha_stat, jpeg_alpha_stat_name);
 }
 
 static void red_disconnect_cursor(RedChannel *channel)
@@ -11144,6 +11233,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
             stat_reset(&worker->display_channel->glz_stat);
             stat_reset(&worker->display_channel->jpeg_stat);
             stat_reset(&worker->display_channel->zlib_glz_stat);
+            stat_reset(&worker->display_channel->jpeg_alpha_stat);
         }
 #endif
         break;

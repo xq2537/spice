@@ -565,6 +565,9 @@ int lz_encode(LzContext *lz, LzImageType type, int width, int height, int top_do
         lz_rgb32_compress(encoder);
         lz_rgb_alpha_compress(encoder);
         break;
+    case LZ_IMAGE_TYPE_XXXA:
+        lz_rgb_alpha_compress(encoder);
+        break;
     case LZ_IMAGE_TYPE_INVALID:
     default:
         encoder->usr->error(encoder->usr, "bad image type\n");
@@ -661,6 +664,7 @@ void lz_decode(LzContext *lz, LzImageType to_type, uint8_t *buf)
             case LZ_IMAGE_TYPE_RGB24:
             case LZ_IMAGE_TYPE_RGB32:
             case LZ_IMAGE_TYPE_RGBA:
+            case LZ_IMAGE_TYPE_XXXA:
             case LZ_IMAGE_TYPE_INVALID:
             default:
                 encoder->usr->error(encoder->usr, "bad image type\n");
@@ -701,6 +705,14 @@ void lz_decode(LzContext *lz, LzImageType to_type, uint8_t *buf)
                 out_size = lz_rgb32_decompress(encoder, (rgb32_pixel_t *)buf, size);
                 alpha_size = lz_rgb_alpha_decompress(encoder, (rgb32_pixel_t *)buf, size);
                 ASSERT(encoder->usr, alpha_size == size);
+            } else {
+                encoder->usr->error(encoder->usr, "unsupported output format\n");
+            }
+            break;
+        case LZ_IMAGE_TYPE_XXXA:
+            if (encoder->type == to_type) {
+                alpha_size = lz_rgb_alpha_decompress(encoder, (rgb32_pixel_t *)buf, size);
+                out_size = alpha_size;
             } else {
                 encoder->usr->error(encoder->usr, "unsupported output format\n");
             }
