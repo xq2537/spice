@@ -61,6 +61,7 @@ libspice_server_la_LIBADD =			\
 	$(CELT051_LIBS)				\
 	$(SLIRP_LIBS)				\
 	$(LIBRT)				\
+	$(Z_LIBS)				\
 	$(NULL)
 
 if SUPPORT_TUNNEL
@@ -105,6 +106,8 @@ libspice_server_la_SOURCES =			\
 	generated_demarshallers.c		\
 	generated_marshallers.c			\
 	generated_marshallers.h			\
+	zlib_encoder.c				\
+	zlib_encoder.h				\
 	$(TUNNEL_SRCS)				\
 	$(COMMON_SRCS)				\
 	$(NULL)

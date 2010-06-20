@@ -111,6 +111,8 @@ RED_COMMON_SRCS =			\
 	threads.h			\
 	utils.cpp			\
 	utils.h				\
+	zlib_decoder.cpp		\
+	zlib_decoder.h			\
 	$(NULL)
 
 MAINTAINERCLEANFILES = $(spice_built_sources)

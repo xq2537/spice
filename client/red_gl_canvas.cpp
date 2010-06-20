@@ -41,7 +41,8 @@ GCanvas::GCanvas(int width, int height, uint32_t format, RedWindow *win,
                                      &palette_cache.base,
                                      &csurfaces.base,
                                      &glz_decoder(),
-                                     &jpeg_decoder()))) {
+                                     &jpeg_decoder(),
+                                     &zlib_decoder()))) {
         THROW("create canvas failed");
     }
 }

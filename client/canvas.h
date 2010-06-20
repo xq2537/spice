@@ -30,6 +30,7 @@
 #include "glz_decoded_image.h"
 #include "glz_decoder.h"
 #include "jpeg_decoder.h"
+#include "zlib_decoder.h"
 
 enum CanvasType {
     CANVAS_TYPE_INVALID,
@@ -446,6 +447,7 @@ protected:
 
     GlzDecoder& glz_decoder() {return _glz_decoder;}
     JpegDecoder& jpeg_decoder() { return _jpeg_decoder;}
+    ZlibDecoder& zlib_decoder() { return _zlib_decoder;}
 
 private:
     void access_test(void* ptr, size_t size);
@@ -468,6 +470,7 @@ private:
     GlzDecoder _glz_decoder;
 
     JpegDecoder _jpeg_decoder;
+    ZlibDecoder _zlib_decoder;
 
     CSurfaces& _csurfaces;
 

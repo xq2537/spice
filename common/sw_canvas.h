@@ -36,6 +36,7 @@ SpiceCanvas *canvas_create(int width, int height, uint32_t format
 			   , SpiceImageSurfaces *surfaces
                            , SpiceGlzDecoder *glz_decoder
                            , SpiceJpegDecoder *jpeg_decoder
+                           , SpiceZlibDecoder *zlib_decoder
 #ifndef SW_CANVAS_NO_CHUNKS
                            , SpiceVirtMapping *virt_mapping
 #endif
@@ -51,6 +52,7 @@ SpiceCanvas *canvas_create_for_data(int width, int height, uint32_t format, uint
 			   , SpiceImageSurfaces *surfaces
                            , SpiceGlzDecoder *glz_decoder
                            , SpiceJpegDecoder *jpeg_decoder
+                           , SpiceZlibDecoder *zlib_decoder
 #ifndef SW_CANVAS_NO_CHUNKS
                            , SpiceVirtMapping *virt_mapping
 #endif

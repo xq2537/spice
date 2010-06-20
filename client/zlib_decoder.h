@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 /*
-   Copyright (C) 2009 Red Hat, Inc.
+   Copyright (C) 2010 Red Hat, Inc.
 
    This library is free software; you can redistribute it and/or
    modify it under the terms of the GNU Lesser General Public
@@ -16,25 +16,26 @@
    License along with this library; if not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef _H__GDI_CANVAS
-#define _H__GDI_CANVAS
+#ifndef _H_ZLIB_DECODER
+#define _H_ZLIB_DECODER
 
-#include <stdint.h>
-
-#include <spice/draw.h>
-#include "pixman_utils.h"
+#include "common.h"
 #include "canvas_base.h"
-#include "region.h"
 
-SpiceCanvas *gdi_canvas_create(int width, int height,
-                               HDC dc, class RecurciveMutex *lock, uint32_t format,
-                               SpiceImageCache *bits_cache,
-                               SpicePaletteCache *palette_cache,
-			       SpiceImageSurfaces *surfaces,
-                               SpiceGlzDecoder *glz_decoder,
-                               SpiceJpegDecoder *jpeg_decoder,
-                               SpiceZlibDecoder *zlib_decoder);
+#define ZLIB_WINAPI 
+#include <zlib.h>
 
-void gdi_canvas_init();
+
+class ZlibDecoder : public SpiceZlibDecoder {
+public:
+    ZlibDecoder();
+    ~ZlibDecoder();
+
+    void decode(uint8_t *data, int data_size, uint8_t *dest, int dest_size);
+
+private:
+    z_stream _z_strm;
+
+};
 
 #endif

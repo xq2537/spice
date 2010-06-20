@@ -53,6 +53,7 @@
 #include "marshaller.h"
 #include "demarshallers.h"
 #include "generated_marshallers.h"
+#include "zlib_encoder.h"
 
 //#define COMPRESS_STAT
 //#define DUMP_BITMAP
@@ -93,6 +94,9 @@
 #define WARST_BIT_RATE_PER_PIXEL 4
 
 #define RED_COMPRESS_BUF_SIZE (1024 * 64)
+
+#define ZLIB_DEFAULT_COMPRESSION_LEVEL 3
+#define MIN_GLZ_SIZE_FOR_ZLIB 100
 
 typedef int64_t red_time_t;
 
@@ -172,6 +176,7 @@ static const char *lz_stat_name = "lz";
 static const char *glz_stat_name = "glz";
 static const char *quic_stat_name = "quic";
 static const char *jpeg_stat_name = "jpeg";
+static const char *zlib_stat_name = "zlib_glz";
 
 static inline void stat_compress_init(stat_info_t *info, const char *name)
 {
@@ -468,6 +473,7 @@ typedef struct  __attribute__ ((__packed__)) RedImage {
         SpiceLZPLTData lz_plt;
         SpiceSurface surface;
         SpiceJPEGData jpeg;
+        SpiceZlibGlzRGBData zlib_glz;
     };
 } RedImage;
 
@@ -562,6 +568,10 @@ typedef struct  {
             int input_bufs_pos;
             RedCompressBuf *input_bufs[2];
         } unstable_lines_data;
+        struct {
+            RedCompressBuf* next;
+            int size_left;
+        } compressed_data; // for encoding data that was already compressed by another method
     } u;
     char message_buf[512];
 } EncoderData;
@@ -585,6 +595,11 @@ typedef struct {
     JpegEncoderUsrContext usr;
     EncoderData data;
 } JpegData;
+
+typedef struct {
+    ZlibEncoderUsrContext usr;
+    EncoderData data;
+} ZlibData;
 
 /**********************************/
 /* LZ dictionary related entities */
@@ -671,6 +686,8 @@ struct DisplayChannel {
 
     int enable_jpeg;
     int jpeg_quality;
+    int enable_zlib_glz_wrap;
+    int zlib_level;
 #ifdef RED_STATISTICS
     StatNodeRef stat;
     uint64_t *cache_hits_counter;
@@ -682,6 +699,7 @@ struct DisplayChannel {
     stat_info_t glz_stat;
     stat_info_t quic_stat;
     stat_info_t jpeg_stat;
+    stat_info_t zlib_glz_stat;
 #endif
 };
 
@@ -953,6 +971,9 @@ typedef struct RedWorker {
 
     JpegData jpeg_data;
     JpegEncoderContext *jpeg;
+    
+    ZlibData zlib_data;
+    ZlibEncoder *zlib;
 
 #ifdef PIPE_DEBUG
     uint32_t last_id;
@@ -1027,9 +1048,16 @@ static void dump_bitmap(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_i
 #ifdef COMPRESS_STAT
 static void print_compress_stats(DisplayChannel *display_channel)
 {
+    uint64_t glz_enc_size;
+
     if (!display_channel) {
         return;
     }
+
+    glz_enc_size = display_channel->enable_zlib_glz_wrap ?
+                       display_channel->zlib_glz_stat.comp_size :
+                       display_channel->glz_stat.comp_size;
+
     red_printf("==> Compression stats for display %u", display_channel->base.id);
     red_printf("Method   \t  count  \torig_size(MB)\tenc_size(MB)\tenc_time(s)");
     red_printf("QUIC     \t%8d\t%13.2f\t%12.2f\t%12.2f",
@@ -1043,6 +1071,12 @@ static void print_compress_stats(DisplayChannel *display_channel)
                stat_byte_to_mega(display_channel->glz_stat.orig_size),
                stat_byte_to_mega(display_channel->glz_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->glz_stat.total)
+               );
+    red_printf("ZLIB GLZ \t%8d\t%13.2f\t%12.2f\t%12.2f",
+               display_channel->zlib_glz_stat.count,
+               stat_byte_to_mega(display_channel->zlib_glz_stat.orig_size),
+               stat_byte_to_mega(display_channel->zlib_glz_stat.comp_size),
+               stat_cpu_time_to_sec(display_channel->zlib_glz_stat.total)
                );
     red_printf("LZ       \t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->lz_stat.count,
@@ -1066,11 +1100,12 @@ static void print_compress_stats(DisplayChannel *display_channel)
                                  display_channel->quic_stat.orig_size +
                                  display_channel->jpeg_stat.orig_size),
                stat_byte_to_mega(display_channel->lz_stat.comp_size +
-                                 display_channel->glz_stat.comp_size +
+                                 glz_enc_size +
                                  display_channel->quic_stat.comp_size +
                                  display_channel->jpeg_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->lz_stat.total +
                                     display_channel->glz_stat.total +
+                                    display_channel->zlib_glz_stat.total +
                                     display_channel->quic_stat.total +
                                     display_channel->jpeg_stat.total)
                );
@@ -5775,6 +5810,12 @@ static int jpeg_usr_more_space(JpegEncoderUsrContext *usr, uint8_t **io_ptr)
     return (encoder_usr_more_space(usr_data, (uint32_t **)io_ptr) << 2);
 }
 
+static int zlib_usr_more_space(ZlibEncoderUsrContext *usr, uint8_t **io_ptr)
+{
+    EncoderData *usr_data = &(((ZlibData *)usr)->data);
+    return (encoder_usr_more_space(usr_data, (uint32_t **)io_ptr) << 2);
+}
+
 static inline int encoder_usr_more_lines(EncoderData *enc_data, uint8_t **lines)
 {
     uint32_t data_size;
@@ -5927,6 +5968,27 @@ static int jpeg_usr_no_more_lines(JpegEncoderUsrContext *usr, uint8_t **lines)
     return 0;
 }
 
+static int zlib_usr_more_input(ZlibEncoderUsrContext *usr, uint8_t** input)
+{
+    EncoderData *usr_data = &(((ZlibData *)usr)->data);
+    int buf_size;
+
+    if (!usr_data->u.compressed_data.next) {
+        ASSERT(usr_data->u.compressed_data.size_left == 0);
+        return 0;
+    }
+
+    *input = (uint8_t*)usr_data->u.compressed_data.next->buf;
+    buf_size = MIN(sizeof(usr_data->u.compressed_data.next->buf),
+                   usr_data->u.compressed_data.size_left);
+
+    usr_data->u.compressed_data.next = usr_data->u.compressed_data.next->send_next;
+    usr_data->u.compressed_data.size_left -= buf_size;
+    
+    return buf_size;
+
+}
+
 static void glz_usr_free_image(GlzEncoderUsrContext *usr, GlzUsrImageContext *image)
 {
     GlzData *lz_data = (GlzData *)usr;
@@ -5998,6 +6060,18 @@ static inline void red_init_jpeg(RedWorker *worker)
 
     if (!worker->jpeg) {
         PANIC("create jpeg encoder failed");
+    }
+}
+
+static inline void red_init_zlib(RedWorker *worker)
+{
+    worker->zlib_data.usr.more_space = zlib_usr_more_space;
+    worker->zlib_data.usr.more_input = zlib_usr_more_input;
+
+    worker->zlib = zlib_encoder_create(&worker->zlib_data.usr, ZLIB_DEFAULT_COMPRESSION_LEVEL);
+
+    if (!worker->zlib) {
+        PANIC("create zlib encoder failed");
     }
 }
 
@@ -6204,12 +6278,14 @@ static inline int red_glz_compress_image(DisplayChannel *display_channel,
 #endif
     ASSERT(BITMAP_FMT_IS_RGB[src->format]);
     GlzData *glz_data = &display_channel->glz_data;
+    ZlibData *zlib_data;
     LzImageType type = MAP_BITMAP_FMT_TO_LZ_IMAGE_TYPE[src->format];
     RedGlzDrawable *glz_drawable;
     GlzDrawableInstanceItem *glz_drawable_instance;
     uint8_t *lines;
     unsigned int num_lines;
-    int size;
+    int glz_size;
+    int zlib_size;
 
     glz_data->data.bufs_tail = red_display_alloc_compress_buf(display_channel);
     glz_data->data.bufs_head = glz_data->data.bufs_tail;
@@ -6241,21 +6317,67 @@ static inline int red_glz_compress_image(DisplayChannel *display_channel,
         num_lines = 0;
     }
 
-    size = glz_encode(display_channel->glz, type, src->x, src->y,
-                      (src->flags & QXL_BITMAP_TOP_DOWN), lines, num_lines,
-                      src->stride, (uint8_t*)glz_data->data.bufs_head->buf,
-                      sizeof(glz_data->data.bufs_head->buf),
-                      glz_drawable_instance,
-                      &glz_drawable_instance->glz_instance);
+    glz_size = glz_encode(display_channel->glz, type, src->x, src->y,
+                          (src->flags & QXL_BITMAP_TOP_DOWN), lines, num_lines,
+                          src->stride, (uint8_t*)glz_data->data.bufs_head->buf,
+                          sizeof(glz_data->data.bufs_head->buf),
+                          glz_drawable_instance,
+                          &glz_drawable_instance->glz_instance);
 
+    stat_compress_add(&display_channel->glz_stat, start_time, src->stride * src->y, glz_size);
+
+   if (!display_channel->enable_zlib_glz_wrap || (glz_size < MIN_GLZ_SIZE_FOR_ZLIB)) {
+        goto glz;
+    }
+#ifdef COMPRESS_STAT
+    start_time = stat_now();
+#endif
+    zlib_data = &worker->zlib_data;
+
+    zlib_data->data.bufs_tail = red_display_alloc_compress_buf(display_channel);
+    zlib_data->data.bufs_head = zlib_data->data.bufs_tail;
+
+    if (!zlib_data->data.bufs_head) {
+        red_printf("failed to allocate zlib compress buffer");
+        goto glz;
+    }
+
+    zlib_data->data.bufs_head->send_next = NULL;
+    zlib_data->data.display_channel = display_channel;
+
+    zlib_data->data.u.compressed_data.next = glz_data->data.bufs_head;
+    zlib_data->data.u.compressed_data.size_left = glz_size;
+
+    zlib_size = zlib_encode(worker->zlib, display_channel->zlib_level,
+                            glz_size, (uint8_t*)zlib_data->data.bufs_head->buf,
+                            sizeof(zlib_data->data.bufs_head->buf));
+
+    // the compressed buffer is bigger than the original data
+    if (zlib_size >= glz_size) {
+        while (zlib_data->data.bufs_head) {
+            RedCompressBuf *buf = zlib_data->data.bufs_head;
+            zlib_data->data.bufs_head = buf->send_next;
+            red_display_free_compress_buf(display_channel, buf);
+        }
+        goto glz;
+    }
+
+    dest->descriptor.type = SPICE_IMAGE_TYPE_ZLIB_GLZ_RGB;
+    dest->zlib_glz.glz_data_size = glz_size;
+    dest->zlib_glz.data_size = zlib_size;
+
+    o_comp_data->comp_buf = zlib_data->data.bufs_head;
+    o_comp_data->comp_buf_size = zlib_size;
+
+    stat_compress_add(&display_channel->zlib_glz_stat, start_time, glz_size, zlib_size);
+    return TRUE;
+glz:
     dest->descriptor.type = SPICE_IMAGE_TYPE_GLZ_RGB;
-    dest->lz_rgb.data_size = size;
+    dest->lz_rgb.data_size = glz_size;
 
     o_comp_data->comp_buf = glz_data->data.bufs_head;
-    o_comp_data->comp_buf_size = size;
+    o_comp_data->comp_buf_size = glz_size;
 
-    stat_compress_add(&display_channel->glz_stat, start_time, src->stride * src->y,
-                      size);
     return TRUE;
 }
 
@@ -9592,7 +9714,7 @@ static SpiceCanvas *create_ogl_context_common(RedWorker *worker, OGLCtx *ctx, ui
 
     oglctx_make_current(ctx);
     if (!(canvas = gl_canvas_create(width, height, depth, &worker->image_cache.base,
-                                    &worker->image_surfaces, NULL, NULL,
+                                    &worker->image_surfaces, NULL, NULL, NULL,
                                     &worker->preload_group_virt_mapping))) {
         return NULL;
     }
@@ -9650,7 +9772,7 @@ static inline void *create_canvas_for_surface(RedWorker *worker, RedSurface *sur
         canvas = canvas_create_for_data(width, height, format,
                                         line_0, stride,
                                         &worker->image_cache.base,
-                                        &worker->image_surfaces, NULL, NULL,
+                                        &worker->image_surfaces, NULL, NULL, NULL,
                                         &worker->preload_group_virt_mapping);
         surface->context.top_down = TRUE;
         surface->context.canvas_draws_on_surface = TRUE;
@@ -10459,6 +10581,9 @@ static void handle_new_display_channel(RedWorker *worker, RedsStreamContext *pee
     display_channel->enable_jpeg = IS_LOW_BANDWIDTH();
     display_channel->jpeg_quality = 85;
 
+    display_channel->enable_zlib_glz_wrap = IS_LOW_BANDWIDTH();
+    display_channel->zlib_level = ZLIB_DEFAULT_COMPRESSION_LEVEL;
+
     red_ref_channel((RedChannel*)display_channel);
     on_new_display_channel(worker);
     red_unref_channel((RedChannel*)display_channel);
@@ -10467,6 +10592,7 @@ static void handle_new_display_channel(RedWorker *worker, RedsStreamContext *pee
     stat_compress_init(&display_channel->glz_stat, glz_stat_name);
     stat_compress_init(&display_channel->quic_stat, quic_stat_name);
     stat_compress_init(&display_channel->jpeg_stat, jpeg_stat_name);
+    stat_compress_init(&display_channel->zlib_glz_stat, zlib_stat_name);
 }
 
 static void red_disconnect_cursor(RedChannel *channel)
@@ -11017,6 +11143,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
             stat_reset(&worker->display_channel->lz_stat);
             stat_reset(&worker->display_channel->glz_stat);
             stat_reset(&worker->display_channel->jpeg_stat);
+            stat_reset(&worker->display_channel->zlib_glz_stat);
         }
 #endif
         break;
@@ -11180,6 +11307,7 @@ void *red_worker_main(void *arg)
     red_init_quic(&worker);
     red_init_lz(&worker);
     red_init_jpeg(&worker);
+    red_init_zlib(&worker);
     worker.epoll_timeout = INF_EPOLL_WAIT;
     for (;;) {
         struct epoll_event events[MAX_EPOLL_SOURCES];

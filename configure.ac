@@ -234,6 +234,9 @@ AC_CHECK_LIB(jpeg, jpeg_destroy_decompress,
     AC_MSG_ERROR([libjpeg not found]))
 AC_SUBST(JPEG_LIBS)
 
+AC_CHECK_LIB(z, deflate, Z_LIBS='-lz', AC_MSG_ERROR([zlib not found]))
+AC_SUBST(Z_LIBS)
+
 dnl ===========================================================================
 dnl check compiler flags
 

@@ -112,6 +112,8 @@ RED_COMMON_SRCS =					\
 	$(CLIENT_DIR)/tunnel_channel.h			\
 	$(CLIENT_DIR)/utils.cpp				\
 	$(CLIENT_DIR)/utils.h				\
+	$(CLIENT_DIR)/zlib_decoder.cpp			\
+	$(CLIENT_DIR)/zlib_decoder.h			\
 	$(CLIENT_DIR)/icon.h				\
 	$(CLIENT_DIR)/gui/softrenderer.h		\
 	$(CLIENT_DIR)/gui/softrenderer.cpp		\
@@ -174,6 +176,7 @@ spicec_LDFLAGS = \
 	$(SSL_LIBS)					\
 	$(CEGUI_LIBS)					\
 	$(JPEG_LIBS)					\
+	$(Z_LIBS)					\
 	$(SPICE_NONPKGCONFIG_LIBS)
 
 spicec_LDADD =						\

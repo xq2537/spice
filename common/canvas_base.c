@@ -186,6 +186,7 @@ typedef struct CanvasBase {
     LzData lz_data;
     GlzData glz_data;
     SpiceJpegDecoder* jpeg;
+    SpiceZlibDecoder* zlib;
 
     void *usr_data;
     spice_destroy_fn_t usr_data_destroy;
@@ -817,6 +818,21 @@ static pixman_image_t *canvas_get_lz(CanvasBase *canvas, LZImage *image, int inv
     return lz_data->decode_data.out_surface;
 }
 
+static pixman_image_t *canvas_get_glz_rgb_common(CanvasBase *canvas, uint8_t *data,
+                                                 int want_original)
+{
+    if (canvas->glz_data.decoder == NULL) {
+        CANVAS_ERROR("glz not supported");
+    }
+
+    canvas->glz_data.decoder->ops->decode(canvas->glz_data.decoder,
+                                          data, NULL,
+                                          &canvas->glz_data.decode_data);
+
+    /* global_decode calls alloc_lz_image, which sets canvas->glz_data.surface */
+    return (canvas->glz_data.decode_data.out_surface);
+}
+
 // don't handle plts since bitmaps with plt can be decoded globally to RGB32 (because
 // same byte sequence can be transformed to different RGB pixels by different plts)
 static pixman_image_t *canvas_get_glz(CanvasBase *canvas, LZImage *image,
@@ -827,15 +843,25 @@ static pixman_image_t *canvas_get_glz(CanvasBase *canvas, LZImage *image,
     canvas->glz_data.decode_data.dc = canvas->dc;
 #endif
 
-    if (canvas->glz_data.decoder == NULL) {
-        CANVAS_ERROR("glz not supported");
+    return canvas_get_glz_rgb_common(canvas, image->lz_rgb.data, want_original);
+}
+
+static pixman_image_t *canvas_get_zlib_glz_rgb(CanvasBase *canvas, SpiceZlibGlzRGBImage *image,
+                                               int want_original)
+{
+    uint8_t *glz_data;
+    pixman_image_t *surface;
+
+    if (canvas->zlib == NULL) {
+        CANVAS_ERROR("zlib not supported");
     }
 
-    canvas->glz_data.decoder->ops->decode(canvas->glz_data.decoder,
-                                          image->lz_rgb.data, NULL,
-                                          &canvas->glz_data.decode_data);
-    /* global_decode calls alloc_lz_image, which sets canvas->glz_data.surface */
-    return (canvas->glz_data.decode_data.out_surface);
+    glz_data = (uint8_t*)spice_malloc(image->zlib_glz.glz_data_size);
+    canvas->zlib->ops->decode(canvas->zlib, image->zlib_glz.data, image->zlib_glz.data_size,
+                              glz_data, image->zlib_glz.glz_data_size);
+    surface = canvas_get_glz_rgb_common(canvas, glz_data, want_original);
+    free(glz_data);
+    return surface;
 }
 
 //#define DEBUG_DUMP_BITMAP
@@ -1025,7 +1051,8 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
 #ifdef SW_CANVAS_CACHE
         !(descriptor->flags & SPICE_IMAGE_FLAGS_CACHE_REPLACE_ME) &&
 #endif
-        (descriptor->type != SPICE_IMAGE_TYPE_GLZ_RGB)) {
+        (descriptor->type != SPICE_IMAGE_TYPE_GLZ_RGB) &&
+        (descriptor->type != SPICE_IMAGE_TYPE_ZLIB_GLZ_RGB)) {
         return NULL;
     }
 
@@ -1067,8 +1094,12 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
         surface = canvas_get_glz(canvas, image, want_original);
         break;
     }
+    case SPICE_IMAGE_TYPE_ZLIB_GLZ_RGB: {
+        SpiceZlibGlzRGBImage *image = (SpiceZlibGlzRGBImage *)descriptor;
+        surface = canvas_get_zlib_glz_rgb(canvas, image, want_original);
+        break;
+    }
 #endif
-
     case SPICE_IMAGE_TYPE_FROM_CACHE:
         surface = canvas->bits_cache->ops->get(canvas->bits_cache, descriptor->id);
         break;
@@ -3305,6 +3336,7 @@ static int canvas_base_init(CanvasBase *canvas, SpiceCanvasOps *ops,
                             , SpiceImageSurfaces *surfaces
                             , SpiceGlzDecoder *glz_decoder
                             , SpiceJpegDecoder *jpeg_decoder
+                            , SpiceZlibDecoder *zlib_decoder
 #ifndef SW_CANVAS_NO_CHUNKS
                             , SpiceVirtMapping *virt_mapping
 #endif
@@ -3339,6 +3371,7 @@ static int canvas_base_init(CanvasBase *canvas, SpiceCanvasOps *ops,
     canvas->surfaces = surfaces;
     canvas->glz_data.decoder = glz_decoder;
     canvas->jpeg = jpeg_decoder;
+    canvas->zlib = zlib_decoder;
 
     canvas->format = format;
 

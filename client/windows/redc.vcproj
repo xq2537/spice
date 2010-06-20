@@ -69,7 +69,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="log4cppD.lib pixman-1D.lib libeay32MTd.lib ssleay32MTd.lib ws2_32.lib msimg32.lib winmm.lib libcelt_0_5_1D.lib pthreadVC2d.lib version.lib CEGUIBase_Static_d.lib CEGUITGAImageCodec_Static_d.lib CEGUIExpatParser_Static_d.lib freetype2312MT_D.lib libexpatMT_D.lib pcre_D.lib CEGUIFalagardWRBase_Static_d.lib libjpeg-static-mt-debug.lib"
+				AdditionalDependencies="log4cppD.lib pixman-1D.lib libeay32MTd.lib ssleay32MTd.lib ws2_32.lib msimg32.lib winmm.lib libcelt_0_5_1D.lib pthreadVC2d.lib version.lib CEGUIBase_Static_d.lib CEGUITGAImageCodec_Static_d.lib CEGUIExpatParser_Static_d.lib freetype2312MT_D.lib libexpatMT_D.lib pcre_D.lib CEGUIFalagardWRBase_Static_d.lib libjpeg-static-mt-debug.lib zlibwapi.lib"
 				OutputFile="$(OutDir)\spicec.exe"
 				LinkIncremental="2"
 				AdditionalLibraryDirectories="&quot;$(SPICE_LIBS)\lib&quot;"
@@ -148,7 +148,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="log4cpp.lib pixman-1.lib libeay32MT.lib ssleay32MT.lib ws2_32.lib msimg32.lib winmm.lib libcelt_0_5_1.lib pthreadVC2.lib version.lib CEGUIBase_Static.lib CEGUITGAImageCodec_Static.lib CEGUIExpatParser_Static.lib freetype2312MT.lib libexpatMT.lib pcre.lib CEGUIFalagardWRBase_Static.lib libjpeg-static-mt.lib"
+				AdditionalDependencies="log4cpp.lib pixman-1.lib libeay32MT.lib ssleay32MT.lib ws2_32.lib msimg32.lib winmm.lib libcelt_0_5_1.lib pthreadVC2.lib version.lib CEGUIBase_Static.lib CEGUITGAImageCodec_Static.lib CEGUIExpatParser_Static.lib freetype2312MT.lib libexpatMT.lib pcre.lib CEGUIFalagardWRBase_Static.lib libjpeg-static-mt.lib zlibwapi.lib"
 				OutputFile="$(OutDir)\spicec.exe"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories="&quot;$(SPICE_LIBS)\lib&quot;"
@@ -437,6 +437,10 @@
 				RelativePath="..\utils.cpp"
 				>
 			</File>
+			<File
+				RelativePath="..\zlib_decoder.cpp"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
@@ -669,6 +673,10 @@
 			</File>
 			<File
 				RelativePath=".\win_platform.h"
+				>
+			</File>
+			<File
+				RelativePath="..\zlib_decoder.h"
 				>
 			</File>
 		</Filter>

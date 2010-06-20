@@ -293,6 +293,7 @@ enum8 image_type {
     SURFACE,
     JPEG,
     FROM_CACHE_LOSSLESS,
+    ZLIB_GLZ_RGB,
 };
 
 flags8 image_flags {
@@ -470,6 +471,12 @@ struct LZPLTData {
     uint8 data[data_size] @end @nomarshal;
 };
 
+struct ZlibGlzRGBData {
+    uint32 glz_data_size;
+    uint32 data_size;
+    uint8 data[data_size] @end @nomarshal;
+} @ctype(SpiceZlibGlzRGBData);
+
 struct Surface {
     uint32 surface_id;
 };
@@ -491,6 +498,8 @@ struct Image {
         BinaryData binary_data @ctype(SpiceQUICData);
     case LZ_PLT:
         LZPLTData lzplt_data @ctype(SpiceLZPLTData);
+    case ZLIB_GLZ_RGB:
+        ZlibGlzRGBData zlib_glz_data @ctype(SpiceZlibGlzRGBData);
     case SURFACE:
         Surface surface_data;
     } u @end;

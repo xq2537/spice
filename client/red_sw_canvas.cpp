@@ -43,14 +43,16 @@ SCanvas::SCanvas(bool onscreen,
                                          &palette_cache.base,
                                          &csurfaces.base,
                                          &glz_decoder(),
-                                         &jpeg_decoder());
+                                         &jpeg_decoder(),
+                                         &zlib_decoder());
     } else {
         _canvas = canvas_create(width, height, format,
                                 &pixmap_cache.base,
                                 &palette_cache.base,
                                 &csurfaces.base,
                                 &glz_decoder(),
-                                &jpeg_decoder());
+                                &jpeg_decoder(),
+                                &zlib_decoder());
     }
     if (_canvas == NULL) {
         THROW("create canvas failed");
