@@ -79,12 +79,12 @@ public:
     void set_render_pbuff(RedPbuffer pbuff);
     void set_render_fbo(GLuint fbo);
     void set_gl_context(RedGlContext context);
-#endif
-
-    int get_screen_num();
 
     void set_type_gl();
     void unset_type_gl();
+#endif
+
+    int get_screen_num();
 
     static void init();
     static void cleanup();

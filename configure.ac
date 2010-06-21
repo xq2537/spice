@@ -96,6 +96,12 @@ AC_ARG_ENABLE(tunnel,
 [  --enable-tunnel         Enable network redirection],
 [  have_tunnel=yes])
 AM_CONDITIONAL(SUPPORT_TUNNEL, test "x$have_tunnel" = "xyes")
+
+have_opengl=no
+AC_ARG_ENABLE(opengl,
+[  --enable-opengl         Enable opengl requirement / support (not recommended)],
+[  have_opengl=yes])
+AM_CONDITIONAL(SUPPORT_GL, test "x$have_opengl" = "xyes")
 dnl =========================================================================
 dnl Check deps
 
@@ -163,13 +169,14 @@ SPICE_REQUIRES+=" openssl"
 # AC_SUBST(GL_LIBS)
 # SPICE_REQUIRES+=" gl glu"
 
-have_gl=yes
-AC_CHECK_LIB(GL, glBlendFunc, GL_LIBS="$GL_LIBS -lGL", have_gl=no)
-AC_CHECK_LIB(GLU, gluSphere, GL_LIBS="$GL_LIBS -lGLU", have_gl=no)
-GL_CFLAGS="-DGL_GLEXT_PROTOTYPES"
+if test "x$have_opengl" = "xyes"; then
+   AC_CHECK_LIB(GL, glBlendFunc, GL_LIBS="$GL_LIBS -lGL", have_opengl=no)
+   AC_CHECK_LIB(GLU, gluSphere, GL_LIBS="$GL_LIBS -lGLU", have_opengl=no)
+   GL_CFLAGS="-DGL_GLEXT_PROTOTYPES -DUSE_OGL"
 
-if test "x$have_gl" = "xno"; then
-   AC_MSG_ERROR([GL libraries not available])
+   if test "x$have_opengl" = "xno"; then
+      AC_MSG_ERROR([GL libraries not available])
+   fi
 fi
 
 AC_SUBST(GL_CFLAGS)
@@ -360,6 +367,8 @@ echo "
         Support tunneling:        ${have_tunnel}
 
         Red target:               ${red_target}
+
+        OpenGL:                   ${have_opengl}
 
         Now type 'make' to build $PACKAGE
 "

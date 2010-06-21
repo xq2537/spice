@@ -45,7 +45,9 @@
 #else
 #include <unistd.h>
 #include <X11/X.h>
+#ifdef USE_OGL
 #include <GL/glx.h>
+#endif
 #endif
 
 #ifdef __GNUC__

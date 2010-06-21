@@ -915,6 +915,7 @@ void RedScreen::interrupt_update()
     _update_interrupt_trigger->trigger();
 }
 
+#ifdef USE_OGL
 void RedScreen::set_type_gl()
 {
     _window.set_type_gl();
@@ -924,4 +925,5 @@ void RedScreen::unset_type_gl()
 {
     _window.unset_type_gl();
 }
+#endif // USE_OGL
 

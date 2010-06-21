@@ -825,14 +825,6 @@ void RedWindow::untouch_context()
 
 #endif
 
-void RedWindow::set_type_gl()
-{
-}
-
-void RedWindow::unset_type_gl()
-{
-}
-
 void RedWindow::on_focus_in()
 {
     _focused = true;

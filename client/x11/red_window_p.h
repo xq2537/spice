@@ -18,12 +18,17 @@
 #ifndef _H_RED_WINDOW_P
 #define _H_RED_WINDOW_P
 
+#ifdef USE_OGL
 #include <GL/glx.h>
+#endif // USE_OGL
+#include <X11/Xdefs.h>
 #include <X11/Xlib.h>
 
 typedef Window Win;
+#ifdef USE_OGL
 typedef GLXContext RedGlContext;
 typedef GLXPbuffer RedPbuffer;
+#endif // USE_OGL
 
 class RedWindow;
 class Icon;
@@ -49,7 +54,9 @@ public:
     static void win_proc(XEvent& event);
     static Cursor create_invisible_cursor(Window window);
 
+#ifdef USE_OGL
     void set_glx(int width, int height);
+#endif // USE_OGL
     static void handle_key_press_event(RedWindow& red_window, XKeyEvent* event);
 
 protected:
@@ -59,7 +66,9 @@ protected:
     bool _visibale;
     bool _expect_parent;
     SpicePoint _show_pos;
+#ifdef USE_OGL
     GLXContext _glcont_copy;
+#endif // USE_OGL
     Icon* _icon;
     bool _focused;
     bool _ignore_foucs;

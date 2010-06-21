@@ -9,7 +9,6 @@ INCLUDES = \
 	-DSW_CANVAS_CACHE				\
 	-DSW_CANVAS_NO_CHUNKS				\
 	-DUSE_GLZ					\
-	-DUSE_OGL					\
 	-D__STDC_LIMIT_MACROS				\
 	-I.						\
 	-I..						\
@@ -60,10 +59,6 @@ RED_COMMON_SRCS =					\
 	$(CLIENT_DIR)/debug.h				\
 	$(CLIENT_DIR)/display_channel.cpp		\
 	$(CLIENT_DIR)/display_channel.h			\
-	$(CLIENT_DIR)/red_gl_canvas.cpp			\
-	$(CLIENT_DIR)/red_gl_canvas.h			\
-	$(CLIENT_DIR)/gl_canvas.cpp			\
-	$(CLIENT_DIR)/glc.cpp				\
 	$(CLIENT_DIR)/glz_decoded_image.h		\
 	$(CLIENT_DIR)/glz_decoder_config.h		\
 	$(CLIENT_DIR)/glz_decoder.cpp			\
@@ -100,7 +95,6 @@ RED_COMMON_SRCS =					\
 	$(CLIENT_DIR)/red_peer.cpp			\
 	$(CLIENT_DIR)/red_peer.h			\
 	$(CLIENT_DIR)/red_pixmap_sw.h			\
-	$(CLIENT_DIR)/red_pixmap_gl.h			\
 	$(CLIENT_DIR)/red_pixmap.h			\
 	$(CLIENT_DIR)/red_types.h			\
 	$(CLIENT_DIR)/red_window.h			\
@@ -129,6 +123,18 @@ RED_COMMON_SRCS =					\
 	$(CLIENT_DIR)/gui/gui.cpp			\
 	$(NULL)
 
+if SUPPORT_GL
+RED_OGL_SRCS =						\
+	$(CLIENT_DIR)/gl_canvas.cpp			\
+	$(CLIENT_DIR)/glc.cpp				\
+	$(CLIENT_DIR)/red_gl_canvas.cpp			\
+	$(CLIENT_DIR)/red_gl_canvas.h			\
+	$(CLIENT_DIR)/red_pixmap_gl.h			\
+	red_pixmap_gl.cpp
+else
+RED_OGL_SRCS =
+endif
+
 bin_PROGRAMS = spicec
 
 spicec_SOURCES =			\
@@ -149,7 +155,6 @@ spicec_SOURCES =			\
 	red_drawable.cpp		\
 	red_pixmap.cpp			\
 	red_pixmap_sw.cpp		\
-	red_pixmap_gl.cpp		\
 	red_window.cpp			\
 	red_window_p.h			\
 	res.cpp				\
@@ -159,6 +164,7 @@ spicec_SOURCES =			\
 	x_icon.h			\
 	x_platform.h			\
 	$(RED_COMMON_SRCS)		\
+	$(RED_OGL_SRCS)			\
 	$(NULL)
 
 spicec_LDFLAGS = \

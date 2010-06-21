@@ -21,7 +21,9 @@
 #include "common.h"
 #include "region.h"
 #include "red_key.h"
+#ifdef USE_OGL
 #include "GL/gl.h"
+#endif // USE_OGL
 
 #include "red_window.h"
 #include "platform.h"
@@ -94,12 +96,12 @@ public:
 #ifdef USE_OGL
     void untouch_context();
     bool need_recreate_context_gl();
+    void set_type_gl();
+    void unset_type_gl();
 #endif
     void set_update_interrupt_trigger(EventSources::Trigger *trigger);
     bool update_by_interrupt();
     void interrupt_update();
-    void set_type_gl();
-    void unset_type_gl();
 
     void update();
 

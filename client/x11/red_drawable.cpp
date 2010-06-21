@@ -21,6 +21,8 @@
 #include "debug.h"
 #include "x_platform.h"
 #include "utils.h"
+
+#ifdef USE_OGL
 #include "gl_utils.h"
 #include <GL/gl.h>
 #include <GL/glu.h>
@@ -131,6 +133,7 @@ static inline void copy_to_gldrawable_from_pixmap(const RedDrawable_p* dest,
         glXMakeCurrent(XPlatform::get_display(), pbuffer, context);
     }
 }
+#endif // USE_OGL
 
 static inline void copy_to_drawable_from_drawable(const RedDrawable_p* dest,
                                                   const SpiceRect& area,
@@ -269,6 +272,7 @@ static inline void copy_to_x_drawable(const RedDrawable_p* dest,
     }
 }
 
+#ifdef USE_OGL
 static inline void copy_to_gl_drawable(const RedDrawable_p* dest,
                                        const SpiceRect& area,
                                        const SpicePoint& offset,
@@ -286,6 +290,7 @@ static inline void copy_to_gl_drawable(const RedDrawable_p* dest,
         THROW("invalid source type %d", source->type);
     }
 }
+#endif // USE_OGL
 
 static inline void copy_to_pixmap_from_drawable(const RedDrawable_p* dest,
                                                 const SpiceRect& area,
@@ -316,6 +321,7 @@ static inline void copy_to_pixmap_from_pixmap(const RedDrawable_p* dest,
                              area.bottom - area.top);
 }
 
+#ifdef USE_OGL
 static inline void copy_to_pixmap_from_gltexture(const RedDrawable_p* dest,
                                                  const SpiceRect& area,
                                                  const SpicePoint& offset,
@@ -359,6 +365,7 @@ static inline void copy_to_pixmap_from_gltexture(const RedDrawable_p* dest,
         glXMakeCurrent(XPlatform::get_display(), win, context);
     }
 }
+#endif // USE_OGL
 
 static inline void copy_to_pixmap(const RedDrawable_p* dest,
                                   const SpiceRect& area,
@@ -367,9 +374,11 @@ static inline void copy_to_pixmap(const RedDrawable_p* dest,
                                   int src_x, int src_y)
 {
     switch (source->type) {
+#ifdef USE_OGL
     case PIXELS_SOURCE_TYPE_GL_TEXTURE:
         copy_to_pixmap_from_gltexture(dest, area, offset, source, src_x, src_y);
         break;
+#endif // USE_OGL
     case PIXELS_SOURCE_TYPE_X_DRAWABLE:
         copy_to_pixmap_from_drawable(dest, area, offset, source, src_x, src_y);
         break;
@@ -386,10 +395,12 @@ void RedDrawable::copy_pixels(const PixelsSource& src, int src_x, int src_y, con
     PixelsSource_p* source = (PixelsSource_p*)src.get_opaque();
     RedDrawable_p* dest = (RedDrawable_p*)get_opaque();
     switch (dest->source.type) {
+#ifdef USE_OGL
     case PIXELS_SOURCE_TYPE_GL_DRAWABLE:
         copy_to_gl_drawable(dest, area, _origin, source, src_x + src._origin.x,
                             src_y + src._origin.y);
         break;
+#endif // USE_OGL
     case PIXELS_SOURCE_TYPE_X_DRAWABLE:
         copy_to_x_drawable(dest, area, _origin, source, src_x + src._origin.x,
                            src_y + src._origin.y);
@@ -639,6 +650,7 @@ static inline void fill_drawable(RedDrawable_p* dest, const SpiceRect& area, rgb
                    area.right - area.left, area.bottom - area.top);
 }
 
+#ifdef USE_OGL
 static inline void fill_gl_drawable(RedDrawable_p* dest, const SpiceRect& area, rgb32_t color,
                                     const SpicePoint& offset)
 {
@@ -672,6 +684,7 @@ static inline void fill_gl_drawable(RedDrawable_p* dest, const SpiceRect& area, 
 
     glColor3f(1, 1, 1);
 }
+#endif // USE_OGL
 
 static inline void fill_pixmap(RedDrawable_p* dest, const SpiceRect& area, rgb32_t color,
                                const SpicePoint& offset)
@@ -689,9 +702,11 @@ void RedDrawable::fill_rect(const SpiceRect& area, rgb32_t color)
 {
     RedDrawable_p* dest = (RedDrawable_p*)get_opaque();
     switch (dest->source.type) {
+#ifdef USE_OGL
     case PIXELS_SOURCE_TYPE_GL_DRAWABLE:
         fill_gl_drawable(dest, area, color, _origin);
         break;
+#endif // USE_OGL
     case PIXELS_SOURCE_TYPE_X_DRAWABLE:
         fill_drawable(dest, area, color, _origin);
         break;

@@ -15,6 +15,17 @@ generated_marshallers.cpp: $(top_srcdir)/spice.proto
 generated_marshallers.h: $(top_srcdir)/spice.proto
 	$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-marshallers $(STRUCTS) --client -H $(top_srcdir)/spice.proto generated_marshallers.h
 
+if SUPPORT_GL
+GL_SRCS =				\
+	gl_canvas.cpp			\
+	glc.cpp				\
+	red_gl_canvas.cpp		\
+	red_gl_canvas.h			\
+	red_pixmap_gl.h
+else
+GL_SRCS =
+endif
+
 RED_COMMON_SRCS =			\
 	application.cpp			\
 	application.h			\
@@ -46,10 +57,6 @@ RED_COMMON_SRCS =			\
 	debug.h				\
 	display_channel.cpp		\
 	display_channel.h		\
-	red_gl_canvas.cpp		\
-	red_gl_canvas.h			\
-	gl_canvas.cpp			\
-	glc.cpp				\
 	glz_decoded_image.h		\
 	glz_decoder_config.h		\
 	glz_decoder.cpp			\
@@ -86,7 +93,6 @@ RED_COMMON_SRCS =			\
 	red_peer.cpp			\
 	red_peer.h			\
 	red_pixmap_sw.h			\
-	red_pixmap_gl.h			\
 	red_pixmap.h			\
 	red_types.h			\
 	red_window.h			\
@@ -109,6 +115,6 @@ RED_COMMON_SRCS =			\
 
 MAINTAINERCLEANFILES = $(spice_built_sources)
 
-EXTRA_DIST = $(RED_COMMON_SRCS) $(spice_built_sources)
+EXTRA_DIST = $(RED_COMMON_SRCS) $(spice_built_sources) $(GL_SRCS)
 
 BUILT_SOURCES = $(spice_built_sources)
