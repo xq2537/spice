@@ -615,6 +615,7 @@ DisplayChannel::DisplayChannel(RedClient& client, uint32_t id,
     handler->set_handler(SPICE_MSG_DISCONNECTING, &DisplayChannel::handle_disconnect);
     handler->set_handler(SPICE_MSG_NOTIFY, &DisplayChannel::handle_notify);
 
+    handler->set_handler(SPICE_MSG_DISPLAY_MODE, &DisplayChannel::handle_mode);
     handler->set_handler(SPICE_MSG_DISPLAY_MARK, &DisplayChannel::handle_mark);
     handler->set_handler(SPICE_MSG_DISPLAY_RESET, &DisplayChannel::handle_reset);
 
@@ -1193,6 +1194,17 @@ void DisplayChannel::create_canvas(int surface_id, const std::vector<int>& canva
     if (i == canvas_types.size()) {
         THROW("create canvas failed");
     }
+}
+
+void DisplayChannel::handle_mode(RedPeer::InMessage* message)
+{
+    SpiceMsgDisplayMode *mode = (SpiceMsgDisplayMode *)message->data();
+
+    if (screen()) {
+        destroy_primary_surface();
+    }
+    create_primary_surface(mode->x_res, mode->y_res,
+                           mode->bits == 32 ? SPICE_SURFACE_FMT_32_xRGB : SPICE_SURFACE_FMT_16_555);
 }
 
 void DisplayChannel::handle_mark(RedPeer::InMessage *message)
