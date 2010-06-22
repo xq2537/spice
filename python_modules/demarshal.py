@@ -966,9 +966,9 @@ def write_channel_parser(writer, channel, server):
 def write_get_channel_parser(writer, channel_parsers, max_channel, is_server):
     writer.newline()
     if is_server:
-        function_name = "spice_get_server_channel_parser"
+        function_name = "spice_get_server_channel_parser" + writer.public_prefix
     else:
-        function_name = "spice_get_client_channel_parser"
+        function_name = "spice_get_client_channel_parser" + writer.public_prefix
 
     scope = writer.function(function_name,
                             "spice_parse_channel_func_t",
@@ -1015,15 +1015,15 @@ def write_full_protocol_parser(writer, is_server):
         function_name = "spice_parse_msg"
     else:
         function_name = "spice_parse_reply"
-    scope = writer.function(function_name,
+    scope = writer.function(function_name + writer.public_prefix,
                             "uint8_t *",
                             "uint8_t *message_start, uint8_t *message_end, uint32_t channel, uint16_t message_type, int minor, size_t *size_out, message_destructor_t *free_message")
     scope.variable_def("spice_parse_channel_func_t", "func" )
 
     if is_server:
-        writer.assign("func", "spice_get_server_channel_parser(channel, NULL)")
+        writer.assign("func", "spice_get_server_channel_parser%s(channel, NULL)" % writer.public_prefix)
     else:
-        writer.assign("func", "spice_get_client_channel_parser(channel, NULL)")
+        writer.assign("func", "spice_get_client_channel_parser%s(channel, NULL)" % writer.public_prefix)
 
     with writer.if_block("func != NULL"):
         writer.statement("return func(message_start, message_end, message_type, minor, size_out, free_message)")

@@ -113,6 +113,8 @@ parser.add_option("-k", "--keep-identical-file",
 parser.add_option("-i", "--include",
                   action="append", dest="includes", metavar="FILE",
                   help="Include FILE in generated code")
+parser.add_option("--prefix", dest="prefix",
+                  help="set public symbol prefix", default="")
 
 (options, args) = parser.parse_args()
 
@@ -133,6 +135,8 @@ codegen.set_prefix(proto.name)
 writer = codegen.CodeWriter()
 writer.header = codegen.CodeWriter()
 writer.set_option("source", os.path.basename(proto_file))
+
+writer.public_prefix = options.prefix
 
 if options.assert_on_error:
     writer.set_option("assert_on_error")

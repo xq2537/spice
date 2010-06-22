@@ -113,6 +113,7 @@ class CodeWriter:
         writer.at_line_start = self.at_line_start
         writer.generated = self.generated
         writer.options = self.options
+        writer.public_prefix = self.public_prefix
 
         return writer;
 

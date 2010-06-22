@@ -360,7 +360,7 @@ def write_protocol_marshaller(writer, proto, is_server, private_marshallers):
                 functions[f] = True
 
     if private_marshallers:
-        scope = writer.function("spice_message_marshallers_get",
+        scope = writer.function("spice_message_marshallers_get" +  writer.public_prefix,
                                 "SpiceMessageMarshallers *",
                                 "void")
         writer.writeln("static SpiceMessageMarshallers marshallers = {NULL};").newline()
