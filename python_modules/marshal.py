@@ -266,6 +266,9 @@ def write_switch_marshaller(writer, container, switch, src, scope):
 def write_member_marshaller(writer, container, member, src, scope):
     if member.has_attr("outvar"):
         writer.out_prefix = "%s_%s" % (member.attributes["outvar"][0], writer.out_prefix)
+    if member.has_attr("virtual"):
+        writer.comment("Don't marshall @virtual %s" % member.name).newline()
+        return
     if member.has_attr("nomarshal"):
         writer.comment("Don't marshall @nomarshal %s" % member.name).newline()
         return

@@ -400,6 +400,9 @@ def write_validate_item(writer, container, item, scope, parent_scope, start,
 
 def write_validate_member(writer, container, member, parent_scope, start,
                           want_nw_size, want_mem_size, want_extra_size):
+    if member.has_attr("virtual"):
+        return
+
     if member.has_minor_attr():
         prefix = "if (minor >= %s)" % (member.get_minor_attr())
         newline = False
@@ -740,6 +743,10 @@ def write_parse_pointer(writer, t, at_end, dest, member_name, is_64bit, scope):
         writer.statement("n_ptr++")
 
 def write_member_parser(writer, container, member, dest, scope):
+    if member.has_attr("virtual"):
+        writer.assign(dest.get_ref(member.name), member.attributes["virtual"][0])
+        return
+
     if member.is_switch():
         write_switch_parser(writer, container, member, dest, scope)
         return

@@ -518,9 +518,13 @@ class Member(Containee):
         return self.has_end_attr()
 
     def is_fixed_nw_size(self):
+        if self.has_attr("virtual"):
+            return True
         return self.member_type.is_fixed_nw_size()
 
     def get_fixed_nw_size(self):
+        if self.has_attr("virtual"):
+            return 0
         size = self.member_type.get_fixed_nw_size()
         if self.has_minor_attr():
             minor = self.get_minor_attr()
