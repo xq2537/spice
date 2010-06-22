@@ -80,9 +80,11 @@ void validate_virt(RedMemSlotInfo *info, unsigned long virt, int slot_id,
 
     if (virt < slot->virt_start_addr || (virt + add_size) > slot->virt_end_addr) {
         print_memslots(info);
-        PANIC("virtual address out of range 0x%lx 0x%lx %d %d 0x%lx 0x%lx 0x%lx", virt,
-              slot->address_delta, slot_id, group_id, slot->virt_start_addr, slot->virt_end_addr,
-              virt + add_size);
+        PANIC("virtual address out of range\n"
+              "    virt=0x%lx+0x%x slot_id=%d group_id=%d\n"
+              "    slot=0x%lx-0x%lx delta=0x%lx",
+              virt, add_size, slot_id, group_id,
+              slot->virt_start_addr, slot->virt_end_addr, slot->address_delta);
     }
 }
 
@@ -101,7 +103,8 @@ unsigned long get_virt(RedMemSlotInfo *info, unsigned long addr, uint32_t add_si
 
     slot_id = get_memslot_id(info, addr);
     if (slot_id > info->num_memslots) {
-        PANIC("slot_id too big");
+        print_memslots(info);
+        PANIC("slot_id too big, addr=%lx", addr);
     }
 
     slot = &info->mem_slots[group_id][slot_id];
