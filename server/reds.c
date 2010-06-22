@@ -797,16 +797,18 @@ static int handle_incoming(RedsStreamContext *peer, IncomingHandler *handler)
                 uint8_t *data = (uint8_t *)(header+1);
                 size_t parsed_size;
                 uint8_t *parsed;
+                message_destructor_t parsed_free;
+
 
                 buf += sizeof(SpiceDataHeader) + header->size;
                 parsed = handler->parser(data, data + header->size, header->type,
-                                         SPICE_VERSION_MINOR, &parsed_size);
+                                         SPICE_VERSION_MINOR, &parsed_size, &parsed_free);
                 if (parsed == NULL) {
                     red_printf("failed to parse message type %d", header->type);
                     return -1;
                 }
                 handler->handle_message(handler->opaque, parsed_size, header->type, parsed);
-                free(parsed);
+                parsed_free(parsed);
                 if (handler->shut) {
                     return -1;
                 }

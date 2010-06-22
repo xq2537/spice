@@ -265,6 +265,7 @@ void MessageHandlerImp<HandlerClass, channel_id>::handle_message(RedPeer::Compun
     uint16_t type;
     uint32_t size;
     size_t parsed_size;
+    message_destructor_t parsed_free;
 
     if (message.sub_list()) {
         SpiceSubMessageList *sub_list;
@@ -274,7 +275,7 @@ void MessageHandlerImp<HandlerClass, channel_id>::handle_message(RedPeer::Compun
             msg = (uint8_t *)(sub + 1);
             type = sub->type;
             size = sub->size;
-            parsed = _parser(msg, msg + size, type, _obj.get_peer_minor(), &parsed_size);
+            parsed = _parser(msg, msg + size, type, _obj.get_peer_minor(), &parsed_size, &parsed_free);
 
             if (parsed == NULL) {
                 THROW("failed to parse message type %d", type);
@@ -283,14 +284,14 @@ void MessageHandlerImp<HandlerClass, channel_id>::handle_message(RedPeer::Compun
             RedPeer::InMessage sub_message(type, parsed_size, parsed);
             (_obj.*_handlers[type])(&sub_message);
 
-            free(parsed);
+            parsed_free(parsed);
         }
     }
 
     msg = message.data();
     type = message.type();
     size = message.size();
-    parsed = _parser(msg, msg + size, type, _obj.get_peer_minor(), &parsed_size);
+    parsed = _parser(msg, msg + size, type, _obj.get_peer_minor(), &parsed_size, &parsed_free);
     RedPeer::InMessage main_message(type, parsed_size, parsed);
 
     if (parsed == NULL) {
@@ -298,7 +299,7 @@ void MessageHandlerImp<HandlerClass, channel_id>::handle_message(RedPeer::Compun
     }
 
     (_obj.*_handlers[type])(&main_message);
-    free(parsed);
+    parsed_free(parsed);
 }
 
 template <class HandlerClass, unsigned int channel_id>

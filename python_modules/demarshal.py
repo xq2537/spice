@@ -41,9 +41,10 @@ def write_parser_helpers(writer):
 
     writer.newline()
     writer.statement("typedef struct PointerInfo PointerInfo")
+    writer.statement("typedef void (*message_destructor_t)(uint8_t *message)");
     writer.statement("typedef uint8_t * (*parse_func_t)(uint8_t *message_start, uint8_t *message_end, uint8_t *struct_data, PointerInfo *ptr_info, int minor)")
-    writer.statement("typedef uint8_t * (*parse_msg_func_t)(uint8_t *message_start, uint8_t *message_end, int minor, size_t *size_out)")
-    writer.statement("typedef uint8_t * (*spice_parse_channel_func_t)(uint8_t *message_start, uint8_t *message_end, uint16_t message_type, int minor, size_t *size_out)")
+    writer.statement("typedef uint8_t * (*parse_msg_func_t)(uint8_t *message_start, uint8_t *message_end, int minor, size_t *size_out, message_destructor_t *free_message)")
+    writer.statement("typedef uint8_t * (*spice_parse_channel_func_t)(uint8_t *message_start, uint8_t *message_end, uint16_t message_type, int minor, size_t *size_out, message_destructor_t *free_message)")
 
     writer.newline()
     writer.begin_block("struct PointerInfo")
@@ -820,6 +821,13 @@ def write_ptr_info_check(writer):
                 writer.error_check("end == NULL")
     writer.newline()
 
+def write_nofree(writer):
+    if writer.is_generated("helper", "nofree"):
+        return
+    writer = writer.function_helper()
+    scope = writer.function("nofree", "static void", "uint8_t *data")
+    writer.end_block()
+
 def write_msg_parser(writer, message):
     msg_name = message.c_name()
     function_name = "parse_%s" % msg_name
@@ -833,7 +841,7 @@ def write_msg_parser(writer, message):
     writer.newline()
     parent_scope = writer.function(function_name,
                                    "uint8_t *",
-                                   "uint8_t *message_start, uint8_t *message_end, int minor, size_t *size", True)
+                                   "uint8_t *message_start, uint8_t *message_end, int minor, size_t *size, message_destructor_t *free_message", True)
     parent_scope.variable_def("SPICE_GNUC_UNUSED uint8_t *", "pos");
     parent_scope.variable_def("uint8_t *", "start = message_start");
     parent_scope.variable_def("uint8_t *", "data = NULL");
@@ -860,8 +868,10 @@ def write_msg_parser(writer, message):
     writer.newline().comment("Validated extents and calculated size").newline()
 
     if message.has_attr("nocopy"):
+        write_nofree(writer)
         writer.assign("data", "message_start")
         writer.assign("*size", "message_end - message_start")
+        writer.assign("*free_message", "nofree")
     else:
         writer.assign("data", "(uint8_t *)malloc(mem_size)")
         writer.error_check("data == NULL")
@@ -882,6 +892,7 @@ def write_msg_parser(writer, message):
 
         writer.newline()
         writer.assign("*size", "end - data")
+        writer.assign("*free_message", "(message_destructor_t) free")
 
     writer.statement("return data")
     writer.newline()
@@ -922,7 +933,7 @@ def write_channel_parser(writer, channel, server):
     writer.newline()
     scope = writer.function(function_name,
                             "uint8_t *",
-                            "uint8_t *message_start, uint8_t *message_end, uint16_t message_type, int minor, size_t *size_out")
+                            "uint8_t *message_start, uint8_t *message_end, uint16_t message_type, int minor, size_t *size_out, message_destructor_t *free_message")
 
     helpers = writer.function_helper()
 
@@ -944,7 +955,7 @@ def write_channel_parser(writer, channel, server):
     for r in ranges:
         d = d + 1
         with writer.if_block("message_type >= %d && message_type < %d" % (r[0], r[1]), d > 1, False):
-            writer.statement("return funcs%d[message_type-%d](message_start, message_end, minor, size_out)" % (d, r[0]))
+            writer.statement("return funcs%d[message_type-%d](message_start, message_end, minor, size_out, free_message)" % (d, r[0]))
     writer.newline()
 
     writer.statement("return NULL")
@@ -1006,7 +1017,7 @@ def write_full_protocol_parser(writer, is_server):
         function_name = "spice_parse_reply"
     scope = writer.function(function_name,
                             "uint8_t *",
-                            "uint8_t *message_start, uint8_t *message_end, uint32_t channel, uint16_t message_type, int minor, size_t *size_out")
+                            "uint8_t *message_start, uint8_t *message_end, uint32_t channel, uint16_t message_type, int minor, size_t *size_out, message_destructor_t *free_message")
     scope.variable_def("spice_parse_channel_func_t", "func" )
 
     if is_server:
@@ -1015,7 +1026,7 @@ def write_full_protocol_parser(writer, is_server):
         writer.assign("func", "spice_get_client_channel_parser(channel, NULL)")
 
     with writer.if_block("func != NULL"):
-        writer.statement("return func(message_start, message_end, message_type, minor, size_out)")
+        writer.statement("return func(message_start, message_end, message_type, minor, size_out, free_message)")
 
     writer.statement("return NULL")
     writer.end_block()

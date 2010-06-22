@@ -415,13 +415,14 @@ static void snd_receive(void* data)
                 uint8_t *data = (uint8_t *)(header+1);
                 size_t parsed_size;
                 uint8_t *parsed;
+                message_destructor_t parsed_free;
 
                 n = channel->recive_data.now - (uint8_t *)header;
                 if (n < sizeof(SpiceDataHeader) || n < sizeof(SpiceDataHeader) + header->size) {
                     break;
                 }
                 parsed = channel->parser((void *)data, data + header->size, header->type,
-                                         SPICE_VERSION_MINOR, &parsed_size);
+                                         SPICE_VERSION_MINOR, &parsed_size, &parsed_free);
                 if (parsed == NULL) {
                     red_printf("failed to parse message type %d", header->type);
                     snd_disconnect_channel(channel);
@@ -432,7 +433,7 @@ static void snd_receive(void* data)
                     snd_disconnect_channel(channel);
                     return;
                 }
-                free(parsed);
+                parsed_free(parsed);
                 channel->recive_data.message = (SpiceDataHeader *)((uint8_t *)header +
                                                                  sizeof(SpiceDataHeader) +
                                                                  header->size);
