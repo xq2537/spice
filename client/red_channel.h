@@ -63,6 +63,7 @@ public:
     const ChannelCaps& get_common_caps() { return _common_caps;}
     const ChannelCaps& get_caps() {return _caps;}
 
+     uint32_t get_peer_major() { return _remote_major;}
      uint32_t get_peer_minor() { return _remote_minor;}
 
 protected:
@@ -74,7 +75,7 @@ protected:
 private:
     void set_capability(ChannelCaps& caps, uint32_t cap);
     bool test_capability(const ChannelCaps& caps, uint32_t cap);
-    void link(uint32_t connection_id, const std::string& password);
+    void link(uint32_t connection_id, const std::string& password, int protocol);
 
 private:
     uint8_t _type;
@@ -86,6 +87,7 @@ private:
     ChannelCaps _remote_common_caps;
     ChannelCaps _remote_caps;
 
+    uint32_t _remote_major;
     uint32_t _remote_minor;
 };
 
@@ -253,8 +255,10 @@ private:
 template <class HandlerClass, unsigned int channel_id>
 MessageHandlerImp<HandlerClass, channel_id>::MessageHandlerImp(HandlerClass& obj)
     : _obj (obj)
+    , _parser (NULL)
 {
-    _parser = spice_get_server_channel_parser(channel_id, &_max_messages);
+    /* max_messages is always from current as its larger than for backwards compat */
+    spice_get_server_channel_parser(channel_id, &_max_messages);
     _handlers = new Handler[_max_messages + 1];
     memset(_handlers, 0, sizeof(Handler) * (_max_messages + 1));
 }
@@ -269,6 +273,16 @@ void MessageHandlerImp<HandlerClass, channel_id>::handle_message(RedPeer::Compun
     uint32_t size;
     size_t parsed_size;
     message_destructor_t parsed_free;
+
+    if (_parser == NULL) {
+	/* We need to do this lazily rather than at constuction because we
+	   don't know the major until we've connected */
+	if (_obj.get_peer_major() == 1) {
+	    _parser = spice_get_server_channel_parser1(channel_id, NULL);
+	} else {
+	    _parser = spice_get_server_channel_parser(channel_id, NULL);
+	}
+    }
 
     if (message.sub_list()) {
         SpiceSubMessageList *sub_list;
@@ -295,12 +309,12 @@ void MessageHandlerImp<HandlerClass, channel_id>::handle_message(RedPeer::Compun
     type = message.type();
     size = message.size();
     parsed = _parser(msg, msg + size, type, _obj.get_peer_minor(), &parsed_size, &parsed_free);
-    RedPeer::InMessage main_message(type, parsed_size, parsed);
 
     if (parsed == NULL) {
         THROW("failed to parse message channel %d type %d", channel_id, type);
     }
 
+    RedPeer::InMessage main_message(type, parsed_size, parsed);
     (_obj.*_handlers[type])(&main_message);
     parsed_free(parsed);
 }

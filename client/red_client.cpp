@@ -171,7 +171,9 @@ void Migrate::run()
     DBG(0, "");
     try {
         conn_type = _client.get_connection_options(SPICE_CHANNEL_MAIN);
-        RedPeer::ConnectionOptions con_opt(conn_type, _port, _sport, _auth_options, _con_ciphers);
+        RedPeer::ConnectionOptions con_opt(conn_type, _port, _sport,
+					   _client.get_peer_major(),
+					   _auth_options, _con_ciphers);
         MigChannels::iterator iter = _channels.begin();
         connection_id = _client.get_connection_id();
         connect_one(**iter, con_opt, connection_id);
@@ -179,6 +181,7 @@ void Migrate::run()
         for (++iter; iter != _channels.end(); ++iter) {
             conn_type = _client.get_connection_options((*iter)->get_type());
             con_opt = RedPeer::ConnectionOptions(conn_type, _port, _sport,
+						 _client.get_peer_major(),
                                                  _auth_options, _con_ciphers);
             connect_one(**iter, con_opt, connection_id);
         }
@@ -211,7 +214,7 @@ void Migrate::start(const SpiceMsgMainMigrationBegin* migrate)
 {
     DBG(0, "");
     abort();
-    if ((SPICE_VERSION_MAJOR == 1) && (_client.get_peer_minor() < 2)) {
+    if ((_client.get_peer_major() == 1) && (_client.get_peer_minor() < 2)) {
         LOG_INFO("server minor version incompatible for destination authentication"
                  "(missing dest pubkey in SpiceMsgMainMigrationBegin)");
         OldRedMigrationBegin* old_migrate = (OldRedMigrationBegin*)migrate;
@@ -304,6 +307,7 @@ RedClient::RedClient(Application& application)
     , _application (application)
     , _port (-1)
     , _sport (-1)
+    , _protocol (0)
     , _connection_id (0)
     , _mouse_mode (SPICE_MOUSE_MODE_SERVER)
     , _notify_disconnect (false)

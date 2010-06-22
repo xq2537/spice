@@ -73,11 +73,13 @@ public:
         };
 
         ConnectionOptions(Type in_type, int in_port, int in_sport,
+			  int in_protocol,
                           const HostAuthOptions& in_host_auth,
                           const std::string& in_ciphers)
             : type (in_type)
             , unsecure_port (in_port)
             , secure_port (in_sport)
+            , protocol (in_protocol)
             , host_auth (in_host_auth)
             , ciphers (in_ciphers)
         {
@@ -99,6 +101,7 @@ public:
         Type type;
         int unsecure_port;
         int secure_port;
+        int protocol; // 0 == auto
         HostAuthOptions host_auth; // for secure connection
         std::string ciphers;
     };
@@ -130,10 +133,10 @@ protected:
     static bool verify_subject(X509* cert, const HostAuthOptions::CertFieldValueList& subject);
 
     static int ssl_verify_callback(int preverify_ok, X509_STORE_CTX *ctx);
+    void cleanup();
 
 private:
     void shutdown();
-    void cleanup();
 
 private:
     SOCKET _peer;

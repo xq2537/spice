@@ -42,7 +42,8 @@ RedChannelBase::~RedChannelBase()
 {
 }
 
-void RedChannelBase::link(uint32_t connection_id, const std::string& password)
+void RedChannelBase::link(uint32_t connection_id, const std::string& password,
+                          int protocol)
 {
     SpiceLinkHeader header;
     SpiceLinkMess link_mess;
@@ -54,11 +55,19 @@ void RedChannelBase::link(uint32_t connection_id, const std::string& password)
     int nRSASize;
     BIO *bioKey;
     RSA *rsa;
+    uint8_t *buffer, *p;
 
     header.magic = SPICE_MAGIC;
     header.size = sizeof(link_mess);
-    header.major_version = SPICE_VERSION_MAJOR;
-    header.minor_version = SPICE_VERSION_MINOR;
+    if (protocol == 1) {
+        /* protocol 1 == major 1, old 0.4 protocol, last active minor */
+        header.major_version = 1;
+        header.minor_version = 3;
+    } else if (protocol == 2) {
+        /* protocol 2 == current */
+        header.major_version = SPICE_VERSION_MAJOR;
+        header.minor_version = SPICE_VERSION_MINOR;
+    }
     link_mess.connection_id = connection_id;
     link_mess.channel_type = _type;
     link_mess.channel_id = _id;
@@ -66,16 +75,29 @@ void RedChannelBase::link(uint32_t connection_id, const std::string& password)
     link_mess.num_channel_caps = get_caps().size();
     link_mess.caps_offset = sizeof(link_mess);
     header.size += (link_mess.num_common_caps + link_mess.num_channel_caps) * sizeof(uint32_t);
-    send((uint8_t*)&header, sizeof(header));
-    send((uint8_t*)&link_mess, sizeof(link_mess));
 
+    buffer =
+        new uint8_t[sizeof(header) + sizeof(link_mess) +
+                    _common_caps.size() * sizeof(uint32_t) +
+                    _caps.size() * sizeof(uint32_t)];
+    p = buffer;
+
+    memcpy(p, (uint8_t*)&header, sizeof(header));
+    p += sizeof(header);
+    memcpy(p, (uint8_t*)&link_mess, sizeof(link_mess));
+    p += sizeof(link_mess);
     for (i = 0; i < _common_caps.size(); i++) {
-        send((uint8_t*)&_common_caps[i], sizeof(uint32_t));
+        *(uint32_t *)p = _common_caps[i];
+        p += sizeof(uint32_t);
     }
 
     for (i = 0; i < _caps.size(); i++) {
-        send((uint8_t*)&_caps[i], sizeof(uint32_t));
+        *(uint32_t *)p = _caps[i];
+        p += sizeof(uint32_t);
     }
+
+    send(buffer, p - buffer);
+    delete [] buffer;
 
     recive((uint8_t*)&header, sizeof(header));
 
@@ -83,13 +105,14 @@ void RedChannelBase::link(uint32_t connection_id, const std::string& password)
         THROW_ERR(SPICEC_ERROR_CODE_CONNECT_FAILED, "bad magic");
     }
 
-    if (header.major_version != SPICE_VERSION_MAJOR) {
+    if (header.major_version != protocol) {
         THROW_ERR(SPICEC_ERROR_CODE_VERSION_MISMATCH,
                   "version mismatch: expect %u got %u",
-                  SPICE_VERSION_MAJOR,
+                  protocol,
                   header.major_version);
     }
 
+    _remote_major = header.major_version;
     _remote_minor = header.minor_version;
 
     AutoArray<uint8_t> reply_buf(new uint8_t[header.size]);
@@ -160,21 +183,39 @@ void RedChannelBase::link(uint32_t connection_id, const std::string& password)
 void RedChannelBase::connect(const ConnectionOptions& options, uint32_t connection_id,
                              const char* host, std::string password)
 {
-    if (options.allow_unsecure()) {
-        try {
-            RedPeer::connect_unsecure(host, options.unsecure_port);
-            link(connection_id, password);
-            return;
-        } catch (...) {
-            if (!options.allow_secure()) {
-                throw;
-            }
-            RedPeer::close();
-        }
+    int protocol = options.protocol;
+
+    if (protocol == 0) { /* AUTO, try major 2 first */
+        protocol = 2;
     }
-    ASSERT(options.allow_secure());
-    RedPeer::connect_secure(options, host);
-    link(connection_id, password);
+
+ retry:
+    try {
+        if (options.allow_unsecure()) {
+            try {
+                RedPeer::connect_unsecure(host, options.unsecure_port);
+                link(connection_id, password, protocol);
+                return;
+            } catch (...) {
+                if (!options.allow_secure()) {
+                    throw;
+                }
+                RedPeer::close();
+            }
+        }
+        ASSERT(options.allow_secure());
+        RedPeer::connect_secure(options, host);
+        link(connection_id, password, protocol);
+    } catch (Exception& e) {
+        if (protocol == 2 &&
+            options.protocol == 0 &&
+            e.get_error_code() == SPICEC_ERROR_CODE_VERSION_MISMATCH) {
+            RedPeer::cleanup();
+            protocol = 1;
+            goto retry;
+        }
+        throw;
+    }
 }
 
 void RedChannelBase::set_capability(ChannelCaps& caps, uint32_t cap)
@@ -237,6 +278,7 @@ RedChannel::RedChannel(RedClient& client, uint8_t type, uint8_t id,
                        RedChannel::MessageHandler* handler,
                        Platform::ThreadPriority worker_priority)
     : RedChannelBase(type, id, ChannelCaps(), ChannelCaps())
+    , _marshallers (NULL)
     , _client (client)
     , _state (PASSIVE_STATE)
     , _action (WAIT_ACTION)
@@ -258,7 +300,6 @@ RedChannel::RedChannel(RedClient& client, uint8_t type, uint8_t id,
 {
     _loop.add_trigger(_send_trigger);
     _loop.add_trigger(_abort_trigger);
-    _marshallers = spice_message_marshallers_get();
 }
 
 RedChannel::~RedChannel()
@@ -398,11 +439,22 @@ void RedChannel::run()
                 ConnectionOptions con_options(_client.get_connection_options(get_type()),
                                               _client.get_port(),
                                               _client.get_sport(),
+                                              _client.get_protocol(),
                                               _client.get_host_auth_options(),
                                               _client.get_connection_ciphers());
                 RedChannelBase::connect(con_options, _client.get_connection_id(),
                                         _client.get_host().c_str(),
                                         _client.get_password().c_str());
+                /* If automatic protocol, remember the first connect protocol type */
+                if (_client.get_protocol() == 0) {
+                    _client.set_protocol(get_peer_major());
+                }
+                /* Initialize when we know the remote major version */
+                if (_client.get_peer_major() == 1) {
+                    _marshallers = spice_message_marshallers_get1();
+                } else {
+                    _marshallers = spice_message_marshallers_get();
+                }
                 on_connect();
                 set_state(CONNECTED_STATE);
                 _loop.add_socket(*this);

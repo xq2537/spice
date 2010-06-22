@@ -152,6 +152,8 @@ public:
     const std::string& get_host() { return _host;}
     int get_port() { return _port;}
     int get_sport() { return _sport;}
+    int get_protocol() { return _protocol;}
+    void set_protocol(int protocol) { _protocol = protocol;}
     virtual uint32_t get_connection_id() { return _connection_id;}
     uint32_t get_mouse_mode() { return _mouse_mode;}
     Application& get_application() { return _application;}
@@ -212,6 +214,7 @@ private:
     std::string _host;
     int _port;
     int _sport;
+    int _protocol;
     std::string _password;
     uint32_t _connection_id;
     uint32_t _mouse_mode;
