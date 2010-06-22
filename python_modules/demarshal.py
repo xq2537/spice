@@ -149,7 +149,7 @@ def write_validate_struct_function(writer, struct):
 
     writer.set_is_generated("validator", validate_function)
     writer = writer.function_helper()
-    scope = writer.function(validate_function, "intptr_t", "uint8_t *message_start, uint8_t *message_end, SPICE_ADDRESS offset, int minor")
+    scope = writer.function(validate_function, "static intptr_t", "uint8_t *message_start, uint8_t *message_end, SPICE_ADDRESS offset, int minor")
     scope.variable_def("uint8_t *", "start = message_start + offset")
     scope.variable_def("SPICE_GNUC_UNUSED uint8_t *", "pos");
     scope.variable_def("size_t", "mem_size", "nw_size");
@@ -661,7 +661,7 @@ def write_parse_ptr_function(writer, target_type):
     writer.set_is_generated("parser", parse_function)
 
     writer = writer.function_helper()
-    scope = writer.function(parse_function, "uint8_t *", "uint8_t *message_start, uint8_t *message_end, uint8_t *struct_data, PointerInfo *this_ptr_info, int minor")
+    scope = writer.function(parse_function, "static uint8_t *", "uint8_t *message_start, uint8_t *message_end, uint8_t *struct_data, PointerInfo *this_ptr_info, int minor")
     scope.variable_def("uint8_t *", "in = message_start + this_ptr_info->offset")
     scope.variable_def("uint8_t *", "end")
 
@@ -932,7 +932,7 @@ def write_channel_parser(writer, channel, server):
         function_name = "parse_%s_msgc" % channel.name
     writer.newline()
     scope = writer.function(function_name,
-                            "uint8_t *",
+                            "static uint8_t *",
                             "uint8_t *message_start, uint8_t *message_end, uint16_t message_type, int minor, size_t *size_out, message_destructor_t *free_message")
 
     helpers = writer.function_helper()
