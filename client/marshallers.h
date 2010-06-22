@@ -56,5 +56,6 @@ typedef struct {
 } SpiceMessageMarshallers;
 
 SpiceMessageMarshallers *spice_message_marshallers_get(void);
+SpiceMessageMarshallers *spice_message_marshallers_get1(void);
 
 #endif

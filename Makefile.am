@@ -6,4 +6,4 @@ pkgconfig_DATA = spice-server.pc
 DISTCLEANFILES =                                \
 	spice-server.pc
 
-EXTRA_DIST = spice.proto spice_codegen.py
+EXTRA_DIST = spice.proto spice1.proto spice_codegen.py

@@ -236,6 +236,18 @@
 				>
 			</File>
 			<File
+				RelativePath="..\generated_demarshallers1.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\generated_marshallers.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\generated_marshallers1.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\glz_decoder.cpp"
 				>
 			</File>
@@ -504,14 +516,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\generated_marshallers.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\generated_marshallers.h"
-				>
-			</File>
-			<File
 				RelativePath="..\..\common\win\my_getopt-1.5\getopt.h"
 				>
 			</File>
@@ -717,7 +721,7 @@
 					Description="Generating demarshaller"
 					CommandLine="generate.bat"
 					AdditionalDependencies=""
-					Outputs="$(ProjectDir)/../generated_demarshallers.cpp;$(ProjectDir)/../generated_marshallers.h;$(ProjectDir)/../generated_marshallers.cpp"
+					Outputs="$(ProjectDir)/../generated_demarshallers.cpp;$(ProjectDir)/../generated_marshallers.cpp"
 				/>
 			</FileConfiguration>
 			<FileConfiguration
@@ -727,7 +731,32 @@
 					Name="VCCustomBuildTool"
 					Description="Generating demarshaller"
 					CommandLine="generate.bat"
-					Outputs="$(ProjectDir)/../generated_demarshallers.cpp;$(ProjectDir)/../generated_marshallers.h;$(ProjectDir)/../generated_marshallers.cpp"
+					Outputs="$(ProjectDir)/../generated_demarshallers.cpp;$(ProjectDir)/../generated_marshallers.cpp"
+				/>
+			</FileConfiguration>
+		</File>
+		<File
+			RelativePath="..\..\spice1.proto"
+			>
+			<FileConfiguration
+				Name="Debug|Win32"
+				>
+				<Tool
+					Name="VCCustomBuildTool"
+					Description="Generating old demarshaller"
+					CommandLine="generate1.bat"
+					AdditionalDependencies=""
+					Outputs="$(ProjectDir)/../generated_demarshallers1.cpp;$(ProjectDir)/../generated_marshallers1.cpp"
+				/>
+			</FileConfiguration>
+			<FileConfiguration
+				Name="Release|Win32"
+				>
+				<Tool
+					Name="VCCustomBuildTool"
+					Description="Generating old demarshaller"
+					CommandLine="generate1.bat"
+					Outputs="$(ProjectDir)/../generated_demarshallers1.cpp;$(ProjectDir)/../generated_marshallers1.cpp"
 				/>
 			</FileConfiguration>
 		</File>
