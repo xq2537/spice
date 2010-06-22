@@ -55,6 +55,8 @@ typedef struct SPICE_ATTR_PACKED RedDrawable {
 
 void red_get_drawable(RedMemSlotInfo *slots, int group_id,
                       RedDrawable *red, SPICE_ADDRESS addr);
+void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
+                             RedDrawable *red, SPICE_ADDRESS addr);
 void red_put_drawable(RedDrawable *red);
 
 #endif
