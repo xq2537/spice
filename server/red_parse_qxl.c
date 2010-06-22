@@ -20,6 +20,23 @@
 #include "red_memslots.h"
 #include "red_parse_qxl.h"
 
+static void red_get_alpha_blend_ptr(RedMemSlotInfo *slots, int group_id,
+                                    SpiceAlphaBlnd *red, QXLAlphaBlnd *qxl)
+{
+    red->alpha_flags = qxl->alpha_flags;
+    red->alpha       = qxl->alpha;
+    red->src_bitmap  = qxl->src_bitmap;
+    red->src_area    = qxl->src_area;
+}
+
+static void red_get_alpha_blend_ptr_compat(RedMemSlotInfo *slots, int group_id,
+                                           SpiceAlphaBlnd *red, QXLCompatAlphaBlnd *qxl)
+{
+    red->alpha       = qxl->alpha;
+    red->src_bitmap  = qxl->src_bitmap;
+    red->src_area    = qxl->src_area;
+}
+
 void red_get_drawable(RedMemSlotInfo *slots, int group_id,
                       RedDrawable *red, SPICE_ADDRESS addr)
 {
@@ -45,7 +62,8 @@ void red_get_drawable(RedMemSlotInfo *slots, int group_id,
     red->type = qxl->type;
     switch (red->type) {
     case QXL_DRAW_ALPHA_BLEND:
-        red->u.alpha_blend = qxl->u.alpha_blend;
+        red_get_alpha_blend_ptr(slots, group_id,
+                                &red->u.alpha_blend, &qxl->u.alpha_blend);
         break;
     case QXL_DRAW_BLACKNESS:
         red->u.blackness = qxl->u.blackness;
@@ -98,7 +116,8 @@ void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
     red->type = qxl->type;
     switch (red->type) {
     case QXL_DRAW_ALPHA_BLEND:
-        red->u.alpha_blend = qxl->u.alpha_blend;
+        red_get_alpha_blend_ptr_compat(slots, group_id,
+                                       &red->u.alpha_blend, &qxl->u.alpha_blend);
         break;
     case QXL_DRAW_BLACKNESS:
         red->u.blackness = qxl->u.blackness;
