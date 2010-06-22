@@ -577,6 +577,7 @@ void RedClient::send_agent_monitors_config()
     _agent_tokens--;
     post_message(message);
     _agent_mon_config_sent = true;
+    _auto_display_res = false; // XXX: remove once migration is back to normal,
 }
 
 #define MIN_DISPLAY_PIXMAP_CACHE (1024 * 1024 * 20)
