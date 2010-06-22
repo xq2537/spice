@@ -310,7 +310,7 @@ def write_container_marshaller(writer, container, src):
             writer.out_prefix = saved_out_prefix
             write_member_marshaller(writer, container, m, src, scope)
 
-def write_message_marshaller(writer, message, is_server):
+def write_message_marshaller(writer, message, is_server, private):
     writer.out_prefix = ""
     function_name = "spice_marshall_" + message.c_name()
     if writer.is_generated("marshaller", function_name):
@@ -323,10 +323,11 @@ def write_message_marshaller(writer, message, is_server):
         n = map(lambda name: ", SpiceMarshaller **%s" % name, names)
         names_args = "".join(n)
 
-    writer.header.writeln("void " + function_name + "(SpiceMarshaller *m, %s *msg" % message.c_type() + names_args + ");")
+    if not private:
+        writer.header.writeln("void " + function_name + "(SpiceMarshaller *m, %s *msg" % message.c_type() + names_args + ");")
 
     scope = writer.function(function_name,
-                            "void",
+                            "static void" if private else "void",
                             "SpiceMarshaller *m, %s *msg" % message.c_type() + names_args)
     scope.variable_def("SPICE_GNUC_UNUSED uint8_t *", "end")
 
@@ -341,18 +342,36 @@ def write_message_marshaller(writer, message, is_server):
 
     writer.end_block()
     writer.newline()
+    return function_name
 
-def write_protocol_marshaller(writer, proto, is_server):
+def write_protocol_marshaller(writer, proto, is_server, private_marshallers):
+    functions = {}
     for c in proto.channels:
         channel = c.channel_type
         if is_server:
             for m in channel.client_messages:
                 message = m.message_type
-                write_message_marshaller(writer, message, is_server)
+                f = write_message_marshaller(writer, message, is_server, private_marshallers)
+                functions[f] = True
         else:
             for m in channel.server_messages:
                 message = m.message_type
-                write_message_marshaller(writer, message, is_server)
+                f= write_message_marshaller(writer, message, is_server, private_marshallers)
+                functions[f] = True
+
+    if private_marshallers:
+        scope = writer.function("spice_message_marshallers_get",
+                                "SpiceMessageMarshallers *",
+                                "void")
+        writer.writeln("static SpiceMessageMarshallers marshallers = {NULL};").newline()
+        for f in sorted(functions.keys()):
+            member = f[len("spice_marshall_"):]
+            writer.assign("marshallers.%s" % member, f)
+
+        writer.newline()
+        writer.statement("return &marshallers")
+        writer.end_block()
+        writer.newline()
 
 def write_trailer(writer):
     writer.header.writeln("#endif")

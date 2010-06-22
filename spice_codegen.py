@@ -86,6 +86,9 @@ parser.add_option("-d", "--generate-demarshallers",
 parser.add_option("-m", "--generate-marshallers",
                   action="store_true", dest="generate_marshallers", default=False,
                   help="Generate message marshallers")
+parser.add_option("-P", "--private-marshallers",
+                  action="store_true", dest="private_marshallers", default=False,
+                  help="Generate private message marshallers")
 parser.add_option("-M", "--generate-struct-marshaller",
                   action="append", dest="struct_marshallers",
                   help="Generate struct marshallers")
@@ -163,9 +166,9 @@ if options.generate_marshallers:
         print >> sys.stderr, "Must specify client and/or server"
         sys.exit(1)
     if options.server:
-        marshal.write_protocol_marshaller(writer, proto, False)
+        marshal.write_protocol_marshaller(writer, proto, False, options.private_marshallers)
     if options.client:
-        marshal.write_protocol_marshaller(writer, proto, True)
+        marshal.write_protocol_marshaller(writer, proto, True, options.private_marshallers)
 
 if options.struct_marshallers:
     for structname in options.struct_marshallers:
