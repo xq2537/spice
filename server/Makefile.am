@@ -91,6 +91,8 @@ libspice_server_la_SOURCES =			\
 	red_dispatcher.h			\
 	red_memslots.c				\
 	red_memslots.h				\
+	red_parse_qxl.c				\
+	red_parse_qxl.h				\
 	reds.c					\
 	reds.h					\
 	stat.h					\

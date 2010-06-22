@@ -48,6 +48,7 @@
 #include "ring.h"
 #include "mjpeg_encoder.h"
 #include "red_memslots.h"
+#include "red_parse_qxl.h"
 #include "jpeg_encoder.h"
 #include "rect.h"
 #include "marshaller.h"
@@ -621,7 +622,7 @@ typedef struct GlzDrawableInstanceItem {
 struct RedGlzDrawable {
     RingItem link;    // ordered by the time it was encoded
     RingItem surface_link;
-    QXLDrawable *qxl_drawable;
+    RedDrawable *red_drawable;
     Drawable    *drawable;
     uint32_t     group_id;
     int32_t      surface_id;
@@ -805,7 +806,7 @@ struct Drawable {
 #ifdef UPDATE_AREA_BY_TREE
     RingItem collect_link;
 #endif
-    QXLDrawable *qxl_drawable;
+    RedDrawable *red_drawable;
 
     RedGlzDrawable *red_glz_drawable;
 
@@ -1195,7 +1196,7 @@ char *draw_type_to_str(uint8_t type)
     }
 }
 
-static void show_qxl_drawable(RedWorker *worker, QXLDrawable *drawable, const char *prefix)
+static void show_red_drawable(RedWorker *worker, RedDrawable *drawable, const char *prefix)
 {
     if (prefix) {
         printf("%s: ", prefix);
@@ -1602,7 +1603,7 @@ static inline void set_surface_release_info(RedWorker *worker, uint32_t surface_
     }
 }
 
-static inline void free_qxl_drawable(RedWorker *worker, QXLDrawable *drawable, uint32_t group_id,
+static inline void free_red_drawable(RedWorker *worker, RedDrawable *drawable, uint32_t group_id,
                                      uint8_t *self_bitmap, int surface_id)
 {
     QXLReleaseInfoExt release_info_ext;
@@ -1612,8 +1613,10 @@ static inline void free_qxl_drawable(RedWorker *worker, QXLDrawable *drawable, u
         free(self_bitmap);
     }
     release_info_ext.group_id = group_id;
-    release_info_ext.info = &drawable->release_info;
+    release_info_ext.info = drawable->release_info;
     worker->qxl->st->qif->release_resource(worker->qxl, release_info_ext);
+    red_put_drawable(drawable);
+    free(drawable);
 }
 
 static void remove_depended_item(DependItem *item)
@@ -1670,7 +1673,7 @@ static inline void release_drawable(RedWorker *worker, Drawable *item)
         if (item->red_glz_drawable) {
             item->red_glz_drawable->drawable = NULL;
         } else { // no reference to the qxl drawable left
-            free_qxl_drawable(worker, item->qxl_drawable, item->group_id, item->self_bitmap,
+            free_red_drawable(worker, item->red_drawable, item->group_id, item->self_bitmap,
                               item->surface_id);
         }
         free_drawable(worker, item);
@@ -1731,10 +1734,10 @@ static inline void red_add_item_trace(RedWorker *worker, Drawable *item)
     trace->frames_count = item->frames_count;
     trace->gradual_frames_count = item->gradual_frames_count;
     trace->last_gradual_frame = item->last_gradual_frame;
-    SpiceRect* src_area = &item->qxl_drawable->u.copy.src_area;
+    SpiceRect* src_area = &item->red_drawable->u.copy.src_area;
     trace->width = src_area->right - src_area->left;
     trace->height = src_area->bottom - src_area->top;
-    trace->dest_area = item->qxl_drawable->bbox;
+    trace->dest_area = item->red_drawable->bbox;
 }
 
 #endif
@@ -1753,7 +1756,7 @@ static void red_flush_source_surfaces(RedWorker *worker, Drawable *drawable)
         surface_id = drawable->surfaces_dest[x];
         if (surface_id != -1 && drawable->depend_items[x].drawable) {
             remove_depended_item(&drawable->depend_items[x]);
-            surface_flush(worker, surface_id, &drawable->qxl_drawable->surfaces_rects[x]);
+            surface_flush(worker, surface_id, &drawable->red_drawable->surfaces_rects[x]);
         }
     }
 }
@@ -2366,19 +2369,19 @@ static int is_equal_line_attr(SpiceLineAttr *a1, SpiceLineAttr *a2)
 // partial imp
 static int is_same_geometry(RedWorker *worker, Drawable *d1, Drawable *d2)
 {
-    if (d1->qxl_drawable->type != d2->qxl_drawable->type) {
+    if (d1->red_drawable->type != d2->red_drawable->type) {
         return FALSE;
     }
 
-    switch (d1->qxl_drawable->type) {
+    switch (d1->red_drawable->type) {
     case QXL_DRAW_STROKE:
-        return is_equal_line_attr(&d1->qxl_drawable->u.stroke.attr,
-                                  &d2->qxl_drawable->u.stroke.attr) &&
-               is_equal_path(worker, d1->qxl_drawable->u.stroke.path,
-                             d2->qxl_drawable->u.stroke.path, d1->group_id,
+        return is_equal_line_attr(&d1->red_drawable->u.stroke.attr,
+                                  &d2->red_drawable->u.stroke.attr) &&
+               is_equal_path(worker, d1->red_drawable->u.stroke.path,
+                             d2->red_drawable->u.stroke.path, d1->group_id,
                              d2->group_id);
     case QXL_DRAW_FILL:
-        return rect_is_equal(&d1->qxl_drawable->bbox, &d2->qxl_drawable->bbox);
+        return rect_is_equal(&d1->red_drawable->bbox, &d2->red_drawable->bbox);
     default:
         return FALSE;
     }
@@ -2390,11 +2393,11 @@ static int is_same_drawable(RedWorker *worker, Drawable *d1, Drawable *d2)
         return FALSE;
     }
 
-    switch (d1->qxl_drawable->type) {
+    switch (d1->red_drawable->type) {
     case QXL_DRAW_STROKE:
-        return is_equal_brush(&d1->qxl_drawable->u.stroke.brush, &d2->qxl_drawable->u.stroke.brush);
+        return is_equal_brush(&d1->red_drawable->u.stroke.brush, &d2->red_drawable->u.stroke.brush);
     case QXL_DRAW_FILL:
-        return is_equal_brush(&d1->qxl_drawable->u.fill.brush, &d2->qxl_drawable->u.fill.brush);
+        return is_equal_brush(&d1->red_drawable->u.fill.brush, &d2->red_drawable->u.fill.brush);
     default:
         return FALSE;
     }
@@ -2449,7 +2452,7 @@ static void push_stream_clip_by_drawable(DisplayChannel* channel, StreamAgent *a
         PANIC("alloc failed");
     }
 
-    if (drawable->qxl_drawable->clip.type == SPICE_CLIP_TYPE_NONE) {
+    if (drawable->red_drawable->clip.type == SPICE_CLIP_TYPE_NONE) {
         item->n_rects = 0;
         item->rects = NULL;
         item->clip_type = SPICE_CLIP_TYPE_NONE;
@@ -2769,8 +2772,8 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
         return;
     }
 
-    ASSERT(drawable->qxl_drawable->type == QXL_DRAW_COPY);
-    src_rect = &drawable->qxl_drawable->u.copy.src_area;
+    ASSERT(drawable->red_drawable->type == QXL_DRAW_COPY);
+    src_rect = &drawable->red_drawable->u.copy.src_area;
     stream_width = SPICE_ALIGN(src_rect->right - src_rect->left, 2);
     stream_height = SPICE_ALIGN(src_rect->bottom - src_rect->top, 2);
 
@@ -2782,11 +2785,11 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
     stream->last_time = drawable->creation_time;
     stream->width = src_rect->right - src_rect->left;
     stream->height = src_rect->bottom - src_rect->top;
-    stream->dest_area = drawable->qxl_drawable->bbox;
+    stream->dest_area = drawable->red_drawable->bbox;
 #endif
     stream->refs = 1;
     stream->bit_rate = get_bit_rate(stream_width, stream_height);
-    QXLImage *qxl_image = (QXLImage *)get_virt(&worker->mem_slots, drawable->qxl_drawable->u.copy.src_bitmap,
+    QXLImage *qxl_image = (QXLImage *)get_virt(&worker->mem_slots, drawable->red_drawable->u.copy.src_bitmap,
                                                sizeof(QXLImage), drawable->group_id);
     stream->top_down = !!(qxl_image->bitmap.flags & SPICE_BITMAP_FLAGS_TOP_DOWN);
     drawable->stream = stream;
@@ -2853,27 +2856,27 @@ static inline int __red_is_next_stream_frame(RedWorker *worker,
                                              const red_time_t other_time,
                                              const Stream *stream)
 {
-    QXLDrawable *qxl_drawable;
+    RedDrawable *red_drawable;
 
     if (candidate->creation_time - other_time >
             (stream ? RED_STREAM_CONTINUS_MAX_DELTA : RED_STREAM_DETACTION_MAX_DELTA)) {
         return FALSE;
     }
 
-    qxl_drawable = candidate->qxl_drawable;
+    red_drawable = candidate->red_drawable;
 
-    if (!rect_is_equal(&qxl_drawable->bbox, other_dest)) {
+    if (!rect_is_equal(&red_drawable->bbox, other_dest)) {
         return FALSE;
     }
 
-    SpiceRect* candidate_src = &qxl_drawable->u.copy.src_area;
+    SpiceRect* candidate_src = &red_drawable->u.copy.src_area;
     if (candidate_src->right - candidate_src->left != other_src_width ||
         candidate_src->bottom - candidate_src->top != other_src_height) {
         return FALSE;
     }
 
     if (stream) {
-        QXLImage *qxl_image = (QXLImage *)get_virt(&worker->mem_slots, qxl_drawable->u.copy.src_bitmap,
+        QXLImage *qxl_image = (QXLImage *)get_virt(&worker->mem_slots, red_drawable->u.copy.src_bitmap,
                                                    sizeof(QXLImage), candidate->group_id);
         if (stream->top_down != !!(qxl_image->bitmap.flags & SPICE_BITMAP_FLAGS_TOP_DOWN)) {
             return FALSE;
@@ -2889,10 +2892,10 @@ static inline int red_is_next_stream_frame(RedWorker *worker, const Drawable *ca
         return FALSE;
     }
 
-    SpiceRect* prev_src = &prev->qxl_drawable->u.copy.src_area;
+    SpiceRect* prev_src = &prev->red_drawable->u.copy.src_area;
     return __red_is_next_stream_frame(worker, candidate, prev_src->right - prev_src->left,
                                       prev_src->bottom - prev_src->top,
-                                      &prev->qxl_drawable->bbox, prev->creation_time,
+                                      &prev->red_drawable->bbox, prev->creation_time,
                                       prev->stream);
 }
 
@@ -2901,16 +2904,16 @@ static inline int red_is_next_stream_frame(RedWorker *worker, const Drawable *ca
 static inline int red_is_next_stream_frame(RedWorker *worker, Drawable *candidate, Drawable *prev)
 {
     QXLImage *qxl_image;
-    QXLDrawable *qxl_drawable;
-    QXLDrawable *prev_qxl_drawable;
+    RedDrawable *red_drawable;
+    RedDrawable *prev_red_drawable;
 
     if (candidate->creation_time - prev->creation_time >
             ((prev->stream) ? RED_STREAM_CONTINUS_MAX_DELTA : RED_STREAM_DETACTION_MAX_DELTA)) {
         return FALSE;
     }
 
-    qxl_drawable = candidate->qxl_drawable;
-    prev_qxl_drawable = prev->qxl_drawable;
+    qxl_drawable = candidate->red_drawable;
+    prev_qxl_drawable = prev->red_drawable;
     if (qxl_drawable->type != QXL_DRAW_COPY || prev_qxl_drawable->type != QXL_DRAW_COPY) {
         return FALSE;
     }
@@ -2995,7 +2998,7 @@ static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream)
 static inline void red_update_copy_graduality(RedWorker* worker, Drawable *drawable)
 {
     QXLImage *qxl_image;
-    ASSERT(drawable->qxl_drawable->type == QXL_DRAW_COPY);
+    ASSERT(drawable->red_drawable->type == QXL_DRAW_COPY);
 
     if (worker->streaming_video != STREAM_VIDEO_FILTER) {
         drawable->copy_bitmap_graduality = BITMAP_GRADUAL_INVALID;
@@ -3006,7 +3009,7 @@ static inline void red_update_copy_graduality(RedWorker* worker, Drawable *drawa
         return; // already set
     }
 
-    qxl_image = (QXLImage *)get_virt(&worker->mem_slots, drawable->qxl_drawable->u.copy.src_bitmap,
+    qxl_image = (QXLImage *)get_virt(&worker->mem_slots, drawable->red_drawable->u.copy.src_bitmap,
                                      sizeof(QXLImage), drawable->group_id);
 
     if (!BITMAP_FMT_IS_RGB[qxl_image->bitmap.format] || _stride_is_extra(&qxl_image->bitmap) ||
@@ -3530,14 +3533,14 @@ static inline int red_current_add_with_shadow(RedWorker *worker, Ring *ring, Dra
     return TRUE;
 }
 
-static inline int has_shadow(QXLDrawable *drawable)
+static inline int has_shadow(RedDrawable *drawable)
 {
     return drawable->type == QXL_COPY_BITS;
 }
 
 #ifdef STREAM_TRACE
 static inline void red_update_streamable(RedWorker *worker, Drawable *drawable,
-                                         QXLDrawable *qxl_drawable)
+                                         RedDrawable *red_drawable)
 {
     QXLImage *qxl_image;
 
@@ -3546,12 +3549,12 @@ static inline void red_update_streamable(RedWorker *worker, Drawable *drawable,
     }
 
     if (drawable->tree_item.effect != QXL_EFFECT_OPAQUE ||
-                                        qxl_drawable->type != QXL_DRAW_COPY ||
-                                        qxl_drawable->u.copy.rop_decriptor != SPICE_ROPD_OP_PUT) {
+                                        red_drawable->type != QXL_DRAW_COPY ||
+                                        red_drawable->u.copy.rop_decriptor != SPICE_ROPD_OP_PUT) {
         return;
     }
 
-    qxl_image = (QXLImage *)get_virt(&worker->mem_slots, qxl_drawable->u.copy.src_bitmap, sizeof(QXLImage),
+    qxl_image = (QXLImage *)get_virt(&worker->mem_slots, red_drawable->u.copy.src_bitmap, sizeof(QXLImage),
                                      drawable->group_id);
     if (qxl_image->descriptor.type != SPICE_IMAGE_TYPE_BITMAP) {
         return;
@@ -3561,7 +3564,7 @@ static inline void red_update_streamable(RedWorker *worker, Drawable *drawable,
         SpiceRect* rect;
         int size;
 
-        rect = &drawable->qxl_drawable->u.copy.src_area;
+        rect = &drawable->red_drawable->u.copy.src_area;
         size = (rect->right - rect->left) * (rect->bottom - rect->top);
         if (size < RED_STREAM_MIN_SIZE) {
             return;
@@ -3574,22 +3577,22 @@ static inline void red_update_streamable(RedWorker *worker, Drawable *drawable,
 #endif
 
 static inline int red_current_add_qxl(RedWorker *worker, Ring *ring, Drawable *drawable,
-                                      QXLDrawable *qxl_drawable)
+                                      RedDrawable *red_drawable)
 {
     int ret;
 
-    if (has_shadow(qxl_drawable)) {
+    if (has_shadow(red_drawable)) {
         SpicePoint delta;
 
 #ifdef RED_WORKER_STAT
         ++worker->add_with_shadow_count;
 #endif
-        delta.x = qxl_drawable->u.copy_bits.src_pos.x - qxl_drawable->bbox.left;
-        delta.y = qxl_drawable->u.copy_bits.src_pos.y - qxl_drawable->bbox.top;
+        delta.x = red_drawable->u.copy_bits.src_pos.x - red_drawable->bbox.left;
+        delta.y = red_drawable->u.copy_bits.src_pos.y - red_drawable->bbox.top;
         ret = red_current_add_with_shadow(worker, ring, drawable, &delta);
     } else {
 #ifdef STREAM_TRACE
-        red_update_streamable(worker, drawable, qxl_drawable);
+        red_update_streamable(worker, drawable, red_drawable);
 #endif
         ret = red_current_add(worker, ring, drawable);
     }
@@ -3689,7 +3692,7 @@ static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
     int bpp;
     int all_set;
 
-    if (!drawable->qxl_drawable->self_bitmap) {
+    if (!drawable->red_drawable->self_bitmap) {
         return TRUE;
     }
 
@@ -3698,8 +3701,8 @@ static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
 
     bpp = SPICE_SURFACE_FMT_DEPTH(surface->context.format) / 8;
 
-    width = drawable->qxl_drawable->bbox.right - drawable->qxl_drawable->bbox.left;
-    height = drawable->qxl_drawable->bbox.bottom - drawable->qxl_drawable->bbox.top;
+    width = drawable->red_drawable->bbox.right - drawable->red_drawable->bbox.left;
+    height = drawable->red_drawable->bbox.bottom - drawable->red_drawable->bbox.top;
     dest_stride = SPICE_ALIGN(width * bpp, 4);
 
     image = spice_malloc_n_m(height, dest_stride, sizeof(QXLImage));
@@ -3719,7 +3722,7 @@ static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
     image->bitmap.palette = 0;
 
     red_get_area(worker, drawable->surface_id,
-                 &drawable->qxl_drawable->self_bitmap_area, dest, dest_stride, TRUE);
+                 &drawable->red_drawable->self_bitmap_area, dest, dest_stride, TRUE);
 
     /* For 32bit non-primary surfaces we need to keep any non-zero
        high bytes as the surface may be used as source to an alpha_blend */
@@ -3756,7 +3759,7 @@ static void free_one_drawable(RedWorker *worker, int force_glz_free)
     container_cleanup(worker, container);
 }
 
-static Drawable *get_drawable(RedWorker *worker, uint8_t effect, QXLDrawable *qxl_drawable,
+static Drawable *get_drawable(RedWorker *worker, uint8_t effect, RedDrawable *red_drawable,
                               uint32_t group_id) {
     Drawable *drawable;
     struct timespec time;
@@ -3782,13 +3785,13 @@ static Drawable *get_drawable(RedWorker *worker, uint8_t effect, QXLDrawable *qx
     region_init(&drawable->tree_item.base.rgn);
     drawable->tree_item.effect = effect;
     red_pipe_item_init(&drawable->pipe_item, PIPE_ITEM_TYPE_DRAW);
-    drawable->qxl_drawable = qxl_drawable;
+    drawable->red_drawable = red_drawable;
     drawable->group_id = group_id;
 
-    drawable->surface_id = qxl_drawable->surface_id;
+    drawable->surface_id = red_drawable->surface_id;
     validate_surface(worker, drawable->surface_id);
     for (x = 0; x < 3; ++x) {
-        drawable->surfaces_dest[x] = qxl_drawable->surfaces_dest[x];
+        drawable->surfaces_dest[x] = red_drawable->surfaces_dest[x];
         if (drawable->surfaces_dest[x] != -1) {
             validate_surface(worker, drawable->surfaces_dest[x]);
         }
@@ -3808,7 +3811,7 @@ static inline int red_handle_depends_on_target_surface(RedWorker *worker, uint32
         Drawable *drawable;
         DependItem *depended_item = SPICE_CONTAINEROF(ring_item, DependItem, ring_item);
         drawable = depended_item->drawable;
-        surface_flush(worker, drawable->surface_id, &drawable->qxl_drawable->bbox);
+        surface_flush(worker, drawable->surface_id, &drawable->red_drawable->bbox);
     }
 
     return TRUE;
@@ -3862,7 +3865,7 @@ static inline void red_inc_surfaces_drawable_dependencies(RedWorker *worker, Dra
     }
 }
 
-static inline void red_process_drawable(RedWorker *worker, QXLDrawable *drawable, uint32_t group_id)
+static inline void red_process_drawable(RedWorker *worker, RedDrawable *drawable, uint32_t group_id)
 {
     int surface_id;
     Drawable *item = get_drawable(worker, drawable->effect, drawable, group_id);
@@ -4437,7 +4440,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
 {
     RedSurface *surface;
     SpiceCanvas *canvas; 
-    SpiceClip clip = drawable->qxl_drawable->clip;
+    SpiceClip clip = drawable->red_drawable->clip;
 
     surface = &worker->surfaces[drawable->surface_id];
     canvas = surface->context.canvas;
@@ -4447,124 +4450,124 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
 
     worker->preload_group_id = drawable->group_id;
 
-    region_add(&surface->draw_dirty_region, &drawable->qxl_drawable->bbox);
+    region_add(&surface->draw_dirty_region, &drawable->red_drawable->bbox);
 
     localize_clip(worker, &clip, drawable->group_id);
-    switch (drawable->qxl_drawable->type) {
+    switch (drawable->red_drawable->type) {
     case QXL_DRAW_FILL: {
-        SpiceFill fill = drawable->qxl_drawable->u.fill;
+        SpiceFill fill = drawable->red_drawable->u.fill;
         localize_brush(worker, &fill.brush, drawable->group_id);
         localize_mask(worker, &fill.mask, drawable->group_id);
-        canvas->ops->draw_fill(canvas, &drawable->qxl_drawable->bbox,
+        canvas->ops->draw_fill(canvas, &drawable->red_drawable->bbox,
                                &clip, &fill); unlocalize_mask(&fill.mask);
         unlocalize_brush(&fill.brush);
         break;
     }
     case QXL_DRAW_OPAQUE: {
-        SpiceOpaque opaque = drawable->qxl_drawable->u.opaque;
+        SpiceOpaque opaque = drawable->red_drawable->u.opaque;
         localize_brush(worker, &opaque.brush, drawable->group_id);
         localize_bitmap(worker, &opaque.src_bitmap, drawable->group_id);
         localize_mask(worker, &opaque.mask, drawable->group_id);
-        canvas->ops->draw_opaque(canvas, &drawable->qxl_drawable->bbox, &clip, &opaque);
+        canvas->ops->draw_opaque(canvas, &drawable->red_drawable->bbox, &clip, &opaque);
         unlocalize_mask(&opaque.mask);
         unlocalize_bitmap(&opaque.src_bitmap);
         unlocalize_brush(&opaque.brush);
         break;
     }
     case QXL_DRAW_COPY: {
-        SpiceCopy copy = drawable->qxl_drawable->u.copy;
+        SpiceCopy copy = drawable->red_drawable->u.copy;
         localize_bitmap(worker, &copy.src_bitmap, drawable->group_id);
         localize_mask(worker, &copy.mask, drawable->group_id);
-        canvas->ops->draw_copy(canvas, &drawable->qxl_drawable->bbox,
+        canvas->ops->draw_copy(canvas, &drawable->red_drawable->bbox,
                                &clip, &copy);
         unlocalize_mask(&copy.mask);
         unlocalize_bitmap(&copy.src_bitmap);
         break;
     }
     case QXL_DRAW_TRANSPARENT: {
-        SpiceTransparent transparent = drawable->qxl_drawable->u.transparent;
+        SpiceTransparent transparent = drawable->red_drawable->u.transparent;
         localize_bitmap(worker, &transparent.src_bitmap, drawable->group_id);
         canvas->ops->draw_transparent(canvas,
-                                      &drawable->qxl_drawable->bbox, &clip, &transparent);
+                                      &drawable->red_drawable->bbox, &clip, &transparent);
         unlocalize_bitmap(&transparent.src_bitmap);
         break;
     }
     case QXL_DRAW_ALPHA_BLEND: {
-        SpiceAlphaBlnd alpha_blend = drawable->qxl_drawable->u.alpha_blend;
+        SpiceAlphaBlnd alpha_blend = drawable->red_drawable->u.alpha_blend;
         localize_bitmap(worker, &alpha_blend.src_bitmap, drawable->group_id);
         canvas->ops->draw_alpha_blend(canvas,
-                                      &drawable->qxl_drawable->bbox, &clip, &alpha_blend);
+                                      &drawable->red_drawable->bbox, &clip, &alpha_blend);
         unlocalize_bitmap(&alpha_blend.src_bitmap);
         break;
     }
     case QXL_COPY_BITS: {
-        canvas->ops->copy_bits(canvas, &drawable->qxl_drawable->bbox,
-                               &clip, &drawable->qxl_drawable->u.copy_bits.src_pos);
+        canvas->ops->copy_bits(canvas, &drawable->red_drawable->bbox,
+                               &clip, &drawable->red_drawable->u.copy_bits.src_pos);
         break;
     }
     case QXL_DRAW_BLEND: {
-        SpiceBlend blend = drawable->qxl_drawable->u.blend;
+        SpiceBlend blend = drawable->red_drawable->u.blend;
         localize_bitmap(worker, &blend.src_bitmap, drawable->group_id);
         localize_mask(worker, &blend.mask, drawable->group_id);
-        canvas->ops->draw_blend(canvas, &drawable->qxl_drawable->bbox,
+        canvas->ops->draw_blend(canvas, &drawable->red_drawable->bbox,
                                 &clip, &blend);
         unlocalize_mask(&blend.mask);
         unlocalize_bitmap(&blend.src_bitmap);
         break;
     }
     case QXL_DRAW_BLACKNESS: {
-        SpiceBlackness blackness = drawable->qxl_drawable->u.blackness;
+        SpiceBlackness blackness = drawable->red_drawable->u.blackness;
         localize_mask(worker, &blackness.mask, drawable->group_id);
         canvas->ops->draw_blackness(canvas,
-                                    &drawable->qxl_drawable->bbox, &clip, &blackness);
+                                    &drawable->red_drawable->bbox, &clip, &blackness);
         unlocalize_mask(&blackness.mask);
         break;
     }
     case QXL_DRAW_WHITENESS: {
-        SpiceWhiteness whiteness = drawable->qxl_drawable->u.whiteness;
+        SpiceWhiteness whiteness = drawable->red_drawable->u.whiteness;
         localize_mask(worker, &whiteness.mask, drawable->group_id);
         canvas->ops->draw_whiteness(canvas,
-                                    &drawable->qxl_drawable->bbox, &clip, &whiteness);
+                                    &drawable->red_drawable->bbox, &clip, &whiteness);
         unlocalize_mask(&whiteness.mask);
         break;
     }
     case QXL_DRAW_INVERS: {
-        SpiceInvers invers = drawable->qxl_drawable->u.invers;
+        SpiceInvers invers = drawable->red_drawable->u.invers;
         localize_mask(worker, &invers.mask, drawable->group_id);
         canvas->ops->draw_invers(canvas,
-                                 &drawable->qxl_drawable->bbox, &clip, &invers);
+                                 &drawable->red_drawable->bbox, &clip, &invers);
         unlocalize_mask(&invers.mask);
         break;
     }
     case QXL_DRAW_ROP3: {
-        SpiceRop3 rop3 = drawable->qxl_drawable->u.rop3;
+        SpiceRop3 rop3 = drawable->red_drawable->u.rop3;
         localize_brush(worker, &rop3.brush, drawable->group_id);
         localize_bitmap(worker, &rop3.src_bitmap, drawable->group_id);
         localize_mask(worker, &rop3.mask, drawable->group_id);
-        canvas->ops->draw_rop3(canvas, &drawable->qxl_drawable->bbox,
+        canvas->ops->draw_rop3(canvas, &drawable->red_drawable->bbox,
                                &clip, &rop3); unlocalize_mask(&rop3.mask);
         unlocalize_bitmap(&rop3.src_bitmap);
         unlocalize_brush(&rop3.brush);
         break;
     }
     case QXL_DRAW_STROKE: {
-        SpiceStroke stroke = drawable->qxl_drawable->u.stroke;
+        SpiceStroke stroke = drawable->red_drawable->u.stroke;
         localize_brush(worker, &stroke.brush, drawable->group_id);
         localize_path(worker, &stroke.path, drawable->group_id);
         localize_attr(worker, &stroke.attr, drawable->group_id);
         canvas->ops->draw_stroke(canvas,
-                                 &drawable->qxl_drawable->bbox, &clip, &stroke);
+                                 &drawable->red_drawable->bbox, &clip, &stroke);
         unlocalize_attr(&stroke.attr);
         unlocalize_path(&stroke.path);
         unlocalize_brush(&stroke.brush);
         break;
     }
     case QXL_DRAW_TEXT: {
-        SpiceText text = drawable->qxl_drawable->u.text;
+        SpiceText text = drawable->red_drawable->u.text;
         localize_brush(worker, &text.fore_brush, drawable->group_id);
         localize_brush(worker, &text.back_brush, drawable->group_id);
         localize_str(worker, &text.str, drawable->group_id);
-        canvas->ops->draw_text(canvas, &drawable->qxl_drawable->bbox,
+        canvas->ops->draw_text(canvas, &drawable->red_drawable->bbox,
                                &clip, &text);
         unlocalize_str(&text.str);
         unlocalize_brush(&text.back_brush);
@@ -5027,8 +5030,9 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size)
         worker->repoll_cmd_ring = 0;
         switch (ext_cmd.cmd.type) {
         case QXL_CMD_DRAW: {
-            QXLDrawable *drawable = (QXLDrawable *)get_virt(&worker->mem_slots, ext_cmd.cmd.data,
-                                                            sizeof(QXLDrawable), ext_cmd.group_id);
+            RedDrawable *drawable = spice_new0(RedDrawable, 1);
+            red_get_drawable(&worker->mem_slots, ext_cmd.group_id,
+                             drawable, ext_cmd.cmd.data);
             red_process_drawable(worker, drawable, ext_cmd.group_id);
             break;
         }
@@ -5385,8 +5389,8 @@ static void fill_base(DisplayChannel *display_channel, Drawable *drawable)
     SpiceMarshaller *cliprects_data_out;
 
     base.surface_id = drawable->surface_id;
-    base.box = drawable->qxl_drawable->bbox;
-    base.clip = drawable->qxl_drawable->clip;
+    base.box = drawable->red_drawable->bbox;
+    base.clip = drawable->red_drawable->clip;
 
     spice_marshall_DisplayBase(channel->send_data.marshaller, &base,
                               &cliprects_data_out);
@@ -5490,7 +5494,7 @@ static RedGlzDrawable *red_display_get_glz_drawable(DisplayChannel *channel, Dra
     ret = spice_new(RedGlzDrawable, 1);
 
     ret->display_channel = channel;
-    ret->qxl_drawable = drawable->qxl_drawable;
+    ret->red_drawable = drawable->red_drawable;
     ret->drawable = drawable;
     ret->group_id = drawable->group_id;
     ret->surface_id = drawable->surface_id;
@@ -5559,7 +5563,7 @@ static void red_display_free_glz_drawable_instance(DisplayChannel *channel,
         if (drawable) {
             drawable->red_glz_drawable = NULL;
         } else { // no reference to the qxl drawable left
-            free_qxl_drawable(channel->base.worker, glz_drawable->qxl_drawable,
+            free_red_drawable(channel->base.worker, glz_drawable->red_drawable,
                               glz_drawable->group_id, glz_drawable->self_bitmap,
                               glz_drawable->surface_id);
         }
@@ -7332,14 +7336,14 @@ static void surface_lossy_region_update(RedWorker *worker, DisplayChannel *displ
                                         Drawable *item, int has_mask, int lossy)
 {
     QRegion *surface_lossy_region;
-    QXLDrawable *drawable;
+    RedDrawable *drawable;
 
     if (has_mask && !lossy) {
         return;
     }
 
     surface_lossy_region = &display_channel->surface_client_lossy_region[item->surface_id];
-    drawable = item->qxl_drawable;
+    drawable = item->red_drawable;
 
     if (drawable->clip.type == SPICE_CLIP_TYPE_RECTS ) {
         QRegion clip_rgn;
@@ -7374,8 +7378,8 @@ static inline int drawable_intersects_with_areas(Drawable *drawable, int surface
 {   
     int i;
     for (i = 0; i < num_surfaces; i++) {
-        if (surface_ids[i] == drawable->qxl_drawable->surface_id) {
-            if (rect_intersects(surface_areas[i], &drawable->qxl_drawable->bbox)) {
+        if (surface_ids[i] == drawable->red_drawable->surface_id) {
+            if (rect_intersects(surface_areas[i], &drawable->red_drawable->bbox)) {
                 return TRUE;
             }
         }
@@ -7389,21 +7393,21 @@ static inline int drawable_depends_on_areas(Drawable *drawable,
                                             int num_surfaces)
 {   
     int i;
-    QXLDrawable *qxl_drawable;
+    RedDrawable *red_drawable;
     int drawable_has_shadow;
     SpiceRect shadow_rect;
 
-    qxl_drawable = drawable->qxl_drawable;
-    drawable_has_shadow = has_shadow(qxl_drawable);
+    red_drawable = drawable->red_drawable;
+    drawable_has_shadow = has_shadow(red_drawable);
 
     if (drawable_has_shadow) {
-       int delta_x = qxl_drawable->u.copy_bits.src_pos.x - qxl_drawable->bbox.left;
-       int delta_y = qxl_drawable->u.copy_bits.src_pos.y - qxl_drawable->bbox.top;
+       int delta_x = red_drawable->u.copy_bits.src_pos.x - red_drawable->bbox.left;
+       int delta_y = red_drawable->u.copy_bits.src_pos.y - red_drawable->bbox.top;
 
-       shadow_rect.left = qxl_drawable->u.copy_bits.src_pos.x;
-       shadow_rect.top = qxl_drawable->u.copy_bits.src_pos.y;
-       shadow_rect.right = qxl_drawable->bbox.right + delta_x;
-       shadow_rect.bottom = qxl_drawable->bbox.bottom + delta_y;
+       shadow_rect.left = red_drawable->u.copy_bits.src_pos.x;
+       shadow_rect.top = red_drawable->u.copy_bits.src_pos.y;
+       shadow_rect.right = red_drawable->bbox.right + delta_x;
+       shadow_rect.bottom = red_drawable->bbox.bottom + delta_y;
     }
 
     for (i = 0; i < num_surfaces; i++) {
@@ -7413,13 +7417,13 @@ static inline int drawable_depends_on_areas(Drawable *drawable,
          for (x = 0; x < 3; ++x) {
             dep_surface_id = drawable->surfaces_dest[x];
             if (dep_surface_id == surface_ids[i]) {
-                if (rect_intersects(&surface_areas[i], &qxl_drawable->surfaces_rects[x])) {
+                if (rect_intersects(&surface_areas[i], &red_drawable->surfaces_rects[x])) {
                     return TRUE;
                 }
             }
         }
 
-        if (surface_ids[i] == qxl_drawable->surface_id) {
+        if (surface_ids[i] == red_drawable->surface_id) {
             if (drawable_has_shadow) {
                 if (rect_intersects(&surface_areas[i], &shadow_rect)) {
                     return TRUE;
@@ -7427,11 +7431,11 @@ static inline int drawable_depends_on_areas(Drawable *drawable,
             }
 
             // not dependent on dest
-            if (qxl_drawable->effect == QXL_EFFECT_OPAQUE) {
+            if (red_drawable->effect == QXL_EFFECT_OPAQUE) {
                 continue;
             }
 
-            if (rect_intersects(&surface_areas[i], &qxl_drawable->bbox)) {
+            if (rect_intersects(&surface_areas[i], &red_drawable->bbox)) {
                 return TRUE;
             }
         }
@@ -7514,10 +7518,10 @@ static void red_pipe_replace_rendered_drawables_with_images(RedWorker *worker,
             continue;
         }
 
-        image = red_add_surface_area_image(worker, drawable->qxl_drawable->surface_id,
-                                           &drawable->qxl_drawable->bbox, pipe_item, TRUE);
-        resent_surface_ids[num_resent] = drawable->qxl_drawable->surface_id;
-        resent_areas[num_resent] = drawable->qxl_drawable->bbox;
+        image = red_add_surface_area_image(worker, drawable->red_drawable->surface_id,
+                                           &drawable->red_drawable->bbox, pipe_item, TRUE);
+        resent_surface_ids[num_resent] = drawable->red_drawable->surface_id;
+        resent_areas[num_resent] = drawable->red_drawable->bbox;
         num_resent++;
 
         ASSERT(image);
@@ -7533,7 +7537,7 @@ static void red_add_lossless_drawable_dependencies(RedWorker *worker,
                                                    SpiceRect *deps_areas[],
                                                    int num_deps)
 {
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     int sync_rendered = FALSE;
     int i;
 
@@ -7601,7 +7605,7 @@ static void red_send_qxl_draw_fill(RedWorker *worker,
                                    Drawable *item)
 {
     RedChannel *channel = &display_channel->base;
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     SpiceMarshaller *brush_pat_out;
     SpiceMarshaller *mask_bitmap_out;
     SpiceFill fill;
@@ -7627,7 +7631,7 @@ static void red_lossy_send_qxl_draw_fill(RedWorker *worker,
                                          DisplayChannel *display_channel,
                                          Drawable *item)
 {
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
 
     int dest_allowed_lossy = FALSE;
     int dest_is_lossy = FALSE;
@@ -7684,7 +7688,7 @@ static FillBitsType red_send_qxl_draw_opaque(RedWorker *worker,
                                              Drawable *item, int src_allowed_lossy)
 {
     RedChannel *channel = &display_channel->base;
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     SpiceMarshaller *brush_pat_out;
     SpiceMarshaller *src_bitmap_out;
     SpiceMarshaller *mask_bitmap_out;
@@ -7716,7 +7720,7 @@ static void red_lossy_send_qxl_draw_opaque(RedWorker *worker,
                                            DisplayChannel *display_channel,
                                            Drawable *item)
 {
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
 
     int src_allowed_lossy;
     int rop;
@@ -7781,7 +7785,7 @@ static FillBitsType red_send_qxl_draw_copy(RedWorker *worker,
                                            Drawable *item, int src_allowed_lossy)
 {
     RedChannel *channel = &display_channel->base;
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     SpiceMarshaller *src_bitmap_out;
     SpiceMarshaller *mask_bitmap_out;
     SpiceCopy copy;
@@ -7807,7 +7811,7 @@ static void red_lossy_send_qxl_draw_copy(RedWorker *worker,
                                          DisplayChannel *display_channel,
                                          Drawable *item)
 {
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     int has_mask = !!drawable->u.copy.mask.bitmap;
     int src_is_lossy;
     BitmapData src_bitmap_data;
@@ -7833,7 +7837,7 @@ static void red_send_qxl_draw_transparent(RedWorker *worker,
                                           Drawable *item)
 {
     RedChannel *channel = &display_channel->base;
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     SpiceMarshaller *src_bitmap_out;
     SpiceTransparent transparent;
 
@@ -7850,7 +7854,7 @@ static void red_lossy_send_qxl_draw_transparent(RedWorker *worker,
                                                 DisplayChannel *display_channel,
                                                 Drawable *item)
 {
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     int src_is_lossy;
     BitmapData src_bitmap_data;
 
@@ -7879,7 +7883,7 @@ static FillBitsType red_send_qxl_draw_alpha_blend(RedWorker *worker,
                                                   int src_allowed_lossy)
 {
     RedChannel *channel = &display_channel->base;
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     SpiceMarshaller *src_bitmap_out;
     SpiceAlphaBlnd alpha_blend;
     FillBitsType src_send_type;
@@ -7899,7 +7903,7 @@ static void red_lossy_send_qxl_draw_alpha_blend(RedWorker *worker,
                                                 DisplayChannel *display_channel,
                                                 Drawable *item)
 {
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     int src_is_lossy;
     BitmapData src_bitmap_data;
     FillBitsType src_send_type;
@@ -7925,7 +7929,7 @@ static void red_send_qxl_copy_bits(RedWorker *worker,
                                    Drawable *item)
 {
     RedChannel *channel = &display_channel->base;
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     SpicePoint copy_bits;
 
     fill_base(display_channel, item);
@@ -7939,7 +7943,7 @@ static void red_lossy_send_qxl_copy_bits(RedWorker *worker,
                                          DisplayChannel *display_channel,
                                          Drawable *item)
 {
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     SpiceRect src_rect;
     int horz_offset;
     int vert_offset;
@@ -7968,7 +7972,7 @@ static void red_send_qxl_draw_blend(RedWorker *worker,
                                     Drawable *item)
 {
     RedChannel *channel = &display_channel->base;
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     SpiceMarshaller *src_bitmap_out;
     SpiceMarshaller *mask_bitmap_out;
     SpiceBlend blend;
@@ -7990,7 +7994,7 @@ static void red_lossy_send_qxl_draw_blend(RedWorker *worker,
                                           DisplayChannel *display_channel,
                                           Drawable *item)
 {
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     int src_is_lossy;
     BitmapData src_bitmap_data;
     int dest_is_lossy;
@@ -8031,7 +8035,7 @@ static void red_send_qxl_draw_blackness(RedWorker *worker,
                                         Drawable *item)
 {
     RedChannel *channel = &display_channel->base;
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     SpiceMarshaller *mask_bitmap_out;
     SpiceBlackness blackness;
 
@@ -8050,7 +8054,7 @@ static void red_lossy_send_qxl_draw_blackness(RedWorker *worker,
                                               DisplayChannel *display_channel,
                                               Drawable *item)
 {
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     int has_mask = !!drawable->u.blackness.mask.bitmap;
 
     red_send_qxl_draw_blackness(worker, display_channel, item);
@@ -8063,7 +8067,7 @@ static void red_send_qxl_draw_whiteness(RedWorker *worker,
                                         Drawable *item)
 {
     RedChannel *channel = &display_channel->base;
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     SpiceMarshaller *mask_bitmap_out;
     SpiceWhiteness whiteness;
 
@@ -8082,7 +8086,7 @@ static void red_lossy_send_qxl_draw_whiteness(RedWorker *worker,
                                               DisplayChannel *display_channel,
                                               Drawable *item)
 {
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     int has_mask = !!drawable->u.whiteness.mask.bitmap;
 
     red_send_qxl_draw_whiteness(worker, display_channel, item);
@@ -8094,7 +8098,7 @@ static void red_send_qxl_draw_inverse(RedWorker *worker,
                                         DisplayChannel *display_channel,
                                         Drawable *item)
 {
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     SpiceMarshaller *mask_bitmap_out;
     RedChannel *channel = &display_channel->base;
     SpiceInvers inverse;
@@ -8121,7 +8125,7 @@ static void red_send_qxl_draw_rop3(RedWorker *worker,
                                    DisplayChannel *display_channel,
                                    Drawable *item)
 {
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     RedChannel *channel = &display_channel->base;
     SpiceRop3 rop3;
     SpiceMarshaller *src_bitmap_out;
@@ -8149,7 +8153,7 @@ static void red_lossy_send_qxl_draw_rop3(RedWorker *worker,
                                          DisplayChannel *display_channel,
                                          Drawable *item)
 {
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     int src_is_lossy;
     BitmapData src_bitmap_data;
     int brush_is_lossy;
@@ -8203,7 +8207,7 @@ static void red_send_qxl_draw_stroke(RedWorker *worker,
                                      DisplayChannel *display_channel,
                                      Drawable *item)
 {
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     RedChannel *channel = &display_channel->base;
     SpiceStroke stroke;
     SpiceMarshaller *brush_pat_out;
@@ -8231,7 +8235,7 @@ static void red_lossy_send_qxl_draw_stroke(RedWorker *worker,
                                            DisplayChannel *display_channel,
                                            Drawable *item)
 {
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     int brush_is_lossy;
     BitmapData brush_bitmap_data;
     int dest_is_lossy = FALSE;
@@ -8285,7 +8289,7 @@ static void red_send_qxl_draw_text(RedWorker *worker,
                                    DisplayChannel *display_channel,
                                    Drawable *item)
 {
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     RedChannel *channel = &display_channel->base;
     SpiceText text;
     SpiceMarshaller *brush_pat_out;
@@ -8316,7 +8320,7 @@ static void red_lossy_send_qxl_draw_text(RedWorker *worker,
                                          DisplayChannel *display_channel,
                                          Drawable *item)
 {
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
     int fg_is_lossy;
     BitmapData fg_bitmap_data;
     int bg_is_lossy;
@@ -8380,7 +8384,7 @@ static void red_lossy_send_qxl_draw_text(RedWorker *worker,
 static void red_lossy_send_qxl_drawable(RedWorker *worker, DisplayChannel *display_channel,
                                    Drawable *item)
 {
-    switch (item->qxl_drawable->type) {
+    switch (item->red_drawable->type) {
     case QXL_DRAW_FILL:
         red_lossy_send_qxl_draw_fill(worker, display_channel, item);
         break;
@@ -8433,7 +8437,7 @@ static void red_lossy_send_qxl_drawable(RedWorker *worker, DisplayChannel *displ
 static inline void red_send_qxl_drawable(RedWorker *worker, DisplayChannel *display_channel,
                                          Drawable *item)
 {
-    QXLDrawable *drawable = item->qxl_drawable;
+    RedDrawable *drawable = item->red_drawable;
 
     switch (drawable->type) {
     case QXL_DRAW_FILL:
@@ -8830,11 +8834,11 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
     int n;
 
     ASSERT(stream);
-    ASSERT(drawable->qxl_drawable->type == QXL_DRAW_COPY);
+    ASSERT(drawable->red_drawable->type == QXL_DRAW_COPY);
 
     channel = &display_channel->base;
     worker = channel->worker;
-    qxl_image = (QXLImage *)get_virt(&worker->mem_slots,  drawable->qxl_drawable->u.copy.src_bitmap,
+    qxl_image = (QXLImage *)get_virt(&worker->mem_slots,  drawable->red_drawable->u.copy.src_bitmap,
                                      sizeof(QXLImage), drawable->group_id);
 
     if (qxl_image->descriptor.type != SPICE_IMAGE_TYPE_BITMAP ||
@@ -8855,7 +8859,7 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
 
     switch (qxl_image->bitmap.format) {
     case SPICE_BITMAP_FMT_32BIT:
-        if (!red_rgb32bpp_to_24(worker, &drawable->qxl_drawable->u.copy.src_area,
+        if (!red_rgb32bpp_to_24(worker, &drawable->red_drawable->u.copy.src_area,
                                 &qxl_image->bitmap, frame, frame_stride,
                                 get_virt_delta(&worker->mem_slots, data, drawable->group_id),
                                 get_memslot_id(&worker->mem_slots, data),
@@ -8864,7 +8868,7 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
         }
         break;
     case SPICE_BITMAP_FMT_16BIT:
-        if (!red_rgb16bpp_to_24(worker, &drawable->qxl_drawable->u.copy.src_area,
+        if (!red_rgb16bpp_to_24(worker, &drawable->red_drawable->u.copy.src_area,
                                 &qxl_image->bitmap, frame, frame_stride,
                                 get_virt_delta(&worker->mem_slots, data, drawable->group_id),
                                 get_memslot_id(&worker->mem_slots, data),
@@ -8873,7 +8877,7 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
         }
         break;
     case SPICE_BITMAP_FMT_24BIT:
-        if (!red_rgb24bpp_to_24(worker, &drawable->qxl_drawable->u.copy.src_area,
+        if (!red_rgb24bpp_to_24(worker, &drawable->red_drawable->u.copy.src_area,
                                 &qxl_image->bitmap, frame, frame_stride,
                                 get_virt_delta(&worker->mem_slots, data, drawable->group_id),
                                 get_memslot_id(&worker->mem_slots, data),
@@ -8907,7 +8911,7 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
     SpiceMsgDisplayStreamData stream_data;
 
     stream_data.id = stream - worker->streams_buf;
-    stream_data.multi_media_time = drawable->qxl_drawable->mm_time;
+    stream_data.multi_media_time = drawable->red_drawable->mm_time;
     stream_data.data_size = n;
     stream_data.pad_size = PADDING;
     spice_marshall_msg_display_stream_data(channel->send_data.marshaller, &stream_data);
@@ -9201,7 +9205,7 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
 static void red_display_send_upgrade(DisplayChannel *display_channel, UpgradeItem *item)
 {
     RedChannel *channel;
-    QXLDrawable *qxl_drawable;
+    RedDrawable *red_drawable;
     SpiceMsgDisplayDrawCopy copy;
     SpiceMarshaller *cliprects_data_out, *src_bitmap_out, *mask_bitmap_out;
     int i;
@@ -9211,16 +9215,16 @@ static void red_display_send_upgrade(DisplayChannel *display_channel, UpgradeIte
 
     channel->send_data.header->type = SPICE_MSG_DISPLAY_DRAW_COPY;
 
-    qxl_drawable = item->drawable->qxl_drawable;
-    ASSERT(qxl_drawable->type == QXL_DRAW_COPY);
-    ASSERT(qxl_drawable->u.copy.rop_decriptor == SPICE_ROPD_OP_PUT);
-    ASSERT(qxl_drawable->u.copy.mask.bitmap == 0);
+    red_drawable = item->drawable->red_drawable;
+    ASSERT(red_drawable->type == QXL_DRAW_COPY);
+    ASSERT(red_drawable->u.copy.rop_decriptor == SPICE_ROPD_OP_PUT);
+    ASSERT(red_drawable->u.copy.mask.bitmap == 0);
 
     copy.base.surface_id = 0;
-    copy.base.box = qxl_drawable->bbox;
+    copy.base.box = red_drawable->bbox;
     copy.base.clip.type = SPICE_CLIP_TYPE_RECTS;
     copy.base.clip.data = 0;
-    copy.data = qxl_drawable->u.copy;
+    copy.data = red_drawable->u.copy;
 
     SpiceMarshaller *m = channel->send_data.marshaller;
 
@@ -9260,8 +9264,8 @@ static void red_display_send_stream_start(DisplayChannel *display_channel, Strea
     stream_create.dest = stream->dest_area;
 
     if (stream->current) {
-        QXLDrawable *qxl_drawable = stream->current->qxl_drawable;
-        stream_create.clip = qxl_drawable->clip;
+        RedDrawable *red_drawable = stream->current->red_drawable;
+        stream_create.clip = red_drawable->clip;
     } else {
         stream_create.clip.type = SPICE_CLIP_TYPE_RECTS;
         stream_create.clip.data = 0;
@@ -9272,12 +9276,12 @@ static void red_display_send_stream_start(DisplayChannel *display_channel, Strea
 
 
     if (stream->current) {
-        QXLDrawable *qxl_drawable = stream->current->qxl_drawable;
-        if (qxl_drawable->clip.type == SPICE_CLIP_TYPE_RECTS) {
+        RedDrawable *red_drawable = stream->current->red_drawable;
+        if (red_drawable->clip.type == SPICE_CLIP_TYPE_RECTS) {
             fill_rects_clip(channel, cliprects_data_out, stream_create.clip.data,
                             stream->current->group_id);
         } else {
-            ASSERT(qxl_drawable->clip.type == SPICE_CLIP_TYPE_NONE);
+            ASSERT(red_drawable->clip.type == SPICE_CLIP_TYPE_NONE);
         }
         display_begin_send_massage(display_channel, &stream->current->pipe_item);
     } else {
@@ -9680,7 +9684,7 @@ static void __show_tree_call(TreeItem *item, void *data)
             printf("  ");
         }
         printf(item_prefix, 0);
-        show_qxl_drawable(tree_data->worker, drawable->qxl_drawable, NULL);
+        show_red_drawable(tree_data->worker, drawable->red_drawable, NULL);
         for (i = 0; i < tree_data->level; i++) {
             printf("  ");
         }
