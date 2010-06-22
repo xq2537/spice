@@ -6605,10 +6605,7 @@ static int red_jpeg_compress_image(DisplayChannel *display_channel, RedImage *de
                                                  group_id);
                 ASSERT(chunk->prev_chunk);
             }
-            jpeg_data->data.u.lines_data.next = (SPICE_ADDRESS)prev_addr -
-                                                get_virt_delta(&worker->mem_slots,
-                                                               get_memslot_id(&worker->mem_slots, src->data),
-                                                               group_id);
+            jpeg_data->data.u.lines_data.next = (SPICE_ADDRESS)prev_addr;
             jpeg_data->usr.more_lines = jpeg_usr_more_lines_reverse;
             stride = -src->stride;
         }
@@ -6809,10 +6806,7 @@ static inline int red_quic_compress_image(DisplayChannel *display_channel, RedIm
                                                  group_id);
                 ASSERT(chunk->prev_chunk);
             }
-            quic_data->data.u.lines_data.next = (SPICE_ADDRESS)prev_addr -
-                                                get_virt_delta(&worker->mem_slots,
-                                                               get_memslot_id(&worker->mem_slots, src->data),
-                                                               group_id);
+            quic_data->data.u.lines_data.next = prev_addr;
             quic_data->usr.more_lines = quic_usr_more_lines_reverse;
             stride = -src->stride;
         }
