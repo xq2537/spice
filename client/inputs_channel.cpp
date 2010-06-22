@@ -22,7 +22,6 @@
 #include "red_client.h"
 #include "application.h"
 #include "display_channel.h"
-#include "generated_marshallers.h"
 
 #define SYNC_REMOTH_MODIFIRES
 
@@ -127,10 +126,8 @@ void MotionMessage::release()
 
 RedPeer::OutMessage& MotionMessage::peer_message()
 {
-    SpiceMsgcMouseMotion motion;
 
-    _channel.set_motion_event(motion);
-    spice_marshall_msgc_inputs_mouse_motion(_marshaller, &motion);
+    _channel.marshall_motion_event(_marshaller);
 
     return *this;
 }
@@ -159,9 +156,7 @@ void PositionMessage::release()
 
 RedPeer::OutMessage& PositionMessage::peer_message()
 {
-    SpiceMsgcMousePosition pos;
-    _channel.set_position_event(pos);
-    spice_marshall_msgc_inputs_mouse_position(_marshaller, &pos);
+    _channel.marshall_position_event(_marshaller);
     return *this;
 }
 
@@ -260,18 +255,23 @@ void InputsChannel::handle_motion_ack(RedPeer::InMessage* message)
     }
 }
 
-void InputsChannel::set_motion_event(SpiceMsgcMouseMotion& motion)
+void InputsChannel::marshall_motion_event(SpiceMarshaller *marshaller)
 {
+    SpiceMsgcMouseMotion motion;
+
     Lock lock(_motion_lock);
     motion.buttons_state = _mouse_buttons_state;
     motion.dx = _mouse_dx;
     motion.dy = _mouse_dy;
     _mouse_dx = _mouse_dy = 0;
     _active_motion = false;
+
+    _marshallers->msgc_inputs_mouse_motion(marshaller, &motion);
 }
 
-void InputsChannel::set_position_event(SpiceMsgcMousePosition& position)
+void InputsChannel::marshall_position_event(SpiceMarshaller *marshaller)
 {
+    SpiceMsgcMousePosition position;
     Lock lock(_motion_lock);
     position.buttons_state = _mouse_buttons_state;
     position.x = _mouse_x;
@@ -280,6 +280,7 @@ void InputsChannel::set_position_event(SpiceMsgcMousePosition& position)
     _mouse_x = _mouse_y = ~0;
     _display_id = -1;
     _active_motion = false;
+    _marshallers->msgc_inputs_mouse_position(marshaller, &position);
 }
 
 void InputsChannel::on_mouse_motion(int dx, int dy, int buttons_state)
@@ -322,7 +323,7 @@ void InputsChannel::on_mouse_down(int button, int buttons_state)
     SpiceMsgcMousePress event;
     event.button = button;
     event.buttons_state = buttons_state;
-    spice_marshall_msgc_inputs_mouse_press(message->marshaller(), &event);
+    _marshallers->msgc_inputs_mouse_press(message->marshaller(), &event);
 
     post_message(message);
 }
@@ -335,7 +336,7 @@ void InputsChannel::on_mouse_up(int button, int buttons_state)
     SpiceMsgcMouseRelease event;
     event.button = button;
     event.buttons_state = buttons_state;
-    spice_marshall_msgc_inputs_mouse_release(message->marshaller(), &event);
+    _marshallers->msgc_inputs_mouse_release(message->marshaller(), &event);
     post_message(message);
 }
 
@@ -362,7 +363,7 @@ void InputsChannel::on_key_down(RedKey key)
     Message* message = new Message(SPICE_MSGC_INPUTS_KEY_DOWN);
     SpiceMsgcKeyDown event;
     event.code = scan_code;
-    spice_marshall_msgc_inputs_key_down(message->marshaller(), &event);
+    _marshallers->msgc_inputs_key_down(message->marshaller(), &event);
 
     post_message(message);
 }
@@ -378,7 +379,7 @@ void InputsChannel::on_key_up(RedKey key)
     Message* message = new Message(SPICE_MSGC_INPUTS_KEY_UP);
     SpiceMsgcKeyUp event;
     event.code = scan_code;
-    spice_marshall_msgc_inputs_key_up(message->marshaller(), &event);
+    _marshallers->msgc_inputs_key_up(message->marshaller(), &event);
     post_message(message);
 }
 
@@ -407,7 +408,7 @@ void InputsChannel::on_focus_in()
     Message* message = new Message(SPICE_MSGC_INPUTS_KEY_MODIFIERS);
     SpiceMsgcKeyModifiers modifiers;
     modifiers.modifiers = Platform::get_keyboard_lock_modifiers();
-    spice_marshall_msgc_inputs_key_modifiers(message->marshaller(), &modifiers);
+    _marshallers->msgc_inputs_key_modifiers(message->marshaller(), &modifiers);
     post_message(message);
 #else
     set_local_modifiers();

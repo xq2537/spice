@@ -21,7 +21,6 @@
 
 #include "common.h"
 #include "tunnel_channel.h"
-#include "generated_marshallers.h"
 #include <spice/protocol.h>
 
 #define SOCKET_WINDOW_SIZE 60
@@ -100,7 +99,8 @@ public:
     virtual void release_buf();
 
     static void init(uint32_t max_data_size);
-    static OutSocketMessage& alloc_message(uint16_t id);
+    static OutSocketMessage& alloc_message(uint16_t id, SpiceMessageMarshallers *marshallers);
+
     static void clear_free_messages();
 
 protected:
@@ -143,7 +143,7 @@ void OutSocketMessage::init(uint32_t max_data_size)
     _max_data_size = max_data_size;
 }
 
-OutSocketMessage& OutSocketMessage::alloc_message(uint16_t id)
+OutSocketMessage& OutSocketMessage::alloc_message(uint16_t id, SpiceMessageMarshallers *marshallers)
 {
     OutSocketMessage* ret;
     if (!_free_messages.empty()) {
@@ -156,7 +156,7 @@ OutSocketMessage& OutSocketMessage::alloc_message(uint16_t id)
 
     SpiceMsgcTunnelSocketData data;
     data.connection_id = id;
-    spice_marshall_msgc_tunnel_socket_data(ret->marshaller(), &data);
+    marshallers->msgc_tunnel_socket_data(ret->marshaller(), &data);
     ret->_the_buf = spice_marshaller_reserve_space(ret->marshaller(), _max_data_size);
 
     return *ret;
@@ -189,7 +189,7 @@ struct TunnelService {
 class TunnelChannel::TunnelSocket: public ClientNetSocket {
 public:
     TunnelSocket(uint16_t id, TunnelService& dst_service, ProcessLoop& process_loop,
-                 EventHandler & event_handler);
+                 EventHandler & event_handler, SpiceMessageMarshallers *marshallers);
     virtual ~TunnelSocket() {}
 
     void set_num_tokens(uint32_t tokens) {_num_tokens = tokens;}
@@ -201,24 +201,27 @@ public:
     bool     get_guest_closed() {return _guest_closed;}
 
 protected:
-    virtual ReceiveBuffer& alloc_receive_buffer() {return OutSocketMessage::alloc_message(id());}
+    virtual ReceiveBuffer& alloc_receive_buffer() {return OutSocketMessage::alloc_message(id(), _marshallers);}
 
 private:
     uint32_t _num_tokens;
     uint32_t _server_num_tokens;
     uint32_t _service_id;
     bool _guest_closed;
+    SpiceMessageMarshallers *_marshallers;
 };
 
 TunnelChannel::TunnelSocket::TunnelSocket(uint16_t id, TunnelService& dst_service,
                                           ProcessLoop& process_loop,
-                                          ClientNetSocket::EventHandler& event_handler)
+                                          ClientNetSocket::EventHandler& event_handler,
+					  SpiceMessageMarshallers *marshallers)
     : ClientNetSocket(id, dst_service.ip, htons((uint16_t)dst_service.port),
                       process_loop, event_handler)
     , _num_tokens (0)
     , _server_num_tokens (0)
     , _service_id (dst_service.id)
     , _guest_closed (false)
+    , _marshallers(marshallers)
 {
 }
 
@@ -295,7 +298,7 @@ void TunnelChannel::send_service(TunnelService& service)
         add.ip.type = SPICE_TUNNEL_IP_TYPE_IPv4;
     }
 
-    spice_marshall_msgc_tunnel_service_add(service_msg->marshaller(), &add.base,
+    _marshallers->msgc_tunnel_service_add(service_msg->marshaller(), &add.base,
                                            &name_out, &description_out);
 
     if (service.type == SPICE_TUNNEL_SERVICE_TYPE_IPP) {
@@ -348,7 +351,7 @@ void TunnelChannel::handle_socket_open(RedPeer::InMessage* message)
               open_msg->service_id);
     }
 
-    sckt = new TunnelSocket(open_msg->connection_id, *service, get_process_loop(), *this);
+    sckt = new TunnelSocket(open_msg->connection_id, *service, get_process_loop(), *this, _marshallers);
 
     if (sckt->connect(open_msg->tokens)) {
         _sockets[open_msg->connection_id] = sckt;
@@ -358,12 +361,12 @@ void TunnelChannel::handle_socket_open(RedPeer::InMessage* message)
         SpiceMsgcTunnelSocketOpenAck ack;
         ack.connection_id = open_msg->connection_id;
         ack.tokens = SOCKET_WINDOW_SIZE;
-        spice_marshall_msgc_tunnel_socket_open_ack(out_msg->marshaller(), &ack);
+        _marshallers->msgc_tunnel_socket_open_ack(out_msg->marshaller(), &ack);
     } else {
         out_msg = new Message(SPICE_MSGC_TUNNEL_SOCKET_OPEN_NACK);
         SpiceMsgcTunnelSocketOpenNack nack;
         nack.connection_id = open_msg->connection_id;
-        spice_marshall_msgc_tunnel_socket_open_nack(out_msg->marshaller(), &nack);
+        _marshallers->msgc_tunnel_socket_open_nack(out_msg->marshaller(), &nack);
         delete sckt;
     }
 
@@ -486,7 +489,7 @@ void TunnelChannel::on_socket_fin_recv(ClientNetSocket& sckt)
     DBG(0, "FIN from client coonection id=%d", tunnel_sckt->id());
     SpiceMsgcTunnelSocketFin fin;
     fin.connection_id = tunnel_sckt->id();
-    spice_marshall_msgc_tunnel_socket_fin(out_msg->marshaller(), &fin);
+    _marshallers->msgc_tunnel_socket_fin(out_msg->marshaller(), &fin);
     post_message(out_msg);
 }
 
@@ -500,7 +503,7 @@ void TunnelChannel::on_socket_disconnect(ClientNetSocket& sckt)
         out_msg = new Message(SPICE_MSGC_TUNNEL_SOCKET_CLOSED_ACK);
         SpiceMsgcTunnelSocketClosedAck ack;
         ack.connection_id = tunnel_sckt->id();
-        spice_marshall_msgc_tunnel_socket_closed_ack(out_msg->marshaller(), &ack);
+        _marshallers->msgc_tunnel_socket_closed_ack(out_msg->marshaller(), &ack);
         _sockets[tunnel_sckt->id()] = NULL;
         delete &sckt;
     } else { // close initiated by client
@@ -508,7 +511,7 @@ void TunnelChannel::on_socket_disconnect(ClientNetSocket& sckt)
         out_msg = new Message(SPICE_MSGC_TUNNEL_SOCKET_CLOSED);
         SpiceMsgcTunnelSocketClosed closed;
         closed.connection_id = tunnel_sckt->id();
-        spice_marshall_msgc_tunnel_socket_closed(out_msg->marshaller(), &closed);
+        _marshallers->msgc_tunnel_socket_closed(out_msg->marshaller(), &closed);
     }
 
     post_message(out_msg);
@@ -525,7 +528,7 @@ void TunnelChannel::on_socket_message_send_done(ClientNetSocket& sckt)
         SpiceMsgcTunnelSocketTokens tokens_msg;
         tokens_msg.connection_id = tunnel_sckt->id();
         tokens_msg.num_tokens = num_tokens;
-        spice_marshall_msgc_tunnel_socket_token(out_msg->marshaller(), &tokens_msg);
+        _marshallers->msgc_tunnel_socket_token(out_msg->marshaller(), &tokens_msg);
         post_message(out_msg);
 
         tunnel_sckt->set_num_tokens(0);

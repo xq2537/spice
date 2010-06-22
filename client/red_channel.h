@@ -25,6 +25,7 @@
 #include "platform.h"
 #include "process_loop.h"
 #include "demarshallers.h"
+#include "marshallers.h"
 
 enum {
     PASSIVE_STATE,
@@ -143,6 +144,8 @@ protected:
     void handle_wait_for_channels(RedPeer::InMessage* message);
     void handle_disconnect(RedPeer::InMessage* message);
     void handle_notify(RedPeer::InMessage* message);
+
+    SpiceMessageMarshallers *_marshallers;
 
 private:
     void set_state(int state);

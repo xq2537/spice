@@ -22,7 +22,7 @@
 #include "process_loop.h"
 #include "utils.h"
 #include "debug.h"
-#include "generated_marshallers.h"
+#include "marshallers.h"
 
 #ifdef __GNUC__
 typedef struct __attribute__ ((__packed__)) OldRedMigrationBegin {
@@ -701,7 +701,7 @@ void RedClient::set_mouse_mode(uint32_t supported_modes, uint32_t current_mode)
         Message* message = new Message(SPICE_MSGC_MAIN_MOUSE_MODE_REQUEST);
         SpiceMsgcMainMouseModeRequest mouse_mode_request;
         mouse_mode_request.mode = SPICE_MOUSE_MODE_CLIENT;
-	spice_marshall_msgc_main_mouse_mode_request(message->marshaller(),
+	_marshallers->msgc_main_mouse_mode_request(message->marshaller(),
 						    &mouse_mode_request);
 
         post_message(message);
@@ -722,7 +722,7 @@ void RedClient::handle_init(RedPeer::InMessage* message)
         Message* msg = new Message(SPICE_MSGC_MAIN_AGENT_START);
         SpiceMsgcMainAgentStart agent_start;
         agent_start.num_tokens = ~0;
-	spice_marshall_msgc_main_agent_start(msg->marshaller(), &agent_start);
+	_marshallers->msgc_main_agent_start(msg->marshaller(), &agent_start);
         post_message(msg);
     }
     if (_auto_display_res) {
@@ -763,7 +763,7 @@ void RedClient::handle_agent_connected(RedPeer::InMessage* message)
     Message* msg = new Message(SPICE_MSGC_MAIN_AGENT_START);
     SpiceMsgcMainAgentStart agent_start;
     agent_start.num_tokens = ~0;
-    spice_marshall_msgc_main_agent_start(msg->marshaller(), &agent_start);
+    _marshallers->msgc_main_agent_start(msg->marshaller(), &agent_start);
     post_message(msg);
     if (_auto_display_res && !_agent_mon_config_sent) {
         send_agent_monitors_config();

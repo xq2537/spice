@@ -21,7 +21,6 @@
 #include "application.h"
 #include "debug.h"
 #include "utils.h"
-#include "generated_marshallers.h"
 
 #include "openssl/rsa.h"
 #include "openssl/evp.h"
@@ -258,6 +257,7 @@ RedChannel::RedChannel(RedClient& client, uint8_t type, uint8_t id,
 {
     _loop.add_trigger(_send_trigger);
     _loop.add_trigger(_abort_trigger);
+    _marshallers = spice_message_marshallers_get();
 }
 
 RedChannel::~RedChannel()
@@ -646,7 +646,7 @@ void RedChannel::handle_set_ack(RedPeer::InMessage* message)
     Message *response = new Message(SPICE_MSGC_ACK_SYNC);
     SpiceMsgcAckSync sync;
     sync.generation = ack->generation;
-    spice_marshall_msgc_ack_sync(response->marshaller(), &sync);
+    _marshallers->msgc_ack_sync(response->marshaller(), &sync);
     post_message(response);
 }
 
@@ -654,7 +654,7 @@ void RedChannel::handle_ping(RedPeer::InMessage* message)
 {
     SpiceMsgPing *ping = (SpiceMsgPing *)message->data();
     Message *pong = new Message(SPICE_MSGC_PONG);
-    spice_marshall_msgc_pong(pong->marshaller(), ping);
+    _marshallers->msgc_pong(pong->marshaller(), ping);
     post_message(pong);
 }
 

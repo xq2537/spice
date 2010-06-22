@@ -19,7 +19,6 @@
 #include "red_client.h"
 #include "audio_channels.h"
 #include "audio_devices.h"
-#include "generated_marshallers.h"
 
 #define NUM_SAMPLES_MESSAGES 4
 
@@ -122,7 +121,7 @@ void RecordChannel::on_connect()
     mode.mode = _mode =
       test_capability(SPICE_RECORD_CAP_CELT_0_5_1) ? RecordChannel::data_mode :
                                                                       SPICE_AUDIO_DATA_MODE_RAW;
-    spice_marshall_msgc_record_mode(message->marshaller(), &mode);
+    _marshallers->msgc_record_mode(message->marshaller(), &mode);
     post_message(message);
 }
 
@@ -131,7 +130,7 @@ void RecordChannel::send_start_mark()
     Message* message = new Message(SPICE_MSGC_RECORD_START_MARK);
     SpiceMsgcRecordStartMark start_mark;
     start_mark.time = get_mm_time();
-    spice_marshall_msgc_record_start_mark(message->marshaller(), &start_mark);
+    _marshallers->msgc_record_start_mark(message->marshaller(), &start_mark);
     post_message(message);
 }
 
@@ -260,7 +259,7 @@ void RecordChannel::push_frame(uint8_t *frame)
     peer_message.reset(SPICE_MSGC_RECORD_DATA);
     SpiceMsgcRecordPacket packet;
     packet.time = get_mm_time();
-    spice_marshall_msgc_record_data(peer_message.marshaller(), &packet);
+    _marshallers->msgc_record_data(peer_message.marshaller(), &packet);
     spice_marshaller_add(peer_message.marshaller(), frame, n);
     post_message(message);
 }

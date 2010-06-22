@@ -39,7 +39,7 @@ RED_COMMON_SRCS =					\
 	$(CLIENT_DIR)/demarshallers.h			\
 	$(CLIENT_DIR)/generated_demarshallers.cpp	\
 	$(CLIENT_DIR)/marshaller.cpp			\
-	$(CLIENT_DIR)/generated_marshallers.h		\
+	$(CLIENT_DIR)/marshallers.h			\
 	$(CLIENT_DIR)/generated_marshallers.cpp		\
 	$(CLIENT_DIR)/sw_canvas.cpp			\
 	$(CLIENT_DIR)/canvas.cpp			\
