@@ -630,14 +630,22 @@ class Switch(Containee):
             return True
 
         size = None
+        has_default = False
         for c in self.cases:
+            for v in c.values:
+                if v == None:
+                    has_default = True
             if not c.member.is_fixed_nw_size():
                 return False
             if size == None:
                 size = c.member.get_fixed_nw_size()
             elif size != c.member.get_fixed_nw_size():
                 return False
-        return True
+        # Fixed size if all elements listed, or has default
+        if has_default:
+            return True
+        key = self.container.lookup_member(self.variable)
+        return len(self.cases) == len(key.member_type.values)
 
     def is_extra_size(self):
         return self.has_end_attr()
