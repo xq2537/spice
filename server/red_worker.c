@@ -1042,6 +1042,7 @@ static void red_display_free_glz_drawable(DisplayChannel *channel, RedGlzDrawabl
 static void reset_rate(StreamAgent *stream_agent);
 static BitmapGradualType _get_bitmap_graduality_level(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_id);
 static inline int _stride_is_extra(SpiceBitmap *bitmap);
+static void red_disconnect_cursor(RedChannel *channel);
 
 #ifdef DUMP_BITMAP
 static void dump_bitmap(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_id);
@@ -4854,13 +4855,15 @@ static inline uint64_t red_now()
     return time.tv_sec * 1000000000 + time.tv_nsec;
 }
 
-static int red_process_cursor(RedWorker *worker, uint32_t max_pipe_size)
+static int red_process_cursor(RedWorker *worker, uint32_t max_pipe_size, int *ring_is_empty)
 {
     QXLCommandExt ext_cmd;
     int n = 0;
 
+    *ring_is_empty = FALSE;
     while (!worker->cursor_channel || worker->cursor_channel->base.pipe_size <= max_pipe_size) {
         if (!worker->qxl->st->qif->get_cursor_command(worker->qxl, &ext_cmd)) {
+            *ring_is_empty = TRUE;
             if (worker->repoll_cursor_ring < CMD_RING_POLL_RETRIES) {
                 worker->repoll_cursor_ring++;
                 worker->epoll_timeout = MIN(worker->epoll_timeout, CMD_RING_POLL_TIMEOUT);
@@ -4891,14 +4894,16 @@ static int red_process_cursor(RedWorker *worker, uint32_t max_pipe_size)
     return n;
 }
 
-static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size)
+static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *ring_is_empty)
 {
     QXLCommandExt ext_cmd;
     int n = 0;
     uint64_t start = red_now();
-
+    
+    *ring_is_empty = FALSE;
     while (!worker->display_channel || worker->display_channel->base.pipe_size <= max_pipe_size) {
         if (!worker->qxl->st->qif->get_command(worker->qxl, &ext_cmd)) {
+            *ring_is_empty = TRUE;;
             if (worker->repoll_cmd_ring < CMD_RING_POLL_RETRIES) {
                 worker->repoll_cmd_ring++;
                 worker->epoll_timeout = MIN(worker->epoll_timeout, CMD_RING_POLL_TIMEOUT);
@@ -9743,17 +9748,18 @@ static inline void flush_display_commands(RedWorker *worker)
 {
     for (;;) {
         uint64_t end_time;
+        int ring_is_empty;
 
-        red_process_commands(worker, MAX_PIPE_SIZE);
-        if (!worker->qxl->st->qif->has_command(worker->qxl)) {
+        red_process_commands(worker, MAX_PIPE_SIZE, &ring_is_empty);
+        if (ring_is_empty) {
             break;
         }
 
-        while (red_process_commands(worker, MAX_PIPE_SIZE)) {
+        while (red_process_commands(worker, MAX_PIPE_SIZE, &ring_is_empty)) {
             display_channel_push(worker);
         }
 
-        if (!worker->qxl->st->qif->has_command(worker->qxl)) {
+        if (ring_is_empty) {
             break;
         }
         end_time = red_now() + DISPLAY_CLIENT_TIMEOUT * 10;
@@ -9770,7 +9776,7 @@ static inline void flush_display_commands(RedWorker *worker)
             red_send_data(channel, NULL);
             if (red_now() >= end_time) {
                 red_printf("update timeout");
-                red_disconnect_display((RedChannel *)worker->display_channel);
+                red_disconnect_display(channel);
             } else {
                 sleep_count++;
                 usleep(DISPLAY_CLIENT_RETRY_INTERVAL);
@@ -9778,6 +9784,54 @@ static inline void flush_display_commands(RedWorker *worker)
             red_unref_channel(channel);
         }
     }
+}
+
+static inline void flush_cursor_commands(RedWorker *worker)
+{
+    for (;;) {
+        uint64_t end_time;
+        int ring_is_empty = FALSE;
+
+        red_process_cursor(worker, MAX_PIPE_SIZE, &ring_is_empty);
+        if (ring_is_empty) {
+            break;
+        }
+
+        while (red_process_cursor(worker, MAX_PIPE_SIZE, &ring_is_empty)) {
+            cursor_channel_push(worker);
+        }
+
+        if (ring_is_empty) {
+            break;
+        }
+        end_time = red_now() + DISPLAY_CLIENT_TIMEOUT * 10;
+        int sleep_count = 0;
+        for (;;) {
+            cursor_channel_push(worker);
+            if (!worker->cursor_channel ||
+                                        worker->cursor_channel->base.pipe_size <= MAX_PIPE_SIZE) {
+                break;
+            }
+            RedChannel *channel = (RedChannel *)worker->cursor_channel;
+            red_ref_channel(channel);
+            red_receive(channel);
+            red_send_data(channel, NULL);
+            if (red_now() >= end_time) {
+                red_printf("flush cursor timeout");
+                red_disconnect_cursor(channel);
+            } else {
+                sleep_count++;
+                usleep(DISPLAY_CLIENT_RETRY_INTERVAL);
+            }
+            red_unref_channel(channel);
+        }
+    }
+}
+
+static inline void flush_all_qxl_commands(RedWorker *worker)
+{
+    flush_display_commands(worker);
+    flush_cursor_commands(worker);
 }
 
 static inline void red_flush_surface_pipe(RedWorker *worker)
@@ -10691,8 +10745,9 @@ static inline void handle_dev_destroy_surface_wait(RedWorker *worker)
     receive_data(worker->channel, &surface_id, sizeof(uint32_t));
 
     ASSERT(surface_id == 0);
+    
+    flush_all_qxl_commands(worker);
 
-    flush_display_commands(worker);
     if (worker->surfaces[0].context.canvas) {
         destroy_surface_wait(worker, 0);
     }
@@ -10706,7 +10761,7 @@ static inline void handle_dev_destroy_surfaces(RedWorker *worker)
     int i;
     RedWorkerMessage message;
 
-    flush_display_commands(worker);
+    flush_all_qxl_commands(worker);
     //to handle better
     if (worker->surfaces[0].context.canvas) {
         destroy_surface_wait(worker, 0);
@@ -10809,7 +10864,7 @@ static inline void handle_dev_destroy_primary_surface(RedWorker *worker)
         ASSERT(!worker->cursor_channel->base.send_data.item);
     }
 
-    flush_display_commands(worker);
+    flush_all_qxl_commands(worker);
     destroy_surface_wait(worker, 0);
     red_destroy_surface(worker, 0);
     ASSERT(ring_is_empty(&worker->streams));
@@ -10828,6 +10883,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
 {
     RedWorker *worker = SPICE_CONTAINEROF(listener, RedWorker, dev_listener);
     RedWorkerMessage message;
+    int ring_is_empty;
 
     read_message(worker->channel, &message);
 
@@ -10841,7 +10897,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         break;
     case RED_WORKER_MESSAGE_OOM:
         ASSERT(worker->running);
-        while (red_process_commands(worker, MAX_PIPE_SIZE)) {
+        while (red_process_commands(worker, MAX_PIPE_SIZE, &ring_is_empty)) {
             display_channel_push(worker);
         }
         if (worker->qxl->st->qif->flush_resources(worker->qxl) == 0) {
@@ -11196,8 +11252,9 @@ void *red_worker_main(void *arg)
         }
 
         if (worker.running) {
-            red_process_cursor(&worker, MAX_PIPE_SIZE);
-            red_process_commands(&worker, MAX_PIPE_SIZE);
+            int ring_is_empty;
+            red_process_cursor(&worker, MAX_PIPE_SIZE, &ring_is_empty);
+            red_process_commands(&worker, MAX_PIPE_SIZE, &ring_is_empty);
         }
         red_push(&worker);
     }
