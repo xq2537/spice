@@ -1052,8 +1052,8 @@ channel TunnelChannel : BaseChannel {
 	uint32 id;
 	uint32 group;
 	uint32 port;
-	uint8 *name[cstring()] @ptr32 @nocopy;
-	uint8 *description[cstring()] @ptr32 @nocopy;
+	uint8 *name[cstring()] @nocopy;
+	uint8 *description[cstring()] @nocopy;
 	switch (type) {
 	case IPP:
 	    TunnelIpInfo ip @ctype(SpiceMsgTunnelIpInfo);
