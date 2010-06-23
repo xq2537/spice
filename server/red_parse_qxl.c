@@ -20,6 +20,20 @@
 #include "red_memslots.h"
 #include "red_parse_qxl.h"
 
+static void red_get_brush_ptr(RedMemSlotInfo *slots, int group_id,
+                              SpiceBrush *red, QXLBrush *qxl)
+{
+    red->type = qxl->type;
+    switch (red->type) {
+    case SPICE_BRUSH_TYPE_SOLID:
+        red->u.color = qxl->u.color;
+        break;
+    case SPICE_BRUSH_TYPE_PATTERN:
+        red->u.pattern = qxl->u.pattern;
+        break;
+    }
+}
+
 static void red_get_qmask_ptr(RedMemSlotInfo *slots, int group_id,
                               SpiceQMask *red, QXLQMask *qxl)
 {
@@ -31,7 +45,7 @@ static void red_get_qmask_ptr(RedMemSlotInfo *slots, int group_id,
 static void red_get_fill_ptr(RedMemSlotInfo *slots, int group_id,
                              SpiceFill *red, QXLFill *qxl)
 {
-    red->brush          = qxl->brush;
+    red_get_brush_ptr(slots, group_id, &red->brush, &qxl->brush);
     red->rop_descriptor = qxl->rop_descriptor;
     red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
 }
@@ -41,7 +55,7 @@ static void red_get_opaque_ptr(RedMemSlotInfo *slots, int group_id,
 {
    red->src_bitmap     = qxl->src_bitmap;
    red->src_area       = qxl->src_area;
-   red->brush          = qxl->brush;
+   red_get_brush_ptr(slots, group_id, &red->brush, &qxl->brush);
    red->rop_descriptor = qxl->rop_descriptor;
    red->scale_mode     = qxl->scale_mode;
    red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
@@ -98,7 +112,7 @@ static void red_get_rop3_ptr(RedMemSlotInfo *slots, int group_id,
 {
    red->src_bitmap = qxl->src_bitmap;
    red->src_area   = qxl->src_area;
-   red->brush      = qxl->brush;
+   red_get_brush_ptr(slots, group_id, &red->brush, &qxl->brush);
    red->rop3       = qxl->rop3;
    red->scale_mode = qxl->scale_mode;
    red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
@@ -109,7 +123,7 @@ static void red_get_stroke_ptr(RedMemSlotInfo *slots, int group_id,
 {
    red->path       = qxl->path;
    red->attr       = qxl->attr;
-   red->brush      = qxl->brush;
+   red_get_brush_ptr(slots, group_id, &red->brush, &qxl->brush);
    red->fore_mode  = qxl->fore_mode;
    red->back_mode  = qxl->back_mode;
 }
@@ -119,8 +133,8 @@ static void red_get_text_ptr(RedMemSlotInfo *slots, int group_id,
 {
    red->str        = qxl->str;
    red->back_area  = qxl->back_area;
-   red->fore_brush = qxl->fore_brush;
-   red->back_brush = qxl->back_brush;
+   red_get_brush_ptr(slots, group_id, &red->fore_brush, &qxl->fore_brush);
+   red_get_brush_ptr(slots, group_id, &red->back_brush, &qxl->back_brush);
    red->fore_mode  = qxl->fore_mode;
    red->back_mode  = qxl->back_mode;
 }
