@@ -1200,7 +1200,7 @@ void DisplayChannel::handle_mode(RedPeer::InMessage* message)
 {
     SpiceMsgDisplayMode *mode = (SpiceMsgDisplayMode *)message->data();
 
-    if (screen()) {
+    if (surfaces_mngr.is_present_canvas(0)) {
         destroy_primary_surface();
     }
     create_primary_surface(mode->x_res, mode->y_res,
@@ -1451,8 +1451,8 @@ void DisplayChannel::create_surface(int surface_id, int width, int height, uint3
 
 void DisplayChannel::destroy_primary_surface()
 {
-#ifdef USE_OGL
     if (screen()) {
+#ifdef USE_OGL
         if (surfaces_mngr.is_present_canvas(0)) {
             Canvas *canvas;
 
@@ -1462,11 +1462,11 @@ void DisplayChannel::destroy_primary_surface()
                 screen()->untouch_context();
             }
         }
-    }
 #endif
 
-	AutoRef<UnlockScreenEvent> unlock_event(new UnlockScreenEvent(screen()));
-    get_client().push_event(*unlock_event);
+        AutoRef<UnlockScreenEvent> unlock_event(new UnlockScreenEvent(screen()));
+        get_client().push_event(*unlock_event);
+    }
 
     AutoRef<DestroyPrimarySurfaceEvent> event(new DestroyPrimarySurfaceEvent(*this));
     get_client().push_event(*event);
