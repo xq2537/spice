@@ -184,7 +184,7 @@ def write_validate_struct_function(writer, struct):
 def write_validate_pointer_item(writer, container, item, scope, parent_scope, start,
                                 want_nw_size, want_mem_size, want_extra_size):
     if want_nw_size:
-        writer.assign(item.nw_size(), 8)
+        writer.assign(item.nw_size(), item.type.get_fixed_nw_size())
 
     if want_mem_size or want_extra_size:
         target_type = item.type.target_type
@@ -636,7 +636,7 @@ def write_switch_parser(writer, container, switch, dest, scope):
             if t.is_struct():
                 write_container_parser(writer, t, dest2)
             elif t.is_pointer():
-                write_parse_pointer(writer, t, False, dest2, m.name, not m.has_attr("ptr32"), block)
+                write_parse_pointer(writer, t, False, dest2, m.name, block)
             elif t.is_primitive():
                 writer.assign(dest2.get_ref(m.name), "consume_%s(&in)" % (t.primitive_type()))
                 #TODO validate e.g. flags and enums
@@ -724,12 +724,9 @@ def write_array_parser(writer, nelements, array, dest, scope):
                     dest2.reuse_scope = array_scope
                     write_container_parser(writer, element_type, dest2)
 
-def write_parse_pointer(writer, t, at_end, dest, member_name, is_64bit, scope):
+def write_parse_pointer(writer, t, at_end, dest, member_name, scope):
         target_type = t.target_type
-        if is_64bit:
-            writer.assign("ptr_info[n_ptr].offset", "consume_uint64(&in)")
-        else:
-            writer.assign("ptr_info[n_ptr].offset", "consume_uint32(&in)")
+        writer.assign("ptr_info[n_ptr].offset", "consume_%s(&in)" % t.primitive_type())
         writer.assign("ptr_info[n_ptr].parse", write_parse_ptr_function(writer, target_type))
         if at_end:
             writer.assign("ptr_info[n_ptr].dest", "end")
@@ -756,9 +753,9 @@ def write_member_parser(writer, container, member, dest, scope):
     if t.is_pointer():
         if member.has_attr("nocopy"):
             writer.comment("Reuse data from network message").newline()
-            writer.assign(dest.get_ref(member.name), "(size_t)(message_start + consume_uint64(&in))")
+            writer.assign(dest.get_ref(member.name), "(size_t)(message_start + consume_%s(&in))" % t.primitive_type())
         else:
-            write_parse_pointer(writer, t, member.has_end_attr(), dest, member.name, not member.has_attr("ptr32"), scope)
+            write_parse_pointer(writer, t, member.has_end_attr(), dest, member.name, scope)
     elif t.is_primitive():
         if member.has_end_attr():
             writer.statement("*(%s *)end = consume_%s(&in)" % (t.c_type(), t.primitive_type()))

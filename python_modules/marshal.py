@@ -239,7 +239,7 @@ def write_switch_marshaller(writer, container, switch, src, scope):
                 write_container_marshaller(writer, t, src2)
             elif t.is_pointer():
                 ptr_func = write_marshal_ptr_function(writer, t.target_type)
-                writer.assign("*%s_out" % (writer.out_prefix + m.name), "spice_marshaller_get_ptr_submarshaller(m, %s)" % ("0" if m.has_attr("ptr32") else "1"))
+                writer.assign("*%s_out" % (writer.out_prefix + m.name), "spice_marshaller_get_ptr_submarshaller(m, %d)" % (1 if m.get_fixed_nw_size() == 8 else 0))
             elif t.is_primitive():
                 if m.has_attr("zero"):
                     writer.statement("spice_marshaller_add_%s(m, 0)" % (t.primitive_type()))
@@ -285,7 +285,7 @@ def write_member_marshaller(writer, container, member, src, scope):
 #        else:
 #            write_parse_pointer(writer, t, member.has_end_attr(), src, member.name, scope)
         ptr_func = write_marshal_ptr_function(writer, t.target_type)
-        writer.assign("*%s_out" % (writer.out_prefix + member.name), "spice_marshaller_get_ptr_submarshaller(m, %s)" % ("0" if member.has_attr("ptr32") else "1"))
+        writer.assign("*%s_out" % (writer.out_prefix + member.name), "spice_marshaller_get_ptr_submarshaller(m, %d)" % (1 if member.get_fixed_nw_size() == 8 else 0))
     elif t.is_primitive():
         if member.has_attr("zero"):
             writer.statement("spice_marshaller_add_%s(m, 0)" % (t.primitive_type()))

@@ -4,6 +4,8 @@ import types
 _types_by_name = {}
 _types = []
 
+default_pointer_size = 4
+
 def type_exists(name):
     return _types_by_name.has_key(name)
 
@@ -426,7 +428,7 @@ class PointerType(Type):
         Type.__init__(self)
         self.name = None
         self.target_type = target_type
-        self.pointer_size = 8
+        self.pointer_size = default_pointer_size
 
     def __str__(self):
         return "%s*" % (str(self.target_type))
