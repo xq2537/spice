@@ -157,13 +157,14 @@ static void free_items(SpiceMarshaller *m)
 
 void spice_marshaller_reset(SpiceMarshaller *m)
 {
-    SpiceMarshaller *m2;
+    SpiceMarshaller *m2, *next;
     SpiceMarshallerData *d;
 
     /* Only supported for root marshaller */
     assert(m->data->marshallers == m);
 
-    for (m2 = m; m2 != NULL; m2 = m2->next) {
+    for (m2 = m; m2 != NULL; m2 = next) {
+        next = m2->next;
         free_item_data(m2);
 
         /* Free non-root marshallers */
