@@ -529,7 +529,7 @@ struct Brush {
         uint32 color;
     case PATTERN:
         Pattern pattern;
-    } u @fixedsize;
+    } u;
 };
 
 struct QMask {
