@@ -85,6 +85,17 @@ static void red_get_alpha_blend_ptr_compat(RedMemSlotInfo *slots, int group_id,
     red->src_area    = qxl->src_area;
 }
 
+static void red_get_rop3_ptr(RedMemSlotInfo *slots, int group_id,
+                             SpiceRop3 *red, QXLRop3 *qxl)
+{
+   red->src_bitmap = qxl->src_bitmap;
+   red->src_area   = qxl->src_area;
+   red->brush      = qxl->brush;
+   red->rop3       = qxl->rop3;
+   red->scale_mode = qxl->scale_mode;
+   red->mask       = qxl->mask;
+}
+
 void red_get_drawable(RedMemSlotInfo *slots, int group_id,
                       RedDrawable *red, SPICE_ADDRESS addr)
 {
@@ -137,7 +148,7 @@ void red_get_drawable(RedMemSlotInfo *slots, int group_id,
     case QXL_DRAW_NOP:
         break;
     case QXL_DRAW_ROP3:
-        red->u.rop3 = qxl->u.rop3;
+        red_get_rop3_ptr(slots, group_id, &red->u.rop3, &qxl->u.rop3);
         break;
     case QXL_DRAW_STROKE:
         red->u.stroke = qxl->u.stroke;
@@ -201,7 +212,7 @@ void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
     case QXL_DRAW_NOP:
         break;
     case QXL_DRAW_ROP3:
-        red->u.rop3 = qxl->u.rop3;
+        red_get_rop3_ptr(slots, group_id, &red->u.rop3, &qxl->u.rop3);
         break;
     case QXL_DRAW_STROKE:
         red->u.stroke = qxl->u.stroke;
