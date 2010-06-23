@@ -20,12 +20,20 @@
 #include "red_memslots.h"
 #include "red_parse_qxl.h"
 
+static void red_get_qmask_ptr(RedMemSlotInfo *slots, int group_id,
+                              SpiceQMask *red, QXLQMask *qxl)
+{
+    red->flags  = qxl->flags;
+    red->pos    = qxl->pos;
+    red->bitmap = qxl->bitmap;
+}
+
 static void red_get_fill_ptr(RedMemSlotInfo *slots, int group_id,
                              SpiceFill *red, QXLFill *qxl)
 {
     red->brush          = qxl->brush;
     red->rop_descriptor = qxl->rop_descriptor;
-    red->mask           = qxl->mask;
+    red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
 }
 
 static void red_get_opaque_ptr(RedMemSlotInfo *slots, int group_id,
@@ -36,7 +44,7 @@ static void red_get_opaque_ptr(RedMemSlotInfo *slots, int group_id,
    red->brush          = qxl->brush;
    red->rop_descriptor = qxl->rop_descriptor;
    red->scale_mode     = qxl->scale_mode;
-   red->mask           = qxl->mask;
+   red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
 }
 
 static void red_get_copy_ptr(RedMemSlotInfo *slots, int group_id,
@@ -46,7 +54,7 @@ static void red_get_copy_ptr(RedMemSlotInfo *slots, int group_id,
    red->src_area        = qxl->src_area;
    red->rop_descriptor  = qxl->rop_descriptor;
    red->scale_mode      = qxl->scale_mode;
-   red->mask            = qxl->mask;
+   red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
 }
 
 static void red_get_blend_ptr(RedMemSlotInfo *slots, int group_id,
@@ -56,7 +64,7 @@ static void red_get_blend_ptr(RedMemSlotInfo *slots, int group_id,
    red->src_area        = qxl->src_area;
    red->rop_descriptor  = qxl->rop_descriptor;
    red->scale_mode      = qxl->scale_mode;
-   red->mask            = qxl->mask;
+   red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
 }
 
 static void red_get_transparent_ptr(RedMemSlotInfo *slots, int group_id,
@@ -93,7 +101,7 @@ static void red_get_rop3_ptr(RedMemSlotInfo *slots, int group_id,
    red->brush      = qxl->brush;
    red->rop3       = qxl->rop3;
    red->scale_mode = qxl->scale_mode;
-   red->mask       = qxl->mask;
+   red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
 }
 
 static void red_get_stroke_ptr(RedMemSlotInfo *slots, int group_id,
@@ -120,19 +128,19 @@ static void red_get_text_ptr(RedMemSlotInfo *slots, int group_id,
 static void red_get_whiteness_ptr(RedMemSlotInfo *slots, int group_id,
                                   SpiceWhiteness *red, QXLWhiteness *qxl)
 {
-    red->mask = qxl->mask;
+    red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
 }
 
 static void red_get_blackness_ptr(RedMemSlotInfo *slots, int group_id,
                                   SpiceBlackness *red, QXLBlackness *qxl)
 {
-    red->mask = qxl->mask;
+    red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
 }
 
 static void red_get_invers_ptr(RedMemSlotInfo *slots, int group_id,
                                SpiceInvers *red, QXLInvers *qxl)
 {
-    red->mask = qxl->mask;
+    red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
 }
 
 void red_get_drawable(RedMemSlotInfo *slots, int group_id,
