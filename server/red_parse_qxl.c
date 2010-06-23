@@ -28,6 +28,17 @@ static void red_get_fill_ptr(RedMemSlotInfo *slots, int group_id,
     red->mask           = qxl->mask;
 }
 
+static void red_get_opaque_ptr(RedMemSlotInfo *slots, int group_id,
+                               SpiceOpaque *red, QXLOpaque *qxl)
+{
+   red->src_bitmap     = qxl->src_bitmap;
+   red->src_area       = qxl->src_area;
+   red->brush          = qxl->brush;
+   red->rop_descriptor = qxl->rop_descriptor;
+   red->scale_mode     = qxl->scale_mode;
+   red->mask           = qxl->mask;
+}
+
 static void red_get_alpha_blend_ptr(RedMemSlotInfo *slots, int group_id,
                                     SpiceAlphaBlnd *red, QXLAlphaBlnd *qxl)
 {
@@ -85,6 +96,9 @@ void red_get_drawable(RedMemSlotInfo *slots, int group_id,
     case QXL_DRAW_FILL:
         red_get_fill_ptr(slots, group_id, &red->u.fill, &qxl->u.fill);
         break;
+    case QXL_DRAW_OPAQUE:
+        red_get_opaque_ptr(slots, group_id, &red->u.opaque, &qxl->u.opaque);
+        break;
     case QXL_DRAW_INVERS:
         red->u.invers = qxl->u.invers;
         break;
@@ -104,6 +118,9 @@ void red_get_drawable(RedMemSlotInfo *slots, int group_id,
         break;
     case QXL_DRAW_WHITENESS:
         red->u.whiteness = qxl->u.whiteness;
+        break;
+    default:
+        red_error("unknown type");
         break;
     };
 }
@@ -139,6 +156,9 @@ void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
     case QXL_DRAW_FILL:
         red_get_fill_ptr(slots, group_id, &red->u.fill, &qxl->u.fill);
         break;
+    case QXL_DRAW_OPAQUE:
+        red_get_opaque_ptr(slots, group_id, &red->u.opaque, &qxl->u.opaque);
+        break;
     case QXL_DRAW_INVERS:
         red->u.invers = qxl->u.invers;
         break;
@@ -158,6 +178,9 @@ void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
         break;
     case QXL_DRAW_WHITENESS:
         red->u.whiteness = qxl->u.whiteness;
+        break;
+    default:
+        red_error("unknown type");
         break;
     };
 }

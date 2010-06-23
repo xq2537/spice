@@ -7734,7 +7734,7 @@ static void red_lossy_send_qxl_draw_opaque(RedWorker *worker,
     BitmapData src_bitmap_data;
     BitmapData brush_bitmap_data;
 
-    rop = drawable->u.opaque.rop_decriptor;
+    rop = drawable->u.opaque.rop_descriptor;
     src_allowed_lossy = !((rop & SPICE_ROPD_OP_OR) ||
                           (rop & SPICE_ROPD_OP_AND) ||
                           (rop & SPICE_ROPD_OP_XOR));

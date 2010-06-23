@@ -662,7 +662,7 @@ channel DisplayChannel : BaseChannel {
 	    Image *src_bitmap;
 	    Rect src_area;
 	    Brush brush;
-	    ropd rop_decriptor;
+	    ropd rop_descriptor;
 	    image_scale_mode scale_mode;
 	    QMask mask @outvar(mask);
 	} data;

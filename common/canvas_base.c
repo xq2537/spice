@@ -2518,7 +2518,7 @@ static void canvas_draw_opaque(SpiceCanvas *spice_canvas, SpiceRect *bbox, Spice
     canvas_mask_pixman(canvas, &dest_region, &opaque->mask,
                        bbox->left, bbox->top);
 
-    rop = ropd_descriptor_to_rop(opaque->rop_decriptor,
+    rop = ropd_descriptor_to_rop(opaque->rop_descriptor,
                                  ROP_INPUT_BRUSH,
                                  ROP_INPUT_SRC);
 

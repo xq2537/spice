@@ -389,7 +389,7 @@ static void gl_canvas_draw_opaque(SpiceCanvas *spice_canvas, SpiceRect *bbox, Sp
     set_clip(canvas, bbox, clip);
     set_mask(canvas, &opaque->mask, bbox->left, bbox->top);
 
-    glc_set_op(canvas->glc, (opaque->rop_decriptor & SPICE_ROPD_INVERS_SRC) ? GLC_OP_COPY_INVERTED :
+    glc_set_op(canvas->glc, (opaque->rop_descriptor & SPICE_ROPD_INVERS_SRC) ? GLC_OP_COPY_INVERTED :
                GLC_OP_COPY);
     surface = canvas_get_image(&canvas->base, opaque->src_bitmap, FALSE);
     surface_to_image(canvas, surface, &image, 0);
@@ -399,7 +399,7 @@ static void gl_canvas_draw_opaque(SpiceCanvas *spice_canvas, SpiceRect *bbox, Sp
     pixman_image_unref(surface);
 
     set_brush(canvas, &opaque->brush);
-    set_op(canvas, opaque->rop_decriptor & ~SPICE_ROPD_INVERS_SRC);
+    set_op(canvas, opaque->rop_descriptor & ~SPICE_ROPD_INVERS_SRC);
     SET_GLC_RECT(&fill_rect, bbox);
     glc_fill_rect(canvas->glc, &fill_rect);
 
