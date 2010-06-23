@@ -2200,7 +2200,7 @@ static void canvas_draw_fill(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceCl
     canvas_mask_pixman(canvas, &dest_region, &fill->mask,
                        bbox->left, bbox->top);
 
-    rop = ropd_descriptor_to_rop(fill->rop_decriptor,
+    rop = ropd_descriptor_to_rop(fill->rop_descriptor,
                                  ROP_INPUT_BRUSH,
                                  ROP_INPUT_DEST);
 

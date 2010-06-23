@@ -20,6 +20,14 @@
 #include "red_memslots.h"
 #include "red_parse_qxl.h"
 
+static void red_get_fill_ptr(RedMemSlotInfo *slots, int group_id,
+                             SpiceFill *red, QXLFill *qxl)
+{
+    red->brush          = qxl->brush;
+    red->rop_descriptor = qxl->rop_descriptor;
+    red->mask           = qxl->mask;
+}
+
 static void red_get_alpha_blend_ptr(RedMemSlotInfo *slots, int group_id,
                                     SpiceAlphaBlnd *red, QXLAlphaBlnd *qxl)
 {
@@ -75,7 +83,7 @@ void red_get_drawable(RedMemSlotInfo *slots, int group_id,
         red->u.copy = qxl->u.copy;
         break;
     case QXL_DRAW_FILL:
-        red->u.fill = qxl->u.fill;
+        red_get_fill_ptr(slots, group_id, &red->u.fill, &qxl->u.fill);
         break;
     case QXL_DRAW_INVERS:
         red->u.invers = qxl->u.invers;
@@ -129,7 +137,7 @@ void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
         red->u.copy = qxl->u.copy;
         break;
     case QXL_DRAW_FILL:
-        red->u.fill = qxl->u.fill;
+        red_get_fill_ptr(slots, group_id, &red->u.fill, &qxl->u.fill);
         break;
     case QXL_DRAW_INVERS:
         red->u.invers = qxl->u.invers;

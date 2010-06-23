@@ -347,7 +347,7 @@ static void gl_canvas_draw_fill(SpiceCanvas *spice_canvas, SpiceRect *bbox, Spic
     set_clip(canvas, bbox, clip);
     set_mask(canvas, &fill->mask, bbox->left, bbox->top);
     set_brush(canvas, &fill->brush);
-    set_op(canvas, fill->rop_decriptor);
+    set_op(canvas, fill->rop_descriptor);
     SET_GLC_RECT(&rect, bbox);
 
     glc_fill_rect(canvas->glc, &rect);

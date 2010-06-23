@@ -7645,7 +7645,7 @@ static void red_lossy_send_qxl_draw_fill(RedWorker *worker,
     BitmapData brush_bitmap_data;
     uint16_t rop;
 
-    rop = drawable->u.fill.rop_decriptor;
+    rop = drawable->u.fill.rop_descriptor;
 
     dest_allowed_lossy = !((rop & SPICE_ROPD_OP_OR) ||
                            (rop & SPICE_ROPD_OP_AND) ||
