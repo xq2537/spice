@@ -59,6 +59,15 @@ static void red_get_blend_ptr(RedMemSlotInfo *slots, int group_id,
    red->mask            = qxl->mask;
 }
 
+static void red_get_transparent_ptr(RedMemSlotInfo *slots, int group_id,
+                                    SpiceTransparent *red, QXLTransparent *qxl)
+{
+   red->src_bitmap      = qxl->src_bitmap;
+   red->src_area        = qxl->src_area;
+   red->src_color       = qxl->src_color;
+   red->true_color      = qxl->true_color;
+}
+
 static void red_get_alpha_blend_ptr(RedMemSlotInfo *slots, int group_id,
                                     SpiceAlphaBlnd *red, QXLAlphaBlnd *qxl)
 {
@@ -137,7 +146,8 @@ void red_get_drawable(RedMemSlotInfo *slots, int group_id,
         red->u.text = qxl->u.text;
         break;
     case QXL_DRAW_TRANSPARENT:
-        red->u.transparent = qxl->u.transparent;
+        red_get_transparent_ptr(slots, group_id,
+                                &red->u.transparent, &qxl->u.transparent);
         break;
     case QXL_DRAW_WHITENESS:
         red->u.whiteness = qxl->u.whiteness;
@@ -200,7 +210,8 @@ void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
         red->u.text = qxl->u.text;
         break;
     case QXL_DRAW_TRANSPARENT:
-        red->u.transparent = qxl->u.transparent;
+        red_get_transparent_ptr(slots, group_id,
+                                &red->u.transparent, &qxl->u.transparent);
         break;
     case QXL_DRAW_WHITENESS:
         red->u.whiteness = qxl->u.whiteness;
