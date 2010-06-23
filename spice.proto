@@ -673,7 +673,7 @@ channel DisplayChannel : BaseChannel {
 	struct Copy {
 	    Image *src_bitmap;
 	    Rect src_area;
-	    ropd rop_decriptor;
+	    ropd rop_descriptor;
 	    image_scale_mode scale_mode;
 	    QMask mask @outvar(mask);
 	} data;
@@ -684,7 +684,7 @@ channel DisplayChannel : BaseChannel {
 	struct Blend {
 	    Image *src_bitmap;
 	    Rect src_area;
-	    ropd rop_decriptor;
+	    ropd rop_descriptor;
 	    image_scale_mode scale_mode;
 	    QMask mask @outvar(mask);
 	} @ctype(SpiceCopy) data;

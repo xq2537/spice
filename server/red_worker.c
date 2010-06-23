@@ -3550,7 +3550,7 @@ static inline void red_update_streamable(RedWorker *worker, Drawable *drawable,
 
     if (drawable->tree_item.effect != QXL_EFFECT_OPAQUE ||
                                         red_drawable->type != QXL_DRAW_COPY ||
-                                        red_drawable->u.copy.rop_decriptor != SPICE_ROPD_OP_PUT) {
+                                        red_drawable->u.copy.rop_descriptor != SPICE_ROPD_OP_PUT) {
         return;
     }
 
@@ -9118,7 +9118,7 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
     copy.base.box.bottom = item->pos.y + bitmap.y;
     copy.base.clip.type = SPICE_CLIP_TYPE_NONE;
     copy.base.clip.data = 0;
-    copy.data.rop_decriptor = SPICE_ROPD_OP_PUT;
+    copy.data.rop_descriptor = SPICE_ROPD_OP_PUT;
     copy.data.src_area.left = 0;
     copy.data.src_area.top = 0;
     copy.data.src_area.right = bitmap.x;
@@ -9222,7 +9222,7 @@ static void red_display_send_upgrade(DisplayChannel *display_channel, UpgradeIte
 
     red_drawable = item->drawable->red_drawable;
     ASSERT(red_drawable->type == QXL_DRAW_COPY);
-    ASSERT(red_drawable->u.copy.rop_decriptor == SPICE_ROPD_OP_PUT);
+    ASSERT(red_drawable->u.copy.rop_descriptor == SPICE_ROPD_OP_PUT);
     ASSERT(red_drawable->u.copy.mask.bitmap == 0);
 
     copy.base.surface_id = 0;

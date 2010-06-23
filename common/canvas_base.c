@@ -2232,7 +2232,7 @@ static void canvas_draw_copy(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceCl
     canvas_mask_pixman(canvas, &dest_region, &copy->mask,
                        bbox->left, bbox->top);
 
-    rop = ropd_descriptor_to_rop(copy->rop_decriptor,
+    rop = ropd_descriptor_to_rop(copy->rop_descriptor,
                                  ROP_INPUT_SRC,
                                  ROP_INPUT_DEST);
 
@@ -2573,7 +2573,7 @@ static void canvas_draw_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceC
     canvas_mask_pixman(canvas, &dest_region, &blend->mask,
                        bbox->left, bbox->top);
 
-    rop = ropd_descriptor_to_rop(blend->rop_decriptor,
+    rop = ropd_descriptor_to_rop(blend->rop_descriptor,
                                  ROP_INPUT_SRC,
                                  ROP_INPUT_DEST);
 

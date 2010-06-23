@@ -364,7 +364,7 @@ static void gl_canvas_draw_copy(SpiceCanvas *spice_canvas, SpiceRect *bbox, Spic
 
     set_clip(canvas, bbox, clip);
     set_mask(canvas, &copy->mask, bbox->left, bbox->top);
-    set_op(canvas, copy->rop_decriptor);
+    set_op(canvas, copy->rop_descriptor);
 
     //todo: optimize get_image (use ogl conversion + remove unnecessary copy of 32bpp)
     surface = canvas_get_image(&canvas->base, copy->src_bitmap, FALSE);
@@ -438,7 +438,7 @@ static void gl_canvas_draw_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, Spi
 
     set_clip(canvas, bbox, clip);
     set_mask(canvas, &blend->mask, bbox->left, bbox->top);
-    set_op(canvas, blend->rop_decriptor);
+    set_op(canvas, blend->rop_descriptor);
 
     surface = canvas_get_image(&canvas->base, blend->src_bitmap, FALSE);
     SET_GLC_RECT(&dest, bbox);

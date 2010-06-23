@@ -39,6 +39,26 @@ static void red_get_opaque_ptr(RedMemSlotInfo *slots, int group_id,
    red->mask           = qxl->mask;
 }
 
+static void red_get_copy_ptr(RedMemSlotInfo *slots, int group_id,
+                             SpiceCopy *red, QXLCopy *qxl)
+{
+   red->src_bitmap      = qxl->src_bitmap;
+   red->src_area        = qxl->src_area;
+   red->rop_descriptor  = qxl->rop_descriptor;
+   red->scale_mode      = qxl->scale_mode;
+   red->mask            = qxl->mask;
+}
+
+static void red_get_blend_ptr(RedMemSlotInfo *slots, int group_id,
+                             SpiceBlend *red, QXLBlend *qxl)
+{
+   red->src_bitmap      = qxl->src_bitmap;
+   red->src_area        = qxl->src_area;
+   red->rop_descriptor  = qxl->rop_descriptor;
+   red->scale_mode      = qxl->scale_mode;
+   red->mask            = qxl->mask;
+}
+
 static void red_get_alpha_blend_ptr(RedMemSlotInfo *slots, int group_id,
                                     SpiceAlphaBlnd *red, QXLAlphaBlnd *qxl)
 {
@@ -88,10 +108,10 @@ void red_get_drawable(RedMemSlotInfo *slots, int group_id,
         red->u.blackness = qxl->u.blackness;
         break;
     case QXL_DRAW_BLEND:
-        red->u.blend = qxl->u.blend;
+        red_get_blend_ptr(slots, group_id, &red->u.blend, &qxl->u.blend);
         break;
     case QXL_DRAW_COPY:
-        red->u.copy = qxl->u.copy;
+        red_get_copy_ptr(slots, group_id, &red->u.copy, &qxl->u.copy);
         break;
     case QXL_COPY_BITS:
         red->u.copy_bits = qxl->u.copy_bits;
@@ -151,10 +171,10 @@ void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
         red->u.blackness = qxl->u.blackness;
         break;
     case QXL_DRAW_BLEND:
-        red->u.blend = qxl->u.blend;
+        red_get_blend_ptr(slots, group_id, &red->u.blend, &qxl->u.blend);
         break;
     case QXL_DRAW_COPY:
-        red->u.copy = qxl->u.copy;
+        red_get_copy_ptr(slots, group_id, &red->u.copy, &qxl->u.copy);
         break;
     case QXL_COPY_BITS:
         red->u.copy_bits = qxl->u.copy_bits;
