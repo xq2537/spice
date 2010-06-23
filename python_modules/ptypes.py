@@ -426,6 +426,7 @@ class PointerType(Type):
         Type.__init__(self)
         self.name = None
         self.target_type = target_type
+        self.pointer_size = 8
 
     def __str__(self):
         return "%s*" % (str(self.target_type))
@@ -434,8 +435,8 @@ class PointerType(Type):
         self.target_type = self.target_type.resolve()
         return self
 
-    def get_fixed_size(self):
-        return 8 # offsets are 64bit
+    def set_ptr_size(self, new_size):
+        self.pointer_size = new_size
 
     def is_fixed_nw_size(self):
         return True
@@ -444,10 +445,13 @@ class PointerType(Type):
         return True
 
     def primitive_type(self):
-        return "uint64"
+        if self.pointer_size == 4:
+            return "uint32"
+        else:
+            return "uint64"
 
     def get_fixed_nw_size(self):
-        return 8
+        return self.pointer_size
 
     def c_type(self):
         return "SPICE_ADDRESS"
@@ -504,6 +508,8 @@ class Member(Containee):
         self.container = container
         self.member_type = self.member_type.resolve()
         self.member_type.register()
+        if self.has_attr("ptr32") and self.member_type.is_pointer():
+            self.member_type.set_ptr_size(4)
         return self
 
     def is_primitive(self):
