@@ -172,7 +172,7 @@ void Migrate::run()
     try {
         conn_type = _client.get_connection_options(SPICE_CHANNEL_MAIN);
         RedPeer::ConnectionOptions con_opt(conn_type, _port, _sport,
-					   _client.get_peer_major(),
+					   _client.get_protocol(),
 					   _auth_options, _con_ciphers);
         MigChannels::iterator iter = _channels.begin();
         connection_id = _client.get_connection_id();
@@ -181,7 +181,7 @@ void Migrate::run()
         for (++iter; iter != _channels.end(); ++iter) {
             conn_type = _client.get_connection_options((*iter)->get_type());
             con_opt = RedPeer::ConnectionOptions(conn_type, _port, _sport,
-						 _client.get_peer_major(),
+						 _client.get_protocol(),
                                                  _auth_options, _con_ciphers);
             connect_one(**iter, con_opt, connection_id);
         }

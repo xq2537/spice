@@ -56,17 +56,20 @@ void RedChannelBase::link(uint32_t connection_id, const std::string& password,
     BIO *bioKey;
     RSA *rsa;
     uint8_t *buffer, *p;
+    uint32_t expected_major;
 
     header.magic = SPICE_MAGIC;
     header.size = sizeof(link_mess);
     if (protocol == 1) {
         /* protocol 1 == major 1, old 0.4 protocol, last active minor */
-        header.major_version = 1;
+        expected_major = header.major_version = 1;
         header.minor_version = 3;
     } else if (protocol == 2) {
         /* protocol 2 == current */
-        header.major_version = SPICE_VERSION_MAJOR;
+        expected_major = header.major_version = SPICE_VERSION_MAJOR;
         header.minor_version = SPICE_VERSION_MINOR;
+    } else {
+        THROW("unsupported protocol version specified");
     }
     link_mess.connection_id = connection_id;
     link_mess.channel_type = _type;
@@ -105,10 +108,10 @@ void RedChannelBase::link(uint32_t connection_id, const std::string& password,
         THROW_ERR(SPICEC_ERROR_CODE_CONNECT_FAILED, "bad magic");
     }
 
-    if (header.major_version != protocol) {
+    if (header.major_version != expected_major) {
         THROW_ERR(SPICEC_ERROR_CODE_VERSION_MISMATCH,
                   "version mismatch: expect %u got %u",
-                  protocol,
+                  expected_major,
                   header.major_version);
     }
 
@@ -447,7 +450,12 @@ void RedChannel::run()
                                         _client.get_password().c_str());
                 /* If automatic protocol, remember the first connect protocol type */
                 if (_client.get_protocol() == 0) {
-                    _client.set_protocol(get_peer_major());
+                    if (get_peer_major() == 1) {
+                        _client.set_protocol(1);
+                    } else {
+                        /* Major is 2 or unstable high value, use 2 */
+                        _client.set_protocol(2);
+                    }
                 }
                 /* Initialize when we know the remote major version */
                 if (_client.get_peer_major() == 1) {
