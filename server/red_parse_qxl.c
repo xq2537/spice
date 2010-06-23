@@ -106,6 +106,17 @@ static void red_get_stroke_ptr(RedMemSlotInfo *slots, int group_id,
    red->back_mode  = qxl->back_mode;
 }
 
+static void red_get_text_ptr(RedMemSlotInfo *slots, int group_id,
+                               SpiceText *red, QXLText *qxl)
+{
+   red->str        = qxl->str;
+   red->back_area  = qxl->back_area;
+   red->fore_brush = qxl->fore_brush;
+   red->back_brush = qxl->back_brush;
+   red->fore_mode  = qxl->fore_mode;
+   red->back_mode  = qxl->back_mode;
+}
+
 void red_get_drawable(RedMemSlotInfo *slots, int group_id,
                       RedDrawable *red, SPICE_ADDRESS addr)
 {
@@ -164,7 +175,7 @@ void red_get_drawable(RedMemSlotInfo *slots, int group_id,
         red_get_stroke_ptr(slots, group_id, &red->u.stroke, &qxl->u.stroke);
         break;
     case QXL_DRAW_TEXT:
-        red->u.text = qxl->u.text;
+        red_get_text_ptr(slots, group_id, &red->u.text, &qxl->u.text);
         break;
     case QXL_DRAW_TRANSPARENT:
         red_get_transparent_ptr(slots, group_id,
@@ -228,7 +239,7 @@ void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
         red_get_stroke_ptr(slots, group_id, &red->u.stroke, &qxl->u.stroke);
         break;
     case QXL_DRAW_TEXT:
-        red->u.text = qxl->u.text;
+        red_get_text_ptr(slots, group_id, &red->u.text, &qxl->u.text);
         break;
     case QXL_DRAW_TRANSPARENT:
         red_get_transparent_ptr(slots, group_id,
