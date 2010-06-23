@@ -93,6 +93,9 @@ void red_get_drawable(RedMemSlotInfo *slots, int group_id,
     case QXL_DRAW_COPY:
         red->u.copy = qxl->u.copy;
         break;
+    case QXL_COPY_BITS:
+        red->u.copy_bits = qxl->u.copy_bits;
+        break;
     case QXL_DRAW_FILL:
         red_get_fill_ptr(slots, group_id, &red->u.fill, &qxl->u.fill);
         break;
@@ -152,6 +155,9 @@ void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
         break;
     case QXL_DRAW_COPY:
         red->u.copy = qxl->u.copy;
+        break;
+    case QXL_COPY_BITS:
+        red->u.copy_bits = qxl->u.copy_bits;
         break;
     case QXL_DRAW_FILL:
         red_get_fill_ptr(slots, group_id, &red->u.fill, &qxl->u.fill);
