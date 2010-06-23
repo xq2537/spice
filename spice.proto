@@ -412,9 +412,7 @@ struct Path {
 struct Clip {
     clip_type type;
     switch (type) {
-    case NONE:
-        uint64 data @zero;
-      case RECTS:
+    case RECTS:
         ClipRects *data @outvar(cliprects);
     case PATH:
         Path *data @outvar(clippath);
