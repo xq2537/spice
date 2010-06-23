@@ -168,11 +168,11 @@ channel MainChannel : BaseChannel {
 	uint16 sport;
     	uint32 host_offset;
 	uint32 host_size;
-	pubkey_type pub_key_type @minor(2);
-	uint32 pub_key_offset @minor(2);
-	uint32 pub_key_size @minor(2);
+	pubkey_type pub_key_type;
+	uint32 pub_key_offset;
+	uint32 pub_key_size;
 	uint8 host_data[host_size] @end @ctype(uint8_t) @zero_terminated @nomarshal;
-	uint8 pub_key_data[pub_key_size] @minor(2) @end @ctype(uint8_t) @zero_terminated @nomarshal;
+	uint8 pub_key_data[pub_key_size] @end @ctype(uint8_t) @zero_terminated @nomarshal;
     } @ctype(SpiceMsgMainMigrationBegin) migrate_begin = 101;
 
     Empty migrate_cancel;
