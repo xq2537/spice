@@ -117,6 +117,24 @@ static void red_get_text_ptr(RedMemSlotInfo *slots, int group_id,
    red->back_mode  = qxl->back_mode;
 }
 
+static void red_get_whiteness_ptr(RedMemSlotInfo *slots, int group_id,
+                                  SpiceWhiteness *red, QXLWhiteness *qxl)
+{
+    red->mask = qxl->mask;
+}
+
+static void red_get_blackness_ptr(RedMemSlotInfo *slots, int group_id,
+                                  SpiceBlackness *red, QXLBlackness *qxl)
+{
+    red->mask = qxl->mask;
+}
+
+static void red_get_invers_ptr(RedMemSlotInfo *slots, int group_id,
+                               SpiceInvers *red, QXLInvers *qxl)
+{
+    red->mask = qxl->mask;
+}
+
 void red_get_drawable(RedMemSlotInfo *slots, int group_id,
                       RedDrawable *red, SPICE_ADDRESS addr)
 {
@@ -146,7 +164,7 @@ void red_get_drawable(RedMemSlotInfo *slots, int group_id,
                                 &red->u.alpha_blend, &qxl->u.alpha_blend);
         break;
     case QXL_DRAW_BLACKNESS:
-        red->u.blackness = qxl->u.blackness;
+        red_get_blackness_ptr(slots, group_id, &red->u.blackness, &qxl->u.blackness);
         break;
     case QXL_DRAW_BLEND:
         red_get_blend_ptr(slots, group_id, &red->u.blend, &qxl->u.blend);
@@ -164,7 +182,7 @@ void red_get_drawable(RedMemSlotInfo *slots, int group_id,
         red_get_opaque_ptr(slots, group_id, &red->u.opaque, &qxl->u.opaque);
         break;
     case QXL_DRAW_INVERS:
-        red->u.invers = qxl->u.invers;
+        red_get_invers_ptr(slots, group_id, &red->u.invers, &qxl->u.invers);
         break;
     case QXL_DRAW_NOP:
         break;
@@ -182,7 +200,7 @@ void red_get_drawable(RedMemSlotInfo *slots, int group_id,
                                 &red->u.transparent, &qxl->u.transparent);
         break;
     case QXL_DRAW_WHITENESS:
-        red->u.whiteness = qxl->u.whiteness;
+        red_get_whiteness_ptr(slots, group_id, &red->u.whiteness, &qxl->u.whiteness);
         break;
     default:
         red_error("unknown type");
@@ -210,7 +228,7 @@ void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
                                        &red->u.alpha_blend, &qxl->u.alpha_blend);
         break;
     case QXL_DRAW_BLACKNESS:
-        red->u.blackness = qxl->u.blackness;
+        red_get_blackness_ptr(slots, group_id, &red->u.blackness, &qxl->u.blackness);
         break;
     case QXL_DRAW_BLEND:
         red_get_blend_ptr(slots, group_id, &red->u.blend, &qxl->u.blend);
@@ -228,7 +246,7 @@ void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
         red_get_opaque_ptr(slots, group_id, &red->u.opaque, &qxl->u.opaque);
         break;
     case QXL_DRAW_INVERS:
-        red->u.invers = qxl->u.invers;
+        red_get_invers_ptr(slots, group_id, &red->u.invers, &qxl->u.invers);
         break;
     case QXL_DRAW_NOP:
         break;
@@ -246,7 +264,7 @@ void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
                                 &red->u.transparent, &qxl->u.transparent);
         break;
     case QXL_DRAW_WHITENESS:
-        red->u.whiteness = qxl->u.whiteness;
+        red_get_whiteness_ptr(slots, group_id, &red->u.whiteness, &qxl->u.whiteness);
         break;
     default:
         red_error("unknown type");
