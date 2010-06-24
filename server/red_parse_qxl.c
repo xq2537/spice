@@ -122,11 +122,17 @@ static void red_get_rop3_ptr(RedMemSlotInfo *slots, int group_id,
 static void red_get_stroke_ptr(RedMemSlotInfo *slots, int group_id,
                                SpiceStroke *red, QXLStroke *qxl)
 {
-   red->path       = qxl->path;
-   red->attr       = qxl->attr;
+   red->path             = qxl->path;
+   red->attr.flags       = qxl->attr.flags;
+   red->attr.join_style  = qxl->attr.join_style;
+   red->attr.end_style   = qxl->attr.end_style;
+   red->attr.style_nseg  = qxl->attr.style_nseg;
+   red->attr.width       = qxl->attr.width;
+   red->attr.miter_limit = qxl->attr.miter_limit;
+   red->attr.style       = qxl->attr.style;
    red_get_brush_ptr(slots, group_id, &red->brush, &qxl->brush);
-   red->fore_mode  = qxl->fore_mode;
-   red->back_mode  = qxl->back_mode;
+   red->fore_mode        = qxl->fore_mode;
+   red->back_mode        = qxl->back_mode;
 }
 
 static void red_get_text_ptr(RedMemSlotInfo *slots, int group_id,
