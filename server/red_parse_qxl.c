@@ -352,3 +352,31 @@ void red_put_message(RedMessage *red)
     /* nothing yet */
 }
 
+void red_get_surface_cmd(RedMemSlotInfo *slots, int group_id,
+                         RedSurfaceCmd *red, SPICE_ADDRESS addr)
+{
+    QXLSurfaceCmd *qxl;
+
+    qxl = (QXLSurfaceCmd *)get_virt(slots, addr, sizeof(*qxl), group_id);
+    red->release_info     = &qxl->release_info;
+
+    red->surface_id = qxl->surface_id;
+    red->type       = qxl->type;
+    red->flags      = qxl->flags;
+
+    switch (red->type) {
+    case QXL_SURFACE_CMD_CREATE:
+        red->u.surface_create.format = qxl->u.surface_create.format;
+        red->u.surface_create.width  = qxl->u.surface_create.width;
+        red->u.surface_create.height = qxl->u.surface_create.height;
+        red->u.surface_create.stride = qxl->u.surface_create.stride;
+        red->u.surface_create.data   = qxl->u.surface_create.data;
+        break;
+    }
+}
+
+void red_put_surface_cmd(RedSurfaceCmd *red)
+{
+    /* nothing yet */
+}
+

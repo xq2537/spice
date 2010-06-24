@@ -3940,7 +3940,7 @@ static inline void red_create_surface(RedWorker *worker, uint32_t surface_id,uin
                                       uint32_t height, int32_t stride, uint32_t format,
                                       void *line_0, int data_is_valid);
 
-static inline void red_process_surface(RedWorker *worker, QXLSurfaceCmd *surface, uint32_t group_id, int data_is_valid)
+static inline void red_process_surface(RedWorker *worker, RedSurfaceCmd *surface, uint32_t group_id, int data_is_valid)
 {
     int surface_id;
     RedSurface *red_surface;
@@ -3964,12 +3964,12 @@ static inline void red_process_surface(RedWorker *worker, QXLSurfaceCmd *surface
         red_create_surface(worker, surface_id, surface->u.surface_create.width,
                            height, stride, surface->u.surface_create.format, data,
                            data_is_valid);
-        set_surface_release_info(worker, surface_id, 1, &surface->release_info, group_id);
+        set_surface_release_info(worker, surface_id, 1, surface->release_info, group_id);
         break;
     }
     case QXL_SURFACE_CMD_DESTROY:
         PANIC_ON(!red_surface->context.canvas);
-        set_surface_release_info(worker, surface_id, 0, &surface->release_info, group_id);
+        set_surface_release_info(worker, surface_id, 0, surface->release_info, group_id);
         red_handle_depends_on_target_surface(worker, surface_id);
         red_current_clear(worker, surface_id);
         red_clear_surface_glz_drawables(worker, surface_id);
@@ -3979,6 +3979,8 @@ static inline void red_process_surface(RedWorker *worker, QXLSurfaceCmd *surface
     default:
             red_error("unknown surface command");
     };
+    red_put_surface_cmd(surface);
+    free(surface);
 }
 
 static void localize_path(RedWorker *worker, QXLPHYSICAL *in_path, uint32_t group_id)
@@ -5073,8 +5075,10 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size)
             break;
         }
         case QXL_CMD_SURFACE: {
-            QXLSurfaceCmd *surface = (QXLSurfaceCmd *)get_virt(&worker->mem_slots, ext_cmd.cmd.data,
-                                                               sizeof(QXLSurfaceCmd), ext_cmd.group_id);
+            RedSurfaceCmd *surface = spice_new0(RedSurfaceCmd, 1);
+
+            red_get_surface_cmd(&worker->mem_slots, ext_cmd.group_id,
+                                surface, ext_cmd.cmd.data);
             red_process_surface(worker, surface, ext_cmd.group_id, 0);
             break;
         }
@@ -11269,7 +11273,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         uint32_t count;
         QXLCommandExt ext;
         QXLCursorCmd *cursor_cmd;
-        QXLSurfaceCmd *surface_cmd;
+        RedSurfaceCmd *surface_cmd;
 
         red_printf("loadvm_commands");
         receive_data(worker->channel, &count, sizeof(uint32_t));
@@ -11284,10 +11288,9 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
                 qxl_process_cursor(worker, cursor_cmd, ext.group_id);
                 break;
             case QXL_CMD_SURFACE:
-                surface_cmd = (QXLSurfaceCmd *)get_virt(&worker->mem_slots,
-                                                        ext.cmd.data,
-                                                        sizeof(QXLSurfaceCmd),
-                                                        ext.group_id);
+                surface_cmd = spice_new0(RedSurfaceCmd, 1);
+                red_get_surface_cmd(&worker->mem_slots, ext.group_id,
+                                    surface_cmd, ext.cmd.data);
                 red_process_surface(worker, surface_cmd, ext.group_id, 1);
                 break;
             default:

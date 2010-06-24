@@ -65,6 +65,24 @@ typedef struct SPICE_ATTR_PACKED RedMessage {
     uint8_t *data;
 } RedMessage;
 
+typedef struct SPICE_ATTR_PACKED RedSurfaceCreate {
+    uint32_t format;
+    uint32_t width;
+    uint32_t height;
+    int32_t stride;
+    SPICE_ADDRESS data;
+} RedSurfaceCreate;
+
+typedef struct SPICE_ATTR_PACKED RedSurfaceCmd {
+    QXLReleaseInfo *release_info;
+    uint32_t surface_id;
+    uint8_t type;
+    uint32_t flags;
+    union {
+        RedSurfaceCreate surface_create;
+    } u;
+} RedSurfaceCmd;
+
 void red_get_drawable(RedMemSlotInfo *slots, int group_id,
                       RedDrawable *red, SPICE_ADDRESS addr);
 void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
@@ -78,5 +96,9 @@ void red_put_update_cmd(RedUpdateCmd *red);
 void red_get_message(RedMemSlotInfo *slots, int group_id,
                      RedMessage *red, SPICE_ADDRESS addr);
 void red_put_message(RedMessage *red);
+
+void red_get_surface_cmd(RedMemSlotInfo *slots, int group_id,
+                         RedSurfaceCmd *red, SPICE_ADDRESS addr);
+void red_put_surface_cmd(RedSurfaceCmd *red);
 
 #endif
