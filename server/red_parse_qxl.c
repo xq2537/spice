@@ -164,6 +164,13 @@ static void red_get_invers_ptr(RedMemSlotInfo *slots, int group_id,
     red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
 }
 
+static void red_get_clip_ptr(RedMemSlotInfo *slots, int group_id,
+                             SpiceClip *red, QXLClip *qxl)
+{
+    red->type = qxl->type;
+    red->data = qxl->data;
+}
+
 void red_get_drawable(RedMemSlotInfo *slots, int group_id,
                       RedDrawable *red, SPICE_ADDRESS addr)
 {
@@ -174,7 +181,7 @@ void red_get_drawable(RedMemSlotInfo *slots, int group_id,
     red->release_info     = &qxl->release_info;
 
     red->bbox             = qxl->bbox;
-    red->clip             = qxl->clip;
+    red_get_clip_ptr(slots, group_id, &red->clip, &qxl->clip);
     red->effect           = qxl->effect;
     red->mm_time          = qxl->mm_time;
     red->self_bitmap      = qxl->self_bitmap;
@@ -246,7 +253,7 @@ void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
     red->release_info     = &qxl->release_info;
 
     red->bbox             = qxl->bbox;
-    red->clip             = qxl->clip;
+    red_get_clip_ptr(slots, group_id, &red->clip, &qxl->clip);
     red->effect           = qxl->effect;
     red->mm_time          = qxl->mm_time;
 
