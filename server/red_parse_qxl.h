@@ -67,6 +67,14 @@ typedef struct SPICE_ATTR_PACKED RedMessage {
     uint8_t *data;
 } RedMessage;
 
+typedef struct SPICE_ATTR_PACKED RedDataChunk RedDataChunk;
+struct SPICE_ATTR_PACKED RedDataChunk {
+    uint32_t data_size;
+    RedDataChunk *prev_chunk;
+    RedDataChunk *next_chunk;
+    uint8_t *data;
+};
+
 typedef struct SPICE_ATTR_PACKED RedSurfaceCreate {
     uint32_t format;
     uint32_t width;

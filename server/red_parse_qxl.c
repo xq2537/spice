@@ -20,6 +20,50 @@
 #include "red_memslots.h"
 #include "red_parse_qxl.h"
 
+static size_t red_get_data_chunks(RedMemSlotInfo *slots, int group_id,
+                                RedDataChunk *red, SPICE_ADDRESS addr)
+{
+    QXLDataChunk *qxl;
+    RedDataChunk *red_prev;
+    size_t data_size = 0;
+
+    qxl = (QXLDataChunk*)get_virt(slots, addr, sizeof(*qxl), group_id);
+    red->data_size = qxl->data_size;
+    data_size += red->data_size;
+    validate_virt(slots, (intptr_t)qxl->data, get_memslot_id(slots, addr),
+                  red->data_size, group_id);
+    red->data = qxl->data;
+    red->prev_chunk = NULL;
+
+    while (qxl->next_chunk) {
+        red_prev = red;
+        red = spice_new(RedDataChunk, 1);
+        qxl = (QXLDataChunk*)get_virt(slots, qxl->next_chunk, sizeof(*qxl), group_id);
+        red->data_size = qxl->data_size;
+        data_size += red->data_size;
+        validate_virt(slots, (intptr_t)qxl->data, get_memslot_id(slots, addr),
+                      red->data_size, group_id);
+        red->data = qxl->data;
+        red->prev_chunk = red_prev;
+        red_prev->next_chunk = red;
+    }
+
+    red->next_chunk = NULL;
+    return data_size;
+}
+
+static void red_put_data_chunks(RedDataChunk *red)
+{
+    RedDataChunk *tmp;
+
+    red = red->next_chunk;
+    while (red) {
+        tmp = red;
+        red = red->next_chunk;
+        free(tmp);
+    }
+}
+
 static void red_get_point_ptr(SpicePoint *red, QXLPoint *qxl)
 {
     red->x = qxl->x;
