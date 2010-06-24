@@ -29,7 +29,8 @@ static void red_get_brush_ptr(RedMemSlotInfo *slots, int group_id,
         red->u.color = qxl->u.color;
         break;
     case SPICE_BRUSH_TYPE_PATTERN:
-        red->u.pattern = qxl->u.pattern;
+        red->u.pattern.pat = qxl->u.pattern.pat;
+        red->u.pattern.pos = qxl->u.pattern.pos;
         break;
     }
 }
