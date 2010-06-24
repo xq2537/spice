@@ -380,3 +380,33 @@ void red_put_surface_cmd(RedSurfaceCmd *red)
     /* nothing yet */
 }
 
+void red_get_cursor_cmd(RedMemSlotInfo *slots, int group_id,
+                        RedCursorCmd *red, SPICE_ADDRESS addr)
+{
+    QXLCursorCmd *qxl;
+
+    qxl = (QXLCursorCmd *)get_virt(slots, addr, sizeof(*qxl), group_id);
+    red->release_info     = &qxl->release_info;
+
+    red->type = qxl->type;
+    switch (red->type) {
+    case QXL_CURSOR_SET:
+        red->u.set.position = qxl->u.set.position;
+        red->u.set.visible  = qxl->u.set.visible;
+        red->u.set.shape    = qxl->u.set.shape;
+        break;
+    case QXL_CURSOR_MOVE:
+        red->u.position = qxl->u.position;
+        break;
+    case QXL_CURSOR_TRAIL:
+        red->u.trail.length    = qxl->u.trail.length;
+        red->u.trail.frequency = qxl->u.trail.frequency;
+        break;
+    }
+}
+
+void red_put_cursor_cmd(RedCursorCmd *red)
+{
+    /* nothing yet */
+}
+

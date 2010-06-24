@@ -83,6 +83,24 @@ typedef struct SPICE_ATTR_PACKED RedSurfaceCmd {
     } u;
 } RedSurfaceCmd;
 
+typedef struct SPICE_ATTR_PACKED RedCursorCmd {
+    QXLReleaseInfo *release_info;
+    uint8_t type;
+    union {
+        struct SPICE_ATTR_PACKED {
+            SpicePoint16 position;
+            uint8_t visible;
+            SPICE_ADDRESS shape;
+        } set;
+        struct SPICE_ATTR_PACKED {
+            uint16_t length;
+            uint16_t frequency;
+        } trail;
+        SpicePoint16 position;
+    } u;
+    uint8_t *device_data;
+} RedCursorCmd;
+
 void red_get_drawable(RedMemSlotInfo *slots, int group_id,
                       RedDrawable *red, SPICE_ADDRESS addr);
 void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
@@ -100,5 +118,9 @@ void red_put_message(RedMessage *red);
 void red_get_surface_cmd(RedMemSlotInfo *slots, int group_id,
                          RedSurfaceCmd *red, SPICE_ADDRESS addr);
 void red_put_surface_cmd(RedSurfaceCmd *red);
+
+void red_get_cursor_cmd(RedMemSlotInfo *slots, int group_id,
+                        RedCursorCmd *red, SPICE_ADDRESS addr);
+void red_put_cursor_cmd(RedCursorCmd *red);
 
 #endif

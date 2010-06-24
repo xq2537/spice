@@ -316,7 +316,7 @@ typedef struct CursorItem {
     uint32_t group_id;
     int refs;
     int type;
-    QXLCursorCmd *qxl_cursor;
+    RedCursorCmd *red_cursor;
 } CursorItem;
 
 typedef struct LocalCursor {
@@ -4862,18 +4862,20 @@ static void red_release_cursor(RedWorker *worker, CursorItem *cursor)
 {
     if (!--cursor->refs) {
         QXLReleaseInfoExt release_info_ext;
-        QXLCursorCmd *cursor_cmd;
+        RedCursorCmd *cursor_cmd;
 
         if (cursor->type == CURSOR_TYPE_LOCAL) {
             free(cursor);
             return;
         }
 
-        cursor_cmd = cursor->qxl_cursor;
+        cursor_cmd = cursor->red_cursor;
         release_info_ext.group_id = cursor->group_id;
-        release_info_ext.info = &cursor_cmd->release_info;
+        release_info_ext.info = cursor_cmd->release_info;
         worker->qxl->st->qif->release_resource(worker->qxl, release_info_ext);
         free_cursor_item(worker, cursor);
+        red_put_cursor_cmd(cursor_cmd);
+        free(cursor_cmd);
     }
 }
 
@@ -4913,7 +4915,7 @@ static void cursor_items_init(RedWorker *worker)
     }
 }
 
-static CursorItem *get_cursor_item(RedWorker *worker, QXLCursorCmd *cmd, uint32_t group_id)
+static CursorItem *get_cursor_item(RedWorker *worker, RedCursorCmd *cmd, uint32_t group_id)
 {
     CursorItem *cursor_item;
 
@@ -4923,12 +4925,12 @@ static CursorItem *get_cursor_item(RedWorker *worker, QXLCursorCmd *cmd, uint32_
     red_pipe_item_init(&cursor_item->pipe_data, PIPE_ITEM_TYPE_CURSOR);
     cursor_item->type = CURSOR_TYPE_INVALID;
     cursor_item->group_id = group_id;
-    cursor_item->qxl_cursor = cmd;
+    cursor_item->red_cursor = cmd;
 
     return cursor_item;
 }
 
-void qxl_process_cursor(RedWorker *worker, QXLCursorCmd *cursor_cmd, uint32_t group_id)
+void qxl_process_cursor(RedWorker *worker, RedCursorCmd *cursor_cmd, uint32_t group_id)
 {
     CursorItem *item = get_cursor_item(worker, cursor_cmd, group_id);
     int cursor_show = FALSE;
@@ -4994,10 +4996,11 @@ static int red_process_cursor(RedWorker *worker, uint32_t max_pipe_size)
         worker->repoll_cursor_ring = 0;
         switch (ext_cmd.cmd.type) {
         case QXL_CMD_CURSOR: {
-            QXLCursorCmd *cursor_cmd = (QXLCursorCmd *)get_virt(&worker->mem_slots, ext_cmd.cmd.data,
-                                                                sizeof(QXLCursorCmd),
-                                                                ext_cmd.group_id);
-            qxl_process_cursor(worker, cursor_cmd, ext_cmd.group_id);
+            RedCursorCmd *cursor = spice_new0(RedCursorCmd, 1);
+
+            red_get_cursor_cmd(&worker->mem_slots, ext_cmd.group_id,
+                               cursor, ext_cmd.cmd.data);
+            qxl_process_cursor(worker, cursor, ext_cmd.group_id);
             break;
         }
         default:
@@ -7183,10 +7186,10 @@ static void fill_cursor(CursorChannel *cursor_channel, SpiceCursor *red_cursor, 
     }
 
     if (cursor->type == CURSOR_TYPE_DEV) {
-        QXLCursorCmd *cursor_cmd;
+        RedCursorCmd *cursor_cmd;
         QXLCursor *qxl_cursor;
 
-        cursor_cmd = cursor->qxl_cursor;
+        cursor_cmd = cursor->red_cursor;
         qxl_cursor = (QXLCursor *)get_virt(&channel->worker->mem_slots, cursor_cmd->u.set.shape,
                                            sizeof(QXLCursor), cursor->group_id);
         red_cursor->flags = 0;
@@ -9414,7 +9417,7 @@ static void cursor_channel_send_migrate(CursorChannel *cursor_channel)
 static void red_send_cursor(CursorChannel *cursor_channel, CursorItem *cursor)
 {
     RedChannel *channel;
-    QXLCursorCmd *cmd;
+    RedCursorCmd *cmd;
     SpiceMarshaller *m;
 
     ASSERT(cursor_channel);
@@ -9422,7 +9425,7 @@ static void red_send_cursor(CursorChannel *cursor_channel, CursorItem *cursor)
     channel = &cursor_channel->base;
     m = channel->send_data.marshaller;
 
-    cmd = cursor->qxl_cursor;
+    cmd = cursor->red_cursor;
     switch (cmd->type) {
     case QXL_CURSOR_MOVE:
         {
@@ -10785,7 +10788,7 @@ static LocalCursor *_new_local_cursor(SpiceCursorHeader *header, int data_size, 
 
 static void red_cursor_flush(RedWorker *worker)
 {
-    QXLCursorCmd *cursor_cmd;
+    RedCursorCmd *cursor_cmd;
     QXLCursor *qxl_cursor;
     LocalCursor *local;
     uint32_t data_size;
@@ -10798,7 +10801,7 @@ static void red_cursor_flush(RedWorker *worker)
 
     ASSERT(worker->cursor->type == CURSOR_TYPE_DEV);
 
-    cursor_cmd = worker->cursor->qxl_cursor;
+    cursor_cmd = worker->cursor->red_cursor;
     ASSERT(cursor_cmd->type == QXL_CURSOR_SET);
     qxl_cursor = (QXLCursor *)get_virt(&worker->mem_slots, cursor_cmd->u.set.shape, sizeof(QXLCursor),
                                        worker->cursor->group_id);
@@ -11272,7 +11275,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
     case RED_WORKER_MESSAGE_LOADVM_COMMANDS: {
         uint32_t count;
         QXLCommandExt ext;
-        QXLCursorCmd *cursor_cmd;
+        RedCursorCmd *cursor_cmd;
         RedSurfaceCmd *surface_cmd;
 
         red_printf("loadvm_commands");
@@ -11281,10 +11284,9 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
             receive_data(worker->channel, &ext, sizeof(QXLCommandExt));
             switch (ext.cmd.type) {
             case QXL_CMD_CURSOR:
-                cursor_cmd = (QXLCursorCmd *)get_virt(&worker->mem_slots,
-                                                      ext.cmd.data,
-                                                      sizeof(QXLCursorCmd),
-                                                      ext.group_id);
+                cursor_cmd = spice_new0(RedCursorCmd, 1);
+                red_get_cursor_cmd(&worker->mem_slots, ext.group_id,
+                                   cursor_cmd, ext.cmd.data);
                 qxl_process_cursor(worker, cursor_cmd, ext.group_id);
                 break;
             case QXL_CMD_SURFACE:
