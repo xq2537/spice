@@ -103,6 +103,8 @@ typedef struct SPICE_ATTR_PACKED RedCursorCmd {
     uint8_t *device_data;
 } RedCursorCmd;
 
+void red_get_rect_ptr(SpiceRect *red, QXLRect *qxl);
+
 void red_get_drawable(RedMemSlotInfo *slots, int group_id,
                       RedDrawable *red, SPICE_ADDRESS addr);
 void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,

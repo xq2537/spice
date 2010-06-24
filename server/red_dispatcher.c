@@ -32,6 +32,7 @@
 #include "gl_canvas.h"
 #include "reds.h"
 #include "red_dispatcher.h"
+#include "red_parse_qxl.h"
 
 static int num_active_workers = 0;
 
@@ -200,11 +201,16 @@ static void update_client_mouse_allowed()
 }
 
 static void qxl_worker_update_area(QXLWorker *qxl_worker, uint32_t surface_id,
-                                   SpiceRect *area, SpiceRect *dirty_rects,
+                                   QXLRect *qxl_area, QXLRect *qxl_dirty_rects,
                                    uint32_t num_dirty_rects, uint32_t clear_dirty_region)
 {
     RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
     RedWorkerMessage message = RED_WORKER_MESSAGE_UPDATE;
+    SpiceRect *dirty_rects = spice_new0(SpiceRect, num_dirty_rects);
+    SpiceRect *area = spice_new0(SpiceRect, 1);
+    int i;
+
+    red_get_rect_ptr(area, qxl_area);
 
     write_message(dispatcher->channel, &message);
     send_data(dispatcher->channel, &surface_id, sizeof(uint32_t));
@@ -214,6 +220,16 @@ static void qxl_worker_update_area(QXLWorker *qxl_worker, uint32_t surface_id,
     send_data(dispatcher->channel, &clear_dirty_region, sizeof(uint32_t));
     read_message(dispatcher->channel, &message);
     ASSERT(message == RED_WORKER_MESSAGE_READY);
+
+    for (i = 0; i < num_dirty_rects; i++) {
+        qxl_dirty_rects[i].top    = dirty_rects[i].top;
+        qxl_dirty_rects[i].left   = dirty_rects[i].left;
+        qxl_dirty_rects[i].bottom = dirty_rects[i].bottom;
+        qxl_dirty_rects[i].right  = dirty_rects[i].right;
+    }
+
+    free(dirty_rects);
+    free(area);
 }
 
 static void qxl_worker_add_memslot(QXLWorker *qxl_worker, QXLDevMemSlot *mem_slot)

@@ -32,6 +32,14 @@ static void red_get_point16_ptr(SpicePoint16 *red, QXLPoint16 *qxl)
     red->y = qxl->y;
 }
 
+void red_get_rect_ptr(SpiceRect *red, QXLRect *qxl)
+{
+    red->top    = qxl->top;
+    red->left   = qxl->left;
+    red->bottom = qxl->bottom;
+    red->right  = qxl->right;
+}
+
 static void red_get_brush_ptr(RedMemSlotInfo *slots, int group_id,
                               SpiceBrush *red, QXLBrush *qxl)
 {
@@ -67,7 +75,7 @@ static void red_get_opaque_ptr(RedMemSlotInfo *slots, int group_id,
                                SpiceOpaque *red, QXLOpaque *qxl)
 {
    red->src_bitmap     = qxl->src_bitmap;
-   red->src_area       = qxl->src_area;
+   red_get_rect_ptr(&red->src_area, &qxl->src_area);
    red_get_brush_ptr(slots, group_id, &red->brush, &qxl->brush);
    red->rop_descriptor = qxl->rop_descriptor;
    red->scale_mode     = qxl->scale_mode;
@@ -78,7 +86,7 @@ static void red_get_copy_ptr(RedMemSlotInfo *slots, int group_id,
                              SpiceCopy *red, QXLCopy *qxl)
 {
    red->src_bitmap      = qxl->src_bitmap;
-   red->src_area        = qxl->src_area;
+   red_get_rect_ptr(&red->src_area, &qxl->src_area);
    red->rop_descriptor  = qxl->rop_descriptor;
    red->scale_mode      = qxl->scale_mode;
    red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
@@ -88,7 +96,7 @@ static void red_get_blend_ptr(RedMemSlotInfo *slots, int group_id,
                              SpiceBlend *red, QXLBlend *qxl)
 {
    red->src_bitmap      = qxl->src_bitmap;
-   red->src_area        = qxl->src_area;
+   red_get_rect_ptr(&red->src_area, &qxl->src_area);
    red->rop_descriptor  = qxl->rop_descriptor;
    red->scale_mode      = qxl->scale_mode;
    red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
@@ -98,7 +106,7 @@ static void red_get_transparent_ptr(RedMemSlotInfo *slots, int group_id,
                                     SpiceTransparent *red, QXLTransparent *qxl)
 {
    red->src_bitmap      = qxl->src_bitmap;
-   red->src_area        = qxl->src_area;
+   red_get_rect_ptr(&red->src_area, &qxl->src_area);
    red->src_color       = qxl->src_color;
    red->true_color      = qxl->true_color;
 }
@@ -109,7 +117,7 @@ static void red_get_alpha_blend_ptr(RedMemSlotInfo *slots, int group_id,
     red->alpha_flags = qxl->alpha_flags;
     red->alpha       = qxl->alpha;
     red->src_bitmap  = qxl->src_bitmap;
-    red->src_area    = qxl->src_area;
+    red_get_rect_ptr(&red->src_area, &qxl->src_area);
 }
 
 static void red_get_alpha_blend_ptr_compat(RedMemSlotInfo *slots, int group_id,
@@ -117,14 +125,14 @@ static void red_get_alpha_blend_ptr_compat(RedMemSlotInfo *slots, int group_id,
 {
     red->alpha       = qxl->alpha;
     red->src_bitmap  = qxl->src_bitmap;
-    red->src_area    = qxl->src_area;
+    red_get_rect_ptr(&red->src_area, &qxl->src_area);
 }
 
 static void red_get_rop3_ptr(RedMemSlotInfo *slots, int group_id,
                              SpiceRop3 *red, QXLRop3 *qxl)
 {
    red->src_bitmap = qxl->src_bitmap;
-   red->src_area   = qxl->src_area;
+   red_get_rect_ptr(&red->src_area, &qxl->src_area);
    red_get_brush_ptr(slots, group_id, &red->brush, &qxl->brush);
    red->rop3       = qxl->rop3;
    red->scale_mode = qxl->scale_mode;
@@ -151,7 +159,7 @@ static void red_get_text_ptr(RedMemSlotInfo *slots, int group_id,
                                SpiceText *red, QXLText *qxl)
 {
    red->str        = qxl->str;
-   red->back_area  = qxl->back_area;
+   red_get_rect_ptr(&red->back_area, &qxl->back_area);
    red_get_brush_ptr(slots, group_id, &red->fore_brush, &qxl->fore_brush);
    red_get_brush_ptr(slots, group_id, &red->back_brush, &qxl->back_brush);
    red->fore_mode  = qxl->fore_mode;
@@ -192,17 +200,17 @@ void red_get_drawable(RedMemSlotInfo *slots, int group_id,
     qxl = (QXLDrawable *)get_virt(slots, addr, sizeof(*qxl), group_id);
     red->release_info     = &qxl->release_info;
 
-    red->bbox             = qxl->bbox;
+    red_get_rect_ptr(&red->bbox, &qxl->bbox);
     red_get_clip_ptr(slots, group_id, &red->clip, &qxl->clip);
     red->effect           = qxl->effect;
     red->mm_time          = qxl->mm_time;
     red->self_bitmap      = qxl->self_bitmap;
-    red->self_bitmap_area = qxl->self_bitmap_area;
+    red_get_rect_ptr(&red->self_bitmap_area, &qxl->self_bitmap_area);
     red->surface_id       = qxl->surface_id;
 
     for (i = 0; i < 3; i++) {
         red->surfaces_dest[i] = qxl->surfaces_dest[i];
-        red->surfaces_rects[i] = qxl->surfaces_rects[i];
+        red_get_rect_ptr(&red->surfaces_rects[i], &qxl->surfaces_rects[i]);
     }
 
     red->type = qxl->type;
@@ -264,7 +272,7 @@ void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
     qxl = (QXLCompatDrawable *)get_virt(slots, addr, sizeof(*qxl), group_id);
     red->release_info     = &qxl->release_info;
 
-    red->bbox             = qxl->bbox;
+    red_get_rect_ptr(&red->bbox, &qxl->bbox);
     red_get_clip_ptr(slots, group_id, &red->clip, &qxl->clip);
     red->effect           = qxl->effect;
     red->mm_time          = qxl->mm_time;
@@ -333,7 +341,7 @@ void red_get_update_cmd(RedMemSlotInfo *slots, int group_id,
     qxl = (QXLUpdateCmd *)get_virt(slots, addr, sizeof(*qxl), group_id);
     red->release_info     = &qxl->release_info;
 
-    red->area       = qxl->area;
+    red_get_rect_ptr(&red->area, &qxl->area);
     red->update_id  = qxl->update_id;
     red->surface_id = qxl->surface_id;
 }
