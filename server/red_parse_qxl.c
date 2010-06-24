@@ -312,3 +312,21 @@ void red_put_drawable(RedDrawable *red)
 {
     /* nothing yet */
 }
+
+void red_get_update_cmd(RedMemSlotInfo *slots, int group_id,
+                        RedUpdateCmd *red, SPICE_ADDRESS addr)
+{
+    QXLUpdateCmd *qxl;
+
+    qxl = (QXLUpdateCmd *)get_virt(slots, addr, sizeof(*qxl), group_id);
+    red->release_info     = &qxl->release_info;
+
+    red->area       = qxl->area;
+    red->update_id  = qxl->update_id;
+    red->surface_id = qxl->surface_id;
+}
+
+void red_put_update_cmd(RedUpdateCmd *red)
+{
+    /* nothing yet */
+}

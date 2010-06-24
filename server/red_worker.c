@@ -5042,18 +5042,18 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size)
             break;
         }
         case QXL_CMD_UPDATE: {
-            int surface_id;
+            RedUpdateCmd update;
             QXLReleaseInfoExt release_info_ext;
-            QXLUpdateCmd *draw_cmd = (QXLUpdateCmd *)get_virt(&worker->mem_slots, ext_cmd.cmd.data,
-                                                              sizeof(QXLUpdateCmd),
-                                                              ext_cmd.group_id);
-            surface_id = draw_cmd->surface_id;
-            validate_surface(worker, surface_id);
-            red_update_area(worker, &draw_cmd->area, draw_cmd->surface_id);
-            worker->qxl->st->qif->notify_update(worker->qxl, draw_cmd->update_id);
+
+            red_get_update_cmd(&worker->mem_slots, ext_cmd.group_id,
+                               &update, ext_cmd.cmd.data);
+            validate_surface(worker, update.surface_id);
+            red_update_area(worker, &update.area, update.surface_id);
+            worker->qxl->st->qif->notify_update(worker->qxl, update.update_id);
             release_info_ext.group_id = ext_cmd.group_id;
-            release_info_ext.info = &draw_cmd->release_info;
+            release_info_ext.info = update.release_info;
             worker->qxl->st->qif->release_resource(worker->qxl, release_info_ext);
+            red_put_update_cmd(&update);
             break;
         }
         case QXL_CMD_MESSAGE: {
