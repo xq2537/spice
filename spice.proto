@@ -64,7 +64,7 @@ enum32 notify_visibility {
     HIGH,
 };
 
-flags32 mouse_mode {
+flags16 mouse_mode {
     SERVER,
     CLIENT,
 };
@@ -251,27 +251,27 @@ channel MainChannel : BaseChannel {
     } @ctype(SpiceMsgcMainAgentTokens) agent_token;
 };
 
-enum32 clip_type {
+enum8 clip_type {
     NONE,
     RECTS
 };
 
-flags32 path_flags { /* TODO: C enum names changes */
+flags8 path_flags { /* TODO: C enum names changes */
     BEGIN = 0,
     END = 1,
     CLOSE = 3,
     BEZIER = 4,
 } @prefix(SPICE_PATH_);
 
-enum32 video_codec_type {
+enum8 video_codec_type {
     MJPEG = 1,
 };
 
-flags32 stream_flags {
+flags8 stream_flags {
     TOP_DOWN = 0,
 };
 
-enum32 brush_type {
+enum8 brush_type {
     NONE,
     SOLID,
     PATTERN,
@@ -361,7 +361,7 @@ enum8 line_join {
     MITER,
 };
 
-flags16 string_flags {
+flags8 string_flags {
     RASTER_A1,
     RASTER_A4,
     RASTER_A8,
@@ -382,7 +382,7 @@ enum32 surface_fmt {
     32_ARGB = 96
 };
 
-flags16 alpha_flags {
+flags8 alpha_flags {
     DEST_HAS_ALPHA,
     SRC_SURFACE_HAS_ALPHA
 };
@@ -787,13 +787,13 @@ channel DisplayChannel : BaseChannel {
     } init = 101;
 };
 
-flags32 keyboard_modifier_flags {
+flags16 keyboard_modifier_flags {
     SCROLL_LOCK,
     NUM_LOCK,
     CAPS_LOCK
 };
 
-enum32 mouse_button {
+enum8 mouse_button {
     INVALID,
     LEFT,
     MIDDLE,
@@ -802,7 +802,7 @@ enum32 mouse_button {
     DOWN,
 };
 
-flags32 mouse_button_mask {
+flags16 mouse_button_mask {
     LEFT,
     MIDDLE,
     RIGHT
@@ -857,7 +857,7 @@ channel InputsChannel : BaseChannel {
     Empty mouse_motion_ack = 111;
 };
 
-enum16 cursor_type {
+enum8 cursor_type {
     ALPHA,
     MONO,
     COLOR4,
@@ -867,7 +867,7 @@ enum16 cursor_type {
     COLOR32,
 };
 
-flags32 cursor_flags {
+flags16 cursor_flags {
     NONE, /* Means no cursor */
     CACHE_ME,
     FROM_CACHE,
@@ -924,13 +924,13 @@ channel CursorChannel : BaseChannel {
     Empty inval_all;
 };
 
-enum32 audio_data_mode {
+enum16 audio_data_mode {
     INVALID,
     RAW,
     CELT_0_5_1,
 };
 
-enum32 audio_fmt {
+enum16 audio_fmt {
     INVALID,
     S16,
 };
@@ -984,7 +984,7 @@ channel RecordChannel : BaseChannel {
     } start_mark;
 };
 
-enum32 tunnel_service_type {
+enum16 tunnel_service_type {
     INVALID,
     GENERIC,
     IPP,
