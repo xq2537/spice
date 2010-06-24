@@ -20,6 +20,18 @@
 #include "red_memslots.h"
 #include "red_parse_qxl.h"
 
+static void red_get_point_ptr(SpicePoint *red, QXLPoint *qxl)
+{
+    red->x = qxl->x;
+    red->y = qxl->y;
+}
+
+static void red_get_point16_ptr(SpicePoint16 *red, QXLPoint16 *qxl)
+{
+    red->x = qxl->x;
+    red->y = qxl->y;
+}
+
 static void red_get_brush_ptr(RedMemSlotInfo *slots, int group_id,
                               SpiceBrush *red, QXLBrush *qxl)
 {
@@ -30,7 +42,7 @@ static void red_get_brush_ptr(RedMemSlotInfo *slots, int group_id,
         break;
     case SPICE_BRUSH_TYPE_PATTERN:
         red->u.pattern.pat = qxl->u.pattern.pat;
-        red->u.pattern.pos = qxl->u.pattern.pos;
+        red_get_point_ptr(&red->u.pattern.pos, &qxl->u.pattern.pos);
         break;
     }
 }
@@ -39,7 +51,7 @@ static void red_get_qmask_ptr(RedMemSlotInfo *slots, int group_id,
                               SpiceQMask *red, QXLQMask *qxl)
 {
     red->flags  = qxl->flags;
-    red->pos    = qxl->pos;
+    red_get_point_ptr(&red->pos, &qxl->pos);
     red->bitmap = qxl->bitmap;
 }
 
@@ -209,7 +221,7 @@ void red_get_drawable(RedMemSlotInfo *slots, int group_id,
         red_get_copy_ptr(slots, group_id, &red->u.copy, &qxl->u.copy);
         break;
     case QXL_COPY_BITS:
-        red->u.copy_bits = qxl->u.copy_bits;
+        red_get_point_ptr(&red->u.copy_bits.src_pos, &qxl->u.copy_bits.src_pos);
         break;
     case QXL_DRAW_FILL:
         red_get_fill_ptr(slots, group_id, &red->u.fill, &qxl->u.fill);
@@ -273,7 +285,7 @@ void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
         red_get_copy_ptr(slots, group_id, &red->u.copy, &qxl->u.copy);
         break;
     case QXL_COPY_BITS:
-        red->u.copy_bits = qxl->u.copy_bits;
+        red_get_point_ptr(&red->u.copy_bits.src_pos, &qxl->u.copy_bits.src_pos);
         break;
     case QXL_DRAW_FILL:
         red_get_fill_ptr(slots, group_id, &red->u.fill, &qxl->u.fill);
@@ -391,12 +403,12 @@ void red_get_cursor_cmd(RedMemSlotInfo *slots, int group_id,
     red->type = qxl->type;
     switch (red->type) {
     case QXL_CURSOR_SET:
-        red->u.set.position = qxl->u.set.position;
+        red_get_point16_ptr(&red->u.set.position, &qxl->u.set.position);
         red->u.set.visible  = qxl->u.set.visible;
         red->u.set.shape    = qxl->u.set.shape;
         break;
     case QXL_CURSOR_MOVE:
-        red->u.position = qxl->u.position;
+        red_get_point16_ptr(&red->u.position, &qxl->u.position);
         break;
     case QXL_CURSOR_TRAIL:
         red->u.trail.length    = qxl->u.trail.length;

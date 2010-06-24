@@ -42,7 +42,9 @@ typedef struct SPICE_ATTR_PACKED RedDrawable {
         SpiceCopy copy;
         SpiceTransparent transparent;
         SpiceAlphaBlnd alpha_blend;
-        QXLCopyBits copy_bits;
+        struct {
+            SpicePoint src_pos;
+        } copy_bits;
         SpiceBlend blend;
         SpiceRop3 rop3;
         SpiceStroke stroke;
