@@ -3890,11 +3890,6 @@ static inline void red_process_drawable(RedWorker *worker, QXLDrawable *drawable
         add_clip_rects(worker, &rgn, drawable->clip.data + SPICE_OFFSETOF(QXLClipRects, chunk), group_id);
         region_and(&item->tree_item.base.rgn, &rgn);
         region_destroy(&rgn);
-    } else if (drawable->clip.type == SPICE_CLIP_TYPE_PATH) {
-        item->tree_item.effect = QXL_EFFECT_BLEND;
-#ifdef PIPE_DEBUG
-        printf("TEST: DRAWABLE: QXL_CLIP_TYPE_PATH\n");
-#endif
     }
     /*
         surface->refs is affected by a drawable (that is
@@ -4083,9 +4078,6 @@ static void localize_clip(RedWorker *worker, SpiceClip *clip, uint32_t group_id)
         } while (chunk);
         break;
     }
-    case SPICE_CLIP_TYPE_PATH:
-        localize_path(worker, &clip->data, group_id);
-        break;
     default:
         red_printf("invalid clip type");
     }
@@ -4099,9 +4091,6 @@ static void unlocalize_clip(SpiceClip *clip)
     case SPICE_CLIP_TYPE_RECTS:
         free((void *)clip->data);
         clip->data = 0;
-        break;
-    case SPICE_CLIP_TYPE_PATH:
-        unlocalize_path(&clip->data);
         break;
     default:
         red_printf("invalid clip type");
@@ -5393,18 +5382,16 @@ static void fill_base(DisplayChannel *display_channel, Drawable *drawable)
 {
     RedChannel *channel = &display_channel->base;
     SpiceMsgDisplayBase base;
-    SpiceMarshaller *cliprects_data_out, *clippath_data_out;
+    SpiceMarshaller *cliprects_data_out;
 
     base.surface_id = drawable->surface_id;
     base.box = drawable->qxl_drawable->bbox;
     base.clip = drawable->qxl_drawable->clip;
 
     spice_marshall_DisplayBase(channel->send_data.marshaller, &base,
-                              &cliprects_data_out, &clippath_data_out);
+                              &cliprects_data_out);
     if (cliprects_data_out) {
         fill_rects_clip(channel, cliprects_data_out, base.clip.data, drawable->group_id);
-    } else if (clippath_data_out) {
-        fill_path(display_channel, clippath_data_out, base.clip.data, drawable->group_id);
     }
 }
 
@@ -7354,14 +7341,7 @@ static void surface_lossy_region_update(RedWorker *worker, DisplayChannel *displ
     surface_lossy_region = &display_channel->surface_client_lossy_region[item->surface_id];
     drawable = item->qxl_drawable;
 
-    if ((drawable->clip.type == SPICE_CLIP_TYPE_NONE) ||
-        ((drawable->clip.type == SPICE_CLIP_TYPE_PATH) && lossy)) {
-        if (!lossy) {
-            region_remove(surface_lossy_region, &drawable->bbox);
-        } else {
-            region_add(surface_lossy_region, &drawable->bbox);
-        }
-    } else if (drawable->clip.type == SPICE_CLIP_TYPE_RECTS) {
+    if (drawable->clip.type == SPICE_CLIP_TYPE_RECTS ) {
         QRegion clip_rgn;
         QRegion draw_region;
         region_init(&clip_rgn);
@@ -7379,7 +7359,13 @@ static void surface_lossy_region_update(RedWorker *worker, DisplayChannel *displ
 
         region_destroy(&clip_rgn);
         region_destroy(&draw_region);
-    } // else SPICE_CLIP_TYPE_PATH and lossless: leave the area as is
+    } else { /* no clip */
+        if (!lossy) {
+            region_remove(surface_lossy_region, &drawable->bbox);
+        } else {
+            region_add(surface_lossy_region, &drawable->bbox);
+        }
+    }
 }
 
 static inline int drawable_intersects_with_areas(Drawable *drawable, int surface_ids[],
@@ -9092,7 +9078,7 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
     int lz_comp = FALSE;
     spice_image_compression_t comp_mode;
     SpiceMsgDisplayDrawCopy copy;
-    SpiceMarshaller *cliprects_data_out, *clippath_data_out, *src_bitmap_out, *mask_bitmap_out;
+    SpiceMarshaller *cliprects_data_out, *src_bitmap_out, *mask_bitmap_out;
     SpiceMarshaller *bitmap_palette_out, *data_out, *lzplt_palette_out;
 
     ASSERT(display_channel && item);
@@ -9139,7 +9125,7 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
     SpiceMarshaller *m = channel->send_data.marshaller;
 
     spice_marshall_msg_display_draw_copy(m, &copy,
-                                         &cliprects_data_out, &clippath_data_out,
+                                         &cliprects_data_out,
                                          &src_bitmap_out, &mask_bitmap_out);
 
     compress_send_data_t comp_send_data = {0};
@@ -9217,7 +9203,7 @@ static void red_display_send_upgrade(DisplayChannel *display_channel, UpgradeIte
     RedChannel *channel;
     QXLDrawable *qxl_drawable;
     SpiceMsgDisplayDrawCopy copy;
-    SpiceMarshaller *cliprects_data_out, *clippath_data_out, *src_bitmap_out, *mask_bitmap_out;
+    SpiceMarshaller *cliprects_data_out, *src_bitmap_out, *mask_bitmap_out;
     int i;
 
     ASSERT(display_channel && item && item->drawable);
@@ -9239,7 +9225,7 @@ static void red_display_send_upgrade(DisplayChannel *display_channel, UpgradeIte
     SpiceMarshaller *m = channel->send_data.marshaller;
 
     spice_marshall_msg_display_draw_copy(m, &copy,
-                                         &cliprects_data_out, &clippath_data_out,
+                                         &cliprects_data_out,
                                          &src_bitmap_out, &mask_bitmap_out);
 
     spice_marshaller_add_uint32(cliprects_data_out, item->n_rects);
@@ -9260,7 +9246,7 @@ static void red_display_send_stream_start(DisplayChannel *display_channel, Strea
     ASSERT(stream);
     channel->send_data.header->type = SPICE_MSG_DISPLAY_STREAM_CREATE;
     SpiceMsgDisplayStreamCreate stream_create;
-    SpiceMarshaller *cliprects_data_out, *clippath_data_out;
+    SpiceMarshaller *cliprects_data_out;
 
     stream_create.surface_id = 0;
     stream_create.id = agent - display_channel->stream_agents;
@@ -9282,7 +9268,7 @@ static void red_display_send_stream_start(DisplayChannel *display_channel, Strea
     }
 
     spice_marshall_msg_display_stream_create(channel->send_data.marshaller, &stream_create,
-                                             &cliprects_data_out, &clippath_data_out);
+                                             &cliprects_data_out);
 
 
     if (stream->current) {
@@ -9313,14 +9299,14 @@ static void red_display_send_stream_clip(DisplayChannel *display_channel,
 
     channel->send_data.header->type = SPICE_MSG_DISPLAY_STREAM_CLIP;
     SpiceMsgDisplayStreamClip stream_clip;
-    SpiceMarshaller *cliprects_data_out, *clippath_data_out;
+    SpiceMarshaller *cliprects_data_out;
 
     stream_clip.id = agent - display_channel->stream_agents;
     stream_clip.clip.type = item->clip_type;
     stream_clip.clip.data = 0;
 
     spice_marshall_msg_display_stream_clip(channel->send_data.marshaller, &stream_clip,
-                                           &cliprects_data_out, &clippath_data_out);
+                                           &cliprects_data_out);
 
     if (stream_clip.clip.type == SPICE_CLIP_TYPE_RECTS) {
         spice_marshaller_add_uint32(cliprects_data_out, item->n_rects);

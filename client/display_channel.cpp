@@ -1294,7 +1294,7 @@ void DisplayChannel::set_clip_rects(const SpiceClip& clip, uint32_t& num_clip_re
         num_clip_rects = 0;
         clip_rects = NULL;
         break;
-    case SPICE_CLIP_TYPE_PATH:
+    default:
         THROW("unexpected clip type");
     }
 }

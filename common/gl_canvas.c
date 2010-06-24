@@ -198,12 +198,6 @@ static void set_clip(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip)
         }
         break;
     }
-    case SPICE_CLIP_TYPE_PATH: {
-        GLCPath path = get_path(canvas, SPICE_GET_ADDRESS(clip->data));
-        glc_clip_path(canvas->glc, path, GLC_CLIP_OP_SET);
-        glc_path_destroy(path);
-        break;
-    }
     default:
         CANVAS_ERROR("invalid clip type");
     }

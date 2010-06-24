@@ -253,8 +253,7 @@ channel MainChannel : BaseChannel {
 
 enum32 clip_type {
     NONE,
-    RECTS,
-    PATH,
+    RECTS
 };
 
 flags32 path_flags { /* TODO: C enum names changes */
@@ -382,12 +381,10 @@ struct Path {
 struct Clip {
     clip_type type;
     switch (type) {
-    case NONE:
-        uint64 data @zero;
-      case RECTS:
+    case RECTS:
         ClipRects *data @outvar(cliprects);
-    case PATH:
-        Path *data @outvar(clippath);
+    default:
+        uint64 data @zero;
     } u @anon;
 };
 

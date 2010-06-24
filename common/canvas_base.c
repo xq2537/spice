@@ -2004,9 +2004,6 @@ static void canvas_clip_pixman(CanvasBase *canvas,
 
         break;
     }
-    case SPICE_CLIP_TYPE_PATH:
-        CANVAS_ERROR("clip paths not supported anymore");
-        break;
     default:
         CANVAS_ERROR("invalid clip type");
     }

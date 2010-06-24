@@ -430,12 +430,6 @@ static void set_clip(GdiCanvas *canvas, SpiceClip *clip)
         }
         break;
     }
-    case SPICE_CLIP_TYPE_PATH:
-        set_path(canvas, SPICE_GET_ADDRESS(clip->data));
-        if (SelectClipPath(canvas->dc, RGN_COPY) == ERROR) {
-            CANVAS_ERROR("Unable to SelectClipPath");
-        }
-        break;
     default:
         CANVAS_ERROR("invalid clip type");
     }
