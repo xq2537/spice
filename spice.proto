@@ -770,7 +770,7 @@ channel DisplayChannel : BaseChannel {
 	uint32 surface_id;
 	uint32 width;
 	uint32 height;
-	uint32 format;
+	surface_fmt format;
 	surface_flags flags;
     } @ctype(SpiceMsgSurfaceCreate) surface_create;
 
