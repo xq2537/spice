@@ -330,3 +330,25 @@ void red_put_update_cmd(RedUpdateCmd *red)
 {
     /* nothing yet */
 }
+
+void red_get_message(RedMemSlotInfo *slots, int group_id,
+                     RedMessage *red, SPICE_ADDRESS addr)
+{
+    QXLMessage *qxl;
+
+    /*
+     * security alert:
+     *   qxl->data[0] size isn't specified anywhere -> can't verify
+     *   luckily this is for debug logging only,
+     *   so we can just ignore it by default.
+     */
+    qxl = (QXLMessage *)get_virt(slots, addr, sizeof(*qxl), group_id);
+    red->release_info  = &qxl->release_info;
+    red->data          = qxl->data;
+}
+
+void red_put_message(RedMessage *red)
+{
+    /* nothing yet */
+}
+

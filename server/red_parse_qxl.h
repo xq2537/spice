@@ -60,6 +60,11 @@ typedef struct SPICE_ATTR_PACKED RedUpdateCmd {
     uint32_t surface_id;
 } RedUpdateCmd;
 
+typedef struct SPICE_ATTR_PACKED RedMessage {
+    QXLReleaseInfo *release_info;
+    uint8_t *data;
+} RedMessage;
+
 void red_get_drawable(RedMemSlotInfo *slots, int group_id,
                       RedDrawable *red, SPICE_ADDRESS addr);
 void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
@@ -69,5 +74,9 @@ void red_put_drawable(RedDrawable *red);
 void red_get_update_cmd(RedMemSlotInfo *slots, int group_id,
                         RedUpdateCmd *red, SPICE_ADDRESS addr);
 void red_put_update_cmd(RedUpdateCmd *red);
+
+void red_get_message(RedMemSlotInfo *slots, int group_id,
+                     RedMessage *red, SPICE_ADDRESS addr);
+void red_put_message(RedMessage *red);
 
 #endif

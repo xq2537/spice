@@ -5057,13 +5057,19 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size)
             break;
         }
         case QXL_CMD_MESSAGE: {
+            RedMessage message;
             QXLReleaseInfoExt release_info_ext;
-            QXLMessage *message = (QXLMessage *)get_virt(&worker->mem_slots, ext_cmd.cmd.data,
-                                                         sizeof(QXLMessage), ext_cmd.group_id);
-            red_printf("MESSAGE: %s", message->data);
+
+            red_get_message(&worker->mem_slots, ext_cmd.group_id,
+                            &message, ext_cmd.cmd.data);
+#ifdef DEBUG
+            /* alert: accessing message.data is insecure */
+            red_printf("MESSAGE: %s", message.data);
+#endif
             release_info_ext.group_id = ext_cmd.group_id;
-            release_info_ext.info = &message->release_info;
+            release_info_ext.info = message.release_info;
             worker->qxl->st->qif->release_resource(worker->qxl, release_info_ext);
+            red_put_message(&message);
             break;
         }
         case QXL_CMD_SURFACE: {
