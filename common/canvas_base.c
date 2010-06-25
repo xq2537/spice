@@ -1991,13 +1991,12 @@ static void canvas_clip_pixman(CanvasBase *canvas,
     case SPICE_CLIP_TYPE_NONE:
         break;
     case SPICE_CLIP_TYPE_RECTS: {
-        uint32_t *n = (uint32_t *)SPICE_GET_ADDRESS(clip->data);
-
-        SpiceRect *now = (SpiceRect *)(n + 1);
+        uint32_t n = clip->rects->num_rects;
+        SpiceRect *now = clip->rects->rects;
 
         pixman_region32_t clip;
 
-        if (spice_pixman_region32_init_rects(&clip, now, *n)) {
+        if (spice_pixman_region32_init_rects(&clip, now, n)) {
             pixman_region32_intersect(dest_region, dest_region, &clip);
             pixman_region32_fini(&clip);
         }
@@ -3191,7 +3190,7 @@ static void canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox,
 
     do {
         uint32_t flags = seg->flags;
-        SpicePointFix* point = (SpicePointFix*)seg->data;
+        SpicePointFix* point = seg->points;
         SpicePointFix* end_point = point + seg->count;
         ASSERT(point < end_point);
         more -= ((unsigned long)end_point - (unsigned long)seg);

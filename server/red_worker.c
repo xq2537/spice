@@ -2289,66 +2289,13 @@ static inline void __current_add_drawable(RedWorker *worker, Drawable *drawable,
 
 #ifdef USE_EXCLUDE_RGN
 
-static int is_equal_path(RedWorker *worker, SPICE_ADDRESS p1, SPICE_ADDRESS p2, uint32_t group_id1,
-                         uint32_t group_id2)
+static int is_equal_path(RedWorker *worker, SpicePath *path1, SpicePath *path2)
 {
-    QXLPath *path1;
-    QXLPath *path2;
-    QXLDataChunk *chunk1;
-    QXLDataChunk *chunk2;
-    uint8_t *data1;
-    uint8_t *data2;
-    int size;
-    int size1;
-    int size2;
-
-    ASSERT(p1 && p2);
-
-    path1 = (QXLPath *)get_virt(&worker->mem_slots, p1, sizeof(QXLPath), group_id1);
-    path2 = (QXLPath *)get_virt(&worker->mem_slots, p2, sizeof(QXLPath), group_id2);
-
-    if ((size = path1->data_size) != path2->data_size) {
+    if (path1->size != path2->size)
         return FALSE;
-    }
-    ASSERT(size);
-
-    chunk1 = &path1->chunk;
-    size1 = chunk1->data_size;
-    data1 = chunk1->data;
-
-    chunk2 = &path2->chunk;
-    size2 = chunk2->data_size;
-    data2 = chunk2->data;
-
-    for (;;) {
-        int now = MIN(size1, size2);
-        ASSERT(now);
-        if (memcmp(data1, data2, now)) {
-            return FALSE;
-        }
-        if (!(size -= now)) {
-            return TRUE;
-        }
-        if ((size1 -= now) == 0) {
-            ASSERT(chunk1->next_chunk)
-            chunk1 = (QXLDataChunk *)get_virt(&worker->mem_slots, chunk1->next_chunk, sizeof(QXLDataChunk),
-                                              group_id1);
-            size1 = chunk1->data_size;
-            data1 = chunk1->data;
-        } else {
-            data1 += now;
-        }
-
-        if ((size2 -= now) == 0) {
-            ASSERT(chunk2->next_chunk)
-            chunk2 = (QXLDataChunk *)get_virt(&worker->mem_slots, chunk2->next_chunk, sizeof(QXLDataChunk),
-                                              group_id2);
-            size2 = chunk2->data_size;
-            data2 = chunk2->data;
-        } else {
-            data2 += now;
-        }
-    }
+    if (memcmp(path1->segments, path2->segments, path1->size) != 0)
+        return FALSE;
+    return TRUE;
 }
 
 // partial imp
@@ -2378,8 +2325,7 @@ static int is_same_geometry(RedWorker *worker, Drawable *d1, Drawable *d2)
         return is_equal_line_attr(&d1->red_drawable->u.stroke.attr,
                                   &d2->red_drawable->u.stroke.attr) &&
                is_equal_path(worker, d1->red_drawable->u.stroke.path,
-                             d2->red_drawable->u.stroke.path, d1->group_id,
-                             d2->group_id);
+                             d2->red_drawable->u.stroke.path);
     case QXL_DRAW_FILL:
         return rect_is_equal(&d1->red_drawable->bbox, &d2->red_drawable->bbox);
     default:
@@ -3445,26 +3391,12 @@ static inline int red_current_add(RedWorker *worker, Ring *ring, Drawable *drawa
 
 #endif
 
-static void add_clip_rects(RedWorker *worker, QRegion *rgn, QXLPHYSICAL data, uint32_t group_id)
+static void add_clip_rects(QRegion *rgn, SpiceClipRects *data)
 {
-    while (data) {
-        SpiceRect *now;
-        SpiceRect *end;
-        uint32_t data_size;
+    int i;
 
-        now = (SpiceRect *)validate_chunk(&worker->mem_slots, data, group_id, &data_size, &data);
-        end = now + data_size / sizeof(SpiceRect);
-
-        for (; now < end; now++) {
-            SpiceRect* r = (SpiceRect *)now;
-
-            ASSERT(now->top == r->top && now->left == r->left &&
-                   now->bottom == r->bottom && now->right == r->right);
-#ifdef PIPE_DEBUG
-            printf("TEST: DRAWABLE: RECT: %u %u %u %u\n", r->top, r->left, r->bottom, r->right);
-#endif
-            region_add(rgn, r);
-        }
+    for (i = 0; i < data->num_rects; i++) {
+        region_add(rgn, data->rects + i);
     }
 }
 
@@ -3888,9 +3820,8 @@ static inline void red_process_drawable(RedWorker *worker, RedDrawable *drawable
     if (drawable->clip.type == SPICE_CLIP_TYPE_RECTS) {
         QRegion rgn;
 
-        region_init(&
-		    rgn);
-        add_clip_rects(worker, &rgn, drawable->clip.data + SPICE_OFFSETOF(QXLClipRects, chunk), group_id);
+        region_init(&rgn);
+        add_clip_rects(&rgn, drawable->clip.rects);
         region_and(&item->tree_item.base.rgn, &rgn);
         region_destroy(&rgn);
     }
@@ -3983,38 +3914,6 @@ static inline void red_process_surface(RedWorker *worker, RedSurfaceCmd *surface
     free(surface);
 }
 
-static void localize_path(RedWorker *worker, QXLPHYSICAL *in_path, uint32_t group_id)
-{
-    QXLPath *path;
-    uint8_t *data;
-    uint32_t data_size;
-    QXLDataChunk *chunk;
-    int memslot_id = get_memslot_id(&worker->mem_slots, *in_path);
-
-    ASSERT(in_path && *in_path);
-    path = (QXLPath *)get_virt(&worker->mem_slots, *in_path, sizeof(QXLPath), group_id);
-    data = spice_malloc_n_m(1, path->data_size, sizeof(uint32_t));
-    *in_path = (QXLPHYSICAL)data;
-    *(uint32_t *)data = path->data_size;
-    data += sizeof(uint32_t);
-    chunk = &path->chunk;
-    do {
-        data_size = chunk->data_size;
-        validate_virt(&worker->mem_slots, (unsigned long)chunk->data, memslot_id, data_size, group_id);
-        memcpy(data, chunk->data, data_size);
-        data += data_size;
-        chunk = chunk->next_chunk ? (QXLDataChunk *)get_virt(&worker->mem_slots, chunk->next_chunk,
-                                                             sizeof(QXLDataChunk), group_id) : NULL;
-    } while (chunk);
-}
-
-static void unlocalize_path(QXLPHYSICAL *path)
-{
-    ASSERT(path && *path);
-    free((void *)*path);
-    *path = 0;
-}
-
 static void localize_str(RedWorker *worker, QXLPHYSICAL *in_str, uint32_t group_id)
 {
     QXLString *qxl_str = (QXLString *)get_virt(&worker->mem_slots, *in_str, sizeof(QXLString), group_id);
@@ -4052,54 +3951,6 @@ static void unlocalize_str(QXLPHYSICAL *str)
     ASSERT(str && *str);
     free((void *)*str);
     *str = 0;
-}
-
-static void localize_clip(RedWorker *worker, SpiceClip *clip, uint32_t group_id)
-{
-    switch (clip->type) {
-    case SPICE_CLIP_TYPE_NONE:
-        return;
-    case SPICE_CLIP_TYPE_RECTS: {
-        QXLClipRects *clip_rects;
-        QXLDataChunk *chunk;
-        int memslot_id = get_memslot_id(&worker->mem_slots, clip->data);
-        uint8_t *data;
-        uint32_t data_size;
-        clip_rects = (QXLClipRects *)get_virt(&worker->mem_slots, clip->data, sizeof(QXLClipRects), group_id);
-        chunk = &clip_rects->chunk;
-        ASSERT(clip->data);
-        data = spice_malloc_n_m(clip_rects->num_rects, sizeof(SpiceRect), sizeof(uint32_t));
-        clip->data = (QXLPHYSICAL)data;
-        *(uint32_t *)(data) = clip_rects->num_rects;
-        data += sizeof(uint32_t);
-        do {
-            data_size = chunk->data_size;
-            validate_virt(&worker->mem_slots, (unsigned long)chunk->data, memslot_id, data_size, group_id);
-            memcpy(data, chunk->data, data_size);
-            data += data_size;
-            chunk = chunk->next_chunk ? (QXLDataChunk *)get_virt(&worker->mem_slots, chunk->next_chunk,
-                                                                 sizeof(QXLDataChunk), group_id) :
-                                         NULL;
-        } while (chunk);
-        break;
-    }
-    default:
-        red_printf("invalid clip type");
-    }
-}
-
-static void unlocalize_clip(SpiceClip *clip)
-{
-    switch (clip->type) {
-    case SPICE_CLIP_TYPE_NONE:
-        return;
-    case SPICE_CLIP_TYPE_RECTS:
-        free((void *)clip->data);
-        clip->data = 0;
-        break;
-    default:
-        red_printf("invalid clip type");
-    }
 }
 
 static LocalImage *alloc_local_image(RedWorker *worker)
@@ -4454,7 +4305,6 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
 
     region_add(&surface->draw_dirty_region, &drawable->red_drawable->bbox);
 
-    localize_clip(worker, &clip, drawable->group_id);
     switch (drawable->red_drawable->type) {
     case QXL_DRAW_FILL: {
         SpiceFill fill = drawable->red_drawable->u.fill;
@@ -4555,12 +4405,10 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
     case QXL_DRAW_STROKE: {
         SpiceStroke stroke = drawable->red_drawable->u.stroke;
         localize_brush(worker, &stroke.brush, drawable->group_id);
-        localize_path(worker, &stroke.path, drawable->group_id);
         localize_attr(worker, &stroke.attr, drawable->group_id);
         canvas->ops->draw_stroke(canvas,
                                  &drawable->red_drawable->bbox, &clip, &stroke);
         unlocalize_attr(&stroke.attr);
-        unlocalize_path(&stroke.path);
         unlocalize_brush(&stroke.brush);
         break;
     }
@@ -4579,7 +4427,6 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
     default:
         red_printf("invalid type");
     }
-    unlocalize_clip(&clip);
 }
 
 #ifndef DRAW_ALL
@@ -5212,55 +5059,6 @@ static void red_add_surface_image(RedWorker *worker, int surface_id)
     display_channel_push(worker);
 }
 
-static uint8_t *chunk_linearize(RedWorker *worker, QXLDataChunk *first_chunk,
-                                int memslot_id, uint32_t group_id, size_t expected_size,
-                                int *free_chunk)
-{
-    uint8_t *data, *ptr;
-    QXLDataChunk *chunk;
-    int data_size;
-    QXLPHYSICAL next_chunk;
-
-    data_size = first_chunk->data_size;
-    next_chunk = first_chunk->next_chunk;
-
-    if (next_chunk == 0) {
-        ASSERT(expected_size <= data_size);
-        validate_virt(&worker->mem_slots, (unsigned long)first_chunk->data, memslot_id, data_size, group_id);
-        *free_chunk = FALSE;
-        return first_chunk->data;
-    }
-
-    data = spice_malloc(expected_size);
-    *free_chunk = TRUE;
-
-    ptr = data;
-    chunk = first_chunk;
-    while (chunk != NULL && expected_size > 0) {
-        data_size = chunk->data_size;
-        next_chunk = chunk->next_chunk;
-
-        if (data_size > expected_size) {
-            data_size = expected_size;
-        }
-        expected_size -= data_size;
-
-        if (data_size) {
-            validate_virt(&worker->mem_slots, (unsigned long)chunk->data, memslot_id, data_size, group_id);
-            memcpy(ptr, chunk->data, data_size);
-            ptr += data_size;
-        }
-
-        chunk = next_chunk ?
-            (QXLDataChunk *)get_virt(&worker->mem_slots, next_chunk, sizeof(QXLDataChunk),
-                                     group_id) :
-            NULL;
-    }
-    ASSERT(expected_size == 0)
-
-    return data;
-}
-
 typedef struct {
     uint32_t type;
     void *data;
@@ -5323,34 +5121,15 @@ static void add_buf_from_info(RedChannel *channel, SpiceMarshaller *m, AddBufInf
 }
 
 
-static void fill_path(DisplayChannel *display_channel, SpiceMarshaller *m,
-                      QXLPHYSICAL in_path, uint32_t group_id)
+static void fill_path(SpiceMarshaller *m, SpicePath *path)
 {
-    RedWorker *worker;
-    RedChannel *channel = &display_channel->base;
-    int memslot_id;
-    uint8_t *path_data, *p;
-    int free_path_data;
-    worker = channel->worker;
-    size_t data_size;
-    ASSERT(in_path);
-    memslot_id  = get_memslot_id(&worker->mem_slots, in_path);
+    SpicePathSeg *start, *end;
 
-    QXLPath *path = (QXLPath *)get_virt(&worker->mem_slots, in_path, sizeof(QXLPath), group_id);
-
-    data_size = path->data_size;
-    spice_marshaller_add_uint32(m, data_size);
-    path_data = chunk_linearize(worker, &path->chunk,
-                                memslot_id, group_id, data_size,
-                                &free_path_data);
-
-    p = path_data;
-    while (p < path_data + data_size) {
-        p = spice_marshall_PathSegment(m, (SpicePathSeg *)p);
-    }
-
-    if (free_path_data) {
-        free(path_data);
+    spice_marshaller_add_uint32(m, path->size);
+    start = path->segments;
+    end = (SpicePathSeg*)((uint8_t*)(path->segments) + path->size);
+    while (start < end) {
+        start = spice_marshall_PathSegment(m, start);
     }
 }
 
@@ -5375,28 +5154,13 @@ static void fill_str(DisplayChannel *display_channel, SpiceMarshaller *m,
                          str->data_size, memslot_id, group_id);
 }
 
-static inline void fill_rects_clip(RedChannel *channel, SpiceMarshaller *m, QXLPHYSICAL in_clip, uint32_t group_id)
+static inline void fill_rects_clip(SpiceMarshaller *m, SpiceClipRects *data)
 {
-    RedWorker *worker = channel->worker;
-    QXLClipRects *clip;
-    uint8_t *rects, *r;
-    int free_rects, i;
-    int memslot_id = get_memslot_id(&worker->mem_slots, in_clip);
+    int i;
 
-    ASSERT(in_clip);
-    clip = (QXLClipRects *)get_virt(&worker->mem_slots, in_clip, sizeof(QXLClipRects), group_id);
-    spice_marshaller_add_uint32(m, clip->num_rects);
-    rects = chunk_linearize(worker, &clip->chunk,
-                            memslot_id, group_id, clip->num_rects * sizeof(SpiceRect),
-                            &free_rects);
-
-    r = rects;
-    for (i = 0; i < clip->num_rects; i++) {
-        r = spice_marshall_Rect(m, (SpiceRect *)r);
-    }
-
-    if (free_rects) {
-        free(rects);
+    spice_marshaller_add_uint32(m, data->num_rects);
+    for (i = 0; i < data->num_rects; i++) {
+        spice_marshall_Rect(m, data->rects + i);
     }
 }
 
@@ -5413,7 +5177,7 @@ static void fill_base(DisplayChannel *display_channel, Drawable *drawable)
     spice_marshall_DisplayBase(channel->send_data.marshaller, &base,
                               &cliprects_data_out);
     if (cliprects_data_out) {
-        fill_rects_clip(channel, cliprects_data_out, base.clip.data, drawable->group_id);
+        fill_rects_clip(cliprects_data_out, base.clip.rects);
     }
 }
 
@@ -7369,9 +7133,7 @@ static void surface_lossy_region_update(RedWorker *worker, DisplayChannel *displ
         region_init(&clip_rgn);
         region_init(&draw_region);
         region_add(&draw_region, &drawable->bbox);
-        add_clip_rects(worker, &clip_rgn,
-                       drawable->clip.data + SPICE_OFFSETOF(QXLClipRects, chunk),
-                       item->group_id);
+        add_clip_rects(&clip_rgn, drawable->clip.rects);
         region_and(&draw_region, &clip_rgn);
         if (lossy) {
             region_or(surface_lossy_region, &draw_region);
@@ -8242,7 +8004,7 @@ static void red_send_qxl_draw_stroke(RedWorker *worker,
                           &style_out,
                           &brush_pat_out);
 
-    fill_path(display_channel, path_out, stroke.path, item->group_id);
+    fill_path(path_out, stroke.path);
     fill_attr(display_channel, style_out, &stroke.attr, item->group_id);
     if (brush_pat_out) {
         fill_bits(display_channel, brush_pat_out, stroke.brush.u.pattern.pat, item, FALSE);
@@ -9130,7 +8892,6 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
     copy.base.box.right = item->pos.x + bitmap.x;
     copy.base.box.bottom = item->pos.y + bitmap.y;
     copy.base.clip.type = SPICE_CLIP_TYPE_NONE;
-    copy.base.clip.data = 0;
     copy.data.rop_descriptor = SPICE_ROPD_OP_PUT;
     copy.data.src_area.left = 0;
     copy.data.src_area.top = 0;
@@ -9241,7 +9002,7 @@ static void red_display_send_upgrade(DisplayChannel *display_channel, UpgradeIte
     copy.base.surface_id = 0;
     copy.base.box = red_drawable->bbox;
     copy.base.clip.type = SPICE_CLIP_TYPE_RECTS;
-    copy.base.clip.data = 0;
+    copy.base.clip.rects = NULL;
     copy.data = red_drawable->u.copy;
 
     SpiceMarshaller *m = channel->send_data.marshaller;
@@ -9286,7 +9047,7 @@ static void red_display_send_stream_start(DisplayChannel *display_channel, Strea
         stream_create.clip = red_drawable->clip;
     } else {
         stream_create.clip.type = SPICE_CLIP_TYPE_RECTS;
-        stream_create.clip.data = 0;
+        stream_create.clip.rects = NULL;
     }
 
     spice_marshall_msg_display_stream_create(channel->send_data.marshaller, &stream_create,
@@ -9296,8 +9057,7 @@ static void red_display_send_stream_start(DisplayChannel *display_channel, Strea
     if (stream->current) {
         RedDrawable *red_drawable = stream->current->red_drawable;
         if (red_drawable->clip.type == SPICE_CLIP_TYPE_RECTS) {
-            fill_rects_clip(channel, cliprects_data_out, stream_create.clip.data,
-                            stream->current->group_id);
+            fill_rects_clip(cliprects_data_out, stream_create.clip.rects);
         } else {
             ASSERT(red_drawable->clip.type == SPICE_CLIP_TYPE_NONE);
         }
@@ -9325,7 +9085,9 @@ static void red_display_send_stream_clip(DisplayChannel *display_channel,
 
     stream_clip.id = agent - display_channel->stream_agents;
     stream_clip.clip.type = item->clip_type;
+#if 0 /* FIXME */
     stream_clip.clip.data = 0;
+#endif
 
     spice_marshall_msg_display_stream_clip(channel->send_data.marshaller, &stream_clip,
                                            &cliprects_data_out);

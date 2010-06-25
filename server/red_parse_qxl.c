@@ -16,33 +16,80 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <stdbool.h>
 #include "red_common.h"
 #include "red_memslots.h"
 #include "red_parse_qxl.h"
 
-static size_t red_get_data_chunks(RedMemSlotInfo *slots, int group_id,
-                                RedDataChunk *red, SPICE_ADDRESS addr)
+#if 0
+static void hexdump_qxl(RedMemSlotInfo *slots, int group_id,
+                        SPICE_ADDRESS addr, uint8_t bytes)
 {
-    QXLDataChunk *qxl;
+    uint8_t *hex;
+    int i;
+
+    hex = (uint8_t*)get_virt(slots, addr, bytes, group_id);
+    for (i = 0; i < bytes; i++) {
+        if (0 == i % 16) {
+            fprintf(stderr, "%lx: ", addr+i);
+        }
+        if (0 == i % 4) {
+            fprintf(stderr, " ");
+        }
+        fprintf(stderr, " %02x", hex[i]);
+        if (15 == i % 16) {
+            fprintf(stderr, "\n");
+        }
+    }
+}
+#endif
+
+static uint8_t *red_linearize_chunk(RedDataChunk *head, size_t size, bool *free_chunk)
+{
+    uint8_t *data, *ptr;
+    RedDataChunk *chunk;
+    uint32_t copy;
+
+    if (head->next_chunk == NULL) {
+        ASSERT(size <= head->data_size);
+        *free_chunk = false;
+        return head->data;
+    }
+
+    ptr = data = spice_malloc(size);
+    *free_chunk = true;
+    for (chunk = head; chunk != NULL && size > 0; chunk = chunk->next_chunk) {
+        copy = MIN(chunk->data_size, size);
+        memcpy(ptr, chunk->data, copy);
+        ptr += copy;
+        size -= copy;
+    }
+    ASSERT(size == 0);
+    return data;
+}
+
+static size_t red_get_data_chunks_ptr(RedMemSlotInfo *slots, int group_id,
+                                      int memslot_id,
+                                      RedDataChunk *red, QXLDataChunk *qxl)
+{
     RedDataChunk *red_prev;
     size_t data_size = 0;
 
-    qxl = (QXLDataChunk*)get_virt(slots, addr, sizeof(*qxl), group_id);
     red->data_size = qxl->data_size;
     data_size += red->data_size;
-    validate_virt(slots, (intptr_t)qxl->data, get_memslot_id(slots, addr),
-                  red->data_size, group_id);
+    validate_virt(slots, (intptr_t)qxl->data, memslot_id, red->data_size, group_id);
     red->data = qxl->data;
     red->prev_chunk = NULL;
 
     while (qxl->next_chunk) {
         red_prev = red;
         red = spice_new(RedDataChunk, 1);
+        memslot_id = get_memslot_id(slots, qxl->next_chunk);
         qxl = (QXLDataChunk*)get_virt(slots, qxl->next_chunk, sizeof(*qxl), group_id);
+
         red->data_size = qxl->data_size;
         data_size += red->data_size;
-        validate_virt(slots, (intptr_t)qxl->data, get_memslot_id(slots, addr),
-                      red->data_size, group_id);
+        validate_virt(slots, (intptr_t)qxl->data, memslot_id, red->data_size, group_id);
         red->data = qxl->data;
         red->prev_chunk = red_prev;
         red_prev->next_chunk = red;
@@ -51,6 +98,18 @@ static size_t red_get_data_chunks(RedMemSlotInfo *slots, int group_id,
     red->next_chunk = NULL;
     return data_size;
 }
+
+#if 0
+static size_t red_get_data_chunks(RedMemSlotInfo *slots, int group_id,
+                                  RedDataChunk *red, SPICE_ADDRESS addr)
+{
+    QXLDataChunk *qxl;
+    int memslot_id = get_memslot_id(slots, addr);
+
+    qxl = (QXLDataChunk*)get_virt(slots, addr, sizeof(*qxl), group_id);
+    return red_get_data_chunks_ptr(slots, group_id, memslot_id, red, qxl);
+}
+#endif
 
 static void red_put_data_chunks(RedDataChunk *red)
 {
@@ -82,6 +141,86 @@ void red_get_rect_ptr(SpiceRect *red, QXLRect *qxl)
     red->left   = qxl->left;
     red->bottom = qxl->bottom;
     red->right  = qxl->right;
+}
+
+static SpicePath *red_get_path(RedMemSlotInfo *slots, int group_id,
+                               SPICE_ADDRESS addr)
+{
+    RedDataChunk chunks;
+    QXLPathSeg *start, *end;
+    SpicePathSeg *seg;
+    uint8_t *data;
+    bool free_data;
+    QXLPath *qxl;
+    SpicePath *red;
+    size_t size;
+    int i;
+
+    qxl = (QXLPath *)get_virt(slots, addr, sizeof(*qxl), group_id);
+    size = red_get_data_chunks_ptr(slots, group_id,
+                                   get_memslot_id(slots, addr),
+                                   &chunks, &qxl->chunk);
+    data = red_linearize_chunk(&chunks, size, &free_data);
+    red_put_data_chunks(&chunks);
+
+    ASSERT(qxl->data_size == size);
+    ASSERT(sizeof(QXLPathSeg) == sizeof(SpicePathSeg)); /* FIXME */
+    red = spice_malloc(sizeof(*red) + size);
+    red->size = qxl->data_size;
+
+    start = (QXLPathSeg*)data;
+    end = (QXLPathSeg*)(data + size);
+    seg = red->segments;
+    while (start < end) {
+        seg->flags = start->flags;
+        seg->count = start->count;
+        for (i = 0; i < seg->count; i++) {
+            seg->points[i].x = start->points[i].x;
+            seg->points[i].y = start->points[i].y;
+        }
+        start = (QXLPathSeg*)(&start->points[i]);
+        seg = (SpicePathSeg*)(&seg->points[i]);
+    }
+
+    if (free_data) {
+        free(data);
+    }
+    return red;
+}
+
+static SpiceClipRects *red_get_clip_rects(RedMemSlotInfo *slots, int group_id,
+                                          SPICE_ADDRESS addr)
+{
+    RedDataChunk chunks;
+    QXLClipRects *qxl;
+    SpiceClipRects *red;
+    QXLRect *start, *end;
+    uint8_t *data;
+    bool free_data;
+    size_t size;
+    int i;
+
+    qxl = (QXLClipRects *)get_virt(slots, addr, sizeof(*qxl), group_id);
+    size = red_get_data_chunks_ptr(slots, group_id,
+                                   get_memslot_id(slots, addr),
+                                   &chunks, &qxl->chunk);
+    data = red_linearize_chunk(&chunks, size, &free_data);
+    red_put_data_chunks(&chunks);
+
+    ASSERT(qxl->num_rects * sizeof(QXLRect) == size);
+    red = spice_malloc(sizeof(*red) + qxl->num_rects * sizeof(SpiceRect));
+    red->num_rects = qxl->num_rects;
+
+    start = (QXLRect*)data;
+    end = (QXLRect*)(data + size);
+    for (i = 0; i < red->num_rects; i++) {
+        red_get_rect_ptr(red->rects + i, start++);
+    }
+
+    if (free_data) {
+        free(data);
+    }
+    return red;
 }
 
 static void red_get_brush_ptr(RedMemSlotInfo *slots, int group_id,
@@ -186,7 +325,7 @@ static void red_get_rop3_ptr(RedMemSlotInfo *slots, int group_id,
 static void red_get_stroke_ptr(RedMemSlotInfo *slots, int group_id,
                                SpiceStroke *red, QXLStroke *qxl)
 {
-   red->path             = qxl->path;
+   red->path = red_get_path(slots, group_id, qxl->path);
    red->attr.flags       = qxl->attr.flags;
    red->attr.join_style  = qxl->attr.join_style;
    red->attr.end_style   = qxl->attr.end_style;
@@ -197,6 +336,11 @@ static void red_get_stroke_ptr(RedMemSlotInfo *slots, int group_id,
    red_get_brush_ptr(slots, group_id, &red->brush, &qxl->brush);
    red->fore_mode        = qxl->fore_mode;
    red->back_mode        = qxl->back_mode;
+}
+
+static void red_put_stroke_ptr(SpiceStroke *red)
+{
+    free(red->path);
 }
 
 static void red_get_text_ptr(RedMemSlotInfo *slots, int group_id,
@@ -232,7 +376,20 @@ static void red_get_clip_ptr(RedMemSlotInfo *slots, int group_id,
                              SpiceClip *red, QXLClip *qxl)
 {
     red->type = qxl->type;
-    red->data = qxl->data;
+    switch (red->type) {
+    case SPICE_CLIP_TYPE_RECTS:
+        red->rects = red_get_clip_rects(slots, group_id, qxl->data);
+        break;
+    }
+}
+
+static void red_put_clip(SpiceClip *red)
+{
+    switch (red->type) {
+    case SPICE_CLIP_TYPE_RECTS:
+        free(red->rects);
+        break;
+    }
 }
 
 void red_get_drawable(RedMemSlotInfo *slots, int group_id,
@@ -374,7 +531,12 @@ void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
 
 void red_put_drawable(RedDrawable *red)
 {
-    /* nothing yet */
+    red_put_clip(&red->clip);
+    switch (red->type) {
+    case QXL_DRAW_STROKE:
+        red_put_stroke_ptr(&red->u.stroke);
+        break;
+    }
 }
 
 void red_get_update_cmd(RedMemSlotInfo *slots, int group_id,

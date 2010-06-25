@@ -111,17 +111,15 @@ static pixman_image_t *canvas_surf_to_trans_surf(GLCImage *image,
     return ret;
 }
 
-static GLCPath get_path(GLCanvas *canvas, void *addr)
+static GLCPath get_path(GLCanvas *canvas, SpicePath *s)
 {
     GLCPath path = glc_path_create(canvas->glc);
-    uint32_t* data_size = (uint32_t*)addr;
-    uint32_t more = *data_size;
-
-    SpicePathSeg* seg = (SpicePathSeg*)(data_size + 1);
+    uint32_t more = s->size;
+    SpicePathSeg* seg = s->segments;
 
     do {
         uint32_t flags = seg->flags;
-        SpicePointFix* point = (SpicePointFix*)seg->data;
+        SpicePointFix* point = seg->points;
         SpicePointFix* end_point = point + seg->count;
         ASSERT(point < end_point);
         more -= ((unsigned long)end_point - (unsigned long)seg);
@@ -178,11 +176,11 @@ static void set_clip(GLCanvas *canvas, SpiceRect *bbox, SpiceClip *clip)
     case SPICE_CLIP_TYPE_NONE:
         break;
     case SPICE_CLIP_TYPE_RECTS: {
-        uint32_t *n = (uint32_t *)SPICE_GET_ADDRESS(clip->data);
-        SpiceRect *now = (SpiceRect *)(n + 1);
-        SpiceRect *end = now + *n;
+        uint32_t n = clip->rects->num_rects;
+        SpiceRect *now = clip->rects->rects;
+        SpiceRect *end = now + n;
 
-        if (*n == 0) {
+        if (n == 0) {
             rect.x = rect.y = 0;
             rect.width = rect.height = 0;
             glc_clip_rect(canvas->glc, &rect, GLC_CLIP_OP_SET);
