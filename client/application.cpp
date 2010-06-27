@@ -1449,7 +1449,7 @@ void Application::enter_full_screen()
 void Application::restore_screens_size()
 {
     for (int i = 0; i < (int)_screens.size(); i++) {
-        if (_screens[i]->is_size_locked()) {
+        if (!_screens[i] || _screens[i]->is_size_locked()) {
             continue;
         }
         _screens[i]->resize(SCREEN_INIT_WIDTH, SCREEN_INIT_HEIGHT);
