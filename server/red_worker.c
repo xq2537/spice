@@ -10979,9 +10979,6 @@ static inline void handle_dev_destroy_surfaces(RedWorker *worker)
     if (worker->display_channel) {
         red_pipe_add_type(&worker->display_channel->base, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
         red_pipe_add_verb(&worker->display_channel->base, SPICE_MSG_DISPLAY_STREAM_DESTROY_ALL);
-        if (!worker->display_channel->base.migrate) {
-            red_pipe_add_verb(&worker->display_channel->base, SPICE_MSG_DISPLAY_RESET);
-        }
     }
 
     //to handle better
