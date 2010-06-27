@@ -1220,25 +1220,31 @@ void DisplayChannel::handle_mark(RedPeer::InMessage *message)
     set_rect_area(area);
 }
 
+void DisplayChannel::reset_screen()
+{
+    AutoRef<UnlockScreenEvent> unlock_event(new UnlockScreenEvent(screen()));
+    get_client().push_event(*unlock_event);
+
+    screen()->set_update_interrupt_trigger(NULL);
+    AutoRef<ResetTimer> reset_timer(new ResetTimer(screen()->ref(), get_client()));
+
+    detach_from_screen(get_client().get_application());
+    
+    get_client().activate_interval_timer(*reset_timer, RESET_TIMEOUT);
+}
+
+
 void DisplayChannel::handle_reset(RedPeer::InMessage *message)
 {
-    screen()->set_update_interrupt_trigger(NULL);
-
     if (surfaces_mngr.is_present_canvas(0)) {
         Canvas *canvas;
         canvas = surfaces_mngr.get_canvas(0);
         canvas->clear();
     }
 
-    AutoRef<ResetTimer> reset_timer(new ResetTimer(screen()->ref(), get_client()));
-
-    AutoRef<UnlockScreenEvent> unlock_event(new UnlockScreenEvent(screen()));
-    get_client().push_event(*unlock_event);
-
-    detach_from_screen(get_client().get_application());
     _palette_cache.clear();
 
-    get_client().activate_interval_timer(*reset_timer, RESET_TIMEOUT);
+    reset_screen();
 }
 
 void DisplayChannel::handle_inval_list(RedPeer::InMessage* message)
@@ -1464,8 +1470,7 @@ void DisplayChannel::destroy_primary_surface()
         }
 #endif
 
-        AutoRef<UnlockScreenEvent> unlock_event(new UnlockScreenEvent(screen()));
-        get_client().push_event(*unlock_event);
+        reset_screen();
     }
 
     AutoRef<DestroyPrimarySurfaceEvent> event(new DestroyPrimarySurfaceEvent(*this));

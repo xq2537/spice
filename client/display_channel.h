@@ -188,6 +188,7 @@ private:
     void streams_time();
     void activate_streams_timer();
     void stream_update_request(uint32_t update_time);
+    void reset_screen();
 
     static void set_clip_rects(const SpiceClip& clip, uint32_t& num_clip_rects, SpiceRect*& clip_rects);
 private:
