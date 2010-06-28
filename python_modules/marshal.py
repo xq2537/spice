@@ -369,6 +369,8 @@ def write_protocol_marshaller(writer, proto, is_server, private_marshallers):
         writer.writeln("static SpiceMessageMarshallers marshallers = {NULL};").newline()
         for f in sorted(functions.keys()):
             member = f[len("spice_marshall_"):]
+            if not member.startswith("msg"):
+                member = "msg_" + member
             writer.assign("marshallers.%s" % member, f)
 
         writer.newline()
