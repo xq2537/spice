@@ -2091,17 +2091,23 @@ void Application::init_logger()
         return;
     }
 
-    log4cpp::Category& root = log4cpp::Category::getRoot();
 #ifdef RED_DEBUG
-    root.setPriority(log4cpp::Priority::DEBUG);
-    root.removeAllAppenders();
-    root.addAppender(new log4cpp::FileAppender("_", fd));
+    logger.setPriority(log4cpp::Priority::DEBUG);
+    logger.removeAllAppenders();
+    logger.addAppender(new log4cpp::FileAppender("_", fd));
 #else
-    root.setPriority(log4cpp::Priority::INFO);
-    root.removeAllAppenders();
+    logger.setPriority(log4cpp::Priority::INFO);
+    logger.removeAllAppenders();
     ::close(fd);
-    root.addAppender(new log4cpp::RollingFileAppender("_", log_file_name));
+    logger.addAppender(new log4cpp::RollingFileAppender("_", log_file_name));
 #endif
+
+    /* send warnings and errors to stderr (in addition to the log file) */
+    log4cpp::Appender *err_appender = new log4cpp::OstreamAppender("__", &std::cerr);
+    log4cpp::SimpleLayout *layout = new log4cpp::SimpleLayout();
+    err_appender->setThreshold(log4cpp::Priority::WARN);
+    err_appender->setLayout(layout);
+    logger.addAppender(err_appender);
 }
 
 void Application::init_globals()

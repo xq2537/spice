@@ -22,8 +22,9 @@
 #include <sstream>
 
 #include <log4cpp/Category.hh>
+#include <log4cpp/OstreamAppender.hh>
+#include <log4cpp/SimpleLayout.hh>
 #include <log4cpp/convenience.h>
-
 #include "platform.h"
 
 #ifdef WIN32
