@@ -20,6 +20,7 @@
 #include <shlobj.h>
 #include <io.h>
 #include <conio.h>
+#include <fcntl.h>
 
 #include "platform.h"
 #include "win_platform.h"

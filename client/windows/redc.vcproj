@@ -47,7 +47,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories=".;..;..\..\common;..\..\..\spice-protocol;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;"
-				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;SW_CANVAS_CACHE;RED_DEBUG;SW_CANVAS_NO_CHUNKS;_WIN32_WINNT=0x0500;LOG4CPLUS_STATIC;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC"
+				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;SW_CANVAS_CACHE;RED_DEBUG;SW_CANVAS_NO_CHUNKS;_WIN32_WINNT=0x0500;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC"
 				MinimalRebuild="false"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="1"
@@ -69,7 +69,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="log4cppD.lib pixman-1D.lib libeay32MTd.lib ssleay32MTd.lib ws2_32.lib msimg32.lib winmm.lib libcelt_0_5_1D.lib pthreadVC2d.lib version.lib CEGUIBase_Static_d.lib CEGUITGAImageCodec_Static_d.lib CEGUIExpatParser_Static_d.lib freetype2312MT_D.lib libexpatMT_D.lib pcre_D.lib CEGUIFalagardWRBase_Static_d.lib libjpeg-static-mt-debug.lib zlibwapi.lib"
+				AdditionalDependencies="pixman-1D.lib libeay32MTd.lib ssleay32MTd.lib ws2_32.lib msimg32.lib winmm.lib libcelt_0_5_1D.lib pthreadVC2d.lib version.lib CEGUIBase_Static_d.lib CEGUITGAImageCodec_Static_d.lib CEGUIExpatParser_Static_d.lib freetype2312MT_D.lib libexpatMT_D.lib pcre_D.lib CEGUIFalagardWRBase_Static_d.lib libjpeg-static-mt-debug.lib zlibwapi.lib"
 				OutputFile="$(OutDir)\spicec.exe"
 				LinkIncremental="2"
 				AdditionalLibraryDirectories="&quot;$(SPICE_LIBS)\lib&quot;"
@@ -129,7 +129,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				AdditionalIncludeDirectories=".;..;..\..\..\spice-protocol;..\..\common;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;"
-				PreprocessorDefinitions="WIN32;_WINDOWS;SW_CANVAS_CACHE;SW_CANVAS_NO_CHUNKS;_WIN32_WINNT=0x0500;LOG4CPLUS_STATIC;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC"
+				PreprocessorDefinitions="WIN32;_WINDOWS;SW_CANVAS_CACHE;SW_CANVAS_NO_CHUNKS;_WIN32_WINNT=0x0500;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
 				WarningLevel="3"
@@ -148,7 +148,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="log4cpp.lib pixman-1.lib libeay32MT.lib ssleay32MT.lib ws2_32.lib msimg32.lib winmm.lib libcelt_0_5_1.lib pthreadVC2.lib version.lib CEGUIBase_Static.lib CEGUITGAImageCodec_Static.lib CEGUIExpatParser_Static.lib freetype2312MT.lib libexpatMT.lib pcre.lib CEGUIFalagardWRBase_Static.lib libjpeg-static-mt.lib zlibwapi.lib"
+				AdditionalDependencies="pixman-1.lib libeay32MT.lib ssleay32MT.lib ws2_32.lib msimg32.lib winmm.lib libcelt_0_5_1.lib pthreadVC2.lib version.lib CEGUIBase_Static.lib CEGUITGAImageCodec_Static.lib CEGUIExpatParser_Static.lib freetype2312MT.lib libexpatMT.lib pcre.lib CEGUIFalagardWRBase_Static.lib libjpeg-static-mt.lib zlibwapi.lib"
 				OutputFile="$(OutDir)\spicec.exe"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories="&quot;$(SPICE_LIBS)\lib&quot;"

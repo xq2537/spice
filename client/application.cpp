@@ -43,10 +43,9 @@
 #include "tunnel_channel.h"
 #include "rect.h"
 #include "gui/gui.h"
-
-#include <log4cpp/BasicConfigurator.hh>
-#include <log4cpp/FileAppender.hh>
-#include <log4cpp/RollingFileAppender.hh>
+#include <stdarg.h>
+#include <stdio.h>
+#include <time.h>
 
 #define STICKY_KEY_PIXMAP ALT_IMAGE_RES_ID
 #define STICKY_KEY_TIMEOUT 750
@@ -2096,30 +2095,84 @@ bool Application::process_cmd_line(int argc, char** argv)
     return true;
 }
 
+#ifdef RED_DEBUG
+static unsigned int log_level = LOG_DEBUG;
+#else
+static unsigned int log_level = LOG_INFO;
+#endif
+
+static FILE *log_file = NULL;
+
+void spice_log_cleanup(void)
+{
+    if (log_file) {
+        fclose(log_file);
+        log_file = NULL;
+    }
+}
+
+static inline std::string function_to_func_name(const std::string& f_name)
+{
+#ifdef __GNUC__
+    std::string name(f_name);
+    std::string::size_type end_pos = f_name.find('(');
+    if (end_pos == std::string::npos) {
+        return f_name;
+    }
+    std::string::size_type start = f_name.rfind(' ', end_pos);
+    if (start == std::string::npos) {
+        return name.substr(0, end_pos);
+    }
+    end_pos -= ++start;
+    return name.substr(start, end_pos);
+#else
+    return f_name;
+#endif
+}
+
+void spice_log(unsigned int type, const char *function, const char *format, ...)
+{
+    std::string formated_message;
+    va_list ap;
+    const char *type_as_char[] = { "DEBUG", "INFO", "WARN", "ERROR", "FATAL" };
+    const char *type_as_nice_char[] = { "Debug", "Info", "Warning", "Error", "Fatal error" };
+
+    if (type < log_level) {
+      return;
+    }
+
+    assert(type <= LOG_FATAL);
+
+    va_start(ap, format);
+    string_vprintf(formated_message, format, ap);
+    va_end(ap);
+
+    if (type >= log_level && log_file != NULL) {
+        fprintf(log_file, "%ld %s [%llu:%llu] %s: %s\n", (long)time(NULL), type_as_char[type],
+                (long long int)Platform::get_process_id(), (long long int)Platform::get_thread_id(),
+                function_to_func_name(function).c_str(),
+                formated_message.c_str());
+		fflush(log_file);
+    }
+
+    if (type >= LOG_WARN) {
+        fprintf(stderr, "%s: %s\n", type_as_nice_char[type], formated_message.c_str());
+    }
+}
+
 void Application::init_logger()
 {
     std::string log_file_name;
+
     Platform::get_app_data_dir(log_file_name, app_name);
     Platform::path_append(log_file_name, "spicec.log");
 
-    int fd = ::open(log_file_name.c_str(), O_CREAT | O_APPEND | O_WRONLY, 0644);
+    log_file = ::fopen(log_file_name.c_str(), "a");
 
-    if (fd == -1) {
-        log4cpp::BasicConfigurator::configure();
+    if (log_file == NULL) {
+        fprintf(stderr, "Failed to open log file %s\n", log_file_name.c_str());
         return;
     }
-
-    log4cpp::Category& root = log4cpp::Category::getRoot();
-#ifdef RED_DEBUG
-    root.setPriority(log4cpp::Priority::DEBUG);
-    root.removeAllAppenders();
-    root.addAppender(new log4cpp::FileAppender("_", fd));
-#else
-    root.setPriority(log4cpp::Priority::INFO);
-    root.removeAllAppenders();
-    ::close(fd);
-    root.addAppender(new log4cpp::RollingFileAppender("_", log_file_name));
-#endif
 }
 
 void Application::init_globals()

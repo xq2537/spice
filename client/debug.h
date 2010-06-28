@@ -21,9 +21,6 @@
 #include <stdlib.h>
 #include <sstream>
 
-#include <log4cpp/Category.hh>
-#include <log4cpp/convenience.h>
-
 #include "platform.h"
 
 #ifdef WIN32
@@ -51,49 +48,36 @@
 
 #endif
 
-#ifdef __GNUC__
-static inline std::string pretty_func_to_func_name(const std::string& f_name)
-{
-    std::string name(f_name);
-    std::string::size_type end_pos = f_name.find('(');
-    if (end_pos == std::string::npos) {
-        return f_name;
-    }
-    std::string::size_type start = f_name.rfind(' ', end_pos);
-    if (start == std::string::npos) {
-        return f_name;
-    }
-    end_pos -= ++start;
-    return name.substr(start, end_pos);
-}
+enum {
+  LOG_DEBUG,
+  LOG_INFO,
+  LOG_WARN,
+  LOG_ERROR,
+  LOG_FATAL
+};
 
-#define FUNC_NAME pretty_func_to_func_name(__PRETTY_FUNCTION__).c_str()
+void spice_log(unsigned int type, const char *function, const char *format, ...);
+void spice_log_cleanup(void);
+
+#ifdef __GNUC__
+#define SPICE_FUNC_NAME __PRETTY_FUNCTION__
 #else
-#define FUNC_NAME __FUNCTION__
+#define SPICE_FUNC_NAME __FUNCTION__
 #endif
 
-#define LOGGER_SECTION(section) LOG4CPP_LOGGER(section)
+#define LOG(type, format, ...) spice_log(type, SPICE_FUNC_NAME, format, ## __VA_ARGS__)
 
-LOG4CPP_LOGGER("spice")
-
-#define LOG(type, format, ...) {                                                        \
-    std::string log_message;                                                            \
-    string_printf(log_message, "[%llu:%llu] %s: " format, Platform::get_process_id(),   \
-                  Platform::get_thread_id(), FUNC_NAME, ## __VA_ARGS__);                \
-    LOG4CPP_##type(logger, log_message.c_str());                                        \
-}
-
-#define LOG_INFO(format, ...) LOG(INFO, format, ## __VA_ARGS__)
-#define LOG_WARN(format, ...) LOG(WARN, format, ## __VA_ARGS__)
-#define LOG_ERROR(format, ...) LOG(ERROR, format, ## __VA_ARGS__)
+#define LOG_INFO(format, ...) LOG(LOG_INFO, format, ## __VA_ARGS__)
+#define LOG_WARN(format, ...) LOG(LOG_WARN, format, ## __VA_ARGS__)
+#define LOG_ERROR(format, ...) LOG(LOG_ERROR, format, ## __VA_ARGS__)
 
 #define PANIC(format, ...) {                \
-    LOG(FATAL, format, ## __VA_ARGS__);     \
+    LOG(LOG_FATAL, format, ## __VA_ARGS__);     \
     ON_PANIC();                             \
 }
 
 #define PANIC_ON(x) if ((x)) {                      \
-    LOG(FATAL, "%s panic %s\n", __FUNCTION__, #x);  \
+    LOG(LOG_FATAL, "%s panic %s\n", __FUNCTION__, #x);  \
     ON_PANIC();                                     \
 }
 
@@ -101,7 +85,7 @@ LOG4CPP_LOGGER("spice")
 
 #define DBG(level, format, ...) {               \
     if (level <= DBGLEVEL) {                    \
-        LOG(DEBUG, format, ## __VA_ARGS__);     \
+        LOG(LOG_DEBUG, format, ## __VA_ARGS__); \
     }                                           \
 }
 

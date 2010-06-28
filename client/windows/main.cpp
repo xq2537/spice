@@ -92,7 +92,7 @@ int WINAPI WinMain(HINSTANCE hInstance,
         exit_val = SPICEC_ERROR_CODE_ERROR;
     }
 
-    log4cpp::Category::shutdown();
+    spice_log_cleanup();
     pthread_win32_process_detach_np();
 
     return exit_val;

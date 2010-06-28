@@ -19,7 +19,6 @@ INCLUDES = \
 	$(GL_CFLAGS)					\
 	$(ALSA_CFLAGS)					\
 	$(PIXMAN_CFLAGS)				\
-	$(LOG4CPP_CFLAGS)				\
 	$(CELT051_CFLAGS)				\
 	$(SSL_CFLAGS)					\
 	$(XRANDR_CFLAGS)				\
@@ -173,7 +172,6 @@ spicec_SOURCES =			\
 
 spicec_LDFLAGS = \
 	$(SPICEC_STATIC_LINKAGE_BSTATIC)		\
-	$(LOG4CPP_LIBS)					\
 	$(CELT051_LIBS)					\
 	$(SSL_LIBS)					\
 	$(CEGUI_LIBS)					\

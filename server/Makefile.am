@@ -8,7 +8,6 @@ INCLUDES = \
 	$(JPEG_CFLAGS)				\
 	$(PIXMAN_CFLAGS)			\
 	$(GL_CFLAGS)				\
-	$(LOG4CPP_CFLAGS)			\
 	$(SSL_CFLAGS)				\
 	$(CELT051_CFLAGS)			\
 	$(SLIRP_CFLAGS)				\

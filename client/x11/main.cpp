@@ -21,7 +21,7 @@
 
 static void cleanup()
 {
-    log4cpp::Category::shutdown();
+    spice_log_cleanup();
 }
 
 const char * version_str = VERSION;

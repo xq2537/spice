@@ -59,8 +59,8 @@ public:
     enum MessageType {
         QUESTION,
         INFO,
-        WARNINNG,
-        ERROR,
+        WARNING,
+        ERROR_MSG
     };
 
     struct ButtonInfo {
