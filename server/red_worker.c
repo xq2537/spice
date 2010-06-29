@@ -9797,6 +9797,7 @@ static void red_migrate_display(RedWorker *worker)
     }
 }
 
+#ifdef USE_OGL
 static SpiceCanvas *create_ogl_context_common(RedWorker *worker, OGLCtx *ctx, uint32_t width,
                                               uint32_t height, int32_t stride, uint8_t depth)
 {
@@ -9850,6 +9851,7 @@ static SpiceCanvas *create_ogl_pixmap_context(RedWorker *worker, uint32_t width,
 
     return canvas;
 }
+#endif
 
 static inline void *create_canvas_for_surface(RedWorker *worker, RedSurface *surface,
                                               uint32_t renderer, uint32_t width, uint32_t height,
@@ -9867,6 +9869,7 @@ static inline void *create_canvas_for_surface(RedWorker *worker, RedSurface *sur
         surface->context.top_down = TRUE;
         surface->context.canvas_draws_on_surface = TRUE;
         return canvas;
+#ifdef USE_OGL
     case RED_RENDERER_OGL_PBUF:
         canvas = create_ogl_pbuf_context(worker, width, height, stride,
                                          SPICE_SURFACE_FMT_DEPTH(format));
@@ -9877,6 +9880,7 @@ static inline void *create_canvas_for_surface(RedWorker *worker, RedSurface *sur
                                            SPICE_SURFACE_FMT_DEPTH(format));
         surface->context.top_down = FALSE;
         return canvas;
+#endif
     default:
         red_error("invalid renderer type");
     };

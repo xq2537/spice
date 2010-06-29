@@ -29,14 +29,21 @@ generated_marshallers.c: $(top_srcdir)/spice.proto
 generated_marshallers.h: $(top_srcdir)/spice.proto
 	$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-marshallers $(STRUCTS) --server -H $(top_srcdir)/spice.proto generated_marshallers.h
 
+if SUPPORT_GL
+GL_SRCS =				\
+	$(top_srcdir)/common/gl_canvas.c		\
+	$(top_srcdir)/common/glc.c			\
+	$(top_srcdir)/common/ogl_ctx.c			\
+	$(NULL)
+else
+GL_SRCS =
+endif
+
 COMMON_SRCS =						\
 	$(top_srcdir)/common/sw_canvas.c		\
 	$(top_srcdir)/common/pixman_utils.c		\
 	$(top_srcdir)/common/lines.c			\
-	$(top_srcdir)/common/gl_canvas.c		\
 	$(top_srcdir)/common/region.c			\
-	$(top_srcdir)/common/glc.c			\
-	$(top_srcdir)/common/ogl_ctx.c			\
 	$(top_srcdir)/common/rop3.c			\
 	$(top_srcdir)/common/quic.c			\
 	$(top_srcdir)/common/lz.c			\
@@ -111,6 +118,7 @@ libspice_server_la_SOURCES =			\
 	zlib_encoder.h				\
 	$(TUNNEL_SRCS)				\
 	$(COMMON_SRCS)				\
+	$(GL_SRCS)				\
 	$(NULL)
 
 libspice_serverincludedir = $(includedir)/spice-server
