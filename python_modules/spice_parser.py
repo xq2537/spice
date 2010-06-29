@@ -87,7 +87,7 @@ def SPICE_BNF():
         attribute = Group(Combine ("@" + identifier) + Optional(lparen + delimitedList(attributeValue) + rparen))
         attributes = Group(ZeroOrMore(attribute))
         arraySizeSpecImage = Group(image_size_ + lparen + integer + comma + identifier + comma + identifier + rparen)
-        arraySizeSpecBytes = Group(bytes_ + lparen + identifier + rparen)
+        arraySizeSpecBytes = Group(bytes_ + lparen + identifier + comma + identifier + rparen)
         arraySizeSpecCString = Group(cstring_ + lparen + rparen)
         arraySizeSpec = lbrack + Optional(identifier ^ integer ^ arraySizeSpecImage ^ arraySizeSpecBytes ^arraySizeSpecCString, default="") + rbrack
         variableDef = Group(typeSpec + Optional("*", default=None) + identifier + Optional(arraySizeSpec, default=None) + attributes - semi) \

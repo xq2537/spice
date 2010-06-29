@@ -2291,10 +2291,29 @@ static inline void __current_add_drawable(RedWorker *worker, Drawable *drawable,
 
 static int is_equal_path(RedWorker *worker, SpicePath *path1, SpicePath *path2)
 {
-    if (path1->size != path2->size)
+    SpicePathSeg *seg1, *seg2;
+    int i, j;
+
+    if (path1->num_segments != path2->num_segments)
         return FALSE;
-    if (memcmp(path1->segments, path2->segments, path1->size) != 0)
-        return FALSE;
+
+    seg1 = &path1->segments[0];
+    seg2 = &path2->segments[0];
+    for (i = 0; i < path1->num_segments; i++) {
+        if (seg1->flags != seg2->flags ||
+            seg1->count != seg2->count) {
+            return FALSE;
+        }
+        for (j = 0; j < seg1->count; j++) {
+            if (seg1->points[j].x != seg2->points[j].x ||
+                seg1->points[j].y != seg2->points[j].y) {
+                return FALSE;
+            }
+        }
+        seg1 = (SpicePathSeg*)(&seg1->points[seg1->count]);
+        seg2 = (SpicePathSeg*)(&seg2->points[seg2->count]);
+    }
+
     return TRUE;
 }
 
@@ -5120,18 +5139,6 @@ static void add_buf_from_info(RedChannel *channel, SpiceMarshaller *m, AddBufInf
     }
 }
 
-
-static void fill_path(SpiceMarshaller *m, SpicePath *path)
-{
-    SpicePathSeg *start, *end;
-
-    spice_marshaller_add_uint32(m, path->size);
-    start = path->segments;
-    end = (SpicePathSeg*)((uint8_t*)(path->segments) + path->size);
-    while (start < end) {
-        start = spice_marshall_PathSegment(m, start);
-    }
-}
 
 static void fill_str(DisplayChannel *display_channel, SpiceMarshaller *m,
                      QXLPHYSICAL in_str, uint32_t group_id)
@@ -8004,7 +8011,7 @@ static void red_send_qxl_draw_stroke(RedWorker *worker,
                           &style_out,
                           &brush_pat_out);
 
-    fill_path(path_out, stroke.path);
+    spice_marshall_Path(path_out, stroke.path);
     fill_attr(display_channel, style_out, &stroke.attr, item->group_id);
     if (brush_pat_out) {
         fill_bits(display_channel, brush_pat_out, stroke.brush.u.pattern.pat, item, FALSE);

@@ -114,15 +114,13 @@ static pixman_image_t *canvas_surf_to_trans_surf(GLCImage *image,
 static GLCPath get_path(GLCanvas *canvas, SpicePath *s)
 {
     GLCPath path = glc_path_create(canvas->glc);
-    uint32_t more = s->size;
+    int i;
     SpicePathSeg* seg = s->segments;
 
-    do {
+    for (i = 0; i < s->num_segments; i++) {
         uint32_t flags = seg->flags;
         SpicePointFix* point = seg->points;
         SpicePointFix* end_point = point + seg->count;
-        ASSERT(point < end_point);
-        more -= ((unsigned long)end_point - (unsigned long)seg);
         seg = (SpicePathSeg*)end_point;
 
         if (flags & SPICE_PATH_BEGIN) {
@@ -148,7 +146,7 @@ static GLCPath get_path(GLCanvas *canvas, SpicePath *s)
                 glc_path_close(path);
             }
         }
-    } while (more);
+    }
 
     return path;
 }
@@ -621,7 +619,7 @@ static void gl_canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox, Sp
     }
     glc_set_line_width(canvas->glc, fix_to_double(stroke->attr.width));
 
-    path = get_path(canvas, SPICE_GET_ADDRESS(stroke->path));
+    path = get_path(canvas, stroke->path);
     glc_stroke_path(canvas->glc, path);
     glc_path_destroy(path);
 }

@@ -374,8 +374,8 @@ struct PathSegment {
 }  @ctype(SpicePathSeg);
 
 struct Path {
-    uint32 size;
-    PathSegment segments[bytes(size)] @end;
+    uint32 segments_size @bytes_count;
+    PathSegment segments[bytes(segments_size, num_segments)] @end;
 };
 
 struct Clip {

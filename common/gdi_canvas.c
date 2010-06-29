@@ -308,19 +308,16 @@ uint32_t raster_ops[] = {
     0x00FF0062 // 1 WHITENESS
 };
 
-static void set_path(GdiCanvas *canvas, void *addr)
+static void set_path(GdiCanvas *canvas, SpicePath *s)
 {
-    uint32_t* data_size = (uint32_t*)addr;
-    uint32_t more = *data_size;
+    SpicePathSeg* seg = s->segments;
+    int i;
 
-    SpicePathSeg* seg = (SpicePathSeg*)(data_size + 1);
-
-    do {
+    for (i = 0; i < s->num_segments; i++) {
         uint32_t flags = seg->flags;
         SpicePointFix* point = (SpicePointFix*)seg->data;
         SpicePointFix* end_point = point + seg->count;
         ASSERT(point < end_point);
-        more -= ((unsigned long)end_point - (unsigned long)seg);
         seg = (SpicePathSeg*)end_point;
 
         if (flags & SPICE_PATH_BEGIN) {
@@ -371,7 +368,7 @@ static void set_path(GdiCanvas *canvas, void *addr)
             }
         }
 
-    } while (more);
+    }
 }
 
 static void set_scale_mode(GdiCanvas *canvas, uint8_t scale_mode)
@@ -1799,7 +1796,7 @@ static void gdi_canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox, S
     }
     prev_hpen = (HPEN)SelectObject(canvas->dc, hpen);
 
-    set_path(canvas, SPICE_GET_ADDRESS(stroke->path));
+    set_path(canvas, stroke->path);
 
     StrokePath(canvas->dc);
 

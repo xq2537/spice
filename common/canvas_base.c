@@ -3077,8 +3077,6 @@ static void canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox,
         stroke_fill_spans,
         stroke_fill_rects
     };
-    uint32_t *data_size;
-    uint32_t more;
     SpicePathSeg *seg;
     StrokeLines lines;
     int i;
@@ -3182,18 +3180,15 @@ static void canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox,
         CANVAS_ERROR("invalid brush type");
     }
 
-    data_size = (uint32_t*)SPICE_GET_ADDRESS(stroke->path);
-    more = *data_size;
-    seg = (SpicePathSeg*)(data_size + 1);
+    seg = stroke->path->segments;
 
     stroke_lines_init(&lines);
 
-    do {
+    for (i = 0; i < stroke->path->num_segments; i++) {
         uint32_t flags = seg->flags;
         SpicePointFix* point = seg->points;
         SpicePointFix* end_point = point + seg->count;
         ASSERT(point < end_point);
-        more -= ((unsigned long)end_point - (unsigned long)seg);
         seg = (SpicePathSeg*)end_point;
 
         if (flags & SPICE_PATH_BEGIN) {
@@ -3223,7 +3218,7 @@ static void canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox,
             }
             stroke_lines_draw(&lines, (lineGC *)&gc, dashed);
         }
-    } while (more);
+    }
 
     stroke_lines_draw(&lines, (lineGC *)&gc, dashed);
 

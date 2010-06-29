@@ -165,7 +165,7 @@ def get_array_size(array, container_src):
         else:
             return "(((%s * %s + 7) / 8 ) * %s)" % (bpp, width_v, rows_v)
     elif array.is_bytes_length():
-        return container_src.get_ref(array.size[1])
+        return container_src.get_ref(array.size[2])
     else:
         raise NotImplementedError("TODO array size type not handled yet")
 
@@ -179,20 +179,18 @@ def write_array_marshaller(writer, at_end, member, array, container_src, scope):
     nelements = get_array_size(array, container_src)
     is_byte_size = array.is_bytes_length()
 
-    if is_byte_size:
-        element = "%s__bytes" % member.name
-    else:
-        element = "%s__element" % member.name
+    element = "%s__element" % member.name
 
     if not at_end:
         writer.assign(element, container_src.get_ref(member.name))
 
     if is_byte_size:
-        scope.variable_def("size_t", "array_end")
-        writer.assign("array_end", "spice_marshaller_get_size(m) + %s" % nelements)
+        size_start_var = "%s__size_start" % member.name
+        scope.variable_def("size_t", size_start_var)
+        writer.assign(size_start_var, "spice_marshaller_get_size(m)")
 
-    with writer.index(no_block = is_byte_size) as index:
-        with writer.while_loop("spice_marshaller_get_size(m) < array_end") if is_byte_size else writer.for_loop(index, nelements) as array_scope:
+    with writer.index() as index:
+        with writer.for_loop(index, nelements) as array_scope:
             array_scope.variable_def(element_type.c_type() + " *", element)
             if at_end:
                 writer.assign(element, "(%s *)end" % element_type.c_type())
@@ -209,6 +207,12 @@ def write_array_marshaller(writer, at_end, member, array, container_src, scope):
 
             if not at_end:
                 writer.statement("%s++" % element)
+
+    if is_byte_size:
+        size_var = member.container.lookup_member(array.size[1])
+        size_var_type = size_var.member_type
+        var = "%s__ref" % array.size[1]
+        writer.statement("spice_marshaller_set_%s(m, %s, spice_marshaller_get_size(m) - %s)" % (size_var_type.primitive_type(), var, size_start_var))
 
 def write_switch_marshaller(writer, container, switch, src, scope):
     var = container.lookup_member(switch.variable)
@@ -289,6 +293,11 @@ def write_member_marshaller(writer, container, member, src, scope):
     elif t.is_primitive():
         if member.has_attr("zero"):
             writer.statement("spice_marshaller_add_%s(m, 0)" % (t.primitive_type()))
+        if member.has_attr("bytes_count"):
+            var = "%s__ref" % member.name
+            scope.variable_def("void *", var)
+            writer.statement("%s = spice_marshaller_add_%s(m, %s)" % (var, t.primitive_type(), 0))
+
         elif member.has_end_attr():
             writer.statement("spice_marshaller_add_%s(m, *(%s_t *)end)" % (t.primitive_type(), t.primitive_type()))
             writer.increment("end", t.sizeof())

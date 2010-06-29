@@ -604,7 +604,7 @@ def read_array_len(writer, prefix, array, dest, scope, handles_bytes = False):
     elif array.is_bytes_length():
         if not handles_bytes:
             raise NotImplementedError("handling of bytes() not supported here yet")
-        writer.assign(nelements, dest.get_ref(array.size[1]))
+        writer.assign(nelements, array.size[1])
     else:
         raise NotImplementedError("TODO array size type not handled yet")
     return nelements
@@ -714,10 +714,15 @@ def write_array_parser(writer, nelements, array, dest, scope):
         writer.increment("end", nelements)
     else:
         if is_byte_size:
+            real_nelements = nelements[:-len("nbytes")] + "nelements"
             scope.variable_def("uint8_t *", "array_end")
+            scope.variable_def("uint32_t", real_nelements)
             writer.assign("array_end", "end + %s" % nelements)
+            writer.assign(real_nelements, 0)
         with writer.index(no_block = is_byte_size) as index:
             with writer.while_loop("end < array_end") if is_byte_size else writer.for_loop(index, nelements) as array_scope:
+                if is_byte_size:
+                    writer.increment(real_nelements, 1)
                 if element_type.is_primitive():
                     writer.statement("*(%s *)end = consume_%s(&in)" % (element_type.c_type(), element_type.primitive_type()))
                     writer.increment("end", element_type.sizeof())
@@ -725,6 +730,8 @@ def write_array_parser(writer, nelements, array, dest, scope):
                     dest2 = dest.child_at_end(writer, element_type)
                     dest2.reuse_scope = array_scope
                     write_container_parser(writer, element_type, dest2)
+        if is_byte_size:
+            writer.assign(dest.get_ref(array.size[2]), real_nelements)
 
 def write_parse_pointer(writer, t, at_end, as_c_ptr, dest, member_name, scope):
         target_type = t.target_type
@@ -766,7 +773,12 @@ def write_member_parser(writer, container, member, dest, scope):
             writer.statement("*(%s *)end = consume_%s(&in)" % (t.c_type(), t.primitive_type()))
             writer.increment("end", t.sizeof())
         else:
-            writer.assign(dest.get_ref(member.name), "consume_%s(&in)" % (t.primitive_type()))
+            if member.has_attr("bytes_count"):
+                scope.variable_def("uint32_t", member.name);
+                dest_var = member.name
+            else:
+                dest_var = dest.get_ref(member.name)
+            writer.assign(dest_var, "consume_%s(&in)" % (t.primitive_type()))
         #TODO validate e.g. flags and enums
     elif t.is_array():
         nelements = read_array_len(writer, member.name, t, dest, scope, handles_bytes = True)

@@ -153,8 +153,10 @@ static SpicePath *red_get_path(RedMemSlotInfo *slots, int group_id,
     bool free_data;
     QXLPath *qxl;
     SpicePath *red;
-    size_t size;
+    size_t size, mem_size, mem_size2, dsize;
+    int n_segments;
     int i;
+    uint32_t count;
 
     qxl = (QXLPath *)get_virt(slots, addr, sizeof(*qxl), group_id);
     size = red_get_data_chunks_ptr(slots, group_id,
@@ -163,17 +165,44 @@ static SpicePath *red_get_path(RedMemSlotInfo *slots, int group_id,
     data = red_linearize_chunk(&chunks, size, &free_data);
     red_put_data_chunks(&chunks);
 
-    ASSERT(qxl->data_size == size);
-    ASSERT(sizeof(QXLPathSeg) == sizeof(SpicePathSeg)); /* FIXME */
-    red = spice_malloc(sizeof(*red) + size);
-    red->size = qxl->data_size;
+    n_segments = 0;
+    mem_size = sizeof(*red);
+
+    start = (QXLPathSeg*)data;
+    end = (QXLPathSeg*)(data + size);
+    while (start < end) {
+        n_segments++;
+        count = start->count;
+        mem_size += sizeof(SpicePathSeg) + count * sizeof(SpicePointFix);
+        start = (QXLPathSeg*)(&start->points[count]);
+    }
+
+    red = spice_malloc(mem_size);
+    red->num_segments = n_segments;
 
     start = (QXLPathSeg*)data;
     end = (QXLPathSeg*)(data + size);
     seg = red->segments;
+    n_segments = 0;
+    mem_size2 = sizeof(*red);
     while (start < end) {
+        n_segments++;
+        count = start->count;
+
+        /* Protect against overflow in size calculations before
+           writing to memory */
+        ASSERT(mem_size2 + sizeof(SpicePathSeg) > mem_size2);
+        mem_size2  += sizeof(SpicePathSeg);
+        ASSERT(count < UINT32_MAX / sizeof(SpicePointFix));
+        dsize = count * sizeof(SpicePointFix);
+        ASSERT(mem_size2 + dsize > mem_size2);
+        mem_size2  += dsize;
+
+        /* Verify that we didn't overflow due to guest changing data */
+        ASSERT(mem_size2 <= mem_size);
+
         seg->flags = start->flags;
-        seg->count = start->count;
+        seg->count = count;
         for (i = 0; i < seg->count; i++) {
             seg->points[i].x = start->points[i].x;
             seg->points[i].y = start->points[i].y;
@@ -181,6 +210,8 @@ static SpicePath *red_get_path(RedMemSlotInfo *slots, int group_id,
         start = (QXLPathSeg*)(&start->points[i]);
         seg = (SpicePathSeg*)(&seg->points[i]);
     }
+    /* Ensure guest didn't tamper with segment count */
+    ASSERT(n_segments == red->num_segments);
 
     if (free_data) {
         free(data);
