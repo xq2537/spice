@@ -50,8 +50,9 @@ def write_parser_helpers(writer):
     writer.begin_block("struct PointerInfo")
     writer.variable_def("uint64_t", "offset")
     writer.variable_def("parse_func_t", "parse")
-    writer.variable_def("SPICE_ADDRESS *", "dest")
+    writer.variable_def("void *", "dest")
     writer.variable_def("uint32_t", "nelements")
+    writer.variable_def("int", "is_ptr")
     writer.end_block(semicolon=True)
 
 def write_read_primitive(writer, start, container, name, scope):
@@ -636,7 +637,7 @@ def write_switch_parser(writer, container, switch, dest, scope):
             if t.is_struct():
                 write_container_parser(writer, t, dest2)
             elif t.is_pointer():
-                write_parse_pointer(writer, t, False, dest2, m.name, block)
+                write_parse_pointer(writer, t, False, m.has_attr("c_ptr"), dest2, m.name, block)
             elif t.is_primitive():
                 if not m.has_attr("zero"):
                     writer.assign(dest2.get_ref(m.name), "consume_%s(&in)" % (t.primitive_type()))
@@ -725,15 +726,16 @@ def write_array_parser(writer, nelements, array, dest, scope):
                     dest2.reuse_scope = array_scope
                     write_container_parser(writer, element_type, dest2)
 
-def write_parse_pointer(writer, t, at_end, dest, member_name, scope):
+def write_parse_pointer(writer, t, at_end, as_c_ptr, dest, member_name, scope):
         target_type = t.target_type
         writer.assign("ptr_info[n_ptr].offset", "consume_%s(&in)" % t.primitive_type())
         writer.assign("ptr_info[n_ptr].parse", write_parse_ptr_function(writer, target_type))
         if at_end:
             writer.assign("ptr_info[n_ptr].dest", "end")
-            writer.increment("end", "sizeof(SPICE_ADDRESS)");
+            writer.increment("end", "sizeof(void *)" if as_c_ptr else "sizeof(SPICE_ADDRESS)");
         else:
             writer.assign("ptr_info[n_ptr].dest", "&%s" % dest.get_ref(member_name))
+        writer.assign("ptr_info[n_ptr].is_ptr", "1" if as_c_ptr else "0")
         if target_type.is_array():
             nelements = read_array_len(writer, member_name, target_type, dest, scope)
             writer.assign("ptr_info[n_ptr].nelements", nelements)
@@ -756,7 +758,7 @@ def write_member_parser(writer, container, member, dest, scope):
             writer.comment("Reuse data from network message").newline()
             writer.assign(dest.get_ref(member.name), "(size_t)(message_start + consume_%s(&in))" % t.primitive_type())
         else:
-            write_parse_pointer(writer, t, member.has_end_attr(), dest, member.name, scope)
+            write_parse_pointer(writer, t, member.has_end_attr(), member.has_attr("c_ptr"), dest, member.name, scope)
     elif t.is_primitive():
         if member.has_attr("zero"):
             pass
@@ -817,13 +819,20 @@ def write_ptr_info_check(writer):
         with writer.for_loop(index, "n_ptr") as scope:
             offset = "ptr_info[%s].offset" % index
             function = "ptr_info[%s].parse" % index
+            is_ptr = "ptr_info[%s].is_ptr" % index
             dest = "ptr_info[%s].dest" % index
             with writer.if_block("%s == 0" % offset, newline=False):
-                writer.assign("*%s" % dest, "0")
+                with writer.if_block("%s == 0" % is_ptr, newline=False):
+                    writer.assign("*(void **)(%s)" % dest, "NULL")
+                with writer.block(" else"):
+                    writer.assign("*(SPICE_ADDRESS *)(%s)" % dest, "0")
             with writer.block(" else"):
                 writer.comment("Align to 32 bit").newline()
                 writer.assign("end", "(uint8_t *)SPICE_ALIGN((size_t)end, 4)")
-                writer.assign("*%s" % dest, "(size_t)end")
+                with writer.if_block("%s == 0" % is_ptr, newline=False):
+                    writer.assign("*(void **)(%s)" % dest, "(void *)end")
+                with writer.block(" else"):
+                    writer.assign("*(SPICE_ADDRESS *)(%s)" % dest, "(SPICE_ADDRESS)end")
                 writer.assign("end", "%s(message_start, message_end, end, &ptr_info[%s], minor)" % (function, index))
                 writer.error_check("end == NULL")
     writer.newline()
