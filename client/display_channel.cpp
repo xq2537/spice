@@ -1291,9 +1291,8 @@ void DisplayChannel::set_clip_rects(const SpiceClip& clip, uint32_t& num_clip_re
 {
     switch (clip.type) {
     case SPICE_CLIP_TYPE_RECTS: {
-        uint32_t* n = (uint32_t*)SPICE_GET_ADDRESS(clip.data);
-        num_clip_rects = *n;
-        clip_rects = (SpiceRect *)(n + 1);
+        num_clip_rects = clip.rects->num_rects;
+        clip_rects = clip.rects->rects;
         break;
     }
     case SPICE_CLIP_TYPE_NONE:
