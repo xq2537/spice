@@ -50,13 +50,15 @@ SpiceMarshaller *spice_marshaller_get_ptr_submarshaller(SpiceMarshaller *m, int 
 int spice_marshaller_fill_iovec(SpiceMarshaller *m, struct iovec *vec,
                                 int n_vec, size_t skip_bytes);
 #endif
-void spice_marshaller_add_uint64(SpiceMarshaller *m, uint64_t v);
-void spice_marshaller_add_int64(SpiceMarshaller *m, int64_t v);
-void spice_marshaller_add_uint32(SpiceMarshaller *m, uint32_t v);
-void spice_marshaller_add_int32(SpiceMarshaller *m, int32_t v);
-void spice_marshaller_add_uint16(SpiceMarshaller *m, uint16_t v);
-void spice_marshaller_add_int16(SpiceMarshaller *m, int16_t v);
-void spice_marshaller_add_uint8(SpiceMarshaller *m, uint8_t v);
-void spice_marshaller_add_int8(SpiceMarshaller *m, int8_t v);
+void *spice_marshaller_add_uint64(SpiceMarshaller *m, uint64_t v);
+void *spice_marshaller_add_int64(SpiceMarshaller *m, int64_t v);
+void *spice_marshaller_add_uint32(SpiceMarshaller *m, uint32_t v);
+void *spice_marshaller_add_int32(SpiceMarshaller *m, int32_t v);
+void *spice_marshaller_add_uint16(SpiceMarshaller *m, uint16_t v);
+void *spice_marshaller_add_int16(SpiceMarshaller *m, int16_t v);
+void *spice_marshaller_add_uint8(SpiceMarshaller *m, uint8_t v);
+void *spice_marshaller_add_int8(SpiceMarshaller *m, int8_t v);
+
+void  spice_marshaller_set_uint32(SpiceMarshaller *m, void *ref, uint32_t v);
 
 #endif

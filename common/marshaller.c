@@ -526,66 +526,79 @@ int spice_marshaller_fill_iovec(SpiceMarshaller *m, struct iovec *vec,
 }
 #endif
 
-void spice_marshaller_add_uint64(SpiceMarshaller *m, uint64_t v)
+void *spice_marshaller_add_uint64(SpiceMarshaller *m, uint64_t v)
 {
     uint8_t *ptr;
 
     ptr = spice_marshaller_reserve_space(m, sizeof(uint64_t));
     write_uint64(ptr, v);
+    return (void *)ptr;
 }
 
-void spice_marshaller_add_int64(SpiceMarshaller *m, int64_t v)
+void *spice_marshaller_add_int64(SpiceMarshaller *m, int64_t v)
 {
     uint8_t *ptr;
 
     ptr = spice_marshaller_reserve_space(m, sizeof(int64_t));
     write_int64(ptr, v);
+    return (void *)ptr;
 }
 
-void spice_marshaller_add_uint32(SpiceMarshaller *m, uint32_t v)
+void *spice_marshaller_add_uint32(SpiceMarshaller *m, uint32_t v)
 {
     uint8_t *ptr;
 
     ptr = spice_marshaller_reserve_space(m, sizeof(uint32_t));
     write_uint32(ptr, v);
+    return (void *)ptr;
 }
 
-void spice_marshaller_add_int32(SpiceMarshaller *m, int32_t v)
+void spice_marshaller_set_uint32(SpiceMarshaller *m, void *ref, uint32_t v)
+{
+    write_uint32((uint8_t *)ref, v);
+}
+
+void *spice_marshaller_add_int32(SpiceMarshaller *m, int32_t v)
 {
     uint8_t *ptr;
 
     ptr = spice_marshaller_reserve_space(m, sizeof(int32_t));
     write_int32(ptr, v);
+    return (void *)ptr;
 }
 
-void spice_marshaller_add_uint16(SpiceMarshaller *m, uint16_t v)
+void *spice_marshaller_add_uint16(SpiceMarshaller *m, uint16_t v)
 {
     uint8_t *ptr;
 
     ptr = spice_marshaller_reserve_space(m, sizeof(uint16_t));
     write_uint16(ptr, v);
+    return (void *)ptr;
 }
 
-void spice_marshaller_add_int16(SpiceMarshaller *m, int16_t v)
+void *spice_marshaller_add_int16(SpiceMarshaller *m, int16_t v)
 {
     uint8_t *ptr;
 
     ptr = spice_marshaller_reserve_space(m, sizeof(int16_t));
     write_int16(ptr, v);
+    return (void *)ptr;
 }
 
-void spice_marshaller_add_uint8(SpiceMarshaller *m, uint8_t v)
+void *spice_marshaller_add_uint8(SpiceMarshaller *m, uint8_t v)
 {
     uint8_t *ptr;
 
     ptr = spice_marshaller_reserve_space(m, sizeof(uint8_t));
     write_uint8(ptr, v);
+    return (void *)ptr;
 }
 
-void spice_marshaller_add_int8(SpiceMarshaller *m, int8_t v)
+void *spice_marshaller_add_int8(SpiceMarshaller *m, int8_t v)
 {
     uint8_t *ptr;
 
     ptr = spice_marshaller_reserve_space(m, sizeof(int8_t));
     write_int8(ptr, v);
+    return (void *)ptr;
 }
