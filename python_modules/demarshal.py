@@ -638,7 +638,8 @@ def write_switch_parser(writer, container, switch, dest, scope):
             elif t.is_pointer():
                 write_parse_pointer(writer, t, False, dest2, m.name, block)
             elif t.is_primitive():
-                writer.assign(dest2.get_ref(m.name), "consume_%s(&in)" % (t.primitive_type()))
+                if not m.has_attr("zero"):
+                    writer.assign(dest2.get_ref(m.name), "consume_%s(&in)" % (t.primitive_type()))
                 #TODO validate e.g. flags and enums
             elif t.is_array():
                 nelements = read_array_len(writer, m.name, t, dest, block)
@@ -757,6 +758,8 @@ def write_member_parser(writer, container, member, dest, scope):
         else:
             write_parse_pointer(writer, t, member.has_end_attr(), dest, member.name, scope)
     elif t.is_primitive():
+        if member.has_attr("zero"):
+            pass
         if member.has_end_attr():
             writer.statement("*(%s *)end = consume_%s(&in)" % (t.c_type(), t.primitive_type()))
             writer.increment("end", t.sizeof())
