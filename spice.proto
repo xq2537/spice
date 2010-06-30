@@ -726,7 +726,7 @@ channel DisplayChannel : BaseChannel {
     message {
 	DisplayBase base;
 	struct Stroke {
-	    Path *path;
+	    Path *path @c_ptr @marshall @nonnull;
 	    LineAttr attr;
 	    Brush brush;
 	    uint16 fore_mode;

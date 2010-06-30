@@ -7998,7 +7998,6 @@ static void red_send_qxl_draw_stroke(RedWorker *worker,
     RedChannel *channel = &display_channel->base;
     SpiceStroke stroke;
     SpiceMarshaller *brush_pat_out;
-    SpiceMarshaller *path_out;
     SpiceMarshaller *style_out;
 
     fill_base(display_channel, item);
@@ -8007,11 +8006,9 @@ static void red_send_qxl_draw_stroke(RedWorker *worker,
     stroke = drawable->u.stroke;
     spice_marshall_Stroke(channel->send_data.marshaller,
                           &stroke,
-                          &path_out,
                           &style_out,
                           &brush_pat_out);
 
-    spice_marshall_Path(path_out, stroke.path);
     fill_attr(display_channel, style_out, &stroke.attr, item->group_id);
     if (brush_pat_out) {
         fill_bits(display_channel, brush_pat_out, stroke.brush.u.pattern.pat, item, FALSE);
