@@ -94,7 +94,7 @@ class Type:
     def get_num_pointers(self):
         return 0
 
-    def get_pointer_names(self):
+    def get_pointer_names(self, marshalled):
         return []
 
     def sizeof(self):
@@ -205,8 +205,8 @@ class TypeAlias(Type):
     def get_num_pointers(self):
         return self.the_type.get_num_pointers()
 
-    def get_pointer_names(self):
-        return self.the_type.get_pointer_names()
+    def get_pointer_names(self, marshalled):
+        return self.the_type.get_pointer_names(marshalled)
 
     def c_type(self):
         if self.has_attr("ctype"):
@@ -408,7 +408,7 @@ class ArrayType(Type):
             return element_count * self.size
         raise Exception, "Pointers in dynamic arrays not supported"
 
-    def get_pointer_names(self):
+    def get_pointer_names(self, marshalled):
         element_count = self.element_type.get_num_pointers()
         if element_count  == 0:
             return []
@@ -554,11 +554,14 @@ class Member(Containee):
     def get_num_pointers(self):
         return self.member_type.get_num_pointers()
 
-    def get_pointer_names(self):
+    def get_pointer_names(self, marshalled):
         if self.member_type.is_pointer():
-            names = [self.name + "_out"]
+            if self.has_attr("marshall") == marshalled:
+                names = [self.name]
+            else:
+                names = []
         else:
-            names = self.member_type.get_pointer_names()
+            names = self.member_type.get_pointer_names(marshalled)
         if self.has_attr("outvar"):
             prefix = self.attributes["outvar"][0]
             names = map(lambda name: prefix + "_" + name, names)
@@ -592,8 +595,8 @@ class SwitchCase:
     def get_num_pointers(self):
         return self.member.get_num_pointers()
 
-    def get_pointer_names(self):
-        return self.member.get_pointer_names()
+    def get_pointer_names(self, marshalled):
+        return self.member.get_pointer_names(marshalled)
 
 class Switch(Containee):
     def __init__(self, variable, cases, name, attribute_list):
@@ -684,10 +687,10 @@ class Switch(Containee):
             count = max(count, c.get_num_pointers())
         return count
 
-    def get_pointer_names(self):
+    def get_pointer_names(self, marshalled):
         names = []
         for c in self.cases:
-            names = names + c.get_pointer_names()
+            names = names + c.get_pointer_names(marshalled)
         return names
 
 class ContainerType(Type):
@@ -736,10 +739,10 @@ class ContainerType(Type):
             count = count + m.get_num_pointers()
         return count
 
-    def get_pointer_names(self):
+    def get_pointer_names(self, marshalled):
         names = []
         for m in self.members:
-            names = names + m.get_pointer_names()
+            names = names + m.get_pointer_names(marshalled)
         return names
 
     def has_pointer(self):

@@ -104,10 +104,10 @@ def write_marshal_ptr_function(writer, target_type):
 
     writer.set_is_generated("marshaller", marshal_function)
 
-    names = target_type.get_pointer_names()
+    names = target_type.get_pointer_names(False)
     names_args = ""
     if len(names) > 0:
-        n = map(lambda name: ", SpiceMarshaller **%s" % name, names)
+        n = map(lambda name: ", SpiceMarshaller **%s_out" % name, names)
         names_args = "".join(n)
 
     header = writer.header
@@ -120,9 +120,10 @@ def write_marshal_ptr_function(writer, target_type):
         scope = writer.function(marshal_function, "void *", "SpiceMarshaller *m, %s *ptr" % target_type.c_type() + names_args)
         header.writeln("void *" + marshal_function + "(SpiceMarshaller *m, %s *msg" % target_type.c_type() + names_args + ");")
     scope.variable_def("SPICE_GNUC_UNUSED uint8_t *", "end")
+    scope.variable_def("SPICE_GNUC_UNUSED SpiceMarshaller *", "m2")
 
     for n in names:
-        writer.assign("*%s" % n, "NULL")
+        writer.assign("*%s_out" % n, "NULL")
 
     writer.newline()
     writer.assign("end", "(uint8_t *)(ptr+1)")
@@ -214,6 +215,20 @@ def write_array_marshaller(writer, at_end, member, array, container_src, scope):
         var = "%s__ref" % array.size[1]
         writer.statement("spice_marshaller_set_%s(m, %s, spice_marshaller_get_size(m) - %s)" % (size_var_type.primitive_type(), var, size_start_var))
 
+def write_pointer_marshaller(writer, member, src):
+    t = member.member_type
+    ptr_func = write_marshal_ptr_function(writer, t.target_type)
+    submarshaller = "spice_marshaller_get_ptr_submarshaller(m, %d)" % (1 if member.get_fixed_nw_size() == 8 else 0)
+    if member.has_attr("marshall"):
+        writer.assign("m2", submarshaller)
+        if member.has_attr("nonnull"):
+            writer.statement("%s(m2, %s)" % (ptr_func, src.get_ref(member.name)))
+        else:
+            with writer.if_block("%s != NULL" % src.get_ref(member.name)) as block:
+                writer.statement("%s(m2, %s)" % (ptr_func, src.get_ref(member.name)))
+    else:
+        writer.assign("*%s_out" % (writer.out_prefix + member.name), submarshaller)
+
 def write_switch_marshaller(writer, container, switch, src, scope):
     var = container.lookup_member(switch.variable)
     var_type = var.member_type
@@ -242,8 +257,7 @@ def write_switch_marshaller(writer, container, switch, src, scope):
             if t.is_struct():
                 write_container_marshaller(writer, t, src2)
             elif t.is_pointer():
-                ptr_func = write_marshal_ptr_function(writer, t.target_type)
-                writer.assign("*%s_out" % (writer.out_prefix + m.name), "spice_marshaller_get_ptr_submarshaller(m, %d)" % (1 if m.get_fixed_nw_size() == 8 else 0))
+                write_pointer_marshaller(writer, m, src2)
             elif t.is_primitive():
                 if m.has_attr("zero"):
                     writer.statement("spice_marshaller_add_%s(m, 0)" % (t.primitive_type()))
@@ -283,13 +297,7 @@ def write_member_marshaller(writer, container, member, src, scope):
     t = member.member_type
 
     if t.is_pointer():
-#        if member.has_attr("nocopy"):
-#            writer.comment("Reuse data from network message").newline()
-#            writer.assign(src.get_ref(member.name), "(size_t)(message_start + consume_uint64(&in))")
-#        else:
-#            write_parse_pointer(writer, t, member.has_end_attr(), src, member.name, scope)
-        ptr_func = write_marshal_ptr_function(writer, t.target_type)
-        writer.assign("*%s_out" % (writer.out_prefix + member.name), "spice_marshaller_get_ptr_submarshaller(m, %d)" % (1 if member.get_fixed_nw_size() == 8 else 0))
+        write_pointer_marshaller(writer, member, src)
     elif t.is_primitive():
         if member.has_attr("zero"):
             writer.statement("spice_marshaller_add_%s(m, 0)" % (t.primitive_type()))
@@ -329,10 +337,10 @@ def write_message_marshaller(writer, message, is_server, private):
         return function_name
     writer.set_is_generated("marshaller", function_name)
 
-    names = message.get_pointer_names()
+    names = message.get_pointer_names(False)
     names_args = ""
     if len(names) > 0:
-        n = map(lambda name: ", SpiceMarshaller **%s" % name, names)
+        n = map(lambda name: ", SpiceMarshaller **%s_out" % name, names)
         names_args = "".join(n)
 
     if not private:
@@ -342,9 +350,10 @@ def write_message_marshaller(writer, message, is_server, private):
                             "static void" if private else "void",
                             "SpiceMarshaller *m, %s *msg" % message.c_type() + names_args)
     scope.variable_def("SPICE_GNUC_UNUSED uint8_t *", "end")
+    scope.variable_def("SPICE_GNUC_UNUSED SpiceMarshaller *", "m2")
 
     for n in names:
-        writer.assign("*%s" % n, "NULL")
+        writer.assign("*%s_out" % n, "NULL")
 
     src = RootMarshallingSource(None, message.c_type(), message.sizeof(), "msg")
     src.reuse_scope = scope
