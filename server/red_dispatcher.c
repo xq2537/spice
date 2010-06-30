@@ -29,7 +29,9 @@
 #include "red_worker.h"
 #include "quic.h"
 #include "sw_canvas.h"
+#ifdef USE_OGL
 #include "gl_canvas.h"
+#endif // USE_OGL
 #include "reds.h"
 #include "red_dispatcher.h"
 #include "red_parse_qxl.h"
@@ -496,7 +498,9 @@ RedDispatcher *red_dispatcher_init(QXLInstance *qxl)
 
     quic_init();
     sw_canvas_init();
+#ifdef USE_OGL
     gl_canvas_init();
+#endif // USE_OGL
 
     if (socketpair(AF_LOCAL, SOCK_STREAM, 0, channels) == -1) {
         red_error("socketpair failed %s", strerror(errno));
