@@ -412,7 +412,7 @@ struct Clip {
     clip_type type;
     switch (type) {
     case RECTS:
-        ClipRects *rects @outvar(cliprects) @c_ptr;
+        ClipRects *rects @outvar(cliprects) @c_ptr @marshall @nonnull;
     } u @anon;
 };
 

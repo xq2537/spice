@@ -451,8 +451,7 @@ typedef struct StreamClipItem {
     int refs;
     StreamAgent *stream_agent;
     int clip_type;
-    SpiceRect *rects;
-    uint32_t n_rects;
+    SpiceClipRects *rects;
 } StreamClipItem;
 
 typedef struct RedCompressBuf RedCompressBuf;
@@ -850,8 +849,7 @@ typedef struct UpgradeItem {
     PipeItem base;
     int refs;
     Drawable *drawable;
-    SpiceRect *rects;
-    uint32_t n_rects;
+    SpiceClipRects *rects;
 } UpgradeItem;
 
 typedef struct DrawContext {
@@ -2413,18 +2411,23 @@ static void push_stream_clip_by_drawable(DisplayChannel* channel, StreamAgent *a
                                          Drawable *drawable)
 {
     StreamClipItem *item = __new_stream_clip(channel, agent);
+    int n_rects;
+
     if (!item) {
         PANIC("alloc failed");
     }
 
     if (drawable->red_drawable->clip.type == SPICE_CLIP_TYPE_NONE) {
-        item->n_rects = 0;
         item->rects = NULL;
         item->clip_type = SPICE_CLIP_TYPE_NONE;
+        item->rects = NULL;
     } else {
         item->clip_type = SPICE_CLIP_TYPE_RECTS;
-        item->rects = region_dup_rects(&drawable->tree_item.base.rgn,
-                                       &item->n_rects);
+        n_rects = pixman_region32_n_rects(&drawable->tree_item.base.rgn);
+
+        item->rects = spice_malloc_n_m(n_rects, sizeof(SpiceRect), sizeof(SpiceClipRects));
+        item->rects->num_rects = n_rects;
+        region_ret_rects(&drawable->tree_item.base.rgn, item->rects->rects, n_rects);
     }
     red_pipe_add((RedChannel*)channel, (PipeItem *)item);
 }
@@ -2432,12 +2435,18 @@ static void push_stream_clip_by_drawable(DisplayChannel* channel, StreamAgent *a
 static void push_stream_clip(DisplayChannel* channel, StreamAgent *agent)
 {
     StreamClipItem *item = __new_stream_clip(channel, agent);
+    int n_rects;
+
     if (!item) {
         PANIC("alloc failed");
     }
     item->clip_type = SPICE_CLIP_TYPE_RECTS;
-    item->rects = region_dup_rects(&agent->vis_region,
-                                   &item->n_rects);
+
+    n_rects = pixman_region32_n_rects(&agent->vis_region);
+
+    item->rects = spice_malloc_n_m(n_rects, sizeof(SpiceRect), sizeof(SpiceClipRects));
+    item->rects->num_rects = n_rects;
+    region_ret_rects(&agent->vis_region, item->rects->rects, n_rects);
     red_pipe_add((RedChannel*)channel, (PipeItem *)item);
 }
 
@@ -2507,14 +2516,17 @@ static inline void red_detach_stream_gracefully(RedWorker *worker, Stream *strea
 
     if ((channel = worker->display_channel) && !pipe_item_is_linked(&stream->current->pipe_item)) {
         UpgradeItem *upgrade_item;
+        int n_rects;
 
         upgrade_item = spice_new(UpgradeItem, 1);
         upgrade_item->refs = 1;
         red_pipe_item_init(&upgrade_item->base, PIPE_ITEM_TYPE_UPGRADE);
         upgrade_item->drawable = stream->current;
         upgrade_item->drawable->refs++;
-        upgrade_item->rects = region_dup_rects(&upgrade_item->drawable->tree_item.base.rgn,
-                                               &upgrade_item->n_rects);
+        n_rects = pixman_region32_n_rects(&upgrade_item->drawable->tree_item.base.rgn);
+        upgrade_item->rects = spice_malloc_n_m(n_rects, sizeof(SpiceRect), sizeof(SpiceClipRects));
+        upgrade_item->rects->num_rects = n_rects;
+        region_ret_rects(&upgrade_item->drawable->tree_item.base.rgn, upgrade_item->rects->rects, n_rects);
         red_pipe_add((RedChannel *)channel, &upgrade_item->base);
     }
     red_detach_stream(worker, stream);
@@ -2526,12 +2538,15 @@ static inline void red_stop_stream_gracefully(RedWorker *worker, Stream *stream)
     ASSERT(stream->current);
     if (worker->display_channel && !pipe_item_is_linked(&stream->current->pipe_item)) {
         UpgradeItem *item = spice_new(UpgradeItem, 1);
+        int n_rects;
         item->refs = 1;
         red_pipe_item_init(&item->base, PIPE_ITEM_TYPE_UPGRADE);
         item->drawable = stream->current;
         item->drawable->refs++;
-        item->rects = region_dup_rects(&item->drawable->tree_item.base.rgn,
-                                       &item->n_rects);
+        n_rects = pixman_region32_n_rects(&item->drawable->tree_item.base.rgn);
+        item->rects = spice_malloc_n_m(n_rects, sizeof(SpiceRect), sizeof(SpiceClipRects));
+        item->rects->num_rects = n_rects;
+        region_ret_rects(&item->drawable->tree_item.base.rgn, item->rects->rects, n_rects);
         red_pipe_add((RedChannel *)worker->display_channel, &item->base);
     }
     red_stop_stream(worker, stream);
@@ -5175,17 +5190,12 @@ static void fill_base(DisplayChannel *display_channel, Drawable *drawable)
 {
     RedChannel *channel = &display_channel->base;
     SpiceMsgDisplayBase base;
-    SpiceMarshaller *cliprects_data_out;
 
     base.surface_id = drawable->surface_id;
     base.box = drawable->red_drawable->bbox;
     base.clip = drawable->red_drawable->clip;
 
-    spice_marshall_DisplayBase(channel->send_data.marshaller, &base,
-                              &cliprects_data_out);
-    if (cliprects_data_out) {
-        fill_rects_clip(cliprects_data_out, base.clip.rects);
-    }
+    spice_marshall_DisplayBase(channel->send_data.marshaller, &base);
 }
 
 /* io_palette is relative address of the palette*/
@@ -8866,7 +8876,7 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
     int lz_comp = FALSE;
     spice_image_compression_t comp_mode;
     SpiceMsgDisplayDrawCopy copy;
-    SpiceMarshaller *cliprects_data_out, *src_bitmap_out, *mask_bitmap_out;
+    SpiceMarshaller *src_bitmap_out, *mask_bitmap_out;
     SpiceMarshaller *bitmap_palette_out, *data_out, *lzplt_palette_out;
 
     ASSERT(display_channel && item);
@@ -8912,7 +8922,6 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
     SpiceMarshaller *m = channel->send_data.marshaller;
 
     spice_marshall_msg_display_draw_copy(m, &copy,
-                                         &cliprects_data_out,
                                          &src_bitmap_out, &mask_bitmap_out);
 
     compress_send_data_t comp_send_data = {0};
@@ -8990,8 +8999,7 @@ static void red_display_send_upgrade(DisplayChannel *display_channel, UpgradeIte
     RedChannel *channel;
     RedDrawable *red_drawable;
     SpiceMsgDisplayDrawCopy copy;
-    SpiceMarshaller *cliprects_data_out, *src_bitmap_out, *mask_bitmap_out;
-    int i;
+    SpiceMarshaller *src_bitmap_out, *mask_bitmap_out;
 
     ASSERT(display_channel && item && item->drawable);
     channel = &display_channel->base;
@@ -9006,19 +9014,14 @@ static void red_display_send_upgrade(DisplayChannel *display_channel, UpgradeIte
     copy.base.surface_id = 0;
     copy.base.box = red_drawable->bbox;
     copy.base.clip.type = SPICE_CLIP_TYPE_RECTS;
-    copy.base.clip.rects = NULL;
+    copy.base.clip.rects = item->rects;
     copy.data = red_drawable->u.copy;
 
     SpiceMarshaller *m = channel->send_data.marshaller;
 
     spice_marshall_msg_display_draw_copy(m, &copy,
-                                         &cliprects_data_out,
                                          &src_bitmap_out, &mask_bitmap_out);
 
-    spice_marshaller_add_uint32(cliprects_data_out, item->n_rects);
-    for (i = 0; i < item->n_rects; i++) {
-        spice_marshall_Rect(cliprects_data_out, &item->rects[i]);
-    }
     fill_bits(display_channel, src_bitmap_out, copy.data.src_bitmap, item->drawable, FALSE);
 
     display_begin_send_massage(display_channel, &item->base);
@@ -9033,7 +9036,7 @@ static void red_display_send_stream_start(DisplayChannel *display_channel, Strea
     ASSERT(stream);
     channel->send_data.header->type = SPICE_MSG_DISPLAY_STREAM_CREATE;
     SpiceMsgDisplayStreamCreate stream_create;
-    SpiceMarshaller *cliprects_data_out;
+    SpiceClipRects clip_rects;
 
     stream_create.surface_id = 0;
     stream_create.id = agent - display_channel->stream_agents;
@@ -9051,23 +9054,16 @@ static void red_display_send_stream_start(DisplayChannel *display_channel, Strea
         stream_create.clip = red_drawable->clip;
     } else {
         stream_create.clip.type = SPICE_CLIP_TYPE_RECTS;
-        stream_create.clip.rects = NULL;
+        clip_rects.num_rects = 0;
+        stream_create.clip.rects = &clip_rects;
     }
 
-    spice_marshall_msg_display_stream_create(channel->send_data.marshaller, &stream_create,
-                                             &cliprects_data_out);
+    spice_marshall_msg_display_stream_create(channel->send_data.marshaller, &stream_create);
 
 
     if (stream->current) {
-        RedDrawable *red_drawable = stream->current->red_drawable;
-        if (red_drawable->clip.type == SPICE_CLIP_TYPE_RECTS) {
-            fill_rects_clip(cliprects_data_out, stream_create.clip.rects);
-        } else {
-            ASSERT(red_drawable->clip.type == SPICE_CLIP_TYPE_NONE);
-        }
         display_begin_send_massage(display_channel, &stream->current->pipe_item);
     } else {
-        spice_marshaller_add_uint32(cliprects_data_out, 0);
         display_begin_send_massage(display_channel, NULL);
     }
 }
@@ -9079,29 +9075,18 @@ static void red_display_send_stream_clip(DisplayChannel *display_channel,
 
     StreamAgent *agent = item->stream_agent;
     Stream *stream = agent->stream;
-    int i;
 
     ASSERT(stream);
 
     channel->send_data.header->type = SPICE_MSG_DISPLAY_STREAM_CLIP;
     SpiceMsgDisplayStreamClip stream_clip;
-    SpiceMarshaller *cliprects_data_out;
 
     stream_clip.id = agent - display_channel->stream_agents;
     stream_clip.clip.type = item->clip_type;
-#if 0 /* FIXME */
-    stream_clip.clip.data = 0;
-#endif
+    stream_clip.clip.rects = item->rects;
 
-    spice_marshall_msg_display_stream_clip(channel->send_data.marshaller, &stream_clip,
-                                           &cliprects_data_out);
+    spice_marshall_msg_display_stream_clip(channel->send_data.marshaller, &stream_clip);
 
-    if (stream_clip.clip.type == SPICE_CLIP_TYPE_RECTS) {
-        spice_marshaller_add_uint32(cliprects_data_out, item->n_rects);
-        for (i = 0; i < item->n_rects; i++) {
-            spice_marshall_Rect(cliprects_data_out, &item->rects[i]);
-        }
-    }
     display_begin_send_massage(display_channel, item);
 }
 
