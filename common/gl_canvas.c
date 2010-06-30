@@ -617,7 +617,7 @@ static void gl_canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox, Sp
     if (stroke->attr.flags & SPICE_LINE_FLAGS_STYLED) {
         WARN("SPICE_LINE_FLAGS_STYLED");
     }
-    glc_set_line_width(canvas->glc, fix_to_double(stroke->attr.width));
+    glc_set_line_width(canvas->glc, 1.0);
 
     path = get_path(canvas, stroke->path);
     glc_stroke_path(canvas->glc, path);

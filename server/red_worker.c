@@ -2324,9 +2324,8 @@ static int is_equal_brush(SpiceBrush *b1, SpiceBrush *b2)
 // partial imp
 static int is_equal_line_attr(SpiceLineAttr *a1, SpiceLineAttr *a2)
 {
-    return a1->flags == a2->flags && a1->join_style == a2->join_style &&
-           a1->end_style == a2->end_style && a1->style_nseg == a2->style_nseg &&
-           a1->width == a2->width && a1->miter_limit == a2->miter_limit &&
+    return a1->flags == a2->flags &&
+           a1->style_nseg == a2->style_nseg &&
            a1->style_nseg == 0;
 }
 

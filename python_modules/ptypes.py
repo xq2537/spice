@@ -610,6 +610,12 @@ class Switch(Containee):
     def is_switch(self):
         return True
 
+    def lookup_case_member(self, name):
+        for c in self.cases:
+            if c.member.name == name:
+                return c.member
+        return None
+
     def has_switch_member(self, member):
         for c in self.cases:
             if c.member == member:
@@ -767,7 +773,14 @@ class ContainerType(Type):
             return str(fixed)
 
     def lookup_member(self, name):
-        return self.members_by_name[name]
+        if self.members_by_name.has_key(name):
+            return self.members_by_name[name]
+        for m in self.members:
+            if m.is_switch():
+                member = m.lookup_case_member(name)
+                if member:
+                    return member
+        raise Exception, "No member called %s found" % name
 
 class StructType(ContainerType):
     def __init__(self, name, members, attribute_list):

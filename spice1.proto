@@ -131,7 +131,7 @@ channel BaseChannel {
 	uint32 what; /* error_code/warn_code/info_code */
 	uint32 message_len;
 	uint8 message[message_len] @end @nomarshal;
-	uint8 zero @end @ctype(uint8_t) @zero  @nomarshal;
+	uint8 zero @end @ctype(uint8_t) @nomarshal;
     } notify;
 
  client:
@@ -485,11 +485,11 @@ struct QMask {
 
 struct LineAttr {
     line_flags flags;
-    line_join join_style;
-    line_cap end_style;
+    line_join join_style @zero;
+    line_cap end_style @zero;
     uint8 style_nseg;
-    fixed28_4 width;
-    fixed28_4 miter_limit;
+    fixed28_4 width @zero;
+    fixed28_4 miter_limit @zero;
     fixed28_4 *style[style_nseg];
 };
 

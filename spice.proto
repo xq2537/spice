@@ -131,7 +131,7 @@ channel BaseChannel {
 	uint32 what; /* error_code/warn_code/info_code */
 	uint32 message_len;
 	uint8 message[message_len] @end @nomarshal;
-	uint8 zero @end @ctype(uint8_t) @zero  @nomarshal;
+	uint8 zero @end @ctype(uint8_t) @nomarshal;
     } notify;
 
  client:
@@ -349,18 +349,6 @@ flags8 line_flags {
     START_WITH_GAP = 2,
 };
 
-enum8 line_cap {
-    ROUND,
-    SQUARE,
-    BUTT,
-};
-
-enum8 line_join {
-    ROUND,
-    BEVEL,
-    MITER,
-};
-
 flags8 string_flags {
     RASTER_A1,
     RASTER_A4,
@@ -537,12 +525,14 @@ struct QMask {
 
 struct LineAttr {
     line_flags flags;
-    line_join join_style;
-    line_cap end_style;
-    uint8 style_nseg;
-    fixed28_4 width;
-    fixed28_4 miter_limit;
-    fixed28_4 *style[style_nseg];
+    switch (flags) {
+    case STYLED:
+        uint8 style_nseg;
+   } u1 @anon;
+   switch (flags) {
+   case STYLED:
+        fixed28_4 *style[style_nseg];
+   } u2 @anon;
 };
 
 struct RasterGlyphA1 {

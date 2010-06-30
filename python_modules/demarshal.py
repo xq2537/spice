@@ -62,7 +62,8 @@ def write_read_primitive(writer, start, container, name, scope):
     writer.error_check("pos + %s > message_end" % m.member_type.get_fixed_nw_size())
 
     var = "%s__value" % (name)
-    scope.variable_def(m.member_type.c_type(), var)
+    if not scope.variable_defined(var):
+        scope.variable_def(m.member_type.c_type(), var)
     writer.assign(var, "read_%s(pos)" % (m.member_type.primitive_type()))
     return var
 
@@ -639,7 +640,9 @@ def write_switch_parser(writer, container, switch, dest, scope):
             elif t.is_pointer():
                 write_parse_pointer(writer, t, False, m.has_attr("c_ptr"), dest2, m.name, block)
             elif t.is_primitive():
-                if not m.has_attr("zero"):
+                if m.has_attr("zero"):
+                    writer.statement("consume_%s(&in)" % (t.primitive_type()))
+                else:
                     writer.assign(dest2.get_ref(m.name), "consume_%s(&in)" % (t.primitive_type()))
                 #TODO validate e.g. flags and enums
             elif t.is_array():
@@ -768,8 +771,8 @@ def write_member_parser(writer, container, member, dest, scope):
             write_parse_pointer(writer, t, member.has_end_attr(), member.has_attr("c_ptr"), dest, member.name, scope)
     elif t.is_primitive():
         if member.has_attr("zero"):
-            pass
-        if member.has_end_attr():
+            writer.statement("consume_%s(&in)" % t.primitive_type())
+        elif member.has_end_attr():
             writer.statement("*(%s *)end = consume_%s(&in)" % (t.c_type(), t.primitive_type()))
             writer.increment("end", t.sizeof())
         else:

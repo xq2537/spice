@@ -1593,34 +1593,6 @@ static void gdi_canvas_draw_text(SpiceCanvas *spice_canvas, SpiceRect *bbox, Spi
     }
 }
 
-static int get_join_style(uint8_t join_style)
-{
-    switch (join_style) {
-    case SPICE_LINE_JOIN_ROUND:
-        return PS_JOIN_ROUND;
-    case SPICE_LINE_JOIN_BEVEL:
-        return PS_JOIN_BEVEL;
-    case SPICE_LINE_JOIN_MITER:
-        return PS_JOIN_MITER;
-    default:
-        CANVAS_ERROR("bad join style %d", join_style);
-    }
-}
-
-static int get_cap(int end_style)
-{
-    switch (end_style) {
-    case SPICE_LINE_CAP_ROUND:
-        return PS_ENDCAP_ROUND;
-    case SPICE_LINE_CAP_SQUARE:
-        return PS_ENDCAP_SQUARE;
-    case SPICE_LINE_CAP_BUTT:
-        return PS_ENDCAP_FLAT;
-    default:
-        CANVAS_ERROR("bad end style %d", end_style);
-    }
-}
-
 static uint32_t *gdi_get_userstyle(GdiCanvas *canvas, uint8_t nseg, SPICE_ADDRESS addr, int start_is_gap)
 {
     SPICE_FIXED28_4* style = (SPICE_FIXED28_4*)SPICE_GET_ADDRESS(addr);
@@ -1656,8 +1628,6 @@ static void gdi_canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox, S
     HPEN hpen;
     HPEN prev_hpen;
     LOGBRUSH logbrush;
-    int ps_join = 0;
-    int line_cap = 0;
     uint32_t *user_style = NULL;
     pixman_image_t *surface = NULL;
 
@@ -1775,23 +1745,16 @@ static void gdi_canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox, S
         pixman_image_unref(surface);
     }
 
-#if 0
-    ps_join = get_join_style(stroke->attr.join_style);
-    line_cap = get_cap(stroke->attr.end_style);
-
-    SetMiterLimit(canvas->dc, (FLOAT)fix_to_double(stroke->attr.miter_limit), &old_miter);
-#endif
-
     if (stroke->attr.flags & SPICE_LINE_FLAGS_STYLED) {
         user_style = gdi_get_userstyle(canvas, stroke->attr.style_nseg,
                                        stroke->attr.style,
                                        !!(stroke->attr.flags & SPICE_LINE_FLAGS_START_WITH_GAP));
-        hpen = ExtCreatePen(PS_GEOMETRIC | ps_join | line_cap | PS_USERSTYLE,
-                            (uint32_t)fix_to_double(stroke->attr.width),
+        hpen = ExtCreatePen(PS_GEOMETRIC | PS_USERSTYLE,
+                            1.0,
                             &logbrush, stroke->attr.style_nseg, (DWORD *)user_style);
     } else {
-        hpen = ExtCreatePen(PS_GEOMETRIC | ps_join | line_cap,
-                            (uint32_t)fix_to_double(stroke->attr.width),
+        hpen = ExtCreatePen(PS_GEOMETRIC,
+                            1.0,
                             &logbrush, 0, NULL);
     }
     prev_hpen = (HPEN)SelectObject(canvas->dc, hpen);
