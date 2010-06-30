@@ -3948,45 +3948,6 @@ static inline void red_process_surface(RedWorker *worker, RedSurfaceCmd *surface
     free(surface);
 }
 
-static void localize_str(RedWorker *worker, QXLPHYSICAL *in_str, uint32_t group_id)
-{
-    QXLString *qxl_str = (QXLString *)get_virt(&worker->mem_slots, *in_str, sizeof(QXLString), group_id);
-    QXLDataChunk *chunk;
-    SpiceString *str;
-    uint8_t *dest;
-    uint32_t data_size;
-    int memslot_id = get_memslot_id(&worker->mem_slots, *in_str);
-
-    ASSERT(in_str);
-    str = spice_malloc_n_m(1, qxl_str->data_size, sizeof(uint32_t));
-    *in_str = (QXLPHYSICAL)str;
-    str->length = qxl_str->length;
-    str->flags = qxl_str->flags;
-    dest = str->data;
-    chunk = &qxl_str->chunk;
-    for (;;) {
-        QXLPHYSICAL next_chunk;
-
-        data_size = chunk->data_size;
-        validate_virt(&worker->mem_slots, (unsigned long)chunk->data, memslot_id, data_size, group_id);
-        memcpy(dest, chunk->data, data_size);
-        if (!chunk->next_chunk) {
-            return;
-        }
-        dest += data_size;
-        next_chunk = chunk->next_chunk;
-        memslot_id = get_memslot_id(&worker->mem_slots, next_chunk);
-        chunk = (QXLDataChunk *)get_virt(&worker->mem_slots, next_chunk, sizeof(QXLDataChunk), group_id);
-    }
-}
-
-static void unlocalize_str(QXLPHYSICAL *str)
-{
-    ASSERT(str && *str);
-    free((void *)*str);
-    *str = 0;
-}
-
 static LocalImage *alloc_local_image(RedWorker *worker)
 {
     ASSERT(worker->local_images_pos < MAX_BITMAPS);
@@ -4450,10 +4411,8 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         SpiceText text = drawable->red_drawable->u.text;
         localize_brush(worker, &text.fore_brush, drawable->group_id);
         localize_brush(worker, &text.back_brush, drawable->group_id);
-        localize_str(worker, &text.str, drawable->group_id);
         canvas->ops->draw_text(canvas, &drawable->red_drawable->bbox,
                                &clip, &text);
-        unlocalize_str(&text.str);
         unlocalize_brush(&text.back_brush);
         unlocalize_brush(&text.fore_brush);
         break;
@@ -5158,27 +5117,6 @@ static void add_buf_from_info(RedChannel *channel, SpiceMarshaller *m, AddBufInf
     }
 }
 
-
-static void fill_str(DisplayChannel *display_channel, SpiceMarshaller *m,
-                     QXLPHYSICAL in_str, uint32_t group_id)
-{
-    RedWorker *worker;
-    RedChannel *channel = &display_channel->base;
-    int memslot_id;
-    SpiceString string;
-
-    worker = channel->worker;
-
-    ASSERT(in_str);
-    memslot_id  = get_memslot_id(&worker->mem_slots, in_str);
-    QXLString *str = (QXLString *)get_virt(&worker->mem_slots, in_str, sizeof(QXLString), group_id);
-    string.length = str->length;
-    string.flags = str->flags;
-    spice_marshall_String(m, &string);
-    /* TODO: This doesn't properly marshal the glyph data */
-    marshaller_add_chunk(worker, m, &str->chunk,
-                         str->data_size, memslot_id, group_id);
-}
 
 static inline void fill_rects_clip(SpiceMarshaller *m, SpiceClipRects *data)
 {
@@ -8092,7 +8030,6 @@ static void red_send_qxl_draw_text(RedWorker *worker,
     SpiceText text;
     SpiceMarshaller *brush_pat_out;
     SpiceMarshaller *back_brush_pat_out;
-    SpiceMarshaller *str_out;
 
     fill_base(display_channel, item);
 
@@ -8100,7 +8037,6 @@ static void red_send_qxl_draw_text(RedWorker *worker,
     text = drawable->u.text;
     spice_marshall_Text(channel->send_data.marshaller,
                         &text,
-                        &str_out,
                         &brush_pat_out,
                         &back_brush_pat_out);
 
@@ -8110,8 +8046,6 @@ static void red_send_qxl_draw_text(RedWorker *worker,
     if (back_brush_pat_out) {
         fill_bits(display_channel, back_brush_pat_out, text.back_brush.u.pattern.pat, item, FALSE);
     }
-
-    fill_str(display_channel, str_out, text.str, item->group_id);
 }
 
 static void red_lossy_send_qxl_draw_text(RedWorker *worker,

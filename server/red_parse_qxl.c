@@ -375,15 +375,95 @@ static void red_put_stroke_ptr(SpiceStroke *red)
     free(red->path);
 }
 
-static void red_get_text_ptr(RedMemSlotInfo *slots, int group_id,
-                               SpiceText *red, QXLText *qxl)
+static SpiceString *red_get_string(RedMemSlotInfo *slots, int group_id,
+                                   SPICE_ADDRESS addr)
 {
-   red->str        = qxl->str;
+    RedDataChunk chunks;
+    QXLString *qxl;
+    QXLRasterGlyph *start, *end;
+    SpiceString *red;
+    SpiceRasterGlyph *glyph;
+    uint8_t *data;
+    bool free_data;
+    size_t chunk_size, qxl_size, red_size, glyph_size;
+    int glyphs, bpp = 0, i;
+
+    qxl = (QXLString *)get_virt(slots, addr, sizeof(*qxl), group_id);
+    chunk_size = red_get_data_chunks_ptr(slots, group_id,
+                                         get_memslot_id(slots, addr),
+                                         &chunks, &qxl->chunk);
+    data = red_linearize_chunk(&chunks, chunk_size, &free_data);
+    red_put_data_chunks(&chunks);
+
+    qxl_size = qxl->data_size;
+    ASSERT(chunk_size == qxl_size);
+
+    if (qxl->flags & SPICE_STRING_FLAGS_RASTER_A1) {
+        bpp = 1;
+    } else if (qxl->flags & SPICE_STRING_FLAGS_RASTER_A4) {
+        bpp = 4;
+    } else if (qxl->flags & SPICE_STRING_FLAGS_RASTER_A8) {
+        bpp = 8;
+    }
+    ASSERT(bpp != 0);
+
+    start = (QXLRasterGlyph*)data;
+    end = (QXLRasterGlyph*)(data + chunk_size);
+    red_size = sizeof(SpiceString);
+    glyphs = 0;
+    while (start < end) {
+        ASSERT((QXLRasterGlyph*)(&start->data[0]) <= end);
+        glyphs++;
+        glyph_size = start->height * ((start->width * bpp + 7) / 8);
+        red_size += sizeof(SpiceRasterGlyph *) + SPICE_ALIGN(sizeof(SpiceRasterGlyph) + glyph_size, 4);
+        start = (QXLRasterGlyph*)(&start->data[glyph_size]);
+    }
+    ASSERT(start <= end);
+    ASSERT(glyphs == qxl->length);
+
+    red = spice_malloc(red_size);
+    red->length = qxl->length;
+    red->flags = qxl->flags;
+
+    start = (QXLRasterGlyph*)data;
+    end = (QXLRasterGlyph*)(data + chunk_size);
+    glyph = (SpiceRasterGlyph *)&red->glyphs[red->length];
+    for (i = 0; i < red->length; i++) {
+        ASSERT((QXLRasterGlyph*)(&start->data[0]) <= end);
+        red->glyphs[i] = glyph;
+        glyph->width = start->width;
+        glyph->height = start->height;
+        red_get_point_ptr(&glyph->render_pos, &start->render_pos);
+        red_get_point_ptr(&glyph->glyph_origin, &start->glyph_origin);
+        glyph_size = glyph->height * ((glyph->width * bpp + 7) / 8);
+        ASSERT((QXLRasterGlyph*)(&start->data[glyph_size]) <= end);
+        memcpy(glyph->data, start->data, glyph_size);
+        start = (QXLRasterGlyph*)(&start->data[glyph_size]);
+        glyph = (SpiceRasterGlyph*)
+            (((uint8_t *)glyph) +
+             SPICE_ALIGN(sizeof(SpiceRasterGlyph) + glyph_size, 4));
+    }
+
+    if (free_data) {
+        free(data);
+    }
+    return red;
+}
+
+static void red_get_text_ptr(RedMemSlotInfo *slots, int group_id,
+                             SpiceText *red, QXLText *qxl)
+{
+   red->str = red_get_string(slots, group_id, qxl->str);
    red_get_rect_ptr(&red->back_area, &qxl->back_area);
    red_get_brush_ptr(slots, group_id, &red->fore_brush, &qxl->fore_brush);
    red_get_brush_ptr(slots, group_id, &red->back_brush, &qxl->back_brush);
    red->fore_mode  = qxl->fore_mode;
    red->back_mode  = qxl->back_mode;
+}
+
+static void red_put_text_ptr(SpiceText *red)
+{
+    free(red->str);
 }
 
 static void red_get_whiteness_ptr(RedMemSlotInfo *slots, int group_id,
@@ -567,6 +647,9 @@ void red_put_drawable(RedDrawable *red)
     switch (red->type) {
     case QXL_DRAW_STROKE:
         red_put_stroke_ptr(&red->u.stroke);
+        break;
+    case QXL_DRAW_TEXT:
+        red_put_text_ptr(&red->u.text);
         break;
     }
 }

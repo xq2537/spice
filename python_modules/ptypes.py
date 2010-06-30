@@ -353,6 +353,7 @@ class ArrayType(Type):
 
         self.element_type = element_type
         self.size = size
+        self.ptr_array = False
 
     def __str__(self):
         if self.size == None:
@@ -413,6 +414,9 @@ class ArrayType(Type):
         if element_count  == 0:
             return []
         raise Exception, "Pointer names in arrays not supported"
+
+    def is_extra_size(self):
+        return self.ptr_array
 
     def contains_extra_size(self):
         return self.element_type.contains_extra_size()
@@ -512,6 +516,8 @@ class Member(Containee):
         self.member_type.register()
         if self.has_attr("ptr32") and self.member_type.is_pointer():
             self.member_type.set_ptr_size(4)
+        if self.has_attr("ptr_array") and self.member_type.is_array():
+            self.member_type.ptr_array = True
         return self
 
     def is_primitive(self):
@@ -523,7 +529,7 @@ class Member(Containee):
         return self.member_type.is_fixed_sizeof()
 
     def is_extra_size(self):
-        return self.has_end_attr()
+        return self.has_end_attr() or self.member_type.is_extra_size()
 
     def is_fixed_nw_size(self):
         if self.has_attr("virtual"):

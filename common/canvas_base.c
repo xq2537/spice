@@ -1591,12 +1591,6 @@ static pixman_image_t *canvas_get_mask(CanvasBase *canvas, SpiceQMask *mask, int
     return surface;
 }
 
-static inline SpiceRasterGlyph *canvas_next_raster_glyph(const SpiceRasterGlyph *glyph, int bpp)
-{
-    return (SpiceRasterGlyph *)((uint8_t *)(glyph + 1) +
-                                          (SPICE_ALIGN(glyph->width * bpp, 8) * glyph->height >> 3));
-}
-
 static inline void canvas_raster_glyph_box(const SpiceRasterGlyph *glyph, SpiceRect *r)
 {
     ASSERT(r);
@@ -1742,8 +1736,7 @@ static void canvas_put_glyph_bits(SpiceRasterGlyph *glyph, int bpp, uint8_t *des
 
 static pixman_image_t *canvas_get_str_mask(CanvasBase *canvas, SpiceString *str, int bpp, SpicePoint *pos)
 {
-    SpiceRasterGlyph *glyph = (SpiceRasterGlyph *)str->data;
-    SpiceRasterGlyph *next_glyph;
+    SpiceRasterGlyph *glyph;
     SpiceRect bounds;
     pixman_image_t *str_mask;
     uint8_t *dest;
@@ -1752,15 +1745,13 @@ static pixman_image_t *canvas_get_str_mask(CanvasBase *canvas, SpiceString *str,
 
     ASSERT(str->length > 0);
 
-    next_glyph = canvas_next_raster_glyph(glyph, bpp);
+    glyph = str->glyphs[0];
     canvas_raster_glyph_box(glyph, &bounds);
 
     for (i = 1; i < str->length; i++) {
         SpiceRect glyph_box;
 
-        glyph = next_glyph;
-        next_glyph = canvas_next_raster_glyph(glyph, bpp);
-        canvas_raster_glyph_box(glyph, &glyph_box);
+        canvas_raster_glyph_box(str->glyphs[i], &glyph_box);
         rect_union(&bounds, &glyph_box);
     }
 
@@ -1772,25 +1763,19 @@ static pixman_image_t *canvas_get_str_mask(CanvasBase *canvas, SpiceString *str,
     }
     dest = (uint8_t *)pixman_image_get_data(str_mask);
     dest_stride = pixman_image_get_stride(str_mask);
-    glyph = (SpiceRasterGlyph *)str->data;
     for (i = 0; i < str->length; i++) {
+        glyph = str->glyphs[i];
 #if defined(GL_CANVAS)
         canvas_put_glyph_bits(glyph, bpp, dest + (bounds.bottom - bounds.top - 1) * dest_stride,
                               -dest_stride, &bounds);
 #else
         canvas_put_glyph_bits(glyph, bpp, dest, dest_stride, &bounds);
 #endif
-        glyph = canvas_next_raster_glyph(glyph, bpp);
     }
 
     pos->x = bounds.left;
     pos->y = bounds.top;
     return str_mask;
-}
-
-static inline SpiceVectorGlyph *canvas_next_vector_glyph(const SpiceVectorGlyph *glyph)
-{
-    return (SpiceVectorGlyph *)((uint8_t *)(glyph + 1) + glyph->data_size);
 }
 
 static pixman_image_t *canvas_scale_surface(pixman_image_t *src, const SpiceRect *src_area, int width,

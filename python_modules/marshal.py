@@ -50,6 +50,7 @@ class RootMarshallingSource(MarshallingSource):
         self.c_type = c_type
         self.sizeof = sizeof
         self.pointer = pointer # None == at "end"
+        self.update_end = False
 
     def get_self_ref(self):
         return self.base_var
@@ -70,6 +71,8 @@ class RootMarshallingSource(MarshallingSource):
 
         if self.pointer:
             writer.assign(self.base_var, "(%s *)%s" % (self.c_type, self.pointer))
+            if self.update_end:
+                writer.assign("end", "((uint8_t *)%s) + %s" % (self.base_var, self.sizeof))
         else:
             writer.assign(self.base_var, "(%s *)end" % self.c_type)
             writer.increment("end", "%s" % self.sizeof)
@@ -182,8 +185,18 @@ def write_array_marshaller(writer, at_end, member, array, container_src, scope):
 
     element = "%s__element" % member.name
 
+    if not scope.variable_defined(element):
+        if array.ptr_array:
+            stars = " **"
+        else:
+            stars = " *"
+        scope.variable_def(element_type.c_type() + stars, element)
+    element_array = element
+    if array.ptr_array:
+        element = "*" + element
+
     if not at_end:
-        writer.assign(element, container_src.get_ref(member.name))
+        writer.assign(element_array, container_src.get_ref(member.name))
 
     if is_byte_size:
         size_start_var = "%s__size_start" % member.name
@@ -192,7 +205,6 @@ def write_array_marshaller(writer, at_end, member, array, container_src, scope):
 
     with writer.index() as index:
         with writer.for_loop(index, nelements) as array_scope:
-            array_scope.variable_def(element_type.c_type() + " *", element)
             if at_end:
                 writer.assign(element, "(%s *)end" % element_type.c_type())
                 writer.increment("end", element_type.sizeof())
@@ -201,13 +213,15 @@ def write_array_marshaller(writer, at_end, member, array, container_src, scope):
                 writer.statement("spice_marshaller_add_%s(m, *%s)" % (element_type.primitive_type(), element))
             elif element_type.is_struct():
                 src2 = RootMarshallingSource(container_src, element_type.c_type(), element_type.sizeof(), element)
+                if array.is_extra_size():
+                    src2.update_end = True
                 src2.reuse_scope = array_scope
                 write_container_marshaller(writer, element_type, src2)
             else:
                 writer.todo("array element unhandled type").newline()
 
             if not at_end:
-                writer.statement("%s++" % element)
+                writer.statement("%s++" % element_array)
 
     if is_byte_size:
         size_var = member.container.lookup_member(array.size[1])

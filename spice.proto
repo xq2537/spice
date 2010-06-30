@@ -564,12 +564,12 @@ struct String {
     string_flags flags; /* Special: Only one of a1/a4/a8 set */
     switch (flags) {
     case RASTER_A1:
-	RasterGlyphA1 glyphs[length] @ctype(SpiceRasterGlyph);
+	RasterGlyphA1 glyphs[length] @ctype(SpiceRasterGlyph) @ptr_array;
     case RASTER_A4:
-	RasterGlyphA4 glyphs[length] @ctype(SpiceRasterGlyph);
+	RasterGlyphA4 glyphs[length] @ctype(SpiceRasterGlyph) @ptr_array;
     case RASTER_A8:
-	RasterGlyphA8 glyphs[length] @ctype(SpiceRasterGlyph);
-    } u @end @nomarshal;
+	RasterGlyphA8 glyphs[length] @ctype(SpiceRasterGlyph) @ptr_array;
+    } u @anon;
 };
 
 channel DisplayChannel : BaseChannel {
@@ -727,7 +727,7 @@ channel DisplayChannel : BaseChannel {
     message {
 	DisplayBase base;
 	struct Text {
-	    String *str;
+	    String *str @marshall @nonnull;
 	    Rect back_area;
 	    Brush fore_brush @outvar(fore_brush);
 	    Brush back_brush @outvar(back_brush);
