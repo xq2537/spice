@@ -116,6 +116,10 @@ RED_COMMON_SRCS =					\
 	$(CLIENT_DIR)/zlib_decoder.cpp			\
 	$(CLIENT_DIR)/zlib_decoder.h			\
 	$(CLIENT_DIR)/icon.h				\
+	$(NULL)
+
+if SUPPORT_GUI
+RED_GUI_SRCS =						\
 	$(CLIENT_DIR)/gui/softrenderer.h		\
 	$(CLIENT_DIR)/gui/softrenderer.cpp		\
 	$(CLIENT_DIR)/gui/softtexture.h			\
@@ -123,8 +127,11 @@ RED_COMMON_SRCS =					\
 	$(CLIENT_DIR)/gui/resource_provider.h		\
 	$(CLIENT_DIR)/gui/resource_provider.cpp		\
 	$(CLIENT_DIR)/gui/gui.h				\
-	$(CLIENT_DIR)/gui/gui.cpp			\
-	$(NULL)
+	$(CLIENT_DIR)/gui/gui.cpp
+else
+RED_GUI_SRCS =
+endif
+
 
 if SUPPORT_GL
 RED_OGL_SRCS =						\
@@ -167,6 +174,7 @@ spicec_SOURCES =			\
 	x_icon.h			\
 	x_platform.h			\
 	$(RED_COMMON_SRCS)		\
+	$(RED_GUI_SRCS)			\
 	$(RED_OGL_SRCS)			\
 	$(NULL)
 

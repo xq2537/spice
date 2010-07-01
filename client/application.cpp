@@ -42,7 +42,9 @@
 #include "cmd_line_parser.h"
 #include "tunnel_channel.h"
 #include "rect.h"
+#ifdef USE_GUI
 #include "gui/gui.h"
+#endif
 #include <stdarg.h>
 #include <stdio.h>
 #include <time.h>
@@ -101,6 +103,7 @@ void SwitchHostEvent::response(AbstractProcessLoop& events_loop)
     app->switch_host(_host, _port, _sport, _cert_subject);
 }
 
+#ifdef USE_GUI
 //todo: add inactive visual appearance
 class GUIBarrier: public ScreenLayer {
 public:
@@ -147,6 +150,43 @@ private:
     int _id;
     AutoRef<LocalCursor> _cursor;
 };
+
+class GUITimer: public Timer {
+public:
+    GUITimer(GUI& gui)
+        : _gui (gui)
+    {
+    }
+
+    virtual void response(AbstractProcessLoop& events_loop)
+    {
+        _gui.idle();
+    }
+
+private:
+    GUI& _gui;
+};
+
+
+#ifdef GUI_DEMO
+class TestTimer: public Timer {
+public:
+    TestTimer(Application& app)
+        : _app (app)
+    {
+    }
+
+    virtual void response(AbstractProcessLoop& events_loop)
+    {
+        _app.message_box_test();
+    }
+
+private:
+    Application& _app;
+};
+#endif
+
+#endif // USE_GUI
 
 class InfoLayer: public ScreenLayer {
 public:
@@ -279,42 +319,6 @@ void StickyKeyTimer::response(AbstractProcessLoop& events_loop)
     app->deactivate_interval_timer(this);
 }
 
-class GUITimer: public Timer {
-public:
-    GUITimer(GUI& gui)
-        : _gui (gui)
-    {
-    }
-
-    virtual void response(AbstractProcessLoop& events_loop)
-    {
-        _gui.idle();
-    }
-
-private:
-    GUI& _gui;
-};
-
-
-#ifdef GUI_DEMO
-class TestTimer: public Timer {
-public:
-    TestTimer(Application& app)
-        : _app (app)
-    {
-    }
-
-    virtual void response(AbstractProcessLoop& events_loop)
-    {
-        _app.message_box_test();
-    }
-
-private:
-    Application& _app;
-};
-#endif
-
-
 static MouseHandler default_mouse_handler;
 static KeyHandler default_key_handler;
 
@@ -330,7 +334,9 @@ enum AppCommands {
     APP_CMD_CONNECT,
     APP_CMD_DISCONNECT,
 #endif
+#ifdef USE_GUI
     APP_CMD_SHOW_GUI,
+#endif // USE_GUI
 };
 
 Application::Application()
@@ -351,7 +357,9 @@ Application::Application()
     , _monitors (NULL)
     , _title (L"SPICEc:%d")
     , _sys_key_intercept_mode (false)
+#ifdef USE_GUI
     , _gui_mode (GUI_MODE_FULL)
+#endif // USE_GUI
     , _during_host_switch(false)
     , _state (DISCONNECTED)
 {
@@ -371,7 +379,9 @@ Application::Application()
     _commands_map["connect"] = APP_CMD_CONNECT;
     _commands_map["disconnect"] = APP_CMD_DISCONNECT;
 #endif
+#ifdef USE_GUI
     _commands_map["show-gui"] = APP_CMD_SHOW_GUI;
+#endif // USE_GUI
 
     _canvas_types.resize(1);
 #ifdef WIN32
@@ -391,7 +401,9 @@ Application::Application()
                                                           ",connect=shift+f5"
                                                           ",disconnect=shift+f6"
 #endif
+#ifdef USE_GUI
                                                           ",show-gui=shift+f7"
+#endif // USE_GUI
                                                           , _commands_map));
     _hot_keys = parser->get();
 
@@ -402,6 +414,7 @@ Application::Application()
     _sticky_info.key  = REDKEY_INVALID;
     _sticky_info.timer.reset(new StickyKeyTimer());
 
+#ifdef USE_GUI
     _gui.reset(new GUI(*this, DISCONNECTED));
     _gui_timer.reset(new GUITimer(*_gui.get()));
     activate_interval_timer(*_gui_timer, 1000 / 30);
@@ -409,6 +422,7 @@ Application::Application()
     _gui_test_timer.reset(new TestTimer(*this));
     activate_interval_timer(*_gui_test_timer, 1000 * 30);
 #endif
+#endif // USE_GUI
     for (int i = SPICE_CHANNEL_MAIN; i < SPICE_END_CHANNEL; i++) {
         _peer_con_opt[i] = RedPeer::ConnectionOptions::CON_OP_BOTH;
     }
@@ -416,12 +430,14 @@ Application::Application()
 
 Application::~Application()
 {
+#ifdef USE_GUI
     deactivate_interval_timer(*_gui_timer);
 #ifdef GUI_DEMO
     deactivate_interval_timer(*_gui_test_timer);
 #endif
     destroyed_gui_barriers();
     _gui->set_screen(NULL);
+#endif // USE_GUI
 
     if (_info_layer->screen()) {
         _main_screen->detach_layer(*_info_layer);
@@ -511,7 +527,11 @@ void Application::remove_mouse_handler(MouseHandler& handler)
 
 void Application::capture_mouse()
 {
-    if (!_active_screen || _gui->screen()) {
+    if (!_active_screen
+#ifdef USE_GUI
+        || _gui->screen()
+#endif // USE_GUI
+        ) {
         return;
     }
     _active_screen->capture_mouse();
@@ -568,11 +588,15 @@ void Application::switch_host(const std::string& host, int port, int sport,
 
 int Application::run()
 {
+#ifdef USE_GUI
     if (_gui_mode != GUI_MODE_FULL) {
         connect();
     }
 
     show_gui();
+#else
+    connect();
+#endif // HAVE_GUI
     _exit_code = ProcessLoop::run();
     return _exit_code;
 }
@@ -630,7 +654,9 @@ RedScreen* Application::get_screen(int id)
             size.y = SCREEN_INIT_HEIGHT;
         }
         screen = _screens[id] = new RedScreen(*this, id, _title, size.x, size.y);
+#ifdef USE_GUI
         create_gui_barrier(*screen, id);
+#endif // USE_GUI
 
         if (id != 0) {
             if (_full_screen) {
@@ -658,6 +684,7 @@ RedScreen* Application::get_screen(int id)
     return screen;
 }
 
+#ifdef USE_GUI
 void Application::attach_gui_barriers()
 {
     GUIBarriers::iterator iter = _gui_barriers.begin();
@@ -710,12 +737,15 @@ void Application::destroyed_gui_barrier(int id)
         }
     }
 }
+#endif // USE_GUI
 
 void Application::on_screen_destroyed(int id, bool was_captured)
 {
     bool reposition = false;
 
+#ifdef USE_GUI
     destroyed_gui_barrier(id);
+#endif // USE_GUI
 
     if ((int)_screens.size() < id + 1 || !_screens[id]) {
         THROW("no screen");
@@ -772,10 +802,12 @@ void Application::set_state(State state)
         return;
     }
     _state = state;
+#ifdef USE_GUI
     _gui->set_state(_state);
     if (_gui->screen() && !_gui->is_visible()) {
         hide_gui();
     }
+#endif // USE_GUI
     reset_sticky();
 }
 
@@ -789,7 +821,11 @@ void Application::on_connected()
 void Application::on_disconnected(int error_code)
 {
     bool host_switch = _during_host_switch && (error_code == SPICEC_ERROR_CODE_SUCCESS);
-    if (_gui_mode != GUI_MODE_FULL && !host_switch) {
+    if (
+#ifdef USE_GUI
+    _gui_mode != GUI_MODE_FULL &&
+#endif // USE_GUI
+    !host_switch) {
         _during_host_switch = false;
         ProcessLoop::quit(error_code);
         return;
@@ -884,6 +920,7 @@ void Application::message_box_test()
 
 #endif
 
+#ifdef USE_GUI
 void Application::show_gui()
 {
     if (_gui->screen() || !_gui->prepare_dialog()) {
@@ -906,6 +943,7 @@ void Application::hide_gui()
     detach_gui_barriers();
     show_info_layer();
 }
+#endif // USE_GUI
 
 void Application::do_command(int command)
 {
@@ -936,9 +974,11 @@ void Application::do_command(int command)
         do_disconnect();
         break;
 #endif
+#ifdef USE_GUI
     case APP_CMD_SHOW_GUI:
         show_gui();
         break;
+#endif // USE_GUI
     }
 }
 
@@ -1659,10 +1699,12 @@ void Application::hide_me()
     hide_gui();
 }
 
+#ifdef USE_GUI
 bool Application::is_disconnect_allowed()
 {
     return _gui_mode == GUI_MODE_FULL;
 }
+#endif // USE_GUI
 
 const std::string& Application::get_host()
 {
@@ -1910,14 +1952,18 @@ bool Application::process_cmd_line(int argc, char** argv)
         SPICE_OPT_CANVAS_TYPE,
     };
 
+#ifdef USE_GUI
     if (argc == 1) {
         _gui_mode = GUI_MODE_FULL;
         register_channels();
         _main_screen->show(true, NULL);
         return true;
     }
+#endif // USE_GUI
 
+#ifdef USE_GUI
     _gui_mode = GUI_MODE_ACTIVE_SESSION;
+#endif // USE_GUI
 
     CmdLineParser parser("Spice client", false);
 

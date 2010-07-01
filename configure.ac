@@ -97,6 +97,12 @@ AC_ARG_ENABLE(tunnel,
 [  have_tunnel=yes])
 AM_CONDITIONAL(SUPPORT_TUNNEL, test "x$have_tunnel" = "xyes")
 
+use_gui=no
+AC_ARG_ENABLE(gui,
+[  --enable-gui         Enable start dialog with CEGUI],
+[  use_gui=yes])
+AM_CONDITIONAL(SUPPORT_GUI, test "x$use_gui" = "xyes")
+
 have_opengl=no
 AC_ARG_ENABLE(opengl,
 [  --enable-opengl         Enable opengl requirement / support (not recommended)],
@@ -121,10 +127,13 @@ SPICE_NONPKGCONFIG_LIBS+=" -pthread $LIBM $LIBRT"
 
 SPICE_REQUIRES=""
 
-PKG_CHECK_MODULES(CEGUI, CEGUI >= 0.6.0 CEGUI < 0.7.0)
-AC_SUBST(CEGUI_CFLAGS)
-AC_SUBST(CEGUI_LIBS)
-SPICE_REQUIRES+=" CEGUI"
+if test "x$use_gui" = "xyes"; then
+    PKG_CHECK_MODULES(CEGUI, CEGUI >= 0.6.0 CEGUI < 0.7.0)
+    AC_SUBST(CEGUI_CFLAGS)
+    AC_SUBST(CEGUI_LIBS)
+    SPICE_REQUIRES+=" CEGUI"
+    CEGUI_CFLAGS+="-DUSE_GUI"
+fi
 
 if test "x$have_tunnel" = "xyes"; then
 	PKG_CHECK_MODULES(SLIRP, slirp)
@@ -365,6 +374,8 @@ echo "
         Red target:               ${red_target}
 
         OpenGL:                   ${have_opengl}
+
+        GUI:                      ${use_gui}
 
         Now type 'make' to build $PACKAGE
 "

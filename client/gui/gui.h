@@ -22,7 +22,9 @@ public:
     void set_screen(RedScreen* screen); //show and hide
 
     Application& get_application() { return _app;}
+#ifdef USE_GUI
     CEGUI::System& gui_system() { return *_gui_system;}
+#endif // USE_GUI
 
     void set_state(Application::State state);
     bool is_visible() { return !!_dialog;}
@@ -87,8 +89,10 @@ private:
     Application& _app;
     Application::State _state;
     RedPixmapSw* _pixmap;
+#ifdef USE_GUI
     CEGUI::SoftRenderer* _renderer;
     CEGUI::System* _gui_system;
+#endif // USE_GUI
     Dialog* _dialog;
     uint64_t _prev_time;
     TabFactorys _tab_factorys;
@@ -100,7 +104,9 @@ class GUI::Tab {
 public:
     virtual ~Tab() {}
 
+#ifdef USE_GUI
     virtual CEGUI::Window& get_root_window() = 0;
+#endif // USE_GUI
     virtual const std::string& get_name() = 0;
 };
 

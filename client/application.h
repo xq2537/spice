@@ -35,6 +35,8 @@ class InputsHandler;
 class Monitor;
 class CmdLineParser;
 class Menu;
+
+#ifdef USE_GUI
 class GUI;
 class GUITimer;
 class GUIBarrier;
@@ -42,6 +44,7 @@ class GUIBarrier;
 #ifdef GUI_DEMO
 class TestTimer;
 #endif
+#endif // USE_GUI
 
 
 class ConnectedEvent: public Event {
@@ -131,7 +134,9 @@ typedef struct StickyInfo {
 
 
 typedef std::list<KeyHandler*> KeyHandlersStack;
+#ifdef USE_GUI
 typedef std::list<GUIBarrier*> GUIBarriers;
+#endif // USE_GUI
 
 class Application : public ProcessLoop,
                     public Platform::EventListener,
@@ -147,11 +152,13 @@ public:
         DISCONECTING,
     };
 
+#ifdef USE_GUI
     enum GuiMode {
         GUI_MODE_FULL,
         GUI_MODE_ACTIVE_SESSION,
         GUI_MODE_MINIMAL,
     };
+#endif // USE_GUI
 
     Application();
     virtual ~Application();
@@ -216,7 +223,9 @@ public:
     void quit();
     void hide_me();
     void beep();
+#ifdef USE_GUI
     bool is_disconnect_allowed();
+#endif
 
     const std::string& get_host();
     int get_port();
@@ -272,6 +281,7 @@ private:
 
     void show_info_layer();
     void hide_info_layer();
+#ifdef USE_GUI
     void attach_gui_barriers();
     void detach_gui_barriers();
     void show_gui();
@@ -279,6 +289,11 @@ private:
     void create_gui_barrier(RedScreen& screen, int id);
     void destroyed_gui_barrier(int id);
     void destroyed_gui_barriers();
+#else // USE_GUI
+    void show_gui() {}
+    void hide_gui() {}
+
+#endif // USE_GUI
 
     // returns the press value before operation (i.e., if it was already pressed)
     bool press_key(RedKey key);
@@ -324,6 +339,7 @@ private:
     StickyInfo _sticky_info;
     std::vector<int> _canvas_types;
     AutoRef<Menu> _app_menu;
+#ifdef USE_GUI
     std::auto_ptr<GUI> _gui;
     AutoRef<GUITimer> _gui_timer;
     GUIBarriers _gui_barriers;
@@ -331,6 +347,7 @@ private:
 #ifdef GUI_DEMO
     AutoRef<TestTimer> _gui_test_timer;
 #endif
+#endif // USE_GUI
     bool _during_host_switch;
 
     State _state;
