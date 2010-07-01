@@ -115,7 +115,7 @@ static GLCPath get_path(GLCanvas *canvas, SpicePath *s)
 {
     GLCPath path = glc_path_create(canvas->glc);
     int i;
-    SpicePathSeg* seg = s->segments;
+    SpicePathSeg* seg = (SpicePathSeg*)s->segments;
 
     for (i = 0; i < s->num_segments; i++) {
         uint32_t flags = seg->flags;

@@ -310,7 +310,7 @@ uint32_t raster_ops[] = {
 
 static void set_path(GdiCanvas *canvas, SpicePath *s)
 {
-    SpicePathSeg* seg = s->segments;
+    SpicePathSeg* seg = (SpicePathSeg*)s->segments;
     int i;
 
     for (i = 0; i < s->num_segments; i++) {

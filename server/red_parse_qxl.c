@@ -182,7 +182,7 @@ static SpicePath *red_get_path(RedMemSlotInfo *slots, int group_id,
 
     start = (QXLPathSeg*)data;
     end = (QXLPathSeg*)(data + size);
-    seg = red->segments;
+    seg = (SpicePathSeg*)red->segments;
     n_segments = 0;
     mem_size2 = sizeof(*red);
     while (start < end) {

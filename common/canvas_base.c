@@ -3180,7 +3180,7 @@ static void canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox,
         CANVAS_ERROR("invalid brush type");
     }
 
-    seg = stroke->path->segments;
+    seg = (SpicePathSeg*)stroke->path->segments;
 
     stroke_lines_init(&lines);
 
