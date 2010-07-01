@@ -806,9 +806,6 @@ SpiceCanvas *gl_canvas_create(int width, int height, uint32_t format
                               , SpiceGlzDecoder *glz_decoder
                               , SpiceJpegDecoder *jpeg_decoder
                               , SpiceZlibDecoder *zlib_decoder
-#ifndef SW_CANVAS_NO_CHUNKS
-                              , SpiceVirtMapping *virt_mapping
-#endif
                            )
 {
     GLCanvas *canvas;
@@ -835,9 +832,6 @@ SpiceCanvas *gl_canvas_create(int width, int height, uint32_t format
                                , glz_decoder
                                , jpeg_decoder
                                , zlib_decoder
-#ifndef SW_CANVAS_NO_CHUNKS
-                               , virt_mapping
-#endif
                                );
     if (!init_ok) {
         goto error_2;

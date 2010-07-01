@@ -93,7 +93,7 @@ def write_read_primitive(writer, start, container, name, scope):
     writer.assign("pos", start + " + " + container.get_nw_offset(m, "", "__nw_size"))
     writer.error_check("pos + %s > message_end" % m.member_type.get_fixed_nw_size())
 
-    var = "%s__value" % (name)
+    var = "%s__value" % (name.replace(".", "_"))
     if not scope.variable_defined(var):
         scope.variable_def(m.member_type.c_type(), var)
     writer.assign(var, "read_%s(pos)" % (m.member_type.primitive_type()))
@@ -112,7 +112,7 @@ def write_read_primitive_item(writer, item, scope):
     assert(item.type.is_primitive())
     writer.assign("pos", item.get_position())
     writer.error_check("pos + %s > message_end" % item.type.get_fixed_nw_size())
-    var = "%s__value" % (item.subprefix)
+    var = "%s__value" % (item.subprefix.replace(".", "_"))
     scope.variable_def(item.type.c_type(), var)
     writer.assign(var, "read_%s(pos)" % (item.type.primitive_type()))
     return var

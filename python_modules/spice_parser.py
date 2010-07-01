@@ -95,7 +95,7 @@ def SPICE_BNF():
 
         switchCase = Group(Group(OneOrMore(default_.setParseAction(replaceWith(None)) + colon | case_.suppress() + identifier + colon)) + variableDef) \
             .setParseAction(lambda toks: ptypes.SwitchCase(toks[0][0], toks[0][1]))
-        switchBody = Group(switch_ + lparen + identifier + rparen + lbrace + Group(OneOrMore(switchCase)) + rbrace + identifier + attributes - semi) \
+        switchBody = Group(switch_ + lparen + delimitedList(identifier,delim='.', combine=True) + rparen + lbrace + Group(OneOrMore(switchCase)) + rbrace + identifier + attributes - semi) \
             .setParseAction(lambda toks: ptypes.Switch(toks[0][1], toks[0][2], toks[0][3], toks[0][4]))
         messageBody = structBody = Group(lbrace + ZeroOrMore(variableDef | switchBody)  + rbrace)
         structSpec = Group(struct_ + identifier + structBody + attributes).setParseAction(lambda toks: ptypes.StructType(toks[0][1], toks[0][2], toks[0][3]))

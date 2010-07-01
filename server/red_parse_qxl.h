@@ -118,6 +118,7 @@ void red_get_drawable(RedMemSlotInfo *slots, int group_id,
 void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
                              RedDrawable *red, SPICE_ADDRESS addr);
 void red_put_drawable(RedDrawable *red);
+void red_put_image(SpiceImage *red);
 
 void red_get_update_cmd(RedMemSlotInfo *slots, int group_id,
                         RedUpdateCmd *red, SPICE_ADDRESS addr);

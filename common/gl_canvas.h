@@ -32,9 +32,6 @@ SpiceCanvas *gl_canvas_create(int width, int height, uint32_t format
                            , SpiceGlzDecoder *glz_decoder
                            , SpiceJpegDecoder *jpeg_decoder
                            , SpiceZlibDecoder *zlib_decoder
-#ifndef SW_CANVAS_NO_CHUNKS
-                            , SpiceVirtMapping *virt_mapping
-#endif
                            );
 void gl_canvas_set_textures_lost(SpiceCanvas *canvas, int textures_lost);
 void gl_canvas_init();

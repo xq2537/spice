@@ -326,7 +326,6 @@ typedef struct LocalCursor {
     SpiceCursor red_cursor;
 } LocalCursor;
 
-#define MAX_BITMAPS 4
 #define MAX_PIPE_SIZE 50
 #define RECIVE_BUF_SIZE 1024
 
@@ -465,20 +464,6 @@ static const int BITMAP_FMT_IS_PLT[] = {0, 1, 1, 1, 1, 1, 0, 0, 0, 0};
 static const int BITMAP_FMT_IS_RGB[] = {0, 0, 0, 0, 0, 0, 1, 1, 1, 1};
 static const int BITMAP_FMP_BYTES_PER_PIXEL[] = {0, 0, 0, 0, 0, 1, 2, 3, 4, 4};
 
-typedef struct  __attribute__ ((__packed__)) RedImage {
-    SpiceImageDescriptor descriptor;
-    union { // variable length
-        SpiceBitmap bitmap;
-        SpiceQUICData quic;
-        SpiceLZRGBData lz_rgb;
-        SpiceLZPLTData lz_plt;
-        SpiceSurface surface;
-        SpiceJPEGData jpeg;
-        SpiceZlibGlzRGBData zlib_glz;
-        SpiceJPEGAlphaData jpeg_alpha;
-    };
-} RedImage;
-
 pthread_mutex_t cache_lock = PTHREAD_MUTEX_INITIALIZER;
 Ring pixmap_cache_list = {&pixmap_cache_list, &pixmap_cache_list};
 
@@ -552,24 +537,11 @@ typedef struct  {
     jmp_buf jmp_env;
     union {
         struct {
-            SPICE_ADDRESS next;
-            uint32_t stride;
-            uint32_t group_id;
-
-            void *enc_get_virt_opaque;
-            enc_get_virt_fn_t enc_get_virt;
-            void *enc_validate_virt_opaque;
-            enc_validate_virt_fn_t enc_validate_virt;
+            SpiceChunks *chunks;
+            int next;
+            int stride;
+            int reverse;
         } lines_data;
-        struct {
-            uint8_t* next;
-            int src_stride;
-            uint32_t dest_stride;
-            int lines;
-            int max_lines_bunch;
-            int input_bufs_pos;
-            RedCompressBuf *input_bufs[2];
-        } unstable_lines_data;
         struct {
             RedCompressBuf* next;
             int size_left;
@@ -625,7 +597,7 @@ struct RedGlzDrawable {
     Drawable    *drawable;
     uint32_t     group_id;
     int32_t      surface_id;
-    uint8_t     *self_bitmap;
+    SpiceImage  *self_bitmap;
     GlzDrawableInstanceItem instances_pool[MAX_GLZ_DRAWABLE_INSTANCES];
     Ring instances;
     uint8_t instances_count;
@@ -718,11 +690,6 @@ typedef struct CursorChannel {
     StatNodeRef stat;
 #endif
 } CursorChannel;
-
-typedef struct __attribute__ ((__packed__)) LocalImage {
-    QXLImage qxl_image;
-    uint8_t buf[sizeof(QXLDataChunk *)]; // quic data area
-} LocalImage;
 
 typedef struct ImageCacheItem {
     RingItem lru_link;
@@ -819,7 +786,7 @@ struct Drawable {
 #endif
     BitmapGradualType copy_bitmap_graduality;
     uint32_t group_id;
-    uint8_t *self_bitmap;
+    SpiceImage *self_bitmap;
     DependItem depend_items[3];
 
     uint8_t *backed_surface_data;
@@ -947,9 +914,6 @@ typedef struct RedWorker {
 
     uint32_t preload_group_id;
 
-    uint32_t local_images_pos;
-    LocalImage local_images[MAX_BITMAPS];
-
     ImageCache image_cache;
 
     spice_image_compression_t image_compression;
@@ -992,8 +956,6 @@ typedef struct RedWorker {
     uint64_t *wakeup_counter;
     uint64_t *command_counter;
 #endif
-    SpiceVirtMapping preload_group_virt_mapping;
-
 } RedWorker;
 
 typedef enum {
@@ -1143,22 +1105,6 @@ static inline void validate_surface(RedWorker *worker, uint32_t surface_id)
 {
     PANIC_ON(surface_id >= worker->n_surfaces);
     PANIC_ON(!worker->surfaces[surface_id].context.canvas);
-}
-
-static void *op_get_virt_preload_group(SpiceVirtMapping *mapping, unsigned long addr, uint32_t add_size)
-{
-    RedWorker *worker = SPICE_CONTAINEROF(mapping, RedWorker, preload_group_virt_mapping);
-    return (void *)get_virt(&worker->mem_slots, addr, add_size,
-                            worker->preload_group_id);
-}
-
-static void op_validate_virt_preload_group(SpiceVirtMapping *mapping, unsigned long virt,
-                                           unsigned long from_addr, uint32_t add_size)
-{
-    RedWorker *worker = SPICE_CONTAINEROF(mapping, RedWorker, preload_group_virt_mapping);
-    int slot_id = get_memslot_id(&worker->mem_slots, from_addr);
-    validate_virt(&worker->mem_slots, virt, slot_id, add_size,
-                  worker->preload_group_id);
 }
 
 char *draw_type_to_str(uint8_t type)
@@ -1603,13 +1549,13 @@ static inline void set_surface_release_info(RedWorker *worker, uint32_t surface_
 }
 
 static inline void free_red_drawable(RedWorker *worker, RedDrawable *drawable, uint32_t group_id,
-                                     uint8_t *self_bitmap, int surface_id)
+                                     SpiceImage *self_bitmap, int surface_id)
 {
     QXLReleaseInfoExt release_info_ext;
     red_destroy_surface(worker, surface_id);
 
     if (self_bitmap) {
-        free(self_bitmap);
+        red_put_image(self_bitmap);
     }
     release_info_ext.group_id = group_id;
     release_info_ext.info = drawable->release_info;
@@ -2768,9 +2714,8 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
 #endif
     stream->refs = 1;
     stream->bit_rate = get_bit_rate(stream_width, stream_height);
-    QXLImage *qxl_image = (QXLImage *)get_virt(&worker->mem_slots, drawable->red_drawable->u.copy.src_bitmap,
-                                               sizeof(QXLImage), drawable->group_id);
-    stream->top_down = !!(qxl_image->bitmap.flags & SPICE_BITMAP_FLAGS_TOP_DOWN);
+    SpiceBitmap *bitmap = &drawable->red_drawable->u.copy.src_bitmap->u.bitmap;
+    stream->top_down = !!(bitmap->flags & SPICE_BITMAP_FLAGS_TOP_DOWN);
     drawable->stream = stream;
 
     if (worker->display_channel) {
@@ -2855,9 +2800,8 @@ static inline int __red_is_next_stream_frame(RedWorker *worker,
     }
 
     if (stream) {
-        QXLImage *qxl_image = (QXLImage *)get_virt(&worker->mem_slots, red_drawable->u.copy.src_bitmap,
-                                                   sizeof(QXLImage), candidate->group_id);
-        if (stream->top_down != !!(qxl_image->bitmap.flags & SPICE_BITMAP_FLAGS_TOP_DOWN)) {
+        SpiceBitmap *bitmap = &red_drawable->u.copy.src_bitmap->u.bitmap;
+        if (stream->top_down != !!(bitmap->flags & SPICE_BITMAP_FLAGS_TOP_DOWN)) {
             return FALSE;
         }
     }
@@ -2882,7 +2826,7 @@ static inline int red_is_next_stream_frame(RedWorker *worker, const Drawable *ca
 
 static inline int red_is_next_stream_frame(RedWorker *worker, Drawable *candidate, Drawable *prev)
 {
-    QXLImage *qxl_image;
+    SpiceImage *image;
     RedDrawable *red_drawable;
     RedDrawable *prev_red_drawable;
 
@@ -2891,33 +2835,32 @@ static inline int red_is_next_stream_frame(RedWorker *worker, Drawable *candidat
         return FALSE;
     }
 
-    qxl_drawable = candidate->red_drawable;
-    prev_qxl_drawable = prev->red_drawable;
-    if (qxl_drawable->type != QXL_DRAW_COPY || prev_qxl_drawable->type != QXL_DRAW_COPY) {
+    red_drawable = candidate->red_drawable;
+    prev_red_drawable = prev->red_drawable;
+    if (red_drawable->type != QXL_DRAW_COPY || prev_red_drawable->type != QXL_DRAW_COPY) {
         return FALSE;
     }
 
-    if (!rect_is_equal(&qxl_drawable->bbox, &prev_qxl_drawable->bbox)) {
+    if (!rect_is_equal(&red_drawable->bbox, &prev_red_drawable->bbox)) {
         return FALSE;
     }
 
-    if (!rect_is_same_size(&qxl_drawable->u.copy.src_area, &prev_qxl_drawable->u.copy.src_area)) {
+    if (!rect_is_same_size(&red_drawable->u.copy.src_area, &prev_red_drawable->u.copy.src_area)) {
         return FALSE;
     }
 
-    if (qxl_drawable->u.copy.rop_decriptor != SPICE_ROPD_OP_PUT ||
-                                    prev_qxl_drawable->u.copy.rop_decriptor != SPICE_ROPD_OP_PUT) {
+    if (red_drawable->u.copy.rop_descriptor != SPICE_ROPD_OP_PUT ||
+        prev_red_drawable->u.copy.rop_descriptor != SPICE_ROPD_OP_PUT) {
         return FALSE;
     }
 
-    qxl_image = (QXLImage *)get_virt(&worker->mem_slots, qxl_drawable->u.copy.src_bitmap, sizeof(QXLImage),
-                                     candidate->group_id);
+    image = red_drawable->u.copy.src_bitmap;
 
-    if (qxl_image->descriptor.type != SPICE_IMAGE_TYPE_BITMAP) {
+    if (image->descriptor.type != SPICE_IMAGE_TYPE_BITMAP) {
         return FALSE;
     }
 
-    if (prev->stream && prev->stream->top_down != !!(qxl_image->bitmap.flags & SPICE_BITMAP_FLAGS_TOP_DOWN)) {
+    if (prev->stream && prev->stream->top_down != !!(image->u.bitmap.flags & SPICE_BITMAP_FLAGS_TOP_DOWN)) {
         return FALSE;
     }
 
@@ -2976,7 +2919,7 @@ static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream)
 
 static inline void red_update_copy_graduality(RedWorker* worker, Drawable *drawable)
 {
-    QXLImage *qxl_image;
+    SpiceBitmap *bitmap;
     ASSERT(drawable->red_drawable->type == QXL_DRAW_COPY);
 
     if (worker->streaming_video != STREAM_VIDEO_FILTER) {
@@ -2988,14 +2931,13 @@ static inline void red_update_copy_graduality(RedWorker* worker, Drawable *drawa
         return; // already set
     }
 
-    qxl_image = (QXLImage *)get_virt(&worker->mem_slots, drawable->red_drawable->u.copy.src_bitmap,
-                                     sizeof(QXLImage), drawable->group_id);
+    bitmap = &drawable->red_drawable->u.copy.src_bitmap->u.bitmap;
 
-    if (!BITMAP_FMT_IS_RGB[qxl_image->bitmap.format] || _stride_is_extra(&qxl_image->bitmap) ||
-        (qxl_image->bitmap.flags & QXL_BITMAP_UNSTABLE)) {
+    if (!BITMAP_FMT_IS_RGB[bitmap->format] || _stride_is_extra(bitmap) ||
+        (bitmap->data->flags & SPICE_CHUNKS_FLAGS_UNSTABLE)) {
         drawable->copy_bitmap_graduality = BITMAP_GRADUAL_NOT_AVAIL;
     } else  {
-        drawable->copy_bitmap_graduality = _get_bitmap_graduality_level(worker, &qxl_image->bitmap, drawable->group_id);
+        drawable->copy_bitmap_graduality = _get_bitmap_graduality_level(worker, bitmap, drawable->group_id);
     }
 }
 
@@ -3048,7 +2990,7 @@ static inline void red_stream_maintenance(RedWorker *worker, Drawable *candidate
     }
 #else
     if ((worker->streaming_video == STREAM_VIDEO_OFF) ||
-        !red_is_next_stream_frame(worker, candidate, prev) {
+        !red_is_next_stream_frame(worker, candidate, prev)) {
         return;
     }
 #endif
@@ -3507,7 +3449,7 @@ static inline int has_shadow(RedDrawable *drawable)
 static inline void red_update_streamable(RedWorker *worker, Drawable *drawable,
                                          RedDrawable *red_drawable)
 {
-    QXLImage *qxl_image;
+    SpiceImage *image;
 
     if (worker->streaming_video == STREAM_VIDEO_OFF) {
         return;
@@ -3519,9 +3461,8 @@ static inline void red_update_streamable(RedWorker *worker, Drawable *drawable,
         return;
     }
 
-    qxl_image = (QXLImage *)get_virt(&worker->mem_slots, red_drawable->u.copy.src_bitmap, sizeof(QXLImage),
-                                     drawable->group_id);
-    if (qxl_image->descriptor.type != SPICE_IMAGE_TYPE_BITMAP) {
+    image = red_drawable->u.copy.src_bitmap;
+    if (image->descriptor.type != SPICE_IMAGE_TYPE_BITMAP) {
         return;
     }
 
@@ -3648,7 +3589,7 @@ static int rgb32_data_has_alpha(int width, int height, size_t stride,
 
 static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
 {
-    QXLImage *image;
+    SpiceImage *image;
     int32_t width;
     int32_t height;
     uint8_t *dest;
@@ -3670,21 +3611,21 @@ static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
     height = drawable->red_drawable->bbox.bottom - drawable->red_drawable->bbox.top;
     dest_stride = SPICE_ALIGN(width * bpp, 4);
 
-    image = spice_malloc_n_m(height, dest_stride, sizeof(QXLImage));
-    dest = (uint8_t *)(image + 1);
-
+    image = spice_new0(SpiceImage, 1);
     image->descriptor.type = SPICE_IMAGE_TYPE_BITMAP;
     image->descriptor.flags = 0;
 
     QXL_SET_IMAGE_ID(image, QXL_IMAGE_GROUP_RED, ++worker->bits_unique);
-    image->bitmap.flags = QXL_BITMAP_DIRECT | (surface->context.top_down ?
-                                               QXL_BITMAP_TOP_DOWN : 0);
-    image->bitmap.format = surface_format_to_image_type(surface->context.format);
-    image->bitmap.stride = dest_stride;
-    image->descriptor.width = image->bitmap.x = width;
-    image->descriptor.height = image->bitmap.y = height;
-    image->bitmap.data = (QXLPHYSICAL)dest;
-    image->bitmap.palette = 0;
+    image->u.bitmap.flags = surface->context.top_down ? SPICE_BITMAP_FLAGS_TOP_DOWN : 0;
+    image->u.bitmap.format = surface_format_to_image_type(surface->context.format);
+    image->u.bitmap.stride = dest_stride;
+    image->descriptor.width = image->u.bitmap.x = width;
+    image->descriptor.height = image->u.bitmap.y = height;
+    image->u.bitmap.palette = NULL;
+
+    dest = (uint8_t *)spice_malloc_n(height, dest_stride);
+    image->u.bitmap.data = spice_chunks_new_linear(dest, height * dest_stride);
+    image->u.bitmap.data->flags |= SPICE_CHUNKS_FLAGS_FREE;
 
     red_get_area(worker, drawable->surface_id,
                  &drawable->red_drawable->self_bitmap_area, dest, dest_stride, TRUE);
@@ -3692,16 +3633,16 @@ static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
     /* For 32bit non-primary surfaces we need to keep any non-zero
        high bytes as the surface may be used as source to an alpha_blend */
     if (!is_primary_surface(worker, drawable->surface_id) &&
-        image->bitmap.format == SPICE_BITMAP_FMT_32BIT &&
+        image->u.bitmap.format == SPICE_BITMAP_FMT_32BIT &&
         rgb32_data_has_alpha(width, height, dest_stride, dest, &all_set)) {
         if (all_set) {
             image->descriptor.flags |= SPICE_IMAGE_FLAGS_HIGH_BITS_SET;
         } else {
-            image->bitmap.format = SPICE_BITMAP_FMT_RGBA;
+            image->u.bitmap.format = SPICE_BITMAP_FMT_RGBA;
         }
     }
 
-    drawable->self_bitmap = (uint8_t *)image;
+    drawable->self_bitmap = image;
     return TRUE;
 }
 
@@ -3947,12 +3888,6 @@ static inline void red_process_surface(RedWorker *worker, RedSurfaceCmd *surface
     free(surface);
 }
 
-static LocalImage *alloc_local_image(RedWorker *worker)
-{
-    ASSERT(worker->local_images_pos < MAX_BITMAPS);
-    return &worker->local_images[worker->local_images_pos++];
-}
-
 static SpiceCanvas *image_surfaces_get(SpiceImageSurfaces *surfaces,
                                        uint32_t surface_id)
 {
@@ -4107,156 +4042,52 @@ static void image_cache_eaging(ImageCache *cache)
 #endif
 }
 
-static void localize_bitmap(RedWorker *worker, QXLPHYSICAL *in_bitmap, uint32_t group_id)
+static void localize_bitmap(RedWorker *worker, SpiceImage **image_ptr, SpiceImage *image_store)
 {
-    QXLImage *image;
-    QXLImage *local_image;
+    SpiceImage *image = *image_ptr;
 
-    ASSERT(in_bitmap && *in_bitmap);
-    image = (QXLImage *)get_virt(&worker->mem_slots, *in_bitmap, sizeof(QXLImage), group_id);
-    local_image = (QXLImage *)alloc_local_image(worker);
-    *local_image = *image;
-    *in_bitmap = (QXLPHYSICAL)local_image;
-    local_image->descriptor.flags = 0;
-
-    if (image_cache_hit(&worker->image_cache, local_image->descriptor.id)) {
-        local_image->descriptor.type = SPICE_IMAGE_TYPE_FROM_CACHE;
+    if (image_cache_hit(&worker->image_cache, image->descriptor.id)) {
+        image_store->descriptor = image->descriptor;
+        image_store->descriptor.type = SPICE_IMAGE_TYPE_FROM_CACHE;
+        image_store->descriptor.flags = 0;
+        *image_ptr = image_store;
         return;
     }
 
-    if (image->descriptor.flags & QXL_IMAGE_HIGH_BITS_SET) {
-        local_image->descriptor.flags |= SPICE_IMAGE_FLAGS_HIGH_BITS_SET;
-    }
-
-    switch (local_image->descriptor.type) {
+    switch (image->descriptor.type) {
     case SPICE_IMAGE_TYPE_QUIC: {
-        QXLDataChunk **chanks_head;
+        image_store->descriptor = image->descriptor;
+        image_store->u.quic = image->u.quic;
+        *image_ptr = image_store;
 #ifdef IMAGE_CACHE_AGE
-        local_image->descriptor.flags |= SPICE_IMAGE_FLAGS_CACHE_ME;
+        image_store->descriptor.flags |= SPICE_IMAGE_FLAGS_CACHE_ME;
 #else
-        if (local_image->descriptor.width * local_image->descriptor.height >= 640 * 480) {
-            local_image->descriptor.flags |= SPICE_IMAGE_FLAGS_CACHE_ME;
+        if (image_store->descriptor.width * image->descriptor.height >= 640 * 480) {
+            image_store->descriptor.flags |= SPICE_IMAGE_FLAGS_CACHE_ME;
         }
 #endif
-        chanks_head = (QXLDataChunk **)local_image->quic.data;
-        *chanks_head = (QXLDataChunk *)image->quic.data;
         break;
     }
     case SPICE_IMAGE_TYPE_BITMAP:
-        if (image->bitmap.flags & QXL_BITMAP_DIRECT) {
-            local_image->bitmap.data = (QXLPHYSICAL)get_virt(&worker->mem_slots, image->bitmap.data,
-                                                          image->bitmap.stride * image->bitmap.y,
-                                                          group_id);
-        } else {
-            QXLPHYSICAL src_data;
-            int size = image->bitmap.y * image->bitmap.stride;
-            uint8_t *data = spice_malloc_n(image->bitmap.y, image->bitmap.stride);
-            local_image->bitmap.data = (QXLPHYSICAL)data;
-            src_data = image->bitmap.data;
-
-            while (size) {
-                QXLDataChunk *chunk;
-                uint32_t data_size;
-                int cp_size;
-
-                ASSERT(src_data);
-                chunk = (QXLDataChunk *)get_virt(&worker->mem_slots, src_data, sizeof(QXLDataChunk), group_id);
-                data_size = chunk->data_size;
-                validate_virt(&worker->mem_slots, (unsigned long)chunk->data, get_memslot_id(&worker->mem_slots, src_data),
-                              data_size, group_id);
-                cp_size = MIN(data_size, size);
-                memcpy(data, chunk->data, cp_size);
-                data += cp_size;
-                size -= cp_size;
-                src_data = chunk->next_chunk;
-            }
-        }
-
-        if (local_image->bitmap.palette) {
-            uint16_t num_ents;
-            uint32_t *ents;
-            SpicePalette *tmp_palette;
-            SpicePalette *shadow_palette;
-
-            int slot_id = get_memslot_id(&worker->mem_slots, local_image->bitmap.palette);
-            tmp_palette = (SpicePalette *)get_virt(&worker->mem_slots, local_image->bitmap.palette,
-                                              sizeof(SpicePalette), group_id);
-
-            num_ents = tmp_palette->num_ents;
-            ents = tmp_palette->ents;
-
-            validate_virt(&worker->mem_slots, (unsigned long)ents, slot_id, (num_ents * sizeof(uint32_t)),
-                          group_id);
-
-            shadow_palette = (SpicePalette *)spice_malloc_n_m(num_ents, sizeof(uint32_t),sizeof(SpicePalette) + sizeof(QXLPHYSICAL));
-
-            memcpy(shadow_palette->ents, ents, num_ents * sizeof(uint32_t));
-            shadow_palette->num_ents = num_ents;
-            shadow_palette->unique = tmp_palette->unique;
-
-            local_image->bitmap.palette = (SPICE_ADDRESS)shadow_palette;
-        }
+    case SPICE_IMAGE_TYPE_SURFACE:
+        /* nothing */
         break;
-    case SPICE_IMAGE_TYPE_SURFACE: {
-        break;
-    }
     default:
         red_error("invalid image type");
     }
 }
 
-static void unlocalize_bitmap(QXLPHYSICAL *bitmap)
-{
-    QXLImage *image;
-
-    ASSERT(bitmap && *bitmap);
-    image = (QXLImage *)*bitmap;
-    *bitmap = 0;
-
-    switch (image->descriptor.type) {
-    case SPICE_IMAGE_TYPE_BITMAP:
-        if (!(image->bitmap.flags & QXL_BITMAP_DIRECT)) {
-            free((void *)image->bitmap.data);
-        }
-        if (image->bitmap.palette) {
-            free((void *)image->bitmap.palette);
-        }
-        break;
-    case SPICE_IMAGE_TYPE_QUIC:
-    case SPICE_IMAGE_TYPE_FROM_CACHE:
-        *bitmap = 0;
-    case SPICE_IMAGE_TYPE_SURFACE:
-        break;
-    default:
-        red_error("invalid image type %u", image->descriptor.type);
-    }
-}
-
-static void localize_brush(RedWorker *worker, SpiceBrush *brush, uint32_t group_id)
+static void localize_brush(RedWorker *worker, SpiceBrush *brush, SpiceImage *image_store)
 {
     if (brush->type == SPICE_BRUSH_TYPE_PATTERN) {
-        localize_bitmap(worker, &brush->u.pattern.pat, group_id);
+        localize_bitmap(worker, &brush->u.pattern.pat, image_store);
     }
 }
 
-static void unlocalize_brush(SpiceBrush *brush)
-{
-    if (brush->type == SPICE_BRUSH_TYPE_PATTERN) {
-        unlocalize_bitmap(&brush->u.pattern.pat);
-    }
-}
-
-static void localize_mask(RedWorker *worker, SpiceQMask *mask, uint32_t group_id)
+static void localize_mask(RedWorker *worker, SpiceQMask *mask, SpiceImage *image_store)
 {
     if (mask->bitmap) {
-        localize_bitmap(worker, &mask->bitmap, group_id);
-    }
-}
-
-static void unlocalize_mask(SpiceQMask *mask)
-{
-    if (mask->bitmap) {
-        unlocalize_bitmap(&mask->bitmap);
+        localize_bitmap(worker, &mask->bitmap, image_store);
     }
 }
 
@@ -4292,7 +4123,6 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
     surface = &worker->surfaces[drawable->surface_id];
     canvas = surface->context.canvas;
 
-    worker->local_images_pos = 0;
     image_cache_eaging(&worker->image_cache);
 
     worker->preload_group_id = drawable->group_id;
@@ -4302,48 +4132,45 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
     switch (drawable->red_drawable->type) {
     case QXL_DRAW_FILL: {
         SpiceFill fill = drawable->red_drawable->u.fill;
-        localize_brush(worker, &fill.brush, drawable->group_id);
-        localize_mask(worker, &fill.mask, drawable->group_id);
+        SpiceImage img1, img2;
+        localize_brush(worker, &fill.brush, &img1);
+        localize_mask(worker, &fill.mask, &img2);
         canvas->ops->draw_fill(canvas, &drawable->red_drawable->bbox,
-                               &clip, &fill); unlocalize_mask(&fill.mask);
-        unlocalize_brush(&fill.brush);
+                               &clip, &fill);
         break;
     }
     case QXL_DRAW_OPAQUE: {
         SpiceOpaque opaque = drawable->red_drawable->u.opaque;
-        localize_brush(worker, &opaque.brush, drawable->group_id);
-        localize_bitmap(worker, &opaque.src_bitmap, drawable->group_id);
-        localize_mask(worker, &opaque.mask, drawable->group_id);
+        SpiceImage img1, img2, img3;
+        localize_brush(worker, &opaque.brush, &img1);
+        localize_bitmap(worker, &opaque.src_bitmap, &img2);
+        localize_mask(worker, &opaque.mask, &img3);
         canvas->ops->draw_opaque(canvas, &drawable->red_drawable->bbox, &clip, &opaque);
-        unlocalize_mask(&opaque.mask);
-        unlocalize_bitmap(&opaque.src_bitmap);
-        unlocalize_brush(&opaque.brush);
         break;
     }
     case QXL_DRAW_COPY: {
         SpiceCopy copy = drawable->red_drawable->u.copy;
-        localize_bitmap(worker, &copy.src_bitmap, drawable->group_id);
-        localize_mask(worker, &copy.mask, drawable->group_id);
+        SpiceImage img1, img2;
+        localize_bitmap(worker, &copy.src_bitmap, &img1);
+        localize_mask(worker, &copy.mask, &img2);
         canvas->ops->draw_copy(canvas, &drawable->red_drawable->bbox,
                                &clip, &copy);
-        unlocalize_mask(&copy.mask);
-        unlocalize_bitmap(&copy.src_bitmap);
         break;
     }
     case QXL_DRAW_TRANSPARENT: {
         SpiceTransparent transparent = drawable->red_drawable->u.transparent;
-        localize_bitmap(worker, &transparent.src_bitmap, drawable->group_id);
+        SpiceImage img1;
+        localize_bitmap(worker, &transparent.src_bitmap, &img1);
         canvas->ops->draw_transparent(canvas,
                                       &drawable->red_drawable->bbox, &clip, &transparent);
-        unlocalize_bitmap(&transparent.src_bitmap);
         break;
     }
     case QXL_DRAW_ALPHA_BLEND: {
         SpiceAlphaBlnd alpha_blend = drawable->red_drawable->u.alpha_blend;
-        localize_bitmap(worker, &alpha_blend.src_bitmap, drawable->group_id);
+        SpiceImage img1;
+        localize_bitmap(worker, &alpha_blend.src_bitmap, &img1);
         canvas->ops->draw_alpha_blend(canvas,
                                       &drawable->red_drawable->bbox, &clip, &alpha_blend);
-        unlocalize_bitmap(&alpha_blend.src_bitmap);
         break;
     }
     case QXL_COPY_BITS: {
@@ -4353,67 +4180,64 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
     }
     case QXL_DRAW_BLEND: {
         SpiceBlend blend = drawable->red_drawable->u.blend;
-        localize_bitmap(worker, &blend.src_bitmap, drawable->group_id);
-        localize_mask(worker, &blend.mask, drawable->group_id);
+        SpiceImage img1, img2;
+        localize_bitmap(worker, &blend.src_bitmap, &img1);
+        localize_mask(worker, &blend.mask, &img2);
         canvas->ops->draw_blend(canvas, &drawable->red_drawable->bbox,
                                 &clip, &blend);
-        unlocalize_mask(&blend.mask);
-        unlocalize_bitmap(&blend.src_bitmap);
         break;
     }
     case QXL_DRAW_BLACKNESS: {
         SpiceBlackness blackness = drawable->red_drawable->u.blackness;
-        localize_mask(worker, &blackness.mask, drawable->group_id);
+        SpiceImage img1;
+        localize_mask(worker, &blackness.mask, &img1);
         canvas->ops->draw_blackness(canvas,
                                     &drawable->red_drawable->bbox, &clip, &blackness);
-        unlocalize_mask(&blackness.mask);
         break;
     }
     case QXL_DRAW_WHITENESS: {
         SpiceWhiteness whiteness = drawable->red_drawable->u.whiteness;
-        localize_mask(worker, &whiteness.mask, drawable->group_id);
+        SpiceImage img1;
+        localize_mask(worker, &whiteness.mask, &img1);
         canvas->ops->draw_whiteness(canvas,
                                     &drawable->red_drawable->bbox, &clip, &whiteness);
-        unlocalize_mask(&whiteness.mask);
         break;
     }
     case QXL_DRAW_INVERS: {
         SpiceInvers invers = drawable->red_drawable->u.invers;
-        localize_mask(worker, &invers.mask, drawable->group_id);
+        SpiceImage img1;
+        localize_mask(worker, &invers.mask, &img1);
         canvas->ops->draw_invers(canvas,
                                  &drawable->red_drawable->bbox, &clip, &invers);
-        unlocalize_mask(&invers.mask);
         break;
     }
     case QXL_DRAW_ROP3: {
         SpiceRop3 rop3 = drawable->red_drawable->u.rop3;
-        localize_brush(worker, &rop3.brush, drawable->group_id);
-        localize_bitmap(worker, &rop3.src_bitmap, drawable->group_id);
-        localize_mask(worker, &rop3.mask, drawable->group_id);
+        SpiceImage img1, img2, img3;
+        localize_brush(worker, &rop3.brush, &img1);
+        localize_bitmap(worker, &rop3.src_bitmap, &img2);
+        localize_mask(worker, &rop3.mask, &img3);
         canvas->ops->draw_rop3(canvas, &drawable->red_drawable->bbox,
-                               &clip, &rop3); unlocalize_mask(&rop3.mask);
-        unlocalize_bitmap(&rop3.src_bitmap);
-        unlocalize_brush(&rop3.brush);
+                               &clip, &rop3);
         break;
     }
     case QXL_DRAW_STROKE: {
         SpiceStroke stroke = drawable->red_drawable->u.stroke;
-        localize_brush(worker, &stroke.brush, drawable->group_id);
+        SpiceImage img1;
+        localize_brush(worker, &stroke.brush, &img1);
         localize_attr(worker, &stroke.attr, drawable->group_id);
         canvas->ops->draw_stroke(canvas,
                                  &drawable->red_drawable->bbox, &clip, &stroke);
         unlocalize_attr(&stroke.attr);
-        unlocalize_brush(&stroke.brush);
         break;
     }
     case QXL_DRAW_TEXT: {
         SpiceText text = drawable->red_drawable->u.text;
-        localize_brush(worker, &text.fore_brush, drawable->group_id);
-        localize_brush(worker, &text.back_brush, drawable->group_id);
+        SpiceImage img1, img2;
+        localize_brush(worker, &text.fore_brush, &img1);
+        localize_brush(worker, &text.back_brush, &img2);
         canvas->ops->draw_text(canvas, &drawable->red_drawable->bbox,
                                &clip, &text);
-        unlocalize_brush(&text.back_brush);
-        unlocalize_brush(&text.fore_brush);
         break;
     }
     default:
@@ -5077,6 +4901,7 @@ static void marshaller_add_compressed(RedWorker *worker, SpiceMarshaller *m,
     } while (max);
 }
 
+
 static void marshaller_add_chunk(RedWorker *worker, SpiceMarshaller *m, QXLDataChunk *chunk, size_t size,
                                  int memslot_id, uint32_t group_id)
 {
@@ -5139,31 +4964,22 @@ static void fill_base(DisplayChannel *display_channel, Drawable *drawable)
     spice_marshall_DisplayBase(channel->send_data.marshaller, &base);
 }
 
-/* io_palette is relative address of the palette*/
-static inline void fill_palette(DisplayChannel *display_channel, SPICE_ADDRESS *io_palette, uint8_t *flags,
-                                uint32_t group_id, SpicePalette **palette_out)
+static inline void fill_palette(DisplayChannel *display_channel,
+                                SpicePalette *palette,
+                                uint8_t *flags)
 {
-    RedChannel *channel = &display_channel->base;
-    RedWorker *worker = channel->worker;
-    SpicePalette *palette;
-
-    *palette_out = NULL;
-    if (!(*io_palette)) {
+    if (palette == NULL) {
         return;
     }
-
-    palette = (SpicePalette *)get_virt(&worker->mem_slots, *io_palette, sizeof(SpicePalette), group_id);
     if (palette->unique) {
         if (red_palette_cache_find(display_channel, palette->unique)) {
             *flags |= SPICE_BITMAP_FLAGS_PAL_FROM_CACHE;
-            *io_palette = palette->unique;
             return;
         }
         if (red_palette_cache_add(display_channel, palette->unique, 1)) {
             *flags |= SPICE_BITMAP_FLAGS_PAL_CACHE_ME;
         }
     }
-    *palette_out = palette;
 }
 
 static inline RedCompressBuf *red_display_alloc_compress_buf(DisplayChannel *display_channel)
@@ -5562,31 +5378,32 @@ static int zlib_usr_more_space(ZlibEncoderUsrContext *usr, uint8_t **io_ptr)
 
 static inline int encoder_usr_more_lines(EncoderData *enc_data, uint8_t **lines)
 {
-    uint32_t data_size;
-    uint8_t *data;
+    struct SpiceChunk *chunk;
 
-    if (!enc_data->u.lines_data.next) {
+    if (enc_data->u.lines_data.reverse) {
+        if (!(enc_data->u.lines_data.next >= 0)) {
+            return 0;
+        }
+    } else {
+        if (!(enc_data->u.lines_data.next < enc_data->u.lines_data.chunks->num_chunks)) {
+            return 0;
+        }
+    }
+
+    chunk = &enc_data->u.lines_data.chunks->chunk[enc_data->u.lines_data.next];
+    if (chunk->len % enc_data->u.lines_data.stride) {
         return 0;
     }
 
-    QXLDataChunk *chunk = (QXLDataChunk *)enc_data->u.lines_data.enc_get_virt(
-                          enc_data->u.lines_data.enc_get_virt_opaque, enc_data->u.lines_data.next,
-                          sizeof(QXLDataChunk), enc_data->u.lines_data.group_id);
-
-    data_size = chunk->data_size;
-    data = chunk->data;
-
-    if (data_size % enc_data->u.lines_data.stride) {
-        return 0;
+    if (enc_data->u.lines_data.reverse) {
+        enc_data->u.lines_data.next--;
+        *lines = chunk->data + chunk->len - enc_data->u.lines_data.stride;
+    } else {
+        enc_data->u.lines_data.next++;
+        *lines = chunk->data;
     }
 
-    enc_data->u.lines_data.enc_validate_virt(enc_data->u.lines_data.enc_validate_virt_opaque,
-                                             (unsigned long)data, enc_data->u.lines_data.next,
-                                             data_size, enc_data->u.lines_data.group_id);
-
-    enc_data->u.lines_data.next = chunk->next_chunk;
-    *lines = data;
-    return data_size / enc_data->u.lines_data.stride;
+    return chunk->len / enc_data->u.lines_data.stride;
 }
 
 static int quic_usr_more_lines(QuicUsrContext *usr, uint8_t **lines)
@@ -5611,105 +5428,6 @@ static int jpeg_usr_more_lines(JpegEncoderUsrContext *usr, uint8_t **lines)
 {
     EncoderData *usr_data = &(((JpegData *)usr)->data);
     return encoder_usr_more_lines(usr_data, lines);
-}
-
-static int encoder_usr_more_lines_reverse(EncoderData *enc_data, uint8_t **lines)
-{
-    uint8_t *data;
-    uint32_t data_size;
-
-    if (!enc_data->u.lines_data.next) {
-        return 0;
-    }
-
-    QXLDataChunk *chunk = (QXLDataChunk *)enc_data->u.lines_data.enc_get_virt(
-                          enc_data->u.lines_data.enc_get_virt_opaque,
-                          enc_data->u.lines_data.next,
-                          sizeof(QXLDataChunk), enc_data->u.lines_data.group_id);
-
-    data_size = chunk->data_size;
-    data = chunk->data;
-
-    if (data_size % enc_data->u.lines_data.stride) {
-        return 0;
-    }
-
-    enc_data->u.lines_data.enc_validate_virt(enc_data->u.lines_data.enc_validate_virt_opaque,
-                                             (unsigned long)data,
-                                             enc_data->u.lines_data.next, data_size,
-                                             enc_data->u.lines_data.group_id);
-
-    enc_data->u.lines_data.next = chunk->prev_chunk;
-    *lines = data + data_size - enc_data->u.lines_data.stride;
-    return data_size / enc_data->u.lines_data.stride;
-}
-
-static int quic_usr_more_lines_reverse(QuicUsrContext *usr, uint8_t **lines)
-{
-    EncoderData *usr_data = &(((QuicData *)usr)->data);
-    return encoder_usr_more_lines_reverse(usr_data, lines);
-
-}
-
-static int jpeg_usr_more_lines_reverse(JpegEncoderUsrContext *usr, uint8_t **lines)
-{
-    EncoderData *usr_data = &(((JpegData *)usr)->data);
-    return encoder_usr_more_lines_reverse(usr_data, lines);
-}
-
-static int encoder_usr_more_lines_unstable(EncoderData *enc_data, uint8_t **out_lines)
-{
-    if (!enc_data->u.unstable_lines_data.lines) {
-        return 0;
-    }
-    uint8_t *src = enc_data->u.unstable_lines_data.next;
-    int lines = MIN(enc_data->u.unstable_lines_data.lines,
-                    enc_data->u.unstable_lines_data.max_lines_bunch);
-    enc_data->u.unstable_lines_data.lines -= lines;
-    uint8_t *end = src + lines * enc_data->u.unstable_lines_data.src_stride;
-    enc_data->u.unstable_lines_data.next = end;
-
-    uint8_t *out = (uint8_t *)enc_data->u.unstable_lines_data.input_bufs[
-                enc_data->u.unstable_lines_data.input_bufs_pos++ & 1]->buf;
-    uint8_t *dest = out;
-    for (; src != end; src += enc_data->u.unstable_lines_data.src_stride,
-                       dest += enc_data->u.unstable_lines_data.dest_stride) {
-        memcpy(dest, src, enc_data->u.unstable_lines_data.dest_stride);
-    }
-    *out_lines = out;
-    return lines;
-}
-
-static int quic_usr_more_lines_unstable(QuicUsrContext *usr, uint8_t **lines)
-{
-    EncoderData *usr_data = &(((QuicData *)usr)->data);
-    return encoder_usr_more_lines_unstable(usr_data, lines);
-}
-
-static int jpeg_usr_more_lines_unstable(JpegEncoderUsrContext *usr, uint8_t **lines)
-{
-    EncoderData *usr_data = &(((JpegData *)usr)->data);
-    return encoder_usr_more_lines_unstable(usr_data, lines);
-}
-
-static int quic_usr_no_more_lines(QuicUsrContext *usr, uint8_t **lines)
-{
-    return 0;
-}
-
-static int lz_usr_no_more_lines(LzUsrContext *usr, uint8_t **lines)
-{
-    return 0;
-}
-
-static int glz_usr_no_more_lines(GlzEncoderUsrContext *usr, uint8_t **lines)
-{
-    return 0;
-}
-
-static int jpeg_usr_no_more_lines(JpegEncoderUsrContext *usr, uint8_t **lines)
-{
-    return 0;
 }
 
 static int zlib_usr_more_input(ZlibEncoderUsrContext *usr, uint8_t** input)
@@ -5869,81 +5587,34 @@ static BitmapGradualType _get_bitmap_graduality_level(RedWorker *worker, SpiceBi
 {
     double score = 0.0;
     int num_samples = 0;
+    int num_lines;
+    double chunk_score = 0.0;
+    int chunk_num_samples = 0;
+    uint32_t x, i;
+    SpiceChunk *chunk;
 
-    if ((bitmap->flags & QXL_BITMAP_DIRECT)) {
-        uint32_t x;
-        uint32_t y;
-
+    chunk = bitmap->data->chunk;
+    for (i = 0; i < bitmap->data->num_chunks; i++) {
+        num_lines = chunk[i].len / bitmap->stride;
         x = bitmap->x;
-        y = bitmap->y;
         switch (bitmap->format) {
-        case SPICE_BITMAP_FMT_16BIT: {
-            uint8_t *lines = (uint8_t*)get_virt(&worker->mem_slots, bitmap->data, x * y *
-                                                sizeof(rgb16_pixel_t), group_id);
-            compute_lines_gradual_score_rgb16((rgb16_pixel_t*)lines, x, y, &score, &num_samples);
+        case SPICE_BITMAP_FMT_16BIT:
+            compute_lines_gradual_score_rgb16((rgb16_pixel_t *)chunk[i].data, x, num_lines,
+                                              &chunk_score, &chunk_num_samples);
+        case SPICE_BITMAP_FMT_24BIT:
+            compute_lines_gradual_score_rgb24((rgb24_pixel_t *)chunk[i].data, x, num_lines,
+                                              &chunk_score, &chunk_num_samples);
             break;
-        }
-        case SPICE_BITMAP_FMT_24BIT: {
-            uint8_t *lines = (uint8_t*)get_virt(&worker->mem_slots, bitmap->data, x * y *
-                                                sizeof(rgb24_pixel_t), group_id);
-            compute_lines_gradual_score_rgb24((rgb24_pixel_t*)lines, x, y, &score, &num_samples);
-            break;
-        }
         case SPICE_BITMAP_FMT_32BIT:
-        case SPICE_BITMAP_FMT_RGBA: {
-            uint8_t *lines = (uint8_t*)get_virt(&worker->mem_slots, bitmap->data, x * y *
-                                                sizeof(rgb32_pixel_t), group_id);
-            compute_lines_gradual_score_rgb32((rgb32_pixel_t*)lines, x, y, &score, &num_samples);
+        case SPICE_BITMAP_FMT_RGBA:
+            compute_lines_gradual_score_rgb32((rgb32_pixel_t *)chunk[i].data, x, num_lines,
+                                              &chunk_score, &chunk_num_samples);
             break;
-        }
         default:
             red_error("invalid bitmap format (not RGB) %u", bitmap->format);
         }
-    } else {
-        QXLDataChunk *chunk = NULL;
-        int num_lines;
-        double chunk_score = 0.0;
-        int chunk_num_samples = 0;
-        uint32_t x;
-        SPICE_ADDRESS relative_address = bitmap->data;
-
-        while (relative_address) {
-            chunk = (QXLDataChunk *)get_virt(&worker->mem_slots, relative_address, sizeof(QXLDataChunk),
-                                             group_id);
-            num_lines = chunk->data_size / bitmap->stride;
-            x = bitmap->x;
-            switch (bitmap->format) {
-            case SPICE_BITMAP_FMT_16BIT:
-                validate_virt(&worker->mem_slots, (unsigned long)chunk->data,
-                              get_memslot_id(&worker->mem_slots, relative_address),
-                              sizeof(rgb16_pixel_t) * x * num_lines, group_id);
-                compute_lines_gradual_score_rgb16((rgb16_pixel_t*)chunk->data, x, num_lines,
-                                                  &chunk_score, &chunk_num_samples);
-                break;
-            case SPICE_BITMAP_FMT_24BIT:
-                validate_virt(&worker->mem_slots, (unsigned long)chunk->data,
-                              get_memslot_id(&worker->mem_slots, relative_address),
-                              sizeof(rgb24_pixel_t) * x * num_lines, group_id);
-                compute_lines_gradual_score_rgb24((rgb24_pixel_t*)chunk->data, x, num_lines,
-                                                  &chunk_score, &chunk_num_samples);
-                break;
-            case SPICE_BITMAP_FMT_32BIT:
-            case SPICE_BITMAP_FMT_RGBA:
-                validate_virt(&worker->mem_slots, (unsigned long)chunk->data,
-                              get_memslot_id(&worker->mem_slots, relative_address),
-                              sizeof(rgb32_pixel_t) *  x * num_lines, group_id);
-                compute_lines_gradual_score_rgb32((rgb32_pixel_t*)chunk->data, x, num_lines,
-                                                  &chunk_score, &chunk_num_samples);
-                break;
-            default:
-                red_error("invalid bitmap format (not RGB) %u", bitmap->format);
-            }
-
-            score += chunk_score;
-            num_samples += chunk_num_samples;
-
-            relative_address = chunk->next_chunk;
-        }
+        score += chunk_score;
+        num_samples += chunk_num_samples;
     }
 
     ASSERT(num_samples);
@@ -6013,7 +5684,7 @@ typedef struct compress_send_data_t {
 
 
 static inline int red_glz_compress_image(DisplayChannel *display_channel,
-                                         RedImage *dest, SpiceBitmap *src, Drawable *drawable,
+                                         SpiceImage *dest, SpiceBitmap *src, Drawable *drawable,
                                          compress_send_data_t* o_comp_data)
 {
     RedWorker *worker = (RedWorker *)display_channel->base.worker;
@@ -6027,7 +5698,6 @@ static inline int red_glz_compress_image(DisplayChannel *display_channel,
     RedGlzDrawable *glz_drawable;
     GlzDrawableInstanceItem *glz_drawable_instance;
     uint8_t *lines;
-    unsigned int num_lines;
     int glz_size;
     int zlib_size;
 
@@ -6044,25 +5714,14 @@ static inline int red_glz_compress_image(DisplayChannel *display_channel,
     glz_drawable = red_display_get_glz_drawable(display_channel, drawable);
     glz_drawable_instance = red_display_add_glz_drawable_instance(glz_drawable);
 
-    if ((src->flags & QXL_BITMAP_DIRECT)) {
-        glz_data->usr.more_lines = glz_usr_no_more_lines;
-        lines = (uint8_t*)get_virt(&worker->mem_slots, src->data, src->stride * src->y, drawable->group_id);
-        num_lines = src->y;
-    } else {
-        glz_data->data.u.lines_data.enc_get_virt = cb_get_virt;
-        glz_data->data.u.lines_data.enc_get_virt_opaque = &worker->mem_slots;
-        glz_data->data.u.lines_data.enc_validate_virt = cb_validate_virt;
-        glz_data->data.u.lines_data.enc_validate_virt_opaque = &worker->mem_slots;
-        glz_data->data.u.lines_data.stride = src->stride;
-        glz_data->data.u.lines_data.next = src->data;
-        glz_data->data.u.lines_data.group_id = drawable->group_id;
-        glz_data->usr.more_lines = glz_usr_more_lines;
-        lines = NULL;
-        num_lines = 0;
-    }
+    glz_data->data.u.lines_data.chunks = src->data;
+    glz_data->data.u.lines_data.stride = src->stride;
+    glz_data->data.u.lines_data.next = 0;
+    glz_data->data.u.lines_data.reverse = 0;
+    glz_data->usr.more_lines = glz_usr_more_lines;
 
     glz_size = glz_encode(display_channel->glz, type, src->x, src->y,
-                          (src->flags & QXL_BITMAP_TOP_DOWN), lines, num_lines,
+                          (src->flags & SPICE_BITMAP_FLAGS_TOP_DOWN), lines, 0,
                           src->stride, (uint8_t*)glz_data->data.bufs_head->buf,
                           sizeof(glz_data->data.bufs_head->buf),
                           glz_drawable_instance,
@@ -6107,8 +5766,8 @@ static inline int red_glz_compress_image(DisplayChannel *display_channel,
     }
 
     dest->descriptor.type = SPICE_IMAGE_TYPE_ZLIB_GLZ_RGB;
-    dest->zlib_glz.glz_data_size = glz_size;
-    dest->zlib_glz.data_size = zlib_size;
+    dest->u.zlib_glz.glz_data_size = glz_size;
+    dest->u.zlib_glz.data_size = zlib_size;
 
     o_comp_data->comp_buf = zlib_data->data.bufs_head;
     o_comp_data->comp_buf_size = zlib_size;
@@ -6117,7 +5776,7 @@ static inline int red_glz_compress_image(DisplayChannel *display_channel,
     return TRUE;
 glz:
     dest->descriptor.type = SPICE_IMAGE_TYPE_GLZ_RGB;
-    dest->lz_rgb.data_size = glz_size;
+    dest->u.lz_rgb.data_size = glz_size;
 
     o_comp_data->comp_buf = glz_data->data.bufs_head;
     o_comp_data->comp_buf_size = glz_size;
@@ -6126,7 +5785,7 @@ glz:
 }
 
 static inline int red_lz_compress_image(DisplayChannel *display_channel,
-                                        RedImage *dest, SpiceBitmap *src,
+                                        SpiceImage *dest, SpiceBitmap *src,
                                         compress_send_data_t* o_comp_data, uint32_t group_id)
 {
     RedWorker *worker = display_channel->base.worker;
@@ -6158,27 +5817,16 @@ static inline int red_lz_compress_image(DisplayChannel *display_channel,
         return FALSE;
     }
 
-    if ((src->flags & QXL_BITMAP_DIRECT)) {
-        lz_data->usr.more_lines = lz_usr_no_more_lines;
-        size = lz_encode(lz, type, src->x, src->y, (src->flags & QXL_BITMAP_TOP_DOWN),
-                         (uint8_t*)get_virt(&worker->mem_slots, src->data, src->stride * src->y, group_id),
-                         src->y, src->stride, (uint8_t*)lz_data->data.bufs_head->buf,
-                         sizeof(lz_data->data.bufs_head->buf));
-    } else {
-        lz_data->data.u.lines_data.enc_get_virt = cb_get_virt;
-        lz_data->data.u.lines_data.enc_get_virt_opaque = &worker->mem_slots;
-        lz_data->data.u.lines_data.enc_validate_virt = cb_validate_virt;
-        lz_data->data.u.lines_data.enc_validate_virt_opaque = &worker->mem_slots;
-        lz_data->data.u.lines_data.stride = src->stride;
-        lz_data->data.u.lines_data.next = src->data;
-        lz_data->data.u.lines_data.group_id = group_id;
-        lz_data->usr.more_lines = lz_usr_more_lines;
+    lz_data->data.u.lines_data.chunks = src->data;
+    lz_data->data.u.lines_data.stride = src->stride;
+    lz_data->data.u.lines_data.next = 0;
+    lz_data->data.u.lines_data.reverse = 0;
+    lz_data->usr.more_lines = lz_usr_more_lines;
 
-        size = lz_encode(lz, type, src->x, src->y, (src->flags & QXL_BITMAP_TOP_DOWN),
-                         NULL, 0, src->stride,
-                         (uint8_t*)lz_data->data.bufs_head->buf,
-                         sizeof(lz_data->data.bufs_head->buf));
-    }
+    size = lz_encode(lz, type, src->x, src->y, (src->flags & SPICE_BITMAP_FLAGS_TOP_DOWN),
+                     NULL, 0, src->stride,
+                     (uint8_t*)lz_data->data.bufs_head->buf,
+                     sizeof(lz_data->data.bufs_head->buf));
 
     // the compressed buffer is bigger than the original data
     if (size > (src->y * src->stride)) {
@@ -6187,21 +5835,22 @@ static inline int red_lz_compress_image(DisplayChannel *display_channel,
 
     if (BITMAP_FMT_IS_RGB[src->format]) {
         dest->descriptor.type = SPICE_IMAGE_TYPE_LZ_RGB;
-        dest->lz_rgb.data_size = size;
+        dest->u.lz_rgb.data_size = size;
 
         o_comp_data->comp_buf = lz_data->data.bufs_head;
         o_comp_data->comp_buf_size = size;
     } else {
         dest->descriptor.type = SPICE_IMAGE_TYPE_LZ_PLT;
-        dest->lz_plt.data_size = size;
-        dest->lz_plt.flags = src->flags & SPICE_BITMAP_FLAGS_TOP_DOWN;
-        dest->lz_plt.palette = src->palette;
+        dest->u.lz_plt.data_size = size;
+        dest->u.lz_plt.flags = src->flags & SPICE_BITMAP_FLAGS_TOP_DOWN;
+        dest->u.lz_plt.palette = src->palette;
+        dest->u.lz_plt.palette_id = src->palette->unique;
 
         o_comp_data->comp_buf = lz_data->data.bufs_head;
         o_comp_data->comp_buf_size = size;
 
-        fill_palette(display_channel, &(dest->lz_plt.palette), &(dest->lz_plt.flags),
-                     group_id, &o_comp_data->lzplt_palette);
+        fill_palette(display_channel, dest->u.lz_plt.palette, &(dest->u.lz_plt.flags));
+        o_comp_data->lzplt_palette = dest->u.lz_plt.palette;
     }
 
     stat_compress_add(&display_channel->lz_stat, start_time, src->stride * src->y,
@@ -6209,7 +5858,7 @@ static inline int red_lz_compress_image(DisplayChannel *display_channel,
     return TRUE;
 }
 
-static int red_jpeg_compress_image(DisplayChannel *display_channel, RedImage *dest,
+static int red_jpeg_compress_image(DisplayChannel *display_channel, SpiceImage *dest,
                                    SpiceBitmap *src, compress_send_data_t* o_comp_data,
                                    uint32_t group_id)
 {
@@ -6224,6 +5873,7 @@ static int red_jpeg_compress_image(DisplayChannel *display_channel, RedImage *de
     int alpha_lz_size = 0;
     int comp_head_filled;
     int comp_head_left;
+    int stride;
     uint8_t *lz_out_start_byte;
 
 #ifdef COMPRESS_STAT
@@ -6267,83 +5917,26 @@ static int red_jpeg_compress_image(DisplayChannel *display_channel, RedImage *de
         return FALSE;
     }
 
-    if ((src->flags & QXL_BITMAP_DIRECT)) {
-        int stride;
-        uint8_t *data;
-
-        if (!(src->flags & QXL_BITMAP_TOP_DOWN)) {
-            data = (uint8_t*)get_virt(&worker->mem_slots, src->data, src->stride * src->y, group_id) +
-                   src->stride * (src->y - 1);
-            stride = -src->stride;
-        } else {
-            data = (uint8_t*)get_virt(&worker->mem_slots, src->data, src->stride * src->y, group_id);
-            stride = src->stride;
-        }
-
-        if ((src->flags & QXL_BITMAP_UNSTABLE)) {
-            ASSERT(!has_alpha);
-            jpeg_data->data.u.unstable_lines_data.next = data;
-            jpeg_data->data.u.unstable_lines_data.src_stride = stride;
-            jpeg_data->data.u.unstable_lines_data.dest_stride = src->stride;
-            jpeg_data->data.u.unstable_lines_data.lines = src->y;
-            jpeg_data->data.u.unstable_lines_data.input_bufs_pos = 0;
-            if (!(jpeg_data->data.u.unstable_lines_data.input_bufs[0] =
-                                            red_display_alloc_compress_buf(display_channel)) ||
-                !(jpeg_data->data.u.unstable_lines_data.input_bufs[1] =
-                                            red_display_alloc_compress_buf(display_channel))) {
-                return FALSE;
-            }
-            jpeg_data->data.u.unstable_lines_data.max_lines_bunch =
-                                 sizeof(jpeg_data->data.u.unstable_lines_data.input_bufs[0]->buf) /
-                                 jpeg_data->data.u.unstable_lines_data.dest_stride;
-            jpeg_data->usr.more_lines = jpeg_usr_more_lines_unstable;
-            jpeg_size = jpeg_encode(jpeg, display_channel->jpeg_quality, jpeg_in_type,
-                                    src->x, src->y, NULL, 0, src->stride,
-                                    (uint8_t*)jpeg_data->data.bufs_head->buf,
-                                    sizeof(jpeg_data->data.bufs_head->buf));
-        } else {
-            jpeg_data->usr.more_lines = jpeg_usr_no_more_lines;
-            jpeg_size = jpeg_encode(jpeg, display_channel->jpeg_quality, jpeg_in_type,
-                                    src->x, src->y, data, src->y, stride,
-                                    (uint8_t*)jpeg_data->data.bufs_head->buf,
-                                    sizeof(jpeg_data->data.bufs_head->buf));
-        }
-    } else {
-        int stride;
-
-        if ((src->flags & QXL_BITMAP_UNSTABLE)) {
-            red_printf_once("unexpected unstable bitmap");
-            return FALSE;
-        }
-        jpeg_data->data.u.lines_data.enc_get_virt = cb_get_virt;
-        jpeg_data->data.u.lines_data.enc_get_virt_opaque = &worker->mem_slots;
-        jpeg_data->data.u.lines_data.enc_validate_virt = cb_validate_virt;
-        jpeg_data->data.u.lines_data.enc_validate_virt_opaque = &worker->mem_slots;
-        jpeg_data->data.u.lines_data.stride = src->stride;
-        jpeg_data->data.u.lines_data.group_id = group_id;
-
-        if ((src->flags & QXL_BITMAP_TOP_DOWN)) {
-            jpeg_data->data.u.lines_data.next = src->data;
-            jpeg_data->usr.more_lines = jpeg_usr_more_lines;
-            stride = src->stride;
-        } else {
-            SPICE_ADDRESS prev_addr = src->data;
-            QXLDataChunk *chunk = (QXLDataChunk *)get_virt(&worker->mem_slots, src->data,
-                                                           sizeof(QXLDataChunk), group_id);
-            while (chunk->next_chunk) {
-                prev_addr = chunk->next_chunk;
-                chunk = (QXLDataChunk *)get_virt(&worker->mem_slots, chunk->next_chunk, sizeof(QXLDataChunk),
-                                                 group_id);
-                ASSERT(chunk->prev_chunk);
-            }
-            jpeg_data->data.u.lines_data.next = (SPICE_ADDRESS)prev_addr;
-            jpeg_data->usr.more_lines = jpeg_usr_more_lines_reverse;
-            stride = -src->stride;
-        }
-        jpeg_size = jpeg_encode(jpeg, display_channel->jpeg_quality, jpeg_in_type, src->x, src->y, NULL,
-                                0, stride, (uint8_t*)jpeg_data->data.bufs_head->buf,
-                                sizeof(jpeg_data->data.bufs_head->buf));
+    if (src->data->flags & SPICE_CHUNKS_FLAGS_UNSTABLE) {
+        spice_chunks_linearize(src->data);
     }
+
+    jpeg_data->data.u.lines_data.chunks = src->data;
+    jpeg_data->data.u.lines_data.stride = src->stride;
+    jpeg_data->usr.more_lines = jpeg_usr_more_lines;
+    if ((src->flags & SPICE_BITMAP_FLAGS_TOP_DOWN)) {
+        jpeg_data->data.u.lines_data.next = 0;
+        jpeg_data->data.u.lines_data.reverse = 0;
+        stride = src->stride;
+    } else {
+        jpeg_data->data.u.lines_data.next = src->data->num_chunks - 1;
+        jpeg_data->data.u.lines_data.reverse = 1;
+        stride = -src->stride;
+    }
+    jpeg_size = jpeg_encode(jpeg, display_channel->jpeg_quality, jpeg_in_type,
+                            src->x, src->y, NULL,
+                            0, stride, (uint8_t*)jpeg_data->data.bufs_head->buf,
+                            sizeof(jpeg_data->data.bufs_head->buf));
 
     // the compressed buffer is bigger than the original data
     if (jpeg_size > (src->y * src->stride)) {
@@ -6352,7 +5945,7 @@ static int red_jpeg_compress_image(DisplayChannel *display_channel, RedImage *de
 
     if (!has_alpha) {
         dest->descriptor.type = SPICE_IMAGE_TYPE_JPEG;
-        dest->jpeg.data_size = jpeg_size;
+        dest->u.jpeg.data_size = jpeg_size;
 
         o_comp_data->comp_buf = jpeg_data->data.bufs_head;
         o_comp_data->comp_buf_size = jpeg_size;
@@ -6372,32 +5965,17 @@ static int red_jpeg_compress_image(DisplayChannel *display_channel, RedImage *de
 
      lz_data->data.display_channel = display_channel;
 
-     if ((src->flags & QXL_BITMAP_DIRECT)) {
-         lz_data->usr.more_lines = lz_usr_no_more_lines;
-         alpha_lz_size = lz_encode(lz, LZ_IMAGE_TYPE_XXXA, src->x, src->y,
-                                   (src->flags & QXL_BITMAP_TOP_DOWN),
-                                   (uint8_t*)get_virt(&worker->mem_slots, src->data,
-                                                      src->stride * src->y, group_id),
-                                   src->y, src->stride,
-                                   lz_out_start_byte,
-                                   comp_head_left);
-    } else {
-        lz_data->data.u.lines_data.enc_get_virt = cb_get_virt;
-        lz_data->data.u.lines_data.enc_get_virt_opaque = &worker->mem_slots;
-        lz_data->data.u.lines_data.enc_validate_virt = cb_validate_virt;
-        lz_data->data.u.lines_data.enc_validate_virt_opaque = &worker->mem_slots;
-        lz_data->data.u.lines_data.stride = src->stride;
-        lz_data->data.u.lines_data.next = src->data;
-        lz_data->data.u.lines_data.group_id = group_id;
-        lz_data->usr.more_lines = lz_usr_more_lines;
+     lz_data->data.u.lines_data.chunks = src->data;
+     lz_data->data.u.lines_data.stride = src->stride;
+     lz_data->data.u.lines_data.next = 0;
+     lz_data->data.u.lines_data.reverse = 0;
+     lz_data->usr.more_lines = lz_usr_more_lines;
 
-        alpha_lz_size = lz_encode(lz, LZ_IMAGE_TYPE_XXXA, src->x, src->y,
-                                  (src->flags & QXL_BITMAP_TOP_DOWN),
-                                  NULL, 0, src->stride,
-                                  lz_out_start_byte,
-                                  comp_head_left);
-    }
-   
+     alpha_lz_size = lz_encode(lz, LZ_IMAGE_TYPE_XXXA, src->x, src->y,
+                               (src->flags & SPICE_BITMAP_FLAGS_TOP_DOWN),
+                               NULL, 0, src->stride,
+                               lz_out_start_byte,
+                               comp_head_left);
 
     // the compressed buffer is bigger than the original data
     if ((jpeg_size + alpha_lz_size) > (src->y * src->stride)) {
@@ -6405,13 +5983,13 @@ static int red_jpeg_compress_image(DisplayChannel *display_channel, RedImage *de
     }
 
     dest->descriptor.type = SPICE_IMAGE_TYPE_JPEG_ALPHA;
-    dest->jpeg_alpha.flags = 0;
-    if (src->flags & QXL_BITMAP_TOP_DOWN) {
-        dest->jpeg_alpha.flags |= SPICE_JPEG_ALPHA_FLAGS_TOP_DOWN;
+    dest->u.jpeg_alpha.flags = 0;
+    if (src->flags & SPICE_BITMAP_FLAGS_TOP_DOWN) {
+        dest->u.jpeg_alpha.flags |= SPICE_JPEG_ALPHA_FLAGS_TOP_DOWN;
     }
 
-    dest->jpeg_alpha.jpeg_size = jpeg_size;
-    dest->jpeg_alpha.data_size = jpeg_size + alpha_lz_size;
+    dest->u.jpeg_alpha.jpeg_size = jpeg_size;
+    dest->u.jpeg_alpha.data_size = jpeg_size + alpha_lz_size;
 
     o_comp_data->comp_buf = jpeg_data->data.bufs_head;
     o_comp_data->comp_buf_size = jpeg_size + alpha_lz_size;
@@ -6421,7 +5999,7 @@ static int red_jpeg_compress_image(DisplayChannel *display_channel, RedImage *de
     return TRUE;
 }
 
-static inline int red_quic_compress_image(DisplayChannel *display_channel, RedImage *dest,
+static inline int red_quic_compress_image(DisplayChannel *display_channel, SpiceImage *dest,
                                           SpiceBitmap *src, compress_send_data_t* o_comp_data,
                                           uint32_t group_id)
 {
@@ -6429,7 +6007,7 @@ static inline int red_quic_compress_image(DisplayChannel *display_channel, RedIm
     QuicData *quic_data = &worker->quic_data;
     QuicContext *quic = worker->quic;
     QuicImageType type;
-    int size;
+    int size, stride;
 
 #ifdef COMPRESS_STAT
     stat_time_t start_time = stat_now();
@@ -6471,80 +6049,25 @@ static inline int red_quic_compress_image(DisplayChannel *display_channel, RedIm
         return FALSE;
     }
 
-    if ((src->flags & QXL_BITMAP_DIRECT)) {
-        int stride;
-        uint8_t *data;
-
-        if (!(src->flags & QXL_BITMAP_TOP_DOWN)) {
-            data = (uint8_t*)get_virt(&worker->mem_slots, src->data, src->stride * src->y, group_id) +
-                   src->stride * (src->y - 1);
-            stride = -src->stride;
-        } else {
-            data = (uint8_t*)get_virt(&worker->mem_slots, src->data, src->stride * src->y, group_id);
-            stride = src->stride;
-        }
-
-        if ((src->flags & QXL_BITMAP_UNSTABLE)) {
-            quic_data->data.u.unstable_lines_data.next = data;
-            quic_data->data.u.unstable_lines_data.src_stride = stride;
-            quic_data->data.u.unstable_lines_data.dest_stride = src->stride;
-            quic_data->data.u.unstable_lines_data.lines = src->y;
-            quic_data->data.u.unstable_lines_data.input_bufs_pos = 0;
-            if (!(quic_data->data.u.unstable_lines_data.input_bufs[0] =
-                                            red_display_alloc_compress_buf(display_channel)) ||
-                !(quic_data->data.u.unstable_lines_data.input_bufs[1] =
-                                            red_display_alloc_compress_buf(display_channel))) {
-                return FALSE;
-            }
-            quic_data->data.u.unstable_lines_data.max_lines_bunch =
-                                 sizeof(quic_data->data.u.unstable_lines_data.input_bufs[0]->buf) /
-                                 quic_data->data.u.unstable_lines_data.dest_stride;
-            quic_data->usr.more_lines = quic_usr_more_lines_unstable;
-            size = quic_encode(quic, type, src->x, src->y, NULL, 0, src->stride,
-                               quic_data->data.bufs_head->buf,
-                               sizeof(quic_data->data.bufs_head->buf) >> 2);
-        } else {
-            quic_data->usr.more_lines = quic_usr_no_more_lines;
-            size = quic_encode(quic, type, src->x, src->y, data, src->y, stride,
-                               quic_data->data.bufs_head->buf,
-                               sizeof(quic_data->data.bufs_head->buf) >> 2);
-        }
-    } else {
-        int stride;
-
-        if ((src->flags & QXL_BITMAP_UNSTABLE)) {
-            red_printf_once("unexpected unstable bitmap");
-            return FALSE;
-        }
-        quic_data->data.u.lines_data.enc_get_virt = cb_get_virt;
-        quic_data->data.u.lines_data.enc_get_virt_opaque = &worker->mem_slots;
-        quic_data->data.u.lines_data.enc_validate_virt = cb_validate_virt;
-        quic_data->data.u.lines_data.enc_validate_virt_opaque = &worker->mem_slots;
-        quic_data->data.u.lines_data.stride = src->stride;
-        quic_data->data.u.lines_data.group_id = group_id;
-
-        if ((src->flags & QXL_BITMAP_TOP_DOWN)) {
-            quic_data->data.u.lines_data.next = src->data;
-            quic_data->usr.more_lines = quic_usr_more_lines;
-            stride = src->stride;
-        } else {
-            SPICE_ADDRESS prev_addr = src->data;
-            QXLDataChunk *chunk = (QXLDataChunk *)get_virt(&worker->mem_slots, src->data,
-                                                           sizeof(QXLDataChunk), group_id);
-            while (chunk->next_chunk) {
-                prev_addr = chunk->next_chunk;
-                chunk = (QXLDataChunk *)get_virt(&worker->mem_slots, chunk->next_chunk, sizeof(QXLDataChunk),
-                                                 group_id);
-                ASSERT(chunk->prev_chunk);
-            }
-            quic_data->data.u.lines_data.next = prev_addr;
-            quic_data->usr.more_lines = quic_usr_more_lines_reverse;
-            stride = -src->stride;
-        }
-        size = quic_encode(quic, type, src->x, src->y, NULL, 0, stride,
-                           quic_data->data.bufs_head->buf,
-                           sizeof(quic_data->data.bufs_head->buf) >> 2);
+    if (src->data->flags & SPICE_CHUNKS_FLAGS_UNSTABLE) {
+        spice_chunks_linearize(src->data);
     }
+
+    quic_data->data.u.lines_data.chunks = src->data;
+    quic_data->data.u.lines_data.stride = src->stride;
+    quic_data->usr.more_lines = quic_usr_more_lines;
+    if ((src->flags & SPICE_BITMAP_FLAGS_TOP_DOWN)) {
+        quic_data->data.u.lines_data.next = 0;
+        quic_data->data.u.lines_data.reverse = 0;
+        stride = src->stride;
+    } else {
+        quic_data->data.u.lines_data.next = src->data->num_chunks - 1;
+        quic_data->data.u.lines_data.reverse = 1;
+        stride = -src->stride;
+    }
+    size = quic_encode(quic, type, src->x, src->y, NULL, 0, stride,
+                       quic_data->data.bufs_head->buf,
+                       sizeof(quic_data->data.bufs_head->buf) >> 2);
 
     // the compressed buffer is bigger than the original data
     if ((size << 2) > (src->y * src->stride)) {
@@ -6552,7 +6075,7 @@ static inline int red_quic_compress_image(DisplayChannel *display_channel, RedIm
     }
 
     dest->descriptor.type = SPICE_IMAGE_TYPE_QUIC;
-    dest->quic.data_size = size << 2;
+    dest->u.quic.data_size = size << 2;
 
     o_comp_data->comp_buf = quic_data->data.bufs_head;
     o_comp_data->comp_buf_size = size << 2;
@@ -6565,7 +6088,7 @@ static inline int red_quic_compress_image(DisplayChannel *display_channel, RedIm
 #define MIN_SIZE_TO_COMPRESS 54
 #define MIN_DIMENSION_TO_QUIC 3
 static inline int red_compress_image(DisplayChannel *display_channel,
-                                     RedImage *dest, SpiceBitmap *src, Drawable *drawable,
+                                     SpiceImage *dest, SpiceBitmap *src, Drawable *drawable,
                                      int can_lossy,
                                      compress_send_data_t* o_comp_data)
 {
@@ -6587,7 +6110,7 @@ static inline int red_compress_image(DisplayChannel *display_channel,
             lz doesn't handle (1) bitmaps with strides that are larger than the width
             of the image in bytes (2) unstable bitmaps
         */
-        if (_stride_is_extra(src) || (src->flags & QXL_BITMAP_UNSTABLE)) {
+        if (_stride_is_extra(src) || (src->data->flags & SPICE_CHUNKS_FLAGS_UNSTABLE)) {
             if ((image_compression == SPICE_IMAGE_COMPRESS_LZ) ||
                 (image_compression == SPICE_IMAGE_COMPRESS_GLZ) ||
                 BITMAP_FMT_IS_PLT[src->format]) {
@@ -6676,14 +6199,14 @@ static inline int red_compress_image(DisplayChannel *display_channel,
 }
 
 static inline void red_display_add_image_to_pixmap_cache(DisplayChannel *display_channel,
-                                                         QXLImage *qxl_image, RedImage *io_image,
+                                                         SpiceImage *image, SpiceImage *io_image,
                                                          int is_lossy)
 {
-    if ((qxl_image->descriptor.flags & QXL_IMAGE_CACHE)) {
-        ASSERT(qxl_image->descriptor.width * qxl_image->descriptor.height > 0);
+    if ((image->descriptor.flags & SPICE_IMAGE_FLAGS_CACHE_ME)) {
+        ASSERT(image->descriptor.width * image->descriptor.height > 0);
         if (!(io_image->descriptor.flags & SPICE_IMAGE_FLAGS_CACHE_REPLACE_ME)) {
-            if (pixmap_cache_add(display_channel->pixmap_cache, qxl_image->descriptor.id,
-                                 qxl_image->descriptor.width * qxl_image->descriptor.height, is_lossy,
+            if (pixmap_cache_add(display_channel->pixmap_cache, image->descriptor.id,
+                                 image->descriptor.width * image->descriptor.height, is_lossy,
                                  display_channel)) {
                 io_image->descriptor.flags |= SPICE_IMAGE_FLAGS_CACHE_ME;
                 stat_inc_counter(display_channel->add_to_cache_counter, 1);
@@ -6708,36 +6231,22 @@ typedef enum {
 /* if the number of times fill_bits can be called per one qxl_drawable increases -
    MAX_LZ_DRAWABLE_INSTANCES must be increased as well */
 static FillBitsType fill_bits(DisplayChannel *display_channel, SpiceMarshaller *m,
-                              QXLPHYSICAL in_bitmap, Drawable *drawable, int can_lossy)
+                              SpiceImage *simage, Drawable *drawable, int can_lossy)
 {
     RedChannel *channel = &display_channel->base;
     RedWorker *worker = channel->worker;
-    RedImage image;
-    QXLImage *qxl_image;
-    uint8_t *data;
-    int memslot_id;
+    SpiceImage image;
     compress_send_data_t comp_send_data = {0};
     SpiceMarshaller *bitmap_palette_out, *data_out, *lzplt_palette_out;
 
-    if (in_bitmap == 0) {
+    if (simage == NULL) {
         ASSERT(drawable->self_bitmap);
-        qxl_image = (QXLImage *)drawable->self_bitmap;
-    } else {
-        qxl_image = (QXLImage *)get_virt(&worker->mem_slots, in_bitmap, sizeof(QXLImage),
-                                         drawable->group_id);
+        simage = drawable->self_bitmap;
     }
 
-    image.descriptor.id = qxl_image->descriptor.id;
-    image.descriptor.type = qxl_image->descriptor.type;
-    image.descriptor.flags = 0;
-    if (qxl_image->descriptor.flags & QXL_IMAGE_HIGH_BITS_SET) {
-        image.descriptor.flags |= SPICE_IMAGE_FLAGS_HIGH_BITS_SET;
-    }
-    image.descriptor.width = qxl_image->descriptor.width;
-    image.descriptor.height = qxl_image->descriptor.height;
+    image.descriptor = simage->descriptor;
 
-    memslot_id = get_memslot_id(&worker->mem_slots, in_bitmap);
-    if ((qxl_image->descriptor.flags & QXL_IMAGE_CACHE)) {
+    if ((simage->descriptor.flags & SPICE_IMAGE_FLAGS_CACHE_ME)) {
         int lossy_cache_item;
         if (pixmap_cache_hit(display_channel->pixmap_cache, image.descriptor.id,
                              &lossy_cache_item, display_channel)) {
@@ -6750,7 +6259,7 @@ static FillBitsType fill_bits(DisplayChannel *display_channel, SpiceMarshaller *
                     // will be retrieved as lossless by another display channel.
                     image.descriptor.type = SPICE_IMAGE_TYPE_FROM_CACHE_LOSSLESS;
                 }
-                spice_marshall_Image(m, (SpiceImageDescriptor *)&image,
+                spice_marshall_Image(m, &image,
                                      &bitmap_palette_out, &data_out, &lzplt_palette_out);
                 ASSERT(bitmap_palette_out == NULL);
                 ASSERT(data_out == NULL);
@@ -6758,19 +6267,19 @@ static FillBitsType fill_bits(DisplayChannel *display_channel, SpiceMarshaller *
                 stat_inc_counter(display_channel->cache_hits_counter, 1);
                 return FILL_BITS_TYPE_CACHE;
             } else {
-                pixmap_cache_set_lossy(display_channel->pixmap_cache, qxl_image->descriptor.id,
+                pixmap_cache_set_lossy(display_channel->pixmap_cache, simage->descriptor.id,
                                        FALSE);
                 image.descriptor.flags |= SPICE_IMAGE_FLAGS_CACHE_REPLACE_ME;
             }
         }
     }
 
-    switch (qxl_image->descriptor.type) {
+    switch (simage->descriptor.type) {
     case SPICE_IMAGE_TYPE_SURFACE: {
         int surface_id;
         RedSurface *surface;
 
-        surface_id = qxl_image->surface_image.surface_id;
+        surface_id = simage->u.surface.surface_id;
         validate_surface(worker, surface_id);
 
         surface = &worker->surfaces[surface_id];
@@ -6779,68 +6288,63 @@ static FillBitsType fill_bits(DisplayChannel *display_channel, SpiceMarshaller *
         image.descriptor.width = surface->context.width;
         image.descriptor.height = surface->context.height;
 
-        image.surface.surface_id = surface_id;
-        spice_marshall_Image(m, (SpiceImageDescriptor *)&image,
+        image.u.surface.surface_id = surface_id;
+        spice_marshall_Image(m, &image,
                              &bitmap_palette_out, &data_out, &lzplt_palette_out);
         ASSERT(bitmap_palette_out == NULL);
         ASSERT(data_out == NULL);
         ASSERT(lzplt_palette_out == NULL);
         return FILL_BITS_TYPE_SURFACE;
     }
-    case SPICE_IMAGE_TYPE_BITMAP:
+    case SPICE_IMAGE_TYPE_BITMAP: {
+        SpiceBitmap *bitmap = &image.u.bitmap;
 #ifdef DUMP_BITMAP
-        dump_bitmap(display_channel->base.worker, &qxl_image->bitmap, drawable->group_id);
+        dump_bitmap(display_channel->base.worker, &simage->u.bitmap, drawable->group_id);
 #endif
         /* Images must be added to the cache only after they are compressed
            in order to prevent starvation in the client between pixmap_cache and
            global dictionary (in cases of multiple monitors) */
-        if (!red_compress_image(display_channel, &image, &qxl_image->bitmap,
+        if (!red_compress_image(display_channel, &image, &simage->u.bitmap,
                                 drawable, can_lossy, &comp_send_data)) {
-            uint32_t y;
+            uint32_t y, i;
             uint32_t stride;
-            SPICE_ADDRESS image_data;
             SpicePalette *palette;
+            SpiceChunk *chunk;
 
-            red_display_add_image_to_pixmap_cache(display_channel, qxl_image, &image, FALSE);
+            red_display_add_image_to_pixmap_cache(display_channel, simage, &image, FALSE);
 
-            image.bitmap = qxl_image->bitmap;
-            y = image.bitmap.y;
-            stride = image.bitmap.stride;
-            image_data = image.bitmap.data;
-            image.bitmap.flags = image.bitmap.flags & SPICE_BITMAP_FLAGS_TOP_DOWN;
+            *bitmap = simage->u.bitmap;
+            y = bitmap->y;
+            stride = bitmap->stride;
+            bitmap->flags = bitmap->flags & SPICE_BITMAP_FLAGS_TOP_DOWN;
 
-            fill_palette(display_channel, &image.bitmap.palette, &image.bitmap.flags,
-                         drawable->group_id, &palette);
-            spice_marshall_Image(m, (SpiceImageDescriptor *)&image,
+            palette = bitmap->palette;
+            fill_palette(display_channel, palette, &bitmap->flags);
+            spice_marshall_Image(m, &image,
                                  &bitmap_palette_out, &data_out, &lzplt_palette_out);
             ASSERT(lzplt_palette_out == NULL);
 
-            if (palette) {
+            if (bitmap_palette_out && palette) {
                 spice_marshall_Palette(bitmap_palette_out, palette);
             }
 
-            if (qxl_image->bitmap.flags & QXL_BITMAP_DIRECT) {
-                data = (uint8_t *)get_virt(&worker->mem_slots, image_data, stride * y, drawable->group_id);
-                spice_marshaller_add_ref(data_out, data, y * stride);
-            } else {
-                data = (uint8_t *)get_virt(&worker->mem_slots, image_data, sizeof(QXLDataChunk),
-                                           drawable->group_id);
-                marshaller_add_chunk(worker, data_out, (QXLDataChunk *)data,
-                                     y * stride, memslot_id, drawable->group_id);
+            chunk = bitmap->data->chunk;
+            for (i = 0; i < bitmap->data->num_chunks; i++) {
+                spice_marshaller_add_ref(data_out, chunk[i].data, chunk[i].len);
             }
             return FILL_BITS_TYPE_BITMAP;
         } else {
-            red_display_add_image_to_pixmap_cache(display_channel, qxl_image, &image,
+            red_display_add_image_to_pixmap_cache(display_channel, simage, &image,
                                                   comp_send_data.is_lossy);
 
-            spice_marshall_Image(m, (SpiceImageDescriptor *)&image,
+            spice_marshall_Image(m, &image,
                                  &bitmap_palette_out, &data_out, &lzplt_palette_out);
             ASSERT(bitmap_palette_out == NULL);
 
             marshaller_add_compressed(worker, m, comp_send_data.comp_buf,
                                       comp_send_data.comp_buf_size);
 
-            if (comp_send_data.lzplt_palette) {
+            if (lzplt_palette_out && comp_send_data.lzplt_palette) {
                 spice_marshall_Palette(lzplt_palette_out, comp_send_data.lzplt_palette);
             }
 
@@ -6849,16 +6353,15 @@ static FillBitsType fill_bits(DisplayChannel *display_channel, SpiceMarshaller *
                                               FILL_BITS_TYPE_COMPRESS_LOSSLESS);
         }
         break;
+    }
     case SPICE_IMAGE_TYPE_QUIC:
-        red_display_add_image_to_pixmap_cache(display_channel, qxl_image, &image, FALSE);
-        image.quic = qxl_image->quic;
-        spice_marshall_Image(m, (SpiceImageDescriptor *)&image,
+        red_display_add_image_to_pixmap_cache(display_channel, simage, &image, FALSE);
+        image.u.quic = simage->u.quic;
+        spice_marshall_Image(m, &image,
                              &bitmap_palette_out, &data_out, &lzplt_palette_out);
         ASSERT(bitmap_palette_out == NULL);
         ASSERT(lzplt_palette_out == NULL);
-        marshaller_add_chunk(worker, m, (QXLDataChunk *)qxl_image->quic.data,
-                             qxl_image->quic.data_size,
-                             memslot_id, drawable->group_id);
+        spice_marshaller_add_ref_chunks(m, image.u.quic.data);
         return FILL_BITS_TYPE_COMPRESS_LOSSLESS;
     default:
         red_error("invalid image type %u", image.descriptor.type);
@@ -6866,7 +6369,7 @@ static FillBitsType fill_bits(DisplayChannel *display_channel, SpiceMarshaller *
 }
 
 static void fill_mask(DisplayChannel *display_channel, SpiceMarshaller *m,
-                      SPICE_ADDRESS mask_bitmap, Drawable *drawable)
+                      SpiceImage *mask_bitmap, Drawable *drawable)
 {
     if (mask_bitmap && m) {
         if (display_channel->base.worker->image_compression != SPICE_IMAGE_COMPRESS_OFF) {
@@ -7010,26 +6513,20 @@ static int is_surface_area_lossy(DisplayChannel *display_channel, uint32_t surfa
    to the client, returns false. "area" is for surfaces. If area = NULL,
    all the surface is considered. out_lossy_data will hold info about the bitmap, and its lossy
    area in case it is lossy and part of a surface. */
-static int is_bitmap_lossy(DisplayChannel *display_channel, SPICE_ADDRESS bitmap, SpiceRect *area,
+static int is_bitmap_lossy(DisplayChannel *display_channel, SpiceImage *image, SpiceRect *area,
                            Drawable *drawable, BitmapData *out_data)
 {
-    RedWorker *worker = display_channel->base.worker;
-    QXLImage *qxl_image;
-
-    if (bitmap == 0) {
+    if (image == NULL) {
         // self bitmap
         out_data->type = BITMAP_DATA_TYPE_BITMAP;
         return FALSE;
     }
 
-    qxl_image = (QXLImage *)get_virt(&worker->mem_slots, bitmap, sizeof(QXLImage),
-                                     drawable->group_id);
-
-    if ((qxl_image->descriptor.flags & QXL_IMAGE_CACHE)) {
+    if ((image->descriptor.flags & SPICE_IMAGE_FLAGS_CACHE_ME)) {
         int is_hit_lossy;
 
-        out_data->id = qxl_image->descriptor.id;
-        if (pixmap_cache_hit(display_channel->pixmap_cache, qxl_image->descriptor.id,
+        out_data->id = image->descriptor.id;
+        if (pixmap_cache_hit(display_channel->pixmap_cache, image->descriptor.id,
                              &is_hit_lossy, display_channel)) {
             out_data->type = BITMAP_DATA_TYPE_CACHE;
             if (is_hit_lossy) {
@@ -7044,14 +6541,14 @@ static int is_bitmap_lossy(DisplayChannel *display_channel, SPICE_ADDRESS bitmap
          out_data->type = BITMAP_DATA_TYPE_BITMAP;
     }
 
-    if (qxl_image->descriptor.type != SPICE_IMAGE_TYPE_SURFACE) {
+    if (image->descriptor.type != SPICE_IMAGE_TYPE_SURFACE) {
         return FALSE;
     }
 
     out_data->type = BITMAP_DATA_TYPE_SURFACE;
-    out_data->id = qxl_image->surface_image.surface_id;
+    out_data->id = image->u.surface.surface_id;
 
-    if (is_surface_area_lossy(display_channel, qxl_image->surface_image.surface_id,
+    if (is_surface_area_lossy(display_channel, out_data->id,
                               area, &out_data->lossy_rect))
     {
         return TRUE;
@@ -8373,31 +7870,28 @@ static inline void red_unref_channel(RedChannel *channel)
     }
 }
 
-static inline uint8_t *red_get_image_line(RedWorker *worker, QXLDataChunk **chunk, int *offset,
-                                          int stride, long phys_delta, int memslot_id,
-                                          uint32_t group_id)
+static inline uint8_t *red_get_image_line(RedWorker *worker, SpiceChunks *chunks, size_t *offset,
+                                          int *chunk_nr, int stride)
 {
     uint8_t *ret;
-    uint32_t data_size;
+    SpiceChunk *chunk;
 
-    validate_virt(&worker->mem_slots, (unsigned long)*chunk, memslot_id, sizeof(QXLDataChunk),
-                  group_id);
-    data_size = (*chunk)->data_size;
-    validate_virt(&worker->mem_slots, (unsigned long)(*chunk)->data, memslot_id, data_size, group_id);
+    chunk = &chunks->chunk[*chunk_nr];
 
-    if (data_size == *offset) {
-        if ((*chunk)->next_chunk == 0) {
-            return NULL;
+    if (*offset == chunk->len) {
+        if (*chunk_nr == chunks->num_chunks - 1) {
+            return NULL; /* Last chunk */
         }
         *offset = 0;
-        *chunk = (QXLDataChunk *)((*chunk)->next_chunk + phys_delta);
+        (*chunk_nr)++;
+        chunk = &chunks->chunk[*chunk_nr];
     }
 
-    if (data_size - *offset < stride) {
+    if (chunk->len - *offset < stride) {
         red_printf("bad chunk alignment");
         return NULL;
     }
-    ret = (*chunk)->data + *offset;
+    ret = chunk->data + *offset;
     *offset += stride;
     return ret;
 }
@@ -8413,31 +7907,29 @@ static void red_display_unshare_stream_buf(DisplayChannel *display_channel)
 static int red_rgb32bpp_to_24 (RedWorker *worker, const SpiceRect *src,
                                const SpiceBitmap *image,
                                uint8_t *frame, size_t frame_stride,
-                               long phys_delta, int memslot_id, int id,
-                               Stream *stream, uint32_t group_id)
+                               int id, Stream *stream)
 {
-    QXLDataChunk *chunk;
+    SpiceChunks *chunks;
     uint32_t image_stride;
     uint8_t *frame_row;
-    int offset;
-    int i, x;
+    size_t offset;
+    int i, x, chunk;
 
+    chunks = image->data;
     offset = 0;
-    chunk = (QXLDataChunk *)(image->data + phys_delta);
+    chunk = 0;
     image_stride = image->stride;
 
     const int skip_lines = stream->top_down ? src->top : image->y - (src->bottom - 0);
     for (i = 0; i < skip_lines; i++) {
-        red_get_image_line(worker, &chunk, &offset, image_stride, phys_delta, memslot_id,
-                           group_id);
+        red_get_image_line(worker, chunks, &offset, &chunk, image_stride);
     }
 
     const int image_height = src->bottom - src->top;
     const int image_width = src->right - src->left;
     for (i = 0; i < image_height; i++) {
         uint32_t *src_line =
-            (uint32_t *)red_get_image_line(worker, &chunk, &offset, image_stride, phys_delta,
-                                           memslot_id, group_id);
+            (uint32_t *)red_get_image_line(worker, chunks, &offset, &chunk, image_stride);
 
         if (!src_line) {
             return FALSE;
@@ -8462,31 +7954,29 @@ static int red_rgb32bpp_to_24 (RedWorker *worker, const SpiceRect *src,
 static int red_rgb24bpp_to_24 (RedWorker *worker, const SpiceRect *src,
                                const SpiceBitmap *image,
                                uint8_t *frame, size_t frame_stride,
-                               long phys_delta, int memslot_id, int id,
-                               Stream *stream, uint32_t group_id)
+                               int id, Stream *stream)
 {
-    QXLDataChunk *chunk;
+    SpiceChunks *chunks;
     uint32_t image_stride;
     uint8_t *frame_row;
-    int offset;
-    int i;
+    size_t offset;
+    int i, chunk;
 
+    chunks = image->data;
     offset = 0;
-    chunk = (QXLDataChunk *)(image->data + phys_delta);
+    chunk = 0;
     image_stride = image->stride;
 
     const int skip_lines = stream->top_down ? src->top : image->y - (src->bottom - 0);
     for (i = 0; i < skip_lines; i++) {
-        red_get_image_line(worker, &chunk, &offset, image_stride, phys_delta, memslot_id,
-                           group_id);
+        red_get_image_line(worker, chunks, &offset, &chunk, image_stride);
     }
 
     const int image_height = src->bottom - src->top;
     const int image_width = src->right - src->left;
     for (i = 0; i < image_height; i++) {
         uint8_t *src_line =
-            (uint8_t *)red_get_image_line(worker, &chunk, &offset, image_stride, phys_delta,
-                                           memslot_id, group_id);
+            (uint8_t *)red_get_image_line(worker, chunks, &offset, &chunk, image_stride);
 
         if (!src_line) {
             return FALSE;
@@ -8505,31 +7995,29 @@ static int red_rgb24bpp_to_24 (RedWorker *worker, const SpiceRect *src,
 static int red_rgb16bpp_to_24 (RedWorker *worker, const SpiceRect *src,
                                const SpiceBitmap *image,
                                uint8_t *frame, size_t frame_stride,
-                               long phys_delta, int memslot_id, int id,
-                               Stream *stream, uint32_t group_id)
+                               int id, Stream *stream)
 {
-    QXLDataChunk *chunk;
+    SpiceChunks *chunks;
     uint32_t image_stride;
     uint8_t *frame_row;
-    int offset;
-    int i, x;
+    size_t offset;
+    int i, x, chunk;
 
+    chunks = image->data;
     offset = 0;
-    chunk = (QXLDataChunk *)(image->data + phys_delta);
+    chunk = 0;
     image_stride = image->stride;
 
     const int skip_lines = stream->top_down ? src->top : image->y - (src->bottom - 0);
     for (i = 0; i < skip_lines; i++) {
-        red_get_image_line(worker, &chunk, &offset, image_stride, phys_delta, memslot_id,
-                           group_id);
+        red_get_image_line(worker, chunks, &offset, &chunk, image_stride);
     }
 
     const int image_height = src->bottom - src->top;
     const int image_width = src->right - src->left;
     for (i = 0; i < image_height; i++) {
         uint16_t *src_line =
-            (uint16_t *)red_get_image_line(worker, &chunk, &offset, image_stride, phys_delta,
-                                           memslot_id, group_id);
+            (uint16_t *)red_get_image_line(worker, chunks, &offset, &chunk, image_stride);
 
         if (!src_line) {
             return FALSE;
@@ -8556,10 +8044,9 @@ static int red_rgb16bpp_to_24 (RedWorker *worker, const SpiceRect *src,
 static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable *drawable)
 {
     Stream *stream = drawable->stream;
-    QXLImage *qxl_image;
+    SpiceImage *image;
     RedChannel *channel;
     RedWorker* worker;
-    unsigned long data;
     uint8_t *frame;
     size_t frame_stride;
     int n;
@@ -8569,11 +8056,9 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
 
     channel = &display_channel->base;
     worker = channel->worker;
-    qxl_image = (QXLImage *)get_virt(&worker->mem_slots,  drawable->red_drawable->u.copy.src_bitmap,
-                                     sizeof(QXLImage), drawable->group_id);
+    image = drawable->red_drawable->u.copy.src_bitmap;
 
-    if (qxl_image->descriptor.type != SPICE_IMAGE_TYPE_BITMAP ||
-        (qxl_image->bitmap.flags & QXL_BITMAP_DIRECT)) {
+    if (image->descriptor.type != SPICE_IMAGE_TYPE_BITMAP) {
         return FALSE;
     }
 
@@ -8584,40 +8069,33 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
         return TRUE;
     }
 
-    data = qxl_image->bitmap.data;
     frame = mjpeg_encoder_get_frame(stream->mjpeg_encoder);
     frame_stride = mjpeg_encoder_get_frame_stride(stream->mjpeg_encoder);
 
-    switch (qxl_image->bitmap.format) {
+    switch (image->u.bitmap.format) {
     case SPICE_BITMAP_FMT_32BIT:
         if (!red_rgb32bpp_to_24(worker, &drawable->red_drawable->u.copy.src_area,
-                                &qxl_image->bitmap, frame, frame_stride,
-                                get_virt_delta(&worker->mem_slots, data, drawable->group_id),
-                                get_memslot_id(&worker->mem_slots, data),
-                                stream - worker->streams_buf, stream, drawable->group_id)) {
+                                &image->u.bitmap, frame, frame_stride,
+                                stream - worker->streams_buf, stream)) {
             return FALSE;
         }
         break;
     case SPICE_BITMAP_FMT_16BIT:
         if (!red_rgb16bpp_to_24(worker, &drawable->red_drawable->u.copy.src_area,
-                                &qxl_image->bitmap, frame, frame_stride,
-                                get_virt_delta(&worker->mem_slots, data, drawable->group_id),
-                                get_memslot_id(&worker->mem_slots, data),
-                                stream - worker->streams_buf, stream, drawable->group_id)) {
+                                &image->u.bitmap, frame, frame_stride,
+                                stream - worker->streams_buf, stream)) {
             return FALSE;
         }
         break;
     case SPICE_BITMAP_FMT_24BIT:
         if (!red_rgb24bpp_to_24(worker, &drawable->red_drawable->u.copy.src_area,
-                                &qxl_image->bitmap, frame, frame_stride,
-                                get_virt_delta(&worker->mem_slots, data, drawable->group_id),
-                                get_memslot_id(&worker->mem_slots, data),
-                                stream - worker->streams_buf, stream, drawable->group_id)) {
+                                &image->u.bitmap, frame, frame_stride,
+                                stream - worker->streams_buf, stream)) {
             return FALSE;
         }
         break;
     default:
-        red_printf_some(1000, "unsupported format %d", qxl_image->bitmap.format);
+        red_printf_some(1000, "unsupported format %d", image->u.bitmap.format);
         return FALSE;
     }
 
@@ -8804,9 +8282,10 @@ static void display_channel_reset_cache(DisplayChannel *display_channel)
 static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
 {
     RedChannel *channel;
-    RedImage red_image;
+    SpiceImage red_image;
     RedWorker *worker;
     SpiceBitmap bitmap;
+    SpiceChunks *chunks;
     QRegion *surface_lossy_region;
     int comp_succeeded;
     int lossy_comp = FALSE;
@@ -8827,13 +8306,17 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
     red_image.descriptor.height = item->height;
 
     bitmap.format = item->image_format;
-    bitmap.flags = QXL_BITMAP_DIRECT;
-    bitmap.flags |= item->top_down ? QXL_BITMAP_TOP_DOWN : 0;
+    if (item->top_down) {
+        bitmap.flags |= SPICE_BITMAP_FLAGS_TOP_DOWN;
+    }
     bitmap.x = item->width;
     bitmap.y = item->height;
     bitmap.stride = item->stride;
     bitmap.palette = 0;
-    bitmap.data = (SPICE_ADDRESS)item->data;
+    bitmap.palette_id = 0;
+
+    chunks = spice_chunks_new_linear(item->data, bitmap.stride * bitmap.y);
+    bitmap.data = chunks;
 
     channel->send_data.header->type = SPICE_MSG_DISPLAY_DRAW_COPY;
 
@@ -8903,13 +8386,13 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
 
     surface_lossy_region = &display_channel->surface_client_lossy_region[item->surface_id];
     if (comp_succeeded) {
-        spice_marshall_Image(src_bitmap_out, (SpiceImageDescriptor *)&red_image,
+        spice_marshall_Image(src_bitmap_out, &red_image,
                              &bitmap_palette_out, &data_out, &lzplt_palette_out);
 
         marshaller_add_compressed(worker, src_bitmap_out,
                                   comp_send_data.comp_buf, comp_send_data.comp_buf_size);
 
-        if (comp_send_data.lzplt_palette) {
+        if (lzplt_palette_out && comp_send_data.lzplt_palette) {
             spice_marshall_Palette(lzplt_palette_out, comp_send_data.lzplt_palette);
         }
 
@@ -8920,15 +8403,16 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
         }
     } else {
         red_image.descriptor.type = SPICE_IMAGE_TYPE_BITMAP;
-        red_image.bitmap = bitmap;
-        red_image.bitmap.flags &= ~QXL_BITMAP_DIRECT;
+        red_image.u.bitmap = bitmap;
 
-        spice_marshall_Image(src_bitmap_out, (SpiceImageDescriptor *)&red_image,
+        spice_marshall_Image(src_bitmap_out, &red_image,
                              &bitmap_palette_out, &data_out, &lzplt_palette_out);
         spice_marshaller_add_ref(data_out, item->data, bitmap.y * bitmap.stride);
         region_remove(surface_lossy_region, &copy.base.box);
     }
     display_begin_send_massage(display_channel, &item->link);
+
+    spice_chunks_destroy(chunks);
 }
 
 static void red_display_send_upgrade(DisplayChannel *display_channel, UpgradeItem *item)
@@ -9493,8 +8977,7 @@ static SpiceCanvas *create_ogl_context_common(RedWorker *worker, OGLCtx *ctx, ui
 
     oglctx_make_current(ctx);
     if (!(canvas = gl_canvas_create(width, height, depth, &worker->image_cache.base,
-                                    &worker->image_surfaces, NULL, NULL, NULL,
-                                    &worker->preload_group_virt_mapping))) {
+                                    &worker->image_surfaces, NULL, NULL, NULL))) {
         return NULL;
     }
 
@@ -9552,8 +9035,7 @@ static inline void *create_canvas_for_surface(RedWorker *worker, RedSurface *sur
         canvas = canvas_create_for_data(width, height, format,
                                         line_0, stride,
                                         &worker->image_cache.base,
-                                        &worker->image_surfaces, NULL, NULL, NULL,
-                                        &worker->preload_group_virt_mapping);
+                                        &worker->image_surfaces, NULL, NULL, NULL);
         surface->context.top_down = TRUE;
         surface->context.canvas_draws_on_surface = TRUE;
         return canvas;
@@ -11055,10 +10537,6 @@ static void red_init(RedWorker *worker, WorkerInitData *init_data)
     struct epoll_event event;
     RedWorkerMessage message;
     int epoll;
-    static SpiceVirtMappingOps preload_group_virt_mapping_ops = {
-        op_get_virt_preload_group,
-        op_validate_virt_preload_group
-    };
 
     ASSERT(sizeof(CursorItem) <= QXL_CURSUR_DEVICE_DATA_SIZE);
 
@@ -11115,8 +10593,6 @@ static void red_init(RedWorker *worker, WorkerInitData *init_data)
     PANIC_ON(init_data->n_surfaces > NUM_SURFACES);
     worker->n_surfaces = init_data->n_surfaces;
 
-    worker->preload_group_virt_mapping.ops = &preload_group_virt_mapping_ops;
-
     message = RED_WORKER_MESSAGE_READY;
     write_message(worker->channel, &message);
 }
@@ -11128,7 +10604,6 @@ void *red_worker_main(void *arg)
     red_printf("begin");
     ASSERT(MAX_PIPE_SIZE > WIDE_CLIENT_ACK_WINDOW &&
            MAX_PIPE_SIZE > NARROW_CLIENT_ACK_WINDOW); //ensure wakeup by ack message
-    ASSERT(QXL_BITMAP_TOP_DOWN == SPICE_BITMAP_FLAGS_TOP_DOWN);
 
 #if  defined(RED_WORKER_STAT) || defined(COMPRESS_STAT)
     if (pthread_getcpuclockid(pthread_self(), &clock_id)) {
@@ -11239,6 +10714,7 @@ static void dump_bitmap(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_i
     int32_t tmp_32;
     uint16_t tmp_u16;
     FILE *f;
+    int i;
 
     switch (bitmap->format) {
     case SPICE_BITMAP_FMT_1BIT_BE:
@@ -11276,7 +10752,7 @@ static void dump_bitmap(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_i
         if (!bitmap->palette) {
             return; // dont dump masks.
         }
-        plt = (SpicePalette *)get_virt(&worker->mem_slots, bitmap->palette, sizeof(SpicePalette), group_id);
+        plt = bitmap->palette;
     }
     row_size = (((bitmap->x * n_pixel_bits) + 31) / 32) * 4;
     bitmap_data_offset = header_size;
@@ -11331,29 +10807,11 @@ static void dump_bitmap(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_i
         dump_palette(f, plt);
     }
     /* writing the data */
-    if ((bitmap->flags & QXL_BITMAP_DIRECT)) {
-        uint8_t *lines = (uint8_t*)get_virt(&worker->mem_slots, bitmap->data, bitmap->stride * bitmap->y,
-                                            group_id);
-        int i;
-        for (i = 0; i < bitmap->y; i++) {
-            dump_line(f, lines + (i * bitmap->stride), n_pixel_bits, bitmap->x, row_size);
-        }
-    } else {
-        QXLDataChunk *chunk = NULL;
-        int num_lines;
-        SPICE_ADDRESS relative_address = bitmap->data;
-
-        while (relative_address) {
-            int i;
-            chunk = (QXLDataChunk *)get_virt(&worker->mem_slots, relative_address, sizeof(QXLDataChunk),
-                                             group_id);
-            validate_virt(&worker->mem_slots, chunk->data, get_memslot_id(&worker->mem_slots, relative_address),
-                          chunk->data_size, group_id);
-            num_lines = chunk->data_size / bitmap->stride;
-            for (i = 0; i < num_lines; i++) {
-                dump_line(f, chunk->data + (i * bitmap->stride), n_pixel_bits, bitmap->x, row_size);
-            }
-            relative_address = chunk->next_chunk;
+    for (i = 0; i < bitmap->data->num_chunks; i++) {
+        SpiceChunk *chunk = &bitmap->data->chunk[i];
+        int num_lines = chunk->len / bitmap->stride;
+        for (i = 0; i < num_lines; i++) {
+            dump_line(f, chunk->data + (i * bitmap->stride), n_pixel_bits, bitmap->x, row_size);
         }
     }
     fclose(f);

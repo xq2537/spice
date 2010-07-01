@@ -111,7 +111,7 @@ channel BaseChannel {
     message {
 	uint32 id;
 	uint64 timestamp;
-	uint8 data[] @end @ctype(uint8_t) @as_ptr(data_len);
+	uint8 data[] @ctype(uint8_t) @as_ptr(data_len);
     } ping;
 
     message {
@@ -435,16 +435,16 @@ struct BitmapData {
     uint32 stride;
     switch (flags) {
     case PAL_FROM_CACHE:
-	uint64 palette;
+	uint64 palette_id;
     default:
-	Palette *palette @outvar(bitmap);
+	Palette *palette @outvar(bitmap) @c_ptr;
     } pal @anon;
-    uint8 *data[image_size(8, stride, y)] @nocopy; /* pointer to array, not array of pointers as in C */
+    uint8 *data[image_size(8, stride, y)] @chunk; /* pointer to array, not array of pointers as in C */
 } @ctype(SpiceBitmap);
 
 struct BinaryData {
     uint32 data_size;
-    uint8 data[data_size] @end @nomarshal;
+    uint8 data[data_size] @nomarshal @chunk;
 } @ctype(SpiceQUICData);
 
 struct LZPLTData {
@@ -452,58 +452,63 @@ struct LZPLTData {
     uint32 data_size;
     switch (flags) {
     case PAL_FROM_CACHE:
-	uint64 palette;
+	uint64 palette_id;
     default:
-	Palette *palette @nonnull @outvar(lzplt);
+	Palette *palette @nonnull @outvar(lzplt) @c_ptr;
     } pal @anon;
-    uint8 data[data_size] @end @nomarshal;
+    uint8 data[data_size] @nomarshal @chunk;
 };
 
 struct ZlibGlzRGBData {
     uint32 glz_data_size;
     uint32 data_size;
-    uint8 data[data_size] @end @nomarshal;
+    uint8 data[data_size] @nomarshal @chunk;
 } @ctype(SpiceZlibGlzRGBData);
 
 struct JPEGAlphaData {
     jpeg_alpha_flags flags;
     uint32 jpeg_size;
     uint32 data_size;
-    uint8 data[data_size] @end @nomarshal;
+    uint8 data[data_size] @nomarshal @chunk;
 } @ctype(SpiceJPEGAlphaData);
 
 struct Surface {
     uint32 surface_id;
 };
 
-struct Image {
-    uint64 id;
-    image_type type;
-    image_flags flags;
-    uint32 width;
-    uint32 height;
 
-    switch (type) {
+struct Image {
+    struct ImageDescriptor {
+        uint64 id;
+        image_type type;
+        image_flags flags;
+        uint32 width;
+        uint32 height;
+    } descriptor;
+
+    switch (descriptor.type) {
     case BITMAP:
-        BitmapData bitmap_data @ctype(SpiceBitmap);
+        BitmapData bitmap;
     case QUIC:
+        BinaryData quic;
     case LZ_RGB:
     case GLZ_RGB:
+        BinaryData lz_rgb;
     case JPEG:
-        BinaryData binary_data @ctype(SpiceQUICData);
+        BinaryData jpeg;
     case LZ_PLT:
-        LZPLTData lzplt_data @ctype(SpiceLZPLTData);
+        LZPLTData lz_plt;
     case ZLIB_GLZ_RGB:
-        ZlibGlzRGBData zlib_glz_data @ctype(SpiceZlibGlzRGBData);
+        ZlibGlzRGBData zlib_glz;
     case JPEG_ALPHA:
-        JPEGAlphaData jpeg_alpha_data  @ctype(SpiceJPEGAlphaData);
+        JPEGAlphaData jpeg_alpha;
     case SURFACE:
-        Surface surface_data;
-    } u @end;
-} @ctype(SpiceImageDescriptor);
+        Surface surface;
+    } u;
+};
 
 struct Pattern {
-    Image *pat @nonnull;
+    Image *pat @nonnull @c_ptr;
     Point pos;
 };
 
@@ -520,7 +525,7 @@ struct Brush {
 struct QMask {
     mask_flags flags;
     Point pos;
-    Image *bitmap;
+    Image *bitmap @c_ptr;
 };
 
 struct LineAttr {
@@ -649,7 +654,7 @@ channel DisplayChannel : BaseChannel {
     message {
 	DisplayBase base;
 	struct Opaque {
-	    Image *src_bitmap;
+	    Image *src_bitmap @c_ptr;
 	    Rect src_area;
 	    Brush brush;
 	    ropd rop_descriptor;
@@ -661,7 +666,7 @@ channel DisplayChannel : BaseChannel {
     message {
 	DisplayBase base;
 	struct Copy {
-	    Image *src_bitmap;
+	    Image *src_bitmap @c_ptr;
 	    Rect src_area;
 	    ropd rop_descriptor;
 	    image_scale_mode scale_mode;
@@ -672,7 +677,7 @@ channel DisplayChannel : BaseChannel {
     message {
 	DisplayBase base;
 	struct Blend {
-	    Image *src_bitmap;
+	    Image *src_bitmap @c_ptr;
 	    Rect src_area;
 	    ropd rop_descriptor;
 	    image_scale_mode scale_mode;
@@ -704,7 +709,7 @@ channel DisplayChannel : BaseChannel {
     message {
 	DisplayBase base;
 	struct Rop3 {
-	    Image *src_bitmap;
+	    Image *src_bitmap @c_ptr;
 	    Rect src_area;
 	    Brush brush;
 	    uint8 rop3;
@@ -739,7 +744,7 @@ channel DisplayChannel : BaseChannel {
     message {
 	DisplayBase base;
 	struct Transparent {
-	    Image *src_bitmap;
+	    Image *src_bitmap @c_ptr;
 	    Rect src_area;
 	    uint32 src_color;
 	    uint32 true_color;
@@ -751,7 +756,7 @@ channel DisplayChannel : BaseChannel {
 	struct AlphaBlnd {
 	    alpha_flags alpha_flags;
 	    uint8 alpha;
-	    Image *src_bitmap;
+	    Image *src_bitmap @c_ptr;
 	    Rect src_area;
 	} data;
     } draw_alpha_blend;
@@ -875,7 +880,7 @@ struct CursorHeader {
 struct Cursor {
     cursor_flags flags;
     CursorHeader header;
-    uint8 data[] @end @as_ptr(data_size);
+    uint8 data[] @as_ptr(data_size);
 };
 
 channel CursorChannel : BaseChannel {
@@ -929,13 +934,13 @@ channel PlaybackChannel : BaseChannel {
  server:
     message {
 	uint32 time;
-	uint8 data[] @end @as_ptr(data_size);
+	uint8 data[] @as_ptr(data_size);
     } @ctype(SpiceMsgPlaybackPacket) data = 101;
 
     message {
 	uint32 time;
 	audio_data_mode mode;
-	uint8 data[] @end @as_ptr(data_size);
+	uint8 data[] @as_ptr(data_size);
     } mode;
 
     message {
@@ -960,13 +965,13 @@ channel RecordChannel : BaseChannel {
  client:
     message {
 	uint32 time;
-	uint8 data[] @end @nomarshal @as_ptr(data_size);
+	uint8 data[] @nomarshal @as_ptr(data_size);
     } @ctype(SpiceMsgcRecordPacket) data = 101;
 
     message {
 	uint32 time;
 	audio_data_mode mode;
-	uint8 data[] @end @as_ptr(data_size);
+	uint8 data[] @as_ptr(data_size);
     } mode;
 
     message {

@@ -1173,9 +1173,6 @@ static SpiceCanvas *canvas_create_common(pixman_image_t *image,
                            , SpiceGlzDecoder *glz_decoder
                            , SpiceJpegDecoder *jpeg_decoder
                            , SpiceZlibDecoder *zlib_decoder
-#ifndef SW_CANVAS_NO_CHUNKS
-                           , SpiceVirtMapping *virt_mapping
-#endif
                            )
 {
     SwCanvas *canvas;
@@ -1202,9 +1199,6 @@ static SpiceCanvas *canvas_create_common(pixman_image_t *image,
                                , glz_decoder
                                , jpeg_decoder
                                , zlib_decoder
-#ifndef SW_CANVAS_NO_CHUNKS
-                               , virt_mapping
-#endif
                                );
     canvas->private_data = NULL;
     canvas->private_data_size = 0;
@@ -1225,9 +1219,6 @@ SpiceCanvas *canvas_create(int width, int height, uint32_t format
                            , SpiceGlzDecoder *glz_decoder
                            , SpiceJpegDecoder *jpeg_decoder
                            , SpiceZlibDecoder *zlib_decoder
-#ifndef SW_CANVAS_NO_CHUNKS
-                           , SpiceVirtMapping *virt_mapping
-#endif
                            )
 {
     pixman_image_t *image;
@@ -1246,9 +1237,6 @@ SpiceCanvas *canvas_create(int width, int height, uint32_t format
                                 , glz_decoder
                                 , jpeg_decoder
                                 , zlib_decoder
-#ifndef SW_CANVAS_NO_CHUNKS
-                                , virt_mapping
-#endif
                                 );
 }
 
@@ -1264,9 +1252,6 @@ SpiceCanvas *canvas_create_for_data(int width, int height, uint32_t format,
                            , SpiceGlzDecoder *glz_decoder
                            , SpiceJpegDecoder *jpeg_decoder
                            , SpiceZlibDecoder *zlib_decoder
-#ifndef SW_CANVAS_NO_CHUNKS
-                           , SpiceVirtMapping *virt_mapping
-#endif
                            )
 {
     pixman_image_t *image;
@@ -1285,9 +1270,6 @@ SpiceCanvas *canvas_create_for_data(int width, int height, uint32_t format,
                                 , glz_decoder
                                 , jpeg_decoder
                                 , zlib_decoder
-#ifndef SW_CANVAS_NO_CHUNKS
-                                , virt_mapping
-#endif
                                 );
 }
 

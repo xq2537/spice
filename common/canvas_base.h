@@ -33,7 +33,6 @@ typedef struct _SpicePaletteCache SpicePaletteCache;
 typedef struct _SpiceGlzDecoder SpiceGlzDecoder;
 typedef struct _SpiceJpegDecoder SpiceJpegDecoder;
 typedef struct _SpiceZlibDecoder SpiceZlibDecoder;
-typedef struct _SpiceVirtMapping SpiceVirtMapping;
 typedef struct _SpiceCanvas SpiceCanvas;
 
 typedef struct {
@@ -118,16 +117,6 @@ typedef struct {
 
 struct _SpiceZlibDecoder {
   SpiceZlibDecoderOps *ops;
-};
-
-typedef struct {
-    void *(*get_virt)(SpiceVirtMapping *mapping, unsigned long addr, uint32_t add_size);
-    void (*validate_virt)(SpiceVirtMapping *mapping, unsigned long virt,
-                          unsigned long from_addr, uint32_t add_size);
-} SpiceVirtMappingOps;
-
-struct _SpiceVirtMapping {
-  SpiceVirtMappingOps *ops;
 };
 
 typedef struct {

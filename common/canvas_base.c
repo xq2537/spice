@@ -69,18 +69,6 @@
     (((descriptor)->type == SPICE_IMAGE_TYPE_JPEG) ||      \
     ((descriptor)->type == SPICE_IMAGE_TYPE_JPEG_ALPHA))
 
-#ifdef WIN32
-typedef struct  __declspec (align(1)) LZImage {
-#else
-typedef struct __attribute__ ((__packed__)) LZImage {
-#endif
-    SpiceImageDescriptor descriptor;
-    union {
-        SpiceLZRGBData lz_rgb;
-        SpiceLZPLTData lz_plt;
-    };
-} LZImage;
-
  static inline int fix_to_int(SPICE_FIXED28_4 fixed)
 {
     int val, rem;
@@ -157,11 +145,9 @@ typedef struct QuicData {
     QuicUsrContext usr;
     QuicContext *quic;
     jmp_buf jmp_env;
-#ifndef SW_CANVAS_NO_CHUNKS
-    SPICE_ADDRESS next;
-    SpiceVirtMapping *virt_mapping;
-#endif
     char message_buf[512];
+    SpiceChunks *chunks;
+    int current_chunk;
 } QuicData;
 
 typedef struct CanvasBase {
@@ -195,32 +181,6 @@ typedef struct CanvasBase {
     void *usr_data;
     spice_destroy_fn_t usr_data_destroy;
 } CanvasBase;
-
-
-#ifndef SW_CANVAS_NO_CHUNKS
-
-#ifdef __GNUC__
-#define ATTR_PACKED __attribute__ ((__packed__))
-#else
-#pragma pack(push)
-#pragma pack(1)
-#define ATTR_PACKED
-#endif
-
-typedef struct ATTR_PACKED DataChunk {
-    uint32_t size;
-    SPICE_ADDRESS prev;
-    SPICE_ADDRESS next;
-    uint8_t data[0];
-} DataChunk;
-
-#undef ATTR_PACKED
-
-#ifndef __GNUC__
-#pragma pack(pop)
-#endif
-
-#endif
 
 typedef enum {
     ROP_INPUT_SRC,
@@ -434,7 +394,7 @@ static pixman_format_code_t canvas_get_target_format(CanvasBase *canvas,
     return format;
 }
 
-static pixman_image_t *canvas_get_quic(CanvasBase *canvas, SpiceQUICImage *image,
+static pixman_image_t *canvas_get_quic(CanvasBase *canvas, SpiceImage *image,
                                        int invers, int want_original)
 {
     pixman_image_t *surface = NULL;
@@ -445,30 +405,21 @@ static pixman_image_t *canvas_get_quic(CanvasBase *canvas, SpiceQUICImage *image
     int stride;
     int width;
     int height;
-#ifndef SW_CANVAS_NO_CHUNKS
-    DataChunk **tmp;
-    DataChunk *chunk;
-#endif
 
     if (setjmp(quic_data->jmp_env)) {
         pixman_image_unref(surface);
         CANVAS_ERROR("quic error, %s", quic_data->message_buf);
     }
 
-#ifdef SW_CANVAS_NO_CHUNKS
-    if (quic_decode_begin(quic_data->quic, (uint32_t *)image->quic.data,
-                          image->quic.data_size >> 2, &type, &width, &height) == QUIC_ERROR) {
-        CANVAS_ERROR("quic decode begin failed");
-    }
-#else
-    tmp = (DataChunk **)image->quic.data;
-    chunk = *tmp;
-    quic_data->next = chunk->next;
-    if (quic_decode_begin(quic_data->quic, (uint32_t *)chunk->data, chunk->size >> 2,
+    quic_data->chunks = image->u.quic.data;
+    quic_data->current_chunk = 0;
+
+    if (quic_decode_begin(quic_data->quic,
+                          (uint32_t *)image->u.quic.data->chunk[0].data,
+                          image->u.quic.data->chunk[0].len >> 2,
                           &type, &width, &height) == QUIC_ERROR) {
         CANVAS_ERROR("quic decode begin failed");
     }
-#endif
 
    switch (type) {
     case QUIC_IMAGE_TYPE_RGBA:
@@ -564,7 +515,7 @@ static void dump_jpeg(uint8_t* data, int data_size)
 }
 #endif
 
-static pixman_image_t *canvas_get_jpeg(CanvasBase *canvas, SpiceJPEGImage *image, int invers)
+static pixman_image_t *canvas_get_jpeg(CanvasBase *canvas, SpiceImage *image, int invers)
 {
     pixman_image_t *surface = NULL;
     int stride;
@@ -572,7 +523,8 @@ static pixman_image_t *canvas_get_jpeg(CanvasBase *canvas, SpiceJPEGImage *image
     int height;
     uint8_t *dest;
 
-    canvas->jpeg->ops->begin_decode(canvas->jpeg, image->jpeg.data, image->jpeg.data_size,
+    ASSERT(image->u.jpeg.data->num_chunks == 1); /* TODO: Handle chunks */
+    canvas->jpeg->ops->begin_decode(canvas->jpeg, image->u.jpeg.data->chunk[0].data, image->u.jpeg.data->chunk[0].len,
                                     &width, &height);
     ASSERT((uint32_t)width == image->descriptor.width);
     ASSERT((uint32_t)height == image->descriptor.height);
@@ -606,13 +558,13 @@ static pixman_image_t *canvas_get_jpeg(CanvasBase *canvas, SpiceJPEGImage *image
         }
     }
 #ifdef DUMP_JPEG
-    dump_jpeg(image->jpeg.data, image->jpeg.data_size);
+    dump_jpeg(image->u.jpeg.data, image->u.jpeg.data_size);
 #endif
     return surface;
 }
 
 static pixman_image_t *canvas_get_jpeg_alpha(CanvasBase *canvas,
-                                             SpiceJPEGAlphaImage *image, int invers)
+                                             SpiceImage *image, int invers)
 {
     pixman_image_t *surface = NULL;
     int stride;
@@ -627,13 +579,15 @@ static pixman_image_t *canvas_get_jpeg_alpha(CanvasBase *canvas,
     int alpha_size;
     int lz_alpha_width, lz_alpha_height, n_comp_pixels, lz_alpha_top_down;
 
-    canvas->jpeg->ops->begin_decode(canvas->jpeg, image->jpeg_alpha.data,
-                                    image->jpeg_alpha.jpeg_size,
+    ASSERT(image->u.jpeg_alpha.data->num_chunks == 1);
+    canvas->jpeg->ops->begin_decode(canvas->jpeg,
+                                    image->u.jpeg_alpha.data->chunk[0].data,
+                                    image->u.jpeg_alpha.data->chunk[0].len,
                                     &width, &height);
     ASSERT((uint32_t)width == image->descriptor.width);
     ASSERT((uint32_t)height == image->descriptor.height);
 
-    if (image->jpeg_alpha.flags & SPICE_JPEG_ALPHA_FLAGS_TOP_DOWN) {
+    if (image->u.jpeg_alpha.flags & SPICE_JPEG_ALPHA_FLAGS_TOP_DOWN) {
         alpha_top_down = TRUE;
     }
 
@@ -642,7 +596,7 @@ static pixman_image_t *canvas_get_jpeg_alpha(CanvasBase *canvas,
 #endif
     surface = alloc_lz_image_surface(&lz_data->decode_data, PIXMAN_a8r8g8b8,
                                      width, height, width*height, alpha_top_down);
- 
+
     if (surface == NULL) {
         CANVAS_ERROR("create surface failed");
     }
@@ -651,9 +605,9 @@ static pixman_image_t *canvas_get_jpeg_alpha(CanvasBase *canvas,
     stride = pixman_image_get_stride(surface);
 
     canvas->jpeg->ops->decode(canvas->jpeg, dest, stride, SPICE_BITMAP_FMT_32BIT);
-    
-    comp_alpha_buf = image->jpeg_alpha.data + image->jpeg_alpha.jpeg_size;
-    alpha_size = image->jpeg_alpha.data_size - image->jpeg_alpha.jpeg_size;
+
+    comp_alpha_buf = image->u.jpeg_alpha.data->chunk[0].data + image->u.jpeg_alpha.jpeg_size;
+    alpha_size = image->u.jpeg_alpha.data_size - image->u.jpeg_alpha.jpeg_size;
 
     lz_decode_begin(lz_data->lz, comp_alpha_buf, alpha_size, &lz_alpha_type,
                     &lz_alpha_width, &lz_alpha_height, &n_comp_pixels,
@@ -685,7 +639,7 @@ static pixman_image_t *canvas_get_jpeg_alpha(CanvasBase *canvas,
         }
     }
 #ifdef DUMP_JPEG
-    dump_jpeg(image->jpeg_alpha.data, image->jpeg_alpha.jpeg_size);
+    dump_jpeg(image->u.jpeg_alpha.data, image->u.jpeg_alpha.jpeg_size);
 #endif
     return surface;
 }
@@ -698,7 +652,9 @@ static pixman_image_t *canvas_bitmap_to_surface(CanvasBase *canvas, SpiceBitmap*
     pixman_image_t *image;
     pixman_format_code_t format;
 
-    src = (uint8_t *)SPICE_GET_ADDRESS(bitmap->data);
+    spice_chunks_linearize(bitmap->data);
+
+    src = bitmap->data->chunk[0].data;
     src_stride = bitmap->stride;
 
     if (want_original) {
@@ -730,27 +686,24 @@ static pixman_image_t *canvas_bitmap_to_surface(CanvasBase *canvas, SpiceBitmap*
 
 #ifdef SW_CANVAS_CACHE
 
-static inline SpicePalette *canvas_get_palette(CanvasBase *canvas, SPICE_ADDRESS base_palette, uint8_t flags)
+static inline SpicePalette *canvas_get_palette(CanvasBase *canvas, SpicePalette *base_palette, uint64_t palette_id, uint8_t flags)
 {
     SpicePalette *palette;
-    if (!base_palette) {
-        return NULL;
-    }
 
     if (flags & SPICE_BITMAP_FLAGS_PAL_FROM_CACHE) {
-        palette = canvas->palette_cache->ops->get(canvas->palette_cache, base_palette);
-    } else if (flags & SPICE_BITMAP_FLAGS_PAL_CACHE_ME) {
-        palette = (SpicePalette *)SPICE_GET_ADDRESS(base_palette);
-        canvas->palette_cache->ops->put(canvas->palette_cache, palette);
+        palette = canvas->palette_cache->ops->get(canvas->palette_cache, palette_id);
     } else {
-        palette = (SpicePalette *)SPICE_GET_ADDRESS(base_palette);
+        palette = base_palette;
+        if (palette != NULL && flags & SPICE_BITMAP_FLAGS_PAL_CACHE_ME) {
+            canvas->palette_cache->ops->put(canvas->palette_cache, palette);
+        }
     }
     return palette;
 }
 
-static inline SpicePalette *canvas_get_localized_palette(CanvasBase *canvas, SPICE_ADDRESS base_palette, uint8_t flags, int *free_palette)
+static inline SpicePalette *canvas_get_localized_palette(CanvasBase *canvas, SpicePalette *base_palette, uint64_t palette_id, uint8_t flags, int *free_palette)
 {
-    SpicePalette *palette = canvas_get_palette(canvas, base_palette, flags);
+    SpicePalette *palette = canvas_get_palette(canvas, base_palette, palette_id, flags);
     SpicePalette *copy;
     uint32_t *now, *end;
     size_t size;
@@ -784,7 +737,7 @@ static inline SpicePalette *canvas_get_localized_palette(CanvasBase *canvas, SPI
     return copy;
 }
 
-static pixman_image_t *canvas_get_lz(CanvasBase *canvas, LZImage *image, int invers,
+static pixman_image_t *canvas_get_lz(CanvasBase *canvas, SpiceImage *image, int invers,
                                      int want_original)
 {
     LzData *lz_data = &canvas->lz_data;
@@ -811,13 +764,15 @@ static pixman_image_t *canvas_get_lz(CanvasBase *canvas, LZImage *image, int inv
 
     free_palette = FALSE;
     if (image->descriptor.type == SPICE_IMAGE_TYPE_LZ_RGB) {
-        comp_buf = image->lz_rgb.data;
-        comp_size = image->lz_rgb.data_size;
+        ASSERT(image->u.lz_rgb.data->num_chunks == 1); /* TODO: Handle chunks */
+        comp_buf = image->u.lz_rgb.data->chunk[0].data;
+        comp_size = image->u.lz_rgb.data->chunk[0].len;
         palette = NULL;
     } else if (image->descriptor.type == SPICE_IMAGE_TYPE_LZ_PLT) {
-        comp_buf = image->lz_plt.data;
-        comp_size = image->lz_plt.data_size;
-        palette = canvas_get_localized_palette(canvas, image->lz_plt.palette, image->lz_plt.flags, &free_palette);
+        ASSERT(image->u.lz_plt.data->num_chunks == 1); /* TODO: Handle chunks */
+        comp_buf = image->u.lz_plt.data->chunk[0].data;
+        comp_size = image->u.lz_plt.data->chunk[0].len;
+        palette = canvas_get_localized_palette(canvas, image->u.lz_plt.palette, image->u.lz_plt.palette_id, image->u.lz_plt.flags, &free_palette);
     } else {
         CANVAS_ERROR("unexpected image type");
     }
@@ -918,7 +873,7 @@ static pixman_image_t *canvas_get_glz_rgb_common(CanvasBase *canvas, uint8_t *da
 
 // don't handle plts since bitmaps with plt can be decoded globally to RGB32 (because
 // same byte sequence can be transformed to different RGB pixels by different plts)
-static pixman_image_t *canvas_get_glz(CanvasBase *canvas, LZImage *image,
+static pixman_image_t *canvas_get_glz(CanvasBase *canvas, SpiceImage *image,
                                       int want_original)
 {
     ASSERT(image->descriptor.type == SPICE_IMAGE_TYPE_GLZ_RGB);
@@ -926,10 +881,11 @@ static pixman_image_t *canvas_get_glz(CanvasBase *canvas, LZImage *image,
     canvas->glz_data.decode_data.dc = canvas->dc;
 #endif
 
-    return canvas_get_glz_rgb_common(canvas, image->lz_rgb.data, want_original);
+    ASSERT(image->u.lz_rgb.data->num_chunks == 1); /* TODO: Handle chunks */
+    return canvas_get_glz_rgb_common(canvas, image->u.lz_rgb.data->chunk[0].data, want_original);
 }
 
-static pixman_image_t *canvas_get_zlib_glz_rgb(CanvasBase *canvas, SpiceZlibGlzRGBImage *image,
+static pixman_image_t *canvas_get_zlib_glz_rgb(CanvasBase *canvas, SpiceImage *image,
                                                int want_original)
 {
     uint8_t *glz_data;
@@ -939,9 +895,11 @@ static pixman_image_t *canvas_get_zlib_glz_rgb(CanvasBase *canvas, SpiceZlibGlzR
         CANVAS_ERROR("zlib not supported");
     }
 
-    glz_data = (uint8_t*)spice_malloc(image->zlib_glz.glz_data_size);
-    canvas->zlib->ops->decode(canvas->zlib, image->zlib_glz.data, image->zlib_glz.data_size,
-                              glz_data, image->zlib_glz.glz_data_size);
+    ASSERT(image->u.zlib_glz.data->num_chunks == 1); /* TODO: Handle chunks */
+    glz_data = (uint8_t*)spice_malloc(image->u.zlib_glz.glz_data_size);
+    canvas->zlib->ops->decode(canvas->zlib, image->u.zlib_glz.data->chunk[0].data,
+                              image->u.zlib_glz.data->chunk[0].len,
+                              glz_data, image->u.zlib_glz.glz_data_size);
     surface = canvas_get_glz_rgb_common(canvas, glz_data, want_original);
     free(glz_data);
     return surface;
@@ -993,7 +951,7 @@ static pixman_image_t *canvas_get_bits(CanvasBase *canvas, SpiceBitmap *bitmap,
     pixman_image_t* surface;
     SpicePalette *palette;
 
-    palette = canvas_get_palette(canvas, bitmap->palette, bitmap->flags);
+    palette = canvas_get_palette(canvas, bitmap->palette, bitmap->palette_id, bitmap->flags);
 #ifdef DEBUG_DUMP_BITMAP
     if (palette) {
         dump_bitmap(bitmap, palette);
@@ -1079,26 +1037,20 @@ static void dump_surface(pixman_image_t *surface, int cache)
 
 #endif
 
-static SpiceCanvas *canvas_get_surface_internal(CanvasBase *canvas, SPICE_ADDRESS addr)
+static SpiceCanvas *canvas_get_surface_internal(CanvasBase *canvas, SpiceImage *image)
 {
-    SpiceImageDescriptor *descriptor = (SpiceImageDescriptor *)SPICE_GET_ADDRESS(addr);
-
-    if (descriptor->type == SPICE_IMAGE_TYPE_SURFACE) {
-        SpiceSurfaceImage *surface = (SpiceSurfaceImage *)descriptor;
-        return canvas->surfaces->ops->get(canvas->surfaces, surface->surface.surface_id);
+    if (image->descriptor.type == SPICE_IMAGE_TYPE_SURFACE) {
+        SpiceSurface *surface = &image->u.surface;
+        return canvas->surfaces->ops->get(canvas->surfaces, surface->surface_id);
     }
     return NULL;
 }
 
-static SpiceCanvas *canvas_get_surface_mask_internal(CanvasBase *canvas, SPICE_ADDRESS addr)
+static SpiceCanvas *canvas_get_surface_mask_internal(CanvasBase *canvas, SpiceImage *image)
 {
-    SpiceImageDescriptor *descriptor;
-
-    descriptor = (SpiceImageDescriptor *)SPICE_GET_ADDRESS(addr);
-
-    if (descriptor->type == SPICE_IMAGE_TYPE_SURFACE) {
-        SpiceSurfaceImage *surface = (SpiceSurfaceImage *)descriptor;
-        return canvas->surfaces->ops->get(canvas->surfaces, surface->surface.surface_id);
+    if (image->descriptor.type == SPICE_IMAGE_TYPE_SURFACE) {
+        SpiceSurface *surface = &image->u.surface;
+        return canvas->surfaces->ops->get(canvas->surfaces, surface->surface_id);
     }
     return NULL;
 }
@@ -1115,10 +1067,10 @@ static SpiceCanvas *canvas_get_surface_mask_internal(CanvasBase *canvas, SPICE_A
  * you have to be able to handle any image format. This is useful to avoid
  * e.g. losing alpha when blending a argb32 image on a rgb16 surface.
  */
-static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRESS addr,
+static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SpiceImage *image,
                                                  int want_original, int real_get)
 {
-    SpiceImageDescriptor *descriptor = (SpiceImageDescriptor *)SPICE_GET_ADDRESS(addr);
+    SpiceImageDescriptor *descriptor = &image->descriptor;
     pixman_image_t *surface, *converted;
     pixman_format_code_t wanted_format, surface_format;
     int saved_want_original;
@@ -1150,40 +1102,33 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
 
     switch (descriptor->type) {
     case SPICE_IMAGE_TYPE_QUIC: {
-        SpiceQUICImage *image = (SpiceQUICImage *)descriptor;
         surface = canvas_get_quic(canvas, image, 0, want_original);
         break;
     }
-#ifdef SW_CANVAS_NO_CHUNKS
+#if defined(SW_CANVAS_CACHE)
     case SPICE_IMAGE_TYPE_LZ_PLT: {
-        LZImage *image = (LZImage *)descriptor;
         surface = canvas_get_lz(canvas, image, 0, want_original);
         break;
     }
     case SPICE_IMAGE_TYPE_LZ_RGB: {
-        LZImage *image = (LZImage *)descriptor;
         surface = canvas_get_lz(canvas, image, 0, want_original);
         break;
     }
 #endif
     case SPICE_IMAGE_TYPE_JPEG: {
-        SpiceJPEGImage *image = (SpiceJPEGImage *)descriptor;
         surface = canvas_get_jpeg(canvas, image, 0);
         break;
     }
     case SPICE_IMAGE_TYPE_JPEG_ALPHA: {
-        SpiceJPEGAlphaImage *image = (SpiceJPEGAlphaImage *)descriptor;
         surface = canvas_get_jpeg_alpha(canvas, image, 0);
         break;
     }
 #if defined(SW_CANVAS_CACHE)
     case SPICE_IMAGE_TYPE_GLZ_RGB: {
-        LZImage *image = (LZImage *)descriptor;
         surface = canvas_get_glz(canvas, image, want_original);
         break;
     }
     case SPICE_IMAGE_TYPE_ZLIB_GLZ_RGB: {
-        SpiceZlibGlzRGBImage *image = (SpiceZlibGlzRGBImage *)descriptor;
         surface = canvas_get_zlib_glz_rgb(canvas, image, want_original);
         break;
     }
@@ -1197,8 +1142,7 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
         break;
 #endif
     case SPICE_IMAGE_TYPE_BITMAP: {
-        SpiceBitmapImage *bitmap = (SpiceBitmapImage *)descriptor;
-        surface = canvas_get_bits(canvas, &bitmap->bitmap, want_original);
+        surface = canvas_get_bits(canvas, &image->u.bitmap, want_original);
         break;
     }
     default:
@@ -1298,10 +1242,10 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
 
 #else
 
-static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRESS addr,
+static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SpiceImage *image,
                                                  int want_original, int real_get)
 {
-    SpiceImageDescriptor *descriptor = (SpiceImageDescriptor *)SPICE_GET_ADDRESS(addr);
+    SpiceImageDescriptor *descriptor = &image->descriptor;
     pixman_format_code_t format;
 
     /* When touching, never load image. */
@@ -1311,12 +1255,10 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
 
     switch (descriptor->type) {
     case SPICE_IMAGE_TYPE_QUIC: {
-        SpiceQUICImage *image = (SpiceQUICImage *)descriptor;
         return canvas_get_quic(canvas, image, 0);
     }
     case SPICE_IMAGE_TYPE_BITMAP: {
-        SpiceBitmapImage *bitmap = (SpiceBitmapImage *)descriptor;
-        return canvas_get_bits(canvas, &bitmap->bitmap, want_original, &format);
+        return canvas_get_bits(canvas, &image->u.bitmap, want_original, &format);
     }
     default:
         CANVAS_ERROR("invalid image type");
@@ -1325,25 +1267,25 @@ static pixman_image_t *canvas_get_image_internal(CanvasBase *canvas, SPICE_ADDRE
 
 #endif
 
-static SpiceCanvas *canvas_get_surface_mask(CanvasBase *canvas, SPICE_ADDRESS addr)
+static SpiceCanvas *canvas_get_surface_mask(CanvasBase *canvas, SpiceImage *image)
 {
-    return canvas_get_surface_mask_internal(canvas, addr);
+    return canvas_get_surface_mask_internal(canvas, image);
 }
 
-static SpiceCanvas *canvas_get_surface(CanvasBase *canvas, SPICE_ADDRESS addr)
+static SpiceCanvas *canvas_get_surface(CanvasBase *canvas, SpiceImage *image)
 {
-    return canvas_get_surface_internal(canvas, addr);
+    return canvas_get_surface_internal(canvas, image);
 }
 
-static pixman_image_t *canvas_get_image(CanvasBase *canvas, SPICE_ADDRESS addr,
+static pixman_image_t *canvas_get_image(CanvasBase *canvas, SpiceImage *image,
                                         int want_original)
 {
-    return canvas_get_image_internal(canvas, addr, want_original, TRUE);
+    return canvas_get_image_internal(canvas, image, want_original, TRUE);
 }
 
-static void canvas_touch_image(CanvasBase *canvas, SPICE_ADDRESS addr)
+static void canvas_touch_image(CanvasBase *canvas, SpiceImage *image)
 {
-    canvas_get_image_internal(canvas, addr, TRUE, FALSE);
+    canvas_get_image_internal(canvas, image, TRUE, FALSE);
 }
 
 static pixman_image_t* canvas_get_image_from_self(SpiceCanvas *canvas,
@@ -1407,7 +1349,8 @@ static pixman_image_t *canvas_get_bitmap_mask(CanvasBase *canvas, SpiceBitmap* b
         CANVAS_ERROR("create surface failed");
     }
 
-    src_line = (uint8_t *)SPICE_GET_ADDRESS(bitmap->data);
+    spice_chunks_linearize(bitmap->data);
+    src_line = bitmap->data->chunk[0].data;
     src_stride = bitmap->stride;
     end_line = src_line + (bitmap->y * src_stride);
     line_size = SPICE_ALIGN(bitmap->x, 8) >> 3;
@@ -1530,7 +1473,7 @@ static inline pixman_image_t *canvas_A1_invers(pixman_image_t *src_surf)
 
 static pixman_image_t *canvas_get_mask(CanvasBase *canvas, SpiceQMask *mask, int *needs_invert_out)
 {
-    SpiceImageDescriptor *descriptor;
+    SpiceImage *image;
     pixman_image_t *surface;
     int need_invers;
     int is_invers;
@@ -1540,31 +1483,30 @@ static pixman_image_t *canvas_get_mask(CanvasBase *canvas, SpiceQMask *mask, int
         *needs_invert_out = 0;
     }
 
-    descriptor = (SpiceImageDescriptor *)SPICE_GET_ADDRESS(mask->bitmap);
+    image = mask->bitmap;
     need_invers = mask->flags & SPICE_MASK_FLAGS_INVERS;
 
 #ifdef SW_CANVAS_CACHE
-    cache_me = descriptor->flags & SPICE_IMAGE_FLAGS_CACHE_ME;
+    cache_me = image->descriptor.flags & SPICE_IMAGE_FLAGS_CACHE_ME;
 #else
     cache_me = 0;
 #endif
 
-    switch (descriptor->type) {
+    switch (image->descriptor.type) {
     case SPICE_IMAGE_TYPE_BITMAP: {
-        SpiceBitmapImage *bitmap = (SpiceBitmapImage *)descriptor;
         is_invers = need_invers && !cache_me;
-        surface = canvas_get_bitmap_mask(canvas, &bitmap->bitmap, is_invers);
+        surface = canvas_get_bitmap_mask(canvas, &image->u.bitmap, is_invers);
         break;
     }
 #if defined(SW_CANVAS_CACHE) || defined(SW_CANVAS_IMAGE_CACHE)
     case SPICE_IMAGE_TYPE_FROM_CACHE:
-        surface = canvas->bits_cache->ops->get(canvas->bits_cache, descriptor->id);
+        surface = canvas->bits_cache->ops->get(canvas->bits_cache, image->descriptor.id);
         is_invers = 0;
         break;
 #endif
 #ifdef SW_CANVAS_CACHE
     case SPICE_IMAGE_TYPE_FROM_CACHE_LOSSLESS:
-        surface = canvas->bits_cache->ops->get_lossless(canvas->bits_cache, descriptor->id);
+        surface = canvas->bits_cache->ops->get_lossless(canvas->bits_cache, image->descriptor.id);
         is_invers = 0;
         break;
 #endif
@@ -1574,7 +1516,7 @@ static pixman_image_t *canvas_get_mask(CanvasBase *canvas, SpiceQMask *mask, int
 
 #if defined(SW_CANVAS_CACHE) || defined(SW_CANVAS_IMAGE_CACHE)
     if (cache_me) {
-        canvas->bits_cache->ops->put(canvas->bits_cache, descriptor->id, surface);
+        canvas->bits_cache->ops->put(canvas->bits_cache, image->descriptor.id, surface);
     }
 
     if (need_invers && !is_invers) { // surface is in cache
@@ -1847,13 +1789,6 @@ static void quic_usr_free(QuicUsrContext *usr, void *ptr)
     free(ptr);
 }
 
-#ifdef SW_CANVAS_NO_CHUNKS
-
-static int quic_usr_more_space(QuicUsrContext *usr, uint32_t **io_ptr, int rows_completed)
-{
-    return 0;
-}
-
 static void lz_usr_warn(LzUsrContext *usr, const char *fmt, ...)
 {
     LzData *usr_data = (LzData *)usr;
@@ -1896,29 +1831,19 @@ static int lz_usr_more_lines(LzUsrContext *usr, uint8_t **lines)
     return 0;
 }
 
-#else
-
 static int quic_usr_more_space(QuicUsrContext *usr, uint32_t **io_ptr, int rows_completed)
 {
     QuicData *quic_data = (QuicData *)usr;
-    DataChunk *chunk;
-    uint32_t size;
 
-    if (!quic_data->next) {
+    if (quic_data->current_chunk == quic_data->chunks->num_chunks -1) {
         return 0;
     }
-    chunk = (DataChunk *)quic_data->virt_mapping->ops->get_virt(quic_data->virt_mapping, quic_data->next,
-                                                                sizeof(DataChunk));
-    size = chunk->size;
-    quic_data->virt_mapping->ops->validate_virt(quic_data->virt_mapping, (unsigned long)chunk->data,
-                                                quic_data->next, size);
+    quic_data->current_chunk++;
 
-    quic_data->next = chunk->next;
-    *io_ptr = (uint32_t *)chunk->data;
-    return size >> 2;
+    *io_ptr = (uint32_t *)quic_data->chunks->chunk[quic_data->current_chunk].data;
+    return quic_data->chunks->chunk[quic_data->current_chunk].len >> 2;
 }
 
-#endif
 
 static int quic_usr_more_lines(QuicUsrContext *usr, uint8_t **lines)
 {
@@ -1928,9 +1853,7 @@ static int quic_usr_more_lines(QuicUsrContext *usr, uint8_t **lines)
 static void canvas_base_destroy(CanvasBase *canvas)
 {
     quic_destroy(canvas->quic_data.quic);
-#ifdef SW_CANVAS_NO_CHUNKS
     lz_destroy(canvas->lz_data.lz);
-#endif
 #ifdef GDI_CANVAS
     DeleteDC(canvas->dc);
 #endif
@@ -3398,9 +3321,6 @@ static int canvas_base_init(CanvasBase *canvas, SpiceCanvasOps *ops,
                             , SpiceGlzDecoder *glz_decoder
                             , SpiceJpegDecoder *jpeg_decoder
                             , SpiceZlibDecoder *zlib_decoder
-#ifndef SW_CANVAS_NO_CHUNKS
-                            , SpiceVirtMapping *virt_mapping
-#endif
                             )
 {
     canvas->parent.ops = ops;
@@ -3411,13 +3331,10 @@ static int canvas_base_init(CanvasBase *canvas, SpiceCanvasOps *ops,
     canvas->quic_data.usr.free = quic_usr_free;
     canvas->quic_data.usr.more_space = quic_usr_more_space;
     canvas->quic_data.usr.more_lines = quic_usr_more_lines;
-#ifndef SW_CANVAS_NO_CHUNKS
-    canvas->quic_data.virt_mapping = virt_mapping;
-#endif
     if (!(canvas->quic_data.quic = quic_create(&canvas->quic_data.usr))) {
             return 0;
     }
-#ifdef SW_CANVAS_NO_CHUNKS
+
     canvas->lz_data.usr.error = lz_usr_error;
     canvas->lz_data.usr.warn = lz_usr_warn;
     canvas->lz_data.usr.info = lz_usr_warn;
@@ -3428,7 +3345,7 @@ static int canvas_base_init(CanvasBase *canvas, SpiceCanvasOps *ops,
     if (!(canvas->lz_data.lz = lz_create(&canvas->lz_data.usr))) {
             return 0;
     }
-#endif
+
     canvas->surfaces = surfaces;
     canvas->glz_data.decoder = glz_decoder;
     canvas->jpeg = jpeg_decoder;

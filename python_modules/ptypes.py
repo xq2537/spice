@@ -811,14 +811,31 @@ class ContainerType(Type):
             return str(fixed)
 
     def lookup_member(self, name):
+        dot = name.find('.')
+        rest = None
+        if dot >= 0:
+            rest = name[dot+1:]
+            name = name[:dot]
+
+        member = None
         if self.members_by_name.has_key(name):
-            return self.members_by_name[name]
-        for m in self.members:
-            if m.is_switch():
-                member = m.lookup_case_member(name)
-                if member:
-                    return member
-        raise Exception, "No member called %s found" % name
+            member = self.members_by_name[name]
+        else:
+            for m in self.members:
+                if m.is_switch():
+                    member = m.lookup_case_member(name)
+                    if member != None:
+                        break
+                if member != None:
+                    break
+
+        if member == None:
+            raise Exception, "No member called %s found" % name
+
+        if rest != None:
+            return member.member_type.lookup_member(rest)
+
+        return member
 
 class StructType(ContainerType):
     def __init__(self, name, members, attribute_list):
