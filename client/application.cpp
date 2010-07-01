@@ -2141,7 +2141,7 @@ void spice_log(unsigned int type, const char *function, const char *format, ...)
       return;
     }
 
-    assert(type <= LOG_FATAL);
+    ASSERT(type <= LOG_FATAL);
 
     va_start(ap, format);
     string_vprintf(formated_message, format, ap);
