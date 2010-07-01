@@ -3079,7 +3079,7 @@ static void canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox,
     };
     SpicePathSeg *seg;
     StrokeLines lines;
-    int i;
+    unsigned int i;
     int dashed;
 
     pixman_region32_init_rect(&gc.dest_region,
@@ -3140,7 +3140,7 @@ static void canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox,
 
         if (stroke->attr.flags & SPICE_LINE_FLAGS_START_WITH_GAP) {
             gc.base.dash[stroke->attr.style_nseg - 1] = fix_to_int(style[0]);
-            for (i = 0; i < stroke->attr.style_nseg - 1; i++) {
+            for (i = 0; i < (unsigned int)(stroke->attr.style_nseg - 1); i++) {
                 gc.base.dash[i] = fix_to_int(style[i+1]);
             }
             gc.base.dashOffset = gc.base.dash[0];

@@ -311,11 +311,11 @@ uint32_t raster_ops[] = {
 static void set_path(GdiCanvas *canvas, SpicePath *s)
 {
     SpicePathSeg* seg = (SpicePathSeg*)s->segments;
-    int i;
+    unsigned int i;
 
     for (i = 0; i < s->num_segments; i++) {
         uint32_t flags = seg->flags;
-        SpicePointFix* point = (SpicePointFix*)seg->data;
+        SpicePointFix* point = seg->points;
         SpicePointFix* end_point = point + seg->count;
         ASSERT(point < end_point);
         seg = (SpicePathSeg*)end_point;
@@ -391,10 +391,10 @@ static void set_clip(GdiCanvas *canvas, SpiceClip *clip)
         }
         break;
     case SPICE_CLIP_TYPE_RECTS: {
-        uint32_t *n = (uint32_t *)SPICE_GET_ADDRESS(clip->data);
+        uint32_t n = clip->rects->num_rects;
 
-        SpiceRect *now = (SpiceRect *)(n + 1);
-        SpiceRect *end = now + *n;
+        SpiceRect *now = clip->rects->rects;
+        SpiceRect *end = now + n;
 
         if (now < end) {
             HRGN main_hrgn;
@@ -1026,10 +1026,10 @@ static void gdi_canvas_draw_fill(SpiceCanvas *spice_canvas, SpiceRect *bbox, Spi
     if (brush_lock) {
         RecurciveLock b_lock(*brush_lock);
         gdi_draw_bitmap_redrop(canvas->dc, bbox, bbox, canvas->dc, &bitmapmask,
-                               fill->rop_decriptor, fill->brush.type != SPICE_BRUSH_TYPE_NONE);
+                               fill->rop_descriptor, fill->brush.type != SPICE_BRUSH_TYPE_NONE);
     } else {
         gdi_draw_bitmap_redrop(canvas->dc, bbox, bbox, canvas->dc, &bitmapmask,
-                               fill->rop_decriptor, fill->brush.type != SPICE_BRUSH_TYPE_NONE);
+                               fill->rop_descriptor, fill->brush.type != SPICE_BRUSH_TYPE_NONE);
     }
 
     free_mask(&bitmapmask);
@@ -1052,7 +1052,7 @@ static void gdi_canvas_draw_copy(SpiceCanvas *spice_canvas, SpiceRect *bbox, Spi
         set_scale_mode(canvas, copy->scale_mode);
         set_clip(canvas, clip);
         gdi_draw_bitmap_redrop(canvas->dc, &copy->src_area, bbox, gdi_surface->dc,
-                               &bitmapmask, copy->rop_decriptor, 0);
+                               &bitmapmask, copy->rop_descriptor, 0);
     } else {
         surface = canvas_get_image(&canvas->base, copy->src_bitmap, FALSE);
         pixman_data = (PixmanData *)pixman_image_get_destroy_data(surface);
@@ -1069,13 +1069,13 @@ static void gdi_canvas_draw_copy(SpiceCanvas *spice_canvas, SpiceRect *bbox, Spi
             dc = create_compatible_dc();
             prev_bitmap = (HBITMAP)SelectObject(dc, pixman_data->bitmap);
             gdi_draw_bitmap_redrop(canvas->dc, &copy->src_area, bbox, dc,
-                                   &bitmapmask, copy->rop_decriptor, 0);
+                                   &bitmapmask, copy->rop_descriptor, 0);
             SelectObject(dc, prev_bitmap);
             DeleteObject(dc);
             ReleaseMutex(pixman_data->mutex);
         } else {
             gdi_draw_image(canvas->dc, &copy->src_area, bbox, surface, &bitmapmask,
-                           copy->rop_decriptor, 0);
+                           copy->rop_descriptor, 0);
         }
 
         pixman_image_unref(surface);
@@ -1309,7 +1309,7 @@ static void gdi_canvas_draw_opaque(SpiceCanvas *spice_canvas, SpiceRect *bbox, S
     uint8_t rop3;
     RecurciveMutex *brush_lock;
 
-    rop3 = calc_rop3_src_brush(opaque->rop_decriptor);
+    rop3 = calc_rop3_src_brush(opaque->rop_descriptor);
 
     gdi_surface = (GdiCanvas *)canvas_get_surface(&canvas->base, opaque->src_bitmap);
     if (gdi_surface) {
@@ -1384,7 +1384,7 @@ static void gdi_canvas_draw_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, Sp
         set_scale_mode(canvas, blend->scale_mode);
         set_clip(canvas, clip);
         gdi_draw_bitmap_redrop(canvas->dc, &blend->src_area, bbox, gdi_surface->dc,
-                               &bitmapmask, blend->rop_decriptor, 0);
+                               &bitmapmask, blend->rop_descriptor, 0);
     }  else {
         surface = canvas_get_image(&canvas->base, blend->src_bitmap, FALSE);
         pixman_data = (PixmanData *)pixman_image_get_destroy_data(surface);
@@ -1401,13 +1401,13 @@ static void gdi_canvas_draw_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, Sp
             dc = create_compatible_dc();
             prev_bitmap = (HBITMAP)SelectObject(dc, pixman_data->bitmap);
             gdi_draw_bitmap_redrop(canvas->dc, &blend->src_area, bbox, dc,
-                                   &bitmapmask, blend->rop_decriptor, 0);
+                                   &bitmapmask, blend->rop_descriptor, 0);
             SelectObject(dc, prev_bitmap);
             DeleteObject(dc);
             ReleaseMutex(pixman_data->mutex);
         } else {
             gdi_draw_image(canvas->dc, &blend->src_area, bbox, surface,
-				           &bitmapmask, blend->rop_decriptor, 0);
+				           &bitmapmask, blend->rop_descriptor, 0);
         }
 
         pixman_image_unref(surface);
@@ -1749,12 +1749,12 @@ static void gdi_canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox, S
         user_style = gdi_get_userstyle(canvas, stroke->attr.style_nseg,
                                        stroke->attr.style,
                                        !!(stroke->attr.flags & SPICE_LINE_FLAGS_START_WITH_GAP));
-        hpen = ExtCreatePen(PS_GEOMETRIC | PS_USERSTYLE,
-                            1.0,
+        hpen = ExtCreatePen(PS_COSMETIC | PS_USERSTYLE,
+                            1,
                             &logbrush, stroke->attr.style_nseg, (DWORD *)user_style);
     } else {
-        hpen = ExtCreatePen(PS_GEOMETRIC,
-                            1.0,
+        hpen = ExtCreatePen(PS_COSMETIC,
+                            1,
                             &logbrush, 0, NULL);
     }
     prev_hpen = (HPEN)SelectObject(canvas->dc, hpen);
