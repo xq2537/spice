@@ -837,14 +837,14 @@ def write_ptr_info_check(writer):
             is_ptr = "ptr_info[%s].is_ptr" % index
             dest = "ptr_info[%s].dest" % index
             with writer.if_block("%s == 0" % offset, newline=False):
-                with writer.if_block("%s == 0" % is_ptr, newline=False):
+                with writer.if_block(is_ptr, newline=False):
                     writer.assign("*(void **)(%s)" % dest, "NULL")
                 with writer.block(" else"):
                     writer.assign("*(SPICE_ADDRESS *)(%s)" % dest, "0")
             with writer.block(" else"):
                 writer.comment("Align to 32 bit").newline()
                 writer.assign("end", "(uint8_t *)SPICE_ALIGN((size_t)end, 4)")
-                with writer.if_block("%s == 0" % is_ptr, newline=False):
+                with writer.if_block(is_ptr, newline=False):
                     writer.assign("*(void **)(%s)" % dest, "(void *)end")
                 with writer.block(" else"):
                     writer.assign("*(SPICE_ADDRESS *)(%s)" % dest, "(SPICE_ADDRESS)end")
