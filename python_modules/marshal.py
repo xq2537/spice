@@ -235,7 +235,7 @@ def write_pointer_marshaller(writer, member, src):
     submarshaller = "spice_marshaller_get_ptr_submarshaller(m, %d)" % (1 if member.get_fixed_nw_size() == 8 else 0)
     if member.has_attr("marshall"):
         writer.assign("m2", submarshaller)
-        if member.has_attr("nonnull"):
+        if t.has_attr("nonnull"):
             writer.statement("%s(m2, %s)" % (ptr_func, src.get_ref(member.name)))
         else:
             with writer.if_block("%s != NULL" % src.get_ref(member.name)) as block:

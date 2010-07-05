@@ -60,7 +60,7 @@ class FixedSize:
 # only to attributes that affect pointer or array attributes, as these
 # are member local types, unlike e.g. a Struct that may be used by
 # other members
-propagated_attributes=["ptr_array", "c_ptr"]
+propagated_attributes=["ptr_array", "c_ptr", "nonnull"]
 
 class Type:
     def __init__(self):

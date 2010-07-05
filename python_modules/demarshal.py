@@ -82,7 +82,6 @@ class ItemInfo:
         self.prefix = prefix
         self.subprefix = prefix
         self.position = position
-        self.non_null = False
         self.member = None
 
     def nw_size(self):
@@ -103,7 +102,6 @@ class MemberItemInfo(ItemInfo):
             self.type = member.member_type
         self.prefix = member.name
         self.subprefix = member.name
-        self.non_null = member.has_attr("nonnull")
         self.position = "(%s + %s)" % (start, container.get_nw_offset(member, "", "__nw_size"))
         self.member = member
 
@@ -123,7 +121,6 @@ def write_validate_switch_member(writer, container, switch_member, scope, parent
         with writer.if_block(check, not first, False) as if_scope:
             item.type = c.member.member_type
             item.subprefix = item.prefix + "_" + m.name
-            item.non_null = c.member.has_attr("nonnull")
             sub_want_extra_size = want_extra_size
             if sub_want_extra_size and not m.contains_extra_size() and not m.is_extra_size():
                 writer.assign(item.extra_size(), 0)
@@ -192,7 +189,7 @@ def write_validate_pointer_item(writer, container, item, scope, parent_scope, st
         target_type = item.type.target_type
 
         v = write_read_primitive_item(writer, item, scope)
-        if item.non_null:
+        if item.type.has_attr("nonnull"):
             writer.error_check("%s == 0" % v)
 
         # pointer target is struct, or array of primitives
