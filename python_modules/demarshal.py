@@ -150,13 +150,19 @@ def write_validate_switch_member(writer, container, switch_member, scope, parent
         with writer.if_block(check, not first, False) as if_scope:
             item.type = c.member.member_type
             item.subprefix = item.prefix + "_" + m.name
-            sub_want_extra_size = want_extra_size
-            if sub_want_extra_size and not m.contains_extra_size() and not m.is_extra_size():
-                writer.assign(item.extra_size(), 0)
-                sub_want_extra_size = False
+
+            all_as_extra_size = m.is_extra_size() and want_extra_size
+            if not want_mem_size and all_as_extra_size and not scope.variable_defined(item.mem_size()):
+                scope.variable_def("uint32_t", item.mem_size())
+
+            sub_want_mem_size = want_mem_size or all_as_extra_size
+            sub_want_extra_size = want_extra_size and not all_as_extra_size
 
             write_validate_item(writer, container, item, if_scope, scope, start,
-                                want_nw_size, want_mem_size, sub_want_extra_size)
+                                want_nw_size, sub_want_mem_size, sub_want_extra_size)
+
+            if all_as_extra_size:
+                writer.assign(item.extra_size(), item.mem_size())
 
         first = False
 
@@ -341,7 +347,7 @@ def write_validate_array_item(writer, container, item, scope, parent_scope, star
             writer.assign(mem_size, "%s * %s" % (element_type.sizeof(), nelements))
         want_mem_size = False
 
-    if not element_type.contains_extra_size() and not array.is_extra_size() and want_extra_size:
+    if not element_type.contains_extra_size() and want_extra_size:
         writer.assign(extra_size, 0)
         want_extra_size = False
 
@@ -361,21 +367,14 @@ def write_validate_array_item(writer, container, item, scope, parent_scope, star
     element_extra_size = element_item.extra_size()
     scope.variable_def("uint32_t", element_nw_size)
     scope.variable_def("uint32_t", element_mem_size)
-    want_is_extra_size = False
-    want_element_mem_size = want_mem_size
     if want_extra_size:
-        if array.is_extra_size():
-            want_is_extra_size = True
-            want_extra_size = False
-            want_element_mem_size = True
-        else:
-            scope.variable_def("uint32_t", element_extra_size)
+        scope.variable_def("uint32_t", element_extra_size)
 
     if want_nw_size:
         writer.assign(nw_size, 0)
     if want_mem_size:
         writer.assign(mem_size, 0)
-    if want_extra_size or want_is_extra_size:
+    if want_extra_size:
         writer.assign(extra_size, 0)
 
     want_element_nw_size = want_nw_size
@@ -391,19 +390,16 @@ def write_validate_array_item(writer, container, item, scope, parent_scope, star
     with writer.index(no_block = is_byte_size) as index:
         with writer.while_loop("%s < %s" % (start2, start2_end) ) if is_byte_size else writer.for_loop(index, nelements) as scope:
             write_validate_item(writer, container, element_item, scope, parent_scope, start2,
-                                want_element_nw_size, want_element_mem_size, want_extra_size)
+                                want_element_nw_size, want_mem_size, want_extra_size)
 
             if want_nw_size:
                 writer.increment(nw_size, element_nw_size)
             if want_mem_size:
-                if not array.is_extra_size():
-                    writer.increment(mem_size, element_mem_size)
-            if want_is_extra_size:
                 if array.has_attr("ptr_array"):
-                    writer.increment(extra_size, "sizeof(void *) + SPICE_ALIGN(%s, 4)" % element_mem_size)
+                    writer.increment(mem_size, "sizeof(void *) + SPICE_ALIGN(%s, 4)" % element_mem_size)
                 else:
-                    writer.increment(extra_size, "%s + %s" % (element_mem_size, element_extra_size))
-            elif want_extra_size:
+                    writer.increment(mem_size, element_mem_size)
+            if want_extra_size:
                 writer.increment(extra_size, element_extra_size)
 
             writer.increment(start2, start_increment)
@@ -426,7 +422,8 @@ def write_validate_primitive_item(writer, container, item, scope, parent_scope, 
     if want_mem_size:
         mem_size = item.mem_size()
         writer.assign(mem_size, item.type.sizeof())
-    assert not want_extra_size
+    if want_extra_size:
+        writer.assign(item.extra_size(), 0)
 
 def write_validate_item(writer, container, item, scope, parent_scope, start,
                         want_nw_size, want_mem_size, want_extra_size):
