@@ -657,7 +657,7 @@ def write_switch_parser(writer, container, switch, dest, scope):
             if t.is_struct():
                 write_container_parser(writer, t, dest2)
             elif t.is_pointer():
-                write_parse_pointer(writer, t, False, m.has_attr("c_ptr"), dest2, m.name, block)
+                write_parse_pointer(writer, t, False, dest2, m.name, block)
             elif t.is_primitive():
                 if m.has_attr("zero"):
                     writer.statement("consume_%s(&in)" % (t.primitive_type()))
@@ -766,21 +766,22 @@ def write_array_parser(writer, nelements, array, dest, scope):
         if is_byte_size:
             writer.assign(dest.get_ref(array.size[2]), real_nelements)
 
-def write_parse_pointer(writer, t, at_end, as_c_ptr, dest, member_name, scope):
-        target_type = t.target_type
-        writer.assign("ptr_info[n_ptr].offset", "consume_%s(&in)" % t.primitive_type())
-        writer.assign("ptr_info[n_ptr].parse", write_parse_ptr_function(writer, target_type))
-        if at_end:
-            writer.assign("ptr_info[n_ptr].dest", "end")
-            writer.increment("end", "sizeof(void *)" if as_c_ptr else "sizeof(SPICE_ADDRESS)");
-        else:
-            writer.assign("ptr_info[n_ptr].dest", "&%s" % dest.get_ref(member_name))
-        writer.assign("ptr_info[n_ptr].is_ptr", "1" if as_c_ptr else "0")
-        if target_type.is_array():
-            nelements = read_array_len(writer, member_name, target_type, dest, scope)
-            writer.assign("ptr_info[n_ptr].nelements", nelements)
+def write_parse_pointer(writer, t, at_end, dest, member_name, scope):
+    as_c_ptr = t.has_attr("c_ptr")
+    target_type = t.target_type
+    writer.assign("ptr_info[n_ptr].offset", "consume_%s(&in)" % t.primitive_type())
+    writer.assign("ptr_info[n_ptr].parse", write_parse_ptr_function(writer, target_type))
+    if at_end:
+        writer.assign("ptr_info[n_ptr].dest", "end")
+        writer.increment("end", "sizeof(void *)" if as_c_ptr else "sizeof(SPICE_ADDRESS)");
+    else:
+        writer.assign("ptr_info[n_ptr].dest", "&%s" % dest.get_ref(member_name))
+    writer.assign("ptr_info[n_ptr].is_ptr", "1" if as_c_ptr else "0")
+    if target_type.is_array():
+        nelements = read_array_len(writer, member_name, target_type, dest, scope)
+        writer.assign("ptr_info[n_ptr].nelements", nelements)
 
-        writer.statement("n_ptr++")
+    writer.statement("n_ptr++")
 
 def write_member_parser(writer, container, member, dest, scope):
     if member.has_attr("virtual"):
@@ -798,7 +799,7 @@ def write_member_parser(writer, container, member, dest, scope):
             writer.comment("Reuse data from network message").newline()
             writer.assign(dest.get_ref(member.name), "(size_t)(message_start + consume_%s(&in))" % t.primitive_type())
         else:
-            write_parse_pointer(writer, t, member.has_end_attr(), member.has_attr("c_ptr"), dest, member.name, scope)
+            write_parse_pointer(writer, t, member.has_end_attr(), dest, member.name, scope)
     elif t.is_primitive():
         if member.has_attr("zero"):
             writer.statement("consume_%s(&in)" % t.primitive_type())
