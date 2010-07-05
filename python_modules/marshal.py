@@ -186,13 +186,13 @@ def write_array_marshaller(writer, at_end, member, array, container_src, scope):
     element = "%s__element" % member.name
 
     if not scope.variable_defined(element):
-        if array.ptr_array:
+        if array.has_attr("ptr_array"):
             stars = " **"
         else:
             stars = " *"
         scope.variable_def(element_type.c_type() + stars, element)
     element_array = element
-    if array.ptr_array:
+    if array.has_attr("ptr_array"):
         element = "*" + element
 
     if not at_end:

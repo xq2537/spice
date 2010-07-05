@@ -55,6 +55,13 @@ class FixedSize:
                 s = s + " + ((minor >= %d)?%d:0)" % (i, self.vals[i])
         return s
 
+# Some attribute are propagated from member to the type as they really
+# are part of the type definition, rather than the member. This applies
+# only to attributes that affect pointer or array attributes, as these
+# are member local types, unlike e.g. a Struct that may be used by
+# other members
+propagated_attributes=["ptr_array"]
+
 class Type:
     def __init__(self):
         self.attributes = {}
@@ -353,7 +360,6 @@ class ArrayType(Type):
 
         self.element_type = element_type
         self.size = size
-        self.ptr_array = False
 
     def __str__(self):
         if self.size == None:
@@ -416,7 +422,7 @@ class ArrayType(Type):
         raise Exception, "Pointer names in arrays not supported"
 
     def is_extra_size(self):
-        return self.ptr_array
+        return self.has_attr("ptr_array")
 
     def contains_extra_size(self):
         return self.element_type.contains_extra_size()
@@ -516,8 +522,9 @@ class Member(Containee):
         self.member_type.register()
         if self.has_attr("ptr32") and self.member_type.is_pointer():
             self.member_type.set_ptr_size(4)
-        if self.has_attr("ptr_array") and self.member_type.is_array():
-            self.member_type.ptr_array = True
+        for i in propagated_attributes:
+            if self.has_attr(i):
+                self.member_type.attributes[i] = self.attributes[i]
         return self
 
     def is_primitive(self):

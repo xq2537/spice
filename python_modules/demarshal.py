@@ -309,7 +309,7 @@ def write_validate_array_item(writer, container, item, scope, parent_scope, star
 
     if element_type.is_fixed_sizeof() and want_mem_size and not is_byte_size:
         # TODO: Overflow check the multiplication
-        if array.ptr_array:
+        if array.has_attr("ptr_array"):
             writer.assign(mem_size, "sizeof(void *) + SPICE_ALIGN(%s * %s, 4)" % (element_type.sizeof(), nelements))
         else:
             writer.assign(mem_size, "%s * %s" % (element_type.sizeof(), nelements))
@@ -373,7 +373,7 @@ def write_validate_array_item(writer, container, item, scope, parent_scope, star
                 if not array.is_extra_size():
                     writer.increment(mem_size, element_mem_size)
             if want_is_extra_size:
-                if array.ptr_array:
+                if array.has_attr("ptr_array"):
                     writer.increment(extra_size, "sizeof(void *) + SPICE_ALIGN(%s, 4)" % element_mem_size)
                 else:
                     writer.increment(extra_size, "%s + %s" % (element_mem_size, element_extra_size))
@@ -741,7 +741,7 @@ def write_array_parser(writer, nelements, array, dest, scope):
             scope.variable_def("uint32_t", real_nelements)
             writer.assign("array_end", "end + %s" % nelements)
             writer.assign(real_nelements, 0)
-        if array.ptr_array:
+        if array.has_attr("ptr_array"):
             scope.variable_def("void **", "ptr_array")
             scope.variable_def("int", "ptr_array_index")
             writer.assign("ptr_array_index", 0)
@@ -749,7 +749,7 @@ def write_array_parser(writer, nelements, array, dest, scope):
             writer.increment("end", "sizeof(void *) * %s" % nelements)
         with writer.index(no_block = is_byte_size) as index:
             with writer.while_loop("end < array_end") if is_byte_size else writer.for_loop(index, nelements) as array_scope:
-                if array.ptr_array:
+                if array.has_attr("ptr_array"):
                     writer.statement("ptr_array[ptr_array_index++] = end")
                 if is_byte_size:
                     writer.increment(real_nelements, 1)
@@ -760,7 +760,7 @@ def write_array_parser(writer, nelements, array, dest, scope):
                     dest2 = dest.child_at_end(writer, element_type)
                     dest2.reuse_scope = array_scope
                     write_container_parser(writer, element_type, dest2)
-                if array.ptr_array:
+                if array.has_attr("ptr_array"):
                     writer.comment("Align ptr_array element to 4 bytes").newline()
                     writer.assign("end", "(uint8_t *)SPICE_ALIGN((size_t)end, 4)")
         if is_byte_size:
