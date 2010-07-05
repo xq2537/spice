@@ -1,6 +1,35 @@
 import ptypes
 import codegen
 
+# The handling of sizes is somewhat complex, as there are several types of size:
+# * nw_size
+#   This is the network size, i.e. the number of bytes on the network
+#
+# * mem_size
+#   The total amount of memory used for the representation of something inside
+#   spice. This is generally sizeof(C struct), but can be larger if for instance
+#   the type has a variable size array at the end or has a pointer in it that
+#   points to another data chunk (which will be allocated after the main
+#   data chunk). This is essentially how much memory you need to allocate to
+#   contain the data type.
+#
+# * extra_size
+#   This is the size of anything that is not part of the containing structure.
+#   For instance, a primitive (say uint32_t) member has no extra size, because
+#   when allocating its part of the sizeof(MessageStructType) struct. However
+#   a variable array can be places at the end of a structure (@end) and its
+#   size is then extra_size. Note that this extra_size is included in the
+#   mem_size of the enclosing struct, and even if you request the mem_size
+#   of the array itself. However, extra_size is typically not requested
+#   when the full mem_size is also requested.
+#
+#   extra sizes come in two flavours. contains_extra_size means that the item
+#   has a normal presence in the parent container, but has some additional
+#   extra_size it references. For instance via a pointer somewhere in it.
+#   There is also is_extra_size(). This indicates that the whole elements
+#   "normal" mem size should be considered extra size for the container, so
+#   when computing the parent mem_size you should add the mem_size of this
+#   part as extra_size
 
 def write_parser_helpers(writer):
     if writer.is_generated("helper", "demarshaller"):
