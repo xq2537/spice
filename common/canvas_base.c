@@ -3062,7 +3062,6 @@ static void canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox,
         stroke_fill_spans,
         stroke_fill_rects
     };
-    SpicePathSeg *seg;
     StrokeLines lines;
     unsigned int i;
     int dashed;
@@ -3165,24 +3164,22 @@ static void canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox,
         CANVAS_ERROR("invalid brush type");
     }
 
-    seg = (SpicePathSeg*)stroke->path->segments;
-
     stroke_lines_init(&lines);
 
     for (i = 0; i < stroke->path->num_segments; i++) {
-        uint32_t flags = seg->flags;
-        SpicePointFix* point = seg->points;
-        SpicePointFix* end_point = point + seg->count;
-        ASSERT(point < end_point);
-        seg = (SpicePathSeg*)end_point;
+        SpicePathSeg *seg = stroke->path->segments[i];
+        SpicePointFix* point, *end_point;
 
-        if (flags & SPICE_PATH_BEGIN) {
+        point = seg->points;
+        end_point = point + seg->count;
+
+        if (seg->flags & SPICE_PATH_BEGIN) {
             stroke_lines_draw(&lines, (lineGC *)&gc, dashed);
             stroke_lines_append_fix(&lines, point);
             point++;
         }
 
-        if (flags & SPICE_PATH_BEZIER) {
+        if (seg->flags & SPICE_PATH_BEZIER) {
             ASSERT((point - end_point) % 3 == 0);
             for (; point + 2 < end_point; point += 3) {
                 stroke_lines_append_bezier(&lines,
@@ -3196,8 +3193,8 @@ static void canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox,
                 stroke_lines_append_fix(&lines, point);
             }
         }
-        if (flags & SPICE_PATH_END) {
-            if (flags & SPICE_PATH_CLOSE) {
+        if (seg->flags & SPICE_PATH_END) {
+            if (seg->flags & SPICE_PATH_CLOSE) {
                 stroke_lines_append(&lines,
                                     lines.points[0].x, lines.points[0].y);
             }

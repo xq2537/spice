@@ -2296,9 +2296,10 @@ static int is_equal_path(RedWorker *worker, SpicePath *path1, SpicePath *path2)
     if (path1->num_segments != path2->num_segments)
         return FALSE;
 
-    seg1 = (SpicePathSeg*)&path1->segments[0];
-    seg2 = (SpicePathSeg*)&path2->segments[0];
     for (i = 0; i < path1->num_segments; i++) {
+        seg1 = path1->segments[i];
+        seg2 = path2->segments[i];
+
         if (seg1->flags != seg2->flags ||
             seg1->count != seg2->count) {
             return FALSE;
@@ -2309,8 +2310,6 @@ static int is_equal_path(RedWorker *worker, SpicePath *path1, SpicePath *path2)
                 return FALSE;
             }
         }
-        seg1 = (SpicePathSeg*)(&seg1->points[seg1->count]);
-        seg2 = (SpicePathSeg*)(&seg2->points[seg2->count]);
     }
 
     return TRUE;

@@ -393,7 +393,7 @@ struct PathSegment {
 
 struct Path {
     uint32 num_segments;
-    PathSegment segments[num_segments] @end;
+    PathSegment segments[num_segments] @ptr_array;
 };
 
 struct Clip {

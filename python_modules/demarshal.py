@@ -47,13 +47,16 @@ def write_parser_helpers(writer):
             swap = "SPICE_BYTESWAP%d" % size
             if size == 8:
                 writer.macro("read_%s" % type, "ptr", "(*((%s_t *)(ptr)))" % type)
+                writer.macro("write_%s" % type, "ptr, val", "*(%s_t *)(ptr) = val" % (type))
             else:
                 writer.macro("read_%s" % type, "ptr", "((%s_t)%s(*((%s_t *)(ptr)))" % (type, swap, utype))
+                writer.macro("write_%s" % type, "ptr, val", "*(%s_t *)(ptr) = %s((%s_t)val)" % (utype, swap, utype))
     writer.writeln("#else")
     for size in [8, 16, 32, 64]:
         for sign in ["", "u"]:
             type = "%sint%d" % (sign, size)
             writer.macro("read_%s" % type, "ptr", "(*((%s_t *)(ptr)))" % type)
+            writer.macro("write_%s" % type, "ptr, val", "(*((%s_t *)(ptr))) = val" % type)
     writer.writeln("#endif")
 
     for size in [8, 16, 32, 64]:
@@ -94,6 +97,15 @@ def write_read_primitive(writer, start, container, name, scope):
     if not scope.variable_defined(var):
         scope.variable_def(m.member_type.c_type(), var)
     writer.assign(var, "read_%s(pos)" % (m.member_type.primitive_type()))
+    return var
+
+def write_write_primitive(writer, start, container, name, val):
+    m = container.lookup_member(name)
+    assert(m.is_primitive())
+    writer.assign("pos", start + " + " + container.get_nw_offset(m, "", "__nw_size"))
+
+    var = "%s__value" % (name)
+    writer.statement("write_%s(pos, %s)" % (m.member_type.primitive_type(), val))
     return var
 
 def write_read_primitive_item(writer, item, scope):
@@ -280,6 +292,9 @@ def write_validate_array_item(writer, container, item, scope, parent_scope, star
     element_type = array.element_type
     if array.is_bytes_length():
         nelements = "%s__nbytes" %(item.prefix)
+        real_nelements = "%s__nelements" %(item.prefix)
+        if not parent_scope.variable_defined(real_nelements):
+            parent_scope.variable_def("uint32_t", real_nelements)
     else:
         nelements = "%s__nelements" %(item.prefix)
     if not parent_scope.variable_defined(nelements):
@@ -315,6 +330,7 @@ def write_validate_array_item(writer, container, item, scope, parent_scope, star
         is_byte_size = True
         v = write_read_primitive(writer, start, container, array.size[1], scope)
         writer.assign(nelements, v)
+        writer.assign(real_nelements, 0)
     elif array.is_cstring_length():
         writer.todo("cstring array size type not handled yet")
     else:
@@ -389,6 +405,8 @@ def write_validate_array_item(writer, container, item, scope, parent_scope, star
 
     with writer.index(no_block = is_byte_size) as index:
         with writer.while_loop("%s < %s" % (start2, start2_end) ) if is_byte_size else writer.for_loop(index, nelements) as scope:
+            if is_byte_size:
+                writer.increment(real_nelements, 1)
             write_validate_item(writer, container, element_item, scope, parent_scope, start2,
                                 want_element_nw_size, want_mem_size, want_extra_size)
 
@@ -405,6 +423,7 @@ def write_validate_array_item(writer, container, item, scope, parent_scope, star
             writer.increment(start2, start_increment)
     if is_byte_size:
         writer.error_check("%s != %s" % (start2, start2_end))
+        write_write_primitive(writer, start, container, array.size[1], real_nelements)
 
 def write_validate_struct_item(writer, container, item, scope, parent_scope, start,
                                want_nw_size, want_mem_size, want_extra_size):
@@ -613,11 +632,9 @@ class SubDemarshallingDestination(DemarshallingDestination):
     def get_ref(self, member):
         return self.parent_dest.get_ref(self.member) + "." + member
 
-def read_array_len(writer, prefix, array, dest, scope, handles_bytes = False):
-    if array.is_bytes_length():
-        nelements = "%s__nbytes" % prefix
-    else:
-        nelements = "%s__nelements" % prefix
+# Note: during parsing, byte_size types have been converted to count during validation
+def read_array_len(writer, prefix, array, dest, scope):
+    nelements = "%s__nelements" % prefix
     if dest.is_toplevel():
         return nelements # Already there for toplevel, need not recalculate
     element_type = array.element_type
@@ -645,9 +662,7 @@ def read_array_len(writer, prefix, array, dest, scope, handles_bytes = False):
         else:
             writer.assign(nelements, "((%s * %s + 7) / 8 ) * %s" % (bpp, width_v, rows_v))
     elif array.is_bytes_length():
-        if not handles_bytes:
-            raise NotImplementedError("handling of bytes() not supported here yet")
-        writer.assign(nelements, array.size[1])
+        writer.assign(nelements, dest.get_ref(array.size[2]))
     else:
         raise NotImplementedError("TODO array size type not handled yet")
     return nelements
@@ -758,24 +773,16 @@ def write_array_parser(writer, nelements, array, dest, scope):
         writer.increment("in", nelements)
         writer.increment("end", nelements)
     else:
-        if is_byte_size:
-            real_nelements = nelements[:-len("nbytes")] + "nelements"
-            scope.variable_def("uint8_t *", "array_end")
-            scope.variable_def("uint32_t", real_nelements)
-            writer.assign("array_end", "end + %s" % nelements)
-            writer.assign(real_nelements, 0)
         if array.has_attr("ptr_array"):
             scope.variable_def("void **", "ptr_array")
             scope.variable_def("int", "ptr_array_index")
             writer.assign("ptr_array_index", 0)
             writer.assign("ptr_array", "(void **)end")
             writer.increment("end", "sizeof(void *) * %s" % nelements)
-        with writer.index(no_block = is_byte_size) as index:
-            with writer.while_loop("end < array_end") if is_byte_size else writer.for_loop(index, nelements) as array_scope:
+        with writer.index() as index:
+            with writer.for_loop(index, nelements) as array_scope:
                 if array.has_attr("ptr_array"):
                     writer.statement("ptr_array[ptr_array_index++] = end")
-                if is_byte_size:
-                    writer.increment(real_nelements, 1)
                 if element_type.is_primitive():
                     writer.statement("*(%s *)end = consume_%s(&in)" % (element_type.c_type(), element_type.primitive_type()))
                     writer.increment("end", element_type.sizeof())
@@ -786,8 +793,6 @@ def write_array_parser(writer, nelements, array, dest, scope):
                 if array.has_attr("ptr_array"):
                     writer.comment("Align ptr_array element to 4 bytes").newline()
                     writer.assign("end", "(uint8_t *)SPICE_ALIGN((size_t)end, 4)")
-        if is_byte_size:
-            writer.assign(dest.get_ref(array.size[2]), real_nelements)
 
 def write_parse_pointer(writer, t, at_end, dest, member_name, scope):
     as_c_ptr = t.has_attr("c_ptr")
@@ -831,14 +836,14 @@ def write_member_parser(writer, container, member, dest, scope):
             writer.increment("end", t.sizeof())
         else:
             if member.has_attr("bytes_count"):
-                scope.variable_def("uint32_t", member.name);
-                dest_var = member.name
+                print member.attributes["bytes_count"]
+                dest_var = dest.get_ref(member.attributes["bytes_count"][0])
             else:
                 dest_var = dest.get_ref(member.name)
             writer.assign(dest_var, "consume_%s(&in)" % (t.primitive_type()))
         #TODO validate e.g. flags and enums
     elif t.is_array():
-        nelements = read_array_len(writer, member.name, t, dest, scope, handles_bytes = True)
+        nelements = read_array_len(writer, member.name, t, dest, scope)
         if member.has_attr("as_ptr") and t.element_type.is_fixed_nw_size():
             writer.comment("use array as pointer").newline()
             writer.assign(dest.get_ref(member.name), "(%s *)in" % t.element_type.c_type())

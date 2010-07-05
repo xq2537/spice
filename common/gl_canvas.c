@@ -115,20 +115,18 @@ static GLCPath get_path(GLCanvas *canvas, SpicePath *s)
 {
     GLCPath path = glc_path_create(canvas->glc);
     int i;
-    SpicePathSeg* seg = (SpicePathSeg*)s->segments;
 
     for (i = 0; i < s->num_segments; i++) {
-        uint32_t flags = seg->flags;
+        SpicePathSeg* seg = s->segments[i];
         SpicePointFix* point = seg->points;
         SpicePointFix* end_point = point + seg->count;
-        seg = (SpicePathSeg*)end_point;
 
-        if (flags & SPICE_PATH_BEGIN) {
+        if (seg->flags & SPICE_PATH_BEGIN) {
             glc_path_move_to(path, fix_to_double(point->x), fix_to_double(point->y));
             point++;
         }
 
-        if (flags & SPICE_PATH_BEZIER) {
+        if (seg->flags & SPICE_PATH_BEZIER) {
             ASSERT((point - end_point) % 3 == 0);
             for (; point + 2 < end_point; point += 3) {
                 glc_path_curve_to(path,
@@ -141,8 +139,8 @@ static GLCPath get_path(GLCanvas *canvas, SpicePath *s)
                 glc_path_line_to(path, fix_to_double(point->x), fix_to_double(point->y));
             }
         }
-        if (flags & SPICE_PATH_END) {
-            if (flags & SPICE_PATH_CLOSE) {
+        if (seg->flags & SPICE_PATH_END) {
+            if (seg->flags & SPICE_PATH_CLOSE) {
                 glc_path_close(path);
             }
         }

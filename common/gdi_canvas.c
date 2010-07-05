@@ -310,17 +310,14 @@ uint32_t raster_ops[] = {
 
 static void set_path(GdiCanvas *canvas, SpicePath *s)
 {
-    SpicePathSeg* seg = (SpicePathSeg*)s->segments;
     unsigned int i;
 
     for (i = 0; i < s->num_segments; i++) {
-        uint32_t flags = seg->flags;
+        SpicePathSeg* seg = s->segments[0];
         SpicePointFix* point = seg->points;
         SpicePointFix* end_point = point + seg->count;
-        ASSERT(point < end_point);
-        seg = (SpicePathSeg*)end_point;
 
-        if (flags & SPICE_PATH_BEGIN) {
+        if (seg->flags & SPICE_PATH_BEGIN) {
             BeginPath(canvas->dc);
             if (!MoveToEx(canvas->dc, (int)fix_to_double(point->x), (int)fix_to_double(point->y),
                           NULL)) {
@@ -330,7 +327,7 @@ static void set_path(GdiCanvas *canvas, SpicePath *s)
             point++;
         }
 
-        if (flags & SPICE_PATH_BEZIER) {
+        if (seg->flags & SPICE_PATH_BEZIER) {
             ASSERT((point - end_point) % 3 == 0);
             for (; point + 2 < end_point; point += 3) {
                 POINT points[3];
@@ -355,9 +352,9 @@ static void set_path(GdiCanvas *canvas, SpicePath *s)
             }
         }
 
-        if (flags & SPICE_PATH_END) {
+        if (seg->flags & SPICE_PATH_END) {
 
-            if (flags & SPICE_PATH_CLOSE) {
+            if (seg->flags & SPICE_PATH_CLOSE) {
                 if (!CloseFigure(canvas->dc)) {
                     CANVAS_ERROR("CloseFigure failed");
                 }

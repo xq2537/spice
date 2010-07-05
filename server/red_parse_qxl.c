@@ -153,7 +153,7 @@ static SpicePath *red_get_path(RedMemSlotInfo *slots, int group_id,
     bool free_data;
     QXLPath *qxl;
     SpicePath *red;
-    size_t size, mem_size, mem_size2, dsize;
+    size_t size, mem_size, mem_size2, dsize, segment_size;
     int n_segments;
     int i;
     uint32_t count;
@@ -173,7 +173,8 @@ static SpicePath *red_get_path(RedMemSlotInfo *slots, int group_id,
     while (start < end) {
         n_segments++;
         count = start->count;
-        mem_size += sizeof(SpicePathSeg) + count * sizeof(SpicePointFix);
+        segment_size = sizeof(SpicePathSeg) + count * sizeof(SpicePointFix);
+        mem_size += sizeof(SpicePathSeg *) + SPICE_ALIGN(segment_size, 4);
         start = (QXLPathSeg*)(&start->points[count]);
     }
 
@@ -182,11 +183,11 @@ static SpicePath *red_get_path(RedMemSlotInfo *slots, int group_id,
 
     start = (QXLPathSeg*)data;
     end = (QXLPathSeg*)(data + size);
-    seg = (SpicePathSeg*)red->segments;
+    seg = (SpicePathSeg*)&red->segments[n_segments];
     n_segments = 0;
     mem_size2 = sizeof(*red);
     while (start < end) {
-        n_segments++;
+        red->segments[n_segments++] = seg;
         count = start->count;
 
         /* Protect against overflow in size calculations before
