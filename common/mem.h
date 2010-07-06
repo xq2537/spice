@@ -21,6 +21,7 @@
 
 #include <stdlib.h>
 #include <spice/macros.h>
+#include <spice/draw.h> /* for SpiceChunks, temporary */
 
 char *spice_strdup(const char *str) SPICE_GNUC_MALLOC;
 char *spice_strndup(const char *str, size_t n_bytes) SPICE_GNUC_MALLOC;
@@ -32,6 +33,10 @@ void *spice_malloc_n(size_t n_blocks, size_t n_block_bytes) SPICE_GNUC_MALLOC SP
 void *spice_malloc_n_m(size_t n_blocks, size_t n_block_bytes, size_t extra_size) SPICE_GNUC_MALLOC;
 void *spice_malloc0_n(size_t n_blocks, size_t n_block_bytes) SPICE_GNUC_MALLOC SPICE_GNUC_ALLOC_SIZE2(1,2);
 void *spice_realloc_n(void *mem, size_t n_blocks, size_t n_block_bytes) SPICE_GNUC_WARN_UNUSED_RESULT;
+SpiceChunks *spice_chunks_new(uint32_t count) SPICE_GNUC_MALLOC;
+SpiceChunks *spice_chunks_new_linear(uint8_t *data, uint32_t len) SPICE_GNUC_MALLOC;
+void spice_chunks_destroy(SpiceChunks *chunks);
+void spice_chunks_linearize(SpiceChunks *chunks);
 
 size_t spice_strnlen(const char *str, size_t max_len);
 

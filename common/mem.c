@@ -178,3 +178,62 @@ void *spice_realloc_n(void *mem, size_t n_blocks, size_t n_block_bytes)
 
     return spice_realloc(mem, n_blocks * n_block_bytes);
 }
+
+SpiceChunks *spice_chunks_new(uint32_t count)
+{
+    SpiceChunks *chunks;
+
+    chunks = (SpiceChunks *)spice_malloc_n_m(count, sizeof(SpiceChunk), sizeof(SpiceChunks));
+    chunks->flags = 0;
+    chunks->num_chunks = count;
+
+    return chunks;
+}
+
+SpiceChunks *spice_chunks_new_linear(uint8_t *data, uint32_t len)
+{
+    SpiceChunks *chunks;
+
+    chunks = spice_chunks_new(1);
+    chunks->data_size = chunks->chunk[0].len = len;
+    chunks->chunk[0].data = data;
+    return chunks;
+}
+
+void spice_chunks_destroy(SpiceChunks *chunks)
+{
+    int i;
+
+    if (chunks->flags & SPICE_CHUNKS_FLAGS_FREE) {
+        for (i = 0; i < chunks->num_chunks; i++) {
+            free(chunks->chunk[i].data);
+        }
+    }
+
+    free(chunks);
+}
+
+void spice_chunks_linearize(SpiceChunks *chunks)
+{
+    uint8_t *data, *p;
+    int i;
+
+    if (chunks->num_chunks > 1) {
+        data = (uint8_t*)spice_malloc(chunks->data_size);
+        for (p = data, i = 0; i < chunks->num_chunks; i++) {
+            memcpy(p, chunks->chunk[i].data,
+                   chunks->chunk[i].len);
+            p += chunks->chunk[i].len;
+        }
+        if (chunks->flags & SPICE_CHUNKS_FLAGS_FREE) {
+            for (i = 0; i < chunks->num_chunks; i++) {
+                free(chunks->chunk[i].data);
+            }
+        }
+        chunks->num_chunks = 1;
+        chunks->flags |= SPICE_CHUNKS_FLAGS_FREE;
+        chunks->flags &= ~SPICE_CHUNKS_FLAGS_UNSTABLE;
+        chunks->chunk[0].data = data;
+        chunks->chunk[0].len = chunks->data_size;
+    }
+}
