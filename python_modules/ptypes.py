@@ -92,6 +92,9 @@ class Type:
     def is_array(self):
         return isinstance(self, ArrayType)
 
+    def contains_member(self, member):
+        return False
+
     def is_struct(self):
         return isinstance(self, StructType)
 
@@ -527,6 +530,9 @@ class Member(Containee):
                 self.member_type.attributes[i] = self.attributes[i]
         return self
 
+    def contains_member(self, member):
+        return self.member_type.contains_member(member)
+
     def is_primitive(self):
         return self.member_type.is_primitive()
 
@@ -694,6 +700,9 @@ class Switch(Containee):
         return "sizeof(((%s *)NULL)->%s)" % (self.container.c_type(),
                                              self.name)
 
+    def contains_member(self, member):
+        return False # TODO: Don't support switch deep member lookup yet
+
     def has_pointer(self):
         for c in self.cases:
             if c.has_pointer():
@@ -739,10 +748,19 @@ class ContainerType(Type):
             size = size + i.get_fixed_nw_size()
         return size
 
+    def contains_member(self, member):
+        for m in self.members:
+            if m == member or m.contains_member(member):
+                return True
+        return False
+
     def get_fixed_nw_offset(self, member):
         size = 0
         for i in self.members:
             if i == member:
+                break
+            if i.contains_member(member):
+                size = size  + i.member_type.get_fixed_nw_offset(member)
                 break
             if i.is_fixed_nw_size():
                 size = size + i.get_fixed_nw_size()
@@ -773,13 +791,20 @@ class ContainerType(Type):
     def get_nw_offset(self, member, prefix = "", postfix = ""):
         fixed = self.get_fixed_nw_offset(member)
         v = []
-        for m in self.members:
-            if m == member:
-                break
-            if m.is_switch() and m.has_switch_member(member):
-                break
-            if not m.is_fixed_nw_size():
-                v.append(prefix + m.name + postfix)
+        container = self
+        while container != None:
+            members = container.members
+            container = None
+            for m in members:
+                if m == member:
+                    break
+                if m.contains_member(member):
+                    container = m.member_type
+                    break
+                if m.is_switch() and m.has_switch_member(member):
+                    break
+                if not m.is_fixed_nw_size():
+                    v.append(prefix + m.name + postfix)
         if len(v) > 0:
             return str(fixed) + " + " + (" + ".join(v))
         else:
