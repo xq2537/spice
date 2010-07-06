@@ -261,7 +261,9 @@ def write_validate_pointer_item(writer, container, item, scope, parent_scope, st
                 writer.error_check("message_start + %s + %s > message_end" % (v, array_item.nw_size()))
 
             if want_extra_size:
-                if item.member and item.member.has_attr("nocopy"):
+                if item.member and item.member.has_attr("chunk"):
+                    writer.assign(item.extra_size(), "sizeof(SpiceChunks) + sizeof(SpiceChunk)")
+                elif item.member and item.member.has_attr("nocopy"):
                     writer.comment("@nocopy, so no extra size").newline()
                     writer.assign(item.extra_size(), 0)
                 elif target_type.element_type.get_fixed_nw_size == 1:
@@ -823,7 +825,20 @@ def write_member_parser(writer, container, member, dest, scope):
     t = member.member_type
 
     if t.is_pointer():
-        if member.has_attr("nocopy"):
+        if member.has_attr("chunk"):
+            assert(t.target_type.is_array())
+            nelements = read_array_len(writer, member.name, t.target_type, dest, scope)
+            writer.comment("Reuse data from network message as chunk").newline()
+            scope.variable_def("SpiceChunks *", "chunks");
+            writer.assign("chunks", "(SpiceChunks *)end")
+            writer.increment("end", "sizeof(SpiceChunks) + sizeof(SpiceChunk)")
+            writer.assign(dest.get_ref(member.name), "chunks") # spice_chunks_new_linear(message_start + consume_%s(&in), %s)" % (t.primitive_type(), nelements))
+            writer.assign("chunks->data_size", nelements)
+            writer.assign("chunks->flags", 0)
+            writer.assign("chunks->num_chunks", 1)
+            writer.assign("chunks->chunk[0].len", nelements)
+            writer.assign("chunks->chunk[0].data", "message_start + consume_%s(&in)" % t.primitive_type())
+        elif member.has_attr("nocopy"):
             writer.comment("Reuse data from network message").newline()
             writer.assign(dest.get_ref(member.name), "(size_t)(message_start + consume_%s(&in))" % t.primitive_type())
         else:
@@ -1140,6 +1155,7 @@ def write_includes(writer):
     writer.writeln("#include <stdio.h>")
     writer.writeln("#include <spice/protocol.h>")
     writer.writeln("#include <spice/macros.h>")
+    writer.writeln("#include <common/mem.h>")
     writer.newline()
     writer.writeln("#ifdef _MSC_VER")
     writer.writeln("#pragma warning(disable:4101)")
