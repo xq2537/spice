@@ -346,6 +346,16 @@ uint8_t *spice_marshaller_add_ref(SpiceMarshaller *m, uint8_t *data, size_t size
     return spice_marshaller_add_ref_full(m, data, size, NULL, NULL);
 }
 
+void spice_marshaller_add_ref_chunks(SpiceMarshaller *m, SpiceChunks *chunks)
+{
+    int i;
+
+    for (i = 0; i < chunks->num_chunks; i++) {
+        spice_marshaller_add_ref(m, chunks->chunk[i].data,
+                                 chunks->chunk[i].len);
+    }
+}
+
 SpiceMarshaller *spice_marshaller_get_submarshaller(SpiceMarshaller *m)
 {
     SpiceMarshallerData *d;

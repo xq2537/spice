@@ -20,6 +20,7 @@
 #define _H_MARSHALLER
 
 #include <spice/types.h>
+#include <spice/draw.h> /* for SpiceChunk, temporary */
 #ifndef WIN32
 #include <sys/uio.h>
 #endif
@@ -36,6 +37,7 @@ uint8_t *spice_marshaller_add(SpiceMarshaller *m, uint8_t *data, size_t size);
 uint8_t *spice_marshaller_add_ref(SpiceMarshaller *m, uint8_t *data, size_t size);
 uint8_t *spice_marshaller_add_ref_full(SpiceMarshaller *m, uint8_t *data, size_t size,
                                        spice_marshaller_item_free_func free_data, void *opaque);
+void     spice_marshaller_add_ref_chunks(SpiceMarshaller *m, SpiceChunks *chunks);
 void spice_marshaller_flush(SpiceMarshaller *m);
 void spice_marshaller_set_base(SpiceMarshaller *m, size_t base);
 uint8_t *spice_marshaller_linearize(SpiceMarshaller *m, size_t skip,
