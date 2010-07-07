@@ -357,6 +357,18 @@ def write_validate_array_item(writer, container, item, scope, parent_scope, star
             writer.assign(nw_size, "(%s) * %s" % (element_size, nelements))
         want_nw_size = False
 
+    if array.has_attr("as_ptr") and want_mem_size:
+        writer.assign(mem_size, "sizeof(void *)")
+        want_mem_size = False
+
+    if array.has_attr("chunk"):
+        if want_mem_size:
+            writer.assign(extra_size, "sizeof(SpiceChunks *)")
+            want_mem_size = False
+        if want_extra_size:
+            writer.assign(extra_size, "sizeof(SpiceChunks) + sizeof(SpiceChunk)")
+            want_extra_size = False
+
     if element_type.is_fixed_sizeof() and want_mem_size and not is_byte_size:
         # TODO: Overflow check the multiplication
         if array.has_attr("ptr_array"):
@@ -832,7 +844,7 @@ def write_member_parser(writer, container, member, dest, scope):
             scope.variable_def("SpiceChunks *", "chunks");
             writer.assign("chunks", "(SpiceChunks *)end")
             writer.increment("end", "sizeof(SpiceChunks) + sizeof(SpiceChunk)")
-            writer.assign(dest.get_ref(member.name), "chunks") # spice_chunks_new_linear(message_start + consume_%s(&in), %s)" % (t.primitive_type(), nelements))
+            writer.assign(dest.get_ref(member.name), "chunks")
             writer.assign("chunks->data_size", nelements)
             writer.assign("chunks->flags", 0)
             writer.assign("chunks->num_chunks", 1)
@@ -851,7 +863,6 @@ def write_member_parser(writer, container, member, dest, scope):
             writer.increment("end", t.sizeof())
         else:
             if member.has_attr("bytes_count"):
-                print member.attributes["bytes_count"]
                 dest_var = dest.get_ref(member.attributes["bytes_count"][0])
             else:
                 dest_var = dest.get_ref(member.name)
@@ -859,7 +870,20 @@ def write_member_parser(writer, container, member, dest, scope):
         #TODO validate e.g. flags and enums
     elif t.is_array():
         nelements = read_array_len(writer, member.name, t, dest, scope)
-        if member.has_attr("as_ptr") and t.element_type.is_fixed_nw_size():
+        if member.has_attr("chunk") and t.element_type.is_fixed_nw_size() and t.element_type.get_fixed_nw_size() == 1:
+            writer.comment("use array as chunk").newline()
+
+            scope.variable_def("SpiceChunks *", "chunks");
+            writer.assign("chunks", "(SpiceChunks *)end")
+            writer.increment("end", "sizeof(SpiceChunks) + sizeof(SpiceChunk)")
+            writer.assign(dest.get_ref(member.name), "chunks")
+            writer.assign("chunks->data_size", nelements)
+            writer.assign("chunks->flags", 0)
+            writer.assign("chunks->num_chunks", 1)
+            writer.assign("chunks->chunk[0].len", nelements)
+            writer.assign("chunks->chunk[0].data", "in")
+            writer.increment("in", "%s" % (nelements))
+        elif member.has_attr("as_ptr") and t.element_type.is_fixed_nw_size():
             writer.comment("use array as pointer").newline()
             writer.assign(dest.get_ref(member.name), "(%s *)in" % t.element_type.c_type())
             len_var = member.attributes["as_ptr"]

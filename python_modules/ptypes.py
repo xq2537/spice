@@ -60,7 +60,7 @@ class FixedSize:
 # only to attributes that affect pointer or array attributes, as these
 # are member local types, unlike e.g. a Struct that may be used by
 # other members
-propagated_attributes=["ptr_array", "c_ptr", "nonnull"]
+propagated_attributes=["ptr_array", "c_ptr", "nonnull", "chunk"]
 
 class Type:
     def __init__(self):
@@ -428,7 +428,7 @@ class ArrayType(Type):
         return self.has_attr("ptr_array")
 
     def contains_extra_size(self):
-        return self.element_type.contains_extra_size()
+        return self.element_type.contains_extra_size() or self.has_attr("chunk")
 
     def sizeof(self):
         return "%s * %s" % (self.element_type.sizeof(), self.size)
