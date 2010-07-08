@@ -161,10 +161,6 @@ struct QXLDevSurfaceCreate {
 struct QXLInterface {
     SpiceBaseInterface base;
 
-    uint16_t pci_vendor;
-    uint16_t pci_id;
-    uint8_t pci_revision;
-
     void (*attache_worker)(QXLInstance *qin, QXLWorker *qxl_worker);
     void (*set_compression_level)(QXLInstance *qin, int level);
     void (*set_mm_time)(QXLInstance *qin, uint32_t mm_time);

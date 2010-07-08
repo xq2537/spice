@@ -489,13 +489,6 @@ RedDispatcher *red_dispatcher_init(QXLInstance *qxl)
     sigset_t thread_sig_mask;
     sigset_t curr_sig_mask;
 
-    if (qxl->st->qif->pci_vendor != REDHAT_PCI_VENDOR_ID ||
-        qxl->st->qif->pci_id != QXL_DEVICE_ID ||
-        qxl->st->qif->pci_revision != QXL_REVISION) {
-        red_printf("pci mismatch");
-        return NULL;
-    }
-
     quic_init();
     sw_canvas_init();
 #ifdef USE_OGL
