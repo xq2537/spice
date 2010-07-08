@@ -40,9 +40,11 @@
 #include <winsock2.h>
 #include <windows.h>
 
+#ifndef __GNUC__
 #pragma warning(disable:4355)
 #pragma warning(disable:4996)
 #pragma warning(disable:4200)
+#endif
 
 #define strcasecmp stricmp
 
