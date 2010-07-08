@@ -450,11 +450,6 @@ protected:
     ZlibDecoder& zlib_decoder() { return _zlib_decoder;}
 
 private:
-    void access_test(void* ptr, size_t size);
-    void localalize_ptr(SPICE_ADDRESS* data);
-    void localalize_image(SPICE_ADDRESS* in_bitmap);
-    void localalize_brush(SpiceBrush& brush);
-    void localalize_mask(SpiceQMask& mask);
     void begin_draw(SpiceMsgDisplayBase& base, int size, size_t min_size);
 
 protected:
