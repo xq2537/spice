@@ -435,7 +435,7 @@ error Need GCC 4.0 for visibility
 int main () { return 0; }
 ], have_gcc4=yes)
 
-if test "x$have_gcc4" = "xyes"; then
+if test "x$have_gcc4" = "xyes" -a ! "$os_win32" = "yes" ; then
    VISIBILITY_HIDDEN_CFLAGS="-fvisibility=hidden"
 fi
 AC_MSG_RESULT($have_gcc4)
