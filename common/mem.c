@@ -202,7 +202,7 @@ SpiceChunks *spice_chunks_new_linear(uint8_t *data, uint32_t len)
 
 void spice_chunks_destroy(SpiceChunks *chunks)
 {
-    int i;
+    unsigned int i;
 
     if (chunks->flags & SPICE_CHUNKS_FLAGS_FREE) {
         for (i = 0; i < chunks->num_chunks; i++) {
@@ -216,7 +216,7 @@ void spice_chunks_destroy(SpiceChunks *chunks)
 void spice_chunks_linearize(SpiceChunks *chunks)
 {
     uint8_t *data, *p;
-    int i;
+    unsigned int i;
 
     if (chunks->num_chunks > 1) {
         data = (uint8_t*)spice_malloc(chunks->data_size);

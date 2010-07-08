@@ -348,7 +348,7 @@ uint8_t *spice_marshaller_add_ref(SpiceMarshaller *m, uint8_t *data, size_t size
 
 void spice_marshaller_add_ref_chunks(SpiceMarshaller *m, SpiceChunks *chunks)
 {
-    int i;
+    unsigned int i;
 
     for (i = 0; i < chunks->num_chunks; i++) {
         spice_marshaller_add_ref(m, chunks->chunk[i].data,
