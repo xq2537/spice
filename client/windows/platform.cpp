@@ -698,7 +698,7 @@ LocalCursor* Platform::create_default_cursor()
     return new WinDefaultCursor();
 }
 
-void Platform::set_display_mode_listner(DisplayModeListner* listener)
+void Platform::set_display_mode_listner(DisplayModeListener* listener)
 {
 }
 

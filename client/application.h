@@ -140,7 +140,7 @@ typedef std::list<GUIBarrier*> GUIBarriers;
 
 class Application : public ProcessLoop,
                     public Platform::EventListener,
-                    public Platform::DisplayModeListner,
+                    public Platform::DisplayModeListener,
                     public CommandTarget {
 public:
 

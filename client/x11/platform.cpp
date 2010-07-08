@@ -105,13 +105,13 @@ public:
 static DefaultEventListener default_event_listener;
 static Platform::EventListener* event_listener = &default_event_listener;
 
-class DefaultDisplayModeListner: public Platform::DisplayModeListner {
+class DefaultDisplayModeListener: public Platform::DisplayModeListener {
 public:
     void on_display_mode_change() {}
 };
 
-static DefaultDisplayModeListner default_display_mode_listener;
-static Platform::DisplayModeListner* display_mode_listener = &default_display_mode_listener;
+static DefaultDisplayModeListener default_display_mode_listener;
+static Platform::DisplayModeListener* display_mode_listener = &default_display_mode_listener;
 
 
 NamedPipe::ListenerRef NamedPipe::create(const char *name, ListenerInterface& listener_interface)
@@ -449,7 +449,7 @@ void Platform::set_event_listener(EventListener* listener)
     event_listener = listener ? listener : &default_event_listener;
 }
 
-void Platform::set_display_mode_listner(DisplayModeListner* listener)
+void Platform::set_display_mode_listner(DisplayModeListener* listener)
 {
     display_mode_listener = listener ? listener : &default_display_mode_listener;
 }

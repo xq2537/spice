@@ -115,8 +115,8 @@ public:
     class EventListener;
     static void set_event_listener(EventListener* listener);
 
-    class DisplayModeListner;
-    static void set_display_mode_listner(DisplayModeListner* listener);
+    class DisplayModeListener;
+    static void set_display_mode_listner(DisplayModeListener* listener);
 };
 
 class Platform::EventListener {
@@ -137,9 +137,9 @@ public:
     virtual void push_frame(uint8_t *frame) = 0;
 };
 
-class Platform::DisplayModeListner {
+class Platform::DisplayModeListener {
 public:
-    virtual ~DisplayModeListner() {}
+    virtual ~DisplayModeListener() {}
     virtual void on_display_mode_change() = 0;
 };
 
