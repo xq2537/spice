@@ -2345,7 +2345,7 @@ static void tunnel_channel_send_set_ack(TunnelChannel *channel, PipeItem *item)
     red_channel_init_send_data(&channel->base, SPICE_MSG_SET_ACK, item);
     red_channel_add_buf(&channel->base, &channel->base.send_data.u.ack, sizeof(SpiceMsgSetAck));
 
-    red_channel_begin_send_massage(&channel->base);
+    red_channel_begin_send_message(&channel->base);
 }
 
 static void tunnel_channel_send_migrate(TunnelChannel *channel, PipeItem *item)
@@ -2356,7 +2356,7 @@ static void tunnel_channel_send_migrate(TunnelChannel *channel, PipeItem *item)
     channel->expect_migrate_mark = TRUE;
     red_channel_init_send_data(&channel->base, SPICE_MSG_MIGRATE, item);
     red_channel_add_buf(&channel->base, &channel->base.send_data.u.migrate, sizeof(SpiceMsgMigrate));
-    red_channel_begin_send_massage(&channel->base);
+    red_channel_begin_send_message(&channel->base);
 }
 
 static int __tunnel_channel_send_process_bufs_migrate_data(TunnelChannel *channel,
@@ -2536,7 +2536,7 @@ static void tunnel_channel_send_migrate_data(TunnelChannel *channel, PipeItem *i
                                                                      data_buf_offset);
     }
 
-    red_channel_begin_send_massage(&channel->base);
+    red_channel_begin_send_message(&channel->base);
 }
 
 static void tunnel_channel_send_init(TunnelChannel *channel, PipeItem *item)
@@ -2549,7 +2549,7 @@ static void tunnel_channel_send_init(TunnelChannel *channel, PipeItem *item)
     red_channel_init_send_data(&channel->base, SPICE_MSG_TUNNEL_INIT, item);
     red_channel_add_buf(&channel->base, &channel->send_data.u.init, sizeof(SpiceMsgTunnelInit));
 
-    red_channel_begin_send_massage(&channel->base);
+    red_channel_begin_send_message(&channel->base);
 }
 
 static void tunnel_channel_send_service_ip_map(TunnelChannel *channel, PipeItem *item)
@@ -2563,7 +2563,7 @@ static void tunnel_channel_send_service_ip_map(TunnelChannel *channel, PipeItem 
     red_channel_add_buf(&channel->base, &channel->send_data.u.service_ip,
                         sizeof(SpiceMsgTunnelServiceIpMap));
     red_channel_add_buf(&channel->base, &service->virt_ip.s_addr, sizeof(SpiceTunnelIPv4));
-    red_channel_begin_send_massage(&channel->base);
+    red_channel_begin_send_message(&channel->base);
 }
 
 static void tunnel_channel_send_socket_open(TunnelChannel *channel, PipeItem *item)
@@ -2581,7 +2581,7 @@ static void tunnel_channel_send_socket_open(TunnelChannel *channel, PipeItem *it
     red_channel_add_buf(&channel->base, &channel->send_data.u.socket_open,
                         sizeof(channel->send_data.u.socket_open));
 
-    red_channel_begin_send_massage(&channel->base);
+    red_channel_begin_send_message(&channel->base);
 #ifdef DEBUG_NETWORK
     PRINT_SCKT(sckt);
 #endif
@@ -2606,7 +2606,7 @@ static void tunnel_channel_send_socket_fin(TunnelChannel *channel, PipeItem *ite
     red_channel_add_buf(&channel->base, &channel->send_data.u.socket_fin,
                         sizeof(channel->send_data.u.socket_fin));
 
-    red_channel_begin_send_massage(&channel->base);
+    red_channel_begin_send_message(&channel->base);
 
 #ifdef DEBUG_NETWORK
     PRINT_SCKT(sckt);
@@ -2638,7 +2638,7 @@ static void tunnel_channel_send_socket_close(TunnelChannel *channel, PipeItem *i
     red_channel_add_buf(&channel->base, &channel->send_data.u.socket_close,
                         sizeof(channel->send_data.u.socket_close));
 
-    red_channel_begin_send_massage(&channel->base);
+    red_channel_begin_send_message(&channel->base);
 
 #ifdef DEBUG_NETWORK
     PRINT_SCKT(sckt);
@@ -2657,7 +2657,7 @@ static void tunnel_channel_send_socket_closed_ack(TunnelChannel *channel, PipeIt
     red_channel_add_buf(&channel->base, &channel->send_data.u.socket_close_ack,
                         sizeof(channel->send_data.u.socket_close_ack));
 
-    red_channel_begin_send_massage(&channel->base);
+    red_channel_begin_send_message(&channel->base);
 
 #ifdef DEBUG_NETWORK
     PRINT_SCKT(sckt);
@@ -2694,7 +2694,7 @@ static void tunnel_channel_send_socket_token(TunnelChannel *channel, PipeItem *i
     red_channel_add_buf(&channel->base, &channel->send_data.u.socket_token,
                         sizeof(channel->send_data.u.socket_token));
 
-    red_channel_begin_send_massage(&channel->base);
+    red_channel_begin_send_message(&channel->base);
 }
 
 static void tunnel_channel_send_socket_out_data(TunnelChannel *channel, PipeItem *item)
@@ -2750,7 +2750,7 @@ static void tunnel_channel_send_socket_out_data(TunnelChannel *channel, PipeItem
 
     sckt->out_data.num_tokens--;
 
-    red_channel_begin_send_massage(&channel->base);
+    red_channel_begin_send_message(&channel->base);
 }
 
 static void tunnel_worker_release_socket_out_data(TunnelWorker *worker, PipeItem *item)
