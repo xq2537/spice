@@ -132,7 +132,7 @@ typedef struct {
     void (*draw_whiteness)(SpiceCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceWhiteness *whiteness);
     void (*draw_invers)(SpiceCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceInvers *invers);
     void (*draw_transparent)(SpiceCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceTransparent* transparent);
-    void (*draw_alpha_blend)(SpiceCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend);
+    void (*draw_alpha_blend)(SpiceCanvas *canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlend* alpha_blend);
     void (*put_image)(SpiceCanvas *canvas,
 #ifdef WIN32
                       HDC dc,

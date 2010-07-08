@@ -661,14 +661,14 @@ uint32_t RedPeer::recive(uint8_t *buf, uint32_t size)
     return pos - buf;
 }
 
-RedPeer::CompundInMessage* RedPeer::recive()
+RedPeer::CompoundInMessage* RedPeer::recive()
 {
     SpiceDataHeader header;
-    AutoRef<CompundInMessage> message;
+    AutoRef<CompoundInMessage> message;
 
     recive((uint8_t*)&header, sizeof(SpiceDataHeader));
-    message.reset(new CompundInMessage(header.serial, header.type, header.size, header.sub_list));
-    recive((*message)->data(), (*message)->compund_size());
+    message.reset(new CompoundInMessage(header.serial, header.type, header.size, header.sub_list));
+    recive((*message)->data(), (*message)->compound_size());
     return message.release();
 }
 

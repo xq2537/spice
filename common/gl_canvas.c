@@ -400,7 +400,7 @@ static void gl_canvas_draw_opaque(SpiceCanvas *spice_canvas, SpiceRect *bbox, Sp
     glc_flush(canvas->glc);
 }
 
-static void gl_canvas_draw_alpha_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd *alpha_blend)
+static void gl_canvas_draw_alpha_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlend *alpha_blend)
 {
     GLCanvas *canvas = (GLCanvas *)spice_canvas;
     pixman_image_t *surface;

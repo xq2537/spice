@@ -169,8 +169,8 @@ void red_channel_add_buf(RedChannel *channel, void *data, uint32_t size);
 
 uint64_t red_channel_get_message_serial(RedChannel *channel);
 
-/* when sending a msg. should first call red_channel_begin_send_massage */
-void red_channel_begin_send_massage(RedChannel *channel);
+/* when sending a msg. should first call red_channel_begin_send_message */
+void red_channel_begin_send_message(RedChannel *channel);
 
 void red_channel_pipe_item_init(RedChannel *channel, PipeItem *item, int type);
 void red_channel_pipe_add(RedChannel *channel, PipeItem *item);

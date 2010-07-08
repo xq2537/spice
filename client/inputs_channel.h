@@ -50,7 +50,7 @@ private:
     void set_local_modifiers();
 
     void handle_init(RedPeer::InMessage* message);
-    void handle_modifaiers(RedPeer::InMessage* message);
+    void handle_modifiers(RedPeer::InMessage* message);
     void handle_motion_ack(RedPeer::InMessage* message);
 
     static uint32_t get_make_scan_code(RedKey key);

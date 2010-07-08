@@ -205,12 +205,12 @@ typedef struct SpiceTransparent {
     uint32_t true_color;
 } SpiceTransparent;
 
-typedef struct SpiceAlphaBlnd {
+typedef struct SpiceAlphaBlend {
     uint16_t alpha_flags;
     uint8_t alpha;
     SpiceImage *src_bitmap;
     SpiceRect src_area;
-} SpiceAlphaBlnd;
+} SpiceAlphaBlend;
 
 typedef struct SpiceRop3 {
     SpiceImage *src_bitmap;

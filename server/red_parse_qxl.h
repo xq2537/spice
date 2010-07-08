@@ -40,7 +40,7 @@ typedef struct RedDrawable {
         SpiceOpaque opaque;
         SpiceCopy copy;
         SpiceTransparent transparent;
-        SpiceAlphaBlnd alpha_blend;
+        SpiceAlphaBlend alpha_blend;
         struct {
             SpicePoint src_pos;
         } copy_bits;

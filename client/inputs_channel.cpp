@@ -23,7 +23,7 @@
 #include "application.h"
 #include "display_channel.h"
 
-#define SYNC_REMOTH_MODIFIRES
+#define SYNC_REMOTE_MODIFIERS
 
 class SetInputsHandlerEvent: public Event {
 public:
@@ -187,7 +187,7 @@ InputsChannel::InputsChannel(RedClient& client, uint32_t id)
     handler->set_handler(SPICE_MSG_NOTIFY, &InputsChannel::handle_notify);
 
     handler->set_handler(SPICE_MSG_INPUTS_INIT, &InputsChannel::handle_init);
-    handler->set_handler(SPICE_MSG_INPUTS_KEY_MODIFIERS, &InputsChannel::handle_modifaiers);
+    handler->set_handler(SPICE_MSG_INPUTS_KEY_MODIFIERS, &InputsChannel::handle_modifiers);
     handler->set_handler(SPICE_MSG_INPUTS_MOUSE_MOTION_ACK, &InputsChannel::handle_motion_ack);
 }
 
@@ -217,7 +217,7 @@ void InputsChannel::handle_init(RedPeer::InMessage* message)
     get_client().push_event(*set_handler_event);
 }
 
-void InputsChannel::handle_modifaiers(RedPeer::InMessage* message)
+void InputsChannel::handle_modifiers(RedPeer::InMessage* message)
 {
     SpiceMsgInputsKeyModifiers* init = (SpiceMsgInputsKeyModifiers*)message->data();
     _modifiers = init->modifiers;
@@ -404,7 +404,7 @@ void InputsChannel::set_local_modifiers()
 
 void InputsChannel::on_focus_in()
 {
-#ifdef SYNC_REMOTH_MODIFIRES
+#ifdef SYNC_REMOTE_MODIFIERS
     Message* message = new Message(SPICE_MSGC_INPUTS_KEY_MODIFIERS);
     SpiceMsgcKeyModifiers modifiers;
     modifiers.modifiers = Platform::get_keyboard_lock_modifiers();

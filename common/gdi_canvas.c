@@ -1251,7 +1251,7 @@ static void gdi_draw_image_alpha(HDC dest_dc, const SpiceRect *src, const SpiceR
     release_bitmap(dc, bitmap, prev_bitmap, 0);
 }
 
-static void gdi_canvas_draw_alpha_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend)
+static void gdi_canvas_draw_alpha_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlend* alpha_blend)
 {
     GdiCanvas *canvas = (GdiCanvas *)spice_canvas;
     GdiCanvas *gdi_surface;

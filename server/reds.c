@@ -294,7 +294,7 @@ typedef struct RedsState {
 } RedsState;
 
 uint64_t bitrate_per_sec = ~0;
-static uint64_t letancy = 0;
+static uint64_t latency = 0;
 
 static RedsState *reds = NULL;
 
@@ -750,7 +750,7 @@ static void reds_disconnect()
     reds->in_handler.end_pos = 0;
 
     bitrate_per_sec = ~0;
-    letancy = 0;
+    latency = 0;
 
     reds_mig_cleanup();
     reds->disconnecting = FALSE;
@@ -1721,20 +1721,20 @@ static void reds_main_handle_message(void *opaque, size_t size, uint32_t type, v
             case NET_TEST_STAGE_LATENCY:
                 reds->net_test_id++;
                 reds->net_test_stage = NET_TEST_STAGE_RATE;
-                letancy = roundtrip;
+                latency = roundtrip;
                 break;
             case NET_TEST_STAGE_RATE:
                 reds->net_test_id = 0;
-                if (roundtrip <= letancy) {
+                if (roundtrip <= latency) {
                     // probably high load on client or server result with incorrect values
-                    letancy = 0;
-                    red_printf("net test: invalid values, letancy %lu roundtrip %lu. assuming high"
-                               "bandwidth", letancy, roundtrip);
+                    latency = 0;
+                    red_printf("net test: invalid values, latency %lu roundtrip %lu. assuming high"
+                               "bandwidth", latency, roundtrip);
                     break;
                 }
-                bitrate_per_sec = (uint64_t)(NET_TEST_BYTES * 8) * 1000000 / (roundtrip - letancy);
-                red_printf("net test: letancy %f ms, bitrate %lu bps (%f Mbps)%s",
-                           (double)letancy / 1000,
+                bitrate_per_sec = (uint64_t)(NET_TEST_BYTES * 8) * 1000000 / (roundtrip - latency);
+                red_printf("net test: latency %f ms, bitrate %lu bps (%f Mbps)%s",
+                           (double)latency / 1000,
                            bitrate_per_sec,
                            (double)bitrate_per_sec / 1024 / 1024,
                            IS_LOW_BANDWIDTH() ? " LOW BANDWIDTH" : "");

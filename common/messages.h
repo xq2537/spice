@@ -226,7 +226,7 @@ typedef struct SpiceMsgDisplayDrawTransparent {
 
 typedef struct SpiceMsgDisplayDrawAlphaBlend {
     SpiceMsgDisplayBase base;
-    SpiceAlphaBlnd data;
+    SpiceAlphaBlend data;
 } SpiceMsgDisplayDrawAlphaBlend;
 
 typedef struct SpiceMsgDisplayCopyBits {

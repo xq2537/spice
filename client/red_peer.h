@@ -34,7 +34,7 @@ public:
     virtual ~RedPeer();
 
     class InMessage;
-    class CompundInMessage;
+    class CompoundInMessage;
     class OutMessage;
     class DisconnectedException {};
 
@@ -114,7 +114,7 @@ public:
     void close();
     void enable() { _shut = false;}
 
-    virtual CompundInMessage* recive();
+    virtual CompoundInMessage* recive();
     uint32_t do_send(OutMessage& message, uint32_t skip_bytes);
     uint32_t send(OutMessage& message);
 
@@ -169,9 +169,9 @@ protected:
     uint8_t* _data;
 };
 
-class RedPeer::CompundInMessage: public RedPeer::InMessage {
+class RedPeer::CompoundInMessage: public RedPeer::InMessage {
 public:
-    CompundInMessage(uint64_t _serial, uint16_t type, uint32_t size, uint32_t sub_list)
+    CompoundInMessage(uint64_t _serial, uint16_t type, uint32_t size, uint32_t sub_list)
         : InMessage(type, size, new uint8_t[size])
         , _refs (1)
         , _serial (_serial)
@@ -186,10 +186,10 @@ public:
     uint32_t sub_list() { return _sub_list;}
 
     virtual uint32_t size() { return _sub_list ? _sub_list : _size;}
-    uint32_t compund_size() {return _size;}
+    uint32_t compound_size() {return _size;}
 
 protected:
-    virtual ~CompundInMessage() { delete[] _data;}
+    virtual ~CompoundInMessage() { delete[] _data;}
 
 private:
     int _refs;

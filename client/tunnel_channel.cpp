@@ -33,7 +33,7 @@ class OutSocketMessage;
 
 class InSocketMessage: public ClientNetSocket::SendBuffer {
 public:
-    InSocketMessage(RedChannel::CompundInMessage& full_msg);
+    InSocketMessage(RedChannel::CompoundInMessage& full_msg);
 
     const uint8_t* data();
     uint32_t size();
@@ -45,12 +45,12 @@ protected:
 
 private:
     int _refs;
-    RedChannel::CompundInMessage& _full_msg;
+    RedChannel::CompoundInMessage& _full_msg;
     SpiceMsgTunnelSocketData* _sckt_msg;
     uint32_t _buf_size;
 };
 
-InSocketMessage::InSocketMessage(RedChannel::CompundInMessage& full_msg)
+InSocketMessage::InSocketMessage(RedChannel::CompoundInMessage& full_msg)
     : _refs (1)
     , _full_msg (full_msg)
 {
@@ -450,7 +450,7 @@ void TunnelChannel::handle_socket_data(RedPeer::InMessage* message)
     }
 
     InSocketMessage* sckt_msg = new InSocketMessage(*(
-                                          static_cast<RedChannel::CompundInMessage*>(message)));
+                                          static_cast<RedChannel::CompoundInMessage*>(message)));
     if (sckt_msg->size() > _max_socket_data_size) {
         THROW("%s: socket data exceeds size limit %d > %d connection_id=%d", __FUNCTION__,
               sckt_msg->size(), _max_socket_data_size, sckt->id());

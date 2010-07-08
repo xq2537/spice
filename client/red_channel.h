@@ -126,7 +126,7 @@ public:
     virtual void disconnect();
     virtual bool abort();
 
-    virtual CompundInMessage *recive();
+    virtual CompoundInMessage *recive();
 
     virtual void post_message(RedChannel::OutMessage* message);
     int get_connection_error() { return _error;}
@@ -189,7 +189,7 @@ private:
 
     SpiceDataHeader _incomming_header;
     uint32_t _incomming_header_pos;
-    RedPeer::CompundInMessage* _incomming_message;
+    RedPeer::CompoundInMessage* _incomming_message;
     uint32_t _incomming_message_pos;
 
     uint32_t _message_ack_count;
@@ -232,7 +232,7 @@ class RedChannel::MessageHandler {
 public:
     MessageHandler() {}
     virtual ~MessageHandler() {}
-    virtual void handle_message(RedPeer::CompundInMessage& message) = 0;
+    virtual void handle_message(RedPeer::CompoundInMessage& message) = 0;
 };
 
 
@@ -241,7 +241,7 @@ class MessageHandlerImp: public RedChannel::MessageHandler {
 public:
     MessageHandlerImp(HandlerClass& obj);
     ~MessageHandlerImp() { delete [] _handlers; };
-    virtual void handle_message(RedPeer::CompundInMessage& message);
+    virtual void handle_message(RedPeer::CompoundInMessage& message);
     typedef void (HandlerClass::*Handler)(RedPeer::InMessage* message);
     void set_handler(unsigned int id, Handler handler);
 
@@ -264,7 +264,7 @@ MessageHandlerImp<HandlerClass, channel_id>::MessageHandlerImp(HandlerClass& obj
 }
 
 template <class HandlerClass, unsigned int channel_id>
-void MessageHandlerImp<HandlerClass, channel_id>::handle_message(RedPeer::CompundInMessage&
+void MessageHandlerImp<HandlerClass, channel_id>::handle_message(RedPeer::CompoundInMessage&
                                                                  message)
 {
     uint8_t *msg;
@@ -288,7 +288,7 @@ void MessageHandlerImp<HandlerClass, channel_id>::handle_message(RedPeer::Compun
         SpiceSubMessageList *sub_list;
         sub_list = (SpiceSubMessageList *)(message.data() + message.sub_list());
         for (int i = 0; i < sub_list->size; i++) {
-            SpicedSubMessage *sub = (SpicedSubMessage *)(message.data() + sub_list->sub_messages[i]);
+            SpiceSubMessage *sub = (SpiceSubMessage *)(message.data() + sub_list->sub_messages[i]);
             msg = (uint8_t *)(sub + 1);
             type = sub->type;
             size = sub->size;

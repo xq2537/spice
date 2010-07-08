@@ -108,7 +108,7 @@ struct ResString{
     {STR_BUTTON_BACK, "Back"},
     {STR_LABEL_HOST, "Host"},
     {STR_LABEL_PORT, "Port"},
-    {STR_LABEL_SPORT, "Secore port"},
+    {STR_LABEL_SPORT, "Secure port"},
     {STR_LABEL_PASSWORD, "Password"},
     {0, NULL},
 };

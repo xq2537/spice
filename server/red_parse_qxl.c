@@ -515,7 +515,7 @@ static void red_put_transparent(SpiceTransparent *red)
 }
 
 static void red_get_alpha_blend_ptr(RedMemSlotInfo *slots, int group_id,
-                                    SpiceAlphaBlnd *red, QXLAlphaBlnd *qxl)
+                                    SpiceAlphaBlend *red, QXLAlphaBlend *qxl)
 {
     red->alpha_flags = qxl->alpha_flags;
     red->alpha       = qxl->alpha;
@@ -524,14 +524,14 @@ static void red_get_alpha_blend_ptr(RedMemSlotInfo *slots, int group_id,
 }
 
 static void red_get_alpha_blend_ptr_compat(RedMemSlotInfo *slots, int group_id,
-                                           SpiceAlphaBlnd *red, QXLCompatAlphaBlnd *qxl)
+                                           SpiceAlphaBlend *red, QXLCompatAlphaBlend *qxl)
 {
     red->alpha       = qxl->alpha;
     red->src_bitmap  = red_get_image(slots, group_id, qxl->src_bitmap);
     red_get_rect_ptr(&red->src_area, &qxl->src_area);
 }
 
-static void red_put_alpha_blend(SpiceAlphaBlnd *red)
+static void red_put_alpha_blend(SpiceAlphaBlend *red)
 {
     red_put_image(red->src_bitmap);
 }

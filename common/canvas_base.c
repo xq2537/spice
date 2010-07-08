@@ -2322,7 +2322,7 @@ static void canvas_draw_transparent(SpiceCanvas *spice_canvas, SpiceRect *bbox, 
     pixman_region32_fini(&dest_region);
 }
 
-static void canvas_draw_alpha_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlnd* alpha_blend)
+static void canvas_draw_alpha_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, SpiceClip *clip, SpiceAlphaBlend* alpha_blend)
 {
     CanvasBase *canvas = (CanvasBase *)spice_canvas;
     pixman_region32_t dest_region;

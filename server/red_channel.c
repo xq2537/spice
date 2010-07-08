@@ -406,7 +406,7 @@ static void red_channel_send(RedChannel *channel)
     red_peer_handle_outgoing(channel->peer, &channel->outgoing);
 }
 
-void red_channel_begin_send_massage(RedChannel *channel)
+void red_channel_begin_send_message(RedChannel *channel)
 {
     channel->send_data.size = channel->send_data.header.size + sizeof(SpiceDataHeader);
     channel->ack_data.messages_window++;

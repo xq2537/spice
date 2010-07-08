@@ -710,7 +710,7 @@ channel DisplayChannel : BaseChannel {
 
     message {
 	DisplayBase base;
-	struct AlphaBlnd {
+	struct AlphaBlend {
 	    int8 alpha_flags @virtual(0);
 	    uint8 alpha;
 	    Image *src_bitmap;
