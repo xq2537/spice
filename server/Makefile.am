@@ -80,6 +80,7 @@ TUNNEL_SRCS =
 endif
 
 libspice_server_la_SOURCES =			\
+	demarshallers.h				\
 	glz_encoder.c				\
 	glz_encoder_config.h			\
 	glz_encoder_dictionary.c		\

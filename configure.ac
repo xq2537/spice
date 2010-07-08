@@ -350,11 +350,15 @@ AC_OUTPUT([
 Makefile
 spice-server.pc
 common/Makefile
+common/win/Makefile
+common/win/my_getopt-1.5/Makefile
 python_modules/Makefile
 server/Makefile
 client/Makefile
 client/x11/Makefile
 client/x11/images/Makefile
+client/gui/Makefile
+client/windows/Makefile
 ])
 
 dnl ==========================================================================

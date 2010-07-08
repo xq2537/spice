@@ -7,3 +7,5 @@ DISTCLEANFILES =                                \
 	spice-server.pc
 
 EXTRA_DIST = spice.proto spice1.proto spice_codegen.py
+
+DISTCHECK_CONFIGURE_FLAGS=--enable-opengl --enable-gui --enable-tunnel

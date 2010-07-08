@@ -1,6 +1,8 @@
+SUBDIRS = win
+
 NULL =
 
-COMMON_SRCS = 				\
+COMMON_SRCS =				\
 	sw_canvas.h			\
 	sw_canvas.c			\
 	pixman_utils.h			\
@@ -10,6 +12,8 @@ COMMON_SRCS = 				\
 	canvas_utils.h			\
 	canvas_utils.c			\
 	draw.h				\
+	gdi_canvas.h			\
+	gdi_canvas.c			\
 	gl_canvas.h			\
 	gl_canvas.c			\
 	glc.h				\
@@ -22,11 +26,7 @@ COMMON_SRCS = 				\
 	quic.h				\
 	quic.c				\
 	quic_config.h			\
-	qxl_dev.h			\
 	rect.h				\
-	red_error_codes.h		\
-	red.h				\
-	reds_stat.h			\
 	region.h			\
 	region.c			\
 	ring.h				\
@@ -41,11 +41,11 @@ COMMON_SRCS = 				\
 	lz.h				\
 	marshaller.h			\
 	marshaller.c			\
+	messages.h			\
+	mem.h				\
+	mem.c				\
 	quic_family_tmpl.c		\
 	quic_rgb_tmpl.c			\
-	quic_tmpl.c			\
-	ipc_ring.h			\
-	vd_agent.h			\
 	quic_tmpl.c			\
 	$(NULL)
 

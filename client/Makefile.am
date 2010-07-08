@@ -1,7 +1,7 @@
 NULL =
 
-SUBDIRS = . $(red_target)
-DIST_SUBDIRS = x11 #windows
+SUBDIRS = . $(red_target) gui
+DIST_SUBDIRS = x11 windows gui
 
 spice_built_sources = generated_demarshallers.cpp generated_marshallers.cpp generated_demarshallers1.cpp generated_marshallers1.cpp
 
@@ -81,10 +81,12 @@ RED_COMMON_SRCS =			\
 	menu.h				\
 	mjpeg_decoder.h			\
 	mjpeg_decoder.cpp		\
+	event_sources.h			\
 	pixels_source.h			\
 	platform.h			\
 	playback_channel.cpp		\
 	process_loop.cpp		\
+	process_loop.h			\
 	quic.cpp			\
 	read_write_mutex.h		\
 	record_channel.cpp		\
@@ -119,8 +121,15 @@ RED_COMMON_SRCS =			\
 	zlib_decoder.h			\
 	$(NULL)
 
+GDI_FILES =				\
+	gdi_canvas.cpp			\
+	red_gdi_canvas.cpp		\
+	red_gdi_canvas.h		\
+	red_pixmap_gdi.h		\
+	$(NULL)
+
 MAINTAINERCLEANFILES = $(spice_built_sources)
 
-EXTRA_DIST = $(RED_COMMON_SRCS) $(spice_built_sources) $(GL_SRCS)
+EXTRA_DIST = $(RED_COMMON_SRCS) $(spice_built_sources) $(GL_SRCS) $(GDI_FILES)
 
 BUILT_SOURCES = $(spice_built_sources)
