@@ -55,7 +55,7 @@
 #include "demarshallers.h"
 #include "marshaller.h"
 #include "generated_marshallers.h"
-#ifdef HAVE_SLIRP
+#ifdef USE_TUNNEL
 #include "red_tunnel_worker.h"
 #endif
 
@@ -92,7 +92,9 @@ static pthread_mutex_t *lock_cs;
 static long *lock_count;
 uint32_t streaming_video = STREAM_VIDEO_FILTER;
 spice_image_compression_t image_compression = SPICE_IMAGE_COMPRESS_AUTO_GLZ;
+#ifdef USE_TUNNEL
 void *red_tunnel = NULL;
+#endif
 int agent_mouse = TRUE;
 
 static void openssl_init();
@@ -3456,7 +3458,7 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
         attach_to_red_agent(SPICE_CONTAINEROF(sin, SpiceVDIPortInstance, base));
 
     } else if (strcmp(interface->type, SPICE_INTERFACE_NET_WIRE) == 0) {
-#ifdef HAVE_SLIRP
+#ifdef USE_TUNNEL
         SpiceNetWireInstance *net;
         red_printf("SPICE_INTERFACE_NET_WIRE");
         if (red_tunnel) {

@@ -109,14 +109,21 @@ RED_COMMON_SRCS =					\
 	$(CLIENT_DIR)/hot_keys.cpp			\
 	$(CLIENT_DIR)/hot_keys.h			\
 	$(CLIENT_DIR)/threads.cpp			\
-	$(CLIENT_DIR)/tunnel_channel.cpp		\
-	$(CLIENT_DIR)/tunnel_channel.h			\
 	$(CLIENT_DIR)/utils.cpp				\
 	$(CLIENT_DIR)/utils.h				\
 	$(CLIENT_DIR)/zlib_decoder.cpp			\
 	$(CLIENT_DIR)/zlib_decoder.h			\
 	$(CLIENT_DIR)/icon.h				\
 	$(NULL)
+
+if SUPPORT_TUNNEL
+RED_TUNNEL_SRCS =					\
+	$(CLIENT_DIR)/tunnel_channel.cpp		\
+	$(CLIENT_DIR)/tunnel_channel.h			\
+	$(NULL)
+else
+RED_TUNNEL_SRCS =
+endif
 
 if SUPPORT_GUI
 RED_GUI_SRCS =						\
@@ -127,7 +134,8 @@ RED_GUI_SRCS =						\
 	$(CLIENT_DIR)/gui/resource_provider.h		\
 	$(CLIENT_DIR)/gui/resource_provider.cpp		\
 	$(CLIENT_DIR)/gui/gui.h				\
-	$(CLIENT_DIR)/gui/gui.cpp
+	$(CLIENT_DIR)/gui/gui.cpp			\
+	$(NULL)
 else
 RED_GUI_SRCS =
 endif
@@ -176,6 +184,7 @@ spicec_SOURCES =			\
 	x_platform.h			\
 	$(RED_COMMON_SRCS)		\
 	$(RED_GUI_SRCS)			\
+	$(RED_TUNNEL_SRCS)		\
 	$(RED_OGL_SRCS)			\
 	$(NULL)
 

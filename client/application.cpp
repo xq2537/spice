@@ -40,7 +40,9 @@
 #include "quic.h"
 #include "mutex.h"
 #include "cmd_line_parser.h"
+#ifdef USE_TUNNEL
 #include "tunnel_channel.h"
+#endif
 #include "rect.h"
 #ifdef USE_GUI
 #include "gui/gui.h"
@@ -1922,9 +1924,11 @@ void Application::register_channels()
         _client.register_channel_factory(RecordChannel::Factory());
     }
 
+#ifdef USE_TUNNEL
     if (_enabled_channels[SPICE_CHANNEL_TUNNEL]) {
         _client.register_channel_factory(TunnelChannel::Factory());
     }
+#endif
 }
 
 bool Application::process_cmd_line(int argc, char** argv)

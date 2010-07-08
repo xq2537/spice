@@ -96,6 +96,9 @@ AC_ARG_ENABLE(tunnel,
 [  --enable-tunnel         Enable network redirection],
 [  have_tunnel=yes])
 AM_CONDITIONAL(SUPPORT_TUNNEL, test "x$have_tunnel" = "xyes")
+if test "x$have_tunnel" = "xyes"; then
+   AC_DEFINE(USE_TUNNEL, [1], [Define if supporting tunnel proxying])
+fi
 
 use_gui=no
 AC_ARG_ENABLE(gui,
