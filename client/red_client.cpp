@@ -641,7 +641,7 @@ void RedClient::send_agent_monitors_config()
         THROW(" monitors query failed");
     }
 
-    double min_distance = HUGE;
+    double min_distance = INFINITY;
     int dx = 0;
     int dy = 0;
     int i;
