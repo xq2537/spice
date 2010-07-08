@@ -138,7 +138,11 @@ AC_CHECK_LIB(rt, clock_gettime,
    )
 AC_SUBST(LIBRT)
 
-SPICE_NONPKGCONFIG_LIBS+=" -pthread $LIBM $LIBRT"
+if test "$red_target" = "windows"; then
+	SPICE_NONPKGCONFIG_LIBS+=" -lpthreadGC2 -lversion -lmsimg32 $LIBM"
+else
+	SPICE_NONPKGCONFIG_LIBS+=" -pthread $LIBM $LIBRT"
+fi
 
 dnl The client needs a yield function
 AC_MSG_CHECKING(for posix yield function)
@@ -323,7 +327,11 @@ dnl MAYBE_WARN in an ignorable way (like adding whitespace)
 
 dnl MAYBE_WARN="-Wall -Wno-sign-compare -Werror -Wno-deprecated-declarations"
 
-MAYBE_WARN="-Wall -Wno-sign-compare -Wno-deprecated-declarations"
+if test "$red_target" = "windows"; then
+	MAYBE_WARN="-Wall -Wno-sign-compare -Wno-deprecated-declarations"
+else
+	MAYBE_WARN="-Wall -Wno-sign-compare -Werror -Wno-deprecated-declarations"
+fi
 
 AC_ARG_ENABLE(werror,
 AC_HELP_STRING([--enable-werror], [Use -Werror (if supported)]),
