@@ -33,7 +33,7 @@
 
 #include <spice/types.h>
 #include <spice/enums.h>
-#include <common/mem.h>
+#include "mem.h"
 
 #define SPICE_GET_ADDRESS(addr) ((void *)(unsigned long)(addr))
 #define SPICE_SET_ADDRESS(addr, val) ((addr) = (unsigned long)(val))

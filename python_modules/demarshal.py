@@ -1169,7 +1169,7 @@ def write_includes(writer):
     writer.writeln("#include <stdio.h>")
     writer.writeln("#include <spice/protocol.h>")
     writer.writeln("#include <spice/macros.h>")
-    writer.writeln("#include <common/mem.h>")
+    writer.writeln('#include "mem.h"')
     writer.newline()
     writer.writeln("#ifdef _MSC_VER")
     writer.writeln("#pragma warning(disable:4101)")

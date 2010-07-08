@@ -52,7 +52,7 @@ SOFTWARE.
 #include <pixman_utils.h>
 #include <stdlib.h>
 #include <string.h>
-#include <common/draw.h>
+#include "draw.h"
 
 typedef struct lineGC lineGC;
 

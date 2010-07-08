@@ -20,7 +20,7 @@
 #define _H_MARSHALLER
 
 #include <spice/types.h>
-#include <common/mem.h>
+#include "mem.h"
 #ifndef WIN32
 #include <sys/uio.h>
 #endif

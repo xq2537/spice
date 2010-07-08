@@ -18,7 +18,7 @@
 #ifndef _H_PIXELS_SOURCE
 #define _H_PIXELS_SOURCE
 
-#include <common/draw.h>
+#include "draw.h"
 
 #define PIXELES_SOURCE_OPAQUE_SIZE (20 * sizeof(void*))
 

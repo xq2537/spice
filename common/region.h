@@ -20,7 +20,7 @@
 #define _H_REGION
 
 #include <stdint.h>
-#include <common/draw.h>
+#include "draw.h"
 #include <pixman_utils.h>
 
 typedef pixman_region32_t QRegion;

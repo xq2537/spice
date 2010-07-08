@@ -24,7 +24,7 @@
 #define PIXMAN_DONT_DEFINE_STDINT
 #include <pixman.h>
 
-#include <common/draw.h>
+#include "draw.h"
 
 /* This lists all possible 2 argument binary raster ops.
  * This enum has the same values as the X11 GXcopy type

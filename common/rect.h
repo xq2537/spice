@@ -19,7 +19,7 @@
 #ifndef _H_RECT
 #define _H_RECT
 
-#include <common/draw.h>
+#include "draw.h"
 #include <spice/macros.h>
 
 static inline void rect_sect(SpiceRect* r, const SpiceRect* bounds)

@@ -21,7 +21,7 @@
 
 #include <stdint.h>
 
-#include <common/draw.h>
+#include "draw.h"
 #include "pixman_utils.h"
 #include "canvas_base.h"
 #include "region.h"
