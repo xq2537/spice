@@ -172,7 +172,6 @@ struct QXLInterface {
     void (*get_init_info)(QXLInstance *qin, QXLDevInitInfo *info);
     int (*get_command)(QXLInstance *qin, struct QXLCommandExt *cmd);
     int (*req_cmd_notification)(QXLInstance *qin);
-    int (*has_command)(QXLInstance *qin);
     void (*release_resource)(QXLInstance *qin, struct QXLReleaseInfoExt release_info);
     int (*get_cursor_command)(QXLInstance *qin, struct QXLCommandExt *cmd);
     int (*req_cursor_notification)(QXLInstance *qin);
