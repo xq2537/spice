@@ -21,7 +21,6 @@
 
 #include <stdint.h>
 
-#include <spice/draw.h>
 #include "pixman_utils.h"
 #include "canvas_base.h"
 #include "region.h"

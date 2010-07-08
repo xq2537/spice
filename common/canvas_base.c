@@ -22,7 +22,6 @@
 #include <stdio.h>
 #include <math.h>
 
-#include <spice/draw.h>
 #include <spice/macros.h>
 #include "quic.h"
 #include "lz.h"

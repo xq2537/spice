@@ -23,7 +23,7 @@
 #include "pixman_utils.h"
 #include "lz.h"
 #include "region.h"
-#include <spice/draw.h>
+#include <common/draw.h>
 
 typedef void (*spice_destroy_fn_t)(void *data);
 

@@ -32,6 +32,7 @@
 #define _H_MESSAGES
 
 #include <spice/protocol.h>
+#include <common/draw.h>
 
 typedef struct SpiceMsgData {
     uint32_t data_size;

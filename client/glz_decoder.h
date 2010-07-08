@@ -23,9 +23,6 @@
 #include "glz_decoder_config.h"
 #include "glz_decoder_window.h"
 #include "canvas_base.h"
-#include <spice/draw.h>
-
-
 
 class GlzDecodeHandler {
 public:

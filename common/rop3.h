@@ -21,7 +21,7 @@
 
 #include <stdint.h>
 
-#include <spice/draw.h>
+#include <common/draw.h>
 #include "pixman_utils.h"
 
 void do_rop3_with_pattern(uint8_t rop3, pixman_image_t *d, pixman_image_t *s, SpicePoint *src_pos,

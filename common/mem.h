@@ -21,7 +21,7 @@
 
 #include <stdlib.h>
 #include <spice/macros.h>
-#include <spice/draw.h> /* for SpiceChunks, temporary */
+#include <common/draw.h> /* for SpiceChunks, temporary */
 
 char *spice_strdup(const char *str) SPICE_GNUC_MALLOC;
 char *spice_strndup(const char *str, size_t n_bytes) SPICE_GNUC_MALLOC;

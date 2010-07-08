@@ -8,7 +8,7 @@
 
 #include "lz_common.h"
 #include "lz_config.h"
-#include <spice/draw.h>
+#include <common/draw.h>
 
 typedef void *LzContext;
 
