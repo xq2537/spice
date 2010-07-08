@@ -22,7 +22,9 @@
 #include "common.h"
 #include "canvas_base.h"
 
-#define ZLIB_WINAPI 
+#ifndef __GNUC__
+#define ZLIB_WINAPI
+#endif
 #include <zlib.h>
 
 

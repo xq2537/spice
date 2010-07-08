@@ -21,10 +21,11 @@
 #include <winsock.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include "utils.h"
 
 #define mb() __asm {lock add [esp], 0}
 
-template<class T, class FreeRes = FreeObject<T>, T invalid = NULL >
+template<class T, class FreeRes = FreeObject<T>, intptr_t invalid = 0 >
 class AutoRes {
 public:
     AutoRes() : res(invalid) {}

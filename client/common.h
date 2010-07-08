@@ -37,6 +37,16 @@
 #include <string.h>
 
 #ifdef WIN32
+#ifdef __GNUC__
+#define UNICODE 1
+#define _UNICODE 1
+#define WINVER 0x0501
+#define swprintf_s(_str, _len, _fmt, ...) \
+    swprintf(_str, _fmt, ## __VA_ARGS__)
+#define vsnprintf_s(_str, _len1, _len2, _fmt, _valist) \
+    vsnprintf(_str, _len2, _fmt, _valist)
+#define _ftime_s(_t) _ftime(_t)
+#endif
 #include <winsock2.h>
 #include <windows.h>
 

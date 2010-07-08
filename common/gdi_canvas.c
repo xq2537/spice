@@ -16,8 +16,8 @@
    License along with this library; if not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <Windows.h>
-#include <Wingdi.h>
+#include <windows.h>
+#include <wingdi.h>
 #include "gdi_canvas.h"
 #define GDI_CANVAS
 #include "canvas_base.c"
