@@ -20,7 +20,7 @@
 #define _H_MARSHALLER
 
 #include <spice/types.h>
-#include <common/draw.h> /* for SpiceChunk, temporary */
+#include <common/mem.h>
 #ifndef WIN32
 #include <sys/uio.h>
 #endif

@@ -21,7 +21,23 @@
 
 #include <stdlib.h>
 #include <spice/macros.h>
-#include <common/draw.h> /* for SpiceChunks, temporary */
+
+typedef struct SpiceChunk {
+    uint8_t *data;
+    uint32_t len;
+} SpiceChunk;
+
+enum {
+    SPICE_CHUNKS_FLAGS_UNSTABLE = (1<<0),
+    SPICE_CHUNKS_FLAGS_FREE = (1<<1)
+};
+
+typedef struct SpiceChunks {
+    uint32_t     data_size;
+    uint32_t     num_chunks;
+    uint32_t     flags;
+    SpiceChunk   chunk[0];
+} SpiceChunks;
 
 char *spice_strdup(const char *str) SPICE_GNUC_MALLOC;
 char *spice_strndup(const char *str, size_t n_bytes) SPICE_GNUC_MALLOC;

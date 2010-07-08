@@ -33,6 +33,7 @@
 
 #include <spice/types.h>
 #include <spice/enums.h>
+#include <common/mem.h>
 
 #include <spice/start-packed.h>
 
@@ -100,23 +101,6 @@ typedef struct SPICE_ATTR_PACKED SpiceImageDescriptor {
     uint32_t width;
     uint32_t height;
 } SpiceImageDescriptor;
-
-typedef struct SPICE_ATTR_PACKED SpiceChunk {
-    uint8_t *data;
-    uint32_t len;
-} SpiceChunk;
-
-enum {
-    SPICE_CHUNKS_FLAGS_UNSTABLE = (1<<0),
-    SPICE_CHUNKS_FLAGS_FREE = (1<<1)
-};
-
-typedef struct SPICE_ATTR_PACKED SpiceChunks {
-    uint32_t     data_size;
-    uint32_t     num_chunks;
-    uint32_t     flags;
-    SpiceChunk   chunk[0];
-} SpiceChunks;
 
 typedef struct SPICE_ATTR_PACKED SpiceBitmap {
     uint8_t format;
