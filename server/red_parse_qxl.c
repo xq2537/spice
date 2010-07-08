@@ -24,7 +24,7 @@
 
 #if 0
 static void hexdump_qxl(RedMemSlotInfo *slots, int group_id,
-                        SPICE_ADDRESS addr, uint8_t bytes)
+                        QXLPHYSICAL addr, uint8_t bytes)
 {
     uint8_t *hex;
     int i;
@@ -101,7 +101,7 @@ static size_t red_get_data_chunks_ptr(RedMemSlotInfo *slots, int group_id,
 }
 
 static size_t red_get_data_chunks(RedMemSlotInfo *slots, int group_id,
-                                  RedDataChunk *red, SPICE_ADDRESS addr)
+                                  RedDataChunk *red, QXLPHYSICAL addr)
 {
     QXLDataChunk *qxl;
     int memslot_id = get_memslot_id(slots, addr);
@@ -143,7 +143,7 @@ void red_get_rect_ptr(SpiceRect *red, QXLRect *qxl)
 }
 
 static SpicePath *red_get_path(RedMemSlotInfo *slots, int group_id,
-                               SPICE_ADDRESS addr)
+                               QXLPHYSICAL addr)
 {
     RedDataChunk chunks;
     QXLPathSeg *start, *end;
@@ -220,7 +220,7 @@ static SpicePath *red_get_path(RedMemSlotInfo *slots, int group_id,
 }
 
 static SpiceClipRects *red_get_clip_rects(RedMemSlotInfo *slots, int group_id,
-                                          SPICE_ADDRESS addr)
+                                          QXLPHYSICAL addr)
 {
     RedDataChunk chunks;
     QXLClipRects *qxl;
@@ -255,7 +255,7 @@ static SpiceClipRects *red_get_clip_rects(RedMemSlotInfo *slots, int group_id,
 }
 
 static SpiceChunks *red_get_image_data_flat(RedMemSlotInfo *slots, int group_id,
-                                            SPICE_ADDRESS addr, size_t size)
+                                            QXLPHYSICAL addr, size_t size)
 {
     SpiceChunks *data;
 
@@ -291,7 +291,7 @@ static SpiceChunks *red_get_image_data_chunked(RedMemSlotInfo *slots, int group_
 }
 
 static SpiceImage *red_get_image(RedMemSlotInfo *slots, int group_id,
-                                 SPICE_ADDRESS addr)
+                                 QXLPHYSICAL addr)
 {
     RedDataChunk chunks;
     QXLImage *qxl;
@@ -589,7 +589,7 @@ static void red_put_stroke(SpiceStroke *red)
 }
 
 static SpiceString *red_get_string(RedMemSlotInfo *slots, int group_id,
-                                   SPICE_ADDRESS addr)
+                                   QXLPHYSICAL addr)
 {
     RedDataChunk chunks;
     QXLString *qxl;
@@ -735,7 +735,7 @@ static void red_put_clip(SpiceClip *red)
 }
 
 void red_get_drawable(RedMemSlotInfo *slots, int group_id,
-                      RedDrawable *red, SPICE_ADDRESS addr)
+                      RedDrawable *red, QXLPHYSICAL addr)
 {
     QXLDrawable *qxl;
     int i;
@@ -808,7 +808,7 @@ void red_get_drawable(RedMemSlotInfo *slots, int group_id,
 }
 
 void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
-                             RedDrawable *red, SPICE_ADDRESS addr)
+                             RedDrawable *red, QXLPHYSICAL addr)
 {
     QXLCompatDrawable *qxl;
 
@@ -915,7 +915,7 @@ void red_put_drawable(RedDrawable *red)
 }
 
 void red_get_update_cmd(RedMemSlotInfo *slots, int group_id,
-                        RedUpdateCmd *red, SPICE_ADDRESS addr)
+                        RedUpdateCmd *red, QXLPHYSICAL addr)
 {
     QXLUpdateCmd *qxl;
 
@@ -933,7 +933,7 @@ void red_put_update_cmd(RedUpdateCmd *red)
 }
 
 void red_get_message(RedMemSlotInfo *slots, int group_id,
-                     RedMessage *red, SPICE_ADDRESS addr)
+                     RedMessage *red, QXLPHYSICAL addr)
 {
     QXLMessage *qxl;
 
@@ -954,7 +954,7 @@ void red_put_message(RedMessage *red)
 }
 
 void red_get_surface_cmd(RedMemSlotInfo *slots, int group_id,
-                         RedSurfaceCmd *red, SPICE_ADDRESS addr)
+                         RedSurfaceCmd *red, QXLPHYSICAL addr)
 {
     QXLSurfaceCmd *qxl;
 
@@ -982,7 +982,7 @@ void red_put_surface_cmd(RedSurfaceCmd *red)
 }
 
 void red_get_cursor_cmd(RedMemSlotInfo *slots, int group_id,
-                        RedCursorCmd *red, SPICE_ADDRESS addr)
+                        RedCursorCmd *red, QXLPHYSICAL addr)
 {
     QXLCursorCmd *qxl;
 

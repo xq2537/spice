@@ -114,26 +114,26 @@ typedef struct SPICE_ATTR_PACKED RedCursorCmd {
 void red_get_rect_ptr(SpiceRect *red, QXLRect *qxl);
 
 void red_get_drawable(RedMemSlotInfo *slots, int group_id,
-                      RedDrawable *red, SPICE_ADDRESS addr);
+                      RedDrawable *red, QXLPHYSICAL addr);
 void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
-                             RedDrawable *red, SPICE_ADDRESS addr);
+                             RedDrawable *red, QXLPHYSICAL addr);
 void red_put_drawable(RedDrawable *red);
 void red_put_image(SpiceImage *red);
 
 void red_get_update_cmd(RedMemSlotInfo *slots, int group_id,
-                        RedUpdateCmd *red, SPICE_ADDRESS addr);
+                        RedUpdateCmd *red, QXLPHYSICAL addr);
 void red_put_update_cmd(RedUpdateCmd *red);
 
 void red_get_message(RedMemSlotInfo *slots, int group_id,
-                     RedMessage *red, SPICE_ADDRESS addr);
+                     RedMessage *red, QXLPHYSICAL addr);
 void red_put_message(RedMessage *red);
 
 void red_get_surface_cmd(RedMemSlotInfo *slots, int group_id,
-                         RedSurfaceCmd *red, SPICE_ADDRESS addr);
+                         RedSurfaceCmd *red, QXLPHYSICAL addr);
 void red_put_surface_cmd(RedSurfaceCmd *red);
 
 void red_get_cursor_cmd(RedMemSlotInfo *slots, int group_id,
-                        RedCursorCmd *red, SPICE_ADDRESS addr);
+                        RedCursorCmd *red, QXLPHYSICAL addr);
 void red_put_cursor_cmd(RedCursorCmd *red);
 
 #endif
