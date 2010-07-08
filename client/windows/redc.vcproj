@@ -442,10 +442,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\tunnel_channel.cpp"
-				>
-			</File>
-			<File
 				RelativePath="..\utils.cpp"
 				>
 			</File>
@@ -665,10 +661,6 @@
 			</File>
 			<File
 				RelativePath="..\threads.h"
-				>
-			</File>
-			<File
-				RelativePath="..\tunnel_channel.h"
 				>
 			</File>
 			<File
