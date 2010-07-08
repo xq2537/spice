@@ -20,6 +20,10 @@
 #include "debug.h"
 #include "utils.h"
 
+#if JPEG_LIB_VERSION < 70
+#define jpeg_boolean boolean
+#endif
+
 static void op_begin_decode(SpiceJpegDecoder *decoder,
                             uint8_t* data,
                             int data_size,
@@ -45,7 +49,7 @@ extern "C" {
     {
     }
 
-    static boolean jpeg_decoder_fill_input_buffer(j_decompress_ptr cinfo)
+    static jpeg_boolean jpeg_decoder_fill_input_buffer(j_decompress_ptr cinfo)
     {
         PANIC("no more data for jpeg");
         return FALSE;

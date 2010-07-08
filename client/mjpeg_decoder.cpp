@@ -21,6 +21,10 @@
 #include "utils.h"
 #include "mjpeg_decoder.h"
 
+#if JPEG_LIB_VERSION < 70
+#define jpeg_boolean boolean
+#endif
+
 enum {
     STATE_READ_HEADER,
     STATE_START_DECOMPRESS,
@@ -34,7 +38,7 @@ extern "C" {
     {
     }
 
-    static boolean fill_input_buffer(j_decompress_ptr cinfo)
+    static jpeg_boolean fill_input_buffer(j_decompress_ptr cinfo)
     {
         return FALSE;
     }
