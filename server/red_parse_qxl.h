@@ -20,11 +20,10 @@
 #define RED_ABI_TRANSLATE_H
 
 #include <spice/qxl_dev.h>
-#include <spice/start-packed.h>
 #include "red_common.h"
 #include "red_memslots.h"
 
-typedef struct SPICE_ATTR_PACKED RedDrawable {
+typedef struct RedDrawable {
     QXLReleaseInfo *release_info;
     uint32_t surface_id;
     uint8_t effect;
@@ -55,27 +54,27 @@ typedef struct SPICE_ATTR_PACKED RedDrawable {
     } u;
 } RedDrawable;
 
-typedef struct SPICE_ATTR_PACKED RedUpdateCmd {
+typedef struct RedUpdateCmd {
     QXLReleaseInfo *release_info;
     SpiceRect area;
     uint32_t update_id;
     uint32_t surface_id;
 } RedUpdateCmd;
 
-typedef struct SPICE_ATTR_PACKED RedMessage {
+typedef struct RedMessage {
     QXLReleaseInfo *release_info;
     uint8_t *data;
 } RedMessage;
 
-typedef struct SPICE_ATTR_PACKED RedDataChunk RedDataChunk;
-struct SPICE_ATTR_PACKED RedDataChunk {
+typedef struct RedDataChunk RedDataChunk;
+struct RedDataChunk {
     uint32_t data_size;
     RedDataChunk *prev_chunk;
     RedDataChunk *next_chunk;
     uint8_t *data;
 };
 
-typedef struct SPICE_ATTR_PACKED RedSurfaceCreate {
+typedef struct RedSurfaceCreate {
     uint32_t format;
     uint32_t width;
     uint32_t height;
@@ -83,7 +82,7 @@ typedef struct SPICE_ATTR_PACKED RedSurfaceCreate {
     SPICE_ADDRESS data;
 } RedSurfaceCreate;
 
-typedef struct SPICE_ATTR_PACKED RedSurfaceCmd {
+typedef struct RedSurfaceCmd {
     QXLReleaseInfo *release_info;
     uint32_t surface_id;
     uint8_t type;
@@ -93,16 +92,16 @@ typedef struct SPICE_ATTR_PACKED RedSurfaceCmd {
     } u;
 } RedSurfaceCmd;
 
-typedef struct SPICE_ATTR_PACKED RedCursorCmd {
+typedef struct RedCursorCmd {
     QXLReleaseInfo *release_info;
     uint8_t type;
     union {
-        struct SPICE_ATTR_PACKED {
+        struct {
             SpicePoint16 position;
             uint8_t visible;
             SPICE_ADDRESS shape;
         } set;
-        struct SPICE_ATTR_PACKED {
+        struct {
             uint16_t length;
             uint16_t frequency;
         } trail;
