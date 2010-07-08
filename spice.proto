@@ -400,7 +400,7 @@ struct Clip {
     clip_type type;
     switch (type) {
     case RECTS:
-        ClipRects *rects @outvar(cliprects) @c_ptr @marshall @nonnull;
+        ClipRects *rects @outvar(cliprects) @marshall @nonnull;
     } u @anon;
 };
 
@@ -437,7 +437,7 @@ struct BitmapData {
     case PAL_FROM_CACHE:
 	uint64 palette_id;
     default:
-	Palette *palette @outvar(bitmap) @c_ptr;
+	Palette *palette @outvar(bitmap);
     } pal @anon;
     uint8 *data[image_size(8, stride, y)] @chunk; /* pointer to array, not array of pointers as in C */
 } @ctype(SpiceBitmap);
@@ -454,7 +454,7 @@ struct LZPLTData {
     case PAL_FROM_CACHE:
 	uint64 palette_id;
     default:
-	Palette *palette @nonnull @outvar(lzplt) @c_ptr;
+	Palette *palette @nonnull @outvar(lzplt);
     } pal @anon;
     uint8 data[data_size] @nomarshal @chunk;
 };
@@ -508,7 +508,7 @@ struct Image {
 };
 
 struct Pattern {
-    Image *pat @nonnull @c_ptr;
+    Image *pat @nonnull;
     Point pos;
 };
 
@@ -525,7 +525,7 @@ struct Brush {
 struct QMask {
     mask_flags flags;
     Point pos;
-    Image *bitmap @c_ptr;
+    Image *bitmap;
 };
 
 struct LineAttr {
@@ -536,7 +536,7 @@ struct LineAttr {
    } u1 @anon;
    switch (flags) {
    case STYLED:
-        fixed28_4 *style[style_nseg] @c_ptr;
+        fixed28_4 *style[style_nseg];
    } u2 @anon;
 };
 
@@ -654,7 +654,7 @@ channel DisplayChannel : BaseChannel {
     message {
 	DisplayBase base;
 	struct Opaque {
-	    Image *src_bitmap @c_ptr;
+	    Image *src_bitmap;
 	    Rect src_area;
 	    Brush brush;
 	    ropd rop_descriptor;
@@ -666,7 +666,7 @@ channel DisplayChannel : BaseChannel {
     message {
 	DisplayBase base;
 	struct Copy {
-	    Image *src_bitmap @c_ptr;
+	    Image *src_bitmap;
 	    Rect src_area;
 	    ropd rop_descriptor;
 	    image_scale_mode scale_mode;
@@ -677,7 +677,7 @@ channel DisplayChannel : BaseChannel {
     message {
 	DisplayBase base;
 	struct Blend {
-	    Image *src_bitmap @c_ptr;
+	    Image *src_bitmap;
 	    Rect src_area;
 	    ropd rop_descriptor;
 	    image_scale_mode scale_mode;
@@ -709,7 +709,7 @@ channel DisplayChannel : BaseChannel {
     message {
 	DisplayBase base;
 	struct Rop3 {
-	    Image *src_bitmap @c_ptr;
+	    Image *src_bitmap;
 	    Rect src_area;
 	    Brush brush;
 	    uint8 rop3;
@@ -721,7 +721,7 @@ channel DisplayChannel : BaseChannel {
     message {
 	DisplayBase base;
 	struct Stroke {
-	    Path *path @c_ptr @marshall @nonnull;
+	    Path *path @marshall @nonnull;
 	    LineAttr attr;
 	    Brush brush;
 	    uint16 fore_mode;
@@ -744,7 +744,7 @@ channel DisplayChannel : BaseChannel {
     message {
 	DisplayBase base;
 	struct Transparent {
-	    Image *src_bitmap @c_ptr;
+	    Image *src_bitmap;
 	    Rect src_area;
 	    uint32 src_color;
 	    uint32 true_color;
@@ -756,7 +756,7 @@ channel DisplayChannel : BaseChannel {
 	struct AlphaBlnd {
 	    alpha_flags alpha_flags;
 	    uint8 alpha;
-	    Image *src_bitmap @c_ptr;
+	    Image *src_bitmap;
 	    Rect src_area;
 	} data;
     } draw_alpha_blend;

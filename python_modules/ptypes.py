@@ -60,7 +60,7 @@ class FixedSize:
 # only to attributes that affect pointer or array attributes, as these
 # are member local types, unlike e.g. a Struct that may be used by
 # other members
-propagated_attributes=["ptr_array", "c_ptr", "nonnull", "chunk"]
+propagated_attributes=["ptr_array", "nonnull", "chunk"]
 
 class Type:
     def __init__(self):
@@ -469,7 +469,10 @@ class PointerType(Type):
         return self.pointer_size
 
     def c_type(self):
-        return "SPICE_ADDRESS"
+        if self.pointer_size == 4:
+            return "uint32_t"
+        else:
+            return "uint64_t"
 
     def has_pointer(self):
         return True
