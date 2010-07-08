@@ -4093,33 +4093,10 @@ static void localize_mask(RedWorker *worker, SpiceQMask *mask, SpiceImage *image
     }
 }
 
-static void localize_attr(RedWorker *worker, SpiceLineAttr *attr, uint32_t group_id)
-{
-    if (attr->style_nseg) {
-        uint8_t *buf;
-        uint8_t *data;
-
-        ASSERT(attr->style);
-        buf = (uint8_t *)get_virt(&worker->mem_slots, attr->style, attr->style_nseg * sizeof(uint32_t),
-                                  group_id);
-        data = spice_malloc_n(attr->style_nseg, sizeof(uint32_t));
-        memcpy(data, buf, attr->style_nseg * sizeof(uint32_t));
-        attr->style = (QXLPHYSICAL)data;
-    }
-}
-
-static void unlocalize_attr(SpiceLineAttr *attr)
-{
-    if (attr->style_nseg) {
-        free((void *)attr->style);
-        attr->style = 0;
-    }
-}
-
 static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
 {
     RedSurface *surface;
-    SpiceCanvas *canvas; 
+    SpiceCanvas *canvas;
     SpiceClip clip = drawable->red_drawable->clip;
 
     surface = &worker->surfaces[drawable->surface_id];
@@ -4227,10 +4204,8 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         SpiceStroke stroke = drawable->red_drawable->u.stroke;
         SpiceImage img1;
         localize_brush(worker, &stroke.brush, &img1);
-        localize_attr(worker, &stroke.attr, drawable->group_id);
         canvas->ops->draw_stroke(canvas,
                                  &drawable->red_drawable->bbox, &clip, &stroke);
-        unlocalize_attr(&stroke.attr);
         break;
     }
     case QXL_DRAW_TEXT: {
@@ -6388,15 +6363,11 @@ static void fill_mask(DisplayChannel *display_channel, SpiceMarshaller *m,
 
 static void fill_attr(DisplayChannel *display_channel, SpiceMarshaller *m, SpiceLineAttr *attr, uint32_t group_id)
 {
-    RedChannel *channel = &display_channel->base;
-    uint32_t *style;
     int i;
 
     if (m && attr->style_nseg) {
-        style = (uint32_t *)get_virt(&channel->worker->mem_slots, attr->style,
-                                     attr->style_nseg * sizeof(uint32_t), group_id);
         for (i = 0 ; i < attr->style_nseg; i++) {
-            spice_marshaller_add_uint32(m, style[i]);
+            spice_marshaller_add_uint32(m, attr->style[i]);
         }
     }
 }

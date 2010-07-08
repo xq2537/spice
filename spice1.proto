@@ -493,7 +493,7 @@ struct LineAttr {
     uint8 style_nseg;
     fixed28_4 width @zero;
     fixed28_4 miter_limit @zero;
-    fixed28_4 *style[style_nseg];
+    fixed28_4 *style[style_nseg] @c_ptr;
 };
 
 struct RasterGlyphA1 {

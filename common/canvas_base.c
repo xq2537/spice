@@ -3027,7 +3027,7 @@ static void canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox,
 
     dashed = 0;
     if (stroke->attr.flags & SPICE_LINE_FLAGS_STYLED) {
-        SPICE_FIXED28_4 *style = (SPICE_FIXED28_4*)SPICE_GET_ADDRESS(stroke->attr.style);
+        SPICE_FIXED28_4 *style = stroke->attr.style;
         int nseg;
 
         dashed = 1;

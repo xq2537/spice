@@ -536,7 +536,7 @@ struct LineAttr {
    } u1 @anon;
    switch (flags) {
    case STYLED:
-        fixed28_4 *style[style_nseg];
+        fixed28_4 *style[style_nseg] @c_ptr;
    } u2 @anon;
 };
 

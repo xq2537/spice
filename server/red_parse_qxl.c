@@ -557,24 +557,35 @@ static void red_put_rop3(SpiceRop3 *red)
 static void red_get_stroke_ptr(RedMemSlotInfo *slots, int group_id,
                                SpiceStroke *red, QXLStroke *qxl)
 {
-   red->path = red_get_path(slots, group_id, qxl->path);
-   red->attr.flags       = qxl->attr.flags;
-   if (red->attr.flags & SPICE_LINE_FLAGS_STYLED) {
-       red->attr.style_nseg  = qxl->attr.style_nseg;
-       red->attr.style       = qxl->attr.style;
-   } else {
-       red->attr.style_nseg  = 0;
-       red->attr.style       = 0;
-   }
-   red_get_brush_ptr(slots, group_id, &red->brush, &qxl->brush);
-   red->fore_mode        = qxl->fore_mode;
-   red->back_mode        = qxl->back_mode;
+    red->path = red_get_path(slots, group_id, qxl->path);
+    red->attr.flags       = qxl->attr.flags;
+    if (red->attr.flags & SPICE_LINE_FLAGS_STYLED) {
+        int style_nseg;
+        uint8_t *buf;
+
+        style_nseg = qxl->attr.style_nseg;
+        red->attr.style = spice_malloc_n(style_nseg, sizeof(SPICE_FIXED28_4));
+        red->attr.style_nseg  = style_nseg;
+        ASSERT(qxl->attr.style);
+        buf = (uint8_t *)get_virt(slots, qxl->attr.style,
+                                  style_nseg * sizeof(QXLFIXED), group_id);
+        memcpy(red->attr.style, buf, style_nseg * sizeof(QXLFIXED));
+    } else {
+        red->attr.style_nseg  = 0;
+        red->attr.style       = NULL;
+    }
+    red_get_brush_ptr(slots, group_id, &red->brush, &qxl->brush);
+    red->fore_mode        = qxl->fore_mode;
+    red->back_mode        = qxl->back_mode;
 }
 
 static void red_put_stroke(SpiceStroke *red)
 {
     red_put_brush(&red->brush);
     free(red->path);
+    if (red->attr.flags & SPICE_LINE_FLAGS_STYLED) {
+        free(red->attr.style);
+    }
 }
 
 static SpiceString *red_get_string(RedMemSlotInfo *slots, int group_id,
