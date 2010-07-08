@@ -919,34 +919,8 @@ pixman_bool_t spice_pixman_region32_init_rects (pixman_region32_t *region,
                                                 const SpiceRect   *rects,
                                                 int                count)
 {
-    pixman_box32_t boxes_array[10];
-    pixman_box32_t *boxes;
-    pixman_bool_t res;
-    int i;
-
-    if (count < 10) {
-        boxes = boxes_array;
-    } else {
-        boxes = spice_new(pixman_box32_t, count);
-        if (boxes == NULL) {
-            return FALSE;
-        }
-    }
-
-    for (i = 0; i < count; i++) {
-        boxes[i].x1 = rects[i].left;
-        boxes[i].y1 = rects[i].top;
-        boxes[i].x2 = rects[i].right;
-        boxes[i].y2 = rects[i].bottom;
-    }
-
-    res = pixman_region32_init_rects(region, boxes, count);
-
-    if (count >= 10) {
-        free(boxes);
-    }
-
-    return res;
+    /* These types are compatible, so just cast */
+    return pixman_region32_init_rects(region, (pixman_box32_t *)rects, count);
 }
 
 pixman_format_code_t spice_surface_format_to_pixman(uint32_t surface_format)
