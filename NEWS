@@ -1,0 +1,22 @@
+Major changes in 0.5.2:
+=======================
+
+This is the first release of the unstable 0.5.x series leading up to 0.6.
+With this release the API of spice-server is considered stable, but
+the network protocol and QXL PCI ABI are still unstable.
+
+The major changes compared to the 0.4 series are:
+
+* New, more efficient network protocol
+* Support for offscreen surfaces in guest driver
+* New spice-server API
+* A marshalling/demarshalling system that isolates the network
+  protocol parsing from the internal types
+* A PCI parsing and validation layer making it easier to
+  get backwards compatibility, cleaning up the internals ans
+  makes security review easier.
+* WAN support, including lossy compression using jpeg and
+  zlib compression.
+* Easier to build. No more dependencies on forked versions
+  of pixman and cairo. Separate module spice-protocol containing
+  headers used when building drivers and qemu.
