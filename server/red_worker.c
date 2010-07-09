@@ -6957,8 +6957,8 @@ static void red_lossy_send_qxl_draw_opaque(RedWorker *worker,
                                        &src_bitmap_data);
     }
 
-    if (!(brush_is_lossy && (brush_bitmap_data.type == SPICE_IMAGE_TYPE_SURFACE)) &&
-        !(src_is_lossy && (src_bitmap_data.type == SPICE_IMAGE_TYPE_SURFACE))) {
+    if (!(brush_is_lossy && (brush_bitmap_data.type == BITMAP_DATA_TYPE_SURFACE)) &&
+        !(src_is_lossy && (src_bitmap_data.type == BITMAP_DATA_TYPE_SURFACE))) {
         FillBitsType src_send_type;
         int has_mask = !!drawable->u.opaque.mask.bitmap;
 
