@@ -439,7 +439,7 @@ struct BitmapData {
     default:
 	Palette *palette @outvar(bitmap);
     } pal @anon;
-    uint8 *data[image_size(8, stride, y)] @chunk; /* pointer to array, not array of pointers as in C */
+    uint8 data[image_size(8, stride, y)] @chunk @nomarshal;
 } @ctype(SpiceBitmap);
 
 struct BinaryData {

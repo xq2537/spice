@@ -6214,7 +6214,7 @@ static FillBitsType fill_bits(DisplayChannel *display_channel, SpiceMarshaller *
     RedWorker *worker = channel->worker;
     SpiceImage image;
     compress_send_data_t comp_send_data = {0};
-    SpiceMarshaller *bitmap_palette_out, *data_out, *lzplt_palette_out;
+    SpiceMarshaller *bitmap_palette_out, *lzplt_palette_out;
 
     if (simage == NULL) {
         ASSERT(drawable->self_bitmap);
@@ -6237,9 +6237,8 @@ static FillBitsType fill_bits(DisplayChannel *display_channel, SpiceMarshaller *
                     image.descriptor.type = SPICE_IMAGE_TYPE_FROM_CACHE_LOSSLESS;
                 }
                 spice_marshall_Image(m, &image,
-                                     &bitmap_palette_out, &data_out, &lzplt_palette_out);
+                                     &bitmap_palette_out, &lzplt_palette_out);
                 ASSERT(bitmap_palette_out == NULL);
-                ASSERT(data_out == NULL);
                 ASSERT(lzplt_palette_out == NULL);
                 stat_inc_counter(display_channel->cache_hits_counter, 1);
                 return FILL_BITS_TYPE_CACHE;
@@ -6267,9 +6266,8 @@ static FillBitsType fill_bits(DisplayChannel *display_channel, SpiceMarshaller *
 
         image.u.surface.surface_id = surface_id;
         spice_marshall_Image(m, &image,
-                             &bitmap_palette_out, &data_out, &lzplt_palette_out);
+                             &bitmap_palette_out, &lzplt_palette_out);
         ASSERT(bitmap_palette_out == NULL);
-        ASSERT(data_out == NULL);
         ASSERT(lzplt_palette_out == NULL);
         return FILL_BITS_TYPE_SURFACE;
     }
@@ -6283,10 +6281,9 @@ static FillBitsType fill_bits(DisplayChannel *display_channel, SpiceMarshaller *
            global dictionary (in cases of multiple monitors) */
         if (!red_compress_image(display_channel, &image, &simage->u.bitmap,
                                 drawable, can_lossy, &comp_send_data)) {
-            uint32_t y, i;
+            uint32_t y;
             uint32_t stride;
             SpicePalette *palette;
-            SpiceChunk *chunk;
 
             red_display_add_image_to_pixmap_cache(display_channel, simage, &image, FALSE);
 
@@ -6298,24 +6295,21 @@ static FillBitsType fill_bits(DisplayChannel *display_channel, SpiceMarshaller *
             palette = bitmap->palette;
             fill_palette(display_channel, palette, &bitmap->flags);
             spice_marshall_Image(m, &image,
-                                 &bitmap_palette_out, &data_out, &lzplt_palette_out);
+                                 &bitmap_palette_out, &lzplt_palette_out);
             ASSERT(lzplt_palette_out == NULL);
 
             if (bitmap_palette_out && palette) {
                 spice_marshall_Palette(bitmap_palette_out, palette);
             }
 
-            chunk = bitmap->data->chunk;
-            for (i = 0; i < bitmap->data->num_chunks; i++) {
-                spice_marshaller_add_ref(data_out, chunk[i].data, chunk[i].len);
-            }
+            spice_marshaller_add_ref_chunks(m, bitmap->data);
             return FILL_BITS_TYPE_BITMAP;
         } else {
             red_display_add_image_to_pixmap_cache(display_channel, simage, &image,
                                                   comp_send_data.is_lossy);
 
             spice_marshall_Image(m, &image,
-                                 &bitmap_palette_out, &data_out, &lzplt_palette_out);
+                                 &bitmap_palette_out, &lzplt_palette_out);
             ASSERT(bitmap_palette_out == NULL);
 
             marshaller_add_compressed(worker, m, comp_send_data.comp_buf,
@@ -6335,7 +6329,7 @@ static FillBitsType fill_bits(DisplayChannel *display_channel, SpiceMarshaller *
         red_display_add_image_to_pixmap_cache(display_channel, simage, &image, FALSE);
         image.u.quic = simage->u.quic;
         spice_marshall_Image(m, &image,
-                             &bitmap_palette_out, &data_out, &lzplt_palette_out);
+                             &bitmap_palette_out, &lzplt_palette_out);
         ASSERT(bitmap_palette_out == NULL);
         ASSERT(lzplt_palette_out == NULL);
         spice_marshaller_add_ref_chunks(m, image.u.quic.data);
@@ -8271,7 +8265,7 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
     spice_image_compression_t comp_mode;
     SpiceMsgDisplayDrawCopy copy;
     SpiceMarshaller *src_bitmap_out, *mask_bitmap_out;
-    SpiceMarshaller *bitmap_palette_out, *data_out, *lzplt_palette_out;
+    SpiceMarshaller *bitmap_palette_out, *lzplt_palette_out;
 
     ASSERT(display_channel && item);
     channel = &display_channel->base;
@@ -8365,7 +8359,7 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
     surface_lossy_region = &display_channel->surface_client_lossy_region[item->surface_id];
     if (comp_succeeded) {
         spice_marshall_Image(src_bitmap_out, &red_image,
-                             &bitmap_palette_out, &data_out, &lzplt_palette_out);
+                             &bitmap_palette_out, &lzplt_palette_out);
 
         marshaller_add_compressed(worker, src_bitmap_out,
                                   comp_send_data.comp_buf, comp_send_data.comp_buf_size);
@@ -8384,8 +8378,8 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
         red_image.u.bitmap = bitmap;
 
         spice_marshall_Image(src_bitmap_out, &red_image,
-                             &bitmap_palette_out, &data_out, &lzplt_palette_out);
-        spice_marshaller_add_ref(data_out, item->data, bitmap.y * bitmap.stride);
+                             &bitmap_palette_out, &lzplt_palette_out);
+        spice_marshaller_add_ref(m, item->data, bitmap.y * bitmap.stride);
         region_remove(surface_lossy_region, &copy.base.box);
     }
     display_begin_send_message(display_channel, &item->link);
