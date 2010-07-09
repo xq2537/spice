@@ -272,7 +272,18 @@ dnl MAYBE_WARN in an ignorable way (like adding whitespace)
 
 dnl MAYBE_WARN="-Wall -Wno-sign-compare -Werror -Wno-deprecated-declarations"
 
-MAYBE_WARN="-Wall -Wno-sign-compare -Werror -Wno-deprecated-declarations"
+MAYBE_WARN="-Wall -Wno-sign-compare -Wno-deprecated-declarations"
+
+AC_ARG_ENABLE(werror,
+AC_HELP_STRING([--enable-werror], [Use -Werror (if supported)]),
+set_werror="$enableval",[
+if test -f $srcdir/GITVERSION; then
+	is_git_version=true
+	set_werror=yes
+else
+	set_werror=no
+fi
+])
 
 
 # invalidate cached value if MAYBE_WARN has changed
@@ -297,6 +308,9 @@ AC_CACHE_CHECK([for supported warning flags], spice_cv_warn_cflags, [
 	for W in $MAYBE_WARN; do
 		SPICE_CC_TRY_FLAG([$W], [WARN_CFLAGS="$WARN_CFLAGS $W"])
 	done
+	if test "$set_werror" != "no"; then
+		SPICE_CC_TRY_FLAG(["-Werror"], [WARN_CFLAGS="$WARN_CFLAGS -Werror"])
+	fi
 
 	spice_cv_warn_cflags=$WARN_CFLAGS
 	spice_cv_warn_maybe=$MAYBE_WARN
