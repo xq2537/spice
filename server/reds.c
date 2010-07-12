@@ -92,6 +92,8 @@ static pthread_mutex_t *lock_cs;
 static long *lock_count;
 uint32_t streaming_video = STREAM_VIDEO_FILTER;
 spice_image_compression_t image_compression = SPICE_IMAGE_COMPRESS_AUTO_GLZ;
+spice_wan_compression_t jpeg_state = SPICE_WAN_COMPRESSION_AUTO;
+spice_wan_compression_t zlib_glz_state = SPICE_WAN_COMPRESSION_AUTO;
 #ifdef USE_TUNNEL
 void *red_tunnel = NULL;
 #endif
@@ -3785,6 +3787,30 @@ __visible__ spice_image_compression_t spice_server_get_image_compression(SpiceSe
 {
     ASSERT(reds == s);
     return image_compression;
+}
+
+__visible__ int spice_server_set_jpeg_compression(SpiceServer *s, spice_wan_compression_t comp)
+{
+    ASSERT(reds == s);
+    if (comp == SPICE_WAN_COMPRESSION_INVALID) {
+        red_printf("invalid jpeg state");
+        return -1;
+    }
+    // todo: support dynamically changing the state
+    jpeg_state = comp;
+    return 0;
+}
+
+__visible__ int spice_server_set_zlib_glz_compression(SpiceServer *s, spice_wan_compression_t comp)
+{
+    ASSERT(reds == s);
+    if (comp == SPICE_WAN_COMPRESSION_INVALID) {
+        red_printf("invalid zlib_glz state");
+        return -1;
+    }
+    // todo: support dynamically changing the state
+    zlib_glz_state = comp;
+    return 0;
 }
 
 __visible__ int spice_server_set_channel_security(SpiceServer *s, const char *channel, int security)

@@ -66,6 +66,8 @@ typedef struct RedWorkeState {
 
 extern uint32_t streaming_video;
 extern spice_image_compression_t image_compression;
+extern spice_wan_compression_t jpeg_state;
+extern spice_wan_compression_t zlib_glz_state;
 
 static RedDispatcher *dispatchers = NULL;
 
@@ -509,6 +511,8 @@ RedDispatcher *red_dispatcher_init(QXLInstance *qxl)
     memcpy(init_data.renderers, renderers, sizeof(init_data.renderers));
 
     init_data.image_compression = image_compression;
+    init_data.jpeg_state = jpeg_state;
+    init_data.zlib_glz_state = zlib_glz_state;
     init_data.streaming_video = streaming_video;
 
     dispatcher->base.major_version = SPICE_INTERFACE_QXL_MAJOR;
