@@ -919,6 +919,8 @@ typedef struct RedWorker {
     ImageCache image_cache;
 
     spice_image_compression_t image_compression;
+    spice_wan_compression_t jpeg_state;
+    spice_wan_compression_t zlib_glz_state;
 
     uint32_t mouse_mode;
 
@@ -8795,6 +8797,7 @@ static void cursor_channel_push(RedWorker *worker)
             free(pipe_item);
             break;
         case PIPE_ITEM_TYPE_CURSOR_INIT:
+            red_reset_cursor_cache(cursor_channel);
             red_send_cursor_init(cursor_channel);
             free(pipe_item);
             break;
@@ -9865,10 +9868,26 @@ static void handle_new_display_channel(RedWorker *worker, RedsStreamContext *pee
                      DISPLAY_FREE_LIST_DEFAULT_SIZE * sizeof(SpiceResourceID));
     display_channel->send_data.free_list.res_size = DISPLAY_FREE_LIST_DEFAULT_SIZE;
 
-    display_channel->enable_jpeg = IS_LOW_BANDWIDTH();
+    if (worker->jpeg_state == SPICE_WAN_COMPRESSION_AUTO) {
+        display_channel->enable_jpeg = IS_LOW_BANDWIDTH();
+    } else {
+        display_channel->enable_jpeg = (worker->jpeg_state == SPICE_WAN_COMPRESSION_ALWAYS);
+    }
+
+    // todo: tune quality according to bandwidth
     display_channel->jpeg_quality = 85;
 
-    display_channel->enable_zlib_glz_wrap = IS_LOW_BANDWIDTH();
+    if (worker->zlib_glz_state == SPICE_WAN_COMPRESSION_AUTO) {
+        display_channel->enable_zlib_glz_wrap = IS_LOW_BANDWIDTH();
+    } else {
+        display_channel->enable_zlib_glz_wrap = (worker->zlib_glz_state == 
+                                                 SPICE_WAN_COMPRESSION_ALWAYS);
+    }
+
+    red_printf("jpeg %s", display_channel->enable_jpeg ? "enabled" : "disabled");
+    red_printf("zlib-over-glz %s", display_channel->enable_zlib_glz_wrap ? "enabled" : "disabled");
+
+    // todo: tune level according to bandwidth
     display_channel->zlib_level = ZLIB_DEFAULT_COMPRESSION_LEVEL;
 
     red_ref_channel((RedChannel*)display_channel);
@@ -10151,7 +10170,7 @@ static inline void handle_dev_destroy_surfaces(RedWorker *worker)
 {
     int i;
     RedWorkerMessage message;
-
+    red_printf("");
     flush_all_qxl_commands(worker);
     //to handle better
     if (worker->surfaces[0].context.canvas) {
@@ -10530,6 +10549,8 @@ static void red_init(RedWorker *worker, WorkerInitData *init_data)
     worker->renderer = RED_RENDERER_INVALID;
     worker->mouse_mode = SPICE_MOUSE_MODE_SERVER;
     worker->image_compression = init_data->image_compression;
+    worker->jpeg_state = init_data->jpeg_state;
+    worker->zlib_glz_state = init_data->zlib_glz_state;
     worker->streaming_video = init_data->streaming_video;
     ring_init(&worker->current_list);
     image_cache_init(&worker->image_cache);

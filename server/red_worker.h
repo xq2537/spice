@@ -89,6 +89,8 @@ typedef struct WorkerInitData {
     uint32_t num_renderers;
     uint32_t renderers[RED_MAX_RENDERERS];
     spice_image_compression_t image_compression;
+    spice_wan_compression_t jpeg_state;
+    spice_wan_compression_t zlib_glz_state;
     int streaming_video;
     uint32_t num_memslots;
     uint32_t num_memslots_groups;

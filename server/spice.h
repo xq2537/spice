@@ -341,6 +341,16 @@ int spice_server_set_image_compression(SpiceServer *s,
                                        spice_image_compression_t comp);
 spice_image_compression_t spice_server_get_image_compression(SpiceServer *s);
 
+typedef enum {
+    SPICE_WAN_COMPRESSION_INVALID,
+    SPICE_WAN_COMPRESSION_AUTO,
+    SPICE_WAN_COMPRESSION_ALWAYS,
+    SPICE_WAN_COMPRESSION_NEVER,
+} spice_wan_compression_t;
+
+int spice_server_set_jpeg_compression(SpiceServer *s, spice_wan_compression_t comp);
+int spice_server_set_zlib_glz_compression(SpiceServer *s, spice_wan_compression_t comp);
+
 #define SPICE_CHANNEL_SECURITY_NONE (1 << 0)
 #define SPICE_CHANNEL_SECURITY_SSL (1 << 1)
 
