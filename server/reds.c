@@ -1169,7 +1169,7 @@ void vdi_read_buf_release(uint8_t *data, void *opaque)
     VDIReadBuf *buf = (VDIReadBuf *)opaque;
 
     ring_add(&reds->agent_state.read_bufs, &buf->link);
-    read_from_vdi_port();
+    //read_from_vdi_port(); // XXX WTF? - ask arnon. should we be calling this here?? (causes recursion of read_from_vdi_port..) 
 }
 
 static void dispatch_vdi_port_data(int port, VDIReadBuf *buf)
@@ -1198,27 +1198,37 @@ static void dispatch_vdi_port_data(int port, VDIReadBuf *buf)
 
 static int read_from_vdi_port(void)
 {
+    // FIXME: UGLY HACK. Result of spice-vmc vmc_read triggering flush of throttled data, and recalling this.
+    static int inside_call = 0;
+    int quit_loop = 0;
     VDIPortState *state = &reds->agent_state;
     SpiceVDIPortInterface *sif;
     VDIReadBuf *dispatch_buf;
     int total = 0;
     int n;
+    if (inside_call) {
+        return 0;
+    }
+    inside_call = 1;
 
     if (!reds->agent_state.connected || reds->mig_target) {
+        inside_call = 0;
         return 0;
     }
 
     sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceVDIPortInterface, base);
-    while (reds->agent_state.connected) {
+    while (!quit_loop && reds->agent_state.connected) {
         switch (state->read_state) {
         case VDI_PORT_READ_STATE_READ_HADER:
             n = sif->read(vdagent, state->recive_pos, state->recive_len);
             if (!n) {
-                return total;
+                quit_loop = 1;
+                break;
             }
             total += n;
             if ((state->recive_len -= n)) {
                 state->recive_pos += n;
+                quit_loop = 1;
                 break;
             }
             state->message_recive_len = state->vdi_chunk_header.size;
@@ -1227,12 +1237,14 @@ static int read_from_vdi_port(void)
             RingItem *item;
 
             if (!(item = ring_get_head(&state->read_bufs))) {
-                return total;
+                quit_loop = 1;
+                break;
             }
 
             if (state->vdi_chunk_header.port == VDP_CLIENT_PORT) {
                 if (!state->send_tokens) {
-                    return total;
+                    quit_loop = 1;
+                    break;
                 }
                 --state->send_tokens;
             }
@@ -1248,7 +1260,8 @@ static int read_from_vdi_port(void)
         case VDI_PORT_READ_STATE_READ_DATA:
             n = sif->read(vdagent, state->recive_pos, state->recive_len);
             if (!n) {
-                return total;
+                quit_loop = 1;
+                break;
             }
             total += n;
             if ((state->recive_len -= n)) {
@@ -1268,6 +1281,7 @@ static int read_from_vdi_port(void)
             dispatch_vdi_port_data(state->vdi_chunk_header.port, dispatch_buf);
         }
     }
+    inside_call = 0;
     return total;
 }
 
@@ -1616,7 +1630,7 @@ static void reds_main_handle_message(void *opaque, size_t size, uint32_t type, v
         }
         agent_start = (SpiceMsgcMainAgentTokens *)message;
         reds->agent_state.client_agent_started = TRUE;
-        reds->agent_state.send_tokens = agent_start->num_tokens;
+        reds->agent_state.send_tokens = agent_start->num_tokens; // TODO: sanitize? coming from guest!
         read_from_vdi_port();
         break;
     }
