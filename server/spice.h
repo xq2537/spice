@@ -21,6 +21,8 @@
 #include <stdint.h>
 #include <sys/socket.h>
 
+#define SPICE_SERVER_VERSION 0x000503 /* release 0.5.3 */
+
 /* interface base type */
 
 typedef struct SpiceBaseInterface SpiceBaseInterface;
