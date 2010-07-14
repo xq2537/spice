@@ -27,7 +27,7 @@ AM_PROG_CC_C_O
 AC_C_BIGENDIAN
 AC_PATH_PROGS(PYTHON, python2 python)
 
-SPICE_LT_VERSION=m4_format("%d:%d:%d", 1, 0, 0)
+SPICE_LT_VERSION=m4_format("%d:%d:%d", 1, 0, 1)
 AC_SUBST(SPICE_LT_VERSION)
 
 # Check for the CPU we are using
