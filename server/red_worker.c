@@ -5676,7 +5676,6 @@ static inline int red_glz_compress_image(DisplayChannel *display_channel,
     LzImageType type = MAP_BITMAP_FMT_TO_LZ_IMAGE_TYPE[src->format];
     RedGlzDrawable *glz_drawable;
     GlzDrawableInstanceItem *glz_drawable_instance;
-    uint8_t *lines;
     int glz_size;
     int zlib_size;
 
@@ -5700,7 +5699,7 @@ static inline int red_glz_compress_image(DisplayChannel *display_channel,
     glz_data->usr.more_lines = glz_usr_more_lines;
 
     glz_size = glz_encode(display_channel->glz, type, src->x, src->y,
-                          (src->flags & SPICE_BITMAP_FLAGS_TOP_DOWN), lines, 0,
+                          (src->flags & SPICE_BITMAP_FLAGS_TOP_DOWN), NULL, 0,
                           src->stride, (uint8_t*)glz_data->data.bufs_head->buf,
                           sizeof(glz_data->data.bufs_head->buf),
                           glz_drawable_instance,
