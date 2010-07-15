@@ -581,7 +581,7 @@ static pixman_image_t *canvas_get_jpeg_alpha(CanvasBase *canvas,
     ASSERT(image->u.jpeg_alpha.data->num_chunks == 1);
     canvas->jpeg->ops->begin_decode(canvas->jpeg,
                                     image->u.jpeg_alpha.data->chunk[0].data,
-                                    image->u.jpeg_alpha.data->chunk[0].len,
+                                    image->u.jpeg_alpha.jpeg_size,
                                     &width, &height);
     ASSERT((uint32_t)width == image->descriptor.width);
     ASSERT((uint32_t)height == image->descriptor.height);
