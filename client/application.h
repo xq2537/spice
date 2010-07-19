@@ -246,6 +246,8 @@ private:
     bool set_host_cert_subject(const char* subject, const char* arg0);
     bool set_enable_channels(CmdLineParser& parser, bool enable, char *val, const char* arg0);
     bool set_canvas_option(CmdLineParser& parser, char *val, const char* arg0);
+    bool set_disabled_display_effects(CmdLineParser& parser, char *val, const char* arg0,
+                                      DisplaySetting& disp_setting);
     void on_cmd_line_invalid_arg(const char* arg0, const char* what, const char* val);
     bool process_cmd_line(int argc, char** argv);
     void register_channels();

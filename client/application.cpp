@@ -1896,6 +1896,36 @@ bool Application::set_enable_channels(CmdLineParser& parser, bool enable, char *
     return true;
 }
 
+bool Application::set_disabled_display_effects(CmdLineParser& parser, char *val, const char* arg0,
+                                               DisplaySetting& disp_setting)
+{
+    if (!strcmp(val, "all")) {
+        if ((val = parser.next_argument())) {
+            Platform::term_printf("%s: \"all\" is exclusive\n", arg0);
+            _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
+            return false;
+        }
+        disp_setting._disable_wallpaper = true;
+        disp_setting._disable_font_smooth = true;
+        disp_setting._disable_animation = true;
+        return true;
+    }
+
+    do {
+        if (!strcmp(val, "wallpaper")) {
+            disp_setting._disable_wallpaper = true;
+        } else if (!strcmp(val, "font-smooth")) {
+            disp_setting._disable_font_smooth = true;
+        } else if (!strcmp(val, "animation")) {
+            disp_setting._disable_animation = true;
+        } else {
+            Platform::term_printf("%s: bad display effect type \"%s\"\n", arg0, val);
+        }
+    } while ((val = parser.next_argument()));
+
+    return true;
+}
+
 void Application::on_cmd_line_invalid_arg(const char* arg0, const char* what, const char* val)
 {
     Platform::term_printf("%s: invalid %s value %s\n", arg0, what, val);
@@ -1939,6 +1969,7 @@ bool Application::process_cmd_line(int argc, char** argv)
     bool auto_display_res = false;
     bool full_screen = false;
     std::string password;
+    DisplaySetting display_setting;
 
     enum {
         SPICE_OPT_HOST = CmdLineParser::OPTION_FIRST_AVILABLE,
@@ -1954,6 +1985,8 @@ bool Application::process_cmd_line(int argc, char** argv)
         SPICE_OPT_ENABLE_CHANNELS,
         SPICE_OPT_DISABLE_CHANNELS,
         SPICE_OPT_CANVAS_TYPE,
+        SPICE_OPT_DISPLAY_COLOR_DEPTH,
+        SPICE_OPT_DISABLE_DISPLAY_EFFECTS,
     };
 
 #ifdef USE_GUI
@@ -2003,6 +2036,13 @@ bool Application::process_cmd_line(int argc, char** argv)
 
     parser.add(SPICE_OPT_CANVAS_TYPE, "canvas-type", "set rendering canvas", "canvas_type", true);
     parser.set_multi(SPICE_OPT_CANVAS_TYPE, ',');
+
+    parser.add(SPICE_OPT_DISPLAY_COLOR_DEPTH, "color-depth", "guest display color depth",
+               "16/32", true);
+
+    parser.add(SPICE_OPT_DISABLE_DISPLAY_EFFECTS, "disable-effects",
+               "disable guest display effects", "wallpaper/font-smooth/animation/all", true);
+    parser.set_multi(SPICE_OPT_DISABLE_DISPLAY_EFFECTS, ',');
 
     for (int i = SPICE_CHANNEL_MAIN; i < SPICE_END_CHANNEL; i++) {
         _peer_con_opt[i] = RedPeer::ConnectionOptions::CON_OP_INVALID;
@@ -2084,6 +2124,22 @@ bool Application::process_cmd_line(int argc, char** argv)
                 return false;
             }
             break;
+        case SPICE_OPT_DISPLAY_COLOR_DEPTH:
+            display_setting._set_color_depth = true;
+            if (!strcmp(val, "16")) {
+                display_setting._color_depth = 16;
+            } else if (!strcmp(val, "32")) {
+                display_setting._color_depth = 32;
+            } else {
+                 on_cmd_line_invalid_arg(argv[0], "color depth", val);
+                 return false;
+            }
+            break;
+        case SPICE_OPT_DISABLE_DISPLAY_EFFECTS:
+            if (!set_disabled_display_effects(parser, val, argv[0], display_setting)) {
+                return false;
+            }
+            break;
         case CmdLineParser::OPTION_HELP:
             parser.show_help();
             return false;
@@ -2136,6 +2192,7 @@ bool Application::process_cmd_line(int argc, char** argv)
     _client.set_target(host, port, sport);
     _client.set_password(password);
     _client.set_auto_display_res(auto_display_res);
+    _client.set_display_setting(display_setting);
 
     if (full_screen) {
         enter_full_screen();

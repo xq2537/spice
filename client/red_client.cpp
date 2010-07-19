@@ -312,9 +312,11 @@ RedClient::RedClient(Application& application)
     , _mouse_mode (SPICE_MOUSE_MODE_SERVER)
     , _notify_disconnect (false)
     , _auto_display_res (false)
+    , _agent_reply_wait_type (-1)
     , _aborting (false)
     , _agent_connected (false)
     , _agent_mon_config_sent (false)
+    , _agent_disp_config_sent (false)
     , _agent_msg (new VDAgentMessage)
     , _agent_msg_data (NULL)
     , _agent_msg_pos (0)
@@ -395,7 +397,10 @@ void RedClient::on_disconnect()
     _migrate.abort();
     _connection_id = 0;
     _application.deactivate_interval_timer(*_agent_timer);
+    // todo: if migration remains not seemless, we shouldn't
+    // resend monitors and display setting to the agent
     _agent_mon_config_sent = false;
+    _agent_disp_config_sent = false;
     delete[] _agent_msg_data;
     _agent_msg_data = NULL;
     _agent_msg_pos = 0;
@@ -625,6 +630,51 @@ void RedClient::send_agent_monitors_config()
     _agent_tokens--;
     post_message(message);
     _agent_mon_config_sent = true;
+    _agent_reply_wait_type = VD_AGENT_MONITORS_CONFIG;
+}
+
+void RedClient::send_agent_display_config()
+{
+    Message* message = new Message(SPICE_MSGC_MAIN_AGENT_DATA);
+    VDAgentMessage* msg = (VDAgentMessage*)
+        spice_marshaller_reserve_space(message->marshaller(), sizeof(VDAgentMessage));
+    VDAgentDisplayConfig* disp_config;
+
+    DBG(0,"");
+    msg->protocol = VD_AGENT_PROTOCOL;
+    msg->type = VD_AGENT_DISPLAY_CONFIG;
+    msg->opaque = 0;
+    msg->size = sizeof(VDAgentDisplayConfig);
+
+    disp_config = (VDAgentDisplayConfig*)
+        spice_marshaller_reserve_space(message->marshaller(), sizeof(VDAgentDisplayConfig));
+    
+    disp_config->flags = 0;
+    if (_display_setting._disable_wallpaper) {
+        disp_config->flags |= VD_AGENT_DISPLAY_CONFIG_FLAG_DISABLE_WALLPAPER;
+    }
+
+    if (_display_setting._disable_font_smooth) {
+        disp_config->flags |= VD_AGENT_DISPLAY_CONFIG_FLAG_DISABLE_FONT_SMOOTH;
+    }
+
+    if (_display_setting._disable_animation) {
+        disp_config->flags |= VD_AGENT_DISPLAY_CONFIG_FLAG_DISABLE_ANIMATION;
+    }
+
+    if (_display_setting._set_color_depth) {
+        disp_config->flags |= VD_AGENT_DISPLAY_CONFIG_FLAG_SET_COLOR_DEPTH;
+        disp_config->depth = _display_setting._color_depth;
+    }
+
+    ASSERT(_agent_tokens)
+    _agent_tokens--;
+    post_message(message);
+    _agent_disp_config_sent = true;
+
+    if (!_display_setting.is_empty()) {
+        _agent_reply_wait_type = VD_AGENT_DISPLAY_CONFIG;
+    }
 }
 
 #define MIN_DISPLAY_PIXMAP_CACHE (1024 * 1024 * 20)
@@ -729,13 +779,20 @@ void RedClient::handle_init(RedPeer::InMessage* message)
 	_marshallers->msgc_main_agent_start(msg->marshaller(), &agent_start);
         post_message(msg);
     }
-    if (_auto_display_res) {
-        _application.activate_interval_timer(*_agent_timer, AGENT_TIMEOUT);
-        if (_agent_connected) {
-            send_agent_monitors_config();
+
+    if (_agent_connected) {
+        if (_auto_display_res) {
+           send_agent_monitors_config();
         }
-    } else {
+        // not sending the color depth through send_agent_monitors_config, since
+        // it applies only for attached screens.
+        send_agent_display_config();
+    }
+
+    if (!_auto_display_res && _display_setting.is_empty()) {
         post_message(new Message(SPICE_MSGC_MAIN_ATTACH_CHANNELS));
+    } else {
+        _application.activate_interval_timer(*_agent_timer, AGENT_TIMEOUT);
     }
 }
 
@@ -772,6 +829,10 @@ void RedClient::handle_agent_connected(RedPeer::InMessage* message)
     if (_auto_display_res && !_agent_mon_config_sent) {
         send_agent_monitors_config();
     }
+
+    if (!_agent_disp_config_sent) {
+        send_agent_display_config();
+    }
 }
 
 void RedClient::handle_agent_disconnected(RedPeer::InMessage* message)
@@ -782,6 +843,7 @@ void RedClient::handle_agent_disconnected(RedPeer::InMessage* message)
 
 void RedClient::on_agent_reply(VDAgentReply* reply)
 {
+    DBG(0, "agent reply type: %d", reply->type);
     switch (reply->error) {
     case VD_AGENT_SUCCESS:
         break;
@@ -792,8 +854,12 @@ void RedClient::on_agent_reply(VDAgentReply* reply)
     }
     switch (reply->type) {
     case VD_AGENT_MONITORS_CONFIG:
-        post_message(new Message(SPICE_MSGC_MAIN_ATTACH_CHANNELS));
-        _application.deactivate_interval_timer(*_agent_timer);
+    case VD_AGENT_DISPLAY_CONFIG:
+        if (_agent_reply_wait_type == reply->type) {
+            post_message(new Message(SPICE_MSGC_MAIN_ATTACH_CHANNELS));
+            _application.deactivate_interval_timer(*_agent_timer);
+            _agent_reply_wait_type = -1;
+        }
         break;
     default:
         THROW("unexpected vdagent reply type");

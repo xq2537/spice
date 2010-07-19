@@ -125,6 +125,25 @@ public:
     virtual bool operator() (RedChannel& channel) = 0;
 };
 
+class DisplaySetting {
+public:
+    DisplaySetting() : _disable_wallpaper (false)
+                     , _disable_font_smooth (false)
+                     , _disable_animation (false)
+                     , _set_color_depth (false)
+                     {}
+
+    bool is_empty() {return !(_disable_wallpaper || _disable_font_smooth ||
+                              _disable_animation || _set_color_depth);}
+
+public:
+    bool _disable_wallpaper;
+    bool _disable_font_smooth;
+    bool _disable_animation;
+    bool _set_color_depth;
+    uint32_t _color_depth;
+};
+
 class RedClient: public RedChannel {
 public:
     friend class RedChannel;
@@ -148,6 +167,7 @@ public:
     void set_target(const std::string&, int port, int sport);
     void set_password(const std::string& password) { _password = password;}
     void set_auto_display_res(bool auto_display_res) { _auto_display_res = auto_display_res;}
+    void set_display_setting(DisplaySetting& setting) { _display_setting = setting;}
     const std::string& get_password() { return _password;}
     const std::string& get_host() { return _host;}
     int get_port() { return _port;}
@@ -184,6 +204,7 @@ private:
     void on_channel_disconnected(RedChannel& channel);
     void migrate_channel(RedChannel& channel);
     void send_agent_monitors_config();
+    void send_agent_display_config();
     void calc_pixmap_cach_and_glz_window_size(uint32_t display_channels_hint,
                                               uint32_t pci_mem_hint);
     void set_mouse_mode(uint32_t supported_modes, uint32_t current_mode);
@@ -221,10 +242,14 @@ private:
     Mutex _notify_lock;
     bool _notify_disconnect;
     bool _auto_display_res;
+    DisplaySetting _display_setting;
+    int _agent_reply_wait_type;
+
     bool _aborting;
 
     bool _agent_connected;
     bool _agent_mon_config_sent;
+    bool _agent_disp_config_sent;
     VDAgentMessage* _agent_msg;
     uint8_t* _agent_msg_data;
     uint32_t _agent_msg_pos;
