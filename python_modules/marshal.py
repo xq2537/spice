@@ -29,8 +29,8 @@ class MarshallingSource:
     def child_at_end(self, t):
         return RootMarshallingSource(self, t.c_type(), t.sizeof())
 
-    def child_sub(self, member):
-        return SubMarshallingSource(self, member)
+    def child_sub(self, containee):
+        return SubMarshallingSource(self, containee)
 
     def declare(self, writer):
         return writer.optional_block(self.reuse_scope)
@@ -84,18 +84,19 @@ class RootMarshallingSource(MarshallingSource):
             return writer.partial_block(scope)
 
 class SubMarshallingSource(MarshallingSource):
-    def __init__(self, parent_src, member):
+    def __init__(self, parent_src, containee):
         self.reuse_scope = None
         self.parent_src = parent_src
         self.base_var = parent_src.base_var
-        self.member = member
+        self.containee = containee
+        self.name = containee.name
         self.is_helper = False
 
     def get_self_ref(self):
-        return "&%s" % self.parent_src.get_ref(self.member)
+        return "&%s" % self.parent_src.get_ref(self.name)
 
     def get_ref(self, member):
-        return self.parent_src.get_ref(self.member) + "." + member
+        return self.parent_src.get_ref(self.name) + "." + member
 
 def write_marshal_ptr_function(writer, target_type):
     if target_type.is_array():
@@ -263,9 +264,9 @@ def write_switch_marshaller(writer, container, switch, src, scope):
                 src2 = src
             else:
                 if t.is_struct():
-                    src2 = src.child_sub(switch.name + "." + m.name)
+                    src2 = src.child_sub(switch).child_sub(m)
                 else:
-                    src2 = src.child_sub(switch.name)
+                    src2 = src.child_sub(switch)
             src2.reuse_scope = block
 
             if t.is_struct():
@@ -331,7 +332,7 @@ def write_member_marshaller(writer, container, member, src, scope):
         if member.has_end_attr():
             src2 = src.child_at_end(t)
         else:
-            src2 = src.child_sub(member.name)
+            src2 = src.child_sub(member)
         writer.comment(member.name)
         write_container_marshaller(writer, t, src2)
     else:
