@@ -19,6 +19,7 @@
 
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
+#include <X11/Xatom.h>
 #include <X11/XKBlib.h>
 #include <X11/Xresource.h>
 #include <X11/cursorfont.h>
@@ -63,7 +64,7 @@
 //#define X_DEBUG_SYNC(display) XSync(display, False)
 #define X_DEBUG_SYNC(display)
 #ifdef HAVE_XRANDR12
-#define USE_XRANDR_1_2
+//#define USE_XRANDR_1_2
 #endif
 
 static Display* x_display = NULL;
@@ -76,6 +77,7 @@ static GLXFBConfig **fb_config = NULL;
 static XIM x_input_method = NULL;
 static XIC x_input_context = NULL;
 
+static Window platform_win;
 static XContext win_proc_context;
 static ProcessLoop* main_loop = NULL;
 static int focus_count = 0;
@@ -95,6 +97,19 @@ static bool using_xrender_0_5 = false;
 static unsigned int caps_lock_mask = 0;
 static unsigned int num_lock_mask = 0;
 
+//FIXME: nicify
+static uint8_t* clipboard_data = NULL;
+static int32_t clipboard_data_size = 0;
+static int32_t clipboard_data_space = 0;
+static Mutex clipboard_lock;
+static Atom clipboard_prop;
+static Atom incr_atom;
+static Atom utf8_atom;
+//static Atom clipboard_type_utf8;
+#ifdef USE_XRANDR_1_2
+static bool clipboard_inited = false;
+#endif
+
 class DefaultEventListener: public Platform::EventListener {
 public:
     virtual void on_app_activated() {}
@@ -113,6 +128,13 @@ public:
 static DefaultDisplayModeListener default_display_mode_listener;
 static Platform::DisplayModeListener* display_mode_listener = &default_display_mode_listener;
 
+class DefaultClipboardListener: public Platform::ClipboardListener {
+public:
+    void on_clipboard_change() {}
+};
+
+static DefaultClipboardListener default_clipboard_listener;
+static Platform::ClipboardListener* clipboard_listener = &default_clipboard_listener;
 
 NamedPipe::ListenerRef NamedPipe::create(const char *name, ListenerInterface& listener_interface)
 {
@@ -689,6 +711,16 @@ private:
     bool _out_of_sync;
 };
 
+static void intern_clipboard_atoms()
+{
+    static bool interned = false;
+    if (interned) return;
+    clipboard_prop = XInternAtom(x_display, "CLIPBOARD", False);
+    incr_atom = XInternAtom(x_display, "INCR", False);
+    utf8_atom = XInternAtom(x_display, "UTF8_STRING", False);
+    interned = true;
+}
+
 DynamicScreen::DynamicScreen(Display* display, int screen, int& next_mon_id)
     : XScreen(display, screen)
     , Monitor(next_mon_id++)
@@ -697,10 +729,12 @@ DynamicScreen::DynamicScreen(Display* display, int screen, int& next_mon_id)
     , _out_of_sync (false)
 {
     X_DEBUG_SYNC(display);
-    Window root_window = RootWindow(display, screen);
-    XSelectInput(display, root_window, StructureNotifyMask);
-    XRRSelectInput(display, root_window, RRScreenChangeNotifyMask);
-    XPlatform::set_win_proc(root_window, root_win_proc);
+    //FIXME: replace RootWindow() in other refs as well?
+    platform_win = XCreateSimpleWindow(display, RootWindow(display, screen), 0, 0, 1, 1, 0, 0, 0);
+    XSelectInput(display, platform_win, StructureNotifyMask);
+    XRRSelectInput(display, platform_win, RRScreenChangeNotifyMask);
+    XPlatform::set_win_proc(platform_win, root_win_proc);
+    intern_clipboard_atoms();
     X_DEBUG_SYNC(display);
 }
 
@@ -962,8 +996,20 @@ MultyMonScreen::MultyMonScreen(Display* display, int screen, int& next_mon_id)
     }
 
     XSelectInput(display, root_window, StructureNotifyMask);
+    X_DEBUG_SYNC(get_display());
     XRRSelectInput(display, root_window, RRScreenChangeNotifyMask);
+    X_DEBUG_SYNC(get_display());
+    intern_clipboard_atoms();
     XPlatform::set_win_proc(root_window, root_win_proc);
+    X_DEBUG_SYNC(get_display());
+    //
+    //platform_win = XCreateSimpleWindow(display, RootWindow(display, screen), 0, 0, 1, 1, 0, 0, 0);
+    //XSelectInput(display, platform_win, StructureNotifyMask);
+    //XRRSelectInput(display, platform_win, RRScreenChangeNotifyMask);
+    //XPlatform::set_win_proc(platform_win, root_win_proc);
+    //clipboard_prop = XInternAtom(x_display, "CLIPBOARD", False);
+    //
+    clipboard_inited = true;
     X_DEBUG_SYNC(get_display());
 }
 
@@ -2079,8 +2125,85 @@ void Platform::path_append(std::string& path, const std::string& partial_path)
     path += partial_path;
 }
 
+static void ensure_clipboard_data_space(uint32_t size)
+{
+    if (size > clipboard_data_space) {
+        delete clipboard_data;
+        clipboard_data = NULL;
+        clipboard_data = new uint8_t[size];
+        assert(clipboard_data);
+        clipboard_data_space = size;
+    }
+}
+
+static void realloc_clipboard_data_space(uint32_t size)
+{
+    if (size <= clipboard_data_space) return;
+    uint32_t old_alloc = clipboard_data_space;
+    clipboard_data_space = size;
+    uint8_t *newbuf = new uint8_t[clipboard_data_space];
+    assert(newbuf);
+    memcpy(newbuf, clipboard_data, old_alloc);
+    delete[] clipboard_data;
+    clipboard_data = newbuf;
+}
+
+static void update_clipboard(unsigned long size, uint8_t* data)
+{
+    clipboard_data_size = 0;
+    ensure_clipboard_data_space(size);
+    memcpy(clipboard_data, data, size);
+    clipboard_data_size = size;
+}
+
+
+/* NOTE: Function taken from xsel, original name get_append_property
+ *
+ * Get a window clipboard property and append its data to the clipboard_data
+ *
+ * Returns true if more data is available for receipt.
+ *
+ * Returns false if no data is availab, or on error.
+ */
+static bool
+get_append_clipboard_data (XSelectionEvent* xsel)
+{
+  Atom target;
+  int format;
+  unsigned long bytesafter, length;
+  unsigned char * value;
+
+  XGetWindowProperty (x_display, xsel->requestor, clipboard_prop,
+                      0L, 1000000, True, (Atom)AnyPropertyType,
+                      &target, &format, &length, &bytesafter, &value);
+
+  if (target != utf8_atom) {
+    LOG_INFO ("%s: target %d not UTF8", __func__, target);
+    // realloc clipboard_data to 0?
+    return false;
+  } else if (length == 0) {
+    /* A length of 0 indicates the end of the transfer */
+    LOG_INFO ("Got zero length property; end of INCR transfer");
+    return false;
+  } else if (format == 8) {
+    if (clipboard_data_size + length > clipboard_data_space) {
+      realloc_clipboard_data_space(clipboard_data_size + length);
+    }
+    strncpy ((char*)clipboard_data + clipboard_data_size, (char*)value, length);
+    clipboard_data_size += length;
+    LOG_INFO ("Appended %d bytes to buffer\n", length);
+  } else {
+    LOG_WARN ("Retrieved non-8-bit data\n");
+  }
+
+  return true;
+}
+
+
 static void root_win_proc(XEvent& event)
 {
+    static bool waiting_for_property_notify = false;
+
 #ifdef USE_XRANDR_1_2
     ASSERT(using_xrandr_1_0 || using_xrandr_1_2);
 #else
@@ -2101,14 +2224,102 @@ static void root_win_proc(XEvent& event)
             (*iter)->set_broken();
         }
         event_listener->on_monitors_change();
+        return;
     }
 
-    /*switch (event.type - xrandr_event_base) {
-    case RRScreenChangeNotify:
-        //XRRScreenChangeNotifyEvent * = (XRRScreenChangeNotifyEvent *) &event;
-        XRRUpdateConfiguration(&event);
+    switch (event.type) {
+    case SelectionRequest: {
+        //FIXME: support multi-chunk
+        Lock lock(clipboard_lock);
+        if (clipboard_data_size == 0) {
+            return;
+        }
+        Window requestor_win = event.xselectionrequest.requestor;
+        Atom prop = event.xselectionrequest.property;
+        XChangeProperty(x_display, requestor_win, prop, utf8_atom, 8, PropModeReplace,
+                        (unsigned char *)clipboard_data, clipboard_data_size);
+        XEvent res;
+        res.xselection.property = prop;
+        res.xselection.type = SelectionNotify;
+        res.xselection.display = event.xselectionrequest.display;
+        res.xselection.requestor = requestor_win;
+        res.xselection.selection = event.xselectionrequest.selection;
+        res.xselection.target = event.xselectionrequest.target;
+        res.xselection.time = event.xselectionrequest.time;
+        XSendEvent(x_display, requestor_win, 0, 0, &res);
+        XFlush(x_display);
         break;
-    }*/
+    }
+    case SelectionClear: {
+        Lock lock(clipboard_lock);
+        clipboard_data_size = 0;
+        break;
+    }
+    case SelectionNotify: {
+        Atom type;
+        int format;
+        unsigned long len;
+        unsigned long size;
+        unsigned long dummy;
+        unsigned char *data;
+        XGetWindowProperty(x_display, platform_win, clipboard_prop, 0, 0, False,
+                           AnyPropertyType, &type, &format, &len, &size, &data);
+        if (size == 0) {
+            break;
+        }
+        if (XGetWindowProperty(x_display, platform_win, clipboard_prop, 0, size,
+            False, AnyPropertyType, &type, &format, &len, &dummy, &data) != Success) {
+            LOG_INFO("XGetWindowProperty failed");
+            break;
+        }
+        LOG_INFO("data: %s len: %u", data, len);
+        {
+            Lock lock(clipboard_lock);
+            clipboard_data_size = 0;
+        }
+        if (type == incr_atom) {
+            Window requestor_win = event.xselection.requestor;
+            Atom prop = event.xselection.property; // is this always "CLIPBOARD"?
+            // According to ICCCM spec 2.7.2 INCR Properties, and xsel reference
+            XSelectInput (x_display, requestor_win, PropertyChangeMask);
+            XDeleteProperty(x_display, requestor_win, prop);
+            waiting_for_property_notify = true;
+            {
+                Lock lock(clipboard_lock);
+                ensure_clipboard_data_space(*(uint32_t*)data);
+            }
+            break;
+        }
+        {
+            Lock lock(clipboard_lock);
+            update_clipboard(++size, data);
+        }
+        XFree(data);
+        clipboard_listener->on_clipboard_change();
+        break;
+    }
+    case PropertyNotify:
+        if (!waiting_for_property_notify) {
+            break;
+        }
+        {
+            if (event.xproperty.state != PropertyNewValue) break;
+            bool finished_incr = false;
+            {
+                Lock lock(clipboard_lock);
+                finished_incr = !get_append_clipboard_data(&event.xselection);
+            }
+            if (finished_incr) {
+                waiting_for_property_notify = false;
+                XDeleteProperty(x_display, event.xselection.requestor,
+                    clipboard_prop);
+                clipboard_listener->on_clipboard_change();
+            }
+        }
+        break;
+    default:
+        return;
+    }
 }
 
 static void process_monitor_configure_events(Window root)
@@ -2735,3 +2946,46 @@ LocalCursor* Platform::create_default_cursor()
 {
     return new XDefaultCursor();
 }
+
+void Platform::set_clipboard_listener(ClipboardListener* listener)
+{
+    //FIXME: XA_CLIPBOARD(x_display)
+    if (XGetSelectionOwner(x_display, XA_PRIMARY) == None) {
+        return;
+    }
+    clipboard_listener = listener;
+    XConvertSelection(x_display, XA_PRIMARY, utf8_atom, clipboard_prop,
+        platform_win, CurrentTime);
+}
+
+bool Platform::set_clipboard_data(uint32_t type, const uint8_t* data, int32_t size)
+{
+    Lock lock(clipboard_lock);
+
+    LOG_INFO("type %u size %u data %s", type, size, data);
+    if (size > clipboard_data_space) {
+        delete clipboard_data;
+        clipboard_data = new uint8_t[size];
+        clipboard_data_space = size;
+    }
+    memcpy(clipboard_data, data, size);
+    clipboard_data_size = size;
+    //FIXME: XA_CLIPBOARD(x_display)
+    XSetSelectionOwner(x_display, XA_PRIMARY, platform_win, CurrentTime);
+    LOG_INFO("XSetSelectionOwner");
+    return true;
+}
+
+bool Platform::get_clipboard_data(uint32_t type, uint8_t* data, int32_t size)
+{
+    //FIXME: check type
+    memcpy(data, clipboard_data, size);
+    return true;
+}
+
+int32_t Platform::get_clipboard_data_size(uint32_t type)
+{
+    //FIXME: check type
+    return clipboard_data_size;
+}
+

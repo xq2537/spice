@@ -117,6 +117,17 @@ public:
 
     class DisplayModeListener;
     static void set_display_mode_listner(DisplayModeListener* listener);
+
+    class ClipboardListener;
+    static void set_clipboard_listener(ClipboardListener* listener);
+
+    enum {
+        CLIPBOARD_UTF8_TEXT = 1,
+    };
+
+    static bool set_clipboard_data(uint32_t type, const uint8_t* data, int32_t size);
+    static bool get_clipboard_data(uint32_t type, uint8_t* data, int32_t size);
+    static int32_t get_clipboard_data_size(uint32_t type);
 };
 
 class Platform::EventListener {
@@ -125,6 +136,12 @@ public:
     virtual void on_app_activated() = 0;
     virtual void on_app_deactivated() = 0;
     virtual void on_monitors_change() = 0;
+};
+
+class Platform::ClipboardListener {
+public:
+    virtual ~ClipboardListener() {}
+    virtual void on_clipboard_change() = 0;
 };
 
 class Platform::RecordClient {

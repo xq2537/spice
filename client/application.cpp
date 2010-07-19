@@ -1325,6 +1325,12 @@ void Application::on_app_activated()
 {
     _active = true;
     _key_handler->on_focus_in();
+    Platform::set_clipboard_listener(this);
+}
+
+void Application::on_clipboard_change()
+{
+    _client.on_clipboard_change();
 }
 
 void Application::on_app_deactivated()

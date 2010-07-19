@@ -186,6 +186,7 @@ public:
     PixmapCache& get_pixmap_cache() {return _pixmap_cache;}
     uint64_t get_pixmap_cache_size() { return _pixmap_cache_size;}
     void on_display_mode_change();
+    void on_clipboard_change();
     void for_each_channel(ForEachChannelFunc& func);
     void on_mouse_capture_trigger(RedScreen& screen);
 
@@ -222,6 +223,8 @@ private:
     void handle_migrate_switch_host(RedPeer::InMessage* message);
 
     void on_agent_reply(VDAgentReply* reply);
+    void on_agent_clipboard(VDAgentClipboard* clipboard, uint32_t size);
+    void post_agent_clipboard();
 
     ChannelFactory* find_factory(uint32_t type);
     void create_channel(uint32_t type, uint32_t id);
@@ -250,9 +253,13 @@ private:
     bool _agent_connected;
     bool _agent_mon_config_sent;
     bool _agent_disp_config_sent;
+    //FIXME: rename to in/out, extract all agent stuff?
     VDAgentMessage* _agent_msg;
     uint8_t* _agent_msg_data;
     uint32_t _agent_msg_pos;
+    VDAgentMessage* _agent_out_msg;
+    uint32_t _agent_out_msg_size;
+    uint32_t _agent_out_msg_pos;
     uint32_t _agent_tokens;
     AutoRef<AgentTimer> _agent_timer;
 

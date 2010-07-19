@@ -749,6 +749,96 @@ void WinPlatform::exit_modal_loop()
     modal_loop_active = false;
 }
 
+void Platform::set_clipboard_listener(ClipboardListener* listener)
+{
+    //FIXME: call only on change, use statics
+    listener->on_clipboard_change();
+}
+
+UINT get_format(uint32_t type)
+{
+    switch (type) {
+    case Platform::CLIPBOARD_UTF8_TEXT:
+        return CF_UNICODETEXT;
+    default:
+        return 0;
+    }
+}
+
+bool Platform::set_clipboard_data(uint32_t type, const uint8_t* data, int32_t size)
+{
+    UINT format = get_format(type);
+    HGLOBAL clip_data;
+    LPVOID clip_buf;
+    int clip_size;
+    bool ret;
+
+    //LOG_INFO("type %u size %d %s", type, size, data);
+    if (!format || !OpenClipboard(paltform_win)) {
+        return false;
+    }
+    clip_size = MultiByteToWideChar(CP_UTF8, 0, (LPCSTR)data, size, NULL, 0);
+    if (!clip_size || !(clip_data = GlobalAlloc(GMEM_DDESHARE, clip_size * sizeof(WCHAR)))) {
+        CloseClipboard();
+        return false;
+    }
+    if (!(clip_buf = GlobalLock(clip_data))) {
+        GlobalFree(clip_data);
+        CloseClipboard();
+        return false;
+    }
+    ret = !!MultiByteToWideChar(CP_UTF8, 0, (LPCSTR)data, size, (LPWSTR)clip_buf, clip_size);
+    GlobalUnlock(clip_data);
+    if (ret) {
+        EmptyClipboard();
+        ret = !!SetClipboardData(format, clip_data);
+    }
+    CloseClipboard();
+    return ret;
+}
+
+bool Platform::get_clipboard_data(uint32_t type, uint8_t* data, int32_t size)
+{
+    UINT format = get_format(type);
+    HANDLE clip_data;
+    LPVOID clip_buf;
+    bool ret;
+
+    LOG_INFO("type %u size %d", type, size);
+    if (!format || !IsClipboardFormatAvailable(format) || !OpenClipboard(paltform_win)) {
+        return false;
+    }
+    if (!(clip_data = GetClipboardData(format)) || !(clip_buf = GlobalLock(clip_data))) {
+        CloseClipboard();
+        return false;
+    }
+    ret = !!WideCharToMultiByte(CP_UTF8, 0, (LPCWSTR)clip_buf, -1, (LPSTR)data, size, NULL, NULL);
+    GlobalUnlock(clip_data);
+    CloseClipboard();
+    return ret;
+}
+
+int32_t Platform::get_clipboard_data_size(uint32_t type)
+{
+    UINT format = get_format(type);
+    HANDLE clip_data;
+    LPVOID clip_buf;
+    int clip_size;
+
+    if (!format || !IsClipboardFormatAvailable(format) || !OpenClipboard(paltform_win)) {
+        return 0;
+    }
+    if (!(clip_data = GetClipboardData(format)) || !(clip_buf = GlobalLock(clip_data))) {
+        CloseClipboard();
+        return 0;
+    }
+    clip_size = WideCharToMultiByte(CP_UTF8, 0, (LPCWSTR)clip_buf, -1, NULL, 0, NULL, NULL);
+    GlobalUnlock(clip_data);
+    CloseClipboard();
+    return clip_size;
+}
+
+
 static bool has_console = false;
 
 static void create_console()
