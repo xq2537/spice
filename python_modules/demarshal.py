@@ -708,7 +708,10 @@ def write_switch_parser(writer, container, switch, dest, scope):
             if switch.has_end_attr():
                 dest2 = dest.child_at_end(writer, m.member_type)
             elif switch.has_attr("anon"):
-                dest2 = dest
+                if t.is_struct() and not m.has_attr("to_ptr"):
+                    dest2 = dest.child_sub(m.name)
+                else:
+                    dest2 = dest
             else:
                 if t.is_struct():
                     dest2 = dest.child_sub(switch.name + "." + m.name)

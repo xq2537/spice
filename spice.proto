@@ -874,7 +874,10 @@ struct CursorHeader {
 
 struct Cursor {
     cursor_flags flags;
-    CursorHeader header;
+    switch (flags) {
+    case !NONE:
+        CursorHeader header;
+    } u @anon;
     uint8 data[] @as_ptr(data_size);
 };
 

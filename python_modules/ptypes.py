@@ -591,9 +591,9 @@ class SwitchCase:
             if v == None:
                 return "1"
             elif var_type.is_enum():
-                checks.append("%s == %s" % (var_cname, var_type.c_enumname_by_name(v)))
+                checks.append("%s == %s" % (var_cname, var_type.c_enumname_by_name(v[1])))
             else:
-                checks.append("(%s & %s)" % (var_cname, var_type.c_enumname_by_name(v)))
+                checks.append("%s(%s & %s)" % (v[0], var_cname, var_type.c_enumname_by_name(v[1])))
         return " || ".join(checks)
 
     def resolve(self, container):
