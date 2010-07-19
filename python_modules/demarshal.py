@@ -161,6 +161,7 @@ def write_validate_switch_member(writer, container, switch_member, scope, parent
         with writer.if_block(check, not first, False) as if_scope:
             item.type = c.member.member_type
             item.subprefix = item.prefix + "_" + m.name
+            item.member = c.member
 
             all_as_extra_size = m.is_extra_size() and want_extra_size
             if not want_mem_size and all_as_extra_size and not scope.variable_defined(item.mem_size()):
@@ -459,6 +460,8 @@ def write_validate_primitive_item(writer, container, item, scope, parent_scope, 
 
 def write_validate_item(writer, container, item, scope, parent_scope, start,
                         want_nw_size, want_mem_size, want_extra_size):
+    if item.member and item.member.has_attr("to_ptr"):
+        want_nw_size = True
     if item.type.is_pointer():
         write_validate_pointer_item(writer, container, item, scope, parent_scope, start,
                                     want_nw_size, want_mem_size, want_extra_size)
@@ -473,6 +476,11 @@ def write_validate_item(writer, container, item, scope, parent_scope, start,
                                       want_nw_size, want_mem_size, want_extra_size)
     else:
         writer.todo("Implement validation of %s" % item.type)
+
+    if item.member and item.member.has_attr("to_ptr"):
+        saved_size = "%s__saved_size" % item.member.name
+        writer.add_function_variable("uint32_t", saved_size)
+        writer.assign(saved_size, item.nw_size())
 
 def write_validate_member(writer, container, member, parent_scope, start,
                           want_nw_size, want_mem_size, want_extra_size):
@@ -708,10 +716,12 @@ def write_switch_parser(writer, container, switch, dest, scope):
                     dest2 = dest.child_sub(switch.name)
             dest2.reuse_scope = block
 
-            if t.is_struct():
-                write_container_parser(writer, t, dest2)
+            if m.has_attr("to_ptr"):
+                write_parse_to_pointer(writer, t, False, dest2, m.name, block)
             elif t.is_pointer():
                 write_parse_pointer(writer, t, False, dest2, m.name, block)
+            elif t.is_struct():
+                write_container_parser(writer, t, dest2)
             elif t.is_primitive():
                 if m.has_attr("zero"):
                     writer.statement("consume_%s(&in)" % (t.primitive_type()))
@@ -813,9 +823,8 @@ def write_array_parser(writer, member, nelements, array, dest, scope):
                     writer.comment("Align ptr_array element to 4 bytes").newline()
                     writer.assign("end", "(uint8_t *)SPICE_ALIGN((size_t)end, 4)")
 
-def write_parse_pointer(writer, t, at_end, dest, member_name, scope):
-    target_type = t.target_type
-    writer.assign("ptr_info[n_ptr].offset", "consume_%s(&in)" % t.primitive_type())
+def write_parse_pointer_core(writer, target_type, offset, at_end, dest, member_name, scope):
+    writer.assign("ptr_info[n_ptr].offset", offset)
     writer.assign("ptr_info[n_ptr].parse", write_parse_ptr_function(writer, target_type))
     if at_end:
         writer.assign("ptr_info[n_ptr].dest", "(void **)end")
@@ -828,6 +837,15 @@ def write_parse_pointer(writer, t, at_end, dest, member_name, scope):
 
     writer.statement("n_ptr++")
 
+def write_parse_pointer(writer, t, at_end, dest, member_name, scope):
+    write_parse_pointer_core(writer, t.target_type, "consume_%s(&in)" % t.primitive_type(),
+                             at_end, dest, member_name, scope)
+
+def write_parse_to_pointer(writer, t, at_end, dest, member_name, scope):
+    write_parse_pointer_core(writer, t, "in - start",
+                             at_end, dest, member_name, scope)
+    writer.increment("in", "%s__saved_size" % member_name)
+
 def write_member_parser(writer, container, member, dest, scope):
     if member.has_attr("virtual"):
         writer.assign(dest.get_ref(member.name), member.attributes["virtual"][0])
@@ -839,7 +857,9 @@ def write_member_parser(writer, container, member, dest, scope):
 
     t = member.member_type
 
-    if t.is_pointer():
+    if member.has_attr("to_ptr"):
+        write_parse_to_pointer(writer, t, member.has_end_attr(), dest, member.name, scope)
+    elif t.is_pointer():
         if member.has_attr("chunk"):
             assert(t.target_type.is_array())
             nelements = read_array_len(writer, member.name, t.target_type, dest, scope, True)

@@ -536,7 +536,7 @@ class Member(Containee):
         return self.member_type.is_fixed_sizeof()
 
     def is_extra_size(self):
-        return self.has_end_attr() or self.member_type.is_extra_size()
+        return self.has_end_attr() or self.has_attr("to_ptr") or self.member_type.is_extra_size()
 
     def is_fixed_nw_size(self):
         if self.has_attr("virtual"):
@@ -562,6 +562,8 @@ class Member(Containee):
         return "%s (%s)" % (str(self.name), str(self.member_type))
 
     def get_num_pointers(self):
+        if self.has_attr("to_ptr"):
+            return 1
         return self.member_type.get_num_pointers()
 
     def get_pointer_names(self, marshalled):

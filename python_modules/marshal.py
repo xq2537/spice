@@ -87,10 +87,16 @@ class SubMarshallingSource(MarshallingSource):
         self.is_helper = False
 
     def get_self_ref(self):
-        return "&%s" % self.parent_src.get_ref(self.name)
+        if self.containee.has_attr("to_ptr"):
+            return "%s" % self.parent_src.get_ref(self.name)
+        else:
+            return "&%s" % self.parent_src.get_ref(self.name)
 
     def get_ref(self, member):
-        return self.parent_src.get_ref(self.name) + "." + member
+        if self.containee.has_attr("to_ptr"):
+            return self.parent_src.get_ref(self.name) + "->" + member
+        else:
+            return self.parent_src.get_ref(self.name) + "." + member
 
 def write_marshal_ptr_function(writer, target_type):
     if target_type.is_array():
