@@ -49,8 +49,8 @@ class RootMarshallingSource(MarshallingSource):
             self.base_var = "src"
         self.c_type = c_type
         self.sizeof = sizeof
-        self.pointer = pointer # None == at "end"
-        self.update_end = False
+        self.pointer = pointer
+        assert pointer != None
 
     def get_self_ref(self):
         return self.base_var
@@ -69,13 +69,7 @@ class RootMarshallingSource(MarshallingSource):
         if not self.reuse_scope:
             scope.newline()
 
-        if self.pointer:
-            writer.assign(self.base_var, "(%s *)%s" % (self.c_type, self.pointer))
-            if self.update_end:
-                writer.assign("end", "((uint8_t *)%s) + %s" % (self.base_var, self.sizeof))
-        else:
-            writer.assign(self.base_var, "(%s *)end" % self.c_type)
-            writer.increment("end", "%s" % self.sizeof)
+        writer.assign(self.base_var, "(%s *)%s" % (self.c_type, self.pointer))
         writer.newline()
 
         if self.reuse_scope:
@@ -119,18 +113,16 @@ def write_marshal_ptr_function(writer, target_type):
     writer.header = header
     writer.out_prefix = ""
     if target_type.is_array():
-        scope = writer.function(marshal_function, "SPICE_GNUC_UNUSED static void *", "SpiceMarshaller *m, %s_t *ptr, int count" % target_type.element_type.primitive_type() + names_args)
+        scope = writer.function(marshal_function, "SPICE_GNUC_UNUSED static void", "SpiceMarshaller *m, %s_t *ptr, int count" % target_type.element_type.primitive_type() + names_args)
     else:
-        scope = writer.function(marshal_function, "void *", "SpiceMarshaller *m, %s *ptr" % target_type.c_type() + names_args)
-        header.writeln("void *" + marshal_function + "(SpiceMarshaller *m, %s *msg" % target_type.c_type() + names_args + ");")
-    scope.variable_def("SPICE_GNUC_UNUSED uint8_t *", "end")
+        scope = writer.function(marshal_function, "void", "SpiceMarshaller *m, %s *ptr" % target_type.c_type() + names_args)
+        header.writeln("void " + marshal_function + "(SpiceMarshaller *m, %s *msg" % target_type.c_type() + names_args + ");")
     scope.variable_def("SPICE_GNUC_UNUSED SpiceMarshaller *", "m2")
 
     for n in names:
         writer.assign("*%s_out" % n, "NULL")
 
     writer.newline()
-    writer.assign("end", "(uint8_t *)(ptr+1)")
 
     if target_type.is_struct():
         src = RootMarshallingSource(None, target_type.c_type(), target_type.sizeof(), "ptr")
@@ -142,8 +134,6 @@ def write_marshal_ptr_function(writer, target_type):
                 writer.statement("spice_marshaller_add_%s(m, *ptr++)" % (target_type.element_type.primitive_type()))
     else:
         writer.todo("Unsuppored pointer marshaller type")
-
-    writer.statement("return end")
 
     writer.end_block()
 
@@ -172,9 +162,9 @@ def get_array_size(array, container_src):
     elif array.is_bytes_length():
         return container_src.get_ref(array.size[2])
     else:
-        raise NotImplementedError("TODO array size type not handled yet")
+        raise NotImplementedError("TODO array size type not handled yet: %s"  % array)
 
-def write_array_marshaller(writer, at_end, member, array, container_src, scope):
+def write_array_marshaller(writer, member, array, container_src, scope):
     element_type = array.element_type
 
     if array.is_remaining_length():
@@ -196,8 +186,7 @@ def write_array_marshaller(writer, at_end, member, array, container_src, scope):
     if array.has_attr("ptr_array"):
         element = "*" + element
 
-    if not at_end:
-        writer.assign(element_array, container_src.get_ref(member.name))
+    writer.assign(element_array, container_src.get_ref(member.name))
 
     if is_byte_size:
         size_start_var = "%s__size_start" % member.name
@@ -206,23 +195,16 @@ def write_array_marshaller(writer, at_end, member, array, container_src, scope):
 
     with writer.index() as index:
         with writer.for_loop(index, nelements) as array_scope:
-            if at_end:
-                writer.assign(element, "(%s *)end" % element_type.c_type())
-                writer.increment("end", element_type.sizeof())
-
             if element_type.is_primitive():
                 writer.statement("spice_marshaller_add_%s(m, *%s)" % (element_type.primitive_type(), element))
             elif element_type.is_struct():
                 src2 = RootMarshallingSource(container_src, element_type.c_type(), element_type.sizeof(), element)
-                if array.is_extra_size():
-                    src2.update_end = True
                 src2.reuse_scope = array_scope
                 write_container_marshaller(writer, element_type, src2)
             else:
                 writer.todo("array element unhandled type").newline()
 
-            if not at_end:
-                writer.statement("%s++" % element_array)
+            writer.statement("%s++" % element_array)
 
     if is_byte_size:
         size_var = member.container.lookup_member(array.size[1])
@@ -235,12 +217,15 @@ def write_pointer_marshaller(writer, member, src):
     ptr_func = write_marshal_ptr_function(writer, t.target_type)
     submarshaller = "spice_marshaller_get_ptr_submarshaller(m, %d)" % (1 if member.get_fixed_nw_size() == 8 else 0)
     if member.has_attr("marshall"):
+        rest_args = ""
+        if t.target_type.is_array():
+            rest_args = ", %s" % get_array_size(t.target_type, src)
         writer.assign("m2", submarshaller)
         if t.has_attr("nonnull"):
-            writer.statement("%s(m2, %s)" % (ptr_func, src.get_ref(member.name)))
+            writer.statement("%s(m2, %s%s)" % (ptr_func, src.get_ref(member.name), rest_args))
         else:
             with writer.if_block("%s != NULL" % src.get_ref(member.name)) as block:
-                writer.statement("%s(m2, %s)" % (ptr_func, src.get_ref(member.name)))
+                writer.statement("%s(m2, %s%s)" % (ptr_func, src.get_ref(member.name), rest_args))
     else:
         writer.assign("*%s_out" % (writer.out_prefix + member.name), submarshaller)
 
@@ -258,10 +243,11 @@ def write_switch_marshaller(writer, container, switch, src, scope):
             writer.out_prefix = "%s_%s" % (m.attributes["outvar"][0], writer.out_prefix)
         with writer.if_block(check, not first, False) as block:
             t = m.member_type
-            if switch.has_end_attr():
-                src2 = src.child_at_end(m.member_type)
-            elif switch.has_attr("anon"):
-                src2 = src
+            if switch.has_attr("anon"):
+                if t.is_struct():
+                    src2 = src.child_sub(m)
+                else:
+                    src2 = src
             else:
                 if t.is_struct():
                     src2 = src.child_sub(switch).child_sub(m)
@@ -280,7 +266,7 @@ def write_switch_marshaller(writer, container, switch, src, scope):
                     writer.statement("spice_marshaller_add_%s(m, %s)" % (t.primitive_type(), src2.get_ref(m.name)))
                 #TODO validate e.g. flags and enums
             elif t.is_array():
-                write_array_marshaller(writer, switch.has_end_attr(), m, t, src, scope)
+                write_array_marshaller(writer, m, t, src2, scope)
             else:
                 writer.todo("Can't handle type %s" % m.member_type)
 
@@ -321,18 +307,12 @@ def write_member_marshaller(writer, container, member, src, scope):
             scope.variable_def("void *", var)
             writer.statement("%s = spice_marshaller_add_%s(m, %s)" % (var, t.primitive_type(), 0))
 
-        elif member.has_end_attr():
-            writer.statement("spice_marshaller_add_%s(m, *(%s_t *)end)" % (t.primitive_type(), t.primitive_type()))
-            writer.increment("end", t.sizeof())
         else:
             writer.statement("spice_marshaller_add_%s(m, %s)" % (t.primitive_type(), src.get_ref(member.name)))
     elif t.is_array():
-        write_array_marshaller(writer, member.has_end_attr(), member, t, src, scope)
+        write_array_marshaller(writer, member, t, src, scope)
     elif t.is_struct():
-        if member.has_end_attr():
-            src2 = src.child_at_end(t)
-        else:
-            src2 = src.child_sub(member)
+        src2 = src.child_sub(member)
         writer.comment(member.name)
         write_container_marshaller(writer, t, src2)
     else:
@@ -364,7 +344,6 @@ def write_message_marshaller(writer, message, is_server, private):
     scope = writer.function(function_name,
                             "static void" if private else "void",
                             "SpiceMarshaller *m, %s *msg" % message.c_type() + names_args)
-    scope.variable_def("SPICE_GNUC_UNUSED uint8_t *", "end")
     scope.variable_def("SPICE_GNUC_UNUSED SpiceMarshaller *", "m2")
 
     for n in names:
@@ -373,7 +352,6 @@ def write_message_marshaller(writer, message, is_server, private):
     src = RootMarshallingSource(None, message.c_type(), message.sizeof(), "msg")
     src.reuse_scope = scope
 
-    writer.assign("end", "(uint8_t *)(msg+1)")
     write_container_marshaller(writer, message, src)
 
     writer.end_block()

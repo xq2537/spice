@@ -646,8 +646,11 @@ class SubDemarshallingDestination(DemarshallingDestination):
         return self.parent_dest.get_ref(self.member) + "." + member
 
 # Note: during parsing, byte_size types have been converted to count during validation
-def read_array_len(writer, prefix, array, dest, scope):
-    nelements = "%s__nelements" % prefix
+def read_array_len(writer, prefix, array, dest, scope, is_ptr):
+    if is_ptr:
+        nelements = "%s__array__nelements" % prefix
+    else:
+        nelements = "%s__nelements" % prefix
     if dest.is_toplevel():
         return nelements # Already there for toplevel, need not recalculate
     element_type = array.element_type
@@ -716,8 +719,8 @@ def write_switch_parser(writer, container, switch, dest, scope):
                     writer.assign(dest2.get_ref(m.name), "consume_%s(&in)" % (t.primitive_type()))
                 #TODO validate e.g. flags and enums
             elif t.is_array():
-                nelements = read_array_len(writer, m.name, t, dest, block)
-                write_array_parser(writer, nelements, t, dest, block)
+                nelements = read_array_len(writer, m.name, t, dest, block, False)
+                write_array_parser(writer, m, nelements, t, dest2, block)
             else:
                 writer.todo("Can't handle type %s" % m.member_type)
 
@@ -759,7 +762,7 @@ def write_parse_ptr_function(writer, target_type):
     dest.is_helper = True
     dest.reuse_scope = scope
     if target_type.is_array():
-        write_array_parser(writer, "this_ptr_info->nelements", target_type, dest, scope)
+        write_array_parser(writer, None, "this_ptr_info->nelements", target_type, dest, scope)
     else:
         write_container_parser(writer, target_type, dest)
 
@@ -777,14 +780,17 @@ def write_parse_ptr_function(writer, target_type):
 
     return parse_function
 
-def write_array_parser(writer, nelements, array, dest, scope):
+def write_array_parser(writer, member, nelements, array, dest, scope):
     is_byte_size = array.is_bytes_length()
 
     element_type = array.element_type
     if element_type == ptypes.uint8 or element_type == ptypes.int8:
-        writer.statement("memcpy(end, in, %s)" % (nelements))
+        if not member or member.has_attr("end"):
+            writer.statement("memcpy(end, in, %s)" % (nelements))
+            writer.increment("end", nelements)
+        else:
+            writer.statement("memcpy(%s, in, %s)" % (dest.get_ref(member.name), nelements))
         writer.increment("in", nelements)
-        writer.increment("end", nelements)
     else:
         if array.has_attr("ptr_array"):
             scope.variable_def("void **", "ptr_array")
@@ -817,7 +823,7 @@ def write_parse_pointer(writer, t, at_end, dest, member_name, scope):
     else:
         writer.assign("ptr_info[n_ptr].dest", "(void **)&%s" % dest.get_ref(member_name))
     if target_type.is_array():
-        nelements = read_array_len(writer, member_name, target_type, dest, scope)
+        nelements = read_array_len(writer, member_name, target_type, dest, scope, True)
         writer.assign("ptr_info[n_ptr].nelements", nelements)
 
     writer.statement("n_ptr++")
@@ -836,7 +842,7 @@ def write_member_parser(writer, container, member, dest, scope):
     if t.is_pointer():
         if member.has_attr("chunk"):
             assert(t.target_type.is_array())
-            nelements = read_array_len(writer, member.name, t.target_type, dest, scope)
+            nelements = read_array_len(writer, member.name, t.target_type, dest, scope, True)
             writer.comment("Reuse data from network message as chunk").newline()
             scope.variable_def("SpiceChunks *", "chunks");
             writer.assign("chunks", "(SpiceChunks *)end")
@@ -866,7 +872,7 @@ def write_member_parser(writer, container, member, dest, scope):
             writer.assign(dest_var, "consume_%s(&in)" % (t.primitive_type()))
         #TODO validate e.g. flags and enums
     elif t.is_array():
-        nelements = read_array_len(writer, member.name, t, dest, scope)
+        nelements = read_array_len(writer, member.name, t, dest, scope, False)
         if member.has_attr("chunk") and t.element_type.is_fixed_nw_size() and t.element_type.get_fixed_nw_size() == 1:
             writer.comment("use array as chunk").newline()
 
@@ -892,7 +898,7 @@ def write_member_parser(writer, container, member, dest, scope):
             else:
                 writer.increment("in", "%s" % (nelements))
         else:
-            write_array_parser(writer, nelements, t, dest, scope)
+            write_array_parser(writer, member, nelements, t, dest, scope)
     elif t.is_struct():
         if member.has_end_attr():
             dest2 = dest.child_at_end(writer, t)
@@ -915,7 +921,9 @@ def write_container_parser(writer, container, dest):
                     writer.end_block(newline=False)
                     writer.begin_block(" else")
                     # TODO: This is not right for fields that don't exist in the struct
-                    if m.member_type.is_primitive():
+                    if m.has_attr("zero"):
+                        pass
+                    elif m.member_type.is_primitive():
                         writer.assign(dest.get_ref(m.name), "0")
                     elif m.is_fixed_sizeof():
                         writer.statement("memset ((char *)&%s, 0, %s)" % (dest.get_ref(m.name), m.sizeof()))

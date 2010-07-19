@@ -287,24 +287,19 @@ void TunnelChannel::send_service(TunnelService& service)
     }
 
     Message* service_msg = new Message(SPICE_MSGC_TUNNEL_SERVICE_ADD);
-    SpiceMsgcTunnelAddPrintService add;
+    SpiceMsgcTunnelAddGenericService add;
     SpiceMarshaller *name_out, *description_out;
-    add.base.id = service.id;
-    add.base.group = service.group;
-    add.base.type = service.type;
-    add.base.port = service.port;
+    add.id = service.id;
+    add.group = service.group;
+    add.type = service.type;
+    add.port = service.port;
 
     if (service.type == SPICE_TUNNEL_SERVICE_TYPE_IPP) {
-        add.ip.type = SPICE_TUNNEL_IP_TYPE_IPv4;
+        add.u.ip.type = SPICE_TUNNEL_IP_TYPE_IPv4;
     }
 
-    _marshallers->msgc_tunnel_service_add(service_msg->marshaller(), &add.base,
+    _marshallers->msgc_tunnel_service_add(service_msg->marshaller(), &add,
                                            &name_out, &description_out);
-
-    if (service.type == SPICE_TUNNEL_SERVICE_TYPE_IPP) {
-        spice_marshaller_add(service_msg->marshaller(), (uint8_t *)&(service.ip.s_addr),
-                             sizeof(SpiceTunnelIPv4));
-    }
 
     spice_marshaller_add(name_out, (uint8_t *)service.name.c_str(), service.name.length() + 1);
     spice_marshaller_add(description_out, (uint8_t *)service.description.c_str(), service.description.length() + 1);

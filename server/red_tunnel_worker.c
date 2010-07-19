@@ -1123,21 +1123,21 @@ static void tunnel_worker_free_print_service(TunnelWorker *worker, TunnelPrintSe
 }
 
 static TunnelPrintService *tunnel_worker_add_print_service(TunnelWorker *worker,
-                                                           SpiceMsgcTunnelAddPrintService *redc_service)
+                                                           SpiceMsgcTunnelAddGenericService *redc_service)
 {
     TunnelPrintService *service;
 
     service = (TunnelPrintService *)tunnel_worker_add_service(worker, sizeof(TunnelPrintService),
-                                                              &redc_service->base);
+                                                              redc_service);
 
     if (!service) {
         return NULL;
     }
 
-    if (redc_service->ip.type == SPICE_TUNNEL_IP_TYPE_IPv4) {
-        memcpy(service->ip, redc_service->ip.data, sizeof(SpiceTunnelIPv4));
+    if (redc_service->type == SPICE_TUNNEL_IP_TYPE_IPv4) {
+        memcpy(service->ip, redc_service->u.ip.data, sizeof(SpiceTunnelIPv4));
     } else {
-        red_printf("unexpected ip type=%d", redc_service->ip.type);
+        red_printf("unexpected ip type=%d", redc_service->type);
         tunnel_worker_free_print_service(worker, service);
         return NULL;
     }
@@ -1154,7 +1154,6 @@ static int tunnel_channel_handle_service_add(TunnelChannel *channel,
     TunnelService *out_service = NULL;
     if (service_msg->type == SPICE_TUNNEL_SERVICE_TYPE_IPP) {
         out_service = &tunnel_worker_add_print_service(channel->worker,
-                                                       (SpiceMsgcTunnelAddPrintService *)
                                                        service_msg)->base;
     } else if (service_msg->type == SPICE_TUNNEL_SERVICE_TYPE_GENERIC) {
         out_service = tunnel_worker_add_service(channel->worker, sizeof(TunnelService),

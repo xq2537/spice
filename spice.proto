@@ -131,7 +131,6 @@ channel BaseChannel {
 	uint32 what; /* error_code/warn_code/info_code */
 	uint32 message_len;
 	uint8 message[message_len] @end @nomarshal;
-	uint8 zero @end @ctype(uint8_t) @nomarshal;
     } notify;
 
  client:
@@ -166,13 +165,11 @@ channel MainChannel : BaseChannel {
      message {
 	uint16 port;
 	uint16 sport;
-    	uint32 host_offset;
 	uint32 host_size;
+	uint8 *host_data[host_size] @zero_terminated @marshall @nonnull;
 	pubkey_type pub_key_type;
-	uint32 pub_key_offset;
 	uint32 pub_key_size;
-	uint8 host_data[host_size] @end @ctype(uint8_t) @zero_terminated @nomarshal;
-	uint8 pub_key_data[pub_key_size] @end @ctype(uint8_t) @zero_terminated @nomarshal;
+	uint8 *pub_key_data[pub_key_size] @zero_terminated  @marshall @nonnull;
     } @ctype(SpiceMsgMainMigrationBegin) migrate_begin = 101;
 
     Empty migrate_cancel;
@@ -217,12 +214,10 @@ channel MainChannel : BaseChannel {
     message {
       uint16 port;
       uint16 sport;
-      uint32 host_offset;
       uint32 host_size;
-      uint32 cert_subject_offset;
+      uint8 *host_data[host_size] @zero_terminated @marshall;
       uint32 cert_subject_size;
-      uint8 host_data[host_size] @end @ctype(uint8_t) @zero_terminated;
-      uint8 cert_subject_data[cert_subject_size] @end @ctype(uint8_t) @zero_terminated;
+      uint8 *cert_subject_data[cert_subject_size] @zero_terminated  @marshall;
     } @ctype(SpiceMsgMainMigrationSwitchHost) migrate_switch_host;
 
  client:
@@ -994,8 +989,8 @@ struct TunnelIpInfo {
     tunnel_ip_type type;
     switch (type) {
     case IPv4:
-	uint8 ipv4[4] @ctype(uint8_t);
-    } u @end @nomarshal;
+	uint8 ipv4[4];
+    } u;
 } @ctype(SpiceMsgTunnelIpInfo);
 
 channel TunnelChannel : BaseChannel {
@@ -1049,7 +1044,7 @@ channel TunnelChannel : BaseChannel {
 	switch (type) {
 	case IPP:
 	    TunnelIpInfo ip @ctype(SpiceMsgTunnelIpInfo);
-	} u @end;
+	} u;
     } @ctype(SpiceMsgcTunnelAddGenericService) service_add = 101;
 
     message {

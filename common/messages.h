@@ -57,20 +57,20 @@ typedef struct SpiceMsgMainMultiMediaTime {
 typedef struct SpiceMsgMainMigrationBegin {
     uint16_t port;
     uint16_t sport;
-    uint32_t host_offset;
     uint32_t host_size;
+    uint8_t *host_data;
     uint16_t pub_key_type;
-    uint32_t pub_key_offset;
     uint32_t pub_key_size;
+    uint8_t *pub_key_data;
 } SpiceMsgMainMigrationBegin;
 
 typedef struct SpiceMsgMainMigrationSwitchHost {
     uint16_t port;
     uint16_t sport;
-    uint32_t host_offset;
     uint32_t host_size;
-    uint32_t cert_subject_offset;
+    uint8_t *host_data;
     uint32_t cert_subject_size;
+    uint8_t *cert_subject_data;
 } SpiceMsgMainMigrationSwitchHost;
 
 
@@ -401,12 +401,15 @@ typedef struct SpiceMsgTunnelInit {
     uint32_t max_socket_data_size;
 } SpiceMsgTunnelInit;
 
+typedef uint8_t SpiceTunnelIPv4[4];
+
 typedef struct SpiceMsgTunnelIpInfo {
     uint16_t type;
+    union {
+      SpiceTunnelIPv4 ipv4;
+    } u;
     uint8_t data[0];
 } SpiceMsgTunnelIpInfo;
-
-typedef uint8_t SpiceTunnelIPv4[4];
 
 typedef struct SpiceMsgTunnelServiceIpMap {
     uint32_t service_id;
@@ -450,12 +453,10 @@ typedef struct SpiceMsgcTunnelAddGenericService {
     uint32_t port;
     uint64_t name;
     uint64_t description;
+    union {
+        SpiceMsgTunnelIpInfo ip;
+    } u;
 } SpiceMsgcTunnelAddGenericService;
-
-typedef struct SpiceMsgcTunnelAddPrintService {
-    SpiceMsgcTunnelAddGenericService base;
-    SpiceMsgTunnelIpInfo ip;
-} SpiceMsgcTunnelAddPrintService;
 
 typedef struct SpiceMsgcTunnelRemoveService {
     uint32_t id;

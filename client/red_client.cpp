@@ -223,13 +223,11 @@ void Migrate::start(const SpiceMsgMainMigrationBegin* migrate)
         _sport = old_migrate->sport ? old_migrate->sport : -1;;
         _auth_options = _client.get_host_auth_options();
     } else {
-        _host.assign(((char*)migrate) + migrate->host_offset);
+        _host.assign((char *)migrate->host_data);
         _port = migrate->port ? migrate->port : -1;
         _sport = migrate->sport ? migrate->sport : -1;
         _auth_options.type_flags = RedPeer::HostAuthOptions::HOST_AUTH_OP_PUBKEY;
-        _auth_options.host_pubkey.assign(((uint8_t*)migrate)+ migrate->pub_key_offset,
-                                         ((uint8_t*)migrate)+ migrate->pub_key_offset +
-                                         migrate->pub_key_size);
+        _auth_options.host_pubkey.assign(migrate->pub_key_data, migrate->pub_key_data + migrate->pub_key_size);
     }
 
     _con_ciphers = _client.get_connection_ciphers();
@@ -1008,7 +1006,7 @@ void RedClient::handle_agent_tokens(RedPeer::InMessage* message)
 void RedClient::handle_migrate_switch_host(RedPeer::InMessage* message)
 {
     SpiceMsgMainMigrationSwitchHost* migrate = (SpiceMsgMainMigrationSwitchHost*)message->data();
-    char* host = ((char*)migrate) + migrate->host_offset;
+    char* host = (char *)migrate->host_data;
     char* subject = NULL;
 
     if (host[migrate->host_size - 1] != '\0') {
@@ -1016,7 +1014,7 @@ void RedClient::handle_migrate_switch_host(RedPeer::InMessage* message)
     }
 
     if (migrate->cert_subject_size) {
-        subject = ((char*)migrate)+ migrate->cert_subject_offset;
+        subject = (char *)migrate->cert_subject_data;
         if (subject[migrate->cert_subject_size - 1] != '\0') {
             THROW("cert subject is not a null-terminated string");
         }

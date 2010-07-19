@@ -3189,22 +3189,18 @@ static void reds_mig_continue(void)
     RedsMigSpice *s = reds->mig_spice;
     SpiceMsgMainMigrationBegin migrate;
     RedsOutItem *item;
-    int host_len;
 
     red_printf("");
-    host_len = strlen(s->host) + 1;
     item = new_out_item(SPICE_MSG_MAIN_MIGRATE_BEGIN);
 
     migrate.port = s->port;
     migrate.sport = s->sport;
-    migrate.host_offset = sizeof(SpiceMsgMainMigrationBegin);
-    migrate.host_size = host_len;
+    migrate.host_size = strlen(s->host) + 1;
+    migrate.host_data = (uint8_t *)s->host;
     migrate.pub_key_type = s->cert_pub_key_type;
-    migrate.pub_key_offset = sizeof(SpiceMsgMainMigrationBegin) + host_len;
     migrate.pub_key_size = s->cert_pub_key_len;
+    migrate.pub_key_data = s->cert_pub_key;
     spice_marshall_msg_main_migrate_begin(item->m, &migrate);
-    spice_marshaller_add(item->m, (uint8_t *)s->host, host_len);
-    spice_marshaller_add(item->m, s->cert_pub_key, s->cert_pub_key_len);
 
     reds_push_pipe_item(item);
 

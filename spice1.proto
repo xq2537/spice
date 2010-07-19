@@ -166,13 +166,13 @@ channel MainChannel : BaseChannel {
      message {
 	uint16 port;
 	uint16 sport;
-    	uint32 host_offset;
+	uint32 host_offset @zero;
 	uint32 host_size;
 	pubkey_type pub_key_type @minor(2);
-	uint32 pub_key_offset @minor(2);
+	uint32 pub_key_offset @minor(2) @zero;
 	uint32 pub_key_size @minor(2);
-	uint8 host_data[host_size] @end @ctype(uint8_t) @zero_terminated @nomarshal;
-	uint8 pub_key_data[pub_key_size] @minor(2) @end @ctype(uint8_t) @zero_terminated @nomarshal;
+	uint8 host_data[host_size] @as_ptr @zero_terminated;
+	uint8 pub_key_data[pub_key_size] @minor(2) @as_ptr @zero_terminated;
     } @ctype(SpiceMsgMainMigrationBegin) migrate_begin = 101;
 
     Empty migrate_cancel;
@@ -217,12 +217,12 @@ channel MainChannel : BaseChannel {
     message {
       uint16 port;
       uint16 sport;
-      uint32 host_offset;
+      uint32 host_offset @zero;
       uint32 host_size;
-      uint32 cert_subject_offset;
+      uint32 cert_subject_offset @zero;
       uint32 cert_subject_size;
-      uint8 host_data[host_size] @end @ctype(uint8_t) @zero_terminated;
-      uint8 cert_subject_data[cert_subject_size] @end @ctype(uint8_t) @zero_terminated;
+      uint8 host_data[host_size] @as_ptr @zero_terminated;
+      uint8 cert_subject_data[cert_subject_size] @as_ptr @zero_terminated;
     } @ctype(SpiceMsgMainMigrationSwitchHost) migrate_switch_host;
 
  client:

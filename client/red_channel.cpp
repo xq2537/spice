@@ -729,19 +729,19 @@ void RedChannel::handle_disconnect(RedPeer::InMessage* message)
 void RedChannel::handle_notify(RedPeer::InMessage* message)
 {
     SpiceMsgNotify *notify = (SpiceMsgNotify *)message->data();
-    const char *sevirity;
+    const char *severity;
     const char *visibility;
-    const char *message_str = "";
+    char *message_str = (char *)"";
     const char *message_prefix = "";
 
-    static const char* sevirity_strings[] = {"info", "warn", "error"};
+    static const char* severity_strings[] = {"info", "warn", "error"};
     static const char* visibility_strings[] = {"!", "!!", "!!!"};
 
 
     if (notify->severity > SPICE_NOTIFY_SEVERITY_ERROR) {
         THROW("bad severity");
     }
-    sevirity = sevirity_strings[notify->severity];
+    severity = severity_strings[notify->severity];
 
     if (notify->visibilty > SPICE_NOTIFY_VISIBILITY_HIGH) {
         THROW("bad visibility");
@@ -750,22 +750,24 @@ void RedChannel::handle_notify(RedPeer::InMessage* message)
 
 
     if (notify->message_len) {
-        if ((message->size() - sizeof(*notify) < notify->message_len + 1)) {
+        if ((message->size() - sizeof(*notify) < notify->message_len)) {
             THROW("access violation");
         }
-        message_str = (char *)(notify + 1);
-        if (message_str[notify->message_len] != 0) {
-            THROW("invalid message");
-        }
+        message_str = new char[notify->message_len + 1];
+        memcpy(message_str, notify->message, notify->message_len);
+        message_str[notify->message_len] = 0;
         message_prefix = ": ";
     }
 
 
     LOG_INFO("remote channel %u:%u %s%s #%u%s%s",
              get_type(), get_id(),
-             sevirity, visibility,
+             severity, visibility,
              notify->what,
              message_prefix, message_str);
+    if (notify->message_len) {
+        delete [] message_str;
+    }
 }
 
 void RedChannel::handle_wait_for_channels(RedPeer::InMessage* message)
