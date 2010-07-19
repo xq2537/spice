@@ -479,7 +479,7 @@ def write_validate_item(writer, container, item, scope, parent_scope, start,
 
     if item.member and item.member.has_attr("to_ptr"):
         saved_size = "%s__saved_size" % item.member.name
-        writer.add_function_variable("uint32_t", saved_size)
+        writer.add_function_variable("uint32_t", saved_size + " = 0")
         writer.assign(saved_size, item.nw_size())
 
 def write_validate_member(writer, container, member, parent_scope, start,
