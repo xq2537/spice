@@ -130,9 +130,6 @@ class Type:
         _types.append(self)
         _types_by_name[self.name] = self
 
-    def has_pointer(self):
-        return False
-
     def has_attr(self, name):
         return self.attributes.has_key(name)
 
@@ -222,9 +219,6 @@ class TypeAlias(Type):
         if self.has_attr("ctype"):
             return self.attributes["ctype"][0]
         return self.name
-
-    def has_pointer(self):
-        return self.the_type.has_pointer()
 
 class EnumBaseType(Type):
     def is_enum(self):
@@ -474,9 +468,6 @@ class PointerType(Type):
         else:
             return "uint64_t"
 
-    def has_pointer(self):
-        return True
-
     def contains_extra_size(self):
         return True
 
@@ -570,9 +561,6 @@ class Member(Containee):
     def __repr__(self):
         return "%s (%s)" % (str(self.name), str(self.member_type))
 
-    def has_pointer(self):
-        return self.member_type.has_pointer()
-
     def get_num_pointers(self):
         return self.member_type.get_num_pointers()
 
@@ -610,9 +598,6 @@ class SwitchCase:
         self.switch = container
         self.member = self.member.resolve(self)
         return self
-
-    def has_pointer(self):
-        return self.member.has_pointer()
 
     def get_num_pointers(self):
         return self.member.get_num_pointers()
@@ -706,12 +691,6 @@ class Switch(Containee):
     def contains_member(self, member):
         return False # TODO: Don't support switch deep member lookup yet
 
-    def has_pointer(self):
-        for c in self.cases:
-            if c.has_pointer():
-                return True
-        return False
-
     def get_num_pointers(self):
         count = 0
         for c in self.cases:
@@ -784,12 +763,6 @@ class ContainerType(Type):
         for m in self.members:
             names = names + m.get_pointer_names(marshalled)
         return names
-
-    def has_pointer(self):
-        for m in self.members:
-            if m.has_pointer():
-                return True
-        return False
 
     def get_nw_offset(self, member, prefix = "", postfix = ""):
         fixed = self.get_fixed_nw_offset(member)
