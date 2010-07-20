@@ -583,9 +583,9 @@ channel DisplayChannel : BaseChannel {
 	uint32 id;
 	uint32 multi_media_time;
 	uint32 data_size;
-	uint32 pad_size;
+	uint32 pad_size @zero;
 	uint8 data[data_size] @end  @nomarshal;
-	uint8 padding[pad_size] @end @ctype(uint8_t)  @nomarshal; /* Uhm, why are we sending padding over network? */
+	/* Ignore: uint8 padding[pad_size] */
     } stream_data;
 
     message {

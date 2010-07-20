@@ -8012,8 +8012,6 @@ static int red_rgb16bpp_to_24 (RedWorker *worker, const SpiceRect *src,
     return TRUE;
 }
 
-#define PADDING 8 /* old ffmpeg padding */
-
 static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable *drawable)
 {
     Stream *stream = drawable->stream;
@@ -8074,7 +8072,7 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
 
     while ((n = mjpeg_encoder_encode_frame(stream->mjpeg_encoder,
                                            display_channel->send_data.stream_outbuf,
-                                           display_channel->send_data.stream_outbuf_size - PADDING)) == 0) {
+                                           display_channel->send_data.stream_outbuf_size)) == 0) {
         uint8_t *new_buf;
         size_t new_size;
 
@@ -8095,10 +8093,9 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
     stream_data.id = stream - worker->streams_buf;
     stream_data.multi_media_time = drawable->red_drawable->mm_time;
     stream_data.data_size = n;
-    stream_data.pad_size = PADDING;
     spice_marshall_msg_display_stream_data(channel->send_data.marshaller, &stream_data);
     spice_marshaller_add_ref(channel->send_data.marshaller,
-                             display_channel->send_data.stream_outbuf, n + PADDING);
+                             display_channel->send_data.stream_outbuf, n);
 
     display_begin_send_message(display_channel, NULL);
     agent->lats_send_time = time_now;

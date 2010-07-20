@@ -158,7 +158,7 @@ public:
                 SpiceRect* dest, int clip_type, uint32_t num_clip_rects, SpiceRect* clip_rects);
     ~VideoStream();
 
-    void push_data(uint32_t mm_time, uint32_t length, uint8_t* data, uint32_t pad_size);
+    void push_data(uint32_t mm_time, uint32_t length, uint8_t* data);
     void set_clip(int type, uint32_t num_clip_rects, SpiceRect* clip_rects);
     const SpiceRect& get_dest() {return _dest;}
     void handle_update_mark(uint64_t update_mark);
@@ -445,7 +445,7 @@ uint32_t VideoStream::alloc_frame_slot()
     return frame_slot(_frames_head++);
 }
 
-void VideoStream::push_data(uint32_t mm_time, uint32_t length, uint8_t* data, uint32_t pad_size)
+void VideoStream::push_data(uint32_t mm_time, uint32_t length, uint8_t* data)
 {
     maintenance();
     uint32_t frame_slot = alloc_frame_slot();
@@ -1345,12 +1345,11 @@ void DisplayChannel::handle_stream_data(RedPeer::InMessage* message)
         THROW("invalid stream");
     }
 
-    if (message->size() < sizeof(SpiceMsgDisplayStreamData) + stream_data->data_size + stream_data->pad_size) {
+    if (message->size() < sizeof(SpiceMsgDisplayStreamData) + stream_data->data_size) {
         THROW("access violation");
     }
 
-    stream->push_data(stream_data->multi_media_time, stream_data->data_size, stream_data->data,
-                      stream_data->pad_size);
+    stream->push_data(stream_data->multi_media_time, stream_data->data_size, stream_data->data);
 }
 
 void DisplayChannel::handle_stream_clip(RedPeer::InMessage* message)

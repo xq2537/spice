@@ -288,7 +288,6 @@ typedef struct SpiceMsgDisplayStreamData {
     uint32_t id;
     uint32_t multi_media_time;
     uint32_t data_size;
-    uint32_t pad_size;
     uint8_t data[0];
 } SpiceMsgDisplayStreamData;
 
