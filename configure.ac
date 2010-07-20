@@ -114,7 +114,7 @@ AM_CONDITIONAL(SUPPORT_GL, test "x$have_opengl" = "xyes")
 dnl =========================================================================
 dnl Check deps
 
-PKG_CHECK_MODULES(PROTOCOL, spice-protocol)
+PKG_CHECK_MODULES(PROTOCOL, spice-protocol >= 0.5.3)
 AC_SUBST(PROTOCOL_CFLAGS)
 
 AC_CHECK_LIBM
