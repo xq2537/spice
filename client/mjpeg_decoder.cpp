@@ -65,7 +65,8 @@ extern "C" {
 
 MJpegDecoder::MJpegDecoder(int width, int height,
                            int stride,
-                           uint8_t *frame) :
+                           uint8_t *frame,
+                           bool back_compat) :
     _data(NULL)
     , _data_size(0)
     , _data_start(0)
@@ -75,6 +76,7 @@ MJpegDecoder::MJpegDecoder(int width, int height,
     , _height(height)
     , _stride(stride)
     , _frame(frame)
+    , _back_compat(back_compat)
     , _y(0)
     , _state(0)
 {
@@ -114,16 +116,23 @@ void MJpegDecoder::convert_scanline(void)
    row = (uint32_t *)(_frame + _y * _stride);
     s = _scanline;
 
-    /* TODO after major bump.
-       We need to check for the old major and for backwards compat
-       a) swap r and b
-       b) to-yuv with right values and then from-yuv with old wrong values
-    */
 
-    for (x = 0; x < _width; x++) {
-        c = s[0] << 16 | s[1] << 8 | s[2];
-        s += 3;
-        *row++ = c;
+    if (_back_compat) {
+        /* We need to check for the old major and for backwards compat
+           a) swap r and b (done)
+           b) to-yuv with right values and then from-yuv with old wrong values (TODO)
+        */
+        for (x = 0; x < _width; x++) {
+            c = s[2] << 16 | s[1] << 8 | s[0];
+            s += 3;
+            *row++ = c;
+        }
+    } else {
+        for (x = 0; x < _width; x++) {
+            c = s[0] << 16 | s[1] << 8 | s[2];
+            s += 3;
+            *row++ = c;
+        }
     }
 }
 

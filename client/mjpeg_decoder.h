@@ -37,7 +37,7 @@ extern "C" {
 class MJpegDecoder {
 public:
     MJpegDecoder(int width, int height, int stride,
-                 uint8_t *frame);
+                 uint8_t *frame, bool back_compat);
     ~MJpegDecoder();
 
     bool decode_data(uint8_t *data, size_t length);
@@ -63,6 +63,7 @@ private:
     int _height;
     int _stride;
     uint8_t *_frame;
+    bool _back_compat;
 
     int _y;
     uint8_t *_scanline;

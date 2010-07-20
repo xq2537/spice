@@ -290,7 +290,7 @@ VideoStream::VideoStream(RedClient& client, Canvas& canvas, DisplayChannel& chan
         _pixmap.width = src_width;
         _pixmap.height = src_height;
 
-	_mjpeg_decoder = new MJpegDecoder(stream_width, stream_height, _stride, _uncompressed_data);
+	_mjpeg_decoder = new MJpegDecoder(stream_width, stream_height, _stride, _uncompressed_data, channel.get_peer_major() == 1);
 
 #ifdef WIN32
         SetViewportOrgEx(_dc, 0, stream_height - src_height, NULL);
