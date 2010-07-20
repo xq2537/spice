@@ -797,29 +797,47 @@ def write_array_parser(writer, member, nelements, array, dest, scope):
     is_byte_size = array.is_bytes_length()
 
     element_type = array.element_type
-    if element_type == ptypes.uint8 or element_type == ptypes.int8:
-        if not member or member.has_attr("end"):
-            writer.statement("memcpy(end, in, %s)" % (nelements))
-            writer.increment("end", nelements)
-        else:
-            writer.statement("memcpy(%s, in, %s)" % (dest.get_ref(member.name), nelements))
-        writer.increment("in", nelements)
+    if member:
+        array_start = dest.get_ref(member.name)
+        at_end = member.has_attr("end")
     else:
-        if array.has_attr("ptr_array"):
-            scope.variable_def("void **", "ptr_array")
-            scope.variable_def("int", "ptr_array_index")
-            writer.assign("ptr_array_index", 0)
-            writer.assign("ptr_array", "(void **)end")
-            writer.increment("end", "sizeof(void *) * %s" % nelements)
+        array_start = "end"
+        at_end = True
+
+    if element_type == ptypes.uint8 or element_type == ptypes.int8:
+        writer.statement("memcpy(%s, in, %s)" % (array_start, nelements))
+        writer.increment("in", nelements)
+        if at_end:
+            writer.increment("end", nelements)
+    else:
         with writer.index() as index:
+            if member:
+                array_pos = "%s[%s]" % (array_start, index)
+            else:
+                array_pos = "*(%s *)end" % (element_type.c_type())
+
+            if array.has_attr("ptr_array"):
+                scope.variable_def("void **", "ptr_array")
+                scope.variable_def("int", "ptr_array_index")
+                writer.assign("ptr_array_index", 0)
+                writer.assign("ptr_array", "(void **)%s" % array_start)
+                writer.increment("end", "sizeof(void *) * %s" % nelements)
+                array_start = "end"
+                array_pos = "*(%s *)end" % (element_type.c_type())
+                at_end = True
+
             with writer.for_loop(index, nelements) as array_scope:
                 if array.has_attr("ptr_array"):
                     writer.statement("ptr_array[ptr_array_index++] = end")
                 if element_type.is_primitive():
-                    writer.statement("*(%s *)end = consume_%s(&in)" % (element_type.c_type(), element_type.primitive_type()))
-                    writer.increment("end", element_type.sizeof())
+                    writer.statement("%s = consume_%s(&in)" % (array_pos, element_type.primitive_type()))
+                    if at_end:
+                        writer.increment("end", element_type.sizeof())
                 else:
-                    dest2 = dest.child_at_end(writer, element_type)
+                    if at_end:
+                        dest2 = dest.child_at_end(writer, element_type)
+                    else:
+                        dest2 = RootDemarshallingDestination(dest, element_type.c_type(), element_type.c_type(), array_pos)
                     dest2.reuse_scope = array_scope
                     write_container_parser(writer, element_type, dest2)
                 if array.has_attr("ptr_array"):
