@@ -7933,7 +7933,7 @@ static int red_rgb24bpp_to_24 (RedWorker *worker, const SpiceRect *src,
     uint32_t image_stride;
     uint8_t *frame_row;
     size_t offset;
-    int i, chunk;
+    int i, x, chunk;
 
     chunks = image->data;
     offset = 0;
@@ -7958,7 +7958,13 @@ static int red_rgb24bpp_to_24 (RedWorker *worker, const SpiceRect *src,
         src_line += src->left * 3;
 
         frame_row = frame;
-        memcpy (frame_row, src_line, image_width * 3);
+        for (x = 0; x < image_width; x++) {
+            /* libjpegs stores rgb, spice/win32 stores bgr */
+            *frame_row++ = src_line[2]; /* red */
+            *frame_row++ = src_line[1]; /* green */
+            *frame_row++ = src_line[0]; /* blue */
+            src_line += 3;
+        }
         frame += frame_stride;
     }
 
