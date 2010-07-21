@@ -2090,10 +2090,51 @@ static uint8_t kbd_get_leds(SpiceKbdInstance *sin)
     return sif->get_leds(sin);
 }
 
+static SpiceMarshaller *marshaller_new_for_outgoing(InputsState *state, int type)
+{
+    SpiceMarshaller *m;
+    SpiceDataHeader *header;
+
+    m = spice_marshaller_new();
+    header = (SpiceDataHeader *)
+        spice_marshaller_reserve_space(m, sizeof(SpiceDataHeader));
+    header->serial = ++state->serial;
+    header->type = type;
+    header->sub_list = 0;
+
+    return m;
+}
+
+static int marshaller_outgoing_write(SpiceMarshaller *m,
+                                     InputsState *state)
+{
+    SpiceDataHeader *header = (SpiceDataHeader *)spice_marshaller_get_ptr(m);
+    uint8_t *data;
+    size_t len;
+    int free_data;
+
+    spice_marshaller_flush(m);
+    header->size = spice_marshaller_get_total_size(m) - sizeof(SpiceDataHeader);
+
+    data = spice_marshaller_linearize(m, 0, &len, &free_data);
+
+    if (outgoing_write(state->peer, &state->out_handler, data, len) != OUTGOING_OK) {
+        return FALSE;
+    }
+
+    if (free_data) {
+        free(data);
+    }
+
+    return TRUE;
+}
+
+
 static void inputs_handle_input(void *opaque, size_t size, uint32_t type, void *message)
 {
     InputsState *state = (InputsState *)opaque;
     uint8_t *buf = (uint8_t *)message;
+    SpiceMarshaller *m;
 
     switch (type) {
     case SPICE_MSGC_INPUTS_KEY_DOWN: {
@@ -2116,17 +2157,12 @@ static void inputs_handle_input(void *opaque, size_t size, uint32_t type, void *
         SpiceMsgcMouseMotion *mouse_motion = (SpiceMsgcMouseMotion *)buf;
 
         if (++state->motion_count % SPICE_INPUT_MOTION_ACK_BUNCH == 0) {
-            SpiceDataHeader header;
-
-            header.serial = ++state->serial;
-            header.type = SPICE_MSG_INPUTS_MOUSE_MOTION_ACK;
-            header.size = 0;
-            header.sub_list = 0;
-            if (outgoing_write(state->peer, &state->out_handler, &header, sizeof(SpiceDataHeader))
-                                                                                != OUTGOING_OK) {
+            m = marshaller_new_for_outgoing(state, SPICE_MSG_INPUTS_MOUSE_MOTION_ACK);
+            if (!marshaller_outgoing_write(m, state)) {
                 red_printf("motion ack failed");
                 reds_disconnect();
             }
+            spice_marshaller_destroy(m);
         }
         if (mouse && reds->mouse_mode == SPICE_MOUSE_MODE_SERVER) {
             SpiceMouseInterface *sif;
@@ -2141,17 +2177,12 @@ static void inputs_handle_input(void *opaque, size_t size, uint32_t type, void *
         SpiceMsgcMousePosition *pos = (SpiceMsgcMousePosition *)buf;
 
         if (++state->motion_count % SPICE_INPUT_MOTION_ACK_BUNCH == 0) {
-            SpiceDataHeader header;
-
-            header.serial = ++state->serial;
-            header.type = SPICE_MSG_INPUTS_MOUSE_MOTION_ACK;
-            header.size = 0;
-            header.sub_list = 0;
-            if (outgoing_write(state->peer, &state->out_handler, &header, sizeof(SpiceDataHeader))
-                                                                                != OUTGOING_OK) {
+            m = marshaller_new_for_outgoing(state, SPICE_MSG_INPUTS_MOUSE_MOTION_ACK);
+            if (!marshaller_outgoing_write(m, state)) {
                 red_printf("position ack failed");
                 reds_disconnect();
             }
+            spice_marshaller_destroy(m);
         }
         if (reds->mouse_mode != SPICE_MOUSE_MODE_CLIENT) {
             break;
@@ -2315,21 +2346,18 @@ static void inputs_shutdown(Channel *channel)
 static void inputs_migrate(Channel *channel)
 {
     InputsState *state = (InputsState *)channel->data;
-    SpiceDataHeader header;
+    SpiceMarshaller *m;
     SpiceMsgMigrate migrate;
 
-    red_printf("");
-    header.serial = ++state->serial;
-    header.type = SPICE_MSG_MIGRATE;
-    header.size = sizeof(migrate);
-    header.sub_list = 0;
+    m = marshaller_new_for_outgoing(state, SPICE_MSG_MIGRATE);
+
     migrate.flags = 0;
-    if (outgoing_write(state->peer, &state->out_handler, &header, sizeof(header))
-                                                                            != OUTGOING_OK ||
-        outgoing_write(state->peer, &state->out_handler, &migrate, sizeof(migrate))
-                                                                            != OUTGOING_OK) {
+    spice_marshall_msg_migrate(m, &migrate);
+
+    if (!marshaller_outgoing_write(m, state)) {
         red_printf("write failed");
     }
+    spice_marshaller_destroy(m);
 }
 
 static void inputs_select(void *opaque, int select)
@@ -2389,46 +2417,40 @@ static void inputs_link(Channel *channel, RedsStreamContext *peer, int migration
     peer->watch = core->watch_add(peer->socket, SPICE_WATCH_EVENT_READ,
                                   inputs_event, inputs_state);
 
-    SpiceDataHeader header;
+    SpiceMarshaller *m;
     SpiceMsgInputsInit inputs_init;
-    header.serial = ++inputs_state->serial;
-    header.type = SPICE_MSG_INPUTS_INIT;
-    header.size = sizeof(SpiceMsgInputsInit);
-    header.sub_list = 0;
+    m = marshaller_new_for_outgoing(inputs_state, SPICE_MSG_INPUTS_INIT);
     inputs_init.keyboard_modifiers = kbd_get_leds(keyboard);
-    if (outgoing_write(inputs_state->peer, &inputs_state->out_handler, &header,
-                       sizeof(SpiceDataHeader)) != OUTGOING_OK ||
-        outgoing_write(inputs_state->peer, &inputs_state->out_handler, &inputs_init,
-                       sizeof(SpiceMsgInputsInit)) != OUTGOING_OK) {
+    spice_marshall_msg_inputs_init(m, &inputs_init);
+    if (!marshaller_outgoing_write(m, inputs_state)) {
         red_printf("failed to send modifiers state");
         reds_disconnect();
     }
+    spice_marshaller_destroy(m);
 }
 
 static void reds_send_keyboard_modifiers(uint8_t modifiers)
 {
     Channel *channel = reds_find_channel(SPICE_CHANNEL_INPUTS, 0);
     InputsState *state;
+    SpiceMsgInputsKeyModifiers key_modifiers;
+    SpiceMarshaller *m;
 
     if (!channel || !(state = (InputsState *)channel->data)) {
         return;
     }
     ASSERT(state->peer);
-    SpiceDataHeader header;
-    SpiceMsgInputsKeyModifiers key_modifiers;
-    header.serial = ++state->serial;
-    header.type = SPICE_MSG_INPUTS_KEY_MODIFIERS;
-    header.size = sizeof(SpiceMsgInputsKeyModifiers);
-    header.sub_list = 0;
-    key_modifiers.modifiers = modifiers;
 
-    if (outgoing_write(state->peer, &state->out_handler, &header, sizeof(SpiceDataHeader))
-                                                                                != OUTGOING_OK ||
-        outgoing_write(state->peer, &state->out_handler, &key_modifiers, sizeof(SpiceMsgInputsKeyModifiers))
-                                                                                != OUTGOING_OK) {
+    m = marshaller_new_for_outgoing(state, SPICE_MSG_INPUTS_KEY_MODIFIERS);
+
+    key_modifiers.modifiers = modifiers;
+    spice_marshall_msg_inputs_key_modifiers(m, &key_modifiers);
+
+    if (!marshaller_outgoing_write(m, state)) {
         red_printf("failed to send modifiers state");
         reds_disconnect();
     }
+    spice_marshaller_destroy(m);
 }
 
 static void reds_on_keyboard_leds_change(void *opaque, uint8_t leds)
