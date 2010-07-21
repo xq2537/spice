@@ -106,6 +106,7 @@ static void openssl_init();
 #define KEY_MODIFIERS_TTL (1000 * 2) /*2sec*/
 #define MM_TIMER_GRANULARITY_MS (1000 / 30)
 #define MM_TIME_DELTA 400 /*ms*/
+#define VDI_PORT_WRITE_RETRY_TIMEOUT 100 /*ms*/
 
 // approximate max receive message size
 #define RECIVE_BUF_SIZE \
@@ -279,6 +280,8 @@ typedef struct RedsState {
     SpiceTimer *mig_timer;
     SpiceTimer *key_modifiers_timer;
     SpiceTimer *mm_timer;
+    SpiceTimer *vdi_port_write_timer;
+    int vdi_port_write_timer_started;
 
     TicketAuthentication taTicket;
     SSL_CTX *ctx;
@@ -1127,6 +1130,24 @@ static void reds_send_tokens()
     reds_push_pipe_item(item);
 }
 
+static int write_to_vdi_port();
+
+static void vdi_port_write_timer_start()
+{
+    if (reds->vdi_port_write_timer_started) {
+        return;
+    }
+    reds->vdi_port_write_timer_started = TRUE;
+    core->timer_start(reds->vdi_port_write_timer,
+                      VDI_PORT_WRITE_RETRY_TIMEOUT);
+}
+
+static void vdi_port_write_retry()
+{
+    write_to_vdi_port();
+    reds->vdi_port_write_timer_started = FALSE;
+}
+
 static int write_to_vdi_port()
 {
     VDIPortState *state = &reds->agent_state;
@@ -1158,6 +1179,10 @@ static int write_to_vdi_port()
             continue;
         }
         buf->now += n;
+    }
+    // Workaround for lack of proper sif write_possible callback (RHBZ 616772)
+    if (ring_item != NULL) {
+        vdi_port_write_timer_start();
     }
     return total;
 }
@@ -3635,6 +3660,11 @@ static void do_spice_init(SpiceCoreInterface *core_interface)
     if (!(reds->key_modifiers_timer = core->timer_add(key_modifiers_sender, NULL))) {
         red_error("key modifiers timer create failed");
     }
+    if (!(reds->vdi_port_write_timer = core->timer_add(vdi_port_write_retry, NULL)))
+    {
+        red_error("vdi port write timer create failed");
+    }
+    reds->vdi_port_write_timer_started = FALSE;
 
 #ifdef RED_STATISTICS
     int shm_name_len = strlen(SPICE_STAT_SHM_NAME) + 20;
