@@ -3,7 +3,7 @@ Major changes in 0.5.3:
 
 Major changes in this release:
 * Various changes in the network protocol to make it more efficient.
-* New commandline arguments to enable/disable jpeg and zlip-over-glz.
+* New commandline arguments to enable/disable jpeg and zlib-over-glz.
 * Initial work on clipboard sharing added
 * Fix color channel order for mjpegs when connecting to older spice
    server.
