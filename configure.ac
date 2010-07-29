@@ -34,7 +34,7 @@ AC_SUBST(SPICE_LT_VERSION)
 #
 AC_MSG_CHECKING(for x86 or x86-64 platform)
 case $host_cpu in
-  i386|i486|i586|i686|i786|k6|k7)
+  i386|i486|i586|i686|i786|k6|k7|arm|armv7)
 	variant=32
         ;;
   x86_64)
