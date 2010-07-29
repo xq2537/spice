@@ -650,7 +650,7 @@ RedScreen* Application::get_screen(int id)
         SpicePoint size;
 
         if (_full_screen && mon) {
-            SpicePoint size = mon->get_size();
+            size = mon->get_size();
         } else {
             size.x = SCREEN_INIT_WIDTH;
             size.y = SCREEN_INIT_HEIGHT;
