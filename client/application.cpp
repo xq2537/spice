@@ -1926,6 +1926,8 @@ bool Application::set_disabled_display_effects(CmdLineParser& parser, char *val,
             disp_setting._disable_animation = true;
         } else {
             Platform::term_printf("%s: bad display effect type \"%s\"\n", arg0, val);
+            _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
+            return false;
         }
     } while ((val = parser.next_argument()));
 
