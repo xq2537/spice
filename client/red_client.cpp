@@ -75,6 +75,11 @@ private:
     RedClient& _client;
 };
 
+void ClipboardEvent::response(AbstractProcessLoop& events_loop)
+{
+    static_cast<RedClient*>(events_loop.get_owner())->send_agent_clipboard();
+}
+
 Migrate::Migrate(RedClient& client)
     : _client (client)
     , _running (false)
@@ -747,7 +752,7 @@ uint32_t get_agent_clipboard_type(uint32_t type)
     }
 }
 
-void RedClient::post_agent_clipboard()
+void RedClient::do_send_agent_clipboard()
 {
     uint32_t size;
 
@@ -771,7 +776,7 @@ void RedClient::post_agent_clipboard()
 }
 
 //FIXME: currently supports text only; better name - poll_clipboard?
-void RedClient::on_clipboard_change()
+void RedClient::send_agent_clipboard()
 {
     //FIXME: check connected  - assert on disconnect
     uint32_t clip_type = Platform::CLIPBOARD_UTF8_TEXT;
@@ -799,9 +804,16 @@ void RedClient::on_clipboard_change()
         _agent_out_msg_size = 0;
         return;
     }
+
     if (_agent_tokens) {
-        post_agent_clipboard();
+        do_send_agent_clipboard();
     }
+}
+
+void RedClient::on_clipboard_change()
+{
+    AutoRef<ClipboardEvent> event(new ClipboardEvent());
+    get_process_loop().push_event(*event);
 }
 
 void RedClient::set_mouse_mode(uint32_t supported_modes, uint32_t current_mode)
@@ -960,6 +972,8 @@ void RedClient::handle_agent_data(RedPeer::InMessage* message)
             msg_size -= n;
             msg_pos += n;
             if (_agent_msg_pos == sizeof(VDAgentMessage)) {
+                DBG(0, "agent msg start: msg_size=%d, protocol=%d, type=%d",
+                    _agent_msg->size, _agent_msg->protocol, _agent_msg->type);
                 if (_agent_msg->protocol != VD_AGENT_PROTOCOL) {
                     THROW("Invalid protocol %u", _agent_msg->protocol);
                 }
@@ -974,6 +988,7 @@ void RedClient::handle_agent_data(RedPeer::InMessage* message)
             msg_pos += n;
         }
         if (_agent_msg_pos == sizeof(VDAgentMessage) + _agent_msg->size) {
+            DBG(0, "agent msg end");
             switch (_agent_msg->type) {
             case VD_AGENT_REPLY: {
                 on_agent_reply((VDAgentReply*)_agent_msg_data);
@@ -999,7 +1014,7 @@ void RedClient::handle_agent_tokens(RedPeer::InMessage* message)
     SpiceMsgMainAgentTokens *token = (SpiceMsgMainAgentTokens *)message->data();
     _agent_tokens += token->num_tokens;
     if (_agent_out_msg_pos < _agent_out_msg_size) {
-        post_agent_clipboard();
+        do_send_agent_clipboard();
     }
 }
 

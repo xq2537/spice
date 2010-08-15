@@ -144,10 +144,16 @@ public:
     uint32_t _color_depth;
 };
 
+class ClipboardEvent : public Event {
+public:
+    virtual void response(AbstractProcessLoop& events_loop);
+};
+
 class RedClient: public RedChannel {
 public:
     friend class RedChannel;
     friend class Migrate;
+    friend class ClipboardEvent;
 
     RedClient(Application& application);
     ~RedClient();
@@ -224,7 +230,8 @@ private:
 
     void on_agent_reply(VDAgentReply* reply);
     void on_agent_clipboard(VDAgentClipboard* clipboard, uint32_t size);
-    void post_agent_clipboard();
+    void send_agent_clipboard();
+    void do_send_agent_clipboard();
 
     ChannelFactory* find_factory(uint32_t type);
     void create_channel(uint32_t type, uint32_t id);
