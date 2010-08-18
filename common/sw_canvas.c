@@ -1241,7 +1241,7 @@ SpiceCanvas *canvas_create(int width, int height, uint32_t format
 }
 
 SpiceCanvas *canvas_create_for_data(int width, int height, uint32_t format,
-                                    uint8_t *data, size_t stride
+                                    uint8_t *data, int stride
 #ifdef SW_CANVAS_CACHE
                            , SpiceImageCache *bits_cache
                            , SpicePaletteCache *palette_cache
