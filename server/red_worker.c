@@ -1516,7 +1516,10 @@ static inline void red_destroy_surface(RedWorker *worker, uint32_t surface_id)
 
     if (!--surface->refs) {
 #ifdef STREAM_TRACE
-        red_reset_stream_trace(worker);
+        // only primary surface streams are supported
+        if (surface_id == 0) {
+            red_reset_stream_trace(worker);
+        }
 #endif
         if (surface->context.canvas) {
             surface->context.canvas->ops->destroy(surface->context.canvas);
@@ -2504,6 +2507,7 @@ static inline void red_stop_stream_gracefully(RedWorker *worker, Stream *stream)
 #endif
 
 #ifdef STREAM_TRACE
+// region should be a primary surface region
 static void red_detach_streams_behind(RedWorker *worker, QRegion *region)
 {
     Ring *ring = &worker->streams;
@@ -2556,6 +2560,11 @@ static void red_streams_update_clip(RedWorker *worker, Drawable *drawable)
     RingItem *item;
 
     if (!(channel = worker->display_channel)) {
+        return;
+    }
+
+    // only primary surface streams are supported
+    if (drawable->surface_id != 0) {
         return;
     }
 
@@ -3261,11 +3270,13 @@ static inline int red_current_add(RedWorker *worker, Ring *ring, Drawable *drawa
 #endif
         red_streams_update_clip(worker, drawable);
     } else {
+        if (drawable->surface_id == 0) {
 #ifdef STREAM_TRACE
-        red_detach_streams_behind(worker, &drawable->tree_item.base.rgn);
+            red_detach_streams_behind(worker, &drawable->tree_item.base.rgn);
 #else
-        red_stop_streams_behind(worker, &drawable->tree_item.base.rgn);
+            red_stop_streams_behind(worker, &drawable->tree_item.base.rgn);
 #endif
+        }
     }
     region_destroy(&exclude_rgn);
     __current_add_drawable(worker, drawable, ring);
@@ -3416,11 +3427,15 @@ static inline int red_current_add_with_shadow(RedWorker *worker, Ring *ring, Dra
     worker->current_size++;
     // item and his shadow must initially be placed in the same container.
     // for now putting them on root.
+
+    // only primary surface streams are supported
+    if (item->surface_id == 0) {
 #ifdef STREAM_TRACE
-    red_detach_streams_behind(worker, &shadow->base.rgn);
+        red_detach_streams_behind(worker, &shadow->base.rgn);
 #else
-    red_stop_streams_behind(worker, &shadow->base.rgn);
+        red_stop_streams_behind(worker, &shadow->base.rgn);
 #endif
+    }
     ring_add(ring, &shadow->base.siblings_link);
     __current_add_drawable(worker, item, ring);
     if (item->tree_item.effect == QXL_EFFECT_OPAQUE) {
@@ -3434,11 +3449,13 @@ static inline int red_current_add_with_shadow(RedWorker *worker, Ring *ring, Dra
         region_destroy(&exclude_rgn);
         red_streams_update_clip(worker, item);
     } else {
+        if (item->surface_id == 0) {
 #ifdef STREAM_TRACE
-        red_detach_streams_behind(worker, &item->tree_item.base.rgn);
+            red_detach_streams_behind(worker, &item->tree_item.base.rgn);
 #else
-        red_stop_streams_behind(worker, &item->tree_item.base.rgn);
+            red_stop_streams_behind(worker, &item->tree_item.base.rgn);
 #endif
+        }
     }
     stat_add(&worker->add_stat, start_time);
     return TRUE;
@@ -3456,6 +3473,11 @@ static inline void red_update_streamable(RedWorker *worker, Drawable *drawable,
     SpiceImage *image;
 
     if (worker->streaming_video == STREAM_VIDEO_OFF) {
+        return;
+    }
+
+    // only primary surface streams are supported
+    if (drawable->surface_id != 0) {
         return;
     }
 
@@ -3753,6 +3775,17 @@ static inline int red_handle_surfaces_dependencies(RedWorker *worker, Drawable *
         if (drawable->surfaces_dest[x] != drawable->surface_id) {
             add_to_surface_dependency(worker, drawable->surfaces_dest[x],
                                       &drawable->depend_items[x], drawable);
+
+            if (drawable->surfaces_dest[x] == 0) {
+                QRegion depend_region;
+                region_init(&depend_region);
+                region_add(&depend_region, &drawable->red_drawable->surfaces_rects[x]);
+#ifdef STREAM_TRACE
+                red_detach_streams_behind(worker, &depend_region);
+#else
+                red_stop_streams_behind(worker, &depend_region);
+#endif
+            }
         }
     }
 
