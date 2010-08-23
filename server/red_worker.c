@@ -3020,7 +3020,6 @@ static inline int red_current_add(RedWorker *worker, Ring *ring, Drawable *drawa
         red_streams_update_clip(worker, drawable);
     } else {
         if (drawable->surface_id == 0) {
-#ifdef STREAM_TRACE
             red_detach_streams_behind(worker, &drawable->tree_item.base.rgn);
         }
     }
