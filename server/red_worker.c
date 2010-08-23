@@ -61,7 +61,6 @@
 //#define COMPRESS_STAT
 //#define DUMP_BITMAP
 //#define PIPE_DEBUG
-#define USE_EXCLUDE_RGN
 //#define RED_WORKER_STAT
 //#define DRAW_ALL
 //#define COMPRESS_DEBUG
@@ -2050,8 +2049,6 @@ static inline void __exclude_region(RedWorker *worker, Ring *ring, TreeItem *ite
     stat_add(&worker->__exclude_stat, start_time);
 }
 
-#ifdef USE_EXCLUDE_RGN
-
 static void exclude_region(RedWorker *worker, Ring *ring, RingItem *ring_item, QRegion *rgn,
                            TreeItem **last, Drawable *frame_candidate)
 {
@@ -2114,67 +2111,6 @@ static void exclude_region(RedWorker *worker, Ring *ring, RingItem *ring_item, Q
     }
 }
 
-#else
-
-static void exclude_region(RedWorker *worker, Ring *ring, RingItem *ring_item, QRegion *rgn)
-{
-#ifdef RED_WORKER_STAT
-    stat_time_t start_time = stat_now();
-#endif
-    Ring *top_ring;
-
-    if (!ring_item) {
-        return;
-    }
-
-    top_ring = ring;
-
-    for (;;) {
-        TreeItem *now = SPICE_CONTAINEROF(ring_item, TreeItem, siblings_link);
-        Container *container = now->container;
-
-        ASSERT(!region_is_empty(&now->rgn));
-
-        if (region_test(rgn, &now->rgn, REGION_TEST_SHARED)) {
-            print_base_item("EXCLUDE2", now);
-            __exclude_region(worker, ring, now, rgn, &top_ring);
-            print_base_item("EXCLUDE3", now);
-
-            if (region_is_empty(&now->rgn)) {
-                ASSERT(now->type != TREE_ITEM_TYPE_SHADOW);
-                ring_item = now->siblings_link.prev;
-                print_base_item("EXCLUDE_REMOVE", now);
-                current_remove(worker, now);
-            } else if (now->type == TREE_ITEM_TYPE_CONTAINER) {
-                Container *container = (Container *)now;
-                if ((ring_item = ring_get_head(&container->items))) {
-                    ring = &container->items;
-                    ASSERT(((TreeItem *)ring_item)->container);
-                    continue;
-                }
-                ring_item = &now->siblings_link;
-            }
-
-            if (region_is_empty(rgn)) {
-                stat_add(&worker->exclude_stat, start_time);
-                return;
-            }
-        }
-
-        while (!(ring_item = ring_next(ring, ring_item))) {
-            if (ring == top_ring) {
-                stat_add(&worker->exclude_stat, start_time);
-                return;
-            }
-            ring_item = &container->base.siblings_link;
-            container = container->base.container;
-            ring = (container) ? &container->items : top_ring;
-        }
-    }
-}
-
-#endif
-
 static inline Container *__new_container(RedWorker *worker, DrawItem *item)
 {
     Container *container = spice_new(Container, 1);
@@ -2213,8 +2149,6 @@ static inline void __current_add_drawable(RedWorker *worker, Drawable *drawable,
     ring_add(&surface->current_list, &drawable->surface_list_link);
     drawable->refs++;
 }
-
-#ifdef USE_EXCLUDE_RGN
 
 static int is_equal_path(RedWorker *worker, SpicePath *path1, SpicePath *path2)
 {
@@ -3096,103 +3030,6 @@ static inline int red_current_add(RedWorker *worker, Ring *ring, Drawable *drawa
     return TRUE;
 }
 
-#else
-
-static inline void __handle_remove_shadow(RedWorker *worker, TreeItem *item, Ring *ring)
-{
-    Shadow *shadow;
-    Ring *_ring;
-
-    while (item->type == TREE_ITEM_TYPE_CONTAINER) {
-        if (!(item = (TreeItem *)ring_get_tail(&((Container *)item)->items))) {
-            return;
-        }
-    }
-
-    if (item->type != TREE_ITEM_TYPE_DRAWABLE || !(shadow = ((DrawItem *)item)->shadow)) {
-        return;
-    }
-    print_base_item("SHADW", &shadow->base);
-    _ring = (shadow->base.container) ? &shadow->base.container->items : ring;
-    exclude_region(worker, _ring, ring_next(_ring, &shadow->base.siblings_link), &shadow->on_hold);
-    region_clear(&shadow->on_hold);
-}
-
-static inline int red_current_add(RedWorker *worker, Ring *ring, Drawable *drawable)
-{
-    DrawItem *item = &drawable->tree_item;
-#ifdef RED_WORKER_STAT
-    stat_time_t start_time = stat_now();
-#endif
-    RingItem *now;
-
-    print_base_item("ADD", &item->base);
-    ASSERT(!region_is_empty(&item->base.rgn));
-    worker->current_size++;
-    now = ring_next(ring, ring);
-
-    while (now) {
-        TreeItem *sibling = SPICE_CONTAINEROF(now, TreeItem, siblings_link);
-        int test_res;
-
-        if (!region_bounds_intersects(&item->base.rgn, &sibling->rgn)) {
-            print_base_item("EMPTY", sibling);
-            now = ring_next(ring, now);
-            continue;
-        }
-        test_res = region_test(&item->base.rgn, &sibling->rgn, REGION_TEST_ALL);
-        if (!(test_res & REGION_TEST_SHARED)) {
-            print_base_item("EMPTY", sibling);
-            now = ring_next(ring, now);
-            continue;
-        } else if (sibling->type != TREE_ITEM_TYPE_SHADOW) {
-            if (!(test_res & REGION_TEST_RIGHT_EXCLUSIVE) && item->effect == QXL_EFFECT_OPAQUE) {
-                print_base_item("CONTAIN", sibling);
-                __handle_remove_shadow(worker, sibling);
-                now = now->prev;
-                current_remove(worker, sibling);
-                now = ring_next(ring, now);
-                continue;
-            }
-
-            if (!(test_res & REGION_TEST_LEFT_EXCLUSIVE) && is_opaque_item(sibling)) {
-                Container *container;
-
-                print_base_item("IN", sibling);
-                if (sibling->type == TREE_ITEM_TYPE_CONTAINER) {
-                    container = (Container *)sibling;
-                    ring = &container->items;
-                    item->base.container = container;
-                    now = ring_next(ring, ring);
-                    continue;
-                }
-                ASSERT(IS_DRAW_ITEM(sibling));
-                if (!((DrawItem *)sibling)->container_root) {
-                    container = __new_container(worker, (DrawItem *)sibling);
-                    if (!container) {
-                        red_printf("create new container failed");
-                        return FALSE;
-                    }
-                    item->base.container = container;
-                    ring = &container->items;
-                }
-            }
-        }
-        if (item->effect == QXL_EFFECT_OPAQUE) {
-            QRegion exclude_rgn;
-            region_clone(&exclude_rgn, &item->base.rgn);
-            exclude_region(worker, ring, now, &exclude_rgn);
-            region_destroy(&exclude_rgn);
-        }
-        break;
-    }
-    __current_add_drawable(worker, drawable, ring);
-    stat_add(&worker->add_stat, start_time);
-    return TRUE;
-}
-
-#endif
-
 static void add_clip_rects(QRegion *rgn, SpiceClipRects *data)
 {
     int i;
@@ -3249,11 +3086,7 @@ static inline int red_current_add_with_shadow(RedWorker *worker, Ring *ring, Dra
     if (item->tree_item.effect == QXL_EFFECT_OPAQUE) {
         QRegion exclude_rgn;
         region_clone(&exclude_rgn, &item->tree_item.base.rgn);
-#ifdef USE_EXCLUDE_RGN
         exclude_region(worker, ring, &shadow->base.siblings_link, &exclude_rgn, NULL, NULL);
-#else
-        exclude_region(worker, ring, &shadow->base.siblings_link, &exclude_rgn);
-#endif
         region_destroy(&exclude_rgn);
         red_streams_update_clip(worker, item);
     } else {
