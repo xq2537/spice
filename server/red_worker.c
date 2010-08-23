@@ -590,11 +590,9 @@ typedef struct GlzDrawableInstanceItem {
 
 struct RedGlzDrawable {
     RingItem link;    // ordered by the time it was encoded
-    RingItem surface_link;
     RedDrawable *red_drawable;
     Drawable    *drawable;
     uint32_t     group_id;
-    int32_t      surface_id;
     SpiceImage  *self_bitmap;
     GlzDrawableInstanceItem instances_pool[MAX_GLZ_DRAWABLE_INSTANCES];
     Ring instances;
@@ -830,7 +828,6 @@ typedef struct RedSurface {
     uint32_t refs;
     Ring current;
     Ring current_list;
-    Ring glz_drawables;
 #ifdef ACYCLIC_SURFACE_DEBUG
     int current_gn;
 #endif
@@ -4672,14 +4669,11 @@ static RedGlzDrawable *red_display_get_glz_drawable(DisplayChannel *channel, Dra
     ret->red_drawable = drawable->red_drawable;
     ret->drawable = drawable;
     ret->group_id = drawable->group_id;
-    ret->surface_id = drawable->surface_id;
     ret->self_bitmap = drawable->self_bitmap;
     ret->instances_count = 0;
     ring_init(&ret->instances);
 
     ring_item_init(&ret->link);
-    ring_item_init(&ret->surface_link);
-    ring_add(&surface->glz_drawables, &ret->surface_link);
     ring_add_before(&ret->link, &channel->glz_drawables);
     drawable->red_glz_drawable = ret;
 
@@ -4745,7 +4739,6 @@ static void red_display_free_glz_drawable_instance(DisplayChannel *channel,
         if (ring_item_is_linked(&glz_drawable->link)) {
             ring_remove(&glz_drawable->link);
         }
-        ring_remove(&glz_drawable->surface_link);
         free(glz_drawable);
     }
 }
@@ -8744,7 +8737,6 @@ static inline void red_create_surface(RedWorker *worker, uint32_t surface_id, ui
     ring_init(&surface->current);
     ring_init(&surface->current_list);
     ring_init(&surface->depend_on_me);
-    ring_init(&surface->glz_drawables);
     region_init(&surface->draw_dirty_region);
     surface->refs = 1;
     if (worker->renderer != RED_RENDERER_INVALID) {
