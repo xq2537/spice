@@ -1541,10 +1541,9 @@ static inline void set_surface_release_info(RedWorker *worker, uint32_t surface_
 }
 
 static inline void free_red_drawable(RedWorker *worker, RedDrawable *drawable, uint32_t group_id,
-                                     SpiceImage *self_bitmap, int surface_id)
+                                     SpiceImage *self_bitmap)
 {
     QXLReleaseInfoExt release_info_ext;
-    red_destroy_surface(worker, surface_id);
 
     if (self_bitmap) {
         red_put_image(self_bitmap);
@@ -1600,12 +1599,12 @@ static inline void release_drawable(RedWorker *worker, Drawable *item)
 
         remove_drawable_dependencies(worker, item);
         red_dec_surfaces_drawable_dependencies(worker, item);
+        red_destroy_surface(worker, item->surface_id);
 
         if (item->red_glz_drawable) {
             item->red_glz_drawable->drawable = NULL;
         } else { // no reference to the qxl drawable left
-            free_red_drawable(worker, item->red_drawable, item->group_id, item->self_bitmap,
-                              item->surface_id);
+            free_red_drawable(worker, item->red_drawable, item->group_id, item->self_bitmap);
         }
         free_drawable(worker, item);
     }
@@ -1796,24 +1795,6 @@ static void red_current_clear(RedWorker *worker, int surface_id)
         TreeItem *now = SPICE_CONTAINEROF(ring_item, TreeItem, siblings_link);
         current_remove(worker, now);
     }
-}
-
-static void red_clear_surface_glz_drawables(RedWorker *worker, int surface_id)
-{
-    RingItem *ring_item;
- 
-    if (!worker->display_channel) {
-        return;
-    }
-
-    pthread_rwlock_wrlock(&worker->display_channel->glz_dict->encode_lock);
-
-    while ((ring_item = ring_get_head(&worker->surfaces[surface_id].glz_drawables))) {
-        RedGlzDrawable *now = SPICE_CONTAINEROF(ring_item, RedGlzDrawable, surface_link);
-        red_display_free_glz_drawable(worker->display_channel, now);
-    }
-
-    pthread_rwlock_unlock(&worker->display_channel->glz_dict->encode_lock);
 }
 
 static void red_clear_surface_drawables_from_pipe(RedWorker *worker, int surface_id)
@@ -3541,7 +3522,6 @@ static inline void red_process_surface(RedWorker *worker, RedSurfaceCmd *surface
         set_surface_release_info(worker, surface_id, 0, surface->release_info, group_id);
         red_handle_depends_on_target_surface(worker, surface_id);
         red_current_clear(worker, surface_id);
-        red_clear_surface_glz_drawables(worker, surface_id);
         red_clear_surface_drawables_from_pipe(worker, surface_id);
         red_destroy_surface(worker, surface_id);
         break;
@@ -4759,8 +4739,7 @@ static void red_display_free_glz_drawable_instance(DisplayChannel *channel,
             drawable->red_glz_drawable = NULL;
         } else { // no reference to the qxl drawable left
             free_red_drawable(channel->base.worker, glz_drawable->red_drawable,
-                              glz_drawable->group_id, glz_drawable->self_bitmap,
-                              glz_drawable->surface_id);
+                              glz_drawable->group_id, glz_drawable->self_bitmap);
         }
 
         if (ring_item_is_linked(&glz_drawable->link)) {
@@ -9802,7 +9781,6 @@ static inline void destroy_surface_wait(RedWorker *worker, int surface_id)
     }
     red_flush_surface_pipe(worker);
     red_current_clear(worker, surface_id);
-    red_clear_surface_glz_drawables(worker, surface_id);
     red_clear_surface_drawables_from_pipe(worker, surface_id);
     red_wait_outgoing_item((RedChannel *)worker->display_channel);
     if (worker->display_channel) {
