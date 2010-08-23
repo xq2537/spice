@@ -277,6 +277,14 @@ XImage *XPlatform::create_x_shm_image(RedDrawable::Format format,
         goto err2;
     }
 
+    /* Ensure the xserver has attached the xshm segment */
+    XSync (XPlatform::get_display(), False);
+
+    /* Mark segment as released so that it will be destroyed when
+       the xserver releases the segment. This way we won't leak
+       the segment if the client crashes. */
+    shmctl(shminfo->shmid, IPC_RMID, 0);
+
     image->data = (char *)shminfo->shmaddr;
 
     *shminfo_out = shminfo;
