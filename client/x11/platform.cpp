@@ -242,22 +242,38 @@ XImage *XPlatform::create_x_shm_image(RedDrawable::Format format,
                             format == RedDrawable::A1 ? XYBitmap : ZPixmap,
                             NULL, shminfo, width, height);
     if (image == NULL) {
+	x_shm_avail = false;
         goto err1;
     }
 
     shminfo->shmid = shmget(IPC_PRIVATE, height * image->bytes_per_line,
                             IPC_CREAT | 0777);
     if (shminfo->shmid < 0) {
+        /* EINVAL indicates, most likely, that the segment we asked for
+         * is bigger than SHMMAX, so we don't treat it as a permanent
+         * error. ENOSPC and ENOMEM may also indicate this, but
+         * more likely are permanent errors.
+         */
+        if (errno != EINVAL) {
+            x_shm_avail = false;
+        }
         goto err2;
     }
 
     shminfo->shmaddr = (char *)shmat(shminfo->shmid, 0, 0);
     if (!shminfo->shmaddr) {
+        /* Failure in shmat is almost certainly permanent. Most likely error is
+         * EMFILE, which would mean that we've exceeded the per-process
+         * Shm segment limit.
+         */
+        x_shm_avail = false;
+
         goto err2;
     }
 
     shminfo->readOnly = False;
     if (!XShmAttach(XPlatform::get_display(), shminfo)) {
+        x_shm_avail = false;
         goto err2;
     }
 
