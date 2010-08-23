@@ -60,7 +60,6 @@
 
 //#define COMPRESS_STAT
 //#define DUMP_BITMAP
-#define STREAM_TRACE
 //#define PIPE_DEBUG
 #define USE_EXCLUDE_RGN
 //#define RED_WORKER_STAT
@@ -422,12 +421,10 @@ typedef struct Stream Stream;
 struct Stream {
     uint8_t refs;
     Drawable *current;
-#ifdef STREAM_TRACE
     red_time_t last_time;
     int width;
     int height;
     SpiceRect dest_area;
-#endif
     MJpegEncoder *mjpeg_encoder;
     int top_down;
     Stream *next;
@@ -783,9 +780,7 @@ struct Drawable {
     int gradual_frames_count;
     int last_gradual_frame;
     Stream *stream;
-#ifdef STREAM_TRACE
     int streamable;
-#endif
     BitmapGradualType copy_bitmap_graduality;
     uint32_t group_id;
     SpiceImage *self_bitmap;
@@ -849,7 +844,6 @@ typedef struct RedSurface {
     QXLReleaseInfoExt create, destroy;
 } RedSurface;
 
-#ifdef STREAM_TRACE
 typedef struct ItemTrace {
     red_time_t time;
     int frames_count;
@@ -863,8 +857,6 @@ typedef struct ItemTrace {
 #define TRACE_ITEMS_SHIFT 3
 #define NUM_TRACE_ITEMS (1 << TRACE_ITEMS_SHIFT)
 #define ITEMS_TRACE_MASK (NUM_TRACE_ITEMS - 1)
-
-#endif
 
 #define NUM_DRAWABLES 1000
 #define NUM_CURSORS 100
@@ -928,10 +920,8 @@ typedef struct RedWorker {
     Stream streams_buf[NUM_STREAMS];
     Stream *free_streams;
     Ring streams;
-#ifdef STREAM_TRACE
     ItemTrace items_trace[NUM_TRACE_ITEMS];
     uint32_t next_item_trace;
-#endif
 
     QuicData quic_data;
     QuicContext *quic;
@@ -941,7 +931,7 @@ typedef struct RedWorker {
 
     JpegData jpeg_data;
     JpegEncoderContext *jpeg;
-    
+
     ZlibData zlib_data;
     ZlibEncoder *zlib;
 
@@ -989,9 +979,7 @@ static void red_update_area(RedWorker *worker, const SpiceRect *area, int surfac
 static void red_release_cursor(RedWorker *worker, CursorItem *cursor);
 static inline void release_drawable(RedWorker *worker, Drawable *item);
 static void red_display_release_stream(DisplayChannel *display, StreamAgent *agent);
-#ifdef STREAM_TRACE
 static inline void red_detach_stream(RedWorker *worker, Stream *stream);
-#endif
 static void red_stop_stream(RedWorker *worker, Stream *stream);
 static inline void red_stream_maintenance(RedWorker *worker, Drawable *candidate, Drawable *sect);
 static inline void red_begin_send_message(RedChannel *channel, void *item);
@@ -1515,12 +1503,10 @@ static inline void red_destroy_surface(RedWorker *worker, uint32_t surface_id)
     RedSurface *surface = &worker->surfaces[surface_id];
 
     if (!--surface->refs) {
-#ifdef STREAM_TRACE
         // only primary surface streams are supported
         if (surface_id == 0) {
             red_reset_stream_trace(worker);
         }
-#endif
         if (surface->context.canvas) {
             surface->context.canvas->ops->destroy(surface->context.canvas);
             if (surface->create.info) {
@@ -1609,13 +1595,7 @@ static void remove_drawable_dependencies(RedWorker *worker, Drawable *drawable)
 static inline void release_drawable(RedWorker *worker, Drawable *item)
 {
     if (!--item->refs) {
-#ifdef STREAM_TRACE
         ASSERT(!item->stream);
-#else
-        if (item->stream) {
-            red_stop_stream(worker, item->stream);
-        }
-#endif
         ASSERT(!item->tree_item.shadow);
         region_destroy(&item->tree_item.base.rgn);
 
@@ -1673,7 +1653,6 @@ static inline void container_cleanup(RedWorker *worker, Container *container)
     }
 }
 
-#ifdef STREAM_TRACE
 static inline void red_add_item_trace(RedWorker *worker, Drawable *item)
 {
     ItemTrace *trace;
@@ -1691,8 +1670,6 @@ static inline void red_add_item_trace(RedWorker *worker, Drawable *item)
     trace->height = src_area->bottom - src_area->top;
     trace->dest_area = item->red_drawable->bbox;
 }
-
-#endif
 
 static void surface_flush(RedWorker *worker, int surface_id, SpiceRect *rect)
 {
@@ -1720,13 +1697,11 @@ static inline void current_remove_drawable(RedWorker *worker, Drawable *item)
     if (item->tree_item.effect != QXL_EFFECT_OPAQUE) {
         worker->transparent_count--;
     }
-#ifdef STREAM_TRACE
     if (item->stream) {
         red_detach_stream(worker, item->stream);
     } else {
         red_add_item_trace(worker, item);
     }
-#endif
     remove_shadow(worker, &item->tree_item);
     ring_remove(&item->tree_item.base.siblings_link);
     ring_remove(&item->list_link);
@@ -2327,11 +2302,7 @@ static inline void red_free_stream(RedWorker *worker, Stream *stream)
 static void red_release_stream(RedWorker *worker, Stream *stream)
 {
     if (!--stream->refs) {
-#ifdef STREAM_TRACE
         ASSERT(!ring_item_is_linked(&stream->link));
-#else
-        ring_remove(&stream->link);
-#endif
         if (stream->mjpeg_encoder) {
             mjpeg_encoder_destroy(stream->mjpeg_encoder);
         }
@@ -2339,7 +2310,6 @@ static void red_release_stream(RedWorker *worker, Stream *stream)
     }
 }
 
-#ifdef STREAM_TRACE
 static inline void red_detach_stream(RedWorker *worker, Stream *stream)
 {
     ASSERT(stream->current && stream->current->stream);
@@ -2432,19 +2402,11 @@ static void red_attach_stream(RedWorker *worker, Drawable *drawable, Stream *str
     }
 }
 
-#endif
-
 static void red_stop_stream(RedWorker *worker, Stream *stream)
 {
     DisplayChannel *channel;
-#ifdef STREAM_TRACE
     ASSERT(ring_item_is_linked(&stream->link));
     ASSERT(!stream->current);
-#else
-    ASSERT(stream->current && stream->current->stream);
-    stream->current->stream = NULL;
-    stream->current = NULL;
-#endif
 
     if ((channel = worker->display_channel)) {
         StreamAgent *stream_agent;
@@ -2454,13 +2416,10 @@ static void red_stop_stream(RedWorker *worker, Stream *stream)
         stream->refs++;
         red_pipe_add(&channel->base, &stream_agent->destroy_item);
     }
-#ifdef STREAM_TRACE
     ring_remove(&stream->link);
-#endif
     red_release_stream(worker, stream);
 }
 
-#ifdef STREAM_TRACE
 static inline void red_detach_stream_gracefully(RedWorker *worker, Stream *stream)
 {
     DisplayChannel *channel;
@@ -2484,29 +2443,6 @@ static inline void red_detach_stream_gracefully(RedWorker *worker, Stream *strea
     red_detach_stream(worker, stream);
 }
 
-#else
-static inline void red_stop_stream_gracefully(RedWorker *worker, Stream *stream)
-{
-    ASSERT(stream->current);
-    if (worker->display_channel && !pipe_item_is_linked(&stream->current->pipe_item)) {
-        UpgradeItem *item = spice_new(UpgradeItem, 1);
-        int n_rects;
-        item->refs = 1;
-        red_pipe_item_init(&item->base, PIPE_ITEM_TYPE_UPGRADE);
-        item->drawable = stream->current;
-        item->drawable->refs++;
-        n_rects = pixman_region32_n_rects(&item->drawable->tree_item.base.rgn);
-        item->rects = spice_malloc_n_m(n_rects, sizeof(SpiceRect), sizeof(SpiceClipRects));
-        item->rects->num_rects = n_rects;
-        region_ret_rects(&item->drawable->tree_item.base.rgn, item->rects->rects, n_rects);
-        red_pipe_add((RedChannel *)worker->display_channel, &item->base);
-    }
-    red_stop_stream(worker, stream);
-}
-
-#endif
-
-#ifdef STREAM_TRACE
 // region should be a primary surface region
 static void red_detach_streams_behind(RedWorker *worker, QRegion *region)
 {
@@ -2533,25 +2469,6 @@ static void red_detach_streams_behind(RedWorker *worker, QRegion *region)
         }
     }
 }
-
-#else
-static void red_stop_streams_behind(RedWorker *worker, QRegion *region)
-{
-    Ring *ring = &worker->streams;
-    RingItem *item = ring_get_head(ring);
-
-    while (item) {
-        Stream *stream = SPICE_CONTAINEROF(item, Stream, link);
-        stream->refs++;
-        if (stream->current && region_intersects(region, &stream->current->tree_item.base.rgn)) {
-            red_stop_stream_gracefully(worker, stream);
-        }
-        item = ring_next(ring, item);
-        red_release_stream(worker, stream);
-    }
-}
-
-#endif
 
 static void red_streams_update_clip(RedWorker *worker, Drawable *drawable)
 {
@@ -2603,22 +2520,12 @@ static inline unsigned int red_get_streams_timout(RedWorker *worker)
         Stream *stream;
 
         stream = SPICE_CONTAINEROF(item, Stream, link);
-#ifdef STREAM_TRACE
         red_time_t delta = (stream->last_time + RED_STREAM_TIMOUT) - now;
 
         if (delta < 1000 * 1000) {
             return 0;
         }
         timout = MIN(timout, (unsigned int)(delta / (1000 * 1000)));
-#else
-        if (stream->current) {
-            red_time_t delta = (stream->current->creation_time + RED_STREAM_TIMOUT) - now;
-            if (delta < 1000 * 1000) {
-                return 0;
-            }
-            timout = MIN(timout, (unsigned int)(delta / (1000 * 1000)));
-        }
-#endif
     }
     return timout;
 }
@@ -2634,7 +2541,6 @@ static inline void red_handle_streams_timout(RedWorker *worker)
     item = ring_get_head(ring);
     while (item) {
         Stream *stream = SPICE_CONTAINEROF(item, Stream, link);
-#ifdef STREAM_TRACE
         item = ring_next(ring, item);
         if (now >= (stream->last_time + RED_STREAM_TIMOUT)) {
             if (stream->current) {
@@ -2642,14 +2548,6 @@ static inline void red_handle_streams_timout(RedWorker *worker)
             }
             red_stop_stream(worker, stream);
         }
-#else
-        stream->refs++;
-        if (stream->current && now >= (stream->current->creation_time + RED_STREAM_TIMOUT)) {
-            red_stop_stream_gracefully(worker, stream);
-        }
-        item = ring_next(ring, item);
-        red_release_stream(worker, stream);
-#endif
     }
 }
 
@@ -2719,12 +2617,10 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
 
     ring_add(&worker->streams, &stream->link);
     stream->current = drawable;
-#ifdef STREAM_TRACE
     stream->last_time = drawable->creation_time;
     stream->width = src_rect->right - src_rect->left;
     stream->height = src_rect->bottom - src_rect->top;
     stream->dest_area = drawable->red_drawable->bbox;
-#endif
     stream->refs = 1;
     stream->bit_rate = get_bit_rate(stream_width, stream_height);
     SpiceBitmap *bitmap = &drawable->red_drawable->u.copy.src_bitmap->u.bitmap;
@@ -2783,8 +2679,6 @@ static void red_init_streams(RedWorker *worker)
     }
 }
 
-#ifdef STREAM_TRACE
-
 static inline int __red_is_next_stream_frame(RedWorker *worker,
                                              const Drawable *candidate,
                                              const int other_src_width,
@@ -2834,53 +2728,6 @@ static inline int red_is_next_stream_frame(RedWorker *worker, const Drawable *ca
                                       &prev->red_drawable->bbox, prev->creation_time,
                                       prev->stream);
 }
-
-#else
-
-static inline int red_is_next_stream_frame(RedWorker *worker, Drawable *candidate, Drawable *prev)
-{
-    SpiceImage *image;
-    RedDrawable *red_drawable;
-    RedDrawable *prev_red_drawable;
-
-    if (candidate->creation_time - prev->creation_time >
-            ((prev->stream) ? RED_STREAM_CONTINUS_MAX_DELTA : RED_STREAM_DETACTION_MAX_DELTA)) {
-        return FALSE;
-    }
-
-    red_drawable = candidate->red_drawable;
-    prev_red_drawable = prev->red_drawable;
-    if (red_drawable->type != QXL_DRAW_COPY || prev_red_drawable->type != QXL_DRAW_COPY) {
-        return FALSE;
-    }
-
-    if (!rect_is_equal(&red_drawable->bbox, &prev_red_drawable->bbox)) {
-        return FALSE;
-    }
-
-    if (!rect_is_same_size(&red_drawable->u.copy.src_area, &prev_red_drawable->u.copy.src_area)) {
-        return FALSE;
-    }
-
-    if (red_drawable->u.copy.rop_descriptor != SPICE_ROPD_OP_PUT ||
-        prev_red_drawable->u.copy.rop_descriptor != SPICE_ROPD_OP_PUT) {
-        return FALSE;
-    }
-
-    image = red_drawable->u.copy.src_bitmap;
-
-    if (image->descriptor.type != SPICE_IMAGE_TYPE_BITMAP) {
-        return FALSE;
-    }
-
-    if (prev->stream && prev->stream->top_down != !!(image->u.bitmap.flags & SPICE_BITMAP_FLAGS_TOP_DOWN)) {
-        return FALSE;
-    }
-
-    return TRUE;
-}
-
-#endif
 
 static void reset_rate(StreamAgent *stream_agent)
 {
@@ -2997,41 +2844,15 @@ static inline void red_stream_maintenance(RedWorker *worker, Drawable *candidate
         return;
     }
 
-#ifdef STREAM_TRACE
     if (!red_is_next_stream_frame(worker, candidate, prev)) {
         return;
     }
-#else
-    if ((worker->streaming_video == STREAM_VIDEO_OFF) ||
-        !red_is_next_stream_frame(worker, candidate, prev)) {
-        return;
-    }
-#endif
 
     if ((stream = prev->stream)) {
-#ifdef STREAM_TRACE
         pre_stream_item_swap(worker, stream);
         red_detach_stream(worker, stream);
         prev->streamable = FALSE; //prevent item trace
         red_attach_stream(worker, candidate, stream);
-#else
-        prev->stream = NULL;
-        candidate->stream = stream;
-        stream->current = candidate;
-
-        if (!region_is_equal(&stream->region, &candidate->tree_item.base.rgn)) {
-            region_destroy(&stream->region);
-            region_clone(&stream->region, &candidate->tree_item.base.rgn);
-            if (worker->display_channel) {
-                int index = stream - worker->streams_buf;
-                StreamAgent *stream_agent = &worker->display_channel->stream_agents[index];
-                if (!pipe_item_is_linked(&stream_agent->clip_item)) {
-                    stream->refs++;
-                    red_pipe_add((RedChannel*)worker->display_channel, &stream_agent->clip_item);
-                }
-            }
-        }
-#endif
     } else {
         red_stream_add_frame(worker, candidate,
                              prev->frames_count,
@@ -3098,8 +2919,6 @@ static inline int red_current_add_equal(RedWorker *worker, DrawItem *item, TreeI
     return FALSE;
 }
 
-#ifdef STREAM_TRACE
-
 static inline void red_use_stream_trace(RedWorker *worker, Drawable *drawable)
 {
     ItemTrace *trace;
@@ -3161,8 +2980,6 @@ static void red_reset_stream_trace(RedWorker *worker)
     worker->next_item_trace = 0;
     memset(worker->items_trace, 0, sizeof(worker->items_trace));
 }
-
-#endif
 
 static inline int red_current_add(RedWorker *worker, Ring *ring, Drawable *drawable)
 {
@@ -3265,17 +3082,12 @@ static inline int red_current_add(RedWorker *worker, Ring *ring, Drawable *drawa
     if (item->effect == QXL_EFFECT_OPAQUE) {
         region_or(&exclude_rgn, &item->base.rgn);
         exclude_region(worker, ring, exclude_base, &exclude_rgn, NULL, drawable);
-#ifdef STREAM_TRACE
         red_use_stream_trace(worker, drawable);
-#endif
         red_streams_update_clip(worker, drawable);
     } else {
         if (drawable->surface_id == 0) {
 #ifdef STREAM_TRACE
             red_detach_streams_behind(worker, &drawable->tree_item.base.rgn);
-#else
-            red_stop_streams_behind(worker, &drawable->tree_item.base.rgn);
-#endif
         }
     }
     region_destroy(&exclude_rgn);
@@ -3430,11 +3242,7 @@ static inline int red_current_add_with_shadow(RedWorker *worker, Ring *ring, Dra
 
     // only primary surface streams are supported
     if (item->surface_id == 0) {
-#ifdef STREAM_TRACE
         red_detach_streams_behind(worker, &shadow->base.rgn);
-#else
-        red_stop_streams_behind(worker, &shadow->base.rgn);
-#endif
     }
     ring_add(ring, &shadow->base.siblings_link);
     __current_add_drawable(worker, item, ring);
@@ -3450,11 +3258,7 @@ static inline int red_current_add_with_shadow(RedWorker *worker, Ring *ring, Dra
         red_streams_update_clip(worker, item);
     } else {
         if (item->surface_id == 0) {
-#ifdef STREAM_TRACE
             red_detach_streams_behind(worker, &item->tree_item.base.rgn);
-#else
-            red_stop_streams_behind(worker, &item->tree_item.base.rgn);
-#endif
         }
     }
     stat_add(&worker->add_stat, start_time);
@@ -3466,7 +3270,6 @@ static inline int has_shadow(RedDrawable *drawable)
     return drawable->type == QXL_COPY_BITS;
 }
 
-#ifdef STREAM_TRACE
 static inline void red_update_streamable(RedWorker *worker, Drawable *drawable,
                                          RedDrawable *red_drawable)
 {
@@ -3506,8 +3309,6 @@ static inline void red_update_streamable(RedWorker *worker, Drawable *drawable,
     drawable->streamable = TRUE;
 }
 
-#endif
-
 static inline int red_current_add_qxl(RedWorker *worker, Ring *ring, Drawable *drawable,
                                       RedDrawable *red_drawable)
 {
@@ -3523,9 +3324,7 @@ static inline int red_current_add_qxl(RedWorker *worker, Ring *ring, Drawable *d
         delta.y = red_drawable->u.copy_bits.src_pos.y - red_drawable->bbox.top;
         ret = red_current_add_with_shadow(worker, ring, drawable, &delta);
     } else {
-#ifdef STREAM_TRACE
         red_update_streamable(worker, drawable, red_drawable);
-#endif
         ret = red_current_add(worker, ring, drawable);
     }
 #ifdef RED_WORKER_STAT
@@ -3780,11 +3579,7 @@ static inline int red_handle_surfaces_dependencies(RedWorker *worker, Drawable *
                 QRegion depend_region;
                 region_init(&depend_region);
                 region_add(&depend_region, &drawable->red_drawable->surfaces_rects[x]);
-#ifdef STREAM_TRACE
                 red_detach_streams_behind(worker, &depend_region);
-#else
-                red_stop_streams_behind(worker, &depend_region);
-#endif
             }
         }
     }
