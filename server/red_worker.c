@@ -9800,6 +9800,7 @@ static inline void handle_dev_destroy_surface_wait(RedWorker *worker)
     write_message(worker->channel, &message);
 }
 
+/* called upon device reset */
 static inline void handle_dev_destroy_surfaces(RedWorker *worker)
 {
     int i;
@@ -9833,6 +9834,8 @@ static inline void handle_dev_destroy_surfaces(RedWorker *worker)
         red_pipe_add_type(&worker->display_channel->base, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
         red_pipe_add_verb(&worker->display_channel->base, SPICE_MSG_DISPLAY_STREAM_DESTROY_ALL);
     }
+
+    red_display_clear_glz_drawables(worker->display_channel);
 
     //to handle better
     for (i = 0; i < NUM_SURFACES; ++i) {
