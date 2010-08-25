@@ -1311,7 +1311,7 @@ static int read_from_vdi_port(void)
 
 void vdagent_char_device_wakeup(SpiceCharDeviceInstance *sin)
 {
-    while (write_to_vdi_port() || read_from_vdi_port());
+    while (read_from_vdi_port());
 }
 
 static void reds_handle_agent_mouse_event()
