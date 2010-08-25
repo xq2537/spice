@@ -1143,8 +1143,8 @@ static void vdi_port_write_timer_start()
 
 static void vdi_port_write_retry()
 {
-    write_to_vdi_port();
     reds->vdi_port_write_timer_started = FALSE;
+    write_to_vdi_port();
 }
 
 static int write_to_vdi_port()
