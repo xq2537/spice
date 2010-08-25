@@ -290,7 +290,7 @@ pixman_image_t *alloc_lz_image_surface(LzDecodeUsrData *canvas_data,
     int stride;
     pixman_image_t *surface = NULL;
 
-    stride = (gross_pixels / height) * 4;
+    stride = (gross_pixels / height) * (PIXMAN_FORMAT_BPP (pixman_format) / 8);
 
     if (!top_down) {
         stride = -stride;
