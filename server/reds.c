@@ -1324,6 +1324,7 @@ static void reds_handle_agent_mouse_event()
     }
     if (reds->mig_target || !(ring_item = ring_get_head(&reds->agent_state.internal_bufs))) {
         reds->inputs_state->pending_mouse_event = TRUE;
+        vdi_port_write_timer_start();
         return;
     }
     reds->inputs_state->pending_mouse_event = FALSE;
