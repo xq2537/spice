@@ -109,6 +109,8 @@ static Atom utf8_atom;
 #ifdef USE_XRANDR_1_2
 static bool clipboard_inited = false;
 #endif
+static Bool handle_x_error = false;
+static int x_error_code;
 
 class DefaultEventListener: public Platform::EventListener {
 public:
@@ -219,6 +221,18 @@ Display* XPlatform::get_display()
     return x_display;
 }
 
+static void handle_x_errors_start(void)
+{
+    handle_x_error = True;
+    x_error_code = 0;
+}
+
+static int handle_x_errors_stop(void)
+{
+    handle_x_error = False;
+    return x_error_code;
+}
+
 bool XPlatform::is_x_shm_avail()
 {
     return x_shm_avail;
@@ -277,8 +291,15 @@ XImage *XPlatform::create_x_shm_image(RedDrawable::Format format,
         goto err2;
     }
 
+    handle_x_errors_start();
+
     /* Ensure the xserver has attached the xshm segment */
     XSync (XPlatform::get_display(), False);
+
+    if (handle_x_errors_stop()) {
+        x_shm_avail = false;
+        goto err2;
+    }
 
     /* Mark segment as released so that it will be destroyed when
        the xserver releases the segment. This way we won't leak
@@ -2492,6 +2513,13 @@ static int x_error_handler(Display* display, XErrorEvent* error_event)
     char error_str[256];
     char request_str[256];
     char number_str[32];
+
+    if (handle_x_error) {
+        if (error_event->error_code) {
+            x_error_code = error_event->error_code;
+        }
+        return 0;
+    }
 
     char* display_name = XDisplayString(display);
     XGetErrorText(display, error_event->error_code, error_str, sizeof(error_str));
