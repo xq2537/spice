@@ -5212,6 +5212,7 @@ static BitmapGradualType _get_bitmap_graduality_level(RedWorker *worker, SpiceBi
         case SPICE_BITMAP_FMT_16BIT:
             compute_lines_gradual_score_rgb16((rgb16_pixel_t *)chunk[i].data, x, num_lines,
                                               &chunk_score, &chunk_num_samples);
+            break;
         case SPICE_BITMAP_FMT_24BIT:
             compute_lines_gradual_score_rgb24((rgb24_pixel_t *)chunk[i].data, x, num_lines,
                                               &chunk_score, &chunk_num_samples);
