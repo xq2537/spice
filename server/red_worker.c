@@ -222,7 +222,6 @@ struct EventListener {
 
 enum {
     BUF_TYPE_RAW = 1,
-    BUF_TYPE_CHUNK,
 };
 
 typedef struct BufDescriptor {
@@ -4517,40 +4516,12 @@ static void marshaller_add_compressed(RedWorker *worker, SpiceMarshaller *m,
 }
 
 
-static void marshaller_add_chunk(RedWorker *worker, SpiceMarshaller *m, QXLDataChunk *chunk, size_t size,
-                                 int memslot_id, uint32_t group_id)
-{
-    while (chunk != NULL && size > 0) {
-        int data_size = chunk->data_size;
-
-        if (data_size > size)
-            data_size = size;
-        size -= data_size;
-
-        if (data_size) {
-            validate_virt(&worker->mem_slots, (unsigned long)chunk->data, memslot_id, data_size, group_id);
-            spice_marshaller_add_ref(m, (uint8_t *)chunk->data, data_size);
-        }
-        chunk = chunk->next_chunk ?
-            (QXLDataChunk *)get_virt(&worker->mem_slots, chunk->next_chunk, sizeof(QXLDataChunk),
-                                     group_id) :
-            NULL;
-    }
-}
-
 static void add_buf_from_info(RedChannel *channel, SpiceMarshaller *m, AddBufInfo *info)
 {
-    QXLDataChunk *chunk;
-
     if (info->data) {
         switch (info->type) {
         case BUF_TYPE_RAW:
             spice_marshaller_add_ref(m, info->data, info->size);
-            break;
-        case BUF_TYPE_CHUNK:
-            chunk = (QXLDataChunk *)info->data;
-            marshaller_add_chunk(channel->worker, m, chunk,
-                                 info->size, info->slot_id, info->group_id);
             break;
         }
     }
