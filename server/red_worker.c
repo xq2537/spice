@@ -7855,6 +7855,7 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
     red_image.descriptor.height = item->height;
 
     bitmap.format = item->image_format;
+    bitmap.flags = 0;
     if (item->top_down) {
         bitmap.flags |= SPICE_BITMAP_FLAGS_TOP_DOWN;
     }
