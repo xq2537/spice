@@ -522,11 +522,6 @@ typedef struct FreeList {
 
 typedef struct DisplayChannel DisplayChannel;
 
-typedef void *(*enc_get_virt_fn_t)(void *get_virt_opaque, unsigned long addr, uint32_t add_size,
-                                   uint32_t group_id);
-typedef void (*enc_validate_virt_fn_t)(void *validate_virt_opaque, unsigned long virt,
-                                       unsigned long from_addr, uint32_t add_size,
-                                       uint32_t group_id);
 typedef struct  {
     DisplayChannel *display_channel;
     RedCompressBuf *bufs_head;
