@@ -1793,30 +1793,32 @@ static void red_clear_surface_drawables_from_pipe(RedWorker *worker, int surface
     ring = &worker->display_channel->base.pipe;
     item = (PipeItem *) ring;
     while ((item = (PipeItem *)ring_next(ring, (RingItem *)item))) {
+        Drawable *drawable;
         if (item->type == PIPE_ITEM_TYPE_DRAW) {
-            PipeItem *tmp_item;
-            Drawable *drawable;
-
             drawable = SPICE_CONTAINEROF(item, Drawable, pipe_item);
+        } else if (item->type == PIPE_ITEM_TYPE_UPGRADE) {
+            drawable = ((UpgradeItem *)item)->drawable;
+        } else {
+            continue;
+        }
 
-            for (x = 0; x < 3; ++x) {
-                if (drawable->surfaces_dest[x] == surface_id) {
-                    return;
-                }
+        for (x = 0; x < 3; ++x) {
+            if (drawable->surfaces_dest[x] == surface_id) {
+                return;
             }
+        }
 
-            if (drawable->surface_id == surface_id) {
-                tmp_item = item;
-                item = (PipeItem *)ring_prev(ring, (RingItem *)item);
-                ring_remove(&tmp_item->link);
-                release_drawable(worker, drawable);
-                worker->display_channel->base.pipe_size--;
+        if (drawable->surface_id == surface_id) {
+            PipeItem *tmp_item = item;
+            item = (PipeItem *)ring_prev(ring, (RingItem *)item);
+            ring_remove(&tmp_item->link);
+            worker->display_channel->base.release_item(&worker->display_channel->base, tmp_item);
+            worker->display_channel->base.pipe_size--;
 
-                if (!item) {
-                    item = (PipeItem *)ring;
-                } 
+            if (!item) {
+                item = (PipeItem *)ring;
             }
-        } 
+        }
     }
 }
 
