@@ -9574,7 +9574,7 @@ static LocalCursor *_new_local_cursor(SpiceCursorHeader *header, int data_size, 
 {
     LocalCursor *local;
 
-    local = (LocalCursor *)spice_malloc(sizeof(LocalCursor) + data_size);
+    local = (LocalCursor *)spice_malloc0(sizeof(LocalCursor) + data_size);
 
     red_pipe_item_init(&local->base.pipe_data, PIPE_ITEM_TYPE_LOCAL_CURSOR);
     local->base.refs = 1;
@@ -9584,6 +9584,8 @@ static LocalCursor *_new_local_cursor(SpiceCursorHeader *header, int data_size, 
     local->red_cursor.header.unique = 0;
 
     local->red_cursor.flags = 0;
+    local->red_cursor.data = (uint8_t*)(local+1);
+
     local->position = position;
     local->data_size = data_size;
     return local;
