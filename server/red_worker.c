@@ -74,6 +74,9 @@
 #define DETACH_TIMEOUT 15000000000ULL //nano
 #define DETACH_SLEEP_DURATION 10000 //micro
 
+#define CHANNEL_PUSH_TIMEOUT 30000000000ULL //nano
+#define CHANNEL_PUSH_SLEEP_DURATION 10000 //micro
+
 #define DISPLAY_CLIENT_TIMEOUT 15000000000ULL //nano
 #define DISPLAY_CLIENT_RETRY_INTERVAL 10000 //micro
 
@@ -979,6 +982,7 @@ static void reset_rate(StreamAgent *stream_agent);
 static BitmapGradualType _get_bitmap_graduality_level(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_id);
 static inline int _stride_is_extra(SpiceBitmap *bitmap);
 static void red_disconnect_cursor(RedChannel *channel);
+static void red_wait_pipe_item_sent(RedChannel *channel, PipeItem *item);
 
 #ifdef DUMP_BITMAP
 static void dump_bitmap(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_id);
@@ -1780,7 +1784,7 @@ static void red_current_clear(RedWorker *worker, int surface_id)
     }
 }
 
-static void red_clear_surface_drawables_from_pipe(RedWorker *worker, int surface_id)
+static void red_clear_surface_drawables_from_pipe(RedWorker *worker, int surface_id, int force)
 {
     Ring *ring;
     PipeItem *item;
@@ -1790,22 +1794,20 @@ static void red_clear_surface_drawables_from_pipe(RedWorker *worker, int surface
         return;
     }
 
+    /* removing the newest drawables that their destination is surface_id and
+       no other drawable depends on them */
+
     ring = &worker->display_channel->base.pipe;
     item = (PipeItem *) ring;
     while ((item = (PipeItem *)ring_next(ring, (RingItem *)item))) {
         Drawable *drawable;
+        int depend_found = FALSE;
         if (item->type == PIPE_ITEM_TYPE_DRAW) {
             drawable = SPICE_CONTAINEROF(item, Drawable, pipe_item);
         } else if (item->type == PIPE_ITEM_TYPE_UPGRADE) {
             drawable = ((UpgradeItem *)item)->drawable;
         } else {
             continue;
-        }
-
-        for (x = 0; x < 3; ++x) {
-            if (drawable->surfaces_dest[x] == surface_id) {
-                return;
-            }
         }
 
         if (drawable->surface_id == surface_id) {
@@ -1818,7 +1820,27 @@ static void red_clear_surface_drawables_from_pipe(RedWorker *worker, int surface
             if (!item) {
                 item = (PipeItem *)ring;
             }
+            continue;
         }
+
+        for (x = 0; x < 3; ++x) {
+            if (drawable->surfaces_dest[x] == surface_id) {
+                depend_found = TRUE;
+                break;
+            }
+        }
+
+        if (depend_found) {
+            if (force) {
+                break;
+            } else {
+                return;
+            }
+        }
+    }
+
+    if (item) {
+        red_wait_pipe_item_sent(&worker->display_channel->base, item);
     }
 }
 
@@ -3506,7 +3528,7 @@ static inline void red_process_surface(RedWorker *worker, RedSurfaceCmd *surface
         set_surface_release_info(worker, surface_id, 0, surface->release_info, group_id);
         red_handle_depends_on_target_surface(worker, surface_id);
         red_current_clear(worker, surface_id);
-        red_clear_surface_drawables_from_pipe(worker, surface_id);
+        red_clear_surface_drawables_from_pipe(worker, surface_id, FALSE);
         red_destroy_surface(worker, surface_id);
         break;
     default:
@@ -9632,6 +9654,48 @@ static void red_wait_outgoing_item(RedChannel *channel)
     red_unref_channel(channel);
 }
 
+static void red_wait_pipe_item_sent(RedChannel *channel, PipeItem *item)
+{
+    uint64_t end_time;
+    int item_in_pipe;
+
+    if (!channel) {
+        return;
+    }
+
+    red_printf("");
+    red_ref_channel(channel);
+    channel->hold_item(item);
+
+    end_time = red_now() + CHANNEL_PUSH_TIMEOUT;
+
+    if (channel->send_data.blocked) {
+        red_receive(channel);
+        red_send_data(channel, NULL);
+    }
+    // todo: different push for each channel
+    red_push(channel->worker);
+
+    while((item_in_pipe = ring_item_is_linked(&item->link)) && (red_now() < end_time)) {
+        usleep(CHANNEL_PUSH_SLEEP_DURATION);
+        red_receive(channel);
+        red_send_data(channel, NULL);
+        red_push(channel->worker);
+    }
+
+    if (item_in_pipe) {
+        red_printf("timeout");
+        channel->disconnect(channel);
+    } else {
+        if (channel->send_data.item == item) {
+            red_wait_outgoing_item(channel);
+        }
+    }
+
+    channel->release_item(channel, item);
+    red_unref_channel(channel);
+}
+
 static inline void handle_dev_update(RedWorker *worker)
 {
     RedWorkerMessage message;
@@ -9700,7 +9764,9 @@ static inline void destroy_surface_wait(RedWorker *worker, int surface_id)
     }
     red_flush_surface_pipe(worker);
     red_current_clear(worker, surface_id);
-    red_clear_surface_drawables_from_pipe(worker, surface_id);
+    red_clear_surface_drawables_from_pipe(worker, surface_id, TRUE);
+    // in case that the pipe didn't contain any item that is dependent on the surface, but
+    // there is one during sending.
     red_wait_outgoing_item((RedChannel *)worker->display_channel);
     if (worker->display_channel) {
         ASSERT(!worker->display_channel->base.send_data.item);
