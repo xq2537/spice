@@ -3768,6 +3768,26 @@ __visible__ void spice_server_destroy(SpiceServer *s)
     reds_exit();
 }
 
+__visible__ spice_compat_version_t spice_get_current_compat_version(void)
+{
+    return SPICE_COMPAT_VERSION_CURRENT;
+}
+
+__visible__ int spice_server_set_compat_version(SpiceServer *s,
+                                                spice_compat_version_t version)
+{
+    if (version < SPICE_COMPAT_VERSION_0_6) {
+        /* We don't support 0.4 compat mode atm */
+        return -1;
+    }
+
+    if (version > SPICE_COMPAT_VERSION_CURRENT) {
+        /* Not compatible with future versions */
+        return -1;
+    }
+    return 0;
+}
+
 __visible__ int spice_server_set_port(SpiceServer *s, int port)
 {
     ASSERT(reds == s);

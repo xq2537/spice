@@ -307,6 +307,17 @@ uint32_t spice_server_record_get_samples(SpiceRecordInstance *sin,
 
 /* spice server setup */
 
+/* Don't use features incompatible with a specific spice
+   version, so that migration to/from that version works. */
+typedef enum {
+    SPICE_COMPAT_VERSION_0_4 = 0,
+    SPICE_COMPAT_VERSION_0_6 = 1,
+} spice_compat_version_t;
+
+#define SPICE_COMPAT_VERSION_CURRENT SPICE_COMPAT_VERSION_0_6
+
+spice_compat_version_t spice_get_current_compat_version(void);
+
 typedef struct RedsState SpiceServer;
 SpiceServer *spice_server_new(void);
 int spice_server_init(SpiceServer *s, SpiceCoreInterface *core);
@@ -315,6 +326,8 @@ void spice_server_destroy(SpiceServer *s);
 #define SPICE_ADDR_FLAG_IPV4_ONLY (1 << 0)
 #define SPICE_ADDR_FLAG_IPV6_ONLY (1 << 1)
 
+int spice_server_set_compat_version(SpiceServer *s,
+                                    spice_compat_version_t version);
 int spice_server_set_port(SpiceServer *s, int port);
 void spice_server_set_addr(SpiceServer *s, const char *addr, int flags);
 int spice_server_set_noauth(SpiceServer *s);
