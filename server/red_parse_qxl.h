@@ -79,7 +79,7 @@ typedef struct RedSurfaceCreate {
     uint32_t width;
     uint32_t height;
     int32_t stride;
-    SPICE_ADDRESS data;
+    uint8_t *data;
 } RedSurfaceCreate;
 
 typedef struct RedSurfaceCmd {

@@ -957,6 +957,7 @@ void red_get_surface_cmd(RedMemSlotInfo *slots, int group_id,
                          RedSurfaceCmd *red, QXLPHYSICAL addr)
 {
     QXLSurfaceCmd *qxl;
+    size_t size;
 
     qxl = (QXLSurfaceCmd *)get_virt(slots, addr, sizeof(*qxl), group_id);
     red->release_info     = &qxl->release_info;
@@ -971,7 +972,9 @@ void red_get_surface_cmd(RedMemSlotInfo *slots, int group_id,
         red->u.surface_create.width  = qxl->u.surface_create.width;
         red->u.surface_create.height = qxl->u.surface_create.height;
         red->u.surface_create.stride = qxl->u.surface_create.stride;
-        red->u.surface_create.data   = qxl->u.surface_create.data;
+        size = red->u.surface_create.height * abs(red->u.surface_create.stride);
+        red->u.surface_create.data =
+            (uint8_t*)get_virt(slots, qxl->u.surface_create.data, size, group_id);
         break;
     }
 }

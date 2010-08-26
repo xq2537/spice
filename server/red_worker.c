@@ -3500,11 +3500,10 @@ static inline void red_process_surface(RedWorker *worker, RedSurfaceCmd *surface
 
     switch (surface->type) {
     case QXL_SURFACE_CMD_CREATE: {
-        unsigned long saved_data = (unsigned long)surface->u.surface_create.data;
         uint32_t height = surface->u.surface_create.height;
         int32_t stride = surface->u.surface_create.stride;
 
-        data = (uint8_t *)get_virt(&worker->mem_slots, saved_data, height * abs(stride), group_id);
+        data = surface->u.surface_create.data;
         if (stride < 0) {
             data -= (int32_t)(stride * (height - 1));
         }
