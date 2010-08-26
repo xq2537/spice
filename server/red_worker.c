@@ -7957,7 +7957,8 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
 
         spice_marshall_Image(src_bitmap_out, &red_image,
                              &bitmap_palette_out, &lzplt_palette_out);
-        spice_marshaller_add_ref(m, item->data, bitmap.y * bitmap.stride);
+        spice_marshaller_add_ref(src_bitmap_out, item->data,
+                                 bitmap.y * bitmap.stride);
         region_remove(surface_lossy_region, &copy.base.box);
     }
     display_begin_send_message(display_channel, &item->link);
