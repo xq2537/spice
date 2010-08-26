@@ -984,6 +984,44 @@ void red_put_surface_cmd(RedSurfaceCmd *red)
     /* nothing yet */
 }
 
+static void red_get_cursor(RedMemSlotInfo *slots, int group_id,
+                           SpiceCursor *red, QXLPHYSICAL addr)
+{
+    QXLCursor *qxl;
+    RedDataChunk chunks;
+    size_t size;
+    uint8_t *data;
+    bool free_data;
+
+    qxl = (QXLCursor *)get_virt(slots, addr, sizeof(*qxl), group_id);
+
+    red->header.unique     = qxl->header.unique;
+    red->header.type       = qxl->header.type;
+    red->header.width      = qxl->header.width;
+    red->header.height     = qxl->header.height;
+    red->header.hot_spot_x = qxl->header.hot_spot_x;
+    red->header.hot_spot_y = qxl->header.hot_spot_y;
+
+    red->flags = 0;
+    red->data_size = qxl->data_size;
+    size = red_get_data_chunks_ptr(slots, group_id,
+                                   get_memslot_id(slots, addr),
+                                   &chunks, &qxl->chunk);
+    data = red_linearize_chunk(&chunks, size, &free_data);
+    red_put_data_chunks(&chunks);
+    red->data = spice_malloc(size);
+    memcpy(red->data, data, size);
+
+    if (free_data) {
+        free(data);
+    }
+}
+
+static void red_put_cursor(SpiceCursor *red)
+{
+    free(red->data);
+}
+
 void red_get_cursor_cmd(RedMemSlotInfo *slots, int group_id,
                         RedCursorCmd *red, QXLPHYSICAL addr)
 {
@@ -997,7 +1035,7 @@ void red_get_cursor_cmd(RedMemSlotInfo *slots, int group_id,
     case QXL_CURSOR_SET:
         red_get_point16_ptr(&red->u.set.position, &qxl->u.set.position);
         red->u.set.visible  = qxl->u.set.visible;
-        red->u.set.shape    = qxl->u.set.shape;
+        red_get_cursor(slots, group_id,  &red->u.set.shape, qxl->u.set.shape);
         break;
     case QXL_CURSOR_MOVE:
         red_get_point16_ptr(&red->u.position, &qxl->u.position);
@@ -1011,6 +1049,10 @@ void red_get_cursor_cmd(RedMemSlotInfo *slots, int group_id,
 
 void red_put_cursor_cmd(RedCursorCmd *red)
 {
-    /* nothing yet */
+    switch (red->type) {
+    case QXL_CURSOR_SET:
+        red_put_cursor(&red->u.set.shape);
+        break;
+    }
 }
 

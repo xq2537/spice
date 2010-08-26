@@ -6001,8 +6001,6 @@ static void fill_attr(DisplayChannel *display_channel, SpiceMarshaller *m, Spice
 
 static void fill_cursor(CursorChannel *cursor_channel, SpiceCursor *red_cursor, CursorItem *cursor, AddBufInfo *addbuf)
 {
-    RedChannel *channel = &cursor_channel->base;
-
     addbuf->data = NULL;
 
     if (!cursor) {
@@ -6012,18 +6010,9 @@ static void fill_cursor(CursorChannel *cursor_channel, SpiceCursor *red_cursor, 
 
     if (cursor->type == CURSOR_TYPE_DEV) {
         RedCursorCmd *cursor_cmd;
-        QXLCursor *qxl_cursor;
 
         cursor_cmd = cursor->red_cursor;
-        qxl_cursor = (QXLCursor *)get_virt(&channel->worker->mem_slots, cursor_cmd->u.set.shape,
-                                           sizeof(QXLCursor), cursor->group_id);
-        red_cursor->flags = 0;
-        red_cursor->header.unique = qxl_cursor->header.unique;
-        red_cursor->header.type = qxl_cursor->header.type;
-        red_cursor->header.width = qxl_cursor->header.width;
-        red_cursor->header.height = qxl_cursor->header.height;
-        red_cursor->header.hot_spot_x = qxl_cursor->header.hot_spot_x;
-        red_cursor->header.hot_spot_y = qxl_cursor->header.hot_spot_y;
+        *red_cursor = cursor_cmd->u.set.shape;
 
         if (red_cursor->header.unique) {
             if (red_cursor_cache_find(cursor_channel, red_cursor->header.unique)) {
@@ -6035,12 +6024,12 @@ static void fill_cursor(CursorChannel *cursor_channel, SpiceCursor *red_cursor, 
             }
         }
 
-        if (qxl_cursor->data_size) {
-            addbuf->type = BUF_TYPE_CHUNK;
-            addbuf->data = &qxl_cursor->chunk;
-            addbuf->size = qxl_cursor->data_size;
-            addbuf->slot_id = get_memslot_id(&channel->worker->mem_slots, cursor_cmd->u.set.shape);
-            addbuf->group_id = cursor->group_id;
+        if (red_cursor->data_size) {
+            addbuf->type = BUF_TYPE_RAW;
+            addbuf->data = red_cursor->data;
+            addbuf->size = red_cursor->data_size;
+            addbuf->slot_id = 0;
+            addbuf->group_id = 0;
         }
     } else {
         LocalCursor *local_cursor;
@@ -9615,7 +9604,7 @@ typedef struct __attribute__ ((__packed__)) CursorData {
     SpiceCursor _cursor;
 } CursorData;
 
-static LocalCursor *_new_local_cursor(QXLCursorHeader *header, int data_size, SpicePoint16 position)
+static LocalCursor *_new_local_cursor(SpiceCursorHeader *header, int data_size, SpicePoint16 position)
 {
     LocalCursor *local;
 
@@ -9625,12 +9614,8 @@ static LocalCursor *_new_local_cursor(QXLCursorHeader *header, int data_size, Sp
     local->base.refs = 1;
     local->base.type = CURSOR_TYPE_LOCAL;
 
+    local->red_cursor.header = *header;
     local->red_cursor.header.unique = 0;
-    local->red_cursor.header.type = header->type;
-    local->red_cursor.header.width = header->width;
-    local->red_cursor.header.height = header->height;
-    local->red_cursor.header.hot_spot_x = header->hot_spot_x;
-    local->red_cursor.header.hot_spot_y = header->hot_spot_y;
 
     local->red_cursor.flags = 0;
     local->position = position;
@@ -9641,11 +9626,8 @@ static LocalCursor *_new_local_cursor(QXLCursorHeader *header, int data_size, Sp
 static void red_cursor_flush(RedWorker *worker)
 {
     RedCursorCmd *cursor_cmd;
-    QXLCursor *qxl_cursor;
+    SpiceCursor *cursor;
     LocalCursor *local;
-    uint32_t data_size;
-    QXLDataChunk *chunk;
-    uint8_t *dest;
 
     if (!worker->cursor || worker->cursor->type == CURSOR_TYPE_LOCAL) {
         return;
@@ -9655,26 +9637,13 @@ static void red_cursor_flush(RedWorker *worker)
 
     cursor_cmd = worker->cursor->red_cursor;
     ASSERT(cursor_cmd->type == QXL_CURSOR_SET);
-    qxl_cursor = (QXLCursor *)get_virt(&worker->mem_slots, cursor_cmd->u.set.shape, sizeof(QXLCursor),
-                                       worker->cursor->group_id);
+    cursor = &cursor_cmd->u.set.shape;
 
-    local = _new_local_cursor(&qxl_cursor->header, qxl_cursor->data_size,
+    local = _new_local_cursor(&cursor->header, cursor->data_size,
                               worker->cursor_position);
     ASSERT(local);
-    data_size = local->data_size;
-    dest = local->red_cursor.data;
-    chunk = &qxl_cursor->chunk;
+    memcpy(local->red_cursor.data, cursor->data, local->data_size);
 
-    while (data_size) {
-        ASSERT(chunk);
-        ASSERT(chunk->data_size <= data_size);
-        memcpy(dest, chunk->data, chunk->data_size);
-        data_size -= chunk->data_size;
-        dest += chunk->data_size;
-        chunk = chunk->next_chunk ?
-                (QXLDataChunk *)get_virt(&worker->mem_slots, chunk->next_chunk, sizeof(QXLDataChunk),
-                                         worker->mem_slots.internal_groupslot_id) : NULL;
-    }
     red_set_cursor(worker, &local->base);
     red_release_cursor(worker, &local->base);
 }

@@ -99,7 +99,7 @@ typedef struct RedCursorCmd {
         struct {
             SpicePoint16 position;
             uint8_t visible;
-            SPICE_ADDRESS shape;
+            SpiceCursor shape;
         } set;
         struct {
             uint16_t length;
