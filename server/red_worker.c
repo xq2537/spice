@@ -1493,19 +1493,19 @@ static inline void red_destroy_surface(RedWorker *worker, uint32_t surface_id)
         if (surface_id == 0) {
             red_reset_stream_trace(worker);
         }
-        if (surface->context.canvas) {
-            surface->context.canvas->ops->destroy(surface->context.canvas);
-            if (surface->create.info) {
-                worker->qxl->st->qif->release_resource(worker->qxl, surface->create);
-            }
-            if (surface->destroy.info) {
-                worker->qxl->st->qif->release_resource(worker->qxl, surface->destroy);
-            }
+        ASSERT(surface->context.canvas);
 
-            region_destroy(&surface->draw_dirty_region);
-            surface->context.canvas = NULL;
-            red_destroy_surface_item(worker, surface_id);
+        surface->context.canvas->ops->destroy(surface->context.canvas);
+        if (surface->create.info) {
+            worker->qxl->st->qif->release_resource(worker->qxl, surface->create);
         }
+        if (surface->destroy.info) {
+            worker->qxl->st->qif->release_resource(worker->qxl, surface->destroy);
+        }
+
+        region_destroy(&surface->draw_dirty_region);
+        surface->context.canvas = NULL;
+        red_destroy_surface_item(worker, surface_id);
 
         PANIC_ON(!ring_is_empty(&surface->depend_on_me));
     }
@@ -3527,6 +3527,9 @@ static inline void red_process_surface(RedWorker *worker, RedSurfaceCmd *surface
         PANIC_ON(!red_surface->context.canvas);
         set_surface_release_info(worker, surface_id, 0, surface->release_info, group_id);
         red_handle_depends_on_target_surface(worker, surface_id);
+        /* note that red_handle_depends_on_target_surface must be called before red_current_clear.
+           otherwise "current" will hold items that other drawables may depend on, and then
+           red_current_clear will remove them from the pipe. */
         red_current_clear(worker, surface_id);
         red_clear_surface_drawables_from_pipe(worker, surface_id, FALSE);
         red_destroy_surface(worker, surface_id);
@@ -8824,13 +8827,6 @@ static inline void flush_all_qxl_commands(RedWorker *worker)
     flush_cursor_commands(worker);
 }
 
-static inline void red_flush_surface_pipe(RedWorker *worker)
-{
-    if (worker->display_channel) {
-        display_channel_push(worker);
-    }
-}
-
 static void push_new_primary_surface(RedWorker *worker)
 {
     DisplayChannel *display_channel;
@@ -9759,10 +9755,14 @@ static inline void handle_dev_del_memslot(RedWorker *worker)
 
 static inline void destroy_surface_wait(RedWorker *worker, int surface_id)
 {
-    if (worker->surfaces[surface_id].context.canvas) {
-        red_handle_depends_on_target_surface(worker, surface_id);
+    if (!worker->surfaces[surface_id].context.canvas) {
+        return;
     }
-    red_flush_surface_pipe(worker);
+
+    red_handle_depends_on_target_surface(worker, surface_id);
+    /* note that red_handle_depends_on_target_surface must be called before red_current_clear.
+       otherwise "current" will hold items that other drawables may depend on, and then
+       red_current_clear will remove them from the pipe. */
     red_current_clear(worker, surface_id);
     red_clear_surface_drawables_from_pipe(worker, surface_id, TRUE);
     // in case that the pipe didn't contain any item that is dependent on the surface, but
@@ -9800,15 +9800,13 @@ static inline void handle_dev_destroy_surfaces(RedWorker *worker)
     red_printf("");
     flush_all_qxl_commands(worker);
     //to handle better
-    if (worker->surfaces[0].context.canvas) {
-        destroy_surface_wait(worker, 0);
-    }
     for (i = 0; i < NUM_SURFACES; ++i) {
         if (worker->surfaces[i].context.canvas) {
             destroy_surface_wait(worker, i);
             if (worker->surfaces[i].context.canvas) {
                 red_destroy_surface(worker, i);
             }
+            ASSERT(!worker->surfaces[i].context.canvas);
         }
     }
     ASSERT(ring_is_empty(&worker->streams));
@@ -9828,11 +9826,6 @@ static inline void handle_dev_destroy_surfaces(RedWorker *worker)
     }
 
     red_display_clear_glz_drawables(worker->display_channel);
-
-    //to handle better
-    for (i = 0; i < NUM_SURFACES; ++i) {
-        ASSERT(!worker->surfaces[i].context.canvas);
-    }
 
     worker->cursor_visible = TRUE;
     worker->cursor_position.x = worker->cursor_position.y = 0;
