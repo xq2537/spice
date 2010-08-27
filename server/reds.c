@@ -3933,6 +3933,33 @@ __visible__ int spice_server_kbd_leds(SpiceKbdInstance *sin, int leds)
     return 0;
 }
 
+__visible__ int spice_server_set_streaming_video(SpiceServer *s, int value)
+{
+    ASSERT(reds == s);
+    if (value != SPICE_STREAM_VIDEO_OFF &&
+        value != SPICE_STREAM_VIDEO_ALL &&
+        value != SPICE_STREAM_VIDEO_FILTER)
+        return -1;
+    streaming_video = value;
+    red_dispatcher_on_sv_change();
+    return 0;
+}
+
+__visible__ int spice_server_set_playback_compression(SpiceServer *s, int enable)
+{
+    ASSERT(reds == s);
+    snd_set_playback_compression(enable);
+    return 0;
+}
+
+__visible__ int spice_server_set_agent_mouse(SpiceServer *s, int enable)
+{
+    ASSERT(reds == s);
+    agent_mouse = enable;
+    reds_update_mouse_mode();
+    return 0;
+}
+
 __visible__ int spice_server_migrate_info(SpiceServer *s, const char* dest,
                                           int port, int secure_port,
                                           const char* cert_subject)
