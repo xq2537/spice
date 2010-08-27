@@ -1009,11 +1009,11 @@ static void red_get_cursor(RedMemSlotInfo *slots, int group_id,
                                    &chunks, &qxl->chunk);
     data = red_linearize_chunk(&chunks, size, &free_data);
     red_put_data_chunks(&chunks);
-    red->data = spice_malloc(size);
-    memcpy(red->data, data, size);
-
     if (free_data) {
-        free(data);
+        red->data = data;
+    } else {
+        red->data = spice_malloc(size);
+        memcpy(red->data, data, size);
     }
 }
 
