@@ -224,14 +224,6 @@ enum {
     BUF_TYPE_RAW = 1,
 };
 
-typedef struct BufDescriptor {
-    uint32_t type;
-    uint32_t size;
-    uint8_t *data;
-    uint32_t slot_id;
-    uint32_t group_id;
-} BufDescriptor;
-
 enum {
     PIPE_ITEM_TYPE_DRAW,
     PIPE_ITEM_TYPE_INVAL_ONE,
@@ -4492,8 +4484,6 @@ typedef struct {
     uint32_t type;
     void *data;
     uint32_t size;
-    uint32_t slot_id;
-    uint32_t group_id;
 } AddBufInfo;
 
 static void marshaller_add_compressed(RedWorker *worker, SpiceMarshaller *m,
@@ -5994,8 +5984,6 @@ static void fill_cursor(CursorChannel *cursor_channel, SpiceCursor *red_cursor, 
             addbuf->type = BUF_TYPE_RAW;
             addbuf->data = red_cursor->data;
             addbuf->size = red_cursor->data_size;
-            addbuf->slot_id = 0;
-            addbuf->group_id = 0;
         }
     } else {
         LocalCursor *local_cursor;
@@ -6005,8 +5993,6 @@ static void fill_cursor(CursorChannel *cursor_channel, SpiceCursor *red_cursor, 
         addbuf->type = BUF_TYPE_RAW;
         addbuf->data = local_cursor->red_cursor.data;
         addbuf->size = local_cursor->data_size;
-        addbuf->slot_id = 0;
-        addbuf->group_id = 0;
     }
 }
 
