@@ -1,5 +1,9 @@
-/* char device interfaces */
+#ifndef __SPICE_EXPERIMENTAL_H__
+#define __SPICE_EXPERIMENTAL_H__
 
+#include "spice.h"
+
+/* char device interfaces */
 #define SPICE_INTERFACE_CHAR_DEVICE "char_device"
 #define SPICE_INTERFACE_CHAR_DEVICE_MAJOR 1
 #define SPICE_INTERFACE_CHAR_DEVICE_MINOR 1
@@ -62,4 +66,6 @@ int spice_server_migrate_info(SpiceServer *s, const char* dest, int port, int se
 int spice_server_migrate_start(SpiceServer *s);
 int spice_server_migrate_client_state(SpiceServer *s);
 int spice_server_migrate_end(SpiceServer *s, int completed);
+
+#endif // __SPICE_EXPERIMENTAL_H__
 
