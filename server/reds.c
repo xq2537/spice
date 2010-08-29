@@ -3453,7 +3453,7 @@ int spice_server_char_device_add_interface(SpiceServer *s,
     sif = SPICE_CONTAINEROF(char_device->base.sif, SpiceCharDeviceInterface, base);
     if (strcmp(char_device->subtype, SUBTYPE_VDAGENT) == 0) {
         if (vdagent) {
-            red_printf("vdi port already attached");
+            red_printf("vdagent already attached");
             return -1;
         }
         char_device->st = &vdagent_char_device_state;
