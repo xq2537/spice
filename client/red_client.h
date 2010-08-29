@@ -210,6 +210,7 @@ protected:
 private:
     void on_channel_disconnected(RedChannel& channel);
     void migrate_channel(RedChannel& channel);
+    void send_agent_announce_capabilities(bool request);
     void send_agent_monitors_config();
     void send_agent_display_config();
     void calc_pixmap_cach_and_glz_window_size(uint32_t display_channels_hint,
@@ -229,6 +230,8 @@ private:
     void handle_migrate_switch_host(RedPeer::InMessage* message);
 
     void on_agent_reply(VDAgentReply* reply);
+    void on_agent_announce_capabilities(VDAgentAnnounceCapabilities* caps,
+                                        uint32_t msg_size);
     void on_agent_clipboard(VDAgentClipboard* clipboard, uint32_t size);
     void send_agent_clipboard();
     void do_send_agent_clipboard();
@@ -269,6 +272,8 @@ private:
     uint32_t _agent_out_msg_pos;
     uint32_t _agent_tokens;
     AutoRef<AgentTimer> _agent_timer;
+    uint32_t _agent_caps_size;
+    uint32_t *_agent_caps;
 
     PeerConnectionOptMap _con_opt_map;
     RedPeer::HostAuthOptions _host_auth_opt;

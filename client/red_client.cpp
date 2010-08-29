@@ -328,6 +328,8 @@ RedClient::RedClient(Application& application)
     , _agent_out_msg_pos (0)
     , _agent_tokens (0)
     , _agent_timer (new AgentTimer())
+    , _agent_caps_size(0)
+    , _agent_caps(NULL)
     , _migrate (*this)
     , _glz_window (0, _glz_debug)
 {
@@ -361,6 +363,7 @@ RedClient::~RedClient()
     ASSERT(_channels.empty());
     _application.deactivate_interval_timer(*_agent_timer);
     delete _agent_msg;
+    delete[] _agent_caps;
 }
 
 void RedClient::set_target(const std::string& host, int port, int sport)
@@ -639,6 +642,34 @@ void RedClient::send_agent_monitors_config()
     _agent_reply_wait_type = VD_AGENT_MONITORS_CONFIG;
 }
 
+void RedClient::send_agent_announce_capabilities(bool request)
+{
+    Message* message = new Message(SPICE_MSGC_MAIN_AGENT_DATA);
+    VDAgentMessage* msg = (VDAgentMessage*)
+        spice_marshaller_reserve_space(message->marshaller(),
+                                       sizeof(VDAgentMessage));
+    VDAgentAnnounceCapabilities* caps;
+
+    msg->protocol = VD_AGENT_PROTOCOL;
+    msg->type = VD_AGENT_ANNOUNCE_CAPABILITIES;
+    msg->opaque = 0;
+    msg->size = sizeof(VDAgentAnnounceCapabilities) + VD_AGENT_CAPS_BYTES;
+
+    caps = (VDAgentAnnounceCapabilities*)
+        spice_marshaller_reserve_space(message->marshaller(), msg->size);
+
+    caps->request = request;
+    memset(caps->caps, 0, VD_AGENT_CAPS_BYTES);
+    VD_AGENT_SET_CAPABILITY(caps->caps, VD_AGENT_CAP_MOUSE_STATE);
+    VD_AGENT_SET_CAPABILITY(caps->caps, VD_AGENT_CAP_MONITORS_CONFIG);
+    VD_AGENT_SET_CAPABILITY(caps->caps, VD_AGENT_CAP_REPLY);
+    VD_AGENT_SET_CAPABILITY(caps->caps, VD_AGENT_CAP_CLIPBOARD);
+    VD_AGENT_SET_CAPABILITY(caps->caps, VD_AGENT_CAP_DISPLAY_CONFIG);
+    ASSERT(_agent_tokens)
+    _agent_tokens--;
+    post_message(message);
+}
+
 void RedClient::send_agent_display_config()
 {
     Message* message = new Message(SPICE_MSGC_MAIN_AGENT_DATA);
@@ -654,7 +685,7 @@ void RedClient::send_agent_display_config()
 
     disp_config = (VDAgentDisplayConfig*)
         spice_marshaller_reserve_space(message->marshaller(), sizeof(VDAgentDisplayConfig));
-    
+
     disp_config->flags = 0;
     if (_display_setting._disable_wallpaper) {
         disp_config->flags |= VD_AGENT_DISPLAY_CONFIG_FLAG_DISABLE_WALLPAPER;
@@ -872,12 +903,10 @@ void RedClient::handle_init(RedPeer::InMessage* message)
     }
 
     if (_agent_connected) {
+        send_agent_announce_capabilities(true);
         if (_auto_display_res) {
            send_agent_monitors_config();
         }
-        // not sending the color depth through send_agent_monitors_config, since
-        // it applies only for attached screens.
-        send_agent_display_config();
     }
 
     if (!_auto_display_res && _display_setting.is_empty()) {
@@ -917,6 +946,8 @@ void RedClient::handle_agent_connected(RedPeer::InMessage* message)
     agent_start.num_tokens = ~0;
     _marshallers->msgc_main_agent_start(msg->marshaller(), &agent_start);
     post_message(msg);
+    send_agent_announce_capabilities(false);
+
     if (_auto_display_res && !_agent_mon_config_sent) {
         send_agent_monitors_config();
     }
@@ -930,6 +961,30 @@ void RedClient::handle_agent_disconnected(RedPeer::InMessage* message)
 {
     DBG(0, "");
     _agent_connected = false;
+}
+
+void RedClient::on_agent_announce_capabilities(
+    VDAgentAnnounceCapabilities* caps, uint32_t msg_size)
+{
+    uint32_t caps_size = VD_AGENT_CAPS_SIZE_FROM_MSG_SIZE(msg_size);
+
+    if (_agent_caps_size != caps_size) {
+        delete[] _agent_caps;
+        _agent_caps = new uint32_t[caps_size];
+        ASSERT(_agent_caps != NULL);
+        _agent_caps_size = caps_size;
+    }
+    memcpy(_agent_caps, caps->caps, sizeof(_agent_caps[0]) * caps_size);
+
+    if (VD_AGENT_HAS_CAPABILITY(caps->caps, caps_size,
+        VD_AGENT_DISPLAY_CONFIG)) {
+        // not sending the color depth through send_agent_monitors_config, since
+        // it applies only for attached screens.
+        send_agent_display_config();
+    }
+    if (caps->request) {
+        send_agent_announce_capabilities(false);
+    }
 }
 
 void RedClient::on_agent_reply(VDAgentReply* reply)
@@ -990,6 +1045,12 @@ void RedClient::handle_agent_data(RedPeer::InMessage* message)
         if (_agent_msg_pos == sizeof(VDAgentMessage) + _agent_msg->size) {
             DBG(0, "agent msg end");
             switch (_agent_msg->type) {
+            case VD_AGENT_ANNOUNCE_CAPABILITIES: {
+                on_agent_announce_capabilities(
+                    (VDAgentAnnounceCapabilities*)_agent_msg_data,
+                                                _agent_msg->size);
+                break;
+            }
             case VD_AGENT_REPLY: {
                 on_agent_reply((VDAgentReply*)_agent_msg_data);
                 break;
