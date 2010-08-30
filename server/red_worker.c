@@ -1235,6 +1235,7 @@ static inline void red_handle_drawable_surfaces_client_synced(RedWorker *worker,
                 continue;
             }
             red_create_surface_item(worker, surface_id);
+            red_current_flush(worker, surface_id);
             red_add_surface_image(worker, surface_id);
         }
     }
@@ -1244,6 +1245,7 @@ static inline void red_handle_drawable_surfaces_client_synced(RedWorker *worker,
     }
 
     red_create_surface_item(worker, drawable->surface_id);
+    red_current_flush(worker, drawable->surface_id);
     red_add_surface_image(worker, drawable->surface_id);
 }
 
@@ -4417,7 +4419,7 @@ static void red_free_some(RedWorker *worker)
 
 static void red_current_flush(RedWorker *worker, int surface_id)
 {
-    while (!ring_is_empty(&worker->current_list)) {
+    while (!ring_is_empty(&worker->surfaces[surface_id].current_list)) {
         free_one_drawable(worker, FALSE);
     }
     red_current_clear(worker, surface_id);
