@@ -174,16 +174,6 @@ enum {
     VDI_PORT_READ_STATE_READ_DATA,
 };
 
-enum {
-    VDP_CLIENT_PORT = 1,
-    VDP_SERVER_PORT,
-};
-
-typedef struct __attribute__ ((__packed__)) VDIChunkHeader {
-    uint32_t port;
-    uint32_t size;
-} VDIChunkHeader;
-
 typedef struct VDIPortState {
     int connected;
     uint32_t plug_generation;
