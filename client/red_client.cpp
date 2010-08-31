@@ -75,6 +75,12 @@ private:
     RedClient& _client;
 };
 
+uint32_t default_agent_caps[] = {
+    (1 << VD_AGENT_CAP_MOUSE_STATE) |
+    (1 << VD_AGENT_CAP_MONITORS_CONFIG) |
+    (1 << VD_AGENT_CAP_REPLY)
+    };
+
 void ClipboardEvent::response(AbstractProcessLoop& events_loop)
 {
     static_cast<RedClient*>(events_loop.get_owner())->send_agent_clipboard();
@@ -334,7 +340,12 @@ RedClient::RedClient(Application& application)
     , _glz_window (0, _glz_debug)
 {
     MainChannelLoop* message_loop = static_cast<MainChannelLoop*>(get_message_handler());
+    uint32_t default_caps_size = SPICE_N_ELEMENTS(default_agent_caps);
 
+    _agent_caps_size = VD_AGENT_CAPS_SIZE;
+    ASSERT(VD_AGENT_CAPS_SIZE >= default_caps_size);
+    _agent_caps = new uint32_t[_agent_caps_size];
+    memcpy(_agent_caps, default_agent_caps, default_caps_size);
     message_loop->set_handler(SPICE_MSG_MIGRATE, &RedClient::handle_migrate);
     message_loop->set_handler(SPICE_MSG_SET_ACK, &RedClient::handle_set_ack);
     message_loop->set_handler(SPICE_MSG_PING, &RedClient::handle_ping);
