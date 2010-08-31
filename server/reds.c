@@ -55,6 +55,7 @@
 #include "demarshallers.h"
 #include "marshaller.h"
 #include "generated_marshallers.h"
+#include "server/char_device.h"
 #ifdef USE_TUNNEL
 #include "red_tunnel_worker.h"
 #endif
@@ -172,10 +173,6 @@ enum {
     VDI_PORT_READ_STATE_READ_HADER,
     VDI_PORT_READ_STATE_GET_BUFF,
     VDI_PORT_READ_STATE_READ_DATA,
-};
-
-struct SpiceCharDeviceState {
-    void (*wakeup)(SpiceCharDeviceInstance *sin);
 };
 
 void vdagent_char_device_wakeup(SpiceCharDeviceInstance *sin);
