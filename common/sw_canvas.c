@@ -454,7 +454,6 @@ static void __scale_image(SpiceCanvas *spice_canvas,
     SwCanvas *canvas = (SwCanvas *)spice_canvas;
     pixman_transform_t transform;
     pixman_fixed_t fsx, fsy;
-    int scaled_src_x, scaled_src_y;
 
     fsx = ((pixman_fixed_48_16_t) src_width * 65536) / dest_width;
     fsy = ((pixman_fixed_48_16_t) src_height * 65536) / dest_height;
@@ -462,6 +461,9 @@ static void __scale_image(SpiceCanvas *spice_canvas,
     pixman_image_set_clip_region32(canvas->image, region);
 
     pixman_transform_init_scale(&transform, fsx, fsy);
+    pixman_transform_translate(&transform, NULL,
+			       pixman_int_to_fixed (src_x),
+			       pixman_int_to_fixed (src_y));
 
     pixman_image_set_transform(src, &transform);
     pixman_image_set_repeat(src, PIXMAN_REPEAT_NONE);
@@ -472,12 +474,9 @@ static void __scale_image(SpiceCanvas *spice_canvas,
                             PIXMAN_FILTER_NEAREST : PIXMAN_FILTER_GOOD,
                             NULL, 0);
 
-    scaled_src_x = ((pixman_fixed_48_16_t)src_x * 65536 + fsx/2 ) / fsx;
-    scaled_src_y = ((pixman_fixed_48_16_t)src_y * 65536 + fsy/2 ) / fsy;
-
     pixman_image_composite32(PIXMAN_OP_SRC,
                              src, NULL, canvas->image,
-                             scaled_src_x, scaled_src_y, /* src */
+                             0, 0, /* src */
                              0, 0, /* mask */
                              dest_x, dest_y, /* dst */
                              dest_width, dest_height);
@@ -530,7 +529,6 @@ static void __scale_image_rop(SpiceCanvas *spice_canvas,
     pixman_box32_t *rects;
     int n_rects, i;
     pixman_fixed_t fsx, fsy;
-    int scaled_src_x, scaled_src_y;
 
     fsx = ((pixman_fixed_48_16_t) src_width * 65536) / dest_width;
     fsy = ((pixman_fixed_48_16_t) src_height * 65536) / dest_height;
@@ -544,6 +542,9 @@ static void __scale_image_rop(SpiceCanvas *spice_canvas,
     pixman_image_set_clip_region32(scaled, region);
 
     pixman_transform_init_scale(&transform, fsx, fsy);
+    pixman_transform_translate(&transform, NULL,
+			       pixman_int_to_fixed (src_x),
+			       pixman_int_to_fixed (src_y));
 
     pixman_image_set_transform(src, &transform);
     pixman_image_set_repeat(src, PIXMAN_REPEAT_NONE);
@@ -554,12 +555,9 @@ static void __scale_image_rop(SpiceCanvas *spice_canvas,
                             PIXMAN_FILTER_NEAREST : PIXMAN_FILTER_GOOD,
                             NULL, 0);
 
-    scaled_src_x = ((pixman_fixed_48_16_t)src_x * 65536 + fsx/2 ) / fsx;
-    scaled_src_y = ((pixman_fixed_48_16_t)src_y * 65536 + fsy/2 ) / fsy;
-
     pixman_image_composite32(PIXMAN_OP_SRC,
                              src, NULL, scaled,
-                             scaled_src_x, scaled_src_y, /* src */
+                             0, 0, /* src */
                              0, 0, /* mask */
                              0, 0, /* dst */
                              dest_width,
@@ -729,7 +727,6 @@ static void __blend_scale_image(SpiceCanvas *spice_canvas,
     pixman_transform_t transform;
     pixman_image_t *mask, *dest;
     pixman_fixed_t fsx, fsy;
-    int scaled_src_x, scaled_src_y;
 
     fsx = ((pixman_fixed_48_16_t) src_width * 65536) / dest_width;
     fsy = ((pixman_fixed_48_16_t) src_height * 65536) / dest_height;
@@ -739,6 +736,9 @@ static void __blend_scale_image(SpiceCanvas *spice_canvas,
     pixman_image_set_clip_region32(dest, region);
 
     pixman_transform_init_scale(&transform, fsx, fsy);
+    pixman_transform_translate(&transform, NULL,
+			       pixman_int_to_fixed (src_x),
+			       pixman_int_to_fixed (src_y));
 
     mask = NULL;
     if (overall_alpha != 0xff) {
@@ -756,12 +756,9 @@ static void __blend_scale_image(SpiceCanvas *spice_canvas,
                             PIXMAN_FILTER_NEAREST : PIXMAN_FILTER_GOOD,
                             NULL, 0);
 
-    scaled_src_x = ((pixman_fixed_48_16_t)src_x * 65536 + fsx/2 ) / fsx;
-    scaled_src_y = ((pixman_fixed_48_16_t)src_y * 65536 + fsy/2 ) / fsy;
-
     pixman_image_composite32(PIXMAN_OP_OVER,
                              src, mask, dest,
-                             scaled_src_x, scaled_src_y, /* src */
+                             0, 0, /* src */
                              0, 0, /* mask */
                              dest_x, dest_y, /* dst */
                              dest_width, dest_height);
@@ -888,7 +885,6 @@ static void __colorkey_scale_image(SpiceCanvas *spice_canvas,
     pixman_box32_t *rects;
     int n_rects, i;
     pixman_fixed_t fsx, fsy;
-    int scaled_src_x, scaled_src_y;
 
     fsx = ((pixman_fixed_48_16_t) src_width * 65536) / dest_width;
     fsy = ((pixman_fixed_48_16_t) src_height * 65536) / dest_height;
@@ -902,6 +898,9 @@ static void __colorkey_scale_image(SpiceCanvas *spice_canvas,
     pixman_image_set_clip_region32(scaled, region);
 
     pixman_transform_init_scale(&transform, fsx, fsy);
+    pixman_transform_translate(&transform, NULL,
+			       pixman_int_to_fixed (src_x),
+			       pixman_int_to_fixed (src_y));
 
     pixman_image_set_transform(src, &transform);
     pixman_image_set_repeat(src, PIXMAN_REPEAT_NONE);
@@ -909,12 +908,9 @@ static void __colorkey_scale_image(SpiceCanvas *spice_canvas,
                             PIXMAN_FILTER_NEAREST,
                             NULL, 0);
 
-    scaled_src_x = ((pixman_fixed_48_16_t)src_x * 65536 + fsx/2 ) / fsx;
-    scaled_src_y = ((pixman_fixed_48_16_t)src_y * 65536 + fsy/2 ) / fsy;
-
     pixman_image_composite32(PIXMAN_OP_SRC,
                              src, NULL, scaled,
-                             scaled_src_x, scaled_src_y, /* src */
+                             0, 0, /* src */
                              0, 0, /* mask */
                              0, 0, /* dst */
                              dest_width,
