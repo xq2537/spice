@@ -1,3 +1,15 @@
+Major changes in 0.6.0:
+=======================
+Major changes in this releas:
+* Various bugfixes
+* Make build work on arm7
+* Fix build for python 2.5
+* Don't allow video streams on non-primary surface
+* Fix shared memory leaks in client
+* Add some new libspice-server APIs for configuration options
+* Convert SpiceVDIPort API to generic SpiceCharDevice API
+* Add capabilities negotiation to agent
+
 Major changes in 0.5.3:
 =======================
 
