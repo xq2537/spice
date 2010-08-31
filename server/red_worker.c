@@ -2785,6 +2785,18 @@ static inline void red_stream_maintenance(RedWorker *worker, Drawable *candidate
     }
 }
 
+static inline int is_drawable_independent_from_surfaces(Drawable *drawable)
+{
+    int x;
+
+    for (x = 0; x < 3; ++x) {
+        if (drawable->surfaces_dest[x] != -1) {
+            return FALSE;
+        }
+    }
+    return TRUE;
+}
+
 static inline int red_current_add_equal(RedWorker *worker, DrawItem *item, TreeItem *other)
 {
     DrawItem *other_draw_item;
@@ -2804,7 +2816,7 @@ static inline int red_current_add_equal(RedWorker *worker, DrawItem *item, TreeI
     other_drawable = SPICE_CONTAINEROF(other_draw_item, Drawable, tree_item);
 
     if (item->effect == QXL_EFFECT_OPAQUE) {
-        int add_after = !!other_drawable->stream;
+        int add_after = !!other_drawable->stream && is_drawable_independent_from_surfaces(drawable);
         red_stream_maintenance(worker, drawable, other_drawable);
         __current_add_drawable(worker, drawable, &other->siblings_link);
         if (add_after) {
