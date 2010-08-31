@@ -820,6 +820,13 @@ void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
     red->effect           = qxl->effect;
     red->mm_time          = qxl->mm_time;
 
+    red->self_bitmap = (qxl->bitmap_offset != 0);
+    red_get_rect_ptr(&red->self_bitmap_area, &qxl->bitmap_area);
+
+    red->surfaces_dest[0] = -1;
+    red->surfaces_dest[1] = -1;
+    red->surfaces_dest[2] = -1;
+
     red->type = qxl->type;
     switch (red->type) {
     case QXL_DRAW_ALPHA_BLEND:
@@ -837,6 +844,13 @@ void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
         break;
     case QXL_COPY_BITS:
         red_get_point_ptr(&red->u.copy_bits.src_pos, &qxl->u.copy_bits.src_pos);
+        red->surfaces_dest[0] = 0;
+        red->surfaces_rects[0].left   = red->u.copy_bits.src_pos.x;
+        red->surfaces_rects[0].right  = red->u.copy_bits.src_pos.x +
+            (red->bbox.right - red->bbox.left);
+        red->surfaces_rects[0].top    = red->u.copy_bits.src_pos.y;
+        red->surfaces_rects[0].bottom = red->u.copy_bits.src_pos.y +
+            (red->bbox.bottom - red->bbox.top);
         break;
     case QXL_DRAW_FILL:
         red_get_fill_ptr(slots, group_id, &red->u.fill, &qxl->u.fill);
