@@ -17,10 +17,12 @@ struct SpiceCharDeviceInterface {
 
 struct SpiceCharDeviceInstance {
     SpiceBaseInstance base;
+    const char* subtype;
     SpiceCharDeviceState *st;
 };
 
 void spice_server_char_device_wakeup(SpiceCharDeviceInstance *sin);
+const char** spice_server_char_device_recognized_subtypes(void);
 
 /* tunnel interface */
 

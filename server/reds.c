@@ -174,6 +174,15 @@ enum {
     VDI_PORT_READ_STATE_READ_DATA,
 };
 
+struct SpiceCharDeviceState {
+    void (*wakeup)(SpiceCharDeviceInstance *sin);
+};
+
+void vdagent_char_device_wakeup(SpiceCharDeviceInstance *sin);
+struct SpiceCharDeviceState vdagent_char_device_state = {
+    .wakeup = &vdagent_char_device_wakeup,
+};
+
 typedef struct VDIPortState {
     int connected;
     uint32_t plug_generation;
@@ -1300,7 +1309,7 @@ static int read_from_vdi_port(void)
     return total;
 }
 
-__visible__ void spice_server_char_device_wakeup(SpiceCharDeviceInstance *sin)
+void vdagent_char_device_wakeup(SpiceCharDeviceInstance *sin)
 {
     while (write_to_vdi_port() || read_from_vdi_port());
 }
@@ -3404,6 +3413,42 @@ static void attach_to_red_agent(SpiceCharDeviceInstance *sin)
     reds_send_agent_connected();
 }
 
+__visible__ void spice_server_char_device_wakeup(SpiceCharDeviceInstance* sin)
+{
+    (*sin->st->wakeup)(sin);
+}
+
+#define SUBTYPE_VDAGENT "vdagent"
+
+const char *spice_server_char_device_recognized_subtypes_list[] = {
+    SUBTYPE_VDAGENT,
+    NULL,
+};
+
+__visible__ const char** spice_server_char_device_recognized_subtypes()
+{
+    return spice_server_char_device_recognized_subtypes_list;
+}
+
+int spice_server_char_device_add_interface(SpiceServer *s,
+                                           SpiceBaseInstance *sin)
+{
+    SpiceCharDeviceInstance* char_device =
+            SPICE_CONTAINEROF(sin, SpiceCharDeviceInstance, base);
+    SpiceCharDeviceInterface* sif;
+
+    sif = SPICE_CONTAINEROF(char_device->base.sif, SpiceCharDeviceInterface, base);
+    if (strcmp(char_device->subtype, SUBTYPE_VDAGENT) == 0) {
+        if (vdagent) {
+            red_printf("vdi port already attached");
+            return -1;
+        }
+        char_device->st = &vdagent_char_device_state;
+        attach_to_red_agent(char_device);
+    }
+    return 0;
+}
+
 __visible__ int spice_server_add_interface(SpiceServer *s,
                                            SpiceBaseInstance *sin)
 {
@@ -3495,16 +3540,12 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
 
     } else if (strcmp(interface->type, SPICE_INTERFACE_CHAR_DEVICE) == 0) {
         red_printf("SPICE_INTERFACE_CHAR_DEVICE");
-        if (vdagent) {
-            red_printf("vdi port already attached");
-            return -1;
-        }
         if (interface->major_version != SPICE_INTERFACE_CHAR_DEVICE_MAJOR ||
             interface->minor_version < SPICE_INTERFACE_CHAR_DEVICE_MINOR) {
             red_printf("unsupported char device interface");
             return -1;
         }
-        attach_to_red_agent(SPICE_CONTAINEROF(sin, SpiceCharDeviceInstance, base));
+        spice_server_char_device_add_interface(s, sin);
 
     } else if (strcmp(interface->type, SPICE_INTERFACE_NET_WIRE) == 0) {
 #ifdef USE_TUNNEL
@@ -3552,7 +3593,7 @@ __visible__ int spice_server_remove_interface(SpiceBaseInstance *sin)
 
     } else if (strcmp(interface->type, SPICE_INTERFACE_CHAR_DEVICE) == 0) {
         red_printf("remove SPICE_INTERFACE_CHAR_DEVICE");
-        if (sin == &vdagent->base) {
+        if (vdagent && sin == &vdagent->base) {
             reds_agent_remove();
         }
 
