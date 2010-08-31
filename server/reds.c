@@ -63,7 +63,7 @@ SpiceCoreInterface *core = NULL;
 static SpiceKbdInstance *keyboard = NULL;
 static SpiceMouseInstance *mouse = NULL;
 static SpiceTabletInstance *tablet = NULL;
-static SpiceVDIPortInstance *vdagent = NULL;
+static SpiceCharDeviceInstance *vdagent = NULL;
 
 #define MIGRATION_NOTIFY_SPICE_KEY "spice_mig_ext"
 
@@ -724,8 +724,8 @@ static void reds_disconnect()
     reds_reset_outgoing();
 
     if (reds->agent_state.connected) {
-        SpiceVDIPortInterface *sif;
-        sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceVDIPortInterface, base);
+        SpiceCharDeviceInterface *sif;
+        sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceCharDeviceInterface, base);
         reds->agent_state.connected = 0;
         if (sif->state) {
             sif->state(vdagent, reds->agent_state.connected);
@@ -1075,8 +1075,8 @@ static void reds_send_agent_disconnected()
 
 static void reds_agent_remove()
 {
-    SpiceVDIPortInstance *sin = vdagent;
-    SpiceVDIPortInterface *sif;
+    SpiceCharDeviceInstance *sin = vdagent;
+    SpiceCharDeviceInterface *sif;
 
     vdagent = NULL;
     reds_update_mouse_mode();
@@ -1086,7 +1086,7 @@ static void reds_agent_remove()
     }
 
     ASSERT(reds->agent_state.connected)
-    sif = SPICE_CONTAINEROF(sin->base.sif, SpiceVDIPortInterface, base);
+    sif = SPICE_CONTAINEROF(sin->base.sif, SpiceCharDeviceInterface, base);
     reds->agent_state.connected = 0;
     if (sif->state) {
         sif->state(sin, reds->agent_state.connected);
@@ -1141,7 +1141,7 @@ static void vdi_port_write_retry()
 static int write_to_vdi_port()
 {
     VDIPortState *state = &reds->agent_state;
-    SpiceVDIPortInterface *sif;
+    SpiceCharDeviceInterface *sif;
     RingItem *ring_item;
     VDIPortBuf *buf;
     int total = 0;
@@ -1151,7 +1151,7 @@ static int write_to_vdi_port()
         return 0;
     }
 
-    sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceVDIPortInterface, base);
+    sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceCharDeviceInterface, base);
     while (reds->agent_state.connected) {
         if (!(ring_item = ring_get_tail(&state->write_queue))) {
             break;
@@ -1217,7 +1217,7 @@ static int read_from_vdi_port(void)
     static int inside_call = 0;
     int quit_loop = 0;
     VDIPortState *state = &reds->agent_state;
-    SpiceVDIPortInterface *sif;
+    SpiceCharDeviceInterface *sif;
     VDIReadBuf *dispatch_buf;
     int total = 0;
     int n;
@@ -1231,7 +1231,7 @@ static int read_from_vdi_port(void)
         return 0;
     }
 
-    sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceVDIPortInterface, base);
+    sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceCharDeviceInterface, base);
     while (!quit_loop && reds->agent_state.connected) {
         switch (state->read_state) {
         case VDI_PORT_READ_STATE_READ_HADER:
@@ -1300,7 +1300,7 @@ static int read_from_vdi_port(void)
     return total;
 }
 
-__visible__ void spice_server_vdi_port_wakeup(SpiceVDIPortInstance *sin)
+__visible__ void spice_server_char_device_wakeup(SpiceCharDeviceInstance *sin)
 {
     while (write_to_vdi_port() || read_from_vdi_port());
 }
@@ -2031,8 +2031,8 @@ static void reds_handle_main_link(RedLinkInfo *link)
     reds_show_new_channel(link);
     __reds_release_link(link);
     if (vdagent) {
-        SpiceVDIPortInterface *sif;
-        sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceVDIPortInterface, base);
+        SpiceCharDeviceInterface *sif;
+        sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceCharDeviceInterface, base);
         reds->agent_state.connected = 1;
         if (sif->state) {
             sif->state(vdagent, reds->agent_state.connected);
@@ -3380,17 +3380,17 @@ static void mm_timer_proc(void *opaque)
     core->timer_start(reds->mm_timer, MM_TIMER_GRANULARITY_MS);
 }
 
-static void attach_to_red_agent(SpiceVDIPortInstance *sin)
+static void attach_to_red_agent(SpiceCharDeviceInstance *sin)
 {
     VDIPortState *state = &reds->agent_state;
-    SpiceVDIPortInterface *sif;
+    SpiceCharDeviceInterface *sif;
 
     vdagent = sin;
     reds_update_mouse_mode();
     if (!reds->peer) {
         return;
     }
-    sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceVDIPortInterface, base);
+    sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceCharDeviceInterface, base);
     state->connected = 1;
     if (sif->state) {
         sif->state(vdagent, state->connected);
@@ -3493,18 +3493,18 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
         }
         snd_attach_record(SPICE_CONTAINEROF(sin, SpiceRecordInstance, base));
 
-    } else if (strcmp(interface->type, SPICE_INTERFACE_VDI_PORT) == 0) {
-        red_printf("SPICE_INTERFACE_VDI_PORT");
+    } else if (strcmp(interface->type, SPICE_INTERFACE_CHAR_DEVICE) == 0) {
+        red_printf("SPICE_INTERFACE_CHAR_DEVICE");
         if (vdagent) {
             red_printf("vdi port already attached");
             return -1;
         }
-        if (interface->major_version != SPICE_INTERFACE_VDI_PORT_MAJOR ||
-            interface->minor_version < SPICE_INTERFACE_VDI_PORT_MINOR) {
-            red_printf("unsupported vdi port interface");
+        if (interface->major_version != SPICE_INTERFACE_CHAR_DEVICE_MAJOR ||
+            interface->minor_version < SPICE_INTERFACE_CHAR_DEVICE_MINOR) {
+            red_printf("unsupported char device interface");
             return -1;
         }
-        attach_to_red_agent(SPICE_CONTAINEROF(sin, SpiceVDIPortInstance, base));
+        attach_to_red_agent(SPICE_CONTAINEROF(sin, SpiceCharDeviceInstance, base));
 
     } else if (strcmp(interface->type, SPICE_INTERFACE_NET_WIRE) == 0) {
 #ifdef USE_TUNNEL
@@ -3550,8 +3550,8 @@ __visible__ int spice_server_remove_interface(SpiceBaseInstance *sin)
         red_printf("remove SPICE_INTERFACE_RECORD");
         snd_detach_record(SPICE_CONTAINEROF(sin, SpiceRecordInstance, base));
 
-    } else if (strcmp(interface->type, SPICE_INTERFACE_VDI_PORT) == 0) {
-        red_printf("remove SPICE_INTERFACE_VDI_PORT");
+    } else if (strcmp(interface->type, SPICE_INTERFACE_CHAR_DEVICE) == 0) {
+        red_printf("remove SPICE_INTERFACE_CHAR_DEVICE");
         if (sin == &vdagent->base) {
             reds_agent_remove();
         }

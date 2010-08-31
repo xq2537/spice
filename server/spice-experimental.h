@@ -1,26 +1,26 @@
-/* vdi port interface */
+/* char device interfaces */
 
-#define SPICE_INTERFACE_VDI_PORT "vdi_port"
-#define SPICE_INTERFACE_VDI_PORT_MAJOR 1
-#define SPICE_INTERFACE_VDI_PORT_MINOR 1
-typedef struct SpiceVDIPortInterface SpiceVDIPortInterface;
-typedef struct SpiceVDIPortInstance SpiceVDIPortInstance;
-typedef struct SpiceVDIPortState SpiceVDIPortState;
+#define SPICE_INTERFACE_CHAR_DEVICE "char_device"
+#define SPICE_INTERFACE_CHAR_DEVICE_MAJOR 1
+#define SPICE_INTERFACE_CHAR_DEVICE_MINOR 1
+typedef struct SpiceCharDeviceInterface SpiceCharDeviceInterface;
+typedef struct SpiceCharDeviceInstance SpiceCharDeviceInstance;
+typedef struct SpiceCharDeviceState SpiceCharDeviceState;
 
-struct SpiceVDIPortInterface {
+struct SpiceCharDeviceInterface {
     SpiceBaseInterface base;
 
-    void (*state)(SpiceVDIPortInstance *sin, int connected);
-    int (*write)(SpiceVDIPortInstance *sin, const uint8_t *buf, int len);
-    int (*read)(SpiceVDIPortInstance *sin, uint8_t *buf, int len);
+    void (*state)(SpiceCharDeviceInstance *sin, int connected);
+    int (*write)(SpiceCharDeviceInstance *sin, const uint8_t *buf, int len);
+    int (*read)(SpiceCharDeviceInstance *sin, uint8_t *buf, int len);
 };
 
-struct SpiceVDIPortInstance {
+struct SpiceCharDeviceInstance {
     SpiceBaseInstance base;
-    SpiceVDIPortState *st;
+    SpiceCharDeviceState *st;
 };
 
-void spice_server_vdi_port_wakeup(SpiceVDIPortInstance *sin);
+void spice_server_char_device_wakeup(SpiceCharDeviceInstance *sin);
 
 /* tunnel interface */
 
