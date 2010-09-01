@@ -2732,7 +2732,8 @@ static inline int red_is_stream_start(Drawable *drawable)
             (RED_STREAM_GRADUAL_FRAMES_START_CONDITION * drawable->frames_count)));
 }
 
-static void red_stream_add_frame(RedWorker* worker, Drawable *frame_drawable,
+// returns whether a stream was created
+static int red_stream_add_frame(RedWorker* worker, Drawable *frame_drawable,
                                  int frames_count,
                                  int gradual_frames_count,
                                  int last_gradual_frame)
@@ -2757,7 +2758,9 @@ static void red_stream_add_frame(RedWorker* worker, Drawable *frame_drawable,
 
     if (red_is_stream_start(frame_drawable)) {
         red_create_stream(worker, frame_drawable);
+        return TRUE;
     }
+    return FALSE;
 }
 
 static inline void red_stream_maintenance(RedWorker *worker, Drawable *candidate, Drawable *prev)
@@ -2890,10 +2893,12 @@ static inline void red_use_stream_trace(RedWorker *worker, Drawable *drawable)
     for (; trace < trace_end; trace++) {
         if (__red_is_next_stream_frame(worker, drawable, trace->width, trace->height,
                                        &trace->dest_area, trace->time, NULL)) {
-            red_stream_add_frame(worker, drawable,
-                                 trace->frames_count,
-                                 trace->gradual_frames_count,
-                                 trace->last_gradual_frame);
+            if (red_stream_add_frame(worker, drawable,
+                                     trace->frames_count,
+                                     trace->gradual_frames_count,
+                                     trace->last_gradual_frame)) {
+                return;
+            }
         }
     }
 }
