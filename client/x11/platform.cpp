@@ -778,6 +778,11 @@ DynamicScreen::DynamicScreen(Display* display, int screen, int& next_mon_id)
     platform_win = XCreateSimpleWindow(display, RootWindow(display, screen), 0, 0, 1, 1, 0, 0, 0);
     XSelectInput(display, platform_win, StructureNotifyMask);
     XRRSelectInput(display, platform_win, RRScreenChangeNotifyMask);
+
+    Monitor::self_monitors_change++;
+    process_monitor_configure_events(platform_win);
+    Monitor::self_monitors_change--;
+
     XPlatform::set_win_proc(platform_win, root_win_proc);
     intern_clipboard_atoms();
     X_DEBUG_SYNC(display);
@@ -1046,6 +1051,11 @@ MultyMonScreen::MultyMonScreen(Display* display, int screen, int& next_mon_id)
     X_DEBUG_SYNC(get_display());
     intern_clipboard_atoms();
     XPlatform::set_win_proc(root_window, root_win_proc);
+
+    XMonitor::inc_change_ref();
+    process_monitor_configure_events(root_window);
+    XMonitor::dec_change_ref();
+
     X_DEBUG_SYNC(get_display());
     //
     //platform_win = XCreateSimpleWindow(display, RootWindow(display, screen), 0, 0, 1, 1, 0, 0, 0);
