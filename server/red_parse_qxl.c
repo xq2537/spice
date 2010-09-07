@@ -302,7 +302,7 @@ static SpiceChunks *red_get_image_data_chunked(RedMemSlotInfo *slots, int group_
 }
 
 static SpiceImage *red_get_image(RedMemSlotInfo *slots, int group_id,
-                                 QXLPHYSICAL addr)
+                                 QXLPHYSICAL addr, uint32_t flags)
 {
     RedDataChunk chunks;
     QXLImage *qxl;
@@ -351,8 +351,14 @@ static SpiceImage *red_get_image(RedMemSlotInfo *slots, int group_id,
             rp = spice_malloc_n_m(num_ents, sizeof(rp->ents[0]), sizeof(*rp));
             rp->unique   = qp->unique;
             rp->num_ents = num_ents;
-            for (i = 0; i < num_ents; i++) {
-                rp->ents[i] = qp->ents[i];
+            if (flags & QXL_COMMAND_FLAG_COMPAT_16BPP) {
+                for (i = 0; i < num_ents; i++) {
+                    rp->ents[i] = color_16_to_32(qp->ents[i]);
+                }
+            } else {
+                for (i = 0; i < num_ents; i++) {
+                    rp->ents[i] = qp->ents[i];
+                }
             }
             red->u.bitmap.palette = rp;
             red->u.bitmap.palette_id = rp->unique;
@@ -423,7 +429,7 @@ static void red_get_brush_ptr(RedMemSlotInfo *slots, int group_id,
         }
         break;
     case SPICE_BRUSH_TYPE_PATTERN:
-        red->u.pattern.pat = red_get_image(slots, group_id, qxl->u.pattern.pat);
+        red->u.pattern.pat = red_get_image(slots, group_id, qxl->u.pattern.pat, flags);
         red_get_point_ptr(&red->u.pattern.pos, &qxl->u.pattern.pos);
         break;
     }
@@ -439,11 +445,11 @@ static void red_put_brush(SpiceBrush *red)
 }
 
 static void red_get_qmask_ptr(RedMemSlotInfo *slots, int group_id,
-                              SpiceQMask *red, QXLQMask *qxl)
+                              SpiceQMask *red, QXLQMask *qxl, uint32_t flags)
 {
     red->flags  = qxl->flags;
     red_get_point_ptr(&red->pos, &qxl->pos);
-    red->bitmap = red_get_image(slots, group_id, qxl->bitmap);
+    red->bitmap = red_get_image(slots, group_id, qxl->bitmap, flags);
 }
 
 static void red_put_qmask(SpiceQMask *red)
@@ -456,7 +462,7 @@ static void red_get_fill_ptr(RedMemSlotInfo *slots, int group_id,
 {
     red_get_brush_ptr(slots, group_id, &red->brush, &qxl->brush, flags);
     red->rop_descriptor = qxl->rop_descriptor;
-    red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
+    red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask, flags);
 }
 
 static void red_put_fill(SpiceFill *red)
@@ -468,12 +474,12 @@ static void red_put_fill(SpiceFill *red)
 static void red_get_opaque_ptr(RedMemSlotInfo *slots, int group_id,
                                SpiceOpaque *red, QXLOpaque *qxl, uint32_t flags)
 {
-   red->src_bitmap     = red_get_image(slots, group_id, qxl->src_bitmap);
+    red->src_bitmap     = red_get_image(slots, group_id, qxl->src_bitmap, flags);
    red_get_rect_ptr(&red->src_area, &qxl->src_area);
    red_get_brush_ptr(slots, group_id, &red->brush, &qxl->brush, flags);
    red->rop_descriptor = qxl->rop_descriptor;
    red->scale_mode     = qxl->scale_mode;
-   red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
+   red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask, flags);
 }
 
 static void red_put_opaque(SpiceOpaque *red)
@@ -484,13 +490,13 @@ static void red_put_opaque(SpiceOpaque *red)
 }
 
 static void red_get_copy_ptr(RedMemSlotInfo *slots, int group_id,
-                             SpiceCopy *red, QXLCopy *qxl)
+                             SpiceCopy *red, QXLCopy *qxl, uint32_t flags)
 {
-   red->src_bitmap      = red_get_image(slots, group_id, qxl->src_bitmap);
+    red->src_bitmap      = red_get_image(slots, group_id, qxl->src_bitmap, flags);
    red_get_rect_ptr(&red->src_area, &qxl->src_area);
    red->rop_descriptor  = qxl->rop_descriptor;
    red->scale_mode      = qxl->scale_mode;
-   red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
+   red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask, flags);
 }
 
 static void red_put_copy(SpiceCopy *red)
@@ -500,13 +506,13 @@ static void red_put_copy(SpiceCopy *red)
 }
 
 static void red_get_blend_ptr(RedMemSlotInfo *slots, int group_id,
-                             SpiceBlend *red, QXLBlend *qxl)
+                             SpiceBlend *red, QXLBlend *qxl, uint32_t flags)
 {
-   red->src_bitmap      = red_get_image(slots, group_id, qxl->src_bitmap);
+    red->src_bitmap      = red_get_image(slots, group_id, qxl->src_bitmap, flags);
    red_get_rect_ptr(&red->src_area, &qxl->src_area);
    red->rop_descriptor  = qxl->rop_descriptor;
    red->scale_mode      = qxl->scale_mode;
-   red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
+   red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask, flags);
 }
 
 static void red_put_blend(SpiceBlend *red)
@@ -516,9 +522,10 @@ static void red_put_blend(SpiceBlend *red)
 }
 
 static void red_get_transparent_ptr(RedMemSlotInfo *slots, int group_id,
-                                    SpiceTransparent *red, QXLTransparent *qxl)
+                                    SpiceTransparent *red, QXLTransparent *qxl,
+                                    uint32_t flags)
 {
-   red->src_bitmap      = red_get_image(slots, group_id, qxl->src_bitmap);
+    red->src_bitmap      = red_get_image(slots, group_id, qxl->src_bitmap, flags);
    red_get_rect_ptr(&red->src_area, &qxl->src_area);
    red->src_color       = qxl->src_color;
    red->true_color      = qxl->true_color;
@@ -530,19 +537,21 @@ static void red_put_transparent(SpiceTransparent *red)
 }
 
 static void red_get_alpha_blend_ptr(RedMemSlotInfo *slots, int group_id,
-                                    SpiceAlphaBlend *red, QXLAlphaBlend *qxl)
+                                    SpiceAlphaBlend *red, QXLAlphaBlend *qxl,
+                                    uint32_t flags)
 {
     red->alpha_flags = qxl->alpha_flags;
     red->alpha       = qxl->alpha;
-    red->src_bitmap  = red_get_image(slots, group_id, qxl->src_bitmap);
+    red->src_bitmap  = red_get_image(slots, group_id, qxl->src_bitmap, flags);
     red_get_rect_ptr(&red->src_area, &qxl->src_area);
 }
 
 static void red_get_alpha_blend_ptr_compat(RedMemSlotInfo *slots, int group_id,
-                                           SpiceAlphaBlend *red, QXLCompatAlphaBlend *qxl)
+                                           SpiceAlphaBlend *red, QXLCompatAlphaBlend *qxl,
+                                           uint32_t flags)
 {
     red->alpha       = qxl->alpha;
-    red->src_bitmap  = red_get_image(slots, group_id, qxl->src_bitmap);
+    red->src_bitmap  = red_get_image(slots, group_id, qxl->src_bitmap, flags);
     red_get_rect_ptr(&red->src_area, &qxl->src_area);
 }
 
@@ -554,12 +563,12 @@ static void red_put_alpha_blend(SpiceAlphaBlend *red)
 static void red_get_rop3_ptr(RedMemSlotInfo *slots, int group_id,
                              SpiceRop3 *red, QXLRop3 *qxl, uint32_t flags)
 {
-   red->src_bitmap = red_get_image(slots, group_id, qxl->src_bitmap);
+    red->src_bitmap = red_get_image(slots, group_id, qxl->src_bitmap, flags);
    red_get_rect_ptr(&red->src_area, &qxl->src_area);
    red_get_brush_ptr(slots, group_id, &red->brush, &qxl->brush, flags);
    red->rop3       = qxl->rop3;
    red->scale_mode = qxl->scale_mode;
-   red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
+   red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask, flags);
 }
 
 static void red_put_rop3(SpiceRop3 *red)
@@ -697,9 +706,9 @@ static void red_put_text_ptr(SpiceText *red)
 }
 
 static void red_get_whiteness_ptr(RedMemSlotInfo *slots, int group_id,
-                                  SpiceWhiteness *red, QXLWhiteness *qxl)
+                                  SpiceWhiteness *red, QXLWhiteness *qxl, uint32_t flags)
 {
-    red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
+    red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask, flags);
 }
 
 static void red_put_whiteness(SpiceWhiteness *red)
@@ -708,9 +717,9 @@ static void red_put_whiteness(SpiceWhiteness *red)
 }
 
 static void red_get_blackness_ptr(RedMemSlotInfo *slots, int group_id,
-                                  SpiceBlackness *red, QXLBlackness *qxl)
+                                  SpiceBlackness *red, QXLBlackness *qxl, uint32_t flags)
 {
-    red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
+    red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask, flags);
 }
 
 static void red_put_blackness(SpiceWhiteness *red)
@@ -719,9 +728,9 @@ static void red_put_blackness(SpiceWhiteness *red)
 }
 
 static void red_get_invers_ptr(RedMemSlotInfo *slots, int group_id,
-                               SpiceInvers *red, QXLInvers *qxl)
+                               SpiceInvers *red, QXLInvers *qxl, uint32_t flags)
 {
-    red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
+    red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask, flags);
 }
 
 static void red_put_invers(SpiceWhiteness *red)
@@ -775,16 +784,17 @@ static void red_get_native_drawable(RedMemSlotInfo *slots, int group_id,
     switch (red->type) {
     case QXL_DRAW_ALPHA_BLEND:
         red_get_alpha_blend_ptr(slots, group_id,
-                                &red->u.alpha_blend, &qxl->u.alpha_blend);
+                                &red->u.alpha_blend, &qxl->u.alpha_blend, flags);
         break;
     case QXL_DRAW_BLACKNESS:
-        red_get_blackness_ptr(slots, group_id, &red->u.blackness, &qxl->u.blackness);
+        red_get_blackness_ptr(slots, group_id,
+                              &red->u.blackness, &qxl->u.blackness, flags);
         break;
     case QXL_DRAW_BLEND:
-        red_get_blend_ptr(slots, group_id, &red->u.blend, &qxl->u.blend);
+        red_get_blend_ptr(slots, group_id, &red->u.blend, &qxl->u.blend, flags);
         break;
     case QXL_DRAW_COPY:
-        red_get_copy_ptr(slots, group_id, &red->u.copy, &qxl->u.copy);
+        red_get_copy_ptr(slots, group_id, &red->u.copy, &qxl->u.copy, flags);
         break;
     case QXL_COPY_BITS:
         red_get_point_ptr(&red->u.copy_bits.src_pos, &qxl->u.copy_bits.src_pos);
@@ -796,7 +806,7 @@ static void red_get_native_drawable(RedMemSlotInfo *slots, int group_id,
         red_get_opaque_ptr(slots, group_id, &red->u.opaque, &qxl->u.opaque, flags);
         break;
     case QXL_DRAW_INVERS:
-        red_get_invers_ptr(slots, group_id, &red->u.invers, &qxl->u.invers);
+        red_get_invers_ptr(slots, group_id, &red->u.invers, &qxl->u.invers, flags);
         break;
     case QXL_DRAW_NOP:
         break;
@@ -811,10 +821,11 @@ static void red_get_native_drawable(RedMemSlotInfo *slots, int group_id,
         break;
     case QXL_DRAW_TRANSPARENT:
         red_get_transparent_ptr(slots, group_id,
-                                &red->u.transparent, &qxl->u.transparent);
+                                &red->u.transparent, &qxl->u.transparent, flags);
         break;
     case QXL_DRAW_WHITENESS:
-        red_get_whiteness_ptr(slots, group_id, &red->u.whiteness, &qxl->u.whiteness);
+        red_get_whiteness_ptr(slots, group_id,
+                              &red->u.whiteness, &qxl->u.whiteness, flags);
         break;
     default:
         red_error("%s: unknown type %d", __FUNCTION__, red->type);
@@ -846,16 +857,17 @@ static void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
     switch (red->type) {
     case QXL_DRAW_ALPHA_BLEND:
         red_get_alpha_blend_ptr_compat(slots, group_id,
-                                       &red->u.alpha_blend, &qxl->u.alpha_blend);
+                                       &red->u.alpha_blend, &qxl->u.alpha_blend, flags);
         break;
     case QXL_DRAW_BLACKNESS:
-        red_get_blackness_ptr(slots, group_id, &red->u.blackness, &qxl->u.blackness);
+        red_get_blackness_ptr(slots, group_id,
+                              &red->u.blackness, &qxl->u.blackness, flags);
         break;
     case QXL_DRAW_BLEND:
-        red_get_blend_ptr(slots, group_id, &red->u.blend, &qxl->u.blend);
+        red_get_blend_ptr(slots, group_id, &red->u.blend, &qxl->u.blend, flags);
         break;
     case QXL_DRAW_COPY:
-        red_get_copy_ptr(slots, group_id, &red->u.copy, &qxl->u.copy);
+        red_get_copy_ptr(slots, group_id, &red->u.copy, &qxl->u.copy, flags);
         break;
     case QXL_COPY_BITS:
         red_get_point_ptr(&red->u.copy_bits.src_pos, &qxl->u.copy_bits.src_pos);
@@ -874,7 +886,7 @@ static void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
         red_get_opaque_ptr(slots, group_id, &red->u.opaque, &qxl->u.opaque, flags);
         break;
     case QXL_DRAW_INVERS:
-        red_get_invers_ptr(slots, group_id, &red->u.invers, &qxl->u.invers);
+        red_get_invers_ptr(slots, group_id, &red->u.invers, &qxl->u.invers, flags);
         break;
     case QXL_DRAW_NOP:
         break;
@@ -889,10 +901,11 @@ static void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
         break;
     case QXL_DRAW_TRANSPARENT:
         red_get_transparent_ptr(slots, group_id,
-                                &red->u.transparent, &qxl->u.transparent);
+                                &red->u.transparent, &qxl->u.transparent, flags);
         break;
     case QXL_DRAW_WHITENESS:
-        red_get_whiteness_ptr(slots, group_id, &red->u.whiteness, &qxl->u.whiteness);
+        red_get_whiteness_ptr(slots, group_id,
+                              &red->u.whiteness, &qxl->u.whiteness, flags);
         break;
     default:
         red_error("%s: unknown type %d", __FUNCTION__, red->type);
