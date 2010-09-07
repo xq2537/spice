@@ -45,6 +45,17 @@ static void hexdump_qxl(RedMemSlotInfo *slots, int group_id,
 }
 #endif
 
+static inline uint32_t color_16_to_32(uint32_t color)
+{
+    uint32_t ret;
+
+    ret = ((color & 0x001f) << 3) | ((color & 0x001c) >> 2);
+    ret |= ((color & 0x03e0) << 6) | ((color & 0x0380) << 1);
+    ret |= ((color & 0x7c00) << 9) | ((color & 0x7000) << 4);
+
+    return ret;
+}
+
 static uint8_t *red_linearize_chunk(RedDataChunk *head, size_t size, bool *free_chunk)
 {
     uint8_t *data, *ptr;
@@ -400,12 +411,16 @@ void red_put_image(SpiceImage *red)
 }
 
 static void red_get_brush_ptr(RedMemSlotInfo *slots, int group_id,
-                              SpiceBrush *red, QXLBrush *qxl)
+                              SpiceBrush *red, QXLBrush *qxl, uint32_t flags)
 {
     red->type = qxl->type;
     switch (red->type) {
     case SPICE_BRUSH_TYPE_SOLID:
-        red->u.color = qxl->u.color;
+        if (flags & QXL_COMMAND_FLAG_COMPAT_16BPP) {
+            red->u.color = color_16_to_32(qxl->u.color);
+        } else {
+            red->u.color = qxl->u.color;
+        }
         break;
     case SPICE_BRUSH_TYPE_PATTERN:
         red->u.pattern.pat = red_get_image(slots, group_id, qxl->u.pattern.pat);
@@ -437,9 +452,9 @@ static void red_put_qmask(SpiceQMask *red)
 }
 
 static void red_get_fill_ptr(RedMemSlotInfo *slots, int group_id,
-                             SpiceFill *red, QXLFill *qxl)
+                             SpiceFill *red, QXLFill *qxl, uint32_t flags)
 {
-    red_get_brush_ptr(slots, group_id, &red->brush, &qxl->brush);
+    red_get_brush_ptr(slots, group_id, &red->brush, &qxl->brush, flags);
     red->rop_descriptor = qxl->rop_descriptor;
     red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
 }
@@ -451,11 +466,11 @@ static void red_put_fill(SpiceFill *red)
 }
 
 static void red_get_opaque_ptr(RedMemSlotInfo *slots, int group_id,
-                               SpiceOpaque *red, QXLOpaque *qxl)
+                               SpiceOpaque *red, QXLOpaque *qxl, uint32_t flags)
 {
    red->src_bitmap     = red_get_image(slots, group_id, qxl->src_bitmap);
    red_get_rect_ptr(&red->src_area, &qxl->src_area);
-   red_get_brush_ptr(slots, group_id, &red->brush, &qxl->brush);
+   red_get_brush_ptr(slots, group_id, &red->brush, &qxl->brush, flags);
    red->rop_descriptor = qxl->rop_descriptor;
    red->scale_mode     = qxl->scale_mode;
    red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
@@ -537,11 +552,11 @@ static void red_put_alpha_blend(SpiceAlphaBlend *red)
 }
 
 static void red_get_rop3_ptr(RedMemSlotInfo *slots, int group_id,
-                             SpiceRop3 *red, QXLRop3 *qxl)
+                             SpiceRop3 *red, QXLRop3 *qxl, uint32_t flags)
 {
    red->src_bitmap = red_get_image(slots, group_id, qxl->src_bitmap);
    red_get_rect_ptr(&red->src_area, &qxl->src_area);
-   red_get_brush_ptr(slots, group_id, &red->brush, &qxl->brush);
+   red_get_brush_ptr(slots, group_id, &red->brush, &qxl->brush, flags);
    red->rop3       = qxl->rop3;
    red->scale_mode = qxl->scale_mode;
    red_get_qmask_ptr(slots, group_id, &red->mask, &qxl->mask);
@@ -555,7 +570,7 @@ static void red_put_rop3(SpiceRop3 *red)
 }
 
 static void red_get_stroke_ptr(RedMemSlotInfo *slots, int group_id,
-                               SpiceStroke *red, QXLStroke *qxl)
+                               SpiceStroke *red, QXLStroke *qxl, uint32_t flags)
 {
     red->path = red_get_path(slots, group_id, qxl->path);
     red->attr.flags       = qxl->attr.flags;
@@ -574,7 +589,7 @@ static void red_get_stroke_ptr(RedMemSlotInfo *slots, int group_id,
         red->attr.style_nseg  = 0;
         red->attr.style       = NULL;
     }
-    red_get_brush_ptr(slots, group_id, &red->brush, &qxl->brush);
+    red_get_brush_ptr(slots, group_id, &red->brush, &qxl->brush, flags);
     red->fore_mode        = qxl->fore_mode;
     red->back_mode        = qxl->back_mode;
 }
@@ -664,12 +679,12 @@ static SpiceString *red_get_string(RedMemSlotInfo *slots, int group_id,
 }
 
 static void red_get_text_ptr(RedMemSlotInfo *slots, int group_id,
-                             SpiceText *red, QXLText *qxl)
+                             SpiceText *red, QXLText *qxl, uint32_t flags)
 {
    red->str = red_get_string(slots, group_id, qxl->str);
    red_get_rect_ptr(&red->back_area, &qxl->back_area);
-   red_get_brush_ptr(slots, group_id, &red->fore_brush, &qxl->fore_brush);
-   red_get_brush_ptr(slots, group_id, &red->back_brush, &qxl->back_brush);
+   red_get_brush_ptr(slots, group_id, &red->fore_brush, &qxl->fore_brush, flags);
+   red_get_brush_ptr(slots, group_id, &red->back_brush, &qxl->back_brush, flags);
    red->fore_mode  = qxl->fore_mode;
    red->back_mode  = qxl->back_mode;
 }
@@ -775,10 +790,10 @@ static void red_get_native_drawable(RedMemSlotInfo *slots, int group_id,
         red_get_point_ptr(&red->u.copy_bits.src_pos, &qxl->u.copy_bits.src_pos);
         break;
     case QXL_DRAW_FILL:
-        red_get_fill_ptr(slots, group_id, &red->u.fill, &qxl->u.fill);
+        red_get_fill_ptr(slots, group_id, &red->u.fill, &qxl->u.fill, flags);
         break;
     case QXL_DRAW_OPAQUE:
-        red_get_opaque_ptr(slots, group_id, &red->u.opaque, &qxl->u.opaque);
+        red_get_opaque_ptr(slots, group_id, &red->u.opaque, &qxl->u.opaque, flags);
         break;
     case QXL_DRAW_INVERS:
         red_get_invers_ptr(slots, group_id, &red->u.invers, &qxl->u.invers);
@@ -786,13 +801,13 @@ static void red_get_native_drawable(RedMemSlotInfo *slots, int group_id,
     case QXL_DRAW_NOP:
         break;
     case QXL_DRAW_ROP3:
-        red_get_rop3_ptr(slots, group_id, &red->u.rop3, &qxl->u.rop3);
+        red_get_rop3_ptr(slots, group_id, &red->u.rop3, &qxl->u.rop3, flags);
         break;
     case QXL_DRAW_STROKE:
-        red_get_stroke_ptr(slots, group_id, &red->u.stroke, &qxl->u.stroke);
+        red_get_stroke_ptr(slots, group_id, &red->u.stroke, &qxl->u.stroke, flags);
         break;
     case QXL_DRAW_TEXT:
-        red_get_text_ptr(slots, group_id, &red->u.text, &qxl->u.text);
+        red_get_text_ptr(slots, group_id, &red->u.text, &qxl->u.text, flags);
         break;
     case QXL_DRAW_TRANSPARENT:
         red_get_transparent_ptr(slots, group_id,
@@ -853,10 +868,10 @@ static void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
             (red->bbox.bottom - red->bbox.top);
         break;
     case QXL_DRAW_FILL:
-        red_get_fill_ptr(slots, group_id, &red->u.fill, &qxl->u.fill);
+        red_get_fill_ptr(slots, group_id, &red->u.fill, &qxl->u.fill, flags);
         break;
     case QXL_DRAW_OPAQUE:
-        red_get_opaque_ptr(slots, group_id, &red->u.opaque, &qxl->u.opaque);
+        red_get_opaque_ptr(slots, group_id, &red->u.opaque, &qxl->u.opaque, flags);
         break;
     case QXL_DRAW_INVERS:
         red_get_invers_ptr(slots, group_id, &red->u.invers, &qxl->u.invers);
@@ -864,13 +879,13 @@ static void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
     case QXL_DRAW_NOP:
         break;
     case QXL_DRAW_ROP3:
-        red_get_rop3_ptr(slots, group_id, &red->u.rop3, &qxl->u.rop3);
+        red_get_rop3_ptr(slots, group_id, &red->u.rop3, &qxl->u.rop3, flags);
         break;
     case QXL_DRAW_STROKE:
-        red_get_stroke_ptr(slots, group_id, &red->u.stroke, &qxl->u.stroke);
+        red_get_stroke_ptr(slots, group_id, &red->u.stroke, &qxl->u.stroke, flags);
         break;
     case QXL_DRAW_TEXT:
-        red_get_text_ptr(slots, group_id, &red->u.text, &qxl->u.text);
+        red_get_text_ptr(slots, group_id, &red->u.text, &qxl->u.text, flags);
         break;
     case QXL_DRAW_TRANSPARENT:
         red_get_transparent_ptr(slots, group_id,
