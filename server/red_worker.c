@@ -4350,13 +4350,9 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
         switch (ext_cmd.cmd.type) {
         case QXL_CMD_DRAW: {
             RedDrawable *drawable = spice_new0(RedDrawable, 1);
-            if (ext_cmd.flags & QXL_COMMAND_FLAG_COMPAT) {
-                red_get_compat_drawable(&worker->mem_slots, ext_cmd.group_id,
-                                        drawable, ext_cmd.cmd.data);
-            } else {
-                red_get_drawable(&worker->mem_slots, ext_cmd.group_id,
-                                 drawable, ext_cmd.cmd.data);
-            }
+
+            red_get_drawable(&worker->mem_slots, ext_cmd.group_id,
+                             drawable, ext_cmd.cmd.data, ext_cmd.flags);
             red_process_drawable(worker, drawable, ext_cmd.group_id);
             break;
         }

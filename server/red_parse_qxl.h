@@ -113,9 +113,7 @@ typedef struct RedCursorCmd {
 void red_get_rect_ptr(SpiceRect *red, QXLRect *qxl);
 
 void red_get_drawable(RedMemSlotInfo *slots, int group_id,
-                      RedDrawable *red, QXLPHYSICAL addr);
-void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
-                             RedDrawable *red, QXLPHYSICAL addr);
+                      RedDrawable *red, QXLPHYSICAL addr, uint32_t flags);
 void red_put_drawable(RedDrawable *red);
 void red_put_image(SpiceImage *red);
 

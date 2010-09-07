@@ -734,8 +734,8 @@ static void red_put_clip(SpiceClip *red)
     }
 }
 
-void red_get_drawable(RedMemSlotInfo *slots, int group_id,
-                      RedDrawable *red, QXLPHYSICAL addr)
+static void red_get_native_drawable(RedMemSlotInfo *slots, int group_id,
+                                    RedDrawable *red, QXLPHYSICAL addr, uint32_t flags)
 {
     QXLDrawable *qxl;
     int i;
@@ -807,8 +807,8 @@ void red_get_drawable(RedMemSlotInfo *slots, int group_id,
     };
 }
 
-void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
-                             RedDrawable *red, QXLPHYSICAL addr)
+static void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
+                                    RedDrawable *red, QXLPHYSICAL addr, uint32_t flags)
 {
     QXLCompatDrawable *qxl;
 
@@ -883,6 +883,16 @@ void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
         red_error("%s: unknown type %d", __FUNCTION__, red->type);
         break;
     };
+}
+
+void red_get_drawable(RedMemSlotInfo *slots, int group_id,
+                      RedDrawable *red, QXLPHYSICAL addr, uint32_t flags)
+{
+    if (flags & QXL_COMMAND_FLAG_COMPAT) {
+        red_get_compat_drawable(slots, group_id, red, addr, flags);
+    } else {
+        red_get_native_drawable(slots, group_id, red, addr, flags);
+    }
 }
 
 void red_put_drawable(RedDrawable *red)
