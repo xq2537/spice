@@ -9951,6 +9951,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
             red_printf("oom current %u pipe %u", worker->current_size, worker->display_channel ?
                        worker->display_channel->base.pipe_size : 0);
             red_free_some(worker);
+            worker->qxl->st->qif->flush_resources(worker->qxl);
         }
         clear_bit(RED_WORKER_PENDING_OOM, worker->pending);
         break;
