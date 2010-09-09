@@ -4408,7 +4408,7 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
     return n;
 }
 
-#define RED_RELEASE_BUNCH_SIZE 5
+#define RED_RELEASE_BUNCH_SIZE 64
 
 static void red_free_some(RedWorker *worker)
 {
