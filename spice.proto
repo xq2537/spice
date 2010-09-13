@@ -1084,6 +1084,13 @@ channel TunnelChannel : BaseChannel {
     } @ctype(SpiceMsgcTunnelSocketTokens) socket_token;
 };
 
+channel SmartcardChannel : BaseChannel {
+server:
+    Data data = 101;
+client:
+    Data data = 101;
+};
+
 protocol Spice {
     MainChannel main = 1;
     DisplayChannel display;
@@ -1092,4 +1099,5 @@ protocol Spice {
     PlaybackChannel playback;
     RecordChannel record;
     TunnelChannel tunnel;
+    SmartcardChannel smartcard;
 };
