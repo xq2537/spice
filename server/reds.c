@@ -3451,6 +3451,7 @@ static int spice_server_char_device_add_interface(SpiceServer *s,
     SpiceCharDeviceInterface* sif;
 
     sif = SPICE_CONTAINEROF(char_device->base.sif, SpiceCharDeviceInterface, base);
+    red_printf("CHAR_DEVICE %s", char_device->subtype);
     if (strcmp(char_device->subtype, SUBTYPE_VDAGENT) == 0) {
         if (vdagent) {
             red_printf("vdagent already attached");
@@ -3552,7 +3553,6 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
         snd_attach_record(SPICE_CONTAINEROF(sin, SpiceRecordInstance, base));
 
     } else if (strcmp(interface->type, SPICE_INTERFACE_CHAR_DEVICE) == 0) {
-        red_printf("SPICE_INTERFACE_CHAR_DEVICE");
         if (interface->major_version != SPICE_INTERFACE_CHAR_DEVICE_MAJOR ||
             interface->minor_version < SPICE_INTERFACE_CHAR_DEVICE_MINOR) {
             red_printf("unsupported char device interface");
