@@ -113,6 +113,16 @@ AC_ARG_ENABLE(opengl,
 [  --enable-opengl         Enable opengl requirement / support (not recommended)],
 [  have_opengl=yes])
 AM_CONDITIONAL(SUPPORT_GL, test "x$have_opengl" = "xyes")
+
+have_smartcard=no
+AC_ARG_ENABLE(smartcard,
+[  --enable-smartcard         Enable network redirection],
+[  have_smartcard=yes])
+AM_CONDITIONAL(SUPPORT_SMARTCARD, test "x$have_smartcard" = "xyes")
+if test "x$have_smartcard" = "xyes"; then
+   AC_DEFINE(USE_SMARTCARD, [1], [Define if supporting smartcard proxying])
+fi
+
 dnl =========================================================================
 dnl Check deps
 
@@ -167,6 +177,16 @@ if test "x$have_tunnel" = "xyes"; then
 	SPICE_REQUIRES+=" slirp"
 	AC_DEFINE([HAVE_SLIRP], [], [Define if we have slirp])
 fi
+
+if test "x$have_smartcard" = "xyes"; then
+    PKG_CHECK_MODULES(CAC_CARD, cac_card >= 0.0.1)
+    SMARTCARD_LIBS="$CAC_CARD_LIBS"
+    SMARTCARD_CFLAGS="$CAC_CARD_CFLAGS"
+    SPICE_REQUIRES+=" cac_card"
+    AC_SUBST(SMARTCARD_LIBS)
+    AC_SUBST(SMARTCARD_CFLAGS)
+fi
+
 
 PKG_CHECK_MODULES(PIXMAN, pixman-1 >= 0.17.7)
 AC_SUBST(PIXMAN_CFLAGS)
@@ -421,6 +441,8 @@ echo "
         OpenGL:                   ${have_opengl}
 
         GUI:                      ${use_gui}
+
+        Smartcard:                ${have_smartcard}
 
         Now type 'make' to build $PACKAGE
 "

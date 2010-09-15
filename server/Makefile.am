@@ -17,6 +17,7 @@ INCLUDES = \
 	-DRED_STATISTICS			\
 	$(WARN_CFLAGS)                          \
 	$(VISIBILITY_HIDDEN_CFLAGS)		\
+	$(SMARTCARD_CFLAGS)				\
 	$(NULL)
 
 spice_built_sources = generated_marshallers.c generated_marshallers.h generated_demarshallers.c
@@ -81,6 +82,15 @@ else
 TUNNEL_SRCS =
 endif
 
+if SUPPORT_SMARTCARD
+SMARTCARD_SRCS =		\
+	smartcard.c			\
+	smartcard.h			\
+	$(NULL)
+else
+SMARTCARD_SRCS =
+endif
+
 libspice_server_la_SOURCES =			\
 	demarshallers.h				\
 	glz_encoder.c				\
@@ -121,6 +131,7 @@ libspice_server_la_SOURCES =			\
 	zlib_encoder.h				\
 	char_device.h				\
 	$(TUNNEL_SRCS)				\
+	$(SMARTCARD_SRCS)			\
 	$(COMMON_SRCS)				\
 	$(GL_SRCS)				\
 	$(NULL)

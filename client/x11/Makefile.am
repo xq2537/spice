@@ -27,6 +27,7 @@ INCLUDES = \
 	$(CEGUI_CFLAGS)					\
 	$(WARN_CFLAGS)                                  \
 	$(SPICE_NONPKGCONFIG_CFLAGS)			\
+	$(SMARTCARD_CFLAGS)				\
 	$(NULL)
 
 
@@ -158,6 +159,12 @@ else
 RED_OGL_SRCS =
 endif
 
+if SUPPORT_SMARTCARD
+RED_SCARD_SRCS = $(CLIENT_DIR)/smartcard_channel.cpp
+else
+RED_SCARD_SRCS =
+endif
+
 bin_PROGRAMS = spicec
 
 spicec_SOURCES =			\
@@ -191,6 +198,7 @@ spicec_SOURCES =			\
 	$(RED_GUI_SRCS)			\
 	$(RED_TUNNEL_SRCS)		\
 	$(RED_OGL_SRCS)			\
+	$(RED_SCARD_SRCS)		\
 	$(NULL)
 
 spicec_LDFLAGS = \
@@ -200,6 +208,7 @@ spicec_LDFLAGS = \
 	$(CEGUI_LIBS)					\
 	$(JPEG_LIBS)					\
 	$(Z_LIBS)					\
+	$(SMARTCARD_LIBS)				\
 	$(SPICE_NONPKGCONFIG_LIBS)
 
 spicec_LDADD =						\
