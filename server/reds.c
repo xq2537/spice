@@ -3463,6 +3463,19 @@ static int spice_server_char_device_add_interface(SpiceServer *s,
     return 0;
 }
 
+static void spice_server_char_device_remove_interface(SpiceBaseInstance *sin)
+{
+    SpiceCharDeviceInstance* char_device =
+            SPICE_CONTAINEROF(sin, SpiceCharDeviceInstance, base);
+
+    red_printf("remove CHAR_DEVICE %s", char_device->subtype);
+    if (strcmp(char_device->subtype, SUBTYPE_VDAGENT) == 0) {
+        if (vdagent) {
+            reds_agent_remove();
+        }
+    }
+}
+
 __visible__ int spice_server_add_interface(SpiceServer *s,
                                            SpiceBaseInstance *sin)
 {
@@ -3605,11 +3618,7 @@ __visible__ int spice_server_remove_interface(SpiceBaseInstance *sin)
         snd_detach_record(SPICE_CONTAINEROF(sin, SpiceRecordInstance, base));
 
     } else if (strcmp(interface->type, SPICE_INTERFACE_CHAR_DEVICE) == 0) {
-        red_printf("remove SPICE_INTERFACE_CHAR_DEVICE");
-        if (vdagent && sin == &vdagent->base) {
-            reds_agent_remove();
-        }
-
+        spice_server_char_device_remove_interface(sin);
     } else {
         red_error("VD_INTERFACE_REMOVING unsupported");
         return -1;
