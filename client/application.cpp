@@ -47,6 +47,10 @@
 #include <stdio.h>
 #include <time.h>
 
+#ifdef USE_SMARTCARD
+#include <smartcard_channel.h>
+#endif
+
 #define STICKY_KEY_PIXMAP ALT_IMAGE_RES_ID
 #define STICKY_KEY_TIMEOUT 750
 
@@ -364,6 +368,9 @@ Application::Application()
 #endif // USE_GUI
     , _during_host_switch(false)
     , _state (DISCONNECTED)
+#ifdef USE_SMARTCARD
+    , _smartcard_options(new SmartcardOptions())
+#endif
 {
     DBG(0, "");
     Platform::set_process_loop(*this);
@@ -447,6 +454,9 @@ Application::~Application()
 
     _main_screen->unref();
     destroy_monitors();
+#ifdef USE_SMARTCARD
+    delete _smartcard_options;
+#endif
 }
 
 void Application::init_menu()
@@ -2148,6 +2158,12 @@ void Application::register_channels()
         _client.register_channel_factory(TunnelChannel::Factory());
     }
 #endif
+#ifdef USE_SMARTCARD
+    if (_enabled_channels[SPICE_CHANNEL_SMARTCARD] && _smartcard_options->enable) {
+        smartcard_init(_smartcard_options); // throws Exception
+        _client.register_channel_factory(SmartCardChannel::Factory());
+    }
+#endif
 }
 
 bool Application::process_cmd_line(int argc, char** argv)
@@ -2177,6 +2193,12 @@ bool Application::process_cmd_line(int argc, char** argv)
         SPICE_OPT_DISPLAY_COLOR_DEPTH,
         SPICE_OPT_DISABLE_DISPLAY_EFFECTS,
         SPICE_OPT_CONTROLLER,
+#ifdef USE_SMARTCARD
+        SPICE_OPT_SMARTCARD,
+        SPICE_OPT_NOSMARTCARD,
+        SPICE_OPT_SMARTCARD_CERT,
+        SPICE_OPT_SMARTCARD_DB,
+#endif
     };
 
 #ifdef USE_GUI
@@ -2234,6 +2256,15 @@ bool Application::process_cmd_line(int argc, char** argv)
     parser.set_multi(SPICE_OPT_DISABLE_DISPLAY_EFFECTS, ',');
 
     parser.add(SPICE_OPT_CONTROLLER, "controller", "enable external controller");
+
+#ifdef USE_SMARTCARD
+    parser.add(SPICE_OPT_SMARTCARD, "smartcard", "enable smartcard channel");
+    parser.add(SPICE_OPT_NOSMARTCARD, "nosmartcard", "disable smartcard channel");
+    parser.add(SPICE_OPT_SMARTCARD_CERT, "smartcard-cert", "Use virtual reader+card with given cert(s)",
+        "smartcard-cert", true);
+    parser.set_multi(SPICE_OPT_SMARTCARD_CERT, ',');
+    parser.add(SPICE_OPT_SMARTCARD_DB, "smartcard-db", "Use given db for smartcard certs");
+#endif
 
     for (int i = SPICE_CHANNEL_MAIN; i < SPICE_END_CHANNEL; i++) {
         _peer_con_opt[i] = RedPeer::ConnectionOptions::CON_OP_INVALID;
@@ -2340,6 +2371,20 @@ bool Application::process_cmd_line(int argc, char** argv)
             }
             _enable_controller = true;
             return true;
+#ifdef USE_SMARTCARD
+        case SPICE_OPT_SMARTCARD:
+            _smartcard_options->enable= true;
+            break;
+        case SPICE_OPT_NOSMARTCARD:
+            _smartcard_options->enable= false; // default
+            break;
+        case SPICE_OPT_SMARTCARD_CERT:
+            do {
+                _smartcard_options->certs.insert(
+                    _smartcard_options->certs.end(), std::string(val));
+            } while ((val=parser.next_argument()));
+            break;
+#endif
         case CmdLineParser::OPTION_HELP:
             parser.show_help();
             return false;

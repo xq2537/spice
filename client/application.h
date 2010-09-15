@@ -29,6 +29,9 @@
 #include "foreign_menu.h"
 #include "controller.h"
 
+#ifdef USE_SMARTCARD
+struct SmartcardOptions;
+#endif
 class RedScreen;
 class Application;
 class ScreenLayer;
@@ -268,6 +271,12 @@ public:
     void message_box_test();
 #endif
 
+#ifdef USE_SMARTCARD
+    const SmartcardOptions* get_smartcard_options() const {
+        return _smartcard_options;
+    }
+#endif
+
     static int main(int argc, char** argv, const char* version_str);
 
 private:
@@ -386,6 +395,9 @@ private:
     bool _during_host_switch;
 
     State _state;
+#ifdef USE_SMARTCARD
+    SmartcardOptions* _smartcard_options;
+#endif
 };
 
 #endif
