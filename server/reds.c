@@ -59,6 +59,9 @@
 #ifdef USE_TUNNEL
 #include "red_tunnel_worker.h"
 #endif
+#ifdef USE_SMARTCARD
+#include "smartcard.h"
+#endif
 
 SpiceCoreInterface *core = NULL;
 static SpiceKbdInstance *keyboard = NULL;
@@ -1251,6 +1254,7 @@ static int read_from_vdi_port(void)
     VDIReadBuf *dispatch_buf;
     int total = 0;
     int n;
+
     if (inside_call) {
         return 0;
     }
@@ -3432,9 +3436,13 @@ __visible__ void spice_server_char_device_wakeup(SpiceCharDeviceInstance* sin)
 }
 
 #define SUBTYPE_VDAGENT "vdagent"
+#define SUBTYPE_SMARTCARD "smartcard"
 
 const char *spice_server_char_device_recognized_subtypes_list[] = {
     SUBTYPE_VDAGENT,
+#ifdef USE_SMARTCARD
+    SUBTYPE_SMARTCARD,
+#endif
     NULL,
 };
 
@@ -3460,6 +3468,13 @@ static int spice_server_char_device_add_interface(SpiceServer *s,
         char_device->st = &vdagent_char_device_state;
         attach_to_red_agent(char_device);
     }
+#ifdef USE_SMARTCARD
+    else if (strcmp(char_device->subtype, SUBTYPE_SMARTCARD) == 0) {
+        if (smartcard_device_connect(char_device) == -1) {
+            return -1;
+        }
+    }
+#endif
     return 0;
 }
 
@@ -3474,6 +3489,11 @@ static void spice_server_char_device_remove_interface(SpiceBaseInstance *sin)
             reds_agent_remove();
         }
     }
+#ifdef USE_SMARTCARD
+    else if (strcmp(char_device->subtype, SUBTYPE_SMARTCARD) == 0) {
+        smartcard_device_disconnect(char_device);
+    }
+#endif
 }
 
 __visible__ int spice_server_add_interface(SpiceServer *s,
@@ -3758,6 +3778,10 @@ static void do_spice_init(SpiceCoreInterface *core_interface)
         reds_init_ssl();
     }
     inputs_init();
+
+#ifdef USE_SMARTCARD
+    smartcard_channel_init();
+#endif
 
     reds->mouse_mode = SPICE_MOUSE_MODE_SERVER;
     atexit(reds_exit);
