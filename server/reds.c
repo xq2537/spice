@@ -3443,7 +3443,7 @@ __visible__ const char** spice_server_char_device_recognized_subtypes()
     return spice_server_char_device_recognized_subtypes_list;
 }
 
-int spice_server_char_device_add_interface(SpiceServer *s,
+static int spice_server_char_device_add_interface(SpiceServer *s,
                                            SpiceBaseInstance *sin)
 {
     SpiceCharDeviceInstance* char_device =
