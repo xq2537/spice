@@ -3130,7 +3130,8 @@ static inline void red_update_streamable(RedWorker *worker, Drawable *drawable,
     }
 
     image = red_drawable->u.copy.src_bitmap;
-    if (image->descriptor.type != SPICE_IMAGE_TYPE_BITMAP) {
+    if (image == NULL ||
+        image->descriptor.type != SPICE_IMAGE_TYPE_BITMAP) {
         return;
     }
 
