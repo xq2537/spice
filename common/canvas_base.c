@@ -1751,7 +1751,8 @@ static pixman_image_t *canvas_scale_surface(pixman_image_t *src, const SpiceRect
                              0, 0, /* dst */
                              width, height);
 
-    pixman_image_set_transform(src, NULL);
+    pixman_transform_init_identity(&transform);
+    pixman_image_set_transform(src, &transform);
 
     return surface;
 }
