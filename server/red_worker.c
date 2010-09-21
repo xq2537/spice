@@ -3271,8 +3271,8 @@ static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
 
     bpp = SPICE_SURFACE_FMT_DEPTH(surface->context.format) / 8;
 
-    width = drawable->red_drawable->bbox.right - drawable->red_drawable->bbox.left;
-    height = drawable->red_drawable->bbox.bottom - drawable->red_drawable->bbox.top;
+    width = drawable->red_drawable->self_bitmap_area.right - drawable->red_drawable->self_bitmap_area.left;
+    height = drawable->red_drawable->self_bitmap_area.bottom - drawable->red_drawable->self_bitmap_area.top;
     dest_stride = SPICE_ALIGN(width * bpp, 4);
 
     image = spice_new0(SpiceImage, 1);
