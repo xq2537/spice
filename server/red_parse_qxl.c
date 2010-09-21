@@ -412,6 +412,9 @@ void red_put_image(SpiceImage *red)
         }
         spice_chunks_destroy(red->u.bitmap.data);
         break;
+    case SPICE_IMAGE_TYPE_QUIC:
+        spice_chunks_destroy(red->u.quic.data);
+        break;
     }
     free(red);
 }
