@@ -3715,9 +3715,16 @@ static void image_cache_eaging(ImageCache *cache)
 #endif
 }
 
-static void localize_bitmap(RedWorker *worker, SpiceImage **image_ptr, SpiceImage *image_store)
+static void localize_bitmap(RedWorker *worker, SpiceImage **image_ptr, SpiceImage *image_store, Drawable *drawable)
 {
     SpiceImage *image = *image_ptr;
+
+    if (image == NULL) {
+        ASSERT(drawable != NULL);
+        ASSERT(drawable->self_bitmap != NULL);
+        *image_ptr = drawable->self_bitmap;
+        return;
+    }
 
     if (image_cache_hit(&worker->image_cache, image->descriptor.id)) {
         image_store->descriptor = image->descriptor;
@@ -3753,14 +3760,14 @@ static void localize_bitmap(RedWorker *worker, SpiceImage **image_ptr, SpiceImag
 static void localize_brush(RedWorker *worker, SpiceBrush *brush, SpiceImage *image_store)
 {
     if (brush->type == SPICE_BRUSH_TYPE_PATTERN) {
-        localize_bitmap(worker, &brush->u.pattern.pat, image_store);
+        localize_bitmap(worker, &brush->u.pattern.pat, image_store, NULL);
     }
 }
 
 static void localize_mask(RedWorker *worker, SpiceQMask *mask, SpiceImage *image_store)
 {
     if (mask->bitmap) {
-        localize_bitmap(worker, &mask->bitmap, image_store);
+        localize_bitmap(worker, &mask->bitmap, image_store, NULL);
     }
 }
 
@@ -3793,7 +3800,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         SpiceOpaque opaque = drawable->red_drawable->u.opaque;
         SpiceImage img1, img2, img3;
         localize_brush(worker, &opaque.brush, &img1);
-        localize_bitmap(worker, &opaque.src_bitmap, &img2);
+        localize_bitmap(worker, &opaque.src_bitmap, &img2, drawable);
         localize_mask(worker, &opaque.mask, &img3);
         canvas->ops->draw_opaque(canvas, &drawable->red_drawable->bbox, &clip, &opaque);
         break;
@@ -3801,7 +3808,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
     case QXL_DRAW_COPY: {
         SpiceCopy copy = drawable->red_drawable->u.copy;
         SpiceImage img1, img2;
-        localize_bitmap(worker, &copy.src_bitmap, &img1);
+        localize_bitmap(worker, &copy.src_bitmap, &img1, drawable);
         localize_mask(worker, &copy.mask, &img2);
         canvas->ops->draw_copy(canvas, &drawable->red_drawable->bbox,
                                &clip, &copy);
@@ -3810,7 +3817,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
     case QXL_DRAW_TRANSPARENT: {
         SpiceTransparent transparent = drawable->red_drawable->u.transparent;
         SpiceImage img1;
-        localize_bitmap(worker, &transparent.src_bitmap, &img1);
+        localize_bitmap(worker, &transparent.src_bitmap, &img1, drawable);
         canvas->ops->draw_transparent(canvas,
                                       &drawable->red_drawable->bbox, &clip, &transparent);
         break;
@@ -3818,7 +3825,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
     case QXL_DRAW_ALPHA_BLEND: {
         SpiceAlphaBlend alpha_blend = drawable->red_drawable->u.alpha_blend;
         SpiceImage img1;
-        localize_bitmap(worker, &alpha_blend.src_bitmap, &img1);
+        localize_bitmap(worker, &alpha_blend.src_bitmap, &img1, drawable);
         canvas->ops->draw_alpha_blend(canvas,
                                       &drawable->red_drawable->bbox, &clip, &alpha_blend);
         break;
@@ -3831,7 +3838,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
     case QXL_DRAW_BLEND: {
         SpiceBlend blend = drawable->red_drawable->u.blend;
         SpiceImage img1, img2;
-        localize_bitmap(worker, &blend.src_bitmap, &img1);
+        localize_bitmap(worker, &blend.src_bitmap, &img1, drawable);
         localize_mask(worker, &blend.mask, &img2);
         canvas->ops->draw_blend(canvas, &drawable->red_drawable->bbox,
                                 &clip, &blend);
@@ -3865,7 +3872,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         SpiceRop3 rop3 = drawable->red_drawable->u.rop3;
         SpiceImage img1, img2, img3;
         localize_brush(worker, &rop3.brush, &img1);
-        localize_bitmap(worker, &rop3.src_bitmap, &img2);
+        localize_bitmap(worker, &rop3.src_bitmap, &img2, drawable);
         localize_mask(worker, &rop3.mask, &img3);
         canvas->ops->draw_rop3(canvas, &drawable->red_drawable->bbox,
                                &clip, &rop3);
