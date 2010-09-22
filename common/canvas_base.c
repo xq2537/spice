@@ -2414,6 +2414,7 @@ static void canvas_draw_opaque(SpiceCanvas *spice_canvas, SpiceRect *bbox, Spice
     CanvasBase *canvas = (CanvasBase *)spice_canvas;
     pixman_image_t *src_image;
     pixman_region32_t dest_region;
+    SpiceCanvas *surface_canvas;
     SpiceROP rop;
 
     pixman_region32_init_rect(&dest_region,
@@ -2436,30 +2437,52 @@ static void canvas_draw_opaque(SpiceCanvas *spice_canvas, SpiceRect *bbox, Spice
         return;
     }
 
-    src_image = canvas_get_image(canvas, opaque->src_bitmap, FALSE);
-
-    if (rect_is_same_size(bbox, &opaque->src_area)) {
-        spice_canvas->ops->blit_image(spice_canvas, &dest_region,
-                                      src_image,
-                                      bbox->left - opaque->src_area.left,
-                                      bbox->top - opaque->src_area.top);
+    surface_canvas = canvas_get_surface(canvas, opaque->src_bitmap);
+    if (surface_canvas) {
+        if (rect_is_same_size(bbox, &opaque->src_area)) {
+            spice_canvas->ops->blit_image_from_surface(spice_canvas, &dest_region,
+                                                       surface_canvas,
+                                                       bbox->left - opaque->src_area.left,
+                                                       bbox->top - opaque->src_area.top);
+        } else {
+            spice_canvas->ops->scale_image_from_surface(spice_canvas, &dest_region,
+                                                        surface_canvas,
+                                                        opaque->src_area.left,
+                                                        opaque->src_area.top,
+                                                        opaque->src_area.right - opaque->src_area.left,
+                                                        opaque->src_area.bottom - opaque->src_area.top,
+                                                        bbox->left,
+                                                        bbox->top,
+                                                        bbox->right - bbox->left,
+                                                        bbox->bottom - bbox->top,
+                                                        opaque->scale_mode);
+        }
     } else {
-        spice_canvas->ops->scale_image(spice_canvas, &dest_region,
-                                       src_image,
-                                       opaque->src_area.left,
-                                       opaque->src_area.top,
-                                       opaque->src_area.right - opaque->src_area.left,
-                                       opaque->src_area.bottom - opaque->src_area.top,
-                                       bbox->left,
-                                       bbox->top,
-                                       bbox->right - bbox->left,
-                                       bbox->bottom - bbox->top,
-                                       opaque->scale_mode);
+        src_image = canvas_get_image(canvas, opaque->src_bitmap, FALSE);
+
+        if (rect_is_same_size(bbox, &opaque->src_area)) {
+            spice_canvas->ops->blit_image(spice_canvas, &dest_region,
+                                          src_image,
+                                          bbox->left - opaque->src_area.left,
+                                          bbox->top - opaque->src_area.top);
+        } else {
+            spice_canvas->ops->scale_image(spice_canvas, &dest_region,
+                                           src_image,
+                                           opaque->src_area.left,
+                                           opaque->src_area.top,
+                                           opaque->src_area.right - opaque->src_area.left,
+                                           opaque->src_area.bottom - opaque->src_area.top,
+                                           bbox->left,
+                                           bbox->top,
+                                           bbox->right - bbox->left,
+                                           bbox->bottom - bbox->top,
+                                           opaque->scale_mode);
+        }
+        pixman_image_unref(src_image);
     }
 
     draw_brush(spice_canvas, &dest_region, &opaque->brush, rop);
 
-    pixman_image_unref(src_image);
     pixman_region32_fini(&dest_region);
 }
 
