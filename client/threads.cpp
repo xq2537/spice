@@ -22,6 +22,9 @@
 #ifdef WIN32
 #include <sys/timeb.h>
 #endif
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>
+#endif
 
 Thread::Thread(thread_main_t thread_main, void* opaque)
 {
@@ -43,8 +46,13 @@ static inline void rel_time(struct timespec& time, uint64_t delta_nano)
     _ftime_s(&now);
     time.tv_sec = (long)now.time;
     time.tv_nsec = now.millitm * 1000 * 1000;
-#else
+#elif defined(HAVE_CLOCK_GETTIME)
     clock_gettime(CLOCK_MONOTONIC, &time);
+#else
+    struct timeval tv;
+    gettimeofday(&tv,NULL);
+    time.tv_sec = tv.tv_sec;
+    time.tv_nsec = tv.tv_usec*1000;
 #endif
     delta_nano += (uint64_t)time.tv_sec * 1000 * 1000 * 1000;
     delta_nano += time.tv_nsec;

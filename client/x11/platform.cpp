@@ -41,6 +41,9 @@
 #include <values.h>
 #include <signal.h>
 #include <sys/shm.h>
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>
+#endif
 
 #include "platform.h"
 #include "application.h"
@@ -425,9 +428,15 @@ void Platform::send_quit_request()
 
 uint64_t Platform::get_monolithic_time()
 {
+#ifdef HAVE_CLOCK_GETTIME
     struct timespec time_space;
     clock_gettime(CLOCK_MONOTONIC, &time_space);
     return uint64_t(time_space.tv_sec) * 1000 * 1000 * 1000 + uint64_t(time_space.tv_nsec);
+#else
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return uint64_t(tv.tv_sec) * 1000 * 1000 * 1000 + uint64_t(tv.tv_usec) * 1000;
+#endif
 }
 
 void Platform::get_temp_dir(std::string& path)
