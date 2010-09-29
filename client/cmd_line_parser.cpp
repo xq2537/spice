@@ -428,29 +428,13 @@ char* CmdLineParser::next_argument()
     return _argv[optind++];
 }
 
-#ifdef WIN32
-char* basename(char *str)
-{
-    char *base;
-    if ((base = strrchr(str, '\\'))) {
-        return base;
-    }
-
-    if ((base = strrchr(str, ':'))) {
-        return base;
-    }
-    return str;
-}
-
-#endif
-
 void CmdLineParser::show_help()
 {
     static const int HELP_START_POS = 30;
     static const int HELP_WIDTH = 80 - HELP_START_POS;
     std::ostringstream os;
 
-    os << basename(_argv[0]) << " - " << _description.c_str() << "\n\noptions:\n\n";
+    os << _argv[0] << " - " << _description.c_str() << "\n\noptions:\n\n";
 
     Options::iterator iter = _options.begin();
     for (; iter != _options.end(); ++iter) {
