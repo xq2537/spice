@@ -647,13 +647,10 @@ RedScreen* Application::get_screen(int id)
 
     if (!(screen = _screens[id])) {
         Monitor* mon = find_monitor(id);
-        SpicePoint size;
+        SpicePoint size = {SCREEN_INIT_WIDTH, SCREEN_INIT_HEIGHT};
 
         if (_full_screen && mon) {
             size = mon->get_size();
-        } else {
-            size.x = SCREEN_INIT_WIDTH;
-            size.y = SCREEN_INIT_HEIGHT;
         }
         screen = _screens[id] = new RedScreen(*this, id, _title, size.x, size.y);
 #ifdef USE_GUI
