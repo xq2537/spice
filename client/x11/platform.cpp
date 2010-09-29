@@ -463,7 +463,7 @@ void Platform::msleep(unsigned int millisec)
 
 void Platform::yield()
 {
-    pthread_yield();
+    POSIX_YIELD_FUNC;
 }
 
 void Platform::term_printf(const char* format, ...)

@@ -128,6 +128,26 @@ AC_SUBST(LIBRT)
 
 SPICE_NONPKGCONFIG_LIBS+=" -pthread $LIBM $LIBRT"
 
+dnl The client needs a yield function
+AC_MSG_CHECKING(for posix yield function)
+for yield_func in pthread_yield pthread_yield_np sched_yield \
+					thr_yield; do
+    spice_save_CPPFLAGS="$CPPFLAGS"
+    CPPFLAGS="$CPPFLAGS $SPICE_NONPKGCONFIG_LIBS"
+    AC_TRY_LINK([#include <pthread.h>],
+		[$yield_func()],
+		[posix_yield_func="$yield_func"
+		break])
+    CPPFLAGS="spice_save_CPPFLAGS"
+done
+if test x"$posix_yield_func" = xnone; then
+    AC_MSG_ERROR([No posix yield function found])
+else
+    AC_MSG_RESULT($posix_yield_func)
+    posix_yield_func="$posix_yield_func()"
+fi
+AC_DEFINE_UNQUOTED(POSIX_YIELD_FUNC,$posix_yield_func,[The POSIX RT yield function])
+
 SPICE_REQUIRES=""
 
 if test "x$use_gui" = "xyes"; then
