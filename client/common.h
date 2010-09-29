@@ -18,6 +18,10 @@
 #ifndef _H_COMMON
 #define _H_COMMON
 
+#ifndef WIN32
+#include "config.h"
+#endif
+
 #ifndef _WIN32_WCE
 #include <errno.h>
 #endif

@@ -40,7 +40,6 @@
 #include <set>
 #include <values.h>
 #include <signal.h>
-#include <config.h>
 #include <sys/shm.h>
 
 #include "platform.h"

@@ -17,7 +17,6 @@
 
 #include "common.h"
 #include "application.h"
-#include "config.h"
 
 static void cleanup()
 {

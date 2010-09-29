@@ -15,10 +15,6 @@
    License along with this library; if not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef WIN32
-#include "config.h"
-#endif
-
 #include "common.h"
 #ifdef WIN32
 #include <io.h>
