@@ -3024,8 +3024,12 @@ void Platform::set_clipboard_listener(ClipboardListener* listener)
         return;
     }
     clipboard_listener = listener;
-    XConvertSelection(x_display, XA_PRIMARY, utf8_atom, clipboard_prop,
-        platform_win, CurrentTime);
+    /* Seems platform_win can be NULL, we'll just ignore that for now.
+       This will be fixed when the rest of cut and paste lands */
+    if (platform_win) {
+      XConvertSelection(x_display, XA_PRIMARY, utf8_atom, clipboard_prop,
+			platform_win, CurrentTime);
+    }
 }
 
 bool Platform::set_clipboard_data(uint32_t type, const uint8_t* data, int32_t size)
