@@ -203,5 +203,4 @@ spicec_LDADD =						\
 	$(GL_LIBS)					\
 	$(XRANDR_LIBS)					\
 	$(MISC_X_LIBS)					\
-	$(CEGUI_LIBS)					\
-	-lrt
+	$(CEGUI_LIBS)
