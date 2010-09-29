@@ -66,7 +66,7 @@
 //#define X_DEBUG_SYNC(display) XSync(display, False)
 #define X_DEBUG_SYNC(display)
 #ifdef HAVE_XRANDR12
-//#define USE_XRANDR_1_2
+#define USE_XRANDR_1_2
 #endif
 
 static Display* x_display = NULL;
