@@ -1,3 +1,11 @@
+Major changes in 0.6.1:
+=======================
+Major changes in this release:
+* New libspice API to handle backwards compatibility
+* Fix X crash in X client
+* Fix memory leaks and crashes
+* Portability fixes
+
 Major changes in 0.6.0:
 =======================
 Major changes in this releas:
