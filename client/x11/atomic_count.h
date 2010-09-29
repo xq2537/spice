@@ -18,6 +18,8 @@
 #ifndef _H_ATOMIC_COUNT
 #define _H_ATOMIC_COUNT
 
+#include <stdint.h>
+
 class AtomicCount {
 public:
     AtomicCount(uint32_t count = 0) : _count (count) {}
