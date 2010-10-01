@@ -173,6 +173,14 @@ static uint32_t get_clipboard_format(uint32_t type) {
     return iter->format;
 }
 
+static const char *atom_name(Atom atom)
+{
+    if (atom == None)
+        return "None";
+
+    return XGetAtomName(x_display, atom);
+}
+
 NamedPipe::ListenerRef NamedPipe::create(const char *name, ListenerInterface& listener_interface)
 {
     ASSERT(main_loop && main_loop->is_same_thread(pthread_self()));
@@ -2399,7 +2407,7 @@ static void root_win_proc(XEvent& event)
         
         uint32_t type = get_clipboard_type(selection_request->target);
         if (!type) {
-            LOG_INFO("Unsupported selection type %s", XGetAtomName(x_display, selection_request->target));
+            LOG_INFO("Unsupported selection type %s", atom_name(selection_request->target));
             send_selection_notify(None);
             break;
         }
