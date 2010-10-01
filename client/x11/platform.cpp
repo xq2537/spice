@@ -2405,6 +2405,7 @@ static void root_win_proc(XEvent& event)
             break;
         }
         
+        clipboard_event = event;
         uint32_t type = get_clipboard_type(selection_request->target);
         if (!type) {
             LOG_INFO("Unsupported selection type %s", atom_name(selection_request->target));
@@ -2415,7 +2416,6 @@ static void root_win_proc(XEvent& event)
             send_selection_notify(selection_request->target);
             break;
         }
-        clipboard_event = event;
         clipboard_listener->on_clipboard_request(type);
         break;
     }
