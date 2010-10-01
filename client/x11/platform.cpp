@@ -151,7 +151,7 @@ static Platform::DisplayModeListener* display_mode_listener = &default_display_m
 
 class DefaultClipboardListener: public Platform::ClipboardListener {
 public:
-    void on_clipboard_grab(uint32_t type) {}
+    void on_clipboard_grab(uint32_t *types, uint32_t type_count) {}
     void on_clipboard_request(uint32_t type) {}
     void on_clipboard_notify(uint32_t type, uint8_t* data, int32_t size) {}
 };
@@ -2392,7 +2392,8 @@ static void root_win_proc(XEvent& event)
             return;
         }
         // FIXME: use actual type
-        clipboard_listener->on_clipboard_grab(VD_AGENT_CLIPBOARD_UTF8_TEXT);
+        uint32_t type = VD_AGENT_CLIPBOARD_UTF8_TEXT;
+        clipboard_listener->on_clipboard_grab(&type, 1);
         return;
     }
     switch (event.type) {
@@ -3144,13 +3145,14 @@ LocalCursor* Platform::create_default_cursor()
     return new XDefaultCursor();
 }
 
-bool Platform::set_clipboard_owner(uint32_t type)
+bool Platform::set_clipboard_owner(uint32_t *types, uint32_t type_count)
 {
     Lock lock(clipboard_lock);
-    uint32_t format = get_clipboard_format(type);
+    /* FIXME use all types rather then just the first one */
+    uint32_t format = get_clipboard_format(types[0]);
 
     if (!format) {
-        LOG_INFO("Unsupported clipboard type %u", type);
+        LOG_INFO("Unsupported clipboard type %u", types[0]);
         return false;
     }
     clipboard_changer = true;

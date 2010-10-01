@@ -83,9 +83,8 @@ uint32_t default_agent_caps[] = {
 
 void ClipboardGrabEvent::response(AbstractProcessLoop& events_loop)
 {
-    VDAgentClipboardGrab grab = {_type};
     static_cast<RedClient*>(events_loop.get_owner())->send_agent_clipboard_message(
-        VD_AGENT_CLIPBOARD_GRAB, sizeof(grab), &grab);
+        VD_AGENT_CLIPBOARD_GRAB, _type_count * sizeof(uint32_t), _types);
 }
 
 void ClipboardRequestEvent::response(AbstractProcessLoop& events_loop)
@@ -834,13 +833,13 @@ void RedClient::send_agent_clipboard_message(uint32_t message_type, uint32_t siz
     post_message(message);
 }
 
-void RedClient::on_clipboard_grab(uint32_t type)
+void RedClient::on_clipboard_grab(uint32_t *types, uint32_t type_count)
 {
     if (!_agent_caps || !VD_AGENT_HAS_CAPABILITY(_agent_caps, _agent_caps_size,
                                                  VD_AGENT_CAP_CLIPBOARD_BY_DEMAND)) {
         return;
     }
-    AutoRef<ClipboardGrabEvent> event(new ClipboardGrabEvent(type));
+    AutoRef<ClipboardGrabEvent> event(new ClipboardGrabEvent(types, type_count));
     get_process_loop().push_event(*event);
 }
 
@@ -1091,7 +1090,8 @@ void RedClient::dispatch_agent_message(VDAgentMessage* msg, void* data)
         break;
     }
     case VD_AGENT_CLIPBOARD_GRAB:
-        Platform::set_clipboard_owner(((VDAgentClipboardGrab*)data)->type);
+        Platform::set_clipboard_owner((uint32_t *)data,
+                                      msg->size / sizeof(uint32_t));
         break;
     case VD_AGENT_CLIPBOARD_REQUEST:
         if (!Platform::request_clipboard_notification(((VDAgentClipboardRequest*)data)->type)) {

@@ -121,7 +121,7 @@ public:
     class ClipboardListener;
     static void set_clipboard_listener(ClipboardListener* listener);
 
-    static bool set_clipboard_owner(uint32_t type);
+    static bool set_clipboard_owner(uint32_t *types, uint32_t type_count);
     static bool set_clipboard_data(uint32_t type, const uint8_t* data, int32_t size);
     static bool request_clipboard_notification(uint32_t type);
     static void release_clipboard();
@@ -138,7 +138,7 @@ public:
 class Platform::ClipboardListener {
 public:
     virtual ~ClipboardListener() {}
-    virtual void on_clipboard_grab(uint32_t type) = 0;
+    virtual void on_clipboard_grab(uint32_t *types, uint32_t type_count) = 0;
     virtual void on_clipboard_request(uint32_t type) = 0;
     virtual void on_clipboard_notify(uint32_t type, uint8_t* data, int32_t size) = 0;
 };

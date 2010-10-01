@@ -51,7 +51,7 @@ static ProcessLoop* main_loop = NULL;
 
 class DefaultClipboardListener: public Platform::ClipboardListener {
 public:
-    virtual void on_clipboard_grab(uint32_t type) {}
+    virtual void on_clipboard_grab(uint32_t *types, uint32_t type_count) {}
     virtual void on_clipboard_request(uint32_t type) {}
     virtual void on_clipboard_notify(uint32_t type, uint8_t* data, int32_t size) {}
 };
@@ -151,7 +151,7 @@ static LRESULT CALLBACK PlatformWinProc(HWND hWnd, UINT message, WPARAM wParam, 
         if (!clipboard_changer) {
             uint32_t type = get_available_clipboard_type();            
             if (type) {
-                clipboard_listener->on_clipboard_grab(type);
+                clipboard_listener->on_clipboard_grab(&type, 1);
             } else {
                 LOG_INFO("Unsupported clipboard format");
             }
@@ -856,12 +856,13 @@ void WinPlatform::exit_modal_loop()
     modal_loop_active = false;
 }
 
-bool Platform::set_clipboard_owner(uint32_t type)
+bool Platform::set_clipboard_owner(uint32_t *types, uint32_t type_count)
 {
-    uint32_t format = get_clipboard_format(type);
+    /* FIXME use all types rather then just the first one */
+    uint32_t format = get_clipboard_format(types[0]);
     
     if (!format) {
-        LOG_INFO("Unsupported clipboard type %u", type);
+        LOG_INFO("Unsupported clipboard type %u", types[0]);
         return false;
     }
     if (!OpenClipboard(platform_win)) {

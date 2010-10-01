@@ -146,11 +146,22 @@ public:
 
 class ClipboardGrabEvent : public Event {
 public:
-    ClipboardGrabEvent(uint32_t type) : _type (type) {}
+    ClipboardGrabEvent(uint32_t *types, uint32_t type_count)
+    {
+        _types = new uint32_t [type_count];
+        memcpy(_types, types, type_count * sizeof(uint32_t));
+        _type_count = type_count;
+    }
+    ~ClipboardGrabEvent()
+    {
+        delete[] _types;
+    }
+
     virtual void response(AbstractProcessLoop& events_loop);
 
 private:
-    uint32_t _type;
+    uint32_t *_types;
+    uint32_t _type_count;
 };
 
 class ClipboardRequestEvent : public Event {
@@ -207,7 +218,7 @@ public:
     PixmapCache& get_pixmap_cache() {return _pixmap_cache;}
     uint64_t get_pixmap_cache_size() { return _pixmap_cache_size;}
     void on_display_mode_change();
-    void on_clipboard_grab(uint32_t type);
+    void on_clipboard_grab(uint32_t *types, uint32_t type_count);
     void on_clipboard_request(uint32_t type);
     void on_clipboard_notify(uint32_t type, uint8_t* data, int32_t size);
 
