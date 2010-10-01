@@ -121,13 +121,10 @@ public:
     class ClipboardListener;
     static void set_clipboard_listener(ClipboardListener* listener);
 
-    enum {
-        CLIPBOARD_UTF8_TEXT = 1,
-    };
-
+    static bool set_clipboard_owner(uint32_t type);
     static bool set_clipboard_data(uint32_t type, const uint8_t* data, int32_t size);
-    static bool get_clipboard_data(uint32_t type, uint8_t* data, int32_t size);
-    static int32_t get_clipboard_data_size(uint32_t type);
+    static bool request_clipboard_notification(uint32_t type);
+    static void release_clipboard();
 };
 
 class Platform::EventListener {
@@ -141,7 +138,9 @@ public:
 class Platform::ClipboardListener {
 public:
     virtual ~ClipboardListener() {}
-    virtual void on_clipboard_change() = 0;
+    virtual void on_clipboard_grab(uint32_t type) = 0;
+    virtual void on_clipboard_request(uint32_t type) = 0;
+    virtual void on_clipboard_notify(uint32_t type, uint8_t* data, int32_t size) = 0;
 };
 
 class Platform::RecordClient {

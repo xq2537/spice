@@ -141,7 +141,6 @@ typedef std::list<GUIBarrier*> GUIBarriers;
 class Application : public ProcessLoop,
                     public Platform::EventListener,
                     public Platform::DisplayModeListener,
-                    public Platform::ClipboardListener,
                     public CommandTarget {
 public:
 
@@ -191,7 +190,6 @@ public:
     virtual void on_app_deactivated();
     virtual void on_monitors_change();
     virtual void on_display_mode_change();
-    virtual void on_clipboard_change();
     void on_connected();
     void on_disconnected(int spice_error_code);
     void on_disconnecting();

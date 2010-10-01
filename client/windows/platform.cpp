@@ -32,6 +32,7 @@
 #include "playback.h"
 #include "cursor.h"
 #include "named_pipe.h"
+#include <spice/vd_agent.h>
 
 int gdi_handlers = 0;
 extern HINSTANCE instance;
@@ -45,8 +46,39 @@ public:
 
 static DefaultEventListener default_event_listener;
 static Platform::EventListener* event_listener = &default_event_listener;
-static HWND paltform_win;
+static HWND platform_win = NULL;
 static ProcessLoop* main_loop = NULL;
+
+class DefaultClipboardListener: public Platform::ClipboardListener {
+public:
+    virtual void on_clipboard_grab(uint32_t type) {}
+    virtual void on_clipboard_request(uint32_t type) {}
+    virtual void on_clipboard_notify(uint32_t type, uint8_t* data, int32_t size) {}
+};
+
+static DefaultClipboardListener default_clipboard_listener;
+static Platform::ClipboardListener* clipboard_listener = &default_clipboard_listener;
+
+// The next window in the clipboard viewer chain, which is refered in all clipboard events.
+static HWND next_clipboard_viewer_win = NULL;
+static HANDLE clipboard_event = NULL;
+
+// clipboard_changer says whether the client was the last one to change cliboard, for loop
+// prevention. It's initialized to true so we ignore the first clipboard change event which
+// happens right when we call SetClipboardViewer().
+static bool clipboard_changer = true;
+
+static const int CLIPBOARD_TIMEOUT_MS = 10000;
+
+typedef struct ClipboardFormat {
+    uint32_t format;
+    uint32_t type;
+} ClipboardFormat;
+
+static ClipboardFormat clipboard_formats[] = {
+    {CF_UNICODETEXT, VD_AGENT_CLIPBOARD_UTF8_TEXT},
+    {CF_DIB, VD_AGENT_CLIPBOARD_BITMAP},
+    {0, 0}};
 
 static const unsigned long MODAL_LOOP_TIMER_ID = 1;
 static const int MODAL_LOOP_DEFAULT_TIMEOUT = 100;
@@ -57,6 +89,32 @@ void Platform::send_quit_request()
 {
     ASSERT(main_loop);
     main_loop->quit(0);
+}
+
+static uint32_t get_clipboard_type(uint32_t format) {
+    ClipboardFormat* iter;
+
+    for (iter = clipboard_formats; iter->type && iter->format != format; iter++);
+    return iter->type;
+}
+
+static uint32_t get_clipboard_format(uint32_t type) {
+    ClipboardFormat* iter;
+
+    for (iter = clipboard_formats; iter->format && iter->type != type; iter++);
+    return iter->format;
+}
+
+static uint32_t get_available_clipboard_type()
+{
+    uint32_t type = 0;
+
+    for (ClipboardFormat* iter = clipboard_formats; iter->format && !type; iter++) {
+        if (IsClipboardFormatAvailable(iter->format)) {
+            type = iter->type;
+        }
+    }
+    return type;
 }
 
 static LRESULT CALLBACK PlatformWinProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -82,6 +140,44 @@ static LRESULT CALLBACK PlatformWinProc(HWND hWnd, UINT message, WPARAM wParam, 
     case WM_DISPLAYCHANGE:
         event_listener->on_monitors_change();
         break;
+    case WM_CHANGECBCHAIN:
+        if (next_clipboard_viewer_win == (HWND)wParam) {
+            next_clipboard_viewer_win = (HWND)lParam;
+        } else if (next_clipboard_viewer_win) {
+            SendMessage(next_clipboard_viewer_win, message, wParam, lParam);
+        }
+        break;
+    case WM_DRAWCLIPBOARD:
+        if (!clipboard_changer) {
+            uint32_t type = get_available_clipboard_type();            
+            if (type) {
+                clipboard_listener->on_clipboard_grab(type);
+            } else {
+                LOG_INFO("Unsupported clipboard format");
+            }
+        } else {
+            clipboard_changer = false;
+        }
+        if (next_clipboard_viewer_win) {
+            SendMessage(next_clipboard_viewer_win, message, wParam, lParam);
+        }
+        break;
+    case WM_RENDERFORMAT: {
+        // In delayed rendering, Windows requires us to SetClipboardData before we return from
+        // handling WM_RENDERFORMAT. Therefore, we try our best by sending CLIPBOARD_REQUEST to the
+        // agent, while waiting alertably for a while (hoping for good) for receiving CLIPBOARD data
+        // or CLIPBOARD_RELEASE from the agent, which both will signal clipboard_event.
+        uint32_t type = get_clipboard_type(wParam);       
+        if (!type) {
+            LOG_INFO("Unsupported clipboard format %u", wParam);
+            break;
+        }
+        clipboard_listener->on_clipboard_request(type);
+        DWORD start_tick = GetTickCount();
+        while (WaitForSingleObjectEx(clipboard_event, 1000, TRUE) != WAIT_OBJECT_0 &&
+               GetTickCount() < start_tick + CLIPBOARD_TIMEOUT_MS);
+        break;
+    }
     default:
         return DefWindowProc(hWnd, message, wParam, lParam);
     }
@@ -92,7 +188,6 @@ static void create_message_wind()
 {
     WNDCLASSEX wclass;
     ATOM class_atom;
-    HWND window;
 
     const LPCWSTR class_name = L"spicec_platform_wclass";
 
@@ -113,11 +208,16 @@ static void create_message_wind()
         THROW("register class failed");
     }
 
-    if (!(window = CreateWindow(class_name, L"", 0, 0, 0, 0, 0, NULL, NULL, instance, NULL))) {
+    if (!(platform_win = CreateWindow(class_name, L"", 0, 0, 0, 0, 0, NULL, NULL, instance, NULL))) {
         THROW("create message window failed");
     }
 
-    paltform_win = window;
+    if (!(next_clipboard_viewer_win = SetClipboardViewer(platform_win)) && GetLastError()) {
+        THROW("set clipboard viewer failed");
+    }
+    if (!(clipboard_event = CreateEvent(NULL, FALSE, FALSE, NULL))) {
+        THROW("create clipboard event failed");
+    }
 }
 
 NamedPipe::ListenerRef NamedPipe::create(const char *name, ListenerInterface& listener_interface)
@@ -460,9 +560,16 @@ void Platform::path_append(std::string& path, const std::string& partial_path)
     path += partial_path;
 }
 
+static void cleanup()
+{
+    ChangeClipboardChain(platform_win, next_clipboard_viewer_win);
+    CloseHandle(clipboard_event);
+}
+
 void Platform::init()
 {
     create_message_wind();
+    atexit(cleanup);
 }
 
 void Platform::set_process_loop(ProcessLoop& main_process_loop)
@@ -733,7 +840,7 @@ static bool set_modal_loop_timer()
                                                  the enterance to the loop*/
     }
 
-    if (!SetTimer(paltform_win, MODAL_LOOP_TIMER_ID, timeout, NULL)) {
+    if (!SetTimer(platform_win, MODAL_LOOP_TIMER_ID, timeout, NULL)) {
         return false;
     }
     return true;
@@ -745,99 +852,152 @@ void WinPlatform::exit_modal_loop()
         LOG_INFO("not inside the loop");
         return;
     }
-    KillTimer(paltform_win, MODAL_LOOP_TIMER_ID);
+    KillTimer(platform_win, MODAL_LOOP_TIMER_ID);
     modal_loop_active = false;
+}
+
+bool Platform::set_clipboard_owner(uint32_t type)
+{
+    uint32_t format = get_clipboard_format(type);
+    
+    if (!format) {
+        LOG_INFO("Unsupported clipboard type %u", type);
+        return false;
+    }
+    if (!OpenClipboard(platform_win)) {
+        return false;
+    }
+    clipboard_changer = true;
+    EmptyClipboard();
+    SetClipboardData(format, NULL);
+    CloseClipboard();
+    return true;
 }
 
 void Platform::set_clipboard_listener(ClipboardListener* listener)
 {
-    //FIXME: call only on change, use statics
-    listener->on_clipboard_change();
-}
-
-UINT get_format(uint32_t type)
-{
-    switch (type) {
-    case Platform::CLIPBOARD_UTF8_TEXT:
-        return CF_UNICODETEXT;
-    default:
-        return 0;
-    }
+    clipboard_listener = listener ? listener : &default_clipboard_listener;
 }
 
 bool Platform::set_clipboard_data(uint32_t type, const uint8_t* data, int32_t size)
 {
-    UINT format = get_format(type);
     HGLOBAL clip_data;
     LPVOID clip_buf;
     int clip_size;
-    bool ret;
+    int clip_len;
+    UINT format;
+    bool ret = false;
 
-    //LOG_INFO("type %u size %d %s", type, size, data);
-    if (!format || !OpenClipboard(paltform_win)) {
+    // Get the required clipboard size
+    switch (type) {
+    case VD_AGENT_CLIPBOARD_UTF8_TEXT:
+        // Received utf8 string is not null-terminated   
+        if (!(clip_len = MultiByteToWideChar(CP_UTF8, 0, (LPCSTR)data, size, NULL, 0))) {
+            return false;
+        }
+        clip_len++;
+        clip_size = clip_len * sizeof(WCHAR);
+        break;
+    case VD_AGENT_CLIPBOARD_BITMAP:
+        clip_size = size;
+        break;
+    default:
+        LOG_INFO("Unsupported clipboard type %u", type);
         return false;
     }
-    clip_size = MultiByteToWideChar(CP_UTF8, 0, (LPCSTR)data, size, NULL, 0);
-    if (!clip_size || !(clip_data = GlobalAlloc(GMEM_DDESHARE, clip_size * sizeof(WCHAR)))) {
-        CloseClipboard();
+
+    // Allocate and lock clipboard memory
+    if (!(clip_data = GlobalAlloc(GMEM_DDESHARE, clip_size))) {
         return false;
     }
     if (!(clip_buf = GlobalLock(clip_data))) {
         GlobalFree(clip_data);
-        CloseClipboard();
         return false;
     }
-    ret = !!MultiByteToWideChar(CP_UTF8, 0, (LPCSTR)data, size, (LPWSTR)clip_buf, clip_size);
-    GlobalUnlock(clip_data);
-    if (ret) {
-        EmptyClipboard();
-        ret = !!SetClipboardData(format, clip_data);
+
+    // Translate data and set clipboard content
+    switch (type) {
+    case VD_AGENT_CLIPBOARD_UTF8_TEXT:
+        ret = !!MultiByteToWideChar(CP_UTF8, 0, (LPCSTR)data, size, (LPWSTR)clip_buf, clip_len);
+        ((LPWSTR)clip_buf)[clip_len - 1] = L'\0';
+        break;
+    case VD_AGENT_CLIPBOARD_BITMAP:
+        memcpy(clip_buf, data, size);
+        ret = true;
+        break;
     }
+    GlobalUnlock(clip_data);
+    if (!ret) {
+        return false;
+    }
+    format = get_clipboard_format(type);
+    if (SetClipboardData(format, clip_data)) {
+        SetEvent(clipboard_event);
+        return true;
+    }
+    // We retry clipboard open-empty-set-close only when there is a timeout in WM_RENDERFORMAT
+    if (!OpenClipboard(platform_win)) {
+        return false;
+    }
+    EmptyClipboard();
+    ret = !!SetClipboardData(format, clip_data);
     CloseClipboard();
     return ret;
 }
 
-bool Platform::get_clipboard_data(uint32_t type, uint8_t* data, int32_t size)
+bool Platform::request_clipboard_notification(uint32_t type)
 {
-    UINT format = get_format(type);
+    UINT format = get_clipboard_format(type);
     HANDLE clip_data;
     LPVOID clip_buf;
-    bool ret;
+    bool ret = false;
 
-    LOG_INFO("type %u size %d", type, size);
-    if (!format || !IsClipboardFormatAvailable(format) || !OpenClipboard(paltform_win)) {
+    if (!format || !IsClipboardFormatAvailable(format) || !OpenClipboard(platform_win)) {
         return false;
     }
     if (!(clip_data = GetClipboardData(format)) || !(clip_buf = GlobalLock(clip_data))) {
         CloseClipboard();
         return false;
     }
-    ret = !!WideCharToMultiByte(CP_UTF8, 0, (LPCWSTR)clip_buf, -1, (LPSTR)data, size, NULL, NULL);
+
+    switch (type) {
+    case VD_AGENT_CLIPBOARD_UTF8_TEXT: {
+        size_t len = wcslen((wchar_t*)clip_buf);
+        int utf8_size = WideCharToMultiByte(CP_UTF8, 0, (LPCWSTR)clip_buf, len, NULL, 0, NULL, NULL);
+        if (!utf8_size) {
+            break;
+        }
+        uint8_t* utf8_data = new uint8_t[utf8_size];
+        if (WideCharToMultiByte(CP_UTF8, 0, (LPCWSTR)clip_buf, len, (LPSTR)utf8_data, utf8_size,
+                                NULL, NULL)) {
+            clipboard_listener->on_clipboard_notify(type, utf8_data, utf8_size);
+            ret = true;
+        }
+        delete[] (uint8_t *)utf8_data;
+        break;
+    }
+    case VD_AGENT_CLIPBOARD_BITMAP: {
+        size_t clip_size = GlobalSize(clip_data);
+        if (!clip_size) {
+            break;
+        }
+        clipboard_listener->on_clipboard_notify(type, (uint8_t*)clip_buf, clip_size);
+        ret = true;
+        break;
+    }
+    default:
+        LOG_INFO("Unsupported clipboard type %u", type);
+    }
+
     GlobalUnlock(clip_data);
     CloseClipboard();
     return ret;
 }
 
-int32_t Platform::get_clipboard_data_size(uint32_t type)
+void Platform::release_clipboard()
 {
-    UINT format = get_format(type);
-    HANDLE clip_data;
-    LPVOID clip_buf;
-    int clip_size;
-
-    if (!format || !IsClipboardFormatAvailable(format) || !OpenClipboard(paltform_win)) {
-        return 0;
-    }
-    if (!(clip_data = GetClipboardData(format)) || !(clip_buf = GlobalLock(clip_data))) {
-        CloseClipboard();
-        return 0;
-    }
-    clip_size = WideCharToMultiByte(CP_UTF8, 0, (LPCWSTR)clip_buf, -1, NULL, 0, NULL, NULL);
-    GlobalUnlock(clip_data);
-    CloseClipboard();
-    return clip_size;
+    SetEvent(clipboard_event);
 }
-
 
 static bool has_console = false;
 

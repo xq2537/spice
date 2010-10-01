@@ -144,16 +144,31 @@ public:
     uint32_t _color_depth;
 };
 
-class ClipboardEvent : public Event {
+class ClipboardGrabEvent : public Event {
 public:
+    ClipboardGrabEvent(uint32_t type) : _type (type) {}
     virtual void response(AbstractProcessLoop& events_loop);
+
+private:
+    uint32_t _type;
 };
 
-class RedClient: public RedChannel {
+class ClipboardRequestEvent : public Event {
+public:
+    ClipboardRequestEvent(uint32_t type) : _type (type) {}
+    virtual void response(AbstractProcessLoop& events_loop);
+
+private:
+    uint32_t _type;
+};
+
+class RedClient: public RedChannel,
+                 public Platform::ClipboardListener {
 public:
     friend class RedChannel;
     friend class Migrate;
-    friend class ClipboardEvent;
+    friend class ClipboardGrabEvent;
+    friend class ClipboardRequestEvent;
 
     RedClient(Application& application);
     ~RedClient();
@@ -192,7 +207,10 @@ public:
     PixmapCache& get_pixmap_cache() {return _pixmap_cache;}
     uint64_t get_pixmap_cache_size() { return _pixmap_cache_size;}
     void on_display_mode_change();
-    void on_clipboard_change();
+    void on_clipboard_grab(uint32_t type);
+    void on_clipboard_request(uint32_t type);
+    void on_clipboard_notify(uint32_t type, uint8_t* data, int32_t size);
+
     void for_each_channel(ForEachChannelFunc& func);
     void on_mouse_capture_trigger(RedScreen& screen);
 
@@ -228,13 +246,13 @@ private:
     void handle_agent_data(RedPeer::InMessage* message);
     void handle_agent_tokens(RedPeer::InMessage* message);
     void handle_migrate_switch_host(RedPeer::InMessage* message);
+    void dispatch_agent_message(VDAgentMessage* msg, void* data);
 
     void on_agent_reply(VDAgentReply* reply);
     void on_agent_announce_capabilities(VDAgentAnnounceCapabilities* caps,
                                         uint32_t msg_size);
-    void on_agent_clipboard(VDAgentClipboard* clipboard, uint32_t size);
-    void send_agent_clipboard();
     void do_send_agent_clipboard();
+    void send_agent_clipboard_message(uint32_t message_type, uint32_t size = 0, void* data = NULL);
 
     ChannelFactory* find_factory(uint32_t type);
     void create_channel(uint32_t type, uint32_t id);

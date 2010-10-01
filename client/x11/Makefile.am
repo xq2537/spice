@@ -22,6 +22,7 @@ INCLUDES = \
 	$(CELT051_CFLAGS)				\
 	$(SSL_CFLAGS)					\
 	$(XRANDR_CFLAGS)				\
+	$(XFIXES_CFLAGS)				\
 	$(MISC_X_CFLAGS)				\
 	$(CEGUI_CFLAGS)					\
 	$(WARN_CFLAGS)                                  \
@@ -202,5 +203,6 @@ spicec_LDADD =						\
 	$(ALSA_LIBS)					\
 	$(GL_LIBS)					\
 	$(XRANDR_LIBS)					\
+	$(XFIXES_LIBS)					\
 	$(MISC_X_LIBS)					\
 	$(CEGUI_LIBS)

@@ -81,9 +81,18 @@ uint32_t default_agent_caps[] = {
     (1 << VD_AGENT_CAP_REPLY)
     };
 
-void ClipboardEvent::response(AbstractProcessLoop& events_loop)
+void ClipboardGrabEvent::response(AbstractProcessLoop& events_loop)
 {
-    static_cast<RedClient*>(events_loop.get_owner())->send_agent_clipboard();
+    VDAgentClipboardGrab grab = {_type};
+    static_cast<RedClient*>(events_loop.get_owner())->send_agent_clipboard_message(
+        VD_AGENT_CLIPBOARD_GRAB, sizeof(grab), &grab);
+}
+
+void ClipboardRequestEvent::response(AbstractProcessLoop& events_loop)
+{
+    VDAgentClipboardRequest request = {_type};
+    static_cast<RedClient*>(events_loop.get_owner())->send_agent_clipboard_message(
+        VD_AGENT_CLIPBOARD_REQUEST, sizeof(request), &request);
 }
 
 Migrate::Migrate(RedClient& client)
@@ -339,6 +348,7 @@ RedClient::RedClient(Application& application)
     , _migrate (*this)
     , _glz_window (0, _glz_debug)
 {
+    Platform::set_clipboard_listener(this);
     MainChannelLoop* message_loop = static_cast<MainChannelLoop*>(get_message_handler());
     uint32_t default_caps_size = SPICE_N_ELEMENTS(default_agent_caps);
 
@@ -542,6 +552,7 @@ bool RedClient::abort_channels()
 bool RedClient::abort()
 {
     if (!_aborting) {
+        Platform::set_clipboard_listener(NULL);
         Lock lock(_sync_lock);
         _aborting = true;
         _sync_condition.notify_all();
@@ -674,8 +685,8 @@ void RedClient::send_agent_announce_capabilities(bool request)
     VD_AGENT_SET_CAPABILITY(caps->caps, VD_AGENT_CAP_MOUSE_STATE);
     VD_AGENT_SET_CAPABILITY(caps->caps, VD_AGENT_CAP_MONITORS_CONFIG);
     VD_AGENT_SET_CAPABILITY(caps->caps, VD_AGENT_CAP_REPLY);
-    VD_AGENT_SET_CAPABILITY(caps->caps, VD_AGENT_CAP_CLIPBOARD);
     VD_AGENT_SET_CAPABILITY(caps->caps, VD_AGENT_CAP_DISPLAY_CONFIG);
+    VD_AGENT_SET_CAPABILITY(caps->caps, VD_AGENT_CAP_CLIPBOARD_BY_DEMAND);
     ASSERT(_agent_tokens)
     _agent_tokens--;
     post_message(message);
@@ -784,16 +795,6 @@ void RedClient::on_display_mode_change()
 #endif
 }
 
-uint32_t get_agent_clipboard_type(uint32_t type)
-{
-    switch (type) {
-    case Platform::CLIPBOARD_UTF8_TEXT:
-        return VD_AGENT_CLIPBOARD_UTF8_TEXT;
-    default:
-        return 0;
-    }
-}
-
 void RedClient::do_send_agent_clipboard()
 {
     uint32_t size;
@@ -802,8 +803,7 @@ void RedClient::do_send_agent_clipboard()
            (size = MIN(VD_AGENT_MAX_DATA_SIZE,
                        _agent_out_msg_size - _agent_out_msg_pos))) {
         Message* message = new Message(SPICE_MSGC_MAIN_AGENT_DATA);
-        void* data =
-         spice_marshaller_reserve_space(message->marshaller(), size);
+        void* data = spice_marshaller_reserve_space(message->marshaller(), size);
         memcpy(data, (uint8_t*)_agent_out_msg + _agent_out_msg_pos, size);
         _agent_tokens--;
         post_message(message);
@@ -817,14 +817,47 @@ void RedClient::do_send_agent_clipboard()
     }
 }
 
-//FIXME: currently supports text only; better name - poll_clipboard?
-void RedClient::send_agent_clipboard()
+void RedClient::send_agent_clipboard_message(uint32_t message_type, uint32_t size, void* data)
 {
-    //FIXME: check connected  - assert on disconnect
-    uint32_t clip_type = Platform::CLIPBOARD_UTF8_TEXT;
-    int32_t clip_size = Platform::get_clipboard_data_size(clip_type);
+    Message* message = new Message(SPICE_MSGC_MAIN_AGENT_DATA);
+    VDAgentMessage* msg = (VDAgentMessage*)
+      spice_marshaller_reserve_space(message->marshaller(), sizeof(VDAgentMessage) + size);
+    msg->protocol = VD_AGENT_PROTOCOL;
+    msg->type = message_type;
+    msg->opaque = 0;
+    msg->size = size;
+    if (size && data) {
+        memcpy(msg->data, data, size);
+    }
+    ASSERT(_agent_tokens)
+    _agent_tokens--;
+    post_message(message);
+}
 
-    if (!clip_size || !_agent_connected) {
+void RedClient::on_clipboard_grab(uint32_t type)
+{
+    if (!_agent_caps || !VD_AGENT_HAS_CAPABILITY(_agent_caps, _agent_caps_size,
+                                                 VD_AGENT_CAP_CLIPBOARD_BY_DEMAND)) {
+        return;
+    }
+    AutoRef<ClipboardGrabEvent> event(new ClipboardGrabEvent(type));
+    get_process_loop().push_event(*event);
+}
+
+void RedClient::on_clipboard_request(uint32_t type)
+{
+    if (!_agent_caps || !VD_AGENT_HAS_CAPABILITY(_agent_caps, _agent_caps_size,
+                                                 VD_AGENT_CAP_CLIPBOARD_BY_DEMAND)) {
+        return;
+    }
+    AutoRef<ClipboardRequestEvent> event(new ClipboardRequestEvent(type));
+    get_process_loop().push_event(*event);
+}
+
+void RedClient::on_clipboard_notify(uint32_t type, uint8_t* data, int32_t size)
+{
+    ASSERT(size && data);
+    if (!_agent_connected) {
         return;
     }
     if (_agent_out_msg) {
@@ -832,30 +865,18 @@ void RedClient::send_agent_clipboard()
         return;
     }
     _agent_out_msg_pos = 0;
-    _agent_out_msg_size = sizeof(VDAgentMessage) + sizeof(VDAgentClipboard) + clip_size;
+    _agent_out_msg_size = sizeof(VDAgentMessage) + sizeof(VDAgentClipboard) + size;
     _agent_out_msg = (VDAgentMessage*)new uint8_t[_agent_out_msg_size];
     _agent_out_msg->protocol = VD_AGENT_PROTOCOL;
     _agent_out_msg->type = VD_AGENT_CLIPBOARD;
     _agent_out_msg->opaque = 0;
-    _agent_out_msg->size = sizeof(VDAgentClipboard) + clip_size;
+    _agent_out_msg->size = sizeof(VDAgentClipboard) + size;
     VDAgentClipboard* clipboard = (VDAgentClipboard*)_agent_out_msg->data;
-    clipboard->type = get_agent_clipboard_type(clip_type);
-    if (!Platform::get_clipboard_data(clip_type, clipboard->data, clip_size)) {
-        delete[] (uint8_t *)_agent_out_msg;
-        _agent_out_msg = NULL;
-        _agent_out_msg_size = 0;
-        return;
-    }
-
+    clipboard->type = type;
+    memcpy(clipboard->data, data, size);
     if (_agent_tokens) {
         do_send_agent_clipboard();
     }
-}
-
-void RedClient::on_clipboard_change()
-{
-    AutoRef<ClipboardEvent> event(new ClipboardEvent());
-    get_process_loop().push_event(*event);
 }
 
 void RedClient::set_mouse_mode(uint32_t supported_modes, uint32_t current_mode)
@@ -881,17 +902,6 @@ void RedClient::set_mouse_mode(uint32_t supported_modes, uint32_t current_mode)
 						    &mouse_mode_request);
 
         post_message(message);
-    }
-}
-
-void RedClient::on_agent_clipboard(VDAgentClipboard* clipboard, uint32_t size)
-{
-    switch (clipboard->type) {
-    case VD_AGENT_CLIPBOARD_UTF8_TEXT:
-        Platform::set_clipboard_data(Platform::CLIPBOARD_UTF8_TEXT, clipboard->data, size);
-        break;
-    default:
-        THROW("unexpected vdagent clipboard data type");
     }
 }
 
@@ -1055,31 +1065,46 @@ void RedClient::handle_agent_data(RedPeer::InMessage* message)
         }
         if (_agent_msg_pos == sizeof(VDAgentMessage) + _agent_msg->size) {
             DBG(0, "agent msg end");
-            switch (_agent_msg->type) {
-            case VD_AGENT_ANNOUNCE_CAPABILITIES: {
-                on_agent_announce_capabilities(
-                    (VDAgentAnnounceCapabilities*)_agent_msg_data,
-                                                _agent_msg->size);
-                break;
-            }
-            case VD_AGENT_REPLY: {
-                on_agent_reply((VDAgentReply*)_agent_msg_data);
-                break;
-            }
-            case VD_AGENT_CLIPBOARD: {
-                on_agent_clipboard((VDAgentClipboard*)_agent_msg_data,
-                                   _agent_msg->size - sizeof(VDAgentClipboard));
-                break;
-            }
-            default:
-                DBG(0, "Unsupported message type %u size %u", _agent_msg->type, _agent_msg->size);
-            }
+            dispatch_agent_message(_agent_msg, _agent_msg_data);
             delete[] _agent_msg_data;
             _agent_msg_data = NULL;
             _agent_msg_pos = 0;
         }
     }
 }
+
+void RedClient::dispatch_agent_message(VDAgentMessage* msg, void* data)
+{
+    switch (msg->type) {
+    case VD_AGENT_ANNOUNCE_CAPABILITIES: {
+        on_agent_announce_capabilities((VDAgentAnnounceCapabilities*)data, msg->size);
+        break;
+    }
+    case VD_AGENT_REPLY: {
+        on_agent_reply((VDAgentReply*)data);
+        break;
+    }
+    case VD_AGENT_CLIPBOARD: {
+        VDAgentClipboard* clipboard = (VDAgentClipboard*)data;
+        Platform::set_clipboard_data(clipboard->type, clipboard->data,
+                                     msg->size - sizeof(VDAgentClipboard));
+        break;
+    }
+    case VD_AGENT_CLIPBOARD_GRAB:
+        Platform::set_clipboard_owner(((VDAgentClipboardGrab*)data)->type);
+        break;
+    case VD_AGENT_CLIPBOARD_REQUEST:
+        if (!Platform::request_clipboard_notification(((VDAgentClipboardRequest*)data)->type)) {
+            send_agent_clipboard_message(VD_AGENT_CLIPBOARD_RELEASE);
+        }
+        break;
+    case VD_AGENT_CLIPBOARD_RELEASE:
+        Platform::release_clipboard();
+        break;
+    default:
+        DBG(0, "Unsupported message type %u size %u", msg->type, msg->size);
+    }
+}                                       
 
 void RedClient::handle_agent_tokens(RedPeer::InMessage* message)
 {
