@@ -830,6 +830,7 @@ DynamicScreen::DynamicScreen(Display* display, int screen, int& next_mon_id)
     X_DEBUG_SYNC(display);
     //FIXME: replace RootWindow() in other refs as well?
     platform_win = XCreateSimpleWindow(display, RootWindow(display, screen), 0, 0, 1, 1, 0, 0, 0);
+    intern_clipboard_atoms();
     XSelectInput(display, platform_win, StructureNotifyMask);
     XRRSelectInput(display, platform_win, RRScreenChangeNotifyMask);
     if (using_xfixes_1_0) {
@@ -843,7 +844,6 @@ DynamicScreen::DynamicScreen(Display* display, int screen, int& next_mon_id)
     process_monitor_configure_events(platform_win);
     Monitor::self_monitors_change--;
 
-    intern_clipboard_atoms();
     XPlatform::set_win_proc(platform_win, root_win_proc);
     X_DEBUG_SYNC(display);
 }
@@ -1106,6 +1106,7 @@ MultyMonScreen::MultyMonScreen(Display* display, int screen, int& next_mon_id)
     }
 
     platform_win = XCreateSimpleWindow(display, RootWindow(display, screen), 0, 0, 1, 1, 0, 0, 0);
+    intern_clipboard_atoms();
     XSelectInput(display, platform_win, StructureNotifyMask);
     X_DEBUG_SYNC(get_display());
     XRRSelectInput(display, platform_win, RRScreenChangeNotifyMask);
@@ -1121,7 +1122,6 @@ MultyMonScreen::MultyMonScreen(Display* display, int screen, int& next_mon_id)
     process_monitor_configure_events(platform_win);
     XMonitor::dec_change_ref();
 
-    intern_clipboard_atoms();
     XPlatform::set_win_proc(platform_win, root_win_proc);
     X_DEBUG_SYNC(get_display());
 }
