@@ -1095,7 +1095,7 @@ void RedClient::dispatch_agent_message(VDAgentMessage* msg, void* data)
         break;
     case VD_AGENT_CLIPBOARD_REQUEST:
         if (!Platform::request_clipboard_notification(((VDAgentClipboardRequest*)data)->type)) {
-            send_agent_clipboard_message(VD_AGENT_CLIPBOARD_RELEASE);
+            on_clipboard_notify(VD_AGENT_CLIPBOARD_NONE, NULL, 0);
         }
         break;
     case VD_AGENT_CLIPBOARD_RELEASE:
