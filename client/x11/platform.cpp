@@ -3145,7 +3145,7 @@ LocalCursor* Platform::create_default_cursor()
     return new XDefaultCursor();
 }
 
-bool Platform::set_clipboard_owner(uint32_t *types, uint32_t type_count)
+bool Platform::on_clipboard_grab(uint32_t *types, uint32_t type_count)
 {
     Lock lock(clipboard_lock);
     /* FIXME use all types rather then just the first one */
@@ -3166,7 +3166,7 @@ void Platform::set_clipboard_listener(ClipboardListener* listener)
     clipboard_listener = listener ? listener : &default_clipboard_listener;
 }
 
-bool Platform::set_clipboard_data(uint32_t type, const uint8_t* data, int32_t size)
+bool Platform::on_clipboard_notify(uint32_t type, const uint8_t* data, int32_t size)
 {
     Lock lock(clipboard_lock);
     uint32_t format = get_clipboard_format(type);
@@ -3187,7 +3187,7 @@ bool Platform::set_clipboard_data(uint32_t type, const uint8_t* data, int32_t si
     return true;
 }
 
-bool Platform::request_clipboard_notification(uint32_t type)
+bool Platform::on_clipboard_request(uint32_t type)
 {
     uint32_t format = get_clipboard_format(type);
 
@@ -3208,7 +3208,7 @@ bool Platform::request_clipboard_notification(uint32_t type)
     return true;
 }
 
-void Platform::release_clipboard()
+void Platform::on_clipboard_release()
 {
     XSetSelectionOwner(x_display, clipboard_prop, None, CurrentTime);
 }

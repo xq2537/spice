@@ -1087,21 +1087,21 @@ void RedClient::dispatch_agent_message(VDAgentMessage* msg, void* data)
     }
     case VD_AGENT_CLIPBOARD: {
         VDAgentClipboard* clipboard = (VDAgentClipboard*)data;
-        Platform::set_clipboard_data(clipboard->type, clipboard->data,
+        Platform::on_clipboard_notify(clipboard->type, clipboard->data,
                                      msg->size - sizeof(VDAgentClipboard));
         break;
     }
     case VD_AGENT_CLIPBOARD_GRAB:
-        Platform::set_clipboard_owner((uint32_t *)data,
+        Platform::on_clipboard_grab((uint32_t *)data,
                                       msg->size / sizeof(uint32_t));
         break;
     case VD_AGENT_CLIPBOARD_REQUEST:
-        if (!Platform::request_clipboard_notification(((VDAgentClipboardRequest*)data)->type)) {
+        if (!Platform::on_clipboard_request(((VDAgentClipboardRequest*)data)->type)) {
             on_clipboard_notify(VD_AGENT_CLIPBOARD_NONE, NULL, 0);
         }
         break;
     case VD_AGENT_CLIPBOARD_RELEASE:
-        Platform::release_clipboard();
+        Platform::on_clipboard_release();
         break;
     default:
         DBG(0, "Unsupported message type %u size %u", msg->type, msg->size);

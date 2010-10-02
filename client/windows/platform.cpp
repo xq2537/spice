@@ -856,7 +856,7 @@ void WinPlatform::exit_modal_loop()
     modal_loop_active = false;
 }
 
-bool Platform::set_clipboard_owner(uint32_t *types, uint32_t type_count)
+bool Platform::on_clipboard_grab(uint32_t *types, uint32_t type_count)
 {
     /* FIXME use all types rather then just the first one */
     uint32_t format = get_clipboard_format(types[0]);
@@ -880,7 +880,7 @@ void Platform::set_clipboard_listener(ClipboardListener* listener)
     clipboard_listener = listener ? listener : &default_clipboard_listener;
 }
 
-bool Platform::set_clipboard_data(uint32_t type, const uint8_t* data, int32_t size)
+bool Platform::on_clipboard_notify(uint32_t type, const uint8_t* data, int32_t size)
 {
     HGLOBAL clip_data;
     LPVOID clip_buf;
@@ -946,7 +946,7 @@ bool Platform::set_clipboard_data(uint32_t type, const uint8_t* data, int32_t si
     return ret;
 }
 
-bool Platform::request_clipboard_notification(uint32_t type)
+bool Platform::on_clipboard_request(uint32_t type)
 {
     UINT format = get_clipboard_format(type);
     HANDLE clip_data;
@@ -995,7 +995,7 @@ bool Platform::request_clipboard_notification(uint32_t type)
     return ret;
 }
 
-void Platform::release_clipboard()
+void Platform::on_clipboard_release()
 {
     SetEvent(clipboard_event);
 }
