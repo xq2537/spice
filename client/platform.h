@@ -125,6 +125,14 @@ public:
     static bool on_clipboard_notify(uint32_t type, const uint8_t* data, int32_t size);
     static bool on_clipboard_request(uint32_t type);
     static void on_clipboard_release();
+
+    enum { owner_none, owner_guest, owner_client };
+
+    static void set_clipboard_owner(int new_owner);
+    static int  get_clipboard_owner() { return _clipboard_owner; }
+
+private:
+    static int _clipboard_owner;
 };
 
 class Platform::EventListener {
@@ -141,6 +149,7 @@ public:
     virtual void on_clipboard_grab(uint32_t *types, uint32_t type_count) = 0;
     virtual void on_clipboard_request(uint32_t type) = 0;
     virtual void on_clipboard_notify(uint32_t type, uint8_t* data, int32_t size) = 0;
+    virtual void on_clipboard_release() = 0;
 };
 
 class Platform::RecordClient {

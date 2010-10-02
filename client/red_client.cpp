@@ -85,10 +85,17 @@ void ClipboardGrabEvent::response(AbstractProcessLoop& events_loop)
 {
     static_cast<RedClient*>(events_loop.get_owner())->send_agent_clipboard_message(
         VD_AGENT_CLIPBOARD_GRAB, _type_count * sizeof(uint32_t), _types);
+    Platform::set_clipboard_owner(Platform::owner_client);
 }
 
 void ClipboardRequestEvent::response(AbstractProcessLoop& events_loop)
 {
+    if (Platform::get_clipboard_owner() != Platform::owner_guest) {
+        LOG_WARN("received clipboard req from client while clipboard is not owned by guest");
+        Platform::on_clipboard_notify(VD_AGENT_CLIPBOARD_NONE, NULL, 0);
+        return;
+    }
+
     VDAgentClipboardRequest request = {_type};
     static_cast<RedClient*>(events_loop.get_owner())->send_agent_clipboard_message(
         VD_AGENT_CLIPBOARD_REQUEST, sizeof(request), &request);
@@ -865,6 +872,11 @@ void RedClient::on_clipboard_notify(uint32_t type, uint8_t* data, int32_t size)
         DBG(0, "clipboard change is already pending");
         return;
     }
+    if (Platform::get_clipboard_owner() != Platform::owner_client) {
+        LOG_WARN("received clipboard data from client while clipboard is not owned by client");
+        type = VD_AGENT_CLIPBOARD_NONE;
+        size = 0;
+    }
     _agent_out_msg_pos = 0;
     _agent_out_msg_size = sizeof(VDAgentMessage) + sizeof(VDAgentClipboard) + size;
     _agent_out_msg = (VDAgentMessage*)new uint8_t[_agent_out_msg_size];
@@ -878,6 +890,12 @@ void RedClient::on_clipboard_notify(uint32_t type, uint8_t* data, int32_t size)
     if (_agent_tokens) {
         do_send_agent_clipboard();
     }
+}
+
+void RedClient::on_clipboard_release()
+{
+    if (Platform::get_clipboard_owner() == Platform::owner_client)
+        send_agent_clipboard_message(VD_AGENT_CLIPBOARD_RELEASE, 0, NULL);
 }
 
 void RedClient::set_mouse_mode(uint32_t supported_modes, uint32_t current_mode)
@@ -1086,6 +1104,12 @@ void RedClient::dispatch_agent_message(VDAgentMessage* msg, void* data)
         break;
     }
     case VD_AGENT_CLIPBOARD: {
+        if (Platform::get_clipboard_owner() != Platform::owner_guest) {
+            LOG_WARN("received clipboard data from guest while clipboard is not owned by guest");
+            Platform::on_clipboard_notify(VD_AGENT_CLIPBOARD_NONE, NULL, 0);
+            break;
+        }
+
         VDAgentClipboard* clipboard = (VDAgentClipboard*)data;
         Platform::on_clipboard_notify(clipboard->type, clipboard->data,
                                      msg->size - sizeof(VDAgentClipboard));
@@ -1094,14 +1118,27 @@ void RedClient::dispatch_agent_message(VDAgentMessage* msg, void* data)
     case VD_AGENT_CLIPBOARD_GRAB:
         Platform::on_clipboard_grab((uint32_t *)data,
                                       msg->size / sizeof(uint32_t));
+        Platform::set_clipboard_owner(Platform::owner_guest);
         break;
     case VD_AGENT_CLIPBOARD_REQUEST:
+        if (Platform::get_clipboard_owner() != Platform::owner_client) {
+            LOG_WARN("received clipboard req from guest while clipboard is not owned by client");
+            on_clipboard_notify(VD_AGENT_CLIPBOARD_NONE, NULL, 0);
+            break;
+        }
+
         if (!Platform::on_clipboard_request(((VDAgentClipboardRequest*)data)->type)) {
             on_clipboard_notify(VD_AGENT_CLIPBOARD_NONE, NULL, 0);
         }
         break;
     case VD_AGENT_CLIPBOARD_RELEASE:
+        if (Platform::get_clipboard_owner() != Platform::owner_guest) {
+            LOG_WARN("received clipboard release from guest while clipboard is not owned by guest");
+            break;
+        }
+
         Platform::on_clipboard_release();
+        Platform::set_clipboard_owner(Platform::owner_none);
         break;
     default:
         DBG(0, "Unsupported message type %u size %u", msg->type, msg->size);

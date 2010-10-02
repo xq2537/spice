@@ -221,6 +221,7 @@ public:
     void on_clipboard_grab(uint32_t *types, uint32_t type_count);
     void on_clipboard_request(uint32_t type);
     void on_clipboard_notify(uint32_t type, uint8_t* data, int32_t size);
+    void on_clipboard_release();
 
     void for_each_channel(ForEachChannelFunc& func);
     void on_mouse_capture_trigger(RedScreen& screen);

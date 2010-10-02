@@ -154,6 +154,7 @@ public:
     void on_clipboard_grab(uint32_t *types, uint32_t type_count) {}
     void on_clipboard_request(uint32_t type) {}
     void on_clipboard_notify(uint32_t type, uint8_t* data, int32_t size) {}
+    void on_clipboard_release() {}
 };
 
 static DefaultClipboardListener default_clipboard_listener;
@@ -3159,6 +3160,18 @@ bool Platform::on_clipboard_grab(uint32_t *types, uint32_t type_count)
     clipboard_data_size = 0;
     XSetSelectionOwner(x_display, clipboard_prop, platform_win, CurrentTime);
     return true;
+}
+
+int Platform::_clipboard_owner = Platform::owner_none;
+
+void Platform::set_clipboard_owner(int new_owner)
+{
+    if (new_owner == owner_none) {
+        clipboard_listener->on_clipboard_release();
+
+        /* FIXME clear cached clipboard type info and data */
+    }
+    _clipboard_owner = new_owner;
 }
 
 void Platform::set_clipboard_listener(ClipboardListener* listener)
