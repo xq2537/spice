@@ -818,6 +818,13 @@ void RedClient::do_send_agent_clipboard()
 
 void RedClient::send_agent_clipboard_message(uint32_t message_type, uint32_t size, void* data)
 {
+    if (!_agent_connected)
+        return;
+
+    if (!VD_AGENT_HAS_CAPABILITY(_agent_caps, _agent_caps_size,
+                                 VD_AGENT_CAP_CLIPBOARD_BY_DEMAND))
+        return;
+
     Message* message = new Message(SPICE_MSGC_MAIN_AGENT_DATA);
     VDAgentMessage* msg = (VDAgentMessage*)
       spice_marshaller_reserve_space(message->marshaller(), sizeof(VDAgentMessage) + size);
@@ -835,20 +842,12 @@ void RedClient::send_agent_clipboard_message(uint32_t message_type, uint32_t siz
 
 void RedClient::on_clipboard_grab(uint32_t *types, uint32_t type_count)
 {
-    if (!_agent_caps || !VD_AGENT_HAS_CAPABILITY(_agent_caps, _agent_caps_size,
-                                                 VD_AGENT_CAP_CLIPBOARD_BY_DEMAND)) {
-        return;
-    }
     AutoRef<ClipboardGrabEvent> event(new ClipboardGrabEvent(types, type_count));
     get_process_loop().push_event(*event);
 }
 
 void RedClient::on_clipboard_request(uint32_t type)
 {
-    if (!_agent_caps || !VD_AGENT_HAS_CAPABILITY(_agent_caps, _agent_caps_size,
-                                                 VD_AGENT_CAP_CLIPBOARD_BY_DEMAND)) {
-        return;
-    }
     AutoRef<ClipboardRequestEvent> event(new ClipboardRequestEvent(type));
     get_process_loop().push_event(*event);
 }
@@ -859,6 +858,9 @@ void RedClient::on_clipboard_notify(uint32_t type, uint8_t* data, int32_t size)
     if (!_agent_connected) {
         return;
     }
+    if (!VD_AGENT_HAS_CAPABILITY(_agent_caps, _agent_caps_size,
+                                 VD_AGENT_CAP_CLIPBOARD_BY_DEMAND))
+        return;
     if (_agent_out_msg) {
         DBG(0, "clipboard change is already pending");
         return;
