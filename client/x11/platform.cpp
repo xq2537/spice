@@ -107,11 +107,14 @@ static unsigned int caps_lock_mask = 0;
 static unsigned int num_lock_mask = 0;
 
 //FIXME: nicify
+static int expected_targets_notifies = 0;
+static bool waiting_for_property_notify = false;
 static uint8_t* clipboard_data = NULL;
 static int32_t clipboard_data_type = 0;
 static int32_t clipboard_data_size = 0;
 static int32_t clipboard_data_space = 0;
-static int32_t clipboard_request_type = 0;
+static Atom clipboard_request_target = None;
+static uint32_t clipboard_type_count = 0;
 static XEvent clipboard_event;
 static Mutex clipboard_lock;
 static Atom clipboard_prop;
@@ -2260,48 +2263,6 @@ static void realloc_clipboard_data_space(uint32_t size)
     clipboard_data = newbuf;
 }
 
-static void update_clipboard(unsigned long size, uint8_t* data)
-{
-    clipboard_data_size = 0;
-    ensure_clipboard_data_space(size);
-    memcpy(clipboard_data, data, size);
-    clipboard_data_size = size;
-}
-
-// Function based on xsel get_append_property()
-// Get a window clipboard property and append its data to the clipboard_data
-// Returns true if more data is available for receipt. false if no data is available, or on error.
-static bool get_append_clipboard_data(XSelectionEvent* xsel)
-{
-    Atom target;
-    int format;
-    unsigned long bytesafter, length;
-    unsigned char* value;
-    
-    XGetWindowProperty(x_display, xsel->requestor, clipboard_prop, 0L, 1000000, True,
-                       xsel->target, &target, &format, &length, &bytesafter, &value);
-    if (target != xsel->target) {
-        LOG_INFO("target %d != %u requested", target, xsel->target);
-        clipboard_data_size = 0;
-        return false;
-    } else if (length == 0) {
-        // A length of 0 indicates the end of the transfer
-        LOG_INFO("Got zero length property; end of INCR transfer");
-        return false;
-    } else if (format != 8) {
-        LOG_INFO("Retrieved non-8-bit data");
-        clipboard_data_size = 0;
-        return false;
-    }
-    if (clipboard_data_size + length > clipboard_data_space) {
-        realloc_clipboard_data_space(clipboard_data_size + length);
-    }
-    memcpy((char*)clipboard_data + clipboard_data_size, (char*)value, length);
-    clipboard_data_size += length;
-    LOG_INFO("Appended %d bytes to buffer", length);
-    return true;
-}
-
 // FIXME: use INCR for large data transfers
 static void send_selection_notify(Atom type)
 {
@@ -2326,6 +2287,15 @@ static void send_selection_notify(Atom type)
     XFlush(x_display);
 }
 
+static void print_targets(const char *action, Atom *atoms, int c)
+{
+    int i;
+
+    LOG_INFO("%s %d targets:", action, c);
+    for (i = 0; i < c; i++)
+        LOG_INFO("%s", atom_name(atoms[i]));
+}
+
 static void send_targets(XEvent& request_event)
 {
     XEvent res;
@@ -2348,11 +2318,197 @@ static void send_targets(XEvent& request_event)
     res.xselection.time = request_event.xselectionrequest.time;
     XSendEvent(x_display, requestor_win, 0, 0, &res);
     XFlush(x_display);
+    print_targets("sent", targets, sizeof(targets)/sizeof(Atom));
+}
+
+static int get_selection(XEvent &event, Atom type, Atom prop, int format,
+                         unsigned char **data_ret, bool incr)
+{
+    Bool del = incr ? True: False;
+    Atom type_ret;
+    int format_ret, ret_val = -1;
+    unsigned long len, remain;
+    unsigned char *data = NULL;
+
+    if (incr) {
+        if (event.xproperty.atom != prop) {
+            LOG_WARN("PropertyNotify parameters mismatch");
+            goto exit;
+        }
+    } else {
+        if (event.xselection.property == None) {
+            LOG_INFO("XConvertSelection refused by clipboard owner");
+            goto exit;
+        }
+
+        if (event.xselection.requestor != platform_win ||
+            event.xselection.selection != clipboard_prop ||
+            event.xselection.property  != prop) {
+            LOG_WARN("SelectionNotify parameters mismatch");
+            goto exit;
+        }
+    }
+
+    if (XGetWindowProperty(x_display, platform_win, prop, 0,
+                           LONG_MAX, del, type, &type_ret, &format_ret, &len,
+                           &remain, &data) != Success) {
+        LOG_WARN("XGetWindowProperty failed");
+        goto exit;
+    }
+
+    if (!incr) {
+        if (type_ret == incr_atom) {
+            XSelectInput(x_display, platform_win, PropertyChangeMask);
+            XDeleteProperty(x_display, platform_win, prop);
+            XFlush(x_display);
+            waiting_for_property_notify = true;
+            ensure_clipboard_data_space(*(uint32_t*)data);
+            XFree(data);
+            return 0; /* Wait for more data */
+        }
+        XDeleteProperty(x_display, platform_win, prop);
+        XFlush(x_display);
+    }
+
+    if (type_ret != type) {
+        LOG_WARN("expected property type: %s, got: %s", atom_name(type),
+                 atom_name(type_ret));
+        goto exit;
+    }
+
+    if (format_ret != format) {
+        LOG_WARN("expected %d bit format, got %d bits", format, format_ret);
+        goto exit;
+    }
+
+    /* Convert len to bytes */
+    switch(format) {
+    case 8:
+        break;
+    case 16:
+        len *= sizeof(short);
+        break;
+    case 32:
+        len *= sizeof(long);
+        break;
+    }
+
+    if (incr) {
+        if (len) {
+            if (clipboard_data_size + len > clipboard_data_space)
+                realloc_clipboard_data_space(clipboard_data_size + len);
+            memcpy(clipboard_data + clipboard_data_size, data, len);
+            clipboard_data_size += len;
+            LOG_INFO("Appended %d bytes to buffer", len);
+            XFree(data);
+            return 0; /* Wait for more data */
+        }
+        len = clipboard_data_size;
+        *data_ret = clipboard_data;
+    } else
+        *data_ret = data;
+
+    if (len > 0)
+        ret_val = len;
+    else
+        LOG_WARN("property contains no data (zero length)");
+
+exit:
+    if ((incr || ret_val == -1) && data)
+        XFree(data);
+
+    if (incr) {
+        clipboard_data_size = 0;
+        waiting_for_property_notify = false;
+    }
+
+    return ret_val;
+}
+
+static void get_selection_free(unsigned char *data, bool incr)
+{
+    if (!incr && data)
+        XFree(data);
+}
+
+static void handle_targets_notify(XEvent& event, bool incr)
+{
+    int len;
+    Lock lock(clipboard_lock);
+    Atom *atoms = NULL;
+
+    if (!expected_targets_notifies) {
+        LOG_WARN("unexpected selection notify TARGETS");
+        return;
+    }
+    expected_targets_notifies--;
+
+    /* If we have more targets_notifies pending, ignore this one, we
+       are only interested in the targets list of the current owner
+       (which is the last one we've requested a targets list from) */
+    if (expected_targets_notifies)
+        return;
+
+    len = get_selection(event, XA_ATOM, targets_atom, 32,
+                        (unsigned char **)&atoms, incr);
+    if (len == 0 || len == -1) /* waiting for more data or error? */
+        return;
+
+    /* bytes -> atoms */
+    len /= sizeof(Atom);
+    print_targets("received", atoms, len);
+#if 0 /* FIXME support multiple types */
+    clipboard_type_count = 0;
+    atom = atom_lists_overlap(utf8_atoms, atoms, utf8_atom_count, len);
+    if (atom) {
+        clipboard_agent_types[clipboard_type_count] =
+            VD_AGENT_CLIPBOARD_UTF8_TEXT;
+        clipboard_x11_targets[x11->clipboard_type_count] = atom;
+        clipboard_type_count++;
+    }
+
+    /* TODO Add support for more types here */
+
+    if (clipboard_type_count)
+        clipboard_listener->on_clipboard_grab(clipboard_agent_types,
+                                              clipboard_type_count);
+#else
+    uint32_t type = VD_AGENT_CLIPBOARD_UTF8_TEXT;
+    clipboard_listener->on_clipboard_grab(&type, 1);
+#endif
+    get_selection_free((unsigned char *)atoms, incr);
+}
+
+static void handle_selection_notify(XEvent& event, bool incr)
+{
+    int len = -1;
+    uint32_t type = get_clipboard_type(clipboard_request_target);
+    unsigned char *data = NULL;
+
+    if (clipboard_request_target == None)
+        LOG_INFO("SelectionNotify received without a target");
+    else if (!incr && event.xselection.target != clipboard_request_target)
+        LOG_WARN("Requested %s target got %s",
+                 atom_name(clipboard_request_target),
+                 atom_name(event.xselection.target));
+    else
+        len = get_selection(event, clipboard_request_target, clipboard_prop,
+                            8, &data, incr);
+
+    if (len == 0) /* waiting for more data? */
+        return;
+    if (len == -1) {
+        type = VD_AGENT_CLIPBOARD_NONE;
+        len = 0;
+    }
+
+    clipboard_listener->on_clipboard_notify(type, data, len);
+    clipboard_request_target = None;
+    get_selection_free(data, incr);
 }
 
 static void root_win_proc(XEvent& event)
 {
-    static bool waiting_for_property_notify = false;
 
 #ifdef USE_XRANDR_1_2
     ASSERT(using_xrandr_1_0 || using_xrandr_1_2);
@@ -2394,11 +2550,11 @@ static void root_win_proc(XEvent& event)
         if (selection_event->owner == None)
             return;
 
-        // FIXME: request targets from new owner, then on receiving the
-        // targets see if there are usable types and only if there are
-        // grab the clipboard with the found usable types
-        uint32_t type = VD_AGENT_CLIPBOARD_UTF8_TEXT;
-        clipboard_listener->on_clipboard_grab(&type, 1);
+        /* Request the supported targets from the new owner */
+        XConvertSelection(x_display, clipboard_prop, targets_atom,
+                          targets_atom, platform_win, CurrentTime);
+        XFlush(x_display);
+        expected_targets_notifies++;
         return;
     }
     switch (event.type) {
@@ -2429,79 +2585,21 @@ static void root_win_proc(XEvent& event)
         /* Do nothing the clipboard ownership will get updated through
            the XFixesSetSelectionOwnerNotify event */
         break;
-    case SelectionNotify: {
-        Atom type;
-        int format;
-        unsigned long len;
-        unsigned long size;
-        unsigned long dummy;
-        unsigned char *data;
-
-        XGetWindowProperty(x_display, platform_win, clipboard_prop, 0, 0, False,
-                           event.xselection.target, &type, &format, &len, &size, &data);
-        if (size == 0) {
-            LOG_INFO("XGetWindowProperty(size) failed");
-            break;
-        }
-        if (type != event.xselection.target && type != incr_atom) {
-            LOG_INFO("type %d != %u requested", type, event.xselection.target);
-            break;
-        }
-        {
-            Lock lock(clipboard_lock);
-            clipboard_data_size = 0;
-        }
-        if (type == incr_atom) {
-            Window requestor_win = event.xselection.requestor;
-            Atom prop = event.xselection.property; // is this always "CLIPBOARD"?
-            // According to ICCCM spec 2.7.2 INCR Properties, and xsel reference
-            XSelectInput(x_display, requestor_win, PropertyChangeMask);
-            XDeleteProperty(x_display, requestor_win, prop);
-            waiting_for_property_notify = true;
-            {
-                Lock lock(clipboard_lock);
-                ensure_clipboard_data_space(*(uint32_t*)data);
-            }
-            break;
-        }
-        if (XGetWindowProperty(x_display, platform_win, clipboard_prop, 0, size,  True,
-                               event.xselection.target, &type, &format, &len,
-                               &dummy, &data) != Success) {
-            LOG_INFO("XGetWindowProperty(data) failed");
-            break;
-        }
-        if (type != event.xselection.target) {
-            LOG_INFO("type %d != %u requested", type, event.xselection.target);
-            break;
-        }
-        {
-            Lock lock(clipboard_lock);
-            update_clipboard(size, data);
-        }
-        clipboard_listener->on_clipboard_notify(clipboard_request_type, clipboard_data,
-                                                clipboard_data_size);
-        clipboard_request_type = 0;
-        XFree(data);
+    case SelectionNotify:
+        if (event.xselection.target == targets_atom)
+            handle_targets_notify(event, false);
+        else
+            handle_selection_notify(event, false);
         break;
-    }
-    case PropertyNotify: {
+    case PropertyNotify:
         if (!waiting_for_property_notify || event.xproperty.state != PropertyNewValue) {
             break;
         }
-        bool finished_incr = false;
-        {
-            Lock lock(clipboard_lock);
-            finished_incr = !get_append_clipboard_data(&event.xselection);
-        }
-        if (finished_incr) {
-            waiting_for_property_notify = false;
-            XDeleteProperty(x_display, event.xselection.requestor, clipboard_prop);
-            clipboard_listener->on_clipboard_notify(clipboard_request_type, clipboard_data,
-                                                    clipboard_data_size);
-            clipboard_request_type = 0;
-        }
+        if (event.xproperty.atom == targets_atom)
+            handle_targets_notify(event, true);
+        else
+            handle_selection_notify(event, true);
         break;
-    }
     default:
         return;
     }
@@ -3159,7 +3257,6 @@ bool Platform::on_clipboard_grab(uint32_t *types, uint32_t type_count)
         LOG_INFO("Unsupported clipboard type %u", types[0]);
         return false;
     }
-    clipboard_data_size = 0;
     XSetSelectionOwner(x_display, clipboard_prop, platform_win, CurrentTime);
     return true;
 }
@@ -3168,12 +3265,25 @@ int Platform::_clipboard_owner = Platform::owner_none;
 
 void Platform::set_clipboard_owner(int new_owner)
 {
-    if (new_owner == owner_none) {
+    const char * const owner_str[] = { "none", "guest", "client" };
+
+    /* Clear pending requests and clipboard data */
+    {
+        Lock lock(clipboard_lock);
+        clipboard_data_size = 0;
+        clipboard_request_target = None;
+        waiting_for_property_notify = false;
+
+        /* Clear cached clipboard type info when there is no new owner
+           (otherwise the new owner will already have set new type info) */
+        if (new_owner == owner_none)
+            clipboard_type_count = 0;
+    }
+    if (new_owner == owner_none)
         clipboard_listener->on_clipboard_release();
 
-        /* FIXME clear cached clipboard type info and data */
-    }
     _clipboard_owner = new_owner;
+    LOG_INFO("new clipboard owner: %s", owner_str[new_owner]);
 }
 
 void Platform::set_clipboard_listener(ClipboardListener* listener)
@@ -3185,6 +3295,11 @@ bool Platform::on_clipboard_notify(uint32_t type, const uint8_t* data, int32_t s
 {
     Lock lock(clipboard_lock);
     uint32_t format = get_clipboard_format(type);
+
+    if (type == VD_AGENT_CLIPBOARD_NONE) {
+        send_selection_notify(None);
+        return true;
+    }
 
     if (!format) {
         LOG_INFO("Unsupported clipboard type %u", type);
@@ -3204,6 +3319,7 @@ bool Platform::on_clipboard_notify(uint32_t type, const uint8_t* data, int32_t s
 
 bool Platform::on_clipboard_request(uint32_t type)
 {
+    Lock lock(clipboard_lock);
     uint32_t format = get_clipboard_format(type);
 
     if (!format) {
@@ -3214,11 +3330,12 @@ bool Platform::on_clipboard_request(uint32_t type)
         LOG_INFO("No owner for the selection");
         return false;
     }
-    if (clipboard_request_type) {
+
+    if (clipboard_request_target) {
         LOG_INFO("XConvertSelection request is already pending");
         return false;
     }
-    clipboard_request_type = type;
+    clipboard_request_target = format;
     XConvertSelection(x_display, clipboard_prop, format, clipboard_prop, platform_win, CurrentTime);
     return true;
 }
