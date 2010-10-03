@@ -506,6 +506,7 @@ void Platform::error_beep()
     }
 
     XBell(x_display, 0);
+    XFlush(x_display);
 }
 
 void Platform::msleep(unsigned int millisec)
@@ -2028,6 +2029,7 @@ void XMonitor::disable()
     for (; iter != _clones.end(); iter++) {
         (*iter)->disable();
     }
+    XFlush(x_display);
     X_DEBUG_SYNC(display);
 }
 
@@ -2049,6 +2051,7 @@ void XMonitor::enable()
     for (; iter != _clones.end(); iter++) {
         (*iter)->enable();
     }
+    XFlush(x_display);
     X_DEBUG_SYNC(display);
 }
 
@@ -2975,11 +2978,13 @@ static void  set_keyboard_led(XLed led, int set)
     case X11_CAPS_LOCK_LED:
         if (caps_lock_mask) {
             XkbLockModifiers(x_display, XkbUseCoreKbd, caps_lock_mask, set ? caps_lock_mask : 0);
+            XFlush(x_display);
         }
         return;
     case X11_NUM_LOCK_LED:
         if (num_lock_mask) {
             XkbLockModifiers(x_display, XkbUseCoreKbd, num_lock_mask, set ? num_lock_mask : 0);
+            XFlush(x_display);
         }
         return;
     case X11_SCROLL_LOCK_LED:
@@ -2987,6 +2992,7 @@ static void  set_keyboard_led(XLed led, int set)
         keyboard_control.led_mode = set ? LedModeOn : LedModeOff;
         keyboard_control.led = led;
         XChangeKeyboardControl(x_display, KBLed | KBLedMode, &keyboard_control);
+        XFlush(x_display);
         return;
     }
 }
@@ -3034,6 +3040,7 @@ void Platform::reset_cursor_pos()
     SpicePoint size =  primary_monitor->get_size();
     Window root_window = RootWindow(x_display, DefaultScreen(x_display));
     XWarpPointer(x_display, None, root_window, 0, 0, 0, 0, pos.x + size.x / 2, pos.y + size.y / 2);
+    XFlush(x_display);
 }
 
 WaveRecordAbstract* Platform::create_recorder(RecordClient& client,
@@ -3080,6 +3087,7 @@ void XBaseLocalCursor::set(Window window)
 {
     if (_handle) {
         XDefineCursor(x_display, window, _handle);
+        XFlush(x_display);
     }
 }
 
@@ -3258,6 +3266,7 @@ bool Platform::on_clipboard_grab(uint32_t *types, uint32_t type_count)
         return false;
     }
     XSetSelectionOwner(x_display, clipboard_prop, platform_win, CurrentTime);
+    XFlush(x_display);
     return true;
 }
 
@@ -3337,6 +3346,7 @@ bool Platform::on_clipboard_request(uint32_t type)
     }
     clipboard_request_target = format;
     XConvertSelection(x_display, clipboard_prop, format, clipboard_prop, platform_win, CurrentTime);
+    XFlush(x_display);
     return true;
 }
 
