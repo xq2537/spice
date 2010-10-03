@@ -1011,6 +1011,7 @@ bool Platform::on_clipboard_request(uint32_t type)
 void Platform::on_clipboard_release()
 {
     SetEvent(clipboard_event);
+    set_clipboard_owner(owner_none);
 }
 
 static bool has_console = false;

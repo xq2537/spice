@@ -3342,5 +3342,18 @@ bool Platform::on_clipboard_request(uint32_t type)
 
 void Platform::on_clipboard_release()
 {
+    XEvent event;
+
     XSetSelectionOwner(x_display, clipboard_prop, None, CurrentTime);
+    /* Make sure we process the XFixesSetSelectionOwnerNotify event caused
+       by this, so we don't end up changing the clipboard owner to none, after
+       it has already been re-owned because this event is still pending. */
+    XSync(x_display, False);
+    while (XCheckTypedEvent(x_display,
+                            XFixesSelectionNotify + xfixes_event_base,
+                            &event))
+        root_win_proc(event);
+
+    /* Note no need to do a set_clipboard_owner(owner_none) here, as that is
+       already done by processing the XFixesSetSelectionOwnerNotify event. */
 }

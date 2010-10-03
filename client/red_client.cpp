@@ -1133,12 +1133,11 @@ void RedClient::dispatch_agent_message(VDAgentMessage* msg, void* data)
         break;
     case VD_AGENT_CLIPBOARD_RELEASE:
         if (Platform::get_clipboard_owner() != Platform::owner_guest) {
-            LOG_WARN("received clipboard release from guest while clipboard is not owned by guest");
+            LOG_INFO("received clipboard release from guest while clipboard is not owned by guest");
             break;
         }
 
         Platform::on_clipboard_release();
-        Platform::set_clipboard_owner(Platform::owner_none);
         break;
     default:
         DBG(0, "Unsupported message type %u size %u", msg->type, msg->size);
