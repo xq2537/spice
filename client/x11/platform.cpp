@@ -112,7 +112,6 @@ static int32_t clipboard_data_type = 0;
 static int32_t clipboard_data_size = 0;
 static int32_t clipboard_data_space = 0;
 static int32_t clipboard_request_type = 0;
-static bool clipboard_changer = false;
 static XEvent clipboard_event;
 static Mutex clipboard_lock;
 static Atom clipboard_prop;
@@ -831,14 +830,13 @@ DynamicScreen::DynamicScreen(Display* display, int screen, int& next_mon_id)
     X_DEBUG_SYNC(display);
     //FIXME: replace RootWindow() in other refs as well?
     platform_win = XCreateSimpleWindow(display, RootWindow(display, screen), 0, 0, 1, 1, 0, 0, 0);
+    LOG_INFO("platform_win: %u", (unsigned int)platform_win);
     intern_clipboard_atoms();
     XSelectInput(display, platform_win, StructureNotifyMask);
     XRRSelectInput(display, platform_win, RRScreenChangeNotifyMask);
     if (using_xfixes_1_0) {
         XFixesSelectSelectionInput(display, platform_win, clipboard_prop,
-                                   XFixesSetSelectionOwnerNotifyMask |
-                                   XFixesSelectionWindowDestroyNotifyMask |
-                                   XFixesSelectionClientCloseNotifyMask);
+                                   XFixesSetSelectionOwnerNotifyMask);
     }
 
     Monitor::self_monitors_change++;
@@ -1107,6 +1105,7 @@ MultyMonScreen::MultyMonScreen(Display* display, int screen, int& next_mon_id)
     }
 
     platform_win = XCreateSimpleWindow(display, RootWindow(display, screen), 0, 0, 1, 1, 0, 0, 0);
+    LOG_INFO("platform_win: %u", (unsigned int)platform_win);
     intern_clipboard_atoms();
     XSelectInput(display, platform_win, StructureNotifyMask);
     X_DEBUG_SYNC(get_display());
@@ -1114,9 +1113,7 @@ MultyMonScreen::MultyMonScreen(Display* display, int screen, int& next_mon_id)
     X_DEBUG_SYNC(get_display());
     if (using_xfixes_1_0) {
         XFixesSelectSelectionInput(display, platform_win, clipboard_prop,
-                                   XFixesSetSelectionOwnerNotifyMask |
-                                   XFixesSelectionWindowDestroyNotifyMask |
-                                   XFixesSelectionClientCloseNotifyMask);
+                                   XFixesSetSelectionOwnerNotifyMask);
     }
 
     XMonitor::inc_change_ref();
@@ -2382,17 +2379,24 @@ static void root_win_proc(XEvent& event)
     if (event.type == XFixesSelectionNotify + xfixes_event_base) {
         XFixesSelectionNotifyEvent* selection_event = (XFixesSelectionNotifyEvent *)&event;
         if (selection_event->subtype != XFixesSetSelectionOwnerNotify) {
-            // FIXME: for some reason the XFixesSelectionWindowDestroyNotify/ClientCloseNotify
-            // events which can help for sending CLIPBOARD_RELEASE to the agent are not received
             LOG_INFO("Unsupported selection event %u", selection_event->subtype);
             return;
         }
-        LOG_INFO("XFixesSetSelectionOwnerNotify %u", clipboard_changer);
-        if (clipboard_changer) {
-            clipboard_changer = false;
+        LOG_INFO("XFixesSetSelectionOwnerNotify %u",
+                 (unsigned int)selection_event->owner);
+
+        /* Ignore becoming the owner ourselves */
+        if (selection_event->owner == platform_win)
             return;
-        }
-        // FIXME: use actual type
+
+        /* If the clipboard owner is changed we no longer own it */
+        Platform::set_clipboard_owner(Platform::owner_none);
+        if (selection_event->owner == None)
+            return;
+
+        // FIXME: request targets from new owner, then on receiving the
+        // targets see if there are usable types and only if there are
+        // grab the clipboard with the found usable types
         uint32_t type = VD_AGENT_CLIPBOARD_UTF8_TEXT;
         clipboard_listener->on_clipboard_grab(&type, 1);
         return;
@@ -2421,11 +2425,10 @@ static void root_win_proc(XEvent& event)
         clipboard_listener->on_clipboard_request(type);
         break;
     }
-    case SelectionClear: {
-        Lock lock(clipboard_lock);
-        clipboard_data_size = 0;
+    case SelectionClear:
+        /* Do nothing the clipboard ownership will get updated through
+           the XFixesSetSelectionOwnerNotify event */
         break;
-    }
     case SelectionNotify: {
         Atom type;
         int format;
@@ -3156,7 +3159,6 @@ bool Platform::on_clipboard_grab(uint32_t *types, uint32_t type_count)
         LOG_INFO("Unsupported clipboard type %u", types[0]);
         return false;
     }
-    clipboard_changer = true;
     clipboard_data_size = 0;
     XSetSelectionOwner(x_display, clipboard_prop, platform_win, CurrentTime);
     return true;
