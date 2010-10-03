@@ -107,6 +107,14 @@ static unsigned int caps_lock_mask = 0;
 static unsigned int num_lock_mask = 0;
 
 //FIXME: nicify
+static const char * const utf8_atom_names[] = {
+    "UTF8_STRING",
+    "text/plain;charset=UTF-8",
+    "text/plain;charset=utf-8",
+};
+
+#define utf8_atom_count (sizeof(utf8_atom_names)/sizeof(utf8_atom_names[0]))
+
 static int expected_targets_notifies = 0;
 static bool waiting_for_property_notify = false;
 static uint8_t* clipboard_data = NULL;
@@ -115,23 +123,18 @@ static int32_t clipboard_data_size = 0;
 static int32_t clipboard_data_space = 0;
 static Atom clipboard_request_target = None;
 static uint32_t clipboard_type_count = 0;
+/* Warning the size of these 2 needs to be increased each time we add
+   support for a new type!! */
+static uint32_t clipboard_agent_types[1];
+static Atom clipboard_x11_targets[1];
 static XEvent clipboard_event;
 static Mutex clipboard_lock;
 static Atom clipboard_prop;
 static Atom incr_atom;
-static Atom utf8_atom;
+static Atom utf8_atoms[utf8_atom_count];
 static Atom targets_atom;
 static Bool handle_x_error = false;
 static int x_error_code;
-
-typedef struct ClipboardFormat {
-    uint32_t format;
-    uint32_t type;
-} ClipboardFormat;
-
-static ClipboardFormat clipboard_formats[] = {
-    {0, 0},
-    {0, 0}};
 
 class DefaultEventListener: public Platform::EventListener {
 public:
@@ -162,26 +165,36 @@ public:
 static DefaultClipboardListener default_clipboard_listener;
 static Platform::ClipboardListener* clipboard_listener = &default_clipboard_listener;
 
-static uint32_t get_clipboard_type(uint32_t format) {
-    ClipboardFormat* iter;
-
-    for (iter = clipboard_formats; iter->type && iter->format != format; iter++);
-    return iter->type;
-}
-
-static uint32_t get_clipboard_format(uint32_t type) {
-    ClipboardFormat* iter;
-
-    for (iter = clipboard_formats; iter->format && iter->type != type; iter++);
-    return iter->format;
-}
-
 static const char *atom_name(Atom atom)
 {
     if (atom == None)
         return "None";
 
     return XGetAtomName(x_display, atom);
+}
+
+static uint32_t get_clipboard_type(Atom target) {
+    int i;
+
+    for (i = 0; i < utf8_atom_count; i++)
+        if (utf8_atoms[i] == target)
+            return VD_AGENT_CLIPBOARD_UTF8_TEXT;
+
+    /* TODO Add support for more types here */
+
+    LOG_WARN("unexpected selection type %s", atom_name(target));
+    return VD_AGENT_CLIPBOARD_NONE;
+}
+
+static Atom get_clipboard_target(uint32_t type) {
+    int i;
+
+    for (i = 0; i < clipboard_type_count; i++)
+        if (clipboard_agent_types[i] == type)
+            return clipboard_x11_targets[i];
+
+    LOG_WARN("client requested unavailable type %u", type);
+    return None;
 }
 
 NamedPipe::ListenerRef NamedPipe::create(const char *name, ListenerInterface& listener_interface)
@@ -811,15 +824,14 @@ private:
 
 static void intern_clipboard_atoms()
 {
+    int i;
     static bool interned = false;
     if (interned) return;
     clipboard_prop = XInternAtom(x_display, "CLIPBOARD", False);
     incr_atom = XInternAtom(x_display, "INCR", False);
-    utf8_atom = XInternAtom(x_display, "UTF8_STRING", False);
     targets_atom = XInternAtom(x_display, "TARGETS", False);
-
-    clipboard_formats[0].format = utf8_atom;
-    clipboard_formats[0].type = VD_AGENT_CLIPBOARD_UTF8_TEXT;
+    for(i = 0; i < utf8_atom_count; i++)
+        utf8_atoms[i] = XInternAtom(x_display, utf8_atom_names[i], False);
 
     interned = true;
 }
@@ -2302,15 +2314,31 @@ static void print_targets(const char *action, Atom *atoms, int c)
 static void send_targets(XEvent& request_event)
 {
     XEvent res;
-    /* FIXME add MULTIPLE */
-    /* FIXME add (and support) all 3 utf8 atom variations (see linux agent) */
-    Atom targets[2] = { targets_atom, utf8_atom };
+    /* Warning the size of this needs to be increased each time we add support
+       for a new type, or the atom count of an existing type changes */
+    Atom targets[4] = { targets_atom, };
+    int i, j, target_count = 1;
+
+    for (i = 0; i < clipboard_type_count; i++) {
+        switch (clipboard_agent_types[i]) {
+            case VD_AGENT_CLIPBOARD_UTF8_TEXT:
+                for (j = 0; j < utf8_atom_count; j++) {
+                    targets[target_count] = utf8_atoms[j];
+                    target_count++;
+                }
+                break;
+            /* TODO Add support for more types here */
+        }
+    }
 
     Window requestor_win = request_event.xselectionrequest.requestor;
     Atom prop = request_event.xselectionrequest.property;
+    if (prop == None)
+        prop = request_event.xselectionrequest.target;
+
     XChangeProperty(x_display, requestor_win, prop, XA_ATOM, 32,
                     PropModeReplace, (unsigned char *)&targets,
-                    sizeof(targets)/sizeof(Atom));
+                    target_count);
 
     res.xselection.property = prop;
     res.xselection.type = SelectionNotify;
@@ -2321,7 +2349,7 @@ static void send_targets(XEvent& request_event)
     res.xselection.time = request_event.xselectionrequest.time;
     XSendEvent(x_display, requestor_win, 0, 0, &res);
     XFlush(x_display);
-    print_targets("sent", targets, sizeof(targets)/sizeof(Atom));
+    print_targets("sent", targets, target_count);
 }
 
 static int get_selection(XEvent &event, Atom type, Atom prop, int format,
@@ -2434,6 +2462,18 @@ static void get_selection_free(unsigned char *data, bool incr)
         XFree(data);
 }
 
+static Atom atom_lists_overlap(Atom *atoms1, Atom *atoms2, int l1, int l2)
+{
+    int i, j;
+
+    for (i = 0; i < l1; i++)
+        for (j = 0; j < l2; j++)
+            if (atoms1[i] == atoms2[j])
+                return atoms1[i];
+
+    return 0;
+}
+
 static void handle_targets_notify(XEvent& event, bool incr)
 {
     int len;
@@ -2460,13 +2500,13 @@ static void handle_targets_notify(XEvent& event, bool incr)
     /* bytes -> atoms */
     len /= sizeof(Atom);
     print_targets("received", atoms, len);
-#if 0 /* FIXME support multiple types */
+
     clipboard_type_count = 0;
-    atom = atom_lists_overlap(utf8_atoms, atoms, utf8_atom_count, len);
+    Atom atom = atom_lists_overlap(utf8_atoms, atoms, utf8_atom_count, len);
     if (atom) {
         clipboard_agent_types[clipboard_type_count] =
             VD_AGENT_CLIPBOARD_UTF8_TEXT;
-        clipboard_x11_targets[x11->clipboard_type_count] = atom;
+        clipboard_x11_targets[clipboard_type_count] = atom;
         clipboard_type_count++;
     }
 
@@ -2475,10 +2515,7 @@ static void handle_targets_notify(XEvent& event, bool incr)
     if (clipboard_type_count)
         clipboard_listener->on_clipboard_grab(clipboard_agent_types,
                                               clipboard_type_count);
-#else
-    uint32_t type = VD_AGENT_CLIPBOARD_UTF8_TEXT;
-    clipboard_listener->on_clipboard_grab(&type, 1);
-#endif
+
     get_selection_free((unsigned char *)atoms, incr);
 }
 
@@ -3258,13 +3295,24 @@ LocalCursor* Platform::create_default_cursor()
 bool Platform::on_clipboard_grab(uint32_t *types, uint32_t type_count)
 {
     Lock lock(clipboard_lock);
-    /* FIXME use all types rather then just the first one */
-    uint32_t format = get_clipboard_format(types[0]);
+    int i;
 
-    if (!format) {
-        LOG_INFO("Unsupported clipboard type %u", types[0]);
+    clipboard_type_count = 0;
+    for (i = 0; i < type_count; i++) {
+        /* TODO Add support for more types here */
+        /* Check if we support the type */
+        if (types[i] != VD_AGENT_CLIPBOARD_UTF8_TEXT)
+            continue;
+
+        clipboard_agent_types[clipboard_type_count] = types[i];
+        clipboard_type_count++;
+    }
+
+    if (!clipboard_type_count) {
+        LOG_INFO("No supported clipboard types in agent grab");
         return false;
     }
+
     XSetSelectionOwner(x_display, clipboard_prop, platform_win, CurrentTime);
     XFlush(x_display);
     return true;
@@ -3303,17 +3351,14 @@ void Platform::set_clipboard_listener(ClipboardListener* listener)
 bool Platform::on_clipboard_notify(uint32_t type, const uint8_t* data, int32_t size)
 {
     Lock lock(clipboard_lock);
-    uint32_t format = get_clipboard_format(type);
+    /* FIXME (requires selection requests queue */
+    uint32_t target = utf8_atoms[0];
 
     if (type == VD_AGENT_CLIPBOARD_NONE) {
         send_selection_notify(None);
         return true;
     }
 
-    if (!format) {
-        LOG_INFO("Unsupported clipboard type %u", type);
-        return false;
-    }
     if (size > clipboard_data_space) {
         delete clipboard_data;
         clipboard_data = new uint8_t[size];
@@ -3322,19 +3367,18 @@ bool Platform::on_clipboard_notify(uint32_t type, const uint8_t* data, int32_t s
     memcpy(clipboard_data, data, size);
     clipboard_data_size = size;
     clipboard_data_type = type;
-    send_selection_notify(format);
+    send_selection_notify(target);
     return true;
 }
 
 bool Platform::on_clipboard_request(uint32_t type)
 {
     Lock lock(clipboard_lock);
-    uint32_t format = get_clipboard_format(type);
+    Atom target = get_clipboard_target(type);
 
-    if (!format) {
-        LOG_INFO("Unsupported clipboard type %u", type);
+    if (target == None)
         return false;
-    }
+
     if (XGetSelectionOwner(x_display, clipboard_prop) == None) {
         LOG_INFO("No owner for the selection");
         return false;
@@ -3344,8 +3388,8 @@ bool Platform::on_clipboard_request(uint32_t type)
         LOG_INFO("XConvertSelection request is already pending");
         return false;
     }
-    clipboard_request_target = format;
-    XConvertSelection(x_display, clipboard_prop, format, clipboard_prop, platform_win, CurrentTime);
+    clipboard_request_target = target;
+    XConvertSelection(x_display, clipboard_prop, target, clipboard_prop, platform_win, CurrentTime);
     XFlush(x_display);
     return true;
 }
