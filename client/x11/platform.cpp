@@ -2445,7 +2445,14 @@ exit:
 
 static void get_selection_free(unsigned char *data, bool incr)
 {
-    if (!incr && data)
+    if (incr) {
+        /* If the clipboard was large return the memory to the system */
+        if (clipboard_data_space > 512 * 1024) {
+            free(clipboard_data);
+            clipboard_data = NULL;
+            clipboard_data_space = 0;
+        }
+    } else if (data)
         XFree(data);
 }
 
