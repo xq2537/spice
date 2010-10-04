@@ -78,7 +78,6 @@ typedef struct ClipboardFormat {
 
 static ClipboardFormat clipboard_formats[] = {
     {CF_UNICODETEXT, VD_AGENT_CLIPBOARD_UTF8_TEXT},
-    {CF_DIB, VD_AGENT_CLIPBOARD_BITMAP},
     {0, 0}};
 
 static const unsigned long MODAL_LOOP_TIMER_ID = 1;
@@ -919,9 +918,6 @@ bool Platform::on_clipboard_notify(uint32_t type, const uint8_t* data, int32_t s
         clip_len++;
         clip_size = clip_len * sizeof(WCHAR);
         break;
-    case VD_AGENT_CLIPBOARD_BITMAP:
-        clip_size = size;
-        break;
     default:
         LOG_INFO("Unsupported clipboard type %u", type);
         return false;
@@ -941,10 +937,6 @@ bool Platform::on_clipboard_notify(uint32_t type, const uint8_t* data, int32_t s
     case VD_AGENT_CLIPBOARD_UTF8_TEXT:
         ret = !!MultiByteToWideChar(CP_UTF8, 0, (LPCSTR)data, size, (LPWSTR)clip_buf, clip_len);
         ((LPWSTR)clip_buf)[clip_len - 1] = L'\0';
-        break;
-    case VD_AGENT_CLIPBOARD_BITMAP:
-        memcpy(clip_buf, data, size);
-        ret = true;
         break;
     }
     GlobalUnlock(clip_data);
@@ -995,15 +987,6 @@ bool Platform::on_clipboard_request(uint32_t type)
             ret = true;
         }
         delete[] (uint8_t *)utf8_data;
-        break;
-    }
-    case VD_AGENT_CLIPBOARD_BITMAP: {
-        size_t clip_size = GlobalSize(clip_data);
-        if (!clip_size) {
-            break;
-        }
-        clipboard_listener->on_clipboard_notify(type, (uint8_t*)clip_buf, clip_size);
-        ret = true;
         break;
     }
     default:
