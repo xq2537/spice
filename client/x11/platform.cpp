@@ -184,6 +184,9 @@ static const char *atom_name(Atom atom)
 static uint32_t get_clipboard_type(Atom target) {
     int i;
 
+    if (target == None)
+        return VD_AGENT_CLIPBOARD_NONE;
+
     for (i = 0; i < utf8_atom_count; i++)
         if (utf8_atoms[i] == target)
             return VD_AGENT_CLIPBOARD_UTF8_TEXT;
