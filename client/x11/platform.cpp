@@ -115,26 +115,34 @@ static const char * const utf8_atom_names[] = {
 
 #define utf8_atom_count (sizeof(utf8_atom_names)/sizeof(utf8_atom_names[0]))
 
+struct selection_request {
+    XEvent event;
+    selection_request *next;
+};
+
 static int expected_targets_notifies = 0;
 static bool waiting_for_property_notify = false;
 static uint8_t* clipboard_data = NULL;
-static int32_t clipboard_data_type = 0;
 static int32_t clipboard_data_size = 0;
 static int32_t clipboard_data_space = 0;
 static Atom clipboard_request_target = None;
+static selection_request *next_selection_request = NULL;
 static uint32_t clipboard_type_count = 0;
+/* TODO Add support for more types here */
 /* Warning the size of these 2 needs to be increased each time we add
    support for a new type!! */
 static uint32_t clipboard_agent_types[1];
 static Atom clipboard_x11_targets[1];
-static XEvent clipboard_event;
 static Mutex clipboard_lock;
 static Atom clipboard_prop;
 static Atom incr_atom;
 static Atom utf8_atoms[utf8_atom_count];
 static Atom targets_atom;
+static Atom multiple_atom;
 static Bool handle_x_error = false;
 static int x_error_code;
+
+static void handle_selection_request();
 
 class DefaultEventListener: public Platform::EventListener {
 public:
@@ -829,6 +837,7 @@ static void intern_clipboard_atoms()
     if (interned) return;
     clipboard_prop = XInternAtom(x_display, "CLIPBOARD", False);
     incr_atom = XInternAtom(x_display, "INCR", False);
+    multiple_atom = XInternAtom(x_display, "MULTIPLE", False);
     targets_atom = XInternAtom(x_display, "TARGETS", False);
     for(i = 0; i < utf8_atom_count; i++)
         utf8_atoms[i] = XInternAtom(x_display, utf8_atom_names[i], False);
@@ -2278,28 +2287,27 @@ static void realloc_clipboard_data_space(uint32_t size)
     clipboard_data = newbuf;
 }
 
-// FIXME: use INCR for large data transfers
-static void send_selection_notify(Atom type)
+static void send_selection_notify(Atom prop, int process_next_req)
 {
-    Window requestor_win = clipboard_event.xselectionrequest.requestor;
-    Atom prop = clipboard_event.xselectionrequest.property;
-    XEvent res;
+    XEvent res, *event = &next_selection_request->event;
+    selection_request *old_request;
 
-    if (type != None) {
-        XChangeProperty(x_display, requestor_win, prop, type, 8, PropModeReplace,
-                        (unsigned char *)clipboard_data, clipboard_data_size);
-        res.xselection.property = prop;
-    } else {
-        res.xselection.property = None;
-    }    
+    res.xselection.property = prop;
     res.xselection.type = SelectionNotify;
-    res.xselection.display = clipboard_event.xselectionrequest.display;
-    res.xselection.requestor = requestor_win;
-    res.xselection.selection = clipboard_event.xselectionrequest.selection;
-    res.xselection.target = clipboard_event.xselectionrequest.target;
-    res.xselection.time = clipboard_event.xselectionrequest.time;
-    XSendEvent(x_display, requestor_win, 0, 0, &res);
+    res.xselection.display = event->xselectionrequest.display;
+    res.xselection.requestor = event->xselectionrequest.requestor;
+    res.xselection.selection = event->xselectionrequest.selection;
+    res.xselection.target = event->xselectionrequest.target;
+    res.xselection.time = event->xselectionrequest.time;
+    XSendEvent(x_display, event->xselectionrequest.requestor, 0, 0, &res);
     XFlush(x_display);
+
+    old_request = next_selection_request;
+    next_selection_request = next_selection_request->next;
+    delete old_request;
+
+    if (process_next_req)
+        handle_selection_request();
 }
 
 static void print_targets(const char *action, Atom *atoms, int c)
@@ -2313,7 +2321,7 @@ static void print_targets(const char *action, Atom *atoms, int c)
 
 static void send_targets(XEvent& request_event)
 {
-    XEvent res;
+    /* TODO Add support for more types here */
     /* Warning the size of this needs to be increased each time we add support
        for a new type, or the atom count of an existing type changes */
     Atom targets[4] = { targets_atom, };
@@ -2339,17 +2347,8 @@ static void send_targets(XEvent& request_event)
     XChangeProperty(x_display, requestor_win, prop, XA_ATOM, 32,
                     PropModeReplace, (unsigned char *)&targets,
                     target_count);
-
-    res.xselection.property = prop;
-    res.xselection.type = SelectionNotify;
-    res.xselection.display = request_event.xselectionrequest.display;
-    res.xselection.requestor = requestor_win;
-    res.xselection.selection = request_event.xselectionrequest.selection;
-    res.xselection.target = targets_atom;
-    res.xselection.time = request_event.xselectionrequest.time;
-    XSendEvent(x_display, requestor_win, 0, 0, &res);
-    XFlush(x_display);
     print_targets("sent", targets, target_count);
+    send_selection_notify(prop, 1);
 }
 
 static int get_selection(XEvent &event, Atom type, Atom prop, int format,
@@ -2547,6 +2546,44 @@ static void handle_selection_notify(XEvent& event, bool incr)
     get_selection_free(data, incr);
 }
 
+static void handle_selection_request()
+{
+    XEvent *event;
+    uint32_t type = VD_AGENT_CLIPBOARD_NONE;
+
+    if (!next_selection_request)
+        return;
+
+    event = &next_selection_request->event;
+
+    if (Platform::get_clipboard_owner() != Platform::owner_guest) {
+        LOG_INFO("received selection request event for target %s, "
+                 "while clipboard not owned by guest",
+                 atom_name(event->xselectionrequest.target));
+        send_selection_notify(None, 1);
+        return;
+    }
+
+    if (event->xselectionrequest.target == multiple_atom) {
+        LOG_WARN("multiple target not supported");
+        send_selection_notify(None, 1);
+        return;
+    }
+
+    if (event->xselectionrequest.target == targets_atom) {
+        send_targets(*event);
+        return;
+    }
+
+    type = get_clipboard_type(event->xselectionrequest.target);
+    if (type == VD_AGENT_CLIPBOARD_NONE) {
+        send_selection_notify(None, 1);
+        return;
+    }
+
+    clipboard_listener->on_clipboard_request(type);
+}
+
 static void root_win_proc(XEvent& event)
 {
 
@@ -2600,25 +2637,26 @@ static void root_win_proc(XEvent& event)
     switch (event.type) {
     case SelectionRequest: {
         Lock lock(clipboard_lock);
-        XSelectionRequestEvent* selection_request = (XSelectionRequestEvent*)&event;
-        
-        if (selection_request->target == targets_atom) {
-            send_targets(event);
+        struct selection_request *req, *new_req;
+
+        new_req = new selection_request;
+        assert(new_req);
+
+        new_req->event = event;
+        new_req->next = NULL;
+
+        if (!next_selection_request) {
+            next_selection_request = new_req;
+            handle_selection_request();
             break;
         }
-        
-        clipboard_event = event;
-        uint32_t type = get_clipboard_type(selection_request->target);
-        if (!type) {
-            LOG_INFO("Unsupported selection type %s", atom_name(selection_request->target));
-            send_selection_notify(None);
-            break;
-        }
-        if (clipboard_data_size > 0) {
-            send_selection_notify(selection_request->target);
-            break;
-        }
-        clipboard_listener->on_clipboard_request(type);
+
+        /* maybe we should limit the selection_request stack depth ? */
+        req = next_selection_request;
+        while (req->next)
+            req = req->next;
+
+        req->next = new_req;
         break;
     }
     case SelectionClear:
@@ -3327,6 +3365,13 @@ void Platform::set_clipboard_owner(int new_owner)
     /* Clear pending requests and clipboard data */
     {
         Lock lock(clipboard_lock);
+
+        if (next_selection_request) {
+            LOG_INFO("selection requests pending upon clipboard owner change, clearing");
+            while (next_selection_request)
+                send_selection_notify(None, 0);
+        }
+
         clipboard_data_size = 0;
         clipboard_request_target = None;
         waiting_for_property_notify = false;
@@ -3351,23 +3396,38 @@ void Platform::set_clipboard_listener(ClipboardListener* listener)
 bool Platform::on_clipboard_notify(uint32_t type, const uint8_t* data, int32_t size)
 {
     Lock lock(clipboard_lock);
-    /* FIXME (requires selection requests queue */
-    uint32_t target = utf8_atoms[0];
+    Atom prop;
+    XEvent *event;
+    uint32_t type_from_event;
 
-    if (type == VD_AGENT_CLIPBOARD_NONE) {
-        send_selection_notify(None);
+    if (!next_selection_request) {
+        LOG_INFO("received clipboard data without an outstanding"
+                 "selection request, ignoring");
         return true;
     }
 
-    if (size > clipboard_data_space) {
-        delete clipboard_data;
-        clipboard_data = new uint8_t[size];
-        clipboard_data_space = size;
+    if (type == VD_AGENT_CLIPBOARD_NONE) {
+        send_selection_notify(None, 1);
+        return true;
     }
-    memcpy(clipboard_data, data, size);
-    clipboard_data_size = size;
-    clipboard_data_type = type;
-    send_selection_notify(target);
+
+    event = &next_selection_request->event;
+    type_from_event = get_clipboard_type(event->xselectionrequest.target);
+    if (type_from_event != type) {
+        LOG_WARN("expecting type %u clipboard data got %u",
+                 type_from_event, type);
+        send_selection_notify(None, 1);
+        return false;
+    }
+
+    prop = event->xselectionrequest.property;
+    if (prop == None)
+        prop = event->xselectionrequest.target;
+    /* FIXME: use INCR for large data transfers */
+    XChangeProperty(x_display, event->xselectionrequest.requestor, prop,
+                    event->xselectionrequest.target, 8, PropModeReplace,
+                    data, size);
+    send_selection_notify(prop, 1);
     return true;
 }
 
