@@ -2265,26 +2265,11 @@ void Platform::path_append(std::string& path, const std::string& partial_path)
 static void ensure_clipboard_data_space(uint32_t size)
 {
     if (size > clipboard_data_space) {
-        delete clipboard_data;
-        clipboard_data = NULL;
-        clipboard_data = new uint8_t[size];
+        free(clipboard_data);
+        clipboard_data = (uint8_t *)malloc(size);
         assert(clipboard_data);
         clipboard_data_space = size;
     }
-}
-
-static void realloc_clipboard_data_space(uint32_t size)
-{
-    if (size <= clipboard_data_space) {
-        return;
-    }
-    uint32_t old_alloc = clipboard_data_space;
-    clipboard_data_space = size;
-    uint8_t *newbuf = new uint8_t[clipboard_data_space];
-    assert(newbuf);
-    memcpy(newbuf, clipboard_data, old_alloc);
-    delete[] clipboard_data;
-    clipboard_data = newbuf;
 }
 
 static void send_selection_notify(Atom prop, int process_next_req)
@@ -2425,8 +2410,11 @@ static int get_selection(XEvent &event, Atom type, Atom prop, int format,
 
     if (incr) {
         if (len) {
-            if (clipboard_data_size + len > clipboard_data_space)
-                realloc_clipboard_data_space(clipboard_data_size + len);
+            if (clipboard_data_size + len > clipboard_data_space) {
+                clipboard_data_space = clipboard_data_size + len;
+                clipboard_data = (uint8_t *)realloc(clipboard_data, clipboard_data_space);
+                assert(clipboard_data);
+            }
             memcpy(clipboard_data + clipboard_data_size, data, len);
             clipboard_data_size += len;
             LOG_INFO("Appended %d bytes to buffer", len);
