@@ -2373,6 +2373,10 @@ static int get_selection(XEvent &event, Atom type, Atom prop, int format,
 
     if (!incr) {
         if (type_ret == incr_atom) {
+            if (waiting_for_property_notify) {
+                LOG_WARN("received an incr property notify while still reading another incr property");
+                goto exit;
+            }
             XSelectInput(x_display, platform_win, PropertyChangeMask);
             XDeleteProperty(x_display, platform_win, prop);
             XFlush(x_display);
