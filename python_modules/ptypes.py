@@ -240,7 +240,7 @@ class EnumBaseType(Type):
 
     def c_enumname_by_name(self, name):
         if self.has_attr("prefix"):
-            return self.attributes["prefix"][0] + self.names[value]
+            return self.attributes["prefix"][0] + name
         return codegen.prefix_underscore_upper(self.name.upper(), name)
 
     def is_primitive(self):
