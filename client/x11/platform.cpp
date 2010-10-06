@@ -3355,6 +3355,8 @@ bool Platform::on_clipboard_grab(uint32_t *types, uint32_t type_count)
 
     XSetSelectionOwner(x_display, clipboard_prop, platform_win, CurrentTime);
     XFlush(x_display);
+
+    set_clipboard_owner_unlocked(owner_guest);
     return true;
 }
 
@@ -3362,12 +3364,16 @@ int Platform::_clipboard_owner = Platform::owner_none;
 
 void Platform::set_clipboard_owner(int new_owner)
 {
+        Lock lock(clipboard_lock);
+        set_clipboard_owner_unlocked(new_owner);
+}
+
+void Platform::set_clipboard_owner_unlocked(int new_owner)
+{
     const char * const owner_str[] = { "none", "guest", "client" };
 
     /* Clear pending requests and clipboard data */
     {
-        Lock lock(clipboard_lock);
-
         if (next_selection_request) {
             LOG_INFO("selection requests pending upon clipboard owner change, clearing");
             while (next_selection_request)

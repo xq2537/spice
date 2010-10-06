@@ -1118,7 +1118,6 @@ void RedClient::dispatch_agent_message(VDAgentMessage* msg, void* data)
     case VD_AGENT_CLIPBOARD_GRAB:
         Platform::on_clipboard_grab((uint32_t *)data,
                                       msg->size / sizeof(uint32_t));
-        Platform::set_clipboard_owner(Platform::owner_guest);
         break;
     case VD_AGENT_CLIPBOARD_REQUEST:
         if (Platform::get_clipboard_owner() != Platform::owner_client) {

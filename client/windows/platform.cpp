@@ -859,6 +859,11 @@ void WinPlatform::exit_modal_loop()
 
 int Platform::_clipboard_owner = Platform::owner_none;
 
+void Platform::set_clipboard_owner_unlocked(int new_owner)
+{
+    set_clipboard_owner(new_owner);
+}
+
 void Platform::set_clipboard_owner(int new_owner)
 {
     if (new_owner == owner_none) {
@@ -885,6 +890,8 @@ bool Platform::on_clipboard_grab(uint32_t *types, uint32_t type_count)
     EmptyClipboard();
     SetClipboardData(format, NULL);
     CloseClipboard();
+
+    set_clipboard_owner(owner_guest);
     return true;
 }
 

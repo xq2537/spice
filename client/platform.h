@@ -132,6 +132,8 @@ public:
     static int  get_clipboard_owner() { return _clipboard_owner; }
 
 private:
+    static void set_clipboard_owner_unlocked(int new_owner);
+
     static int _clipboard_owner;
 };
 
