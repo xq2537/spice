@@ -3466,7 +3466,15 @@ void Platform::on_clipboard_release()
 {
     XEvent event;
 
+    if (XGetSelectionOwner(x_display, clipboard_prop) != platform_win) {
+        LOG_INFO("Platform::on_clipboard_release() called while not selection owner");
+        return;
+    }
+    /* Note there is a small race window here where another x11 app could
+       acquire selection ownership and we kick it off again, nothing we
+       can do about that :( */
     XSetSelectionOwner(x_display, clipboard_prop, None, CurrentTime);
+
     /* Make sure we process the XFixesSetSelectionOwnerNotify event caused
        by this, so we don't end up changing the clipboard owner to none, after
        it has already been re-owned because this event is still pending. */
