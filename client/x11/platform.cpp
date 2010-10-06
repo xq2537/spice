@@ -271,7 +271,6 @@ void XEventHandler::on_event()
 
         XNextEvent(&_x_display, &event);
         if (event.xany.window == None) {
-            LOG_WARN("invalid window");
             continue;
         }
 
