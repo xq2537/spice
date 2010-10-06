@@ -105,6 +105,7 @@ static uint32_t get_clipboard_format(uint32_t type) {
     return iter->format;
 }
 
+//FIXME: handle multiple types
 static uint32_t get_available_clipboard_type()
 {
     uint32_t type = 0;
@@ -149,6 +150,7 @@ static LRESULT CALLBACK PlatformWinProc(HWND hWnd, UINT message, WPARAM wParam, 
         break;
     case WM_DRAWCLIPBOARD:
         if (!clipboard_changer) {
+            //FIXME: handle multiple types
             uint32_t type = get_available_clipboard_type();            
             if (type) {
                 clipboard_listener->on_clipboard_grab(&type, 1);
@@ -865,12 +867,15 @@ void Platform::set_clipboard_owner_unlocked(int new_owner)
 
 void Platform::set_clipboard_owner(int new_owner)
 {
+    const char * const owner_str[] = { "none", "guest", "client" };
+
     if (new_owner == owner_none) {
         clipboard_listener->on_clipboard_release();
 
         /* FIXME clear cached clipboard type info and data */
     }
     _clipboard_owner = new_owner;
+    LOG_INFO("new clipboard owner: %s", owner_str[new_owner]);
 }
 
 bool Platform::on_clipboard_grab(uint32_t *types, uint32_t type_count)
@@ -908,6 +913,10 @@ bool Platform::on_clipboard_notify(uint32_t type, const uint8_t* data, int32_t s
     UINT format;
     bool ret = false;
 
+    if (type == VD_AGENT_CLIPBOARD_NONE) {
+        SetEvent(clipboard_event);
+        return true;
+    }
     // Get the required clipboard size
     switch (type) {
     case VD_AGENT_CLIPBOARD_UTF8_TEXT:
@@ -920,7 +929,7 @@ bool Platform::on_clipboard_notify(uint32_t type, const uint8_t* data, int32_t s
         break;
     default:
         LOG_INFO("Unsupported clipboard type %u", type);
-        return false;
+        return true;
     }
 
     // Allocate and lock clipboard memory
