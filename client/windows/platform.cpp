@@ -64,11 +64,6 @@ static Platform::ClipboardListener* clipboard_listener = &default_clipboard_list
 static HWND next_clipboard_viewer_win = NULL;
 static HANDLE clipboard_event = NULL;
 
-// clipboard_changer says whether the client was the last one to change cliboard, for loop
-// prevention. It's initialized to true so we ignore the first clipboard change event which
-// happens right when we call SetClipboardViewer().
-static bool clipboard_changer = true;
-
 static const int CLIPBOARD_TIMEOUT_MS = 10000;
 
 typedef struct ClipboardFormat {
@@ -149,7 +144,8 @@ static LRESULT CALLBACK PlatformWinProc(HWND hWnd, UINT message, WPARAM wParam, 
         }
         break;
     case WM_DRAWCLIPBOARD:
-        if (!clipboard_changer) {
+        if (platform_win != GetClipboardOwner()) {
+            Platform::set_clipboard_owner(Platform::owner_none);
             //FIXME: handle multiple types
             uint32_t type = get_available_clipboard_type();            
             if (type) {
@@ -157,8 +153,6 @@ static LRESULT CALLBACK PlatformWinProc(HWND hWnd, UINT message, WPARAM wParam, 
             } else {
                 LOG_INFO("Unsupported clipboard format");
             }
-        } else {
-            clipboard_changer = false;
         }
         if (next_clipboard_viewer_win) {
             SendMessage(next_clipboard_viewer_win, message, wParam, lParam);
@@ -890,7 +884,6 @@ bool Platform::on_clipboard_grab(uint32_t *types, uint32_t type_count)
     if (!OpenClipboard(platform_win)) {
         return false;
     }
-    clipboard_changer = true;
     EmptyClipboard();
     SetClipboardData(format, NULL);
     CloseClipboard();
