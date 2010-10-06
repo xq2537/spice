@@ -101,6 +101,21 @@ void ClipboardRequestEvent::response(AbstractProcessLoop& events_loop)
         VD_AGENT_CLIPBOARD_REQUEST, sizeof(request), &request);
 }
 
+void ClipboardNotifyEvent::response(AbstractProcessLoop& events_loop)
+{
+    static_cast<RedClient*>(events_loop.get_owner())->send_agent_clipboard_notify_message(
+        _type, _data, _size);
+}
+
+void ClipboardReleaseEvent::response(AbstractProcessLoop& events_loop)
+{
+    if (Platform::get_clipboard_owner() != Platform::owner_client)
+        return;
+
+    static_cast<RedClient*>(events_loop.get_owner())->send_agent_clipboard_message(
+        VD_AGENT_CLIPBOARD_RELEASE, 0, NULL);
+}
+
 Migrate::Migrate(RedClient& client)
     : _client (client)
     , _running (false)
@@ -861,6 +876,18 @@ void RedClient::on_clipboard_request(uint32_t type)
 
 void RedClient::on_clipboard_notify(uint32_t type, uint8_t* data, int32_t size)
 {
+    AutoRef<ClipboardNotifyEvent> event(new ClipboardNotifyEvent(type, data, size));
+    get_process_loop().push_event(*event);
+}
+
+void RedClient::on_clipboard_release()
+{
+    AutoRef<ClipboardReleaseEvent> event(new ClipboardReleaseEvent());
+    get_process_loop().push_event(*event);
+}
+
+void RedClient::send_agent_clipboard_notify_message(uint32_t type, uint8_t *data, uint32_t size)
+{
     ASSERT(size && data);
     if (!_agent_connected) {
         return;
@@ -890,12 +917,6 @@ void RedClient::on_clipboard_notify(uint32_t type, uint8_t* data, int32_t size)
     if (_agent_tokens) {
         do_send_agent_clipboard();
     }
-}
-
-void RedClient::on_clipboard_release()
-{
-    if (Platform::get_clipboard_owner() == Platform::owner_client)
-        send_agent_clipboard_message(VD_AGENT_CLIPBOARD_RELEASE, 0, NULL);
 }
 
 void RedClient::set_mouse_mode(uint32_t supported_modes, uint32_t current_mode)

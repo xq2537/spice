@@ -173,6 +173,35 @@ private:
     uint32_t _type;
 };
 
+class ClipboardNotifyEvent : public Event {
+public:
+    ClipboardNotifyEvent(uint32_t type, uint8_t *data, uint32_t size)
+    {
+        _type = type;
+        _data = new uint8_t [size];
+        memcpy(_data, data, size);
+        _size = size;
+    }
+    ~ClipboardNotifyEvent()
+    {
+        delete[] _data;
+    }
+
+    virtual void response(AbstractProcessLoop& events_loop);
+
+private:
+    uint32_t _type;
+    uint8_t *_data;
+    uint32_t _size;
+};
+
+class ClipboardReleaseEvent : public Event {
+public:
+    ClipboardReleaseEvent() {}
+    virtual void response(AbstractProcessLoop& events_loop);
+};
+
+
 class RedClient: public RedChannel,
                  public Platform::ClipboardListener {
 public:
@@ -180,6 +209,8 @@ public:
     friend class Migrate;
     friend class ClipboardGrabEvent;
     friend class ClipboardRequestEvent;
+    friend class ClipboardNotifyEvent;
+    friend class ClipboardReleaseEvent;
 
     RedClient(Application& application);
     ~RedClient();
@@ -265,6 +296,7 @@ private:
                                         uint32_t msg_size);
     void do_send_agent_clipboard();
     void send_agent_clipboard_message(uint32_t message_type, uint32_t size = 0, void* data = NULL);
+    void send_agent_clipboard_notify_message(uint32_t type, uint8_t *data, uint32_t size);
 
     ChannelFactory* find_factory(uint32_t type);
     void create_channel(uint32_t type, uint32_t id);
