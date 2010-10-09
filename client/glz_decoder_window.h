@@ -33,7 +33,7 @@ typedef int DecodedImageWinId;
 
 class GlzDecoderWindow {
 public:
-    GlzDecoderWindow(int pixels_capacity, GlzDecoderDebug &debug_calls);
+    GlzDecoderWindow(GlzDecoderDebug &debug_calls);
     virtual ~GlzDecoderWindow();
 
     DecodedImageWinId pre_decode(uint64_t image_id, uint64_t relative_head_id);
@@ -49,8 +49,6 @@ public:
 
     /* NOTE - clear mustn't be called if the window is currently used by a decoder*/
     void clear();
-
-    void set_pixels_capacity(int pixels_capacity);
 
 private:
     void wait_for_image(int index);
@@ -75,14 +73,12 @@ private:
     void release_images();
 
 private:
-    int _pixels_capacity;
     GlzDecodedImage **_images; // cyclic window
     int _head_idx;            // index in images array (not image id)
     uint64_t _tail_image_id;
     int _images_capacity;
     int _n_images;            // _n_images counts all the images in
                               // the window, including the missing ones
-    uint64_t _n_pixels;
 
     std::list<uint64_t> _missing_list;
 

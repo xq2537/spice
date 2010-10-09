@@ -367,7 +367,7 @@ RedClient::RedClient(Application& application)
     , _agent_caps_size(0)
     , _agent_caps(NULL)
     , _migrate (*this)
-    , _glz_window (0, _glz_debug)
+    , _glz_window (_glz_debug)
 {
     Platform::set_clipboard_listener(this);
     MainChannelLoop* message_loop = static_cast<MainChannelLoop*>(get_message_handler());
@@ -951,7 +951,6 @@ void RedClient::handle_init(RedPeer::InMessage* message)
     _connection_id = init->session_id;
     set_mm_time(init->multi_media_time);
     calc_pixmap_cach_and_glz_window_size(init->display_channels_hint, init->ram_hint);
-    _glz_window.set_pixels_capacity(_glz_window_size);
     set_mouse_mode(init->supported_mouse_modes, init->current_mouse_mode);
     _agent_tokens = init->agent_tokens;
     _agent_connected = !!init->agent_connected;

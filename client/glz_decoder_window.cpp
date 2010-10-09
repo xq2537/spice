@@ -21,21 +21,12 @@
 #include "utils.h"
 
 #define INIT_IMAGES_CAPACITY 100
-#define WIN_OVERFLOW_FACTOR 1.5
 #define WIN_REALLOC_FACTOR 1.5
 
-GlzDecoderWindow::GlzDecoderWindow(int pixels_capacity, GlzDecoderDebug &debug_calls)
-    : _pixels_capacity (pixels_capacity)
-    , _aborting (false)
+GlzDecoderWindow::GlzDecoderWindow(GlzDecoderDebug &debug_calls)
+    : _aborting (false)
     , _debug_calls (debug_calls)
 {
-    if (_pixels_capacity > LZ_MAX_WINDOW_SIZE) {
-        std::string erro_str;
-        string_printf(erro_str, "Glz Window capacity exceeds the limit %d",
-                      _pixels_capacity);
-        _debug_calls.error(erro_str);
-    }
-
     _images_capacity = INIT_IMAGES_CAPACITY;
     _images = new  GlzDecodedImage*[_images_capacity];
     if (!_images) {
@@ -105,19 +96,6 @@ void GlzDecoderWindow::clear()
     init();
 }
 
-void GlzDecoderWindow::set_pixels_capacity(int pixels_capacity)
-{
-    Lock lock(_win_modifiers_mutex);
-
-    if (pixels_capacity > LZ_MAX_WINDOW_SIZE) {
-        std::string erro_str;
-        string_printf(erro_str, "Glz Window capacity exceeds the limit %d",
-                      pixels_capacity);
-        _debug_calls.error(erro_str);
-    }
-    _pixels_capacity = pixels_capacity;
-}
-
 void GlzDecoderWindow::init()
 {
     _missing_list.clear();
@@ -127,7 +105,6 @@ void GlzDecoderWindow::init()
     _head_idx = 0;
     _tail_image_id = 0;
     _n_images = 1;
-    _n_pixels = 0;
 }
 
 void GlzDecoderWindow::release_images()
@@ -146,16 +123,10 @@ inline bool GlzDecoderWindow::is_empty()
     return (!_n_images);
 }
 
-/* approximated overflow. Considers only the size that currently occupies the window and
-   not the size of the missing images. TODO: consider other measures */
 inline bool GlzDecoderWindow::will_overflow(uint64_t image_id, uint64_t relative_head_id)
 {
     if (image_id <= _tail_image_id) {
         return false;
-    }
-
-    if (_n_pixels > (WIN_OVERFLOW_FACTOR * _pixels_capacity)) {
-        return true;
     }
 
     if (!_missing_list.empty() && (_missing_list.front() < relative_head_id)) {
@@ -276,7 +247,6 @@ void GlzDecoderWindow::add_decoded_image(GlzDecodedImage *image)
     Lock lock(_new_image_mutex);
     GLZ_ASSERT(_debug_calls, image->get_id() <= _tail_image_id);
     _images[calc_image_win_idx(image->get_id())] = image;
-    _n_pixels += image->get_size();
     _new_image_cond.notify_all();
 }
 
@@ -339,7 +309,6 @@ inline void GlzDecoderWindow::remove_head(uint64_t new_head_image_id)
 
     for (int i = 0; i < n_images_remove; i++) {
         int index = (_head_idx + i) % _images_capacity;
-        _n_pixels -= _images[index]->get_size();
         delete _images[index];
         _images[index] = NULL;
     }
