@@ -61,13 +61,19 @@ void XIcon::get_pixmaps(int screen, Pixmap& out_pixmap, Pixmap& out_mask)
     Pixmap mask = None;
     GC gc = NULL;
     try {
+        XLockDisplay(x_display);
         pixmap = XCreatePixmap(x_display, root_window, _raw_icon->width, _raw_icon->height, 24);
+        XUnlockDisplay(x_display);
         if (pixmap == None) {
             THROW("create pixmap failed");
         }
 
         XWindowAttributes attr;
+
+        XLockDisplay(x_display);
         XGetWindowAttributes(x_display, root_window, &attr);
+        XUnlockDisplay(x_display);
+
         XImage image;
         memset(&image, 0, sizeof(image));
         image.width = _raw_icon->width;
@@ -94,14 +100,18 @@ void XIcon::get_pixmaps(int screen, Pixmap& out_pixmap, Pixmap& out_mask)
         gc_vals.foreground = ~0;
         gc_vals.background = 0;
         gc_vals.plane_mask = AllPlanes;
+
+        XLockDisplay(x_display);
         gc = XCreateGC(x_display, pixmap, GCFunction | GCForeground | GCBackground | GCPlaneMask,
                        &gc_vals);
         XPutImage(x_display, pixmap, gc, &image, 0, 0, 0, 0, image.width, image.height);
+        // HDG: why ?? XFlush should suffice
         XSync(x_display, False);
         XFreeGC(x_display, gc);
         gc = NULL;
 
         mask = XCreatePixmap(x_display, root_window, _raw_icon->width, _raw_icon->height, 1);
+        XUnlockDisplay(x_display);
         if (mask == None) {
             THROW("create mask failed");
         }
@@ -121,10 +131,13 @@ void XIcon::get_pixmaps(int screen, Pixmap& out_pixmap, Pixmap& out_mask)
             THROW("init image failed");
         }
 
+        XLockDisplay(x_display);
         gc = XCreateGC(x_display, mask, GCFunction | GCForeground | GCBackground | GCPlaneMask,
                        &gc_vals);
         XPutImage(x_display, mask, gc, &image, 0, 0, 0, 0, image.width, image.height);
+        // HDG: why ?? XFlush should suffice
         XSync(x_display, False);
+        XUnlockDisplay(x_display);
         XFreeGC(x_display, gc);
     } catch (...) {
         if (gc) {

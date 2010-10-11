@@ -216,7 +216,6 @@ static inline void copy_to_drawable_from_pixmap(const RedDrawable_p* dest,
                          dest->source.x_drawable.gc, source->pixmap.x_image,
                          src_x, src_y, area.left + offset.x, area.top + offset.y,
                          area.right - area.left, area.bottom - area.top, false);
-            XSync(XPlatform::get_display(), 0);
         } else {
             XPutImage(XPlatform::get_display(), dest->source.x_drawable.drawable,
                       dest->source.x_drawable.gc, source->pixmap.x_image, src_x,
@@ -242,7 +241,6 @@ static inline void copy_to_drawable_from_pixmap(const RedDrawable_p* dest,
                          dest->source.x_drawable.gc, image,
                          0, 0, area.left + offset.x, area.top + offset.y,
                          area.right - area.left, area.bottom - area.top, false);
-            XSync(XPlatform::get_display(), 0);
         } else {
             XPutImage(XPlatform::get_display(), dest->source.x_drawable.drawable,
                       dest->source.x_drawable.gc, image,
@@ -252,6 +250,7 @@ static inline void copy_to_drawable_from_pixmap(const RedDrawable_p* dest,
 
         free_temp_image(image, shminfo, pixman_image);
     }
+    XFlush(XPlatform::get_display());
 }
 
 static inline void copy_to_x_drawable(const RedDrawable_p* dest,
@@ -628,6 +627,7 @@ static inline void fill_drawable(RedDrawable_p* dest, const SpiceRect& area, rgb
     Drawable drawable = dest->source.x_drawable.drawable;
     GC gc = dest->source.x_drawable.gc;
 
+    XLockDisplay(XPlatform::get_display());
     Colormap color_map = DefaultColormap(XPlatform::get_display(),
                                          DefaultScreen(XPlatform::get_display()));
     XColor x_color;
@@ -639,6 +639,7 @@ static inline void fill_drawable(RedDrawable_p* dest, const SpiceRect& area, rgb
     if (!XAllocColor(XPlatform::get_display(), color_map, &x_color)) {
         LOG_WARN("color map failed");
     }
+    XUnlockDisplay(XPlatform::get_display());
 
     XGCValues gc_vals;
     gc_vals.foreground = x_color.pixel;
@@ -724,6 +725,7 @@ static inline void frame_drawable(RedDrawable_p* dest, const SpiceRect& area, rg
     Drawable drawable = dest->source.x_drawable.drawable;
     GC gc = dest->source.x_drawable.gc;
 
+    XLockDisplay(XPlatform::get_display());
     Colormap color_map = DefaultColormap(XPlatform::get_display(),
                                          DefaultScreen(XPlatform::get_display()));
     XColor x_color;
@@ -735,6 +737,7 @@ static inline void frame_drawable(RedDrawable_p* dest, const SpiceRect& area, rg
     if (!XAllocColor(XPlatform::get_display(), color_map, &x_color)) {
         LOG_WARN("color map failed");
     }
+    XUnlockDisplay(XPlatform::get_display());
 
     XGCValues gc_vals;
     gc_vals.foreground = x_color.pixel;

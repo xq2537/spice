@@ -65,7 +65,7 @@
 #define BOOL bool
 #include "named_pipe.h"
 
-//#define X_DEBUG_SYNC(display) XSync(display, False)
+//#define X_DEBUG_SYNC(display) do { XLockDisplay(display); XSync(display, False); XUnlockDisplay(display); } while(0)
 #define X_DEBUG_SYNC(display)
 #ifdef HAVE_XRANDR12
 #define USE_XRANDR_1_2
@@ -175,10 +175,16 @@ static Platform::ClipboardListener* clipboard_listener = &default_clipboard_list
 
 static const char *atom_name(Atom atom)
 {
+    const char *name;
+
     if (atom == None)
         return "None";
 
-    return XGetAtomName(x_display, atom);
+    XLockDisplay(x_display);
+    name = XGetAtomName(x_display, atom);
+    XUnlockDisplay(x_display);
+
+    return name;
 }
 
 static uint32_t get_clipboard_type(Atom target) {
@@ -265,6 +271,7 @@ XEventHandler::XEventHandler(Display& x_display, XContext& win_proc_context)
 
 void XEventHandler::on_event()
 {
+    XLockDisplay(x_display);
     while (XPending(&_x_display)) {
         XPointer proc_pointer;
         XEvent event;
@@ -281,8 +288,11 @@ void XEventHandler::on_event()
         if (XFindContext(&_x_display, event.xany.window, _win_proc_context, &proc_pointer)) {
             THROW("no window proc");
         }
+        XUnlockDisplay(x_display);
         ((XPlatform::win_proc_t)proc_pointer)(event);
+        XLockDisplay(x_display);
     }
+    XUnlockDisplay(x_display);
 }
 
 Display* XPlatform::get_display()
@@ -314,6 +324,12 @@ XImage *XPlatform::create_x_shm_image(RedDrawable::Format format,
 {
     XImage *image;
     XShmSegmentInfo *shminfo;
+
+    /* We need to lock the display early, and force any pending requests to
+       be processed, to make sure that any errors reported by
+       handle_x_errors_stop() are actually ours */
+    XLockDisplay(XPlatform::get_display());
+    XSync(XPlatform::get_display(), False);
 
     shminfo = new XShmSegmentInfo;
     shminfo->shmid = -1;
@@ -375,6 +391,8 @@ XImage *XPlatform::create_x_shm_image(RedDrawable::Format format,
        the segment if the client crashes. */
     shmctl(shminfo->shmid, IPC_RMID, 0);
 
+    XUnlockDisplay(XPlatform::get_display());
+
     image->data = (char *)shminfo->shmaddr;
 
     *shminfo_out = shminfo;
@@ -390,6 +408,7 @@ err2:
     }
 
 err1:
+    XUnlockDisplay(XPlatform::get_display());
     delete shminfo;
     return NULL;
 }
@@ -422,6 +441,7 @@ XImage *XPlatform::create_x_image(RedDrawable::Format format,
         THROW("Out of memory");
     }
 
+    XLockDisplay(XPlatform::get_display());
     if (format == RedDrawable::A1) {
         image = XCreateImage(XPlatform::get_display(),
                              NULL, 1, XYBitmap,
@@ -431,6 +451,7 @@ XImage *XPlatform::create_x_image(RedDrawable::Format format,
                              visual, depth, ZPixmap,
                              0, (char *)data, width, height, 32, stride);
     }
+    XUnlockDisplay(XPlatform::get_display());
 
     return image;
 }
@@ -440,6 +461,7 @@ void XPlatform::free_x_image(XImage *image,
                              XShmSegmentInfo *shminfo)
 {
     if (shminfo) {
+        XLockDisplay(XPlatform::get_display());
         XShmDetach(XPlatform::get_display(), shminfo);
     }
     if (image) {
@@ -448,6 +470,7 @@ void XPlatform::free_x_image(XImage *image,
     if (shminfo) {
         XSync(XPlatform::get_display(), False);
         shmdt(shminfo->shmaddr);
+        XUnlockDisplay(XPlatform::get_display());
         delete shminfo;
     }
 }
@@ -477,14 +500,21 @@ XIC XPlatform::get_input_context()
 
 void XPlatform::set_win_proc(Window win, win_proc_t proc)
 {
-    if (XSaveContext(x_display, win, win_proc_context, (XPointer)proc)) {
+    int res;
+    
+    XLockDisplay(x_display);
+    res = XSaveContext(x_display, win, win_proc_context, (XPointer)proc);
+    XUnlockDisplay(x_display);
+    if (res) {
         THROW("set win proc failed");
     }
 }
 
 void XPlatform::cleare_win_proc(Window win)
 {
+    XLockDisplay(x_display);
     XDeleteContext(x_display, win, win_proc_context);
+    XUnlockDisplay(x_display);
 }
 
 void Platform::send_quit_request()
@@ -651,12 +681,15 @@ static void show_scren_info()
     int maxWidth;
     int maxHeight;
 
+    XLockDisplay(x_display);
     AutoScreenRes res(XRRGetScreenResources(x_display, root_window));
+    XUnlockDisplay(x_display);
 
     if (!res.valid()) {
         throw Exception(fmt("%s: get screen resources failed") % __FUNCTION__);
     }
 
+    XLockDisplay(x_display);
     XRRGetScreenSizeRange(x_display, root_window, &minWidth, &minHeight,
                           &maxWidth, &maxHeight);
     printf("screen: min %dx%d max %dx%d\n", minWidth, minHeight,
@@ -706,6 +739,7 @@ static void show_scren_info()
                crtc_info->x, crtc_info->y,
                crtc_info->width, crtc_info->height, crtc_info->mode);
     }
+    XUnlockDisplay(x_display);
 }
 
 #endif
@@ -767,7 +801,10 @@ XScreen::XScreen(Display* display, int screen)
     int root = RootWindow(display, screen);
 
     XWindowAttributes attrib;
+
+    XLockDisplay(display);
     XGetWindowAttributes(display, root, &attrib);
+    XUnlockDisplay(display);
 
     _position.x = attrib.x;
     _position.y = attrib.y;
@@ -837,12 +874,16 @@ static void intern_clipboard_atoms()
     int i;
     static bool interned = false;
     if (interned) return;
+
+    XLockDisplay(x_display);
     clipboard_prop = XInternAtom(x_display, "CLIPBOARD", False);
     incr_atom = XInternAtom(x_display, "INCR", False);
     multiple_atom = XInternAtom(x_display, "MULTIPLE", False);
     targets_atom = XInternAtom(x_display, "TARGETS", False);
     for(i = 0; i < utf8_atom_count; i++)
         utf8_atoms[i] = XInternAtom(x_display, utf8_atom_names[i], False);
+
+    XUnlockDisplay(x_display);
 
     interned = true;
 }
@@ -856,7 +897,10 @@ DynamicScreen::DynamicScreen(Display* display, int screen, int& next_mon_id)
 {
     X_DEBUG_SYNC(display);
     //FIXME: replace RootWindow() in other refs as well?
+    XLockDisplay(display);
     platform_win = XCreateSimpleWindow(display, RootWindow(display, screen), 0, 0, 1, 1, 0, 0, 0);
+    XUnlockDisplay(display);
+
     LOG_INFO("platform_win: %u", (unsigned int)platform_win);
     intern_clipboard_atoms();
     XSelectInput(display, platform_win, StructureNotifyMask);
@@ -907,7 +951,10 @@ void DynamicScreen::do_set_mode(int width, int height)
     int num_sizes;
 
     X_DEBUG_SYNC(get_display());
+
+    XLockDisplay(get_display());
     XRRScreenSize* sizes = XRRSizes(get_display(), get_screen(), &num_sizes);
+    XUnlockDisplay(get_display());
 
     typedef std::set<SizeInfo, SizeCompare> SizesSet;
     SizesSet sizes_set;
@@ -932,7 +979,10 @@ void DynamicScreen::do_restore()
     }
     int num_sizes;
 
+    XLockDisplay(get_display());
     XRRScreenSize* sizes = XRRSizes(get_display(), get_screen(), &num_sizes);
+    XUnlockDisplay(get_display());
+
     for (int i = 0; i < num_sizes; i++) {
         if (sizes[i].width == _saved_width && sizes[i].height == _saved_height) {
             set_screen_size(i);
@@ -949,7 +999,11 @@ bool DynamicScreen::set_screen_size(int size_index)
     Window root_window = RootWindow(get_display(), get_screen());
     XRRScreenConfiguration* config;
 
-    if (!(config = XRRGetScreenInfo(get_display(), root_window))) {
+    XLockDisplay(get_display());
+    config = XRRGetScreenInfo(get_display(), root_window);
+    XUnlockDisplay(get_display());
+    
+    if (!config) {
         LOG_WARN("get screen info failed");
         return false;
     }
@@ -965,7 +1019,11 @@ bool DynamicScreen::set_screen_size(int size_index)
     X_DEBUG_SYNC(get_display());
 
     int num_sizes;
+
+    XLockDisplay(get_display());
     XRRScreenSize* sizes = XRRSizes(get_display(), get_screen(), &num_sizes);
+    XUnlockDisplay(get_display());
+
     if (num_sizes <= size_index) {
         THROW("invalid sizes size");
     }
@@ -1091,10 +1149,13 @@ MultyMonScreen::MultyMonScreen(Display* display, int screen, int& next_mon_id)
 {
     X_DEBUG_SYNC(get_display());
     Window root_window = RootWindow(display, screen);
+
+    XLockDisplay(display);
     XRRGetScreenSizeRange(display, root_window, &_min_width, &_min_height,
                           &_max_width, &_max_height);
-
     AutoScreenRes res(XRRGetScreenResources(display, root_window));
+    XUnlockDisplay(display);
+
     if (!res.valid()) {
         THROW("get screen resources failed");
     }
@@ -1102,6 +1163,7 @@ MultyMonScreen::MultyMonScreen(Display* display, int screen, int& next_mon_id)
 #ifdef SHOW_SCREEN_INFO
     show_scren_info();
 #endif
+    XLockDisplay(display);
     try {
         for (int i = 0; i < res->ncrtc; i++) {
             AutoCrtcInfo crtc_info(XRRGetCrtcInfo(display, res.get(), res->crtcs[i]));
@@ -1126,12 +1188,17 @@ MultyMonScreen::MultyMonScreen(Display* display, int screen, int& next_mon_id)
 
             _monitors.push_back(new XMonitor(*this, next_mon_id++, res->crtcs[i]));
         }
+        XUnlockDisplay(display);
     } catch (...) {
+        XUnlockDisplay(display);
         monitors_cleanup();
         throw;
     }
 
+    XLockDisplay(display);
     platform_win = XCreateSimpleWindow(display, RootWindow(display, screen), 0, 0, 1, 1, 0, 0, 0);
+    XUnlockDisplay(display);
+
     LOG_INFO("platform_win: %u", (unsigned int)platform_win);
     intern_clipboard_atoms();
     XSelectInput(display, platform_win, StructureNotifyMask);
@@ -1851,13 +1918,18 @@ void XMonitor::update_position()
     Display* display = _container.get_display();
     X_DEBUG_SYNC(display);
     Window root_window = RootWindow(display, _container.get_screen());
+
+    XLockDisplay(display);
     AutoScreenRes res(XRRGetScreenResources(display, root_window));
+    XUnlockDisplay(display);
 
     if (!res.valid()) {
         THROW("get screen resources failed");
     }
 
+    XLockDisplay(display);
     AutoCrtcInfo crtc_info(XRRGetCrtcInfo(display, res.get(), _crtc));
+    XUnlockDisplay(display);
 
     ASSERT(crtc_info->noutput);
 
@@ -1887,7 +1959,9 @@ void XMonitor::update_position()
         //todo: set valid subpixel order in case all outputs share the same type
         _subpixel_order = RED_SUBPIXEL_ORDER_UNKNOWN;
     } else {
+        XLockDisplay(display);
         AutoOutputInfo output_info(XRRGetOutputInfo(display, res.get(), crtc_info->outputs[0]));
+        XUnlockDisplay(display);
 
         switch (output_info->subpixel_order) {
         case SubPixelUnknown:
@@ -1924,8 +1998,10 @@ void XMonitor::update_position()
 bool XMonitor::finde_mode_in_outputs(RRMode mode, int start_index, XRRScreenResources* res)
 {
     int i, j;
+    bool retval = true;
 
     X_DEBUG_SYNC(_container.get_display());
+    XLockDisplay(_container.get_display());
     for (i = start_index; i < _noutput; i++) {
         AutoOutputInfo output_info(XRRGetOutputInfo(_container.get_display(), res, _outputs[i]));
         for (j = 0; j < output_info->nmode; j++) {
@@ -1934,11 +2010,13 @@ bool XMonitor::finde_mode_in_outputs(RRMode mode, int start_index, XRRScreenReso
             }
         }
         if (j == output_info->nmode) {
-            return false;
+            retval = false;
+            break;
         }
     }
+    XUnlockDisplay(_container.get_display());
     X_DEBUG_SYNC(_container.get_display());
-    return true;
+    return retval;
 }
 
 bool XMonitor::finde_mode_in_clones(RRMode mode, XRRScreenResources* res)
@@ -1975,7 +2053,11 @@ XRRModeInfo* XMonitor::find_mode(int width, int height, XRRScreenResources* res)
     typedef std::set<ModeInfo, ModeCompare> ModesSet;
     ModesSet modes_set;
     X_DEBUG_SYNC(_container.get_display());
+
+    XLockDisplay(_container.get_display());
     AutoOutputInfo output_info(XRRGetOutputInfo(_container.get_display(), res, _outputs[0]));
+    XUnlockDisplay(_container.get_display());
+
     for (int i = 0; i < output_info->nmode; i++) {
         XRRModeInfo* mode_inf = find_mod(res, output_info->modes[i]);
         if (mode_inf->width >= width && mode_inf->height >= height) {
@@ -2010,7 +2092,11 @@ void XMonitor::do_set_mode(int width, int height)
     Display* display = _container.get_display();
     X_DEBUG_SYNC(display);
     Window root_window = RootWindow(display, _container.get_screen());
+
+    XLockDisplay(display);
     AutoScreenRes res(XRRGetScreenResources(display, root_window));
+    XUnlockDisplay(display);
+
     if (!res.valid()) {
         THROW("get screen resource failed");
     }
@@ -2041,7 +2127,11 @@ void XMonitor::disable()
     Display* display = _container.get_display();
     X_DEBUG_SYNC(display);
     Window root_window = RootWindow(display, _container.get_screen());
+
+    XLockDisplay(display);
     AutoScreenRes res(XRRGetScreenResources(display, root_window));
+    XUnlockDisplay(display);
+
     if (!res.valid()) {
         THROW("get screen resources failed");
     }
@@ -2061,7 +2151,11 @@ void XMonitor::enable()
     Display* display = _container.get_display();
     X_DEBUG_SYNC(display);
     Window root_window = RootWindow(display, _container.get_screen());
+
+    XLockDisplay(display);
     AutoScreenRes res(XRRGetScreenResources(display, root_window));
+    XUnlockDisplay(display);
+
     if (!res.valid()) {
         THROW("get screen resources failed");
     }
@@ -2343,7 +2437,7 @@ static int get_selection(XEvent &event, Atom type, Atom prop, int format,
 {
     Bool del = incr ? True: False;
     Atom type_ret;
-    int format_ret, ret_val = -1;
+    int res, format_ret, ret_val = -1;
     unsigned long len, remain;
     unsigned char *data = NULL;
 
@@ -2366,9 +2460,15 @@ static int get_selection(XEvent &event, Atom type, Atom prop, int format,
         }
     }
 
-    if (XGetWindowProperty(x_display, platform_win, prop, 0,
-                           LONG_MAX, del, type, &type_ret, &format_ret, &len,
-                           &remain, &data) != Success) {
+    /* Warning we are running with the clipboard_lock held!! That is ok, as
+       there is no code holding XLockDisplay which calls code taking
+       the clipboard_lock!!  */
+    XLockDisplay(x_display);
+    res = XGetWindowProperty(x_display, platform_win, prop, 0,
+                             LONG_MAX, del, type, &type_ret, &format_ret, &len,
+                             &remain, &data);
+    XUnlockDisplay(x_display);
+    if (res != Success) {
         LOG_WARN("XGetWindowProperty failed");
         goto exit;
     }
@@ -2686,17 +2786,25 @@ static void root_win_proc(XEvent& event)
 
 static void process_monitor_configure_events(Window root)
 {
-    XSync(x_display, False);
     XEvent event;
 
+    XLockDisplay(x_display);
+    XSync(x_display, False);
+
     while (XCheckTypedWindowEvent(x_display, root, ConfigureNotify, &event)) {
+        XUnlockDisplay(x_display);
         root_win_proc(event);
+        XLockDisplay(x_display);
     }
 
     while (XCheckTypedWindowEvent(x_display, root, xrandr_event_base + RRScreenChangeNotify,
                                   &event)) {
+        XUnlockDisplay(x_display);
         root_win_proc(event);
+        XLockDisplay(x_display);
     }
+
+    XUnlockDisplay(x_display);
 }
 
 static void cleanup(void)
@@ -2779,7 +2887,7 @@ static void init_xfixes()
         XFixesQueryVersion(x_display, &major, &minor) && major >= 1;
 }
 
-unsigned int get_modifier_mask(KeySym modifier)
+static unsigned int get_modifier_mask(KeySym modifier)
 {
     int mask = 0;
     int i;
@@ -3028,7 +3136,9 @@ uint32_t Platform::get_keyboard_lock_modifiers()
     XKeyboardState keyboard_state;
     uint32_t modifiers = 0;
 
+    XLockDisplay(x_display);
     XGetKeyboardControl(x_display, &keyboard_state);
+    XUnlockDisplay(x_display);
 
     if (keyboard_state.led_mask & 0x01) {
         modifiers |= CAPS_LOCK_MODIFIER;
@@ -3088,7 +3198,7 @@ void Platform::set_keyboard_lock_modifiers(uint32_t modifiers)
     }
 }
 
-uint32_t key_bit(char* keymap, int key, uint32_t bit)
+static uint32_t key_bit(char* keymap, int key, uint32_t bit)
 {
     KeyCode key_code = XKeysymToKeycode(x_display, key);
     return (((keymap[key_code >> 3] >> (key_code & 7)) & 1) ? bit : 0);
@@ -3097,14 +3207,19 @@ uint32_t key_bit(char* keymap, int key, uint32_t bit)
 uint32_t Platform::get_keyboard_modifiers()
 {
     char keymap[32];
+    uint32_t mods;
 
+    XLockDisplay(x_display);
     XQueryKeymap(x_display, keymap);
-    return key_bit(keymap, XK_Shift_L, L_SHIFT_MODIFIER) |
+    mods = key_bit(keymap, XK_Shift_L, L_SHIFT_MODIFIER) |
            key_bit(keymap, XK_Shift_R, R_SHIFT_MODIFIER) |
            key_bit(keymap, XK_Control_L, L_CTRL_MODIFIER) |
            key_bit(keymap, XK_Control_R, R_CTRL_MODIFIER) |
            key_bit(keymap, XK_Alt_L, L_ALT_MODIFIER) |
            key_bit(keymap, XK_Alt_R, R_ALT_MODIFIER);
+    XUnlockDisplay(x_display);
+
+    return mods;
 }
 
 void Platform::reset_cursor_pos()
@@ -3258,7 +3373,9 @@ XLocalCursor::XLocalCursor(CursorData* cursor_data)
     case SPICE_CURSOR_TYPE_COLOR8:
     default:
         LOG_WARN("unsupported cursor type %d", header.type);
+        XLockDisplay(x_display);
         _handle = XCreateFontCursor(x_display, XC_arrow);
+        XUnlockDisplay(x_display);
         delete[] cur_data;
         return;
     }
@@ -3284,22 +3401,25 @@ XLocalCursor::XLocalCursor(CursorData* cursor_data)
     }
 
     Window root_window = RootWindow(x_display, DefaultScreen(x_display));
-    Pixmap pixmap = XCreatePixmap(x_display, root_window, header.width, header.height, 32);
-
     XGCValues gc_vals;
     gc_vals.function = GXcopy;
     gc_vals.foreground = ~0;
     gc_vals.background = 0;
     gc_vals.plane_mask = AllPlanes;
 
+    XLockDisplay(x_display);
+    Pixmap pixmap = XCreatePixmap(x_display, root_window, header.width, header.height, 32);
     GC gc = XCreateGC(x_display, pixmap, GCFunction | GCForeground | GCBackground | GCPlaneMask,
                       &gc_vals);
+
     XPutImage(x_display, pixmap, gc, &image, 0, 0, 0, 0, header.width, header.height);
     XFreeGC(x_display, gc);
 
     XRenderPictFormat *xformat = XRenderFindStandardFormat(x_display, PictStandardARGB32);
     Picture picture = XRenderCreatePicture(x_display, pixmap, xformat, 0, NULL);
     _handle = XRenderCreateCursor(x_display, picture, header.hot_spot_x, header.hot_spot_y);
+    XUnlockDisplay(x_display);
+
     XRenderFreePicture(x_display, picture);
     XFreePixmap(x_display, pixmap);
     delete[] cur_data;
@@ -3323,7 +3443,12 @@ LocalCursor* Platform::create_inactive_cursor()
 
 class XDefaultCursor: public XBaseLocalCursor {
 public:
-    XDefaultCursor() { _handle = XCreateFontCursor(x_display, XC_top_left_arrow);}
+    XDefaultCursor()
+    {
+        XLockDisplay(x_display);
+        _handle = XCreateFontCursor(x_display, XC_top_left_arrow);
+        XUnlockDisplay(x_display);
+    }
 };
 
 LocalCursor* Platform::create_default_cursor()
@@ -3440,13 +3565,17 @@ bool Platform::on_clipboard_notify(uint32_t type, const uint8_t* data, int32_t s
 
 bool Platform::on_clipboard_request(uint32_t type)
 {
+    Window owner;
     Lock lock(clipboard_lock);
     Atom target = get_clipboard_target(type);
 
     if (target == None)
         return false;
 
-    if (XGetSelectionOwner(x_display, clipboard_prop) == None) {
+    XLockDisplay(x_display);
+    owner = XGetSelectionOwner(x_display, clipboard_prop);
+    XUnlockDisplay(x_display);
+    if (owner == None) {
         LOG_INFO("No owner for the selection");
         return false;
     }
@@ -3464,8 +3593,12 @@ bool Platform::on_clipboard_request(uint32_t type)
 void Platform::on_clipboard_release()
 {
     XEvent event;
+    Window owner;
 
-    if (XGetSelectionOwner(x_display, clipboard_prop) != platform_win) {
+    XLockDisplay(x_display);
+    owner = XGetSelectionOwner(x_display, clipboard_prop);
+    XUnlockDisplay(x_display);
+    if (owner != platform_win) {
         LOG_INFO("Platform::on_clipboard_release() called while not selection owner");
         return;
     }
@@ -3477,11 +3610,16 @@ void Platform::on_clipboard_release()
     /* Make sure we process the XFixesSetSelectionOwnerNotify event caused
        by this, so we don't end up changing the clipboard owner to none, after
        it has already been re-owned because this event is still pending. */
+    XLockDisplay(x_display);
     XSync(x_display, False);
     while (XCheckTypedEvent(x_display,
                             XFixesSelectionNotify + xfixes_event_base,
-                            &event))
+                            &event)) {
+        XUnlockDisplay(x_display);
         root_win_proc(event);
+        XLockDisplay(x_display);
+    }
+    XUnlockDisplay(x_display);
 
     /* Note no need to do a set_clipboard_owner(owner_none) here, as that is
        already done by processing the XFixesSetSelectionOwnerNotify event. */

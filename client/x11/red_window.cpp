@@ -309,13 +309,17 @@ enum KbdKeyCode {
 
 static void query_keyboard()
 {
+    XLockDisplay(x_display);
     XkbDescPtr kbd_desk = XkbGetKeyboard(x_display, XkbAllComponentsMask, XkbUseCoreKbd);
+    XUnlockDisplay(x_display);
     if (!kbd_desk) {
         LOG_WARN("get keyboard failed");
         return;
     }
 
+    XLockDisplay(x_display);
     char* keycodes = XGetAtomName(x_display, kbd_desk->names->keycodes);
+    XUnlockDisplay(x_display);
 
     if (keycodes) {
         if (strstr(keycodes, "evdev")) {
@@ -642,7 +646,9 @@ static void init_key_table_0xfe()
 
 static inline RedKey to_red_key_code(unsigned int keycode)
 {
+    XLockDisplay(x_display);
     KeySym sym = XKeycodeToKeysym(x_display, keycode, 0);
+    XUnlockDisplay(x_display);
     RedKey red_key;
 
     if (sym == NoSymbol) {
@@ -772,8 +778,12 @@ void RedWindow_p::win_proc(XEvent& event)
 {
     XPointer window_pointer;
     RedWindow* red_window;
+    int res;
 
-    if (XFindContext(x_display, event.xany.window, user_data_context, &window_pointer)) {
+    XLockDisplay(x_display);
+    res = XFindContext(x_display, event.xany.window, user_data_context, &window_pointer);
+    XUnlockDisplay(x_display);
+    if (res) {
         THROW("no user data");
     }
     red_window = (RedWindow*)window_pointer;
@@ -795,7 +805,10 @@ void RedWindow_p::win_proc(XEvent& event)
     case KeyRelease: {
         RedKey key = to_red_key_code(event.xkey.keycode);
         XEvent next_event;
-        if (XCheckWindowEvent(x_display, red_window->_win, ~long(0), &next_event)) {
+        XLockDisplay(x_display);
+        Bool check = XCheckWindowEvent(x_display, red_window->_win, ~long(0), &next_event);
+        XUnlockDisplay(x_display);
+        if (check) {
             XPutBackEvent(x_display, &next_event);
             if ((next_event.type == KeyPress) &&
                 (event.xkey.keycode == next_event.xkey.keycode) &&
@@ -921,6 +934,8 @@ void RedWindow_p::win_proc(XEvent& event)
 
 void RedWindow_p::sync(bool shadowed)
 {
+    XEvent event;
+
     if (shadowed) {
         _ignore_foucs = true;
         _ignore_pointer = true;
@@ -928,11 +943,16 @@ void RedWindow_p::sync(bool shadowed)
         _shadow_pointer_state = _pointer_in_window;
         _shadow_focus_event.xany.serial = 0;
     }
+
+    XLockDisplay(x_display);
     XSync(x_display, False);
-    XEvent event;
     while (XCheckWindowEvent(x_display, _win, ~long(0), &event)) {
+        XUnlockDisplay(x_display);
         win_proc(event);
+        XLockDisplay(x_display);
     }
+    XUnlockDisplay(x_display);
+
     if (!shadowed) {
         return;
     }
@@ -954,11 +974,17 @@ void RedWindow_p::wait_for_reparent()
 {
     XEvent event;
     for (int i = 0; i < 50; i++) {
-        if (XCheckTypedWindowEvent(x_display, _win, ReparentNotify, &event)) {
+        XLockDisplay(x_display);
+        bool check = XCheckTypedWindowEvent(x_display, _win, ReparentNotify, &event);
+        XUnlockDisplay(x_display);
+        if (check) {
             return;
         }
         usleep(20 * 1000);
+        // HDG: why?? this makes no sense
+        XLockDisplay(x_display);
         XSync(x_display, False);
+        XUnlockDisplay(x_display);
     }
     DBG(0, "failed");
 }
@@ -968,7 +994,9 @@ void RedWindow_p::wait_for_map()
     bool wait_parent = _expect_parent;
     while (!_visibale) {
         XEvent event;
+        XLockDisplay(x_display);
         XWindowEvent(x_display, _win, ~0, &event);
+        XUnlockDisplay(x_display);
         switch (event.type) {
         case ReparentNotify:
             wait_parent = false;
@@ -993,7 +1021,9 @@ void RedWindow_p::wait_for_unmap()
     bool wait_parent = _expect_parent;
     while (_visibale) {
         XEvent event;
+        XLockDisplay(x_display);
         XWindowEvent(x_display, _win, ~0, &event);
+        XUnlockDisplay(x_display);
         switch (event.type) {
         case ReparentNotify:
             wait_parent = false;
@@ -1015,7 +1045,9 @@ void RedWindow_p::wait_for_unmap()
 void RedWindow_p::set_glx(int width, int height)
 {
     if (_glcont_copy) {
+        XLockDisplay(x_display);
         XSync(x_display, False);
+        XUnlockDisplay(x_display);
         glXMakeCurrent(x_display, _win, _glcont_copy);
         //glDrawBuffer(GL_FRONT);
         glMatrixMode(GL_PROJECTION);
@@ -1050,8 +1082,10 @@ Cursor RedWindow_p::create_invisible_cursor(Window window)
     XColor color;
     char data[1] = {0};
     Window root_window = RootWindow(x_display, DefaultScreen(x_display));
+    XLockDisplay(x_display);
     Pixmap blank = XCreateBitmapFromData(x_display, root_window, data, 1, 1);
     Cursor cursor = XCreatePixmapCursor(x_display, blank, blank, &color, &color, 0, 0);
+    XUnlockDisplay(x_display);
     XFreePixmap(x_display, blank);
     return cursor;
 }
@@ -1071,6 +1105,8 @@ RedWindow_p::RedWindow_p()
 
 void RedWindow_p::destroy(RedWindow& red_window, PixelsSource_p& pix_source)
 {
+    XEvent event;
+
     if (_win == None) {
         return;
     }
@@ -1082,9 +1118,12 @@ void RedWindow_p::destroy(RedWindow& red_window, PixelsSource_p& pix_source)
 
     XPlatform::cleare_win_proc(_win);
     XSelectInput(x_display, _win, 0);
+
+    XLockDisplay(x_display);
     XSync(x_display, False);
-    XEvent event;
     while (XCheckWindowEvent(x_display, _win, ~long(0), &event));
+    XUnlockDisplay(x_display);
+
     Window window = _win;
     _win = None;
     XFreeCursor(x_display, _invisible_cursor);
@@ -1123,6 +1162,7 @@ void RedWindow_p::create(RedWindow& red_window, PixelsSource_p& pix_source, int 
                                 ButtonReleaseMask | PointerMotionMask | FocusChangeMask |
                                 EnterWindowMask | LeaveWindowMask;
 
+    XLockDisplay(x_display);
     _colormap = XCreateColormap(x_display, root_window, XPlatform::get_vinfo()[in_screen]->visual,
                                AllocNone);
     win_attributes.colormap = _colormap;
@@ -1131,22 +1171,34 @@ void RedWindow_p::create(RedWindow& red_window, PixelsSource_p& pix_source, int 
                            width, height, 0, XPlatform::get_vinfo()[in_screen]->depth,
                            InputOutput, XPlatform::get_vinfo()[in_screen]->visual, mask,
                            &win_attributes);
+    XUnlockDisplay(x_display);
 
     if (!window) {
         THROW("create X window failed");
     }
 
     try {
-        if (XSaveContext(x_display, window, user_data_context, (XPointer)&red_window)) {
+        int res;
+
+        XLockDisplay(x_display);
+        res = XSaveContext(x_display, window, user_data_context, (XPointer)&red_window);
+        XUnlockDisplay(x_display);
+        if (res) {
             THROW("set win usr data failed");
         }
 
         XSetWMProtocols(x_display, window, &wm_delete_window_atom, 1);
         XGCValues gc_vals;
-        if (!(gc = XCreateGC(x_display, window, 0, &gc_vals))) {
+
+        XLockDisplay(x_display);
+        gc = XCreateGC(x_display, window, 0, &gc_vals);
+        XUnlockDisplay(x_display);
+        if (!gc) {
             THROW("create gc failed");
         }
-        if (!(cursor = create_invisible_cursor(window))) {
+
+        cursor = create_invisible_cursor(window);
+        if (!cursor) {
             THROW("create invisible cursor failed");
         }
 
@@ -1189,7 +1241,9 @@ void RedWindow_p::migrate(RedWindow& red_window, PixelsSource_p& pix_source, int
         THROW("get attributes failed");
     }
     XTextProperty text_pro;
+    XLockDisplay(x_display);
     bool valid_title = XGetWMName(x_display, _win, &text_pro) && text_pro.value;
+    XUnlockDisplay(x_display);
     destroy(red_window, pix_source);
     create(red_window, pix_source, _show_pos.x, _show_pos.y, attrib.width, attrib.height,
            to_screen);
@@ -1213,6 +1267,7 @@ void RedWindow_p::move_to_current_desktop()
     unsigned char *prop_return;
     long desktop = ~long(0);
 
+    XLockDisplay(x_display);
     if (XGetWindowProperty(x_display, root, wm_current_desktop, 0, 1, False, AnyPropertyType,
                            &actual_type_return, &actual_format_return, &nitems_return,
                            &bytes_after_return, &prop_return) == Success &&
@@ -1221,6 +1276,7 @@ void RedWindow_p::move_to_current_desktop()
     } else {
         DBG(0, "get current desktop failed");
     }
+    XUnlockDisplay(x_display);
 
     XEvent xevent;
     xevent.type = ClientMessage;
@@ -1266,7 +1322,9 @@ void RedWindow::set_title(std::wstring& title)
     wchar_t *name = const_cast<wchar_t *>(title.c_str());
     int r;
     if (_win) {
+        XLockDisplay(x_display);
         r = XwcTextListToTextProperty(x_display, &name, 1, XStringStyle, &text_prop);
+        XUnlockDisplay(x_display);
         if (r >= 0) {
             XSetWMName(x_display, _win, &text_prop);
             XFree(text_prop.value);
@@ -1323,15 +1381,19 @@ public:
     AutoXErrorHandler()
     {
         ASSERT(old_error_handler == NULL);
+        XLockDisplay(x_display);
         XSync(x_display, False);
         x_error = Success;
         old_error_handler = XSetErrorHandler(x_error_handler);
+        XUnlockDisplay(x_display);
     }
 
     ~AutoXErrorHandler()
     {
         if (old_error_handler) {
+            XLockDisplay(x_display);
             XSetErrorHandler(old_error_handler);
+            XUnlockDisplay(x_display);
             old_error_handler = NULL;
         }
     }
@@ -1344,8 +1406,12 @@ static Window get_window_for_reposition(Window window)
         Window parent;
         Window* childrens;
         unsigned int num_childrens;
+        int res;
 
-        if (!XQueryTree(x_display, window, &root, &parent, &childrens, &num_childrens)) {
+        XLockDisplay(x_display);
+        res = XQueryTree(x_display, window, &root, &parent, &childrens, &num_childrens);
+        XUnlockDisplay(x_display);
+        if (!res) {
             return None;
         }
 
@@ -1464,7 +1530,9 @@ static bool get_prop_32(Window win, Atom prop, uint32_t &val)
     unsigned long bytes_after_return;
     unsigned long nitems_return;
     unsigned char *prop_return;
+    bool retval = false;
 
+    XLockDisplay(x_display);
     if (XGetWindowProperty(x_display, win, prop, 0, 1, False, AnyPropertyType,
                            &actual_type_return, &actual_format_return,
                            &nitems_return, &bytes_after_return, &prop_return) == Success &&
@@ -1472,9 +1540,11 @@ static bool get_prop_32(Window win, Atom prop, uint32_t &val)
                                                             actual_type_return != None &&
                                                             actual_format_return == 32) {
         val = *(uint32_t *)prop_return;
-        return true;
+        retval = true;
     }
-    return false;
+    XUnlockDisplay(x_display);
+
+    return retval;
 }
 
 void RedWindow::external_show()
@@ -1486,7 +1556,9 @@ void RedWindow::external_show()
     raise();
     activate();
 
+    XLockDisplay(x_display);
     atom = XInternAtom(x_display, "_NET_ACTIVE_WINDOW", true);
+    XUnlockDisplay(x_display);
     if (atom != None) {
         Window root;
         XEvent xev;
@@ -1595,14 +1667,21 @@ static bool __get_position(Window window, SpicePoint& pos)
         Window parent;
         Window* childrens;
         unsigned int num_childrens;
+        int res;
 
-        if (!XGetWindowAttributes(x_display, window, &attrib)) {
+        XLockDisplay(x_display);
+        res = XGetWindowAttributes(x_display, window, &attrib);
+        XUnlockDisplay(x_display);
+        if (!res) {
             return false;
         }
         pos.x += attrib.x;
         pos.y += attrib.y;
 
-        if (!XQueryTree(x_display, window, &root, &parent, &childrens, &num_childrens)) {
+        XLockDisplay(x_display);
+        res = XQueryTree(x_display, window, &root, &parent, &childrens, &num_childrens);
+        XUnlockDisplay(x_display);
+        if (!res) {
             return false;
         }
 
@@ -1648,7 +1727,9 @@ void RedWindow::do_start_key_interception()
     // LeaveNotify and EnterNotify.
 
     ASSERT(_focused);
+    XLockDisplay(x_display);
     XGrabKeyboard(x_display, _win, True, GrabModeAsync, GrabModeAsync, CurrentTime);
+    XUnlockDisplay(x_display);
     sync(true);
     _listener.on_start_key_interception();
     _key_interception_on = true;
@@ -1656,7 +1737,9 @@ void RedWindow::do_start_key_interception()
 
 void RedWindow::do_stop_key_interception()
 {
+    XLockDisplay(x_display);
     XUngrabKeyboard(x_display, CurrentTime);
+    XUnlockDisplay(x_display);
     sync(true);
     _key_interception_on = false;
     _listener.on_stop_key_interception();
@@ -1715,18 +1798,24 @@ void RedWindow::hide_cursor()
 
 void RedWindow::release_mouse()
 {
+    XLockDisplay(x_display);
     XUngrabPointer(x_display, CurrentTime);
+    XUnlockDisplay(x_display);
     sync(true);
 }
 
 void RedWindow::cupture_mouse()
 {
     int grab_retries = MOUSE_GRAB_RETRIES;
+    XLockDisplay(x_display);
     XSync(x_display, False);
+    XUnlockDisplay(x_display);
     for (;; --grab_retries) {
+        XLockDisplay(x_display);
         int result = XGrabPointer(x_display, _win, True, 0,
                                   GrabModeAsync, GrabModeAsync,
                                   _win, None, CurrentTime);
+        XUnlockDisplay(x_display);
         if (result == GrabSuccess) {
             break;
         }
@@ -1748,7 +1837,9 @@ void RedWindow::set_mouse_position(int x, int y)
 SpicePoint RedWindow::get_size()
 {
     XWindowAttributes attrib;
+    XLockDisplay(x_display);
     XGetWindowAttributes(x_display, _win, &attrib);
+    XUnlockDisplay(x_display);
     SpicePoint size;
     size.x = attrib.width;
     size.y = attrib.height;
@@ -1777,7 +1868,12 @@ static QRegion *get_visibale_region(Window window)
     QRegion* region = new QRegion;
     region_init(region);
     XWindowAttributes attrib;
-    if (!XGetWindowAttributes(x_display, window, &attrib)) {
+    int res;
+
+    XLockDisplay(x_display);
+    res = XGetWindowAttributes(x_display, window, &attrib);
+    XUnlockDisplay(x_display);
+    if (!res) {
         return NULL;
     }
 
@@ -1800,11 +1896,20 @@ static QRegion *get_visibale_region(Window window)
 
     AutoXErrorHandler auto_error_handler;
     for (;;) {
-        FAIL_ON_BAD_WINDOW(!XQueryTree(x_display, window, &root, &parent, &childrens,
-                                       &num_childrens),
+        int res;
+
+        XLockDisplay(x_display);
+        res = XQueryTree(x_display, window, &root, &parent, &childrens,
+                         &num_childrens);
+        XUnlockDisplay(x_display);
+        FAIL_ON_BAD_WINDOW(!res,
                            "%s: query X tree failed", __FUNCTION__);
         for (int i = num_childrens - 1; i >= 0 && childrens[i] != prev; i--) {
-            FAIL_ON_BAD_WINDOW(!XGetWindowAttributes(x_display, childrens[i], &attrib),
+
+            XLockDisplay(x_display);
+            res = XGetWindowAttributes(x_display, childrens[i], &attrib);
+            XUnlockDisplay(x_display);
+            FAIL_ON_BAD_WINDOW(!res,
                                "%s: get win attributes failed", __FUNCTION__);
 
             if (attrib.map_state == IsViewable) {
@@ -1821,7 +1926,10 @@ static QRegion *get_visibale_region(Window window)
             XFree(childrens);
         }
 
-        FAIL_ON_BAD_WINDOW(!XGetWindowAttributes(x_display, window, &attrib),
+        XLockDisplay(x_display);
+        res = XGetWindowAttributes(x_display, window, &attrib);
+        XUnlockDisplay(x_display);
+        FAIL_ON_BAD_WINDOW(!res,
                            "%s: get win attributes failed", __FUNCTION__);
         window_area_from_attributes(window_area, attrib);
         region_offset(region, window_area.left, window_area.top);
@@ -1830,7 +1938,10 @@ static QRegion *get_visibale_region(Window window)
             break;
         }
 
-        FAIL_ON_BAD_WINDOW(!XGetWindowAttributes(x_display, parent, &attrib),
+        XLockDisplay(x_display);
+        res = XGetWindowAttributes(x_display, parent, &attrib);
+        XUnlockDisplay(x_display);
+        FAIL_ON_BAD_WINDOW(!res,
                            "%s: get win attributes failed", __FUNCTION__);
         window_area_from_attributes(window_area, attrib);
         window_area.right -= window_area.left;
@@ -1907,10 +2018,13 @@ bool RedWindow::get_mouse_anchor_point(SpicePoint& pt)
 #ifdef USE_OGL
 RedGlContext RedWindow::create_context_gl()
 {
+    RedGlContext *context = NULL;
     if (XPlatform::get_fbconfig()[_screen]) {
-        return glXCreateContext(x_display, XPlatform::get_vinfo()[_screen], NULL, GL_TRUE);
+        XLockDisplay(x_display);
+        context = glXCreateContext(x_display, XPlatform::get_vinfo()[_screen], NULL, GL_TRUE);
+        XUnlockDisplay(x_display);
     }
-    return NULL;
+    return context;
 }
 
 RedPbuffer RedWindow::create_pbuff(int width, int height)
@@ -1925,8 +2039,10 @@ RedPbuffer RedWindow::create_pbuff(int width, int height)
                         0, 0 };
 
     fb_config = XPlatform::get_fbconfig();
+    XLockDisplay(XPlatform::get_display());
     pbuff = glXCreatePbuffer(XPlatform::get_display(), fb_config[_screen][0],
                              pbuf_attr);
+    XUnlockDisplay(XPlatform::get_display());
 
     return pbuff;
 }
