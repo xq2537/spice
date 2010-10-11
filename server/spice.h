@@ -42,17 +42,33 @@ struct SpiceBaseInstance {
 
 #define SPICE_INTERFACE_CORE "core"
 #define SPICE_INTERFACE_CORE_MAJOR 1
-#define SPICE_INTERFACE_CORE_MINOR 2
+#define SPICE_INTERFACE_CORE_MINOR 3
 typedef struct SpiceCoreInterface SpiceCoreInterface;
 
 #define SPICE_WATCH_EVENT_READ  (1 << 0)
 #define SPICE_WATCH_EVENT_WRITE (1 << 1)
+
+#define SPICE_CHANNEL_EVENT_CONNECTED     1
+#define SPICE_CHANNEL_EVENT_INITIALIZED   2
+#define SPICE_CHANNEL_EVENT_DISCONNECTED  3
+
+#define SPICE_CHANNEL_EVENT_FLAG_TLS      (1 << 0)
 
 typedef struct SpiceWatch SpiceWatch;
 typedef void (*SpiceWatchFunc)(int fd, int event, void *opaque);
 
 typedef struct SpiceTimer SpiceTimer;
 typedef void (*SpiceTimerFunc)(void *opaque);
+
+typedef struct SpiceChannelEventInfo {
+    int connection_id;
+    int type;
+    int id;
+    int flags;
+    struct sockaddr laddr;
+    struct sockaddr paddr;
+    socklen_t llen, plen;
+} SpiceChannelEventInfo;
 
 struct SpiceCoreInterface {
     SpiceBaseInterface base;
@@ -66,6 +82,7 @@ struct SpiceCoreInterface {
     void (*watch_update_mask)(SpiceWatch *watch, int event_mask);
     void (*watch_remove)(SpiceWatch *watch);
 
+    void (*channel_event)(int event, SpiceChannelEventInfo *info);
 };
 
 /* qxl interface */

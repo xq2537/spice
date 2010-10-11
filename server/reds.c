@@ -385,6 +385,13 @@ static ChannelSecurityOptions *find_channel_security(int id)
     return now;
 }
 
+static void reds_channel_event(RedsStreamContext *peer, int event)
+{
+    if (core->base.minor_version < 3 || core->channel_event == NULL)
+        return;
+    core->channel_event(event, &peer->info);
+}
+
 static int reds_write(void *ctx, void *buf, size_t size)
 {
     int return_code;
@@ -409,6 +416,7 @@ static int reds_read(void *ctx, void *buf, size_t size)
 
 static int reds_free(RedsStreamContext *peer)
 {
+    reds_channel_event(peer, SPICE_CHANNEL_EVENT_DISCONNECTED);
     close(peer->socket);
     free(peer);
     return 0;
@@ -471,6 +479,7 @@ static int reds_ssl_writev(void *ctx, const struct iovec *vector, int count)
 
 static int reds_ssl_free(RedsStreamContext *peer)
 {
+    reds_channel_event(peer, SPICE_CHANNEL_EVENT_DISCONNECTED);
     SSL_free(peer->ssl);
     close(peer->socket);
     free(peer);
@@ -1980,12 +1989,20 @@ static int reds_send_link_error(RedLinkInfo *link, uint32_t error)
                                                                          sizeof(reply));
 }
 
-static void reds_show_new_channel(RedLinkInfo *link)
+static void reds_show_new_channel(RedLinkInfo *link, int connection_id)
 {
     red_printf("channel %d:%d, connected successfully, over %s link",
                link->link_mess->channel_type,
                link->link_mess->channel_id,
                link->peer->ssl == NULL ? "Non Secure" : "Secure");
+    /* add info + send event */
+    if (link->peer->ssl) {
+        link->peer->info.flags |= SPICE_CHANNEL_EVENT_FLAG_TLS;
+    }
+    link->peer->info.connection_id = connection_id;
+    link->peer->info.type = link->link_mess->channel_type;
+    link->peer->info.id   = link->link_mess->channel_id;
+    reds_channel_event(link->peer, SPICE_CHANNEL_EVENT_INITIALIZED);
 }
 
 static void reds_send_link_result(RedLinkInfo *link, uint32_t error)
@@ -2038,7 +2055,7 @@ static void reds_handle_main_link(RedLinkInfo *link)
     reds->peer = link->peer;
     reds->in_handler.shut = FALSE;
 
-    reds_show_new_channel(link);
+    reds_show_new_channel(link, connection_id);
     __reds_release_link(link);
     if (vdagent) {
         SpiceCharDeviceInterface *sif;
@@ -2530,7 +2547,7 @@ static void reds_handle_other_links(RedLinkInfo *link)
     }
 
     reds_send_link_result(link, SPICE_LINK_ERR_OK);
-    reds_show_new_channel(link);
+    reds_show_new_channel(link, reds->link_id);
     if (link_mess->channel_type == SPICE_CHANNEL_INPUTS && !link->peer->ssl) {
         RedsOutItem *item;
         SpiceMsgNotify notify;
@@ -2813,6 +2830,14 @@ static RedLinkInfo *__reds_accept_connection(int listen_socket)
     peer = spice_new0(RedsStreamContext, 1);
     link->peer = peer;
     peer->socket = socket;
+
+    /* gather info + send event */
+    peer->info.llen = sizeof(peer->info.laddr);
+    peer->info.plen = sizeof(peer->info.paddr);
+    getsockname(peer->socket, (struct sockaddr*)(&peer->info.laddr), &peer->info.llen);
+    getpeername(peer->socket, (struct sockaddr*)(&peer->info.paddr), &peer->info.plen);
+    reds_channel_event(peer, SPICE_CHANNEL_EVENT_CONNECTED);
+
     openssl_init(link);
 
     return link;

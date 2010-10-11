@@ -35,6 +35,8 @@ typedef struct RedsStreamContext {
     int shutdown;
     SSL *ssl;
 
+    SpiceChannelEventInfo info;
+
     int (*cb_write)(void *, void *, int);
     int (*cb_read)(void *, void *, int);
 
