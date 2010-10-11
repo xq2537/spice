@@ -75,6 +75,8 @@ static ClipboardFormat clipboard_formats[] = {
     {CF_UNICODETEXT, VD_AGENT_CLIPBOARD_UTF8_TEXT},
     {0, 0}};
 
+#define clipboard_formats_count (sizeof(clipboard_formats) / sizeof(clipboard_formats[0]))
+
 static const unsigned long MODAL_LOOP_TIMER_ID = 1;
 static const int MODAL_LOOP_DEFAULT_TIMEOUT = 100;
 static bool modal_loop_active = false;
@@ -100,17 +102,21 @@ static uint32_t get_clipboard_format(uint32_t type) {
     return iter->format;
 }
 
-//FIXME: handle multiple types
-static uint32_t get_available_clipboard_type()
+static int get_available_clipboard_types(uint32_t** types)
 {
-    uint32_t type = 0;
+    int count = 0;
 
-    for (ClipboardFormat* iter = clipboard_formats; iter->format && !type; iter++) {
+    *types = new uint32_t[clipboard_formats_count];
+    for (ClipboardFormat* iter = clipboard_formats; iter->format; iter++) {
         if (IsClipboardFormatAvailable(iter->format)) {
-            type = iter->type;
+            *types[count++] = iter->type;
         }
     }
-    return type;
+    if (!count) {
+        delete[] *types;
+        *types = NULL;
+    }
+    return count;
 }
 
 static LRESULT CALLBACK PlatformWinProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -145,11 +151,12 @@ static LRESULT CALLBACK PlatformWinProc(HWND hWnd, UINT message, WPARAM wParam, 
         break;
     case WM_DRAWCLIPBOARD:
         if (platform_win != GetClipboardOwner()) {
+            int type_count;
+            uint32_t* types;
             Platform::set_clipboard_owner(Platform::owner_none);
-            //FIXME: handle multiple types
-            uint32_t type = get_available_clipboard_type();            
-            if (type) {
-                clipboard_listener->on_clipboard_grab(&type, 1);
+            if (type_count = get_available_clipboard_types(&types)) {
+                clipboard_listener->on_clipboard_grab(types, type_count);
+                delete[] types;
             } else {
                 LOG_INFO("Unsupported clipboard format");
             }
@@ -874,18 +881,28 @@ void Platform::set_clipboard_owner(int new_owner)
 
 bool Platform::on_clipboard_grab(uint32_t *types, uint32_t type_count)
 {
-    /* FIXME use all types rather then just the first one */
-    uint32_t format = get_clipboard_format(types[0]);
-    
-    if (!format) {
-        LOG_INFO("Unsupported clipboard type %u", types[0]);
+    bool has_supported_type = false;
+    uint32_t format;
+
+    for (uint32_t i = 0; i < type_count; i++) {
+        format = get_clipboard_format(types[i]);
+        //On first supported type, open and empty the clipboard
+        if (format && !has_supported_type) {
+            has_supported_type = true;
+            if (!OpenClipboard(platform_win)) {
+                return false;
+            }
+            EmptyClipboard();
+        }
+        //For all supported type set delayed rendering
+        if (format) {
+            SetClipboardData(format, NULL);
+        }
+    }
+    if (!has_supported_type) {
+        LOG_INFO("No supported clipboard types in client grab");
         return false;
     }
-    if (!OpenClipboard(platform_win)) {
-        return false;
-    }
-    EmptyClipboard();
-    SetClipboardData(format, NULL);
     CloseClipboard();
 
     set_clipboard_owner(owner_guest);
