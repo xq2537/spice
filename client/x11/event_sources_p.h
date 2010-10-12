@@ -21,24 +21,18 @@
 #include "common.h"
 #include "threads.h"
 
-#if __GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 8)
-#define USING_EVENT_FD
-#endif
-
 #define INFINITE -1
 
-class EventWrapper;
+class EventSource;
 
 class EventSources_p {
-public:
-    void remove_wrapper(EventWrapper*);
+protected:
+    void add_event(int fd, EventSource* source);
+    void remove_event(EventSource* source);
 
 public:
-    int _epoll;
-    typedef std::list<EventWrapper*> Events;
-    Events _events;
-
-    friend class EventWrapper;
+    std::vector<EventSource*> _events;
+    std::vector<int> _fds;
 };
 
 class Trigger_p {
@@ -49,9 +43,7 @@ public:
 
 public:
     int _event_fd;
-#ifndef USING_EVENT_FD
     int _event_write_fd;
-#endif
     bool _pending_int;
     Mutex _lock;
 };
