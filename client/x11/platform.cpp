@@ -107,13 +107,24 @@ static unsigned int caps_lock_mask = 0;
 static unsigned int num_lock_mask = 0;
 
 //FIXME: nicify
-static const char * const utf8_atom_names[] = {
-    "UTF8_STRING",
-    "text/plain;charset=UTF-8",
-    "text/plain;charset=utf-8",
+struct clipboard_format_info {
+    uint32_t type;
+    const char *atom_names[16];
+    Atom atoms[16];
+    int atom_count;
 };
 
-#define utf8_atom_count (sizeof(utf8_atom_names)/sizeof(utf8_atom_names[0]))
+static struct clipboard_format_info clipboard_formats[] = {
+    { VD_AGENT_CLIPBOARD_UTF8_TEXT, { "UTF8_STRING",
+      "text/plain;charset=UTF-8", "text/plain;charset=utf-8", NULL }, },
+    { VD_AGENT_CLIPBOARD_IMAGE_PNG, { "image/png", NULL }, },
+    { VD_AGENT_CLIPBOARD_IMAGE_BMP, { "image/bmp", "image/x-bmp",
+      "image/x-MS-bmp", "image/x-win-bitmap", NULL }, },
+    { VD_AGENT_CLIPBOARD_IMAGE_TIFF, { "image/tiff", NULL }, },
+    { VD_AGENT_CLIPBOARD_IMAGE_JPG, { "image/jpeg", NULL }, },
+};
+
+#define clipboard_format_count (sizeof(clipboard_formats)/sizeof(clipboard_formats[0]))
 
 struct selection_request {
     XEvent event;
@@ -128,15 +139,11 @@ static int32_t clipboard_data_space = 0;
 static Atom clipboard_request_target = None;
 static selection_request *next_selection_request = NULL;
 static uint32_t clipboard_type_count = 0;
-/* TODO Add support for more types here */
-/* Warning the size of these 2 needs to be increased each time we add
-   support for a new type!! */
-static uint32_t clipboard_agent_types[1];
-static Atom clipboard_x11_targets[1];
+static uint32_t clipboard_agent_types[256];
+static Atom clipboard_x11_targets[256];
 static Mutex clipboard_lock;
 static Atom clipboard_prop;
 static Atom incr_atom;
-static Atom utf8_atoms[utf8_atom_count];
 static Atom targets_atom;
 static Atom multiple_atom;
 static Bool handle_x_error = false;
@@ -188,16 +195,18 @@ static const char *atom_name(Atom atom)
 }
 
 static uint32_t get_clipboard_type(Atom target) {
-    int i;
+    int i, j;
 
     if (target == None)
         return VD_AGENT_CLIPBOARD_NONE;
 
-    for (i = 0; i < utf8_atom_count; i++)
-        if (utf8_atoms[i] == target)
-            return VD_AGENT_CLIPBOARD_UTF8_TEXT;
-
-    /* TODO Add support for more types here */
+    for (i = 0; i < clipboard_format_count; i++) {
+        for (j = 0; j < clipboard_formats[i].atom_count; i++) {
+            if (clipboard_formats[i].atoms[j] == target) {
+                return clipboard_formats[i].type;
+            }
+        }
+    }
 
     LOG_WARN("unexpected selection type %s", atom_name(target));
     return VD_AGENT_CLIPBOARD_NONE;
@@ -871,7 +880,7 @@ private:
 
 static void intern_clipboard_atoms()
 {
-    int i;
+    int i, j;
     static bool interned = false;
     if (interned) return;
 
@@ -880,8 +889,14 @@ static void intern_clipboard_atoms()
     incr_atom = XInternAtom(x_display, "INCR", False);
     multiple_atom = XInternAtom(x_display, "MULTIPLE", False);
     targets_atom = XInternAtom(x_display, "TARGETS", False);
-    for(i = 0; i < utf8_atom_count; i++)
-        utf8_atoms[i] = XInternAtom(x_display, utf8_atom_names[i], False);
+    for(i = 0; i < clipboard_format_count; i++) {
+        for(j = 0; clipboard_formats[i].atom_names[j]; j++) {
+            clipboard_formats[i].atoms[j] =
+                XInternAtom(x_display, clipboard_formats[i].atom_names[j],
+                            False);
+        }
+        clipboard_formats[i].atom_count = j;
+    }
 
     XUnlockDisplay(x_display);
 
@@ -2402,23 +2417,25 @@ static void print_targets(const char *action, Atom *atoms, int c)
 
 static void send_targets(XEvent& request_event)
 {
-    /* TODO Add support for more types here */
-    /* Warning the size of this needs to be increased each time we add support
-       for a new type, or the atom count of an existing type changes */
-    Atom targets[4] = { targets_atom, };
-    int i, j, target_count = 1;
+    Atom targets[256] = { targets_atom, };
+    int i, j, k, target_count = 1;
 
     for (i = 0; i < clipboard_type_count; i++) {
-        switch (clipboard_agent_types[i]) {
-            case VD_AGENT_CLIPBOARD_UTF8_TEXT:
-                for (j = 0; j < utf8_atom_count; j++) {
-                    targets[target_count] = utf8_atoms[j];
-                    target_count++;
+        for (j = 0; j < clipboard_format_count; j++) {
+            if (clipboard_formats[j].type != clipboard_agent_types[i]) {
+                continue;
+            }
+            for (k = 0; k < clipboard_formats[j].atom_count; k++) {
+                targets[target_count] = clipboard_formats[j].atoms[k];
+                target_count++;
+                if (target_count == sizeof(targets)/sizeof(Atom)) {
+                    LOG_WARN("sendtargets: too many targets");
+                    goto exit_loop;
                 }
-                break;
-            /* TODO Add support for more types here */
+            }
         }
     }
+exit_loop:
 
     Window requestor_win = request_event.xselectionrequest.requestor;
     Atom prop = request_event.xselectionrequest.property;
@@ -2576,9 +2593,9 @@ static Atom atom_lists_overlap(Atom *atoms1, Atom *atoms2, int l1, int l2)
 
 static void handle_targets_notify(XEvent& event, bool incr)
 {
-    int len;
+    int i, len;
     Lock lock(clipboard_lock);
-    Atom *atoms = NULL;
+    Atom atom, *atoms = NULL;
 
     if (!expected_targets_notifies) {
         LOG_WARN("unexpected selection notify TARGETS");
@@ -2602,15 +2619,21 @@ static void handle_targets_notify(XEvent& event, bool incr)
     print_targets("received", atoms, len);
 
     clipboard_type_count = 0;
-    Atom atom = atom_lists_overlap(utf8_atoms, atoms, utf8_atom_count, len);
-    if (atom) {
-        clipboard_agent_types[clipboard_type_count] =
-            VD_AGENT_CLIPBOARD_UTF8_TEXT;
-        clipboard_x11_targets[clipboard_type_count] = atom;
-        clipboard_type_count++;
+    for (i = 0; i < clipboard_format_count; i++) {
+        atom = atom_lists_overlap(clipboard_formats[i].atoms, atoms,
+                                  clipboard_formats[i].atom_count, len);
+        if (atom) {
+            clipboard_agent_types[clipboard_type_count] =
+                clipboard_formats[i].type;
+            clipboard_x11_targets[clipboard_type_count] = atom;
+            clipboard_type_count++;
+            if (clipboard_type_count ==
+                    sizeof(clipboard_agent_types)/sizeof(uint32_t)) {
+                LOG_WARN("handle_targets_notify: too many matching types");
+                break;
+            }
+        }
     }
-
-    /* TODO Add support for more types here */
 
     if (clipboard_type_count)
         clipboard_listener->on_clipboard_grab(clipboard_agent_types,
@@ -3459,23 +3482,14 @@ LocalCursor* Platform::create_default_cursor()
 bool Platform::on_clipboard_grab(uint32_t *types, uint32_t type_count)
 {
     Lock lock(clipboard_lock);
-    int i;
 
-    clipboard_type_count = 0;
-    for (i = 0; i < type_count; i++) {
-        /* TODO Add support for more types here */
-        /* Check if we support the type */
-        if (types[i] != VD_AGENT_CLIPBOARD_UTF8_TEXT)
-            continue;
-
-        clipboard_agent_types[clipboard_type_count] = types[i];
-        clipboard_type_count++;
+    if (type_count > sizeof(clipboard_agent_types)/sizeof(uint32_t)) {
+        LOG_WARN("on_clipboard_grab: too many types");
+        type_count = sizeof(clipboard_agent_types)/sizeof(uint32_t);
     }
 
-    if (!clipboard_type_count) {
-        LOG_INFO("No supported clipboard types in agent grab");
-        return false;
-    }
+    memcpy(clipboard_agent_types, types, type_count * sizeof(uint32_t));
+    clipboard_type_count = type_count;
 
     XSetSelectionOwner(x_display, clipboard_prop, platform_win, CurrentTime);
     XFlush(x_display);
