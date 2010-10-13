@@ -1894,7 +1894,7 @@ static void reds_main_event(int fd, int event, void *data)
         RedsOutgoingData *outgoing = &reds->outgoing;
         if (reds_send_data()) {
             reds_push();
-            if (!outgoing->item) {
+            if (!outgoing->item && reds->peer) {
                 core->watch_update_mask(reds->peer->watch,
                                         SPICE_WATCH_EVENT_READ);
             }
