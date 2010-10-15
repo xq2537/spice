@@ -1202,7 +1202,12 @@ void vdi_read_buf_release(uint8_t *data, void *opaque)
     VDIReadBuf *buf = (VDIReadBuf *)opaque;
 
     ring_add(&reds->agent_state.read_bufs, &buf->link);
-    //read_from_vdi_port(); // XXX WTF? - ask arnon. should we be calling this here?? (causes recursion of read_from_vdi_port..) 
+    /* read_from_vdi_port() may have never completed because the read_bufs
+       ring was empty. So we call it again so it can complete its work if
+       necessary. Note since we can be called from read_from_vdi_port ourselves
+       this can cause recursion, read_from_vdi_port() contains code protecting
+       it against this. */
+    while (read_from_vdi_port());
 }
 
 static void dispatch_vdi_port_data(int port, VDIReadBuf *buf)
@@ -1235,7 +1240,12 @@ static void dispatch_vdi_port_data(int port, VDIReadBuf *buf)
    it returns 0 ensures that all data has been consumed. */
 static int read_from_vdi_port(void)
 {
-    // FIXME: UGLY HACK. Result of spice-vmc vmc_read triggering flush of throttled data, and recalling this.
+    /* There are 2 scenarios where we can get called recursively:
+       1) spice-vmc vmc_read triggering flush of throttled data, recalling us
+       2) the buf we push to the client may be send immediately without
+          blocking, in which case its free function will recall us
+       This messes up the state machine, so ignore recursive calls.
+       This is why we always must be called in a loop. */
     static int inside_call = 0;
     int quit_loop = 0;
     VDIPortState *state = &reds->agent_state;
