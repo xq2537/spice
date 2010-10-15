@@ -1229,6 +1229,10 @@ static void dispatch_vdi_port_data(int port, VDIReadBuf *buf)
     }
 }
 
+/* Note this function MUST always be called in a while loop until it
+   returns 0. This is needed because it can cause new data available events
+   and its recursion protection causes those to get lost. Calling it until
+   it returns 0 ensures that all data has been consumed. */
 static int read_from_vdi_port(void)
 {
     // FIXME: UGLY HACK. Result of spice-vmc vmc_read triggering flush of throttled data, and recalling this.
@@ -1665,7 +1669,7 @@ static void reds_main_handle_message(void *opaque, size_t size, uint32_t type, v
         agent_start = (SpiceMsgcMainAgentTokens *)message;
         reds->agent_state.client_agent_started = TRUE;
         reds->agent_state.send_tokens = agent_start->num_tokens; // TODO: sanitize? coming from guest!
-        read_from_vdi_port();
+        while (read_from_vdi_port());
         break;
     }
     case SPICE_MSGC_MAIN_AGENT_DATA: {
@@ -1721,7 +1725,7 @@ static void reds_main_handle_message(void *opaque, size_t size, uint32_t type, v
 
         token = (SpiceMsgcMainAgentTokens *)message;
         reds->agent_state.send_tokens += token->num_tokens;
-        read_from_vdi_port();
+        while (read_from_vdi_port());
         break;
     }
     case SPICE_MSGC_MAIN_ATTACH_CHANNELS:
