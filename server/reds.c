@@ -203,7 +203,6 @@ typedef struct VDIPortState {
     VDIChunkHeader vdi_chunk_header;
 
     int client_agent_started;
-    uint32_t send_tokens;
 } VDIPortState;
 
 typedef struct InputsState {
@@ -710,7 +709,6 @@ static void reds_reset_vdp()
         state->current_read_buf = NULL;
     }
     state->client_agent_started = FALSE;
-    state->send_tokens = 0;
 }
 
 static void reds_reset_outgoing()
@@ -1288,13 +1286,6 @@ static int read_from_vdi_port(void)
                 break;
             }
 
-            if (state->vdi_chunk_header.port == VDP_CLIENT_PORT) {
-                if (!state->send_tokens) {
-                    quit_loop = 1;
-                    break;
-                }
-                --state->send_tokens;
-            }
             ring_remove(item);
             state->current_read_buf = (VDIReadBuf *)item;
             state->recive_pos = state->current_read_buf->data;
@@ -1414,7 +1405,7 @@ static void main_channel_push_migrate_data_item()
     data->agent_connected = !!state->connected;
     data->client_agent_started = state->client_agent_started;
     data->num_client_tokens = state->num_client_tokens;
-    data->send_tokens = state->send_tokens;
+    data->send_tokens = ~0;
 
     data->read_state = state->read_state;
     data->vdi_chunk_header = state->vdi_chunk_header;
@@ -1633,8 +1624,6 @@ static void main_channel_recive_migrate_data(MainMigrateData *data, uint8_t *end
     ASSERT(state->num_client_tokens + data->write_queue_size <= REDS_AGENT_WINDOW_SIZE +
                                                                 REDS_NUM_INTERNAL_AGENT_MESSAGES);
     state->num_tokens = REDS_AGENT_WINDOW_SIZE - state->num_client_tokens;
-    state->send_tokens = data->send_tokens;
-
 
     if (!data->agent_connected) {
         if (state->connected) {
@@ -1669,19 +1658,13 @@ static void main_channel_recive_migrate_data(MainMigrateData *data, uint8_t *end
 static void reds_main_handle_message(void *opaque, size_t size, uint32_t type, void *message)
 {
     switch (type) {
-    case SPICE_MSGC_MAIN_AGENT_START: {
-        SpiceMsgcMainAgentTokens *agent_start;
-
+    case SPICE_MSGC_MAIN_AGENT_START:
         red_printf("agent start");
         if (!reds->peer) {
             return;
         }
-        agent_start = (SpiceMsgcMainAgentTokens *)message;
         reds->agent_state.client_agent_started = TRUE;
-        reds->agent_state.send_tokens = agent_start->num_tokens; // TODO: sanitize? coming from guest!
-        while (read_from_vdi_port());
         break;
-    }
     case SPICE_MSGC_MAIN_AGENT_DATA: {
         RingItem *ring_item;
         VDAgentExtBuf *buf;
@@ -1725,19 +1708,8 @@ static void reds_main_handle_message(void *opaque, size_t size, uint32_t type, v
         write_to_vdi_port();
         break;
     }
-    case SPICE_MSGC_MAIN_AGENT_TOKEN: {
-        SpiceMsgcMainAgentTokens *token;
-
-        if (!reds->agent_state.client_agent_started) {
-            red_printf("SPICE_MSGC_MAIN_AGENT_TOKEN race");
-            break;
-        }
-
-        token = (SpiceMsgcMainAgentTokens *)message;
-        reds->agent_state.send_tokens += token->num_tokens;
-        while (read_from_vdi_port());
+    case SPICE_MSGC_MAIN_AGENT_TOKEN:
         break;
-    }
     case SPICE_MSGC_MAIN_ATTACH_CHANNELS:
         reds_send_channels();
         break;
@@ -2048,7 +2020,6 @@ static void reds_handle_main_link(RedLinkInfo *link)
         reds_send_link_result(link, SPICE_LINK_ERR_OK);
         while((connection_id = rand()) == 0);
         reds->agent_state.num_tokens = 0;
-        reds->agent_state.send_tokens = 0;
         memcpy(&(reds->taTicket), &taTicket, sizeof(reds->taTicket));
         reds->mig_target = FALSE;
     } else {
@@ -2106,6 +2077,8 @@ static void reds_handle_main_link(RedLinkInfo *link)
 
         reds_push_pipe_item(item);
         reds_start_net_test();
+        /* Now that we have a client, forward any pending agent data */
+        while (read_from_vdi_port());
     }
 }
 
