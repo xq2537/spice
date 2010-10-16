@@ -1011,11 +1011,6 @@ void RedClient::handle_agent_connected(RedPeer::InMessage* message)
     if (_auto_display_res && !_agent_mon_config_sent) {
         send_agent_monitors_config();
     }
-
-    if (VD_AGENT_HAS_CAPABILITY(_agent_caps, _agent_caps_size,
-            VD_AGENT_CAP_DISPLAY_CONFIG) && !_agent_disp_config_sent) {
-        send_agent_display_config();
-    }
 }
 
 void RedClient::handle_agent_disconnected(RedPeer::InMessage* message)
@@ -1037,14 +1032,14 @@ void RedClient::on_agent_announce_capabilities(
     }
     memcpy(_agent_caps, caps->caps, sizeof(_agent_caps[0]) * caps_size);
 
+    if (caps->request) {
+        send_agent_announce_capabilities(false);
+    }
     if (VD_AGENT_HAS_CAPABILITY(caps->caps, caps_size,
-            VD_AGENT_CAP_DISPLAY_CONFIG)) {
+            VD_AGENT_CAP_DISPLAY_CONFIG) && !_agent_disp_config_sent) {
         // not sending the color depth through send_agent_monitors_config, since
         // it applies only for attached screens.
         send_agent_display_config();
-    }
-    if (caps->request) {
-        send_agent_announce_capabilities(false);
     }
 }
 
