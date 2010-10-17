@@ -89,6 +89,7 @@ public:
     void show();
     void activate();
     void external_show();
+    void update_menu();
 
     int get_id() { return _id;}
     int get_screen_id();
