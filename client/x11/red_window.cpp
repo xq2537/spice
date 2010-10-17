@@ -1063,18 +1063,27 @@ void RedWindow_p::set_glx(int width, int height)
 }
 #endif // USE_OGL
 
-void RedWindow_p::set_minmax(PixelsSource_p& pix_source, int width, int height)
+void RedWindow_p::set_minmax(PixelsSource_p& pix_source)
 {
     //todo: auto res
     XSizeHints* size_hints = XAllocSizeHints();
     ASSERT(size_hints);
     size_hints->flags = PMinSize | PMaxSize;
-    size_hints->min_width = size_hints->max_width = width;
-    size_hints->min_height = size_hints->max_height = height;
+    if (_red_window->_type == RedWindow::TYPE_FULLSCREEN) {
+        /* Some window managers won't allow full screen mode with a fixed
+           width / height */
+        size_hints->min_width = 1;
+        size_hints->max_width = 65535;
+        size_hints->min_height = 1;
+        size_hints->max_height = 65535;
+    } else {
+        size_hints->min_width = size_hints->max_width = _width;
+        size_hints->min_height = size_hints->max_height = _height;
+    }
     XSetWMNormalHints(x_display, _win, size_hints);
     XFree(size_hints);
-    pix_source.x_drawable.height = height;
-    pix_source.x_drawable.width = width;
+    pix_source.x_drawable.height = _height;
+    pix_source.x_drawable.width = _width;
 }
 
 Cursor RedWindow_p::create_invisible_cursor(Window window)
@@ -1100,6 +1109,8 @@ RedWindow_p::RedWindow_p()
     , _ignore_foucs (false)
     , _pointer_in_window (false)
     , _ignore_pointer (false)
+    ,_width (200)
+    ,_height (200)
 {
 }
 
@@ -1145,8 +1156,8 @@ void RedWindow_p::destroy(RedWindow& red_window, PixelsSource_p& pix_source)
     }
 }
 
-void RedWindow_p::create(RedWindow& red_window, PixelsSource_p& pix_source, int x, int y,
-                         unsigned int width, unsigned int height, int in_screen)
+void RedWindow_p::create(RedWindow& red_window, PixelsSource_p& pix_source,
+                         int x, int y, int in_screen)
 {
     Window window = None;
     Cursor cursor = None;
@@ -1168,7 +1179,7 @@ void RedWindow_p::create(RedWindow& red_window, PixelsSource_p& pix_source, int 
     win_attributes.colormap = _colormap;
     mask |= CWColormap;
     window = XCreateWindow(x_display, root_window, x, y,
-                           width, height, 0, XPlatform::get_vinfo()[in_screen]->depth,
+                           _width, _height, 0, XPlatform::get_vinfo()[in_screen]->depth,
                            InputOutput, XPlatform::get_vinfo()[in_screen]->visual, mask,
                            &win_attributes);
     XUnlockDisplay(x_display);
@@ -1223,11 +1234,12 @@ void RedWindow_p::create(RedWindow& red_window, PixelsSource_p& pix_source, int 
     _show_pos.y = y;
     _visibale = false;
     _expect_parent = false;
+    _red_window = &red_window;
     pix_source.type = PIXELS_SOURCE_TYPE_X_DRAWABLE;
     pix_source.x_drawable.drawable = window;
     pix_source.x_drawable.screen = _screen;
     pix_source.x_drawable.gc = gc;
-    set_minmax(pix_source, width, height);
+    set_minmax(pix_source);
     sync();
 }
 
@@ -1236,17 +1248,12 @@ void RedWindow_p::migrate(RedWindow& red_window, PixelsSource_p& pix_source, int
     if (to_screen == _screen) {
         return;
     }
-    XWindowAttributes attrib;
-    if (!XGetWindowAttributes(x_display, _win, &attrib)) {
-        THROW("get attributes failed");
-    }
     XTextProperty text_pro;
     XLockDisplay(x_display);
     bool valid_title = XGetWMName(x_display, _win, &text_pro) && text_pro.value;
     XUnlockDisplay(x_display);
     destroy(red_window, pix_source);
-    create(red_window, pix_source, _show_pos.x, _show_pos.y, attrib.width, attrib.height,
-           to_screen);
+    create(red_window, pix_source, _show_pos.x, _show_pos.y, to_screen);
     if (valid_title) {
         XSetWMName(x_display, _win, &text_pro);
         XFree(text_pro.value); //???
@@ -1304,7 +1311,7 @@ RedWindow::RedWindow(RedWindow::Listener& listener, int screen)
     , _menu (NULL)
 {
     ASSERT(x_display);
-    create(*this, *(PixelsSource_p*)get_opaque(), 0, 0, 200, 200,
+    create(*this, *(PixelsSource_p*)get_opaque(), 0, 0,
            (screen == DEFAULT_SCREEN) ? DefaultScreen(x_display) : screen);
 }
 
@@ -1505,6 +1512,9 @@ void RedWindow::show(int screen_id)
         _listener.post_migrate();
     }
 
+    /* We must update min/max for fullscreen / normal switching */
+    set_minmax(*(PixelsSource_p*)get_opaque());
+
     if (_type == TYPE_FULLSCREEN) {
         Atom state[2];
         state[0] = wm_state_above;
@@ -1621,7 +1631,9 @@ static void send_expose(Window window, int width, int height)
 
 void RedWindow::move_and_resize(int x, int y, int width, int height)
 {
-    set_minmax(*(PixelsSource_p*)get_opaque(), width, height);
+    _width = width;
+    _height = height;
+    set_minmax(*(PixelsSource_p*)get_opaque());
     XMoveResizeWindow(x_display, _win, x, y, width, height);
     _show_pos.x = x;
     _show_pos.y = y;
@@ -1639,7 +1651,9 @@ void RedWindow::move(int x, int y)
 
 void RedWindow::resize(int width, int height)
 {
-    set_minmax(*(PixelsSource_p*)get_opaque(), width, height);
+    _width = width;
+    _height = height;
+    set_minmax(*(PixelsSource_p*)get_opaque());
     XResizeWindow(x_display, _win, width, height);
     if (_visibale) {
         send_expose(_win, width, height);

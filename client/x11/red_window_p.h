@@ -39,10 +39,10 @@ public:
     RedWindow_p();
 
     void migrate(RedWindow& red_window, PixelsSource_p& pix_source, int dest_screen);
-    void create(RedWindow& red_window, PixelsSource_p& pix_source, int x, int y,
-                unsigned int width, unsigned int height, int in_screen);
+    void create(RedWindow& red_window, PixelsSource_p& pix_source,
+                int x, int y, int in_screen);
     void destroy(RedWindow& red_window, PixelsSource_p& pix_source);
-    void set_minmax(PixelsSource_p& pix_source, int width, int height);
+    void set_minmax(PixelsSource_p& pix_source);
     void wait_for_reparent();
     void wait_for_map();
     void wait_for_unmap();
@@ -79,6 +79,9 @@ protected:
     bool _shadow_pointer_state;
     XEvent _shadow_pointer_event;
     Colormap _colormap;
+    RedWindow *_red_window;
+    int _width;
+    int _height;
 };
 
 #endif
