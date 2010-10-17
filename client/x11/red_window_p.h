@@ -82,6 +82,7 @@ protected:
     RedWindow *_red_window;
     int _width;
     int _height;
+    Time last_event_time;
 };
 
 #endif
