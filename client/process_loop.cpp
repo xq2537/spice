@@ -263,7 +263,6 @@ ProcessLoop::ProcessLoop(void* owner)
     , _quitting (false)
     , _exit_code (0)
     , _started (false)
-
 {
     _event_sources.add_trigger(_wakeup_trigger);
 }
@@ -277,6 +276,7 @@ int ProcessLoop::run()
 {
     _thread = pthread_self();
     _started = true;
+    on_start_running();
     for (;;) {
         if (_event_sources.wait_events(_timers_queue.get_soonest_timeout())) {
             _quitting = true;

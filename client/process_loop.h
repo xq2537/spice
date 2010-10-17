@@ -220,6 +220,7 @@ protected:
         virtual void on_event() {}
     };
 
+    virtual void on_start_running() {}
     void wakeup();
     void do_quit(int error_code);
 
