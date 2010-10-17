@@ -1026,8 +1026,10 @@ bool DynamicScreen::set_screen_size(int size_index)
     XRRConfigCurrentConfiguration(config, &rotation);
 
     Monitor::self_monitors_change++;
+    XLockDisplay(get_display());
     /*what status*/
     XRRSetScreenConfig(get_display(), config, root_window, size_index, rotation, CurrentTime);
+    XUnlockDisplay(get_display());
     process_monitor_configure_events(platform_win);
     Monitor::self_monitors_change--;
     XRRFreeScreenConfigInfo(config);
@@ -1300,7 +1302,9 @@ void MultyMonScreen::set_size(int width, int height)
     int width_mm = (int)((double)_saved_width_mm / _saved_width * width);
     set_height(height);
     int height_mm = (int)((double)_saved_height_mm / _saved_height * height);
+    XLockDisplay(get_display());
     XRRSetScreenSize(get_display(), root_window, width, height, width_mm, height_mm);
+    XUnlockDisplay(get_display());
     X_DEBUG_SYNC(get_display());
 }
 
@@ -1329,9 +1333,11 @@ void MultyMonScreen::restore()
     disable();
     Window root_window = RootWindow(get_display(), get_screen());
 
+    XLockDisplay(get_display());
     XRRSetScreenSize(get_display(), root_window, _saved_width,
                      _saved_height,
                      _saved_width_mm, _saved_height_mm);
+    XUnlockDisplay(get_display());
     XMonitorsList::iterator iter = _monitors.begin();
     for (; iter != _monitors.end(); iter++) {
         (*iter)->revert();
@@ -2150,8 +2156,10 @@ void XMonitor::disable()
     if (!res.valid()) {
         THROW("get screen resources failed");
     }
+    XLockDisplay(display);
     XRRSetCrtcConfig(display, res.get(), _crtc, CurrentTime,
                      0, 0, None, RR_Rotate_0, NULL, 0);
+    XUnlockDisplay(display);
 
     XMonitorsList::iterator iter = _clones.begin();
     for (; iter != _clones.end(); iter++) {
@@ -2174,10 +2182,12 @@ void XMonitor::enable()
     if (!res.valid()) {
         THROW("get screen resources failed");
     }
+    XLockDisplay(display);
     XRRSetCrtcConfig(display, res.get(), _crtc, CurrentTime,
                      _position.x, _position.y,
                      _mode, _rotation,
                      _outputs, _noutput);
+    XUnlockDisplay(display);
 
     XMonitorsList::iterator iter = _clones.begin();
     for (; iter != _clones.end(); iter++) {
