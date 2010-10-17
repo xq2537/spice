@@ -20,6 +20,10 @@
 #include "utils.h"
 #include "debug.h"
 
+#define PIPE_TIMEOUT 5000
+#define PIPE_MAX_NAME_LEN 256
+#define PIPE_PREFIX TEXT("\\\\.\\pipe\\")
+
 PipeBuffer::PipeBuffer(HANDLE pipe, ProcessLoop& process_loop)
     : _handler (NULL)
     , _pipe (pipe)
