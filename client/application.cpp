@@ -673,9 +673,9 @@ RedScreen* Application::get_screen(int id)
                 mon = get_monitor(id);
                 capture = release_capture();
                 screen->set_monitor(mon);
+                prepare_monitors();
                 position_screens();
                 screen->show_full_screen();
-                prepare_monitors();
 
                 if (capture) {
                     _main_screen->activate();
@@ -1529,6 +1529,7 @@ void Application::exit_full_screen()
     LOG_INFO("");
     _changing_screens = true;
     release_capture();
+    restore_monitors();
     for (int i = 0; i < (int)_screens.size(); i++) {
         if (_screens[i]) {
             Monitor* mon;
@@ -1539,7 +1540,6 @@ void Application::exit_full_screen()
             }
         }
     }
-    restore_monitors();
     _full_screen = false;
     restore_screens_size();
     show();
