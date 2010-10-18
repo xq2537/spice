@@ -1786,8 +1786,6 @@ void Application::show_me(bool full_screen)
 
 void Application::hide_me()
 {
-//  hide_gui();
-//  FIXME: this instead?
     if (_full_screen) {
         exit_full_screen();
     }

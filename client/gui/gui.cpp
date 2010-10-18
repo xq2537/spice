@@ -420,7 +420,7 @@ void GUI::Dialog::handle_message_click(int id)
     }
 
     if (_close_on_message_click) {
-        application().hide_me();
+        application().hide_gui();
     }
 }
 
@@ -840,7 +840,7 @@ public:
 bool SettingsDialog::handle_close(const CEGUI::EventArgs& e)
 {
     DBG(0, "");
-    application().hide_me();
+    application().hide_gui();
     return true;
 }
 

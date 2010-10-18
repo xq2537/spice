@@ -254,6 +254,7 @@ public:
 
 #ifdef USE_GUI
     bool is_disconnect_allowed();
+    void hide_gui();
 #endif
 
     const std::string& get_host();
@@ -318,7 +319,6 @@ private:
     void attach_gui_barriers();
     void detach_gui_barriers();
     void show_gui();
-    void hide_gui();
     void create_gui_barrier(RedScreen& screen, int id);
     void destroyed_gui_barrier(int id);
     void destroyed_gui_barriers();
