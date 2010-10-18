@@ -26,6 +26,7 @@
 #include "menu.h"
 #include "hot_keys.h"
 #include "process_loop.h"
+#include "foreign_menu.h"
 
 class RedScreen;
 class Application;
@@ -138,10 +139,23 @@ typedef std::list<KeyHandler*> KeyHandlersStack;
 typedef std::list<GUIBarrier*> GUIBarriers;
 #endif // USE_GUI
 
+enum AppMenuItemType {
+    APP_MENU_ITEM_TYPE_INVALID,
+    APP_MENU_ITEM_TYPE_FOREIGN,
+};
+
+typedef struct AppMenuItem {
+    AppMenuItemType type;
+    int32_t conn_ref;
+    uint32_t ext_id;
+} AppMenuItem;
+
+typedef std::map<int, AppMenuItem> AppMenuItemMap;
+
 class Application : public ProcessLoop,
                     public Platform::EventListener,
                     public Platform::DisplayModeListener,
-                    public CommandTarget {
+                    public ForeignMenuInterface {
 public:
 
     enum State {
@@ -186,6 +200,7 @@ public:
     void on_activate_screen(RedScreen* screen);
     void on_start_screen_key_interception(RedScreen* screen);
     void on_stop_screen_key_interception(RedScreen* screen);
+    virtual void on_start_running();
     virtual void on_app_activated();
     virtual void on_app_deactivated();
     virtual void on_monitors_change();
@@ -200,7 +215,7 @@ public:
     void exit_full_screen();
     bool toggle_full_screen();
     void minimize();
-    void set_title(std::wstring& title);
+    void set_title(const std::wstring& title);
     void hide();
     void show();
     void external_show();
@@ -216,6 +231,10 @@ public:
     Menu* get_app_menu();
     virtual void do_command(int command);
 
+    int get_foreign_menu_item_id(int32_t opaque_conn_ref, uint32_t msg_id);
+    void clear_menu_items(int32_t opaque_conn_ref);
+    void remove_menu_item(int item_id);
+    void update_menu();
 
     //controller interface begin
     bool connect(const std::string& host, int port, int sport, const std::string& password);
@@ -276,6 +295,7 @@ private:
     void send_command_hotkey(int command);
     void send_hotkey_key_set(const HotkeySet& key_set);
     void menu_item_callback(unsigned int item_id);
+    int get_menu_item_id(AppMenuItemType type, int32_t conn_ref, uint32_t ext_id);
     int get_hotkeys_commnad();
     bool is_key_set_pressed(const HotkeySet& key_set);
     void do_on_key_up(RedKey key);
@@ -341,6 +361,8 @@ private:
     StickyInfo _sticky_info;
     std::vector<int> _canvas_types;
     AutoRef<Menu> _app_menu;
+    AutoRef<ForeignMenu> _foreign_menu;
+    AppMenuItemMap _app_menu_items;
 #ifdef USE_GUI
     std::auto_ptr<GUI> _gui;
     AutoRef<GUITimer> _gui_timer;

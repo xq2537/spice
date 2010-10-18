@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="windows-1255"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="9,00"
+	Version="9.00"
 	Name="redc"
 	ProjectGUID="{4F03BAF9-DFBC-4CA7-B860-8929555981AE}"
 	RootNamespace="redc"
@@ -225,6 +225,10 @@
 			</File>
 			<File
 				RelativePath=".\event_sources_p.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\foreign_menu.cpp"
 				>
 			</File>
 			<File
@@ -508,6 +512,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\foreign_menu.h"
+				>
+			</File>
+			<File
 				RelativePath="..\..\common\gdi_canvas.h"
 				>
 			</File>
@@ -711,7 +719,7 @@
 				<Tool
 					Name="VCCustomBuildTool"
 					Description="Generating demarshaller"
-					CommandLine="generate.bat"
+					CommandLine="generate.bat&#x0D;&#x0A;"
 					AdditionalDependencies=""
 					Outputs="$(ProjectDir)/../generated_demarshallers.cpp;$(ProjectDir)/../generated_marshallers.cpp"
 				/>
@@ -722,7 +730,7 @@
 				<Tool
 					Name="VCCustomBuildTool"
 					Description="Generating demarshaller"
-					CommandLine="generate.bat"
+					CommandLine="generate.bat&#x0D;&#x0A;"
 					Outputs="$(ProjectDir)/../generated_demarshallers.cpp;$(ProjectDir)/../generated_marshallers.cpp"
 				/>
 			</FileConfiguration>
@@ -736,7 +744,7 @@
 				<Tool
 					Name="VCCustomBuildTool"
 					Description="Generating old demarshaller"
-					CommandLine="generate1.bat"
+					CommandLine="generate1.bat&#x0D;&#x0A;"
 					AdditionalDependencies=""
 					Outputs="$(ProjectDir)/../generated_demarshallers1.cpp;$(ProjectDir)/../generated_marshallers1.cpp"
 				/>
@@ -747,7 +755,7 @@
 				<Tool
 					Name="VCCustomBuildTool"
 					Description="Generating old demarshaller"
-					CommandLine="generate1.bat"
+					CommandLine="generate1.bat&#x0D;&#x0A;"
 					Outputs="$(ProjectDir)/../generated_demarshallers1.cpp;$(ProjectDir)/../generated_marshallers1.cpp"
 				/>
 			</FileConfiguration>

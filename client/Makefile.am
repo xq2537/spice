@@ -61,6 +61,8 @@ RED_COMMON_SRCS =			\
 	debug.h				\
 	display_channel.cpp		\
 	display_channel.h		\
+	foreign_menu.cpp		\
+	foreign_menu.h			\
 	glz_decoded_image.h		\
 	glz_decoder_config.h		\
 	glz_decoder.cpp			\

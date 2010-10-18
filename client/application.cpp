@@ -335,6 +335,8 @@ enum AppCommands {
 #ifdef USE_GUI
     APP_CMD_SHOW_GUI,
 #endif // USE_GUI
+    APP_CMD_EXTERNAL_BEGIN = 0x400,
+    APP_CMD_EXTERNAL_END = 0x800,
 };
 
 Application::Application()
@@ -586,6 +588,13 @@ void Application::switch_host(const std::string& host, int port, int sport,
 
 int Application::run()
 {
+    _exit_code = ProcessLoop::run();
+    return _exit_code;
+}
+
+void Application::on_start_running()
+{
+    _foreign_menu.reset(new ForeignMenu(this));
 #ifdef USE_GUI
     if (_gui_mode != GUI_MODE_FULL) {
         connect();
@@ -595,8 +604,6 @@ int Application::run()
 #else
     connect();
 #endif // HAVE_GUI
-    _exit_code = ProcessLoop::run();
-    return _exit_code;
 }
 
 RedScreen* Application::find_screen(int id)
@@ -974,6 +981,14 @@ void Application::do_command(int command)
         show_gui();
         break;
 #endif // USE_GUI
+    default:
+        AppMenuItemMap::iterator iter = _app_menu_items.find(command);
+        ASSERT(iter != _app_menu_items.end());
+        AppMenuItem* item = &(*iter).second;
+        if (item->type == APP_MENU_ITEM_TYPE_FOREIGN) {
+            ASSERT(*_foreign_menu);
+            (*_foreign_menu)->on_command(item->conn_ref, item->ext_id);
+        }
     }
 }
 
@@ -1318,12 +1333,18 @@ void Application::on_app_activated()
 {
     _active = true;
     _key_handler->on_focus_in();
+    if (*_foreign_menu) {
+        (*_foreign_menu)->on_activate();
+    }
 }
 
 void Application::on_app_deactivated()
 {
     _active = false;
     _key_handler->on_focus_out();
+    if (*_foreign_menu) {
+        (*_foreign_menu)->on_deactivate();
+    }
 #ifdef WIN32
     if (!_changing_screens) {
         exit_full_screen();
@@ -1573,7 +1594,7 @@ uint32_t Application::get_mouse_mode()
     return _client.get_mouse_mode();
 }
 
-void Application::set_title(std::wstring& title)
+void Application::set_title(const std::wstring& title)
 {
     _title = title;
 
@@ -1665,6 +1686,53 @@ void Application::send_hotkey_key_set(const HotkeySet& key_set)
     }
 }
 
+int Application::get_menu_item_id(AppMenuItemType type, int32_t conn_ref, uint32_t ext_id)
+{
+    int free_id = APP_CMD_EXTERNAL_BEGIN;
+    AppMenuItem item = {type, conn_ref, ext_id};
+    AppMenuItemMap::iterator iter = _app_menu_items.begin();
+    for (; iter != _app_menu_items.end(); iter++) {
+        if (!memcmp(&(*iter).second, &item, sizeof(item))) {
+            return (*iter).first;
+        } else if (free_id == (*iter).first && ++free_id > APP_CMD_EXTERNAL_END) {
+            return APP_CMD_INVALID;
+        }
+    }
+    _app_menu_items[free_id] = item;
+    return free_id;
+}
+
+void Application::clear_menu_items(int32_t opaque_conn_ref)
+{
+    AppMenuItemMap::iterator iter = _app_menu_items.begin();
+    AppMenuItemMap::iterator curr;
+
+    while (iter != _app_menu_items.end()) {
+        curr = iter++;
+        if (((*curr).second).conn_ref == opaque_conn_ref) {
+            _app_menu_items.erase(curr);
+        }
+    }
+}
+
+void Application::remove_menu_item(int item_id)
+{
+    _app_menu_items.erase(item_id);
+}
+
+int Application::get_foreign_menu_item_id(int32_t opaque_conn_ref, uint32_t msg_id)
+{
+    return get_menu_item_id(APP_MENU_ITEM_TYPE_FOREIGN, opaque_conn_ref, msg_id);
+}
+
+void Application::update_menu()
+{
+    for (size_t i = 0; i < _screens.size(); ++i) {
+        if (_screens[i]) {
+            _screens[i]->update_menu();
+        }
+    }
+}
 
 //controller interface begin
 
