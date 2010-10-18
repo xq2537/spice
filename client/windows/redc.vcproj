@@ -212,6 +212,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\controller.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\cursor.cpp"
 				>
 			</File>
@@ -481,6 +485,10 @@
 			</File>
 			<File
 				RelativePath="..\common.h"
+				>
+			</File>
+			<File
+				RelativePath="..\controller.h"
 				>
 			</File>
 			<File

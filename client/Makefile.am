@@ -54,6 +54,8 @@ RED_COMMON_SRCS =			\
 	marshaller.cpp			\
 	generated_marshallers.cpp	\
 	generated_marshallers1.cpp	\
+	controller.cpp			\
+	controller.h			\
 	cursor_channel.cpp		\
 	cursor_channel.h		\
 	cursor.cpp			\

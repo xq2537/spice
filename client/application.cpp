@@ -357,6 +357,7 @@ Application::Application()
     , _monitors (NULL)
     , _title (L"SPICEc:%d")
     , _sys_key_intercept_mode (false)
+	, _enable_controller (false)
 #ifdef USE_GUI
     , _gui_mode (GUI_MODE_FULL)
 #endif // USE_GUI
@@ -595,6 +596,11 @@ int Application::run()
 void Application::on_start_running()
 {
     _foreign_menu.reset(new ForeignMenu(this));
+    if (_enable_controller) {
+        _controller.reset(new Controller(this));
+        return;
+    }
+    //FIXME: _client.connect() or use the following instead?
 #ifdef USE_GUI
     if (_gui_mode != GUI_MODE_FULL) {
         connect();
@@ -988,6 +994,9 @@ void Application::do_command(int command)
         if (item->type == APP_MENU_ITEM_TYPE_FOREIGN) {
             ASSERT(*_foreign_menu);
             (*_foreign_menu)->on_command(item->conn_ref, item->ext_id);
+        } else if (item->type == APP_MENU_ITEM_TYPE_CONTROLLER) {
+            ASSERT(*_controller);
+            (*_controller)->on_command(item->conn_ref, item->ext_id);
         }
     }
 }
@@ -1736,6 +1745,11 @@ void Application::update_menu()
 
 //controller interface begin
 
+void Application::set_auto_display_res(bool auto_display_res)
+{
+   _client.set_auto_display_res(auto_display_res);
+}
+
 bool Application::connect(const std::string& host, int port, int sport, const std::string& password)
 {
     if (_state != DISCONNECTED) {
@@ -1743,6 +1757,10 @@ bool Application::connect(const std::string& host, int port, int sport, const st
     }
     _client.set_target(host, port, sport);
     _client.set_password(password);
+    if (!set_channels_security(port, sport)) {
+        return false;
+    }
+    register_channels();
     connect();
     return true;
 }
@@ -1757,9 +1775,52 @@ void Application::quit()
     ProcessLoop::quit(SPICEC_ERROR_CODE_SUCCESS);
 }
 
+void Application::show_me(bool full_screen)
+{
+    if (full_screen) {
+        enter_full_screen();
+    } else {
+        _main_screen->show(true, NULL);
+    }
+}
+
 void Application::hide_me()
 {
-    hide_gui();
+//  hide_gui();
+//  FIXME: this instead?
+    if (_full_screen) {
+        exit_full_screen();
+    }
+    hide();
+}
+
+void Application::set_hotkeys(const std::string& hotkeys)
+{
+    std::auto_ptr<HotKeysParser> parser(new HotKeysParser(hotkeys, _commands_map));
+    _hot_keys = parser->get();
+}
+
+int Application::get_controller_menu_item_id(int32_t opaque_conn_ref, uint32_t msg_id)
+{
+    return get_menu_item_id(APP_MENU_ITEM_TYPE_CONTROLLER, opaque_conn_ref, msg_id);
+}
+
+void Application::set_menu(Menu* menu)
+{
+    if (menu) {
+        _app_menu.reset(menu->ref());
+    } else {
+        init_menu();
+    }
+    if (*_foreign_menu) {
+        (*_foreign_menu)->add_sub_menus();
+    }
+    update_menu();
+}
+
+void Application::delete_menu()
+{
+    set_menu(NULL);
 }
 
 #ifdef USE_GUI
@@ -1830,6 +1891,40 @@ bool Application::set_channels_security(CmdLineParser& parser, bool on, char *va
         }
         _peer_con_opt[(*iter).second] = option;
     } while ((val = parser.next_argument()));
+    return true;
+}
+
+bool Application::set_channels_security(int port, int sport)
+{
+    PeerConnectionOptMap::iterator iter = _peer_con_opt.begin();
+
+    for (; iter != _peer_con_opt.end(); iter++) {
+        if ((*iter).second == RedPeer::ConnectionOptions::CON_OP_SECURE) {
+            continue;
+        }
+
+        if ((*iter).second == RedPeer::ConnectionOptions::CON_OP_UNSECURE) {
+            continue;
+        }
+
+        if (port != -1 && sport != -1) {
+            (*iter).second = RedPeer::ConnectionOptions::CON_OP_BOTH;
+            continue;
+        }
+
+        if (port != -1) {
+            (*iter).second = RedPeer::ConnectionOptions::CON_OP_UNSECURE;
+            continue;
+        }
+
+        if (sport != -1) {
+            (*iter).second = RedPeer::ConnectionOptions::CON_OP_SECURE;
+            continue;
+        }
+
+        _exit_code = SPICEC_ERROR_CODE_CMD_LINE_ERROR;
+        return false;
+    }
     return true;
 }
 
@@ -2026,7 +2121,7 @@ void Application::register_channels()
 
 bool Application::process_cmd_line(int argc, char** argv)
 {
-    std::string host;
+    std::string host = "";
     int sport = -1;
     int port = -1;
     bool auto_display_res = false;
@@ -2050,6 +2145,7 @@ bool Application::process_cmd_line(int argc, char** argv)
         SPICE_OPT_CANVAS_TYPE,
         SPICE_OPT_DISPLAY_COLOR_DEPTH,
         SPICE_OPT_DISABLE_DISPLAY_EFFECTS,
+        SPICE_OPT_CONTROLLER,
     };
 
 #ifdef USE_GUI
@@ -2068,7 +2164,6 @@ bool Application::process_cmd_line(int argc, char** argv)
     CmdLineParser parser("Spice client", false);
 
     parser.add(SPICE_OPT_HOST, "host", "spice server address", "host", true, 'h');
-    parser.set_reqired(SPICE_OPT_HOST);
     parser.add(SPICE_OPT_PORT, "port", "spice server port", "port", true, 'p');
     parser.add(SPICE_OPT_SPORT, "secure-port", "spice server secure port", "port", true, 's');
     parser.add(SPICE_OPT_SECURE_CHANNELS, "secure-channels",
@@ -2106,6 +2201,8 @@ bool Application::process_cmd_line(int argc, char** argv)
     parser.add(SPICE_OPT_DISABLE_DISPLAY_EFFECTS, "disable-effects",
                "disable guest display effects", "wallpaper/font-smooth/animation/all", true);
     parser.set_multi(SPICE_OPT_DISABLE_DISPLAY_EFFECTS, ',');
+
+    parser.add(SPICE_OPT_CONTROLLER, "controller", "enable external controller");
 
     for (int i = SPICE_CHANNEL_MAIN; i < SPICE_END_CHANNEL; i++) {
         _peer_con_opt[i] = RedPeer::ConnectionOptions::CON_OP_INVALID;
@@ -2203,6 +2300,15 @@ bool Application::process_cmd_line(int argc, char** argv)
                 return false;
             }
             break;
+        case SPICE_OPT_CONTROLLER:
+            if (argc > 2) {
+                Platform::term_printf("%s: controller cannot be combined with other options\n",
+                                      argv[0]);
+                _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
+                return false;
+            }
+            _enable_controller = true;
+            return true;
         case CmdLineParser::OPTION_HELP:
             parser.show_help();
             return false;
@@ -2214,42 +2320,21 @@ bool Application::process_cmd_line(int argc, char** argv)
         }
     }
 
+    if (host.empty()) {
+        Platform::term_printf("%s: missing --host\n", argv[0]);
+        return false;
+    }
+
     if (parser.is_set(SPICE_OPT_SECURE_CHANNELS) && !parser.is_set(SPICE_OPT_SPORT)) {
         Platform::term_printf("%s: missing --secure-port\n", argv[0]);
         _exit_code = SPICEC_ERROR_CODE_CMD_LINE_ERROR;
         return false;
     }
 
-    PeerConnectionOptMap::iterator iter = _peer_con_opt.begin();
-    for (; iter != _peer_con_opt.end(); iter++) {
-        if ((*iter).second == RedPeer::ConnectionOptions::CON_OP_SECURE) {
-            continue;
-        }
-
-        if ((*iter).second == RedPeer::ConnectionOptions::CON_OP_UNSECURE) {
-            continue;
-        }
-
-        if (parser.is_set(SPICE_OPT_PORT) && parser.is_set(SPICE_OPT_SPORT)) {
-            (*iter).second = RedPeer::ConnectionOptions::CON_OP_BOTH;
-            continue;
-        }
-
-        if (parser.is_set(SPICE_OPT_PORT)) {
-            (*iter).second = RedPeer::ConnectionOptions::CON_OP_UNSECURE;
-            continue;
-        }
-
-        if (parser.is_set(SPICE_OPT_SPORT)) {
-            (*iter).second = RedPeer::ConnectionOptions::CON_OP_SECURE;
-            continue;
-        }
-
+    if (!set_channels_security(port, sport)) {
         Platform::term_printf("%s: missing --port or --sport\n", argv[0]);
-        _exit_code = SPICEC_ERROR_CODE_CMD_LINE_ERROR;
         return false;
     }
-
     register_channels();
 
     _client.set_target(host, port, sport);

@@ -27,6 +27,7 @@
 #include "hot_keys.h"
 #include "process_loop.h"
 #include "foreign_menu.h"
+#include "controller.h"
 
 class RedScreen;
 class Application;
@@ -142,6 +143,7 @@ typedef std::list<GUIBarrier*> GUIBarriers;
 enum AppMenuItemType {
     APP_MENU_ITEM_TYPE_INVALID,
     APP_MENU_ITEM_TYPE_FOREIGN,
+    APP_MENU_ITEM_TYPE_CONTROLLER,
 };
 
 typedef struct AppMenuItem {
@@ -155,7 +157,8 @@ typedef std::map<int, AppMenuItem> AppMenuItemMap;
 class Application : public ProcessLoop,
                     public Platform::EventListener,
                     public Platform::DisplayModeListener,
-                    public ForeignMenuInterface {
+                    public ForeignMenuInterface,
+                    public ControllerInterface {
 public:
 
     enum State {
@@ -237,11 +240,18 @@ public:
     void update_menu();
 
     //controller interface begin
+    void set_auto_display_res(bool auto_display_res);
     bool connect(const std::string& host, int port, int sport, const std::string& password);
     void disconnect();
     void quit();
+    void show_me(bool full_screen);
     void hide_me();
+    void set_hotkeys(const std::string& hotkeys);
+    int get_controller_menu_item_id(int32_t opaque_conn_ref, uint32_t msg_id);
+    void set_menu(Menu* menu);
+    void delete_menu();
     void beep();
+
 #ifdef USE_GUI
     bool is_disconnect_allowed();
 #endif
@@ -260,6 +270,7 @@ public:
 
 private:
     bool set_channels_security(CmdLineParser& parser, bool on, char *val, const char* arg0);
+    bool set_channels_security(int port, int sport);
     bool set_connection_ciphers(const char* ciphers, const char* arg0);
     bool set_ca_file(const char* ca_file, const char* arg0);
     bool set_host_cert_subject(const char* subject, const char* arg0);
@@ -362,6 +373,8 @@ private:
     std::vector<int> _canvas_types;
     AutoRef<Menu> _app_menu;
     AutoRef<ForeignMenu> _foreign_menu;
+    bool _enable_controller;
+    AutoRef<Controller> _controller;
     AppMenuItemMap _app_menu_items;
 #ifdef USE_GUI
     std::auto_ptr<GUI> _gui;
