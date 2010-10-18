@@ -1,4 +1,4 @@
-Major changes in 0.6.2:
+Major changes in 0.6.3:
 =======================
 Major changes in this release:
 * Foreign menu and controller support for the client for XPI / ActiveX
@@ -7,6 +7,11 @@ Major changes in this release:
 * Image copy and paste support in the X client
 * Fix fullscreen mode of the X client under compiz and KDE
 * Various portability and bug fixes
+
+Major changes in 0.6.2:
+=======================
+0.6.2 was skipped because a small but nasty bug was found while preparing
+the release (and it was already tagged as 0.6.2 in git).
 
 Major changes in 0.6.1:
 =======================

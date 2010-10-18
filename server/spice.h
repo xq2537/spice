@@ -21,7 +21,7 @@
 #include <stdint.h>
 #include <sys/socket.h>
 
-#define SPICE_SERVER_VERSION 0x000602 /* release 0.6.2 */
+#define SPICE_SERVER_VERSION 0x000603 /* release 0.6.3 */
 
 /* interface base type */
 
