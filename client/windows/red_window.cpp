@@ -137,7 +137,7 @@ static uint32_t utf16_to_utf32(uint16_t*& utf16, int& len)
 
 LRESULT CALLBACK RedWindow_p::WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    RedWindow* window = (RedWindow*)GetWindowLong(hWnd, GWL_USERDATA);
+    RedWindow* window = (RedWindow*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
     ASSERT(window);
 
     switch (message) {
@@ -359,8 +359,8 @@ void RedWindow_p::create(RedWindow& red_window, PixelsSource_p& pixels_source)
         _format = RedDrawable::RGB32;
         break;
     }
-    SetWindowLong(window, GWL_USERDATA, (LONG)&red_window);
-    SetWindowLong(window, GWL_WNDPROC, (LONG)WindowProc);
+    SetWindowLongPtr(window, GWLP_USERDATA, (LONG_PTR)&red_window);
+    SetWindowLongPtr(window, GWLP_WNDPROC, (LONG_PTR)WindowProc);
 }
 
 void RedWindow_p::destroy(PixelsSource_p& pixels_source)
@@ -370,8 +370,8 @@ void RedWindow_p::destroy(PixelsSource_p& pixels_source)
     }
 
     ReleaseDC(_win, pixels_source.dc);
-    SetWindowLong(_win, GWL_WNDPROC, (LONG)DefWindowProc);
-    SetWindowLong(_win, GWL_USERDATA, NULL);
+    SetWindowLongPtr(_win, GWLP_WNDPROC, (LONG_PTR)DefWindowProc);
+    SetWindowLongPtr(_win, GWLP_USERDATA, NULL);
     DestroyWindow(_win);
 }
 
