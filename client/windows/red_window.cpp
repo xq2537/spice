@@ -446,7 +446,7 @@ RedWindow::~RedWindow()
     }
 }
 
-void RedWindow::set_title(std::wstring& title)
+void RedWindow::set_title(std::string& title)
 {
     SetWindowText(_win, title.c_str());
 }

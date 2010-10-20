@@ -355,7 +355,7 @@ Application::Application()
     , _key_handler (&default_key_handler)
     , _mouse_handler (&default_mouse_handler)
     , _monitors (NULL)
-    , _title (L"SPICEc:%d")
+    , _title ("SPICEc:%d")
     , _sys_key_intercept_mode (false)
 	, _enable_controller (false)
 #ifdef USE_GUI
@@ -1603,7 +1603,7 @@ uint32_t Application::get_mouse_mode()
     return _client.get_mouse_mode();
 }
 
-void Application::set_title(const std::wstring& title)
+void Application::set_title(const std::string& title)
 {
     _title = title;
 

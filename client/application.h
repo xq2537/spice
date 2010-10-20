@@ -218,7 +218,7 @@ public:
     void exit_full_screen();
     bool toggle_full_screen();
     void minimize();
-    void set_title(const std::wstring& title);
+    void set_title(const std::string& title);
     void hide();
     void show();
     void external_show();
@@ -367,7 +367,7 @@ private:
     KeyHandlersStack _key_handlers;
     MouseHandler* _mouse_handler;
     const MonitorsList* _monitors;
-    std::wstring _title;
+    std::string _title;
     bool _sys_key_intercept_mode;
     StickyInfo _sticky_info;
     std::vector<int> _canvas_types;

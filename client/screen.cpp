@@ -71,7 +71,7 @@ void UpdateTimer::response(AbstractProcessLoop& events_loop)
     _screen->periodic_update();
 }
 
-RedScreen::RedScreen(Application& owner, int id, const std::wstring& name, int width, int height)
+RedScreen::RedScreen(Application& owner, int id, const std::string& name, int width, int height)
     : _owner (owner)
     , _id (id)
     , _refs (1)
@@ -216,10 +216,10 @@ void RedScreen::unlock_size()
     _owner.on_screen_unlocked(*this);
 }
 
-void RedScreen::set_name(const std::wstring& name)
+void RedScreen::set_name(const std::string& name)
 {
     if (!name.empty()) {
-        wstring_printf(_name, name.c_str(), _id);
+        string_printf(_name, name.c_str(), _id);
     }
     _window.set_title(_name);
 }

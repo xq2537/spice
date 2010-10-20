@@ -54,7 +54,7 @@ private:
 
 class RedScreen: public RedWindow::Listener {
 public:
-    RedScreen(Application& owner, int id, const std::wstring& name, int width, int height);
+    RedScreen(Application& owner, int id, const std::string& name, int width, int height);
 
     RedScreen* ref();
     void unref();
@@ -63,7 +63,7 @@ public:
     void detach_layer(ScreenLayer& layer);
     void on_layer_changed(ScreenLayer& layer);
     void resize(int width, int height);
-    void set_name(const std::wstring& name);
+    void set_name(const std::string& name);
     uint64_t invalidate(const SpiceRect& rect, bool urgent);
     void invalidate(const QRegion &region);
     void capture_mouse();
@@ -163,7 +163,7 @@ private:
     Application& _owner;
     int _id;
     AtomicCount _refs;
-    std::wstring _name;
+    std::string _name;
     RedWindow _window;
     std::vector<ScreenLayer*> _layes;
     QRegion _dirty_region;

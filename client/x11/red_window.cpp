@@ -1331,16 +1331,16 @@ RedWindow::~RedWindow()
     }
 }
 
-void RedWindow::set_title(std::wstring& title)
+void RedWindow::set_title(std::string& title)
 {
     XTextProperty text_prop;
-    wchar_t *name = const_cast<wchar_t *>(title.c_str());
+    char *name = const_cast<char *>(title.c_str());
     int r;
     if (_win) {
         XLockDisplay(x_display);
-        r = XwcTextListToTextProperty(x_display, &name, 1, XStringStyle, &text_prop);
+        r = Xutf8TextListToTextProperty(x_display, &name, 1, XUTF8StringStyle, &text_prop);
         XUnlockDisplay(x_display);
-        if (r >= 0) {
+        if (r == Success) {
             XSetWMName(x_display, _win, &text_prop);
             XFree(text_prop.value);
         } else {

@@ -33,7 +33,7 @@ public:
 
     virtual bool connect(const std::string& host, int port, int sport,
                          const std::string& password) = 0;
-    virtual void set_title(const std::wstring& title) = 0;
+    virtual void set_title(const std::string& title) = 0;
     virtual void set_auto_display_res(bool auto_display_res) = 0;
     virtual void show_me(bool full_screen) = 0;
     virtual void hide_me() = 0;

@@ -308,12 +308,8 @@ bool ControllerConnection::handle_message(ControllerMsg *hdr)
         _handler->set_auto_display_res(!!(value & CONTROLLER_AUTO_DISPLAY_RES));
         break;
     case CONTROLLER_SET_TITLE: {
-        std::wstring str;
-#ifdef WIN32
-        wstring_printf(str, L"%s", data);
-#else
-        wstring_printf(str, L"%S", data);
-#endif
+        std::string str;
+        string_printf(str, "%s", data);
         _handler->set_title(str);
         break;
     }

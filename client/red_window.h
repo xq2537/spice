@@ -48,7 +48,7 @@ public:
     void hide();
     void minimize();
     void activate();
-    void set_title(std::wstring& title);
+    void set_title(std::string& title);
     void set_icon(Icon *icon);
     virtual RedDrawable::Format get_format();
 
