@@ -28,10 +28,6 @@
 
 #ifdef WIN32
 #define PIPE_NAME "SpiceController-%lu"
-#elif defined(__i386__)
-#define PIPE_NAME "/tmp/SpiceController-%llu.uds"
-#else
-#define PIPE_NAME "/tmp/SpiceController-%lu.uds"
 #endif
 
 Controller::Controller(ControllerInterface *handler)
@@ -42,7 +38,15 @@ Controller::Controller(ControllerInterface *handler)
     char pipe_name[PIPE_NAME_MAX_LEN];
 
     ASSERT(_handler);
+#ifdef WIN32
     snprintf(pipe_name, PIPE_NAME_MAX_LEN, PIPE_NAME, Platform::get_process_id());
+#else
+    char *p_socket = getenv("SPICE_XPI_SOCKET");
+    if (!p_socket) {
+        LOG_ERROR("Failed to get a controller connection (SPICE_XPI_SOCKET)");
+    }
+    strncpy(pipe_name, p_socket, sizeof(pipe_name));
+#endif
     LOG_INFO("Creating a controller connection %s", pipe_name);
     _pipe = NamedPipe::create(pipe_name, *this);
     if (!_pipe) {
