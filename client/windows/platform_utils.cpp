@@ -35,20 +35,6 @@ void string_vprintf(std::string& str, const char* format, va_list ap)
     }
 }
 
-void wstring_vprintf(std::wstring& str, const wchar_t* format, va_list ap)
-{
-    int buf_size = 256;
-    for (;;) {
-        AutoArray<wchar_t> buf(new wchar_t[buf_size]);
-        int r = vswprintf(buf.get(), buf_size, format, ap);
-        if (r != -1) {
-            str = buf.get();
-            return;
-        }
-        buf_size *= 2;
-    }
-}
-
 HDC create_compatible_dc()
 {
     HDC dc = CreateCompatibleDC(NULL);

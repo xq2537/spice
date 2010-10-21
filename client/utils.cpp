@@ -29,14 +29,6 @@ void string_printf(std::string& str, const char* format, ...)
     va_end(ap);
 }
 
-void wstring_printf(std::wstring& str, const wchar_t* format, ...)
-{
-    va_list ap;
-    va_start(ap, format);
-    wstring_vprintf(str, format, ap);
-    va_end(ap);
-}
-
 int str_to_port(const char *str)
 {
     long port;

@@ -99,8 +99,6 @@ int str_to_port(const char *str);
 
 void string_vprintf(std::string& str, const char* format, va_list ap);
 void string_printf(std::string& str, const char *format, ...);
-void wstring_vprintf(std::wstring& str, const wchar_t* format, va_list ap);
-void wstring_printf(std::wstring& str, const wchar_t *format, ...);
 
 template<class T>
 class FreeObject {
