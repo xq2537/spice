@@ -801,7 +801,7 @@ void RedWindow_p::win_proc(XEvent& event)
     }
     case KeyPress:
         red_window->handle_key_press_event(*red_window, &event.xkey);
-        red_window->last_event_time = event.xkey.time;
+        red_window->_last_event_time = event.xkey.time;
         XChangeProperty(x_display, red_window->_win, wm_user_time,
                         XA_CARDINAL, 32, PropModeReplace,
                         (unsigned char *)&event.xkey.time, 1);
@@ -833,7 +833,7 @@ void RedWindow_p::win_proc(XEvent& event)
             break;
         }
         red_window->get_listener().on_mouse_button_press(button, state);
-        red_window->last_event_time = event.xkey.time;
+        red_window->_last_event_time = event.xkey.time;
         XChangeProperty(x_display, red_window->_win, wm_user_time,
                         XA_CARDINAL, 32, PropModeReplace,
                         (unsigned char *)&event.xbutton.time, 1);
@@ -1119,6 +1119,7 @@ RedWindow_p::RedWindow_p()
     , _ignore_pointer (false)
     ,_width (200)
     ,_height (200)
+    ,_last_event_time (0)
 {
 }
 
@@ -1534,8 +1535,9 @@ void RedWindow::show(int screen_id)
         XDeleteProperty(x_display, _win, wm_state);
         wait_parent = true;
     }
-    XChangeProperty(x_display, _win, wm_user_time, XA_CARDINAL, 32,
-                    PropModeReplace, (unsigned char *)&last_event_time, 1);
+    if (_last_event_time != 0)
+        XChangeProperty(x_display, _win, wm_user_time, XA_CARDINAL, 32,
+                        PropModeReplace, (unsigned char *)&_last_event_time, 1);
     XMapWindow(x_display, _win);
     move_to_current_desktop();
     _expect_parent = wait_parent;
