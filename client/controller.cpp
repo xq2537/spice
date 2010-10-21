@@ -326,7 +326,7 @@ bool ControllerConnection::handle_message(ControllerMsg *hdr)
         _handler->hide_me();
         break;
     case CONTROLLER_CREATE_MENU:
-        return create_menu((wchar_t*)data);
+        return create_menu((char*)data);
     case CONTROLLER_DELETE_MENU:
         _handler->delete_menu();
         break;
@@ -339,18 +339,18 @@ bool ControllerConnection::handle_message(ControllerMsg *hdr)
 }
 
 #ifdef WIN32
-#define next_tok(str, delim, state) wcstok(str, delim)
+#define next_tok(str, delim, state) strtok(str, delim)
 #else
-#define next_tok(str, delim, state) wcstok(str, delim, state)
+#define next_tok(str, delim, state) strtok_r(str, delim, state)
 #endif
 
-bool ControllerConnection::create_menu(wchar_t* resource)
+bool ControllerConnection::create_menu(char* resource)
 {
     bool ret = true;
-    wchar_t* item_state = 0;
-    wchar_t* item_dup;
-    wchar_t* param;
-    std::string text;
+    char* item_state = 0;
+    char* item_dup;
+    const char* param;
+    const char* text;
     int parent_id;
     int flags;
     int state;
@@ -359,30 +359,27 @@ bool ControllerConnection::create_menu(wchar_t* resource)
     ASSERT(_handler);
     AutoRef<Menu> app_menu(_handler->get_app_menu());
     AutoRef<Menu> menu(new Menu((*app_menu)->get_target(), ""));
-    wchar_t* item = next_tok(resource, CONTROLLER_MENU_ITEM_DELIMITER, &item_state);
+    char* item = next_tok(resource, CONTROLLER_MENU_ITEM_DELIMITER, &item_state);
     while (item != NULL) {
-        item_dup = wcsdup(item);
+        item_dup = strdup(item);
         ret = ret && (param = next_tok(item_dup, CONTROLLER_MENU_PARAM_DELIMITER, &item_state)) &&
-              swscanf(param, L"%d", &parent_id);
+              sscanf(param, "%d", &parent_id);
         ret = ret && (param = next_tok(NULL, CONTROLLER_MENU_PARAM_DELIMITER, &item_state)) &&
-              swscanf(param, L"%d", &id);
-        ret = ret && (param = next_tok(NULL, CONTROLLER_MENU_PARAM_DELIMITER, &item_state));
-        if (ret) {
-            string_printf(text, "%S", param);
-        }
+              sscanf(param, "%d", &id);
+        ret = ret && (text = next_tok(NULL, CONTROLLER_MENU_PARAM_DELIMITER, &item_state));
         ret = ret && (param = next_tok(NULL, CONTROLLER_MENU_PARAM_DELIMITER, &item_state)) &&
-              swscanf(param, L"%d", &flags);
+              sscanf(param, "%d", &flags);
         free(item_dup);
 
         if (!ret) {
-            DBG(0, "item parsing failed %S", item);
+            DBG(0, "item parsing failed %s", item);
             break;
         }
-        DBG(0, "parent_id=%d, id=%d, text=%s, flags=%d", parent_id, id, text.c_str(), flags);
+        DBG(0, "parent_id=%d, id=%d, text=%s, flags=%d", parent_id, id, text, flags);
 
         AutoRef<Menu> sub_menu((*menu)->find_sub(parent_id));
         if (!(ret = !!*sub_menu)) {
-            DBG(0, "submenu not found %S", item);
+            DBG(0, "submenu not found %s", item);
             break;
         }
 
@@ -406,7 +403,7 @@ bool ControllerConnection::create_menu(wchar_t* resource)
             }
             (*sub_menu)->add_command(text, id, state);
         }
-        item = next_tok(item + wcslen(item) + 1, CONTROLLER_MENU_ITEM_DELIMITER, &item_state);
+        item = next_tok(item + strlen(item) + 1, CONTROLLER_MENU_ITEM_DELIMITER, &item_state);
     }
     if (ret) {
         _handler->set_menu(*menu);

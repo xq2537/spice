@@ -90,7 +90,7 @@ private:
     bool read_msgs();
     bool handle_init(ControllerInit *init);
     bool handle_message(ControllerMsg *hdr);
-    bool create_menu(wchar_t* resource);
+    bool create_menu(char* resource);
     bool set_multi_val(uint32_t op, char* multi_val);
 
 private:
