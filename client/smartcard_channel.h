@@ -92,6 +92,8 @@ public:
     SmartCardChannel(RedClient& client, uint32_t id);
     void handle_smartcard_data(RedPeer::InMessage* message);
 
+    void virtual_card_remove();
+    void virtual_card_insert();
     static ChannelFactory& Factory();
 protected:
     virtual void on_connect();

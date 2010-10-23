@@ -339,6 +339,10 @@ enum AppCommands {
 #ifdef USE_GUI
     APP_CMD_SHOW_GUI,
 #endif // USE_GUI
+#ifdef USE_SMARTCARD
+    APP_CMD_SMARTCARD_INSERT,
+    APP_CMD_SMARTCARD_REMOVE,
+#endif
     APP_CMD_EXTERNAL_BEGIN = 0x400,
     APP_CMD_EXTERNAL_END = 0x800,
 };
@@ -391,6 +395,10 @@ Application::Application()
 #ifdef USE_GUI
     _commands_map["show-gui"] = APP_CMD_SHOW_GUI;
 #endif // USE_GUI
+#ifdef USE_SMARTCARD
+    _commands_map["smartcard-insert"] = APP_CMD_SMARTCARD_INSERT;
+    _commands_map["smartcard-remove"] = APP_CMD_SMARTCARD_REMOVE;
+#endif
 
     _canvas_types.resize(1);
 #ifdef WIN32
@@ -413,6 +421,10 @@ Application::Application()
 #ifdef USE_GUI
                                                           ",show-gui=shift+f7"
 #endif // USE_GUI
+#ifdef USE_SMARTCARD
+                                                          ",smartcard-insert=shift+f8"
+                                                          ",smartcard-remove=shift+f9"
+#endif
                                                           , _commands_map));
     _hot_keys = parser->get();
 
@@ -1007,6 +1019,14 @@ void Application::do_command(int command)
         show_gui();
         break;
 #endif // USE_GUI
+#ifdef USE_SMARTCARD
+    case APP_CMD_SMARTCARD_INSERT:
+        virtual_card_insert();
+        break;
+    case APP_CMD_SMARTCARD_REMOVE:
+        virtual_card_remove();
+        break;
+#endif
     default:
         AppMenuItemMap::iterator iter = _app_menu_items.find(command);
         ASSERT(iter != _app_menu_items.end());

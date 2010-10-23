@@ -228,6 +228,38 @@ void SmartCardChannel::cac_card_events_thread_main()
     }
 }
 
+void virtual_card_insert()
+{
+    if (g_smartcard_channel == NULL) {
+        return;
+    }
+    g_smartcard_channel->virtual_card_insert();
+}
+
+void SmartCardChannel::virtual_card_insert()
+{
+    if (_readers_by_id.size() == 0) {
+        return;
+    }
+    vcard_emul_force_card_insert(_readers_by_id.begin()->second->vreader);
+}
+
+void virtual_card_remove()
+{
+    if (g_smartcard_channel == NULL) {
+        return;
+    }
+    g_smartcard_channel->virtual_card_remove();
+}
+
+void SmartCardChannel::virtual_card_remove()
+{
+    if (_readers_by_id.size() == 0) {
+        return;
+    }
+    vcard_emul_force_card_remove(_readers_by_id.begin()->second->vreader);
+}
+
 #define CERTIFICATES_DEFAULT_DB "/etc/pki/nssdb"
 #define CERTIFICATES_ARGS_TEMPLATE "db=\"%s\" use_hw=no soft=(,Virtual Card,CAC,,%s,%s,%s)"
 
