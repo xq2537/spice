@@ -42,6 +42,23 @@ RedChannelBase::~RedChannelBase()
 {
 }
 
+const char *spice_link_error_string(int err)
+{
+    switch (err) {
+        case SPICE_LINK_ERR_OK: return "no error";
+        case SPICE_LINK_ERR_ERROR: return "general error";
+        case SPICE_LINK_ERR_INVALID_MAGIC: return "invalid magic";
+        case SPICE_LINK_ERR_INVALID_DATA: return "invalid data";
+        case SPICE_LINK_ERR_VERSION_MISMATCH: return "version mismatch";
+        case SPICE_LINK_ERR_NEED_SECURED: return "need secured connection";
+        case SPICE_LINK_ERR_NEED_UNSECURED: return "need unsecured connection";
+        case SPICE_LINK_ERR_PERMISSION_DENIED: return "permission denied";
+        case SPICE_LINK_ERR_BAD_CONNECTION_ID: return "bad connection id";
+        case SPICE_LINK_ERR_CHANNEL_NOT_AVAILABLE: return "channel not available";
+    }
+    return "";
+}
+
 void RedChannelBase::link(uint32_t connection_id, const std::string& password,
                           int protocol)
 {
@@ -124,7 +141,8 @@ void RedChannelBase::link(uint32_t connection_id, const std::string& password,
     reply = (SpiceLinkReply *)reply_buf.get();
 
     if (reply->error != SPICE_LINK_ERR_OK) {
-        THROW_ERR(SPICEC_ERROR_CODE_CONNECT_FAILED, "connect error %u", reply->error);
+        THROW_ERR(SPICEC_ERROR_CODE_CONNECT_FAILED, "connect error %u - %s",
+                        reply->error, spice_link_error_string(reply->error));
     }
 
     uint32_t num_caps = reply->num_channel_caps + reply->num_common_caps;
