@@ -348,7 +348,7 @@ bool ControllerConnection::create_menu(char* resource)
 {
     bool ret = true;
     char* item_state = 0;
-    char* item_dup;
+    char* next_item;
     const char* param;
     const char* text;
     int parent_id;
@@ -361,15 +361,14 @@ bool ControllerConnection::create_menu(char* resource)
     AutoRef<Menu> menu(new Menu((*app_menu)->get_target(), ""));
     char* item = next_tok(resource, CONTROLLER_MENU_ITEM_DELIMITER, &item_state);
     while (item != NULL) {
-        item_dup = strdup(item);
-        ret = ret && (param = next_tok(item_dup, CONTROLLER_MENU_PARAM_DELIMITER, &item_state)) &&
+        next_item = item + strlen(item) + 1;
+        ret = ret && (param = next_tok(item, CONTROLLER_MENU_PARAM_DELIMITER, &item_state)) &&
               sscanf(param, "%d", &parent_id);
         ret = ret && (param = next_tok(NULL, CONTROLLER_MENU_PARAM_DELIMITER, &item_state)) &&
               sscanf(param, "%d", &id);
         ret = ret && (text = next_tok(NULL, CONTROLLER_MENU_PARAM_DELIMITER, &item_state));
         ret = ret && (param = next_tok(NULL, CONTROLLER_MENU_PARAM_DELIMITER, &item_state)) &&
               sscanf(param, "%d", &flags);
-        free(item_dup);
 
         if (!ret) {
             DBG(0, "item parsing failed %s", item);
@@ -403,7 +402,7 @@ bool ControllerConnection::create_menu(char* resource)
             }
             (*sub_menu)->add_command(text, id, state);
         }
-        item = next_tok(item + strlen(item) + 1, CONTROLLER_MENU_ITEM_DELIMITER, &item_state);
+        item = next_tok(next_item, CONTROLLER_MENU_ITEM_DELIMITER, &item_state);
     }
     if (ret) {
         _handler->set_menu(*menu);
