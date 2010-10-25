@@ -1,0 +1,4 @@
+#!/bin/bash
+
+g++ -I ../../../../spice-protocol/ -o spice_controller controller_test.cpp
+
