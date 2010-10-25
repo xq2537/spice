@@ -448,7 +448,14 @@ RedWindow::~RedWindow()
 
 void RedWindow::set_title(std::string& title)
 {
-    SetWindowText(_win, title.c_str());
+    int len = MultiByteToWideChar(CP_UTF8, 0, title.c_str(), title.length(), NULL, 0) + 1;
+    WCHAR* wtitle = new WCHAR[len * sizeof(WCHAR)];
+
+    if (wtitle && MultiByteToWideChar(CP_UTF8, 0, title.c_str(), title.length(), wtitle, len)) {
+        wtitle[len - 1] = L'\0';
+        SetWindowText(_win, wtitle);
+    }
+    delete []wtitle;
 }
 
 void RedWindow::set_icon(Icon* icon)
