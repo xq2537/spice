@@ -12,6 +12,9 @@
 		<Platform
 			Name="Win32"
 		/>
+		<Platform
+			Name="x64"
+		/>
 	</Platforms>
 	<ToolFiles>
 	</ToolFiles>
@@ -103,6 +106,94 @@
 			/>
 		</Configuration>
 		<Configuration
+			Name="Debug|x64"
+			OutputDirectory="$(REDC_BUILD_DIR)\$(PlatformName)\$(ConfigurationName)"
+			IntermediateDirectory="$(REDC_BUILD_DIR)\$(PlatformName)\$(ConfigurationName)"
+			ConfigurationType="1"
+			CharacterSet="1"
+			>
+			<Tool
+				Name="VCPreBuildEventTool"
+				CommandLine=""
+			/>
+			<Tool
+				Name="VCCustomBuildTool"
+				Description=""
+				CommandLine=""
+				AdditionalDependencies=""
+				Outputs=""
+			/>
+			<Tool
+				Name="VCXMLDataGeneratorTool"
+			/>
+			<Tool
+				Name="VCWebServiceProxyGeneratorTool"
+			/>
+			<Tool
+				Name="VCMIDLTool"
+				TargetEnvironment="3"
+			/>
+			<Tool
+				Name="VCCLCompilerTool"
+				Optimization="0"
+				AdditionalIncludeDirectories=".;..;..\..\common;..\..\..\spice-protocol;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;"
+				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;SW_CANVAS_CACHE;RED_DEBUG;SW_CANVAS_NO_CHUNKS;_WIN32_WINNT=0x0500;USE_GUI;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC"
+				MinimalRebuild="false"
+				BasicRuntimeChecks="3"
+				RuntimeLibrary="1"
+				UsePrecompiledHeader="1"
+				PrecompiledHeaderThrough="common.h"
+				WarningLevel="3"
+				WarnAsError="false"
+				Detect64BitPortabilityProblems="false"
+				DebugInformationFormat="3"
+			/>
+			<Tool
+				Name="VCManagedResourceCompilerTool"
+			/>
+			<Tool
+				Name="VCResourceCompilerTool"
+			/>
+			<Tool
+				Name="VCPreLinkEventTool"
+			/>
+			<Tool
+				Name="VCLinkerTool"
+				AdditionalDependencies="pixman-1D.lib libeay32MTd.lib ssleay32MTd.lib ws2_32.lib msimg32.lib winmm.lib zlibwapiD.lib version.lib pthreadVC2D.lib libjpeg-static-mt-debug.lib libcelt_0_5_1D.lib CEGUIBase_Static_d.lib CEGUIExpatParser_Static_d.lib CEGUIFalagardWRBase_Static_d.lib CEGUITGAImageCodec_Static_d.lib freetype2312MT.lib libexpatMT.lib pcre.lib"
+				OutputFile="$(OutDir)\spicec.exe"
+				LinkIncremental="2"
+				AdditionalLibraryDirectories="&quot;$(SPICE_LIBS)\lib64&quot;"
+				IgnoreAllDefaultLibraries="false"
+				IgnoreDefaultLibraryNames="MSVCRT.lib"
+				GenerateDebugInformation="true"
+				SubSystem="2"
+				RandomizedBaseAddress="1"
+				DataExecutionPrevention="0"
+				TargetMachine="17"
+			/>
+			<Tool
+				Name="VCALinkTool"
+			/>
+			<Tool
+				Name="VCManifestTool"
+			/>
+			<Tool
+				Name="VCXDCMakeTool"
+			/>
+			<Tool
+				Name="VCBscMakeTool"
+			/>
+			<Tool
+				Name="VCFxCopTool"
+			/>
+			<Tool
+				Name="VCAppVerifierTool"
+			/>
+			<Tool
+				Name="VCPostBuildEventTool"
+			/>
+		</Configuration>
+		<Configuration
 			Name="Release|Win32"
 			OutputDirectory="$(REDC_BUILD_DIR)$(ConfigurationName)"
 			IntermediateDirectory="$(REDC_BUILD_DIR)$(ConfigurationName)"
@@ -152,6 +243,7 @@
 				OutputFile="$(OutDir)\spicec.exe"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories="&quot;$(SPICE_LIBS)\lib&quot;"
+				IgnoreDefaultLibraryNames=""
 				GenerateDebugInformation="true"
 				SubSystem="2"
 				OptimizeReferences="2"
@@ -159,6 +251,90 @@
 				RandomizedBaseAddress="1"
 				DataExecutionPrevention="0"
 				TargetMachine="1"
+			/>
+			<Tool
+				Name="VCALinkTool"
+			/>
+			<Tool
+				Name="VCManifestTool"
+			/>
+			<Tool
+				Name="VCXDCMakeTool"
+			/>
+			<Tool
+				Name="VCBscMakeTool"
+			/>
+			<Tool
+				Name="VCFxCopTool"
+			/>
+			<Tool
+				Name="VCAppVerifierTool"
+			/>
+			<Tool
+				Name="VCPostBuildEventTool"
+			/>
+		</Configuration>
+		<Configuration
+			Name="Release|x64"
+			OutputDirectory="$(REDC_BUILD_DIR)\$(PlatformName)\$(ConfigurationName)"
+			IntermediateDirectory="$(REDC_BUILD_DIR)\$(PlatformName)\$(ConfigurationName)"
+			ConfigurationType="1"
+			UseOfMFC="0"
+			CharacterSet="1"
+			WholeProgramOptimization="1"
+			>
+			<Tool
+				Name="VCPreBuildEventTool"
+				CommandLine=""
+			/>
+			<Tool
+				Name="VCCustomBuildTool"
+			/>
+			<Tool
+				Name="VCXMLDataGeneratorTool"
+			/>
+			<Tool
+				Name="VCWebServiceProxyGeneratorTool"
+			/>
+			<Tool
+				Name="VCMIDLTool"
+				TargetEnvironment="3"
+			/>
+			<Tool
+				Name="VCCLCompilerTool"
+				AdditionalIncludeDirectories=".;..;..\..\..\spice-protocol;..\..\common;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;"
+				PreprocessorDefinitions="WIN32;_WINDOWS;SW_CANVAS_CACHE;SW_CANVAS_NO_CHUNKS;_WIN32_WINNT=0x0500;USE_GUI;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC"
+				RuntimeLibrary="0"
+				UsePrecompiledHeader="0"
+				WarningLevel="3"
+				WarnAsError="false"
+				Detect64BitPortabilityProblems="false"
+				DebugInformationFormat="3"
+			/>
+			<Tool
+				Name="VCManagedResourceCompilerTool"
+			/>
+			<Tool
+				Name="VCResourceCompilerTool"
+			/>
+			<Tool
+				Name="VCPreLinkEventTool"
+			/>
+			<Tool
+				Name="VCLinkerTool"
+				AdditionalDependencies="pixman-1.lib libeay32MT.lib ssleay32MT.lib ws2_32.lib msimg32.lib winmm.lib zlibwapi.lib version.lib pthreadVC2.lib libjpeg-static-mt.lib libcelt_0_5_1.lib CEGUIBase_Static.lib CEGUIExpatParser_Static.lib CEGUIFalagardWRBase_Static.lib CEGUITGAImageCodec_Static.lib freetype2312MT.lib libexpatMT.lib pcre.lib"
+				OutputFile="$(OutDir)\spicec.exe"
+				LinkIncremental="1"
+				AdditionalLibraryDirectories="&quot;$(SPICE_LIBS)\lib64&quot;"
+				IgnoreAllDefaultLibraries="false"
+				IgnoreDefaultLibraryNames="MSVCRT.lib"
+				GenerateDebugInformation="true"
+				SubSystem="2"
+				OptimizeReferences="2"
+				EnableCOMDATFolding="2"
+				RandomizedBaseAddress="1"
+				DataExecutionPrevention="0"
+				TargetMachine="17"
 			/>
 			<Tool
 				Name="VCALinkTool"
@@ -320,7 +496,25 @@
 					/>
 				</FileConfiguration>
 				<FileConfiguration
+					Name="Debug|x64"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						ObjectFile="$(IntDir)\$(InputName)1.obj"
+						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
 					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						ObjectFile="$(IntDir)\$(InputName)1.obj"
+						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|x64"
 					>
 					<Tool
 						Name="VCCLCompilerTool"
@@ -733,7 +927,28 @@
 				/>
 			</FileConfiguration>
 			<FileConfiguration
+				Name="Debug|x64"
+				>
+				<Tool
+					Name="VCCustomBuildTool"
+					Description="Generating demarshaller"
+					CommandLine="generate.bat&#x0D;&#x0A;"
+					AdditionalDependencies=""
+					Outputs="$(ProjectDir)/../generated_demarshallers.cpp;$(ProjectDir)/../generated_marshallers.cpp"
+				/>
+			</FileConfiguration>
+			<FileConfiguration
 				Name="Release|Win32"
+				>
+				<Tool
+					Name="VCCustomBuildTool"
+					Description="Generating demarshaller"
+					CommandLine="generate.bat&#x0D;&#x0A;"
+					Outputs="$(ProjectDir)/../generated_demarshallers.cpp;$(ProjectDir)/../generated_marshallers.cpp"
+				/>
+			</FileConfiguration>
+			<FileConfiguration
+				Name="Release|x64"
 				>
 				<Tool
 					Name="VCCustomBuildTool"
@@ -758,7 +973,28 @@
 				/>
 			</FileConfiguration>
 			<FileConfiguration
+				Name="Debug|x64"
+				>
+				<Tool
+					Name="VCCustomBuildTool"
+					Description="Generating old demarshaller"
+					CommandLine="generate1.bat&#x0D;&#x0A;"
+					AdditionalDependencies=""
+					Outputs="$(ProjectDir)/../generated_demarshallers1.cpp;$(ProjectDir)/../generated_marshallers1.cpp"
+				/>
+			</FileConfiguration>
+			<FileConfiguration
 				Name="Release|Win32"
+				>
+				<Tool
+					Name="VCCustomBuildTool"
+					Description="Generating old demarshaller"
+					CommandLine="generate1.bat&#x0D;&#x0A;"
+					Outputs="$(ProjectDir)/../generated_demarshallers1.cpp;$(ProjectDir)/../generated_marshallers1.cpp"
+				/>
+			</FileConfiguration>
+			<FileConfiguration
+				Name="Release|x64"
 				>
 				<Tool
 					Name="VCCustomBuildTool"
