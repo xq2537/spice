@@ -922,7 +922,9 @@ DynamicScreen::DynamicScreen(Display* display, int screen, int& next_mon_id)
     XRRSelectInput(display, platform_win, RRScreenChangeNotifyMask);
     if (using_xfixes_1_0) {
         XFixesSelectSelectionInput(display, platform_win, clipboard_prop,
-                                   XFixesSetSelectionOwnerNotifyMask);
+                                   XFixesSetSelectionOwnerNotifyMask|
+                                   XFixesSelectionWindowDestroyNotifyMask|
+                                   XFixesSelectionClientCloseNotifyMask);
     }
 
     Monitor::self_monitors_change++;
@@ -1224,7 +1226,9 @@ MultyMonScreen::MultyMonScreen(Display* display, int screen, int& next_mon_id)
     X_DEBUG_SYNC(get_display());
     if (using_xfixes_1_0) {
         XFixesSelectSelectionInput(display, platform_win, clipboard_prop,
-                                   XFixesSetSelectionOwnerNotifyMask);
+                                   XFixesSetSelectionOwnerNotifyMask|
+                                   XFixesSelectionWindowDestroyNotifyMask|
+                                   XFixesSelectionClientCloseNotifyMask);
     }
 
     XMonitor::inc_change_ref();
@@ -2745,7 +2749,15 @@ static void root_win_proc(XEvent& event)
     }
     if (event.type == XFixesSelectionNotify + xfixes_event_base) {
         XFixesSelectionNotifyEvent* selection_event = (XFixesSelectionNotifyEvent *)&event;
-        if (selection_event->subtype != XFixesSetSelectionOwnerNotify) {
+        switch (selection_event->subtype) {
+        case XFixesSetSelectionOwnerNotify:
+            break;
+        /* Treat ... as a SelectionOwnerNotify None */
+        case XFixesSelectionWindowDestroyNotify:
+        case XFixesSelectionClientCloseNotify:
+            selection_event->owner = None;
+            break;
+        default:
             LOG_INFO("Unsupported selection event %u", selection_event->subtype);
             return;
         }
