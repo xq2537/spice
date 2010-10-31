@@ -79,7 +79,7 @@ static SpiceCharDeviceInstance *vdagent = NULL;
 #define REDS_AGENT_WINDOW_SIZE 10
 #define REDS_TOKENS_TO_SEND 5
 #define REDS_NUM_INTERNAL_AGENT_MESSAGES 1
-#define REDS_VDI_PORT_NUM_RECIVE_BUFFS 5
+#define REDS_VDI_PORT_NUM_RECEIVE_BUFFS 5
 #define REDS_MAX_SEND_IOVEC 100
 
 #define NET_TEST_WARMUP_BYTES 0
@@ -113,7 +113,7 @@ static void openssl_init();
 #define VDI_PORT_WRITE_RETRY_TIMEOUT 100 /*ms*/
 
 // approximate max receive message size
-#define RECIVE_BUF_SIZE \
+#define RECEIVE_BUF_SIZE \
     (4096 + (REDS_AGENT_WINDOW_SIZE + REDS_NUM_INTERNAL_AGENT_MESSAGES) * SPICE_AGENT_MAX_DATA_SIZE)
 
 #define SEND_BUF_SIZE 4096
@@ -126,7 +126,7 @@ typedef struct IncomingHandler {
     spice_parse_channel_func_t parser;
     void *opaque;
     int shut;
-    uint8_t buf[RECIVE_BUF_SIZE];
+    uint8_t buf[RECEIVE_BUF_SIZE];
     uint32_t end_pos;
     void (*handle_message)(void *opaque, size_t size, uint32_t type, void *message);
 } IncomingHandler;
@@ -784,7 +784,7 @@ static int handle_incoming(RedsStreamContext *peer, IncomingHandler *handler)
         uint8_t *end = buf + pos;
         SpiceDataHeader *header;
         int n;
-        n = peer->cb_read(peer->ctx, buf + pos, RECIVE_BUF_SIZE - pos);
+        n = peer->cb_read(peer->ctx, buf + pos, RECEIVE_BUF_SIZE - pos);
         if (n <= 0) {
             if (n == 0) {
                 return -1;
@@ -3700,7 +3700,7 @@ static void init_vd_agent_resources()
         ring_add(&reds->agent_state.internal_bufs, &buf->base.link);
     }
 
-    for (i = 0; i < REDS_VDI_PORT_NUM_RECIVE_BUFFS; i++) {
+    for (i = 0; i < REDS_VDI_PORT_NUM_RECEIVE_BUFFS; i++) {
         VDIReadBuf *buf = spice_new0(VDIReadBuf, 1);
         ring_item_init(&buf->link);
         ring_add(&reds->agent_state.read_bufs, &buf->link);
