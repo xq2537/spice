@@ -21,6 +21,7 @@
 #include <stdint.h>
 #include <openssl/ssl.h>
 #include <sys/uio.h>
+#include <spice/vd_agent.h>
 
 #define __visible__ __attribute__ ((visibility ("default")))
 
@@ -90,11 +91,18 @@ void reds_set_client_mouse_allowed(int is_client_mouse_allowed,
                                    int x_res, int y_res);
 void reds_register_channel(Channel *channel);
 void reds_unregister_channel(Channel *channel);
+int reds_get_mouse_mode(void); // used by inputs_channel
+int reds_get_agent_mouse(void); // used by inputs_channel
+int reds_has_vdagent(void); // used by inputs channel
+void reds_handle_agent_mouse_event(const VDAgentMouseState *mouse_state); // used by inputs_channel
 
 extern struct SpiceCoreInterface *core;
 extern uint64_t bitrate_per_sec;
 
 #define IS_LOW_BANDWIDTH() (bitrate_per_sec < 10 * 1024 * 1024)
+
+// Temporary measures to make splitting reds.c to inputs_channel.c easier
+void reds_disconnect(void);
 
 #endif
 

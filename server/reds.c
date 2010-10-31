@@ -45,6 +45,7 @@
 #include <spice/protocol.h>
 #include <spice/vd_agent.h>
 
+#include "inputs_channel.h"
 #include "red_common.h"
 #include "red_dispatcher.h"
 #include "snd_worker.h"
@@ -64,9 +65,6 @@
 #endif
 
 SpiceCoreInterface *core = NULL;
-static SpiceKbdInstance *keyboard = NULL;
-static SpiceMouseInstance *mouse = NULL;
-static SpiceTabletInstance *tablet = NULL;
 static SpiceCharDeviceInstance *vdagent = NULL;
 
 #define MIGRATION_NOTIFY_SPICE_KEY "spice_mig_ext"
@@ -107,21 +105,19 @@ static void openssl_init();
 
 #define MIGRATE_TIMEOUT (1000 * 10) /* 10sec */
 #define PING_INTERVAL (1000 * 10)
-#define KEY_MODIFIERS_TTL (1000 * 2) /*2sec*/
 #define MM_TIMER_GRANULARITY_MS (1000 / 30)
 #define MM_TIME_DELTA 400 /*ms*/
 #define VDI_PORT_WRITE_RETRY_TIMEOUT 100 /*ms*/
 
-// approximate max receive message size
+// approximate max receive message size for main channel
 #define RECEIVE_BUF_SIZE \
     (4096 + (REDS_AGENT_WINDOW_SIZE + REDS_NUM_INTERNAL_AGENT_MESSAGES) * SPICE_AGENT_MAX_DATA_SIZE)
-
-#define SEND_BUF_SIZE 4096
 
 #define SCROLL_LOCK_SCAN_CODE 0x46
 #define NUM_LOCK_SCAN_CODE 0x45
 #define CAPS_LOCK_SCAN_CODE 0x3a
 
+// TODO - remove and use red_channel.h
 typedef struct IncomingHandler {
     spice_parse_channel_func_t parser;
     void *opaque;
@@ -131,14 +127,6 @@ typedef struct IncomingHandler {
     void (*handle_message)(void *opaque, size_t size, uint32_t type, void *message);
 } IncomingHandler;
 
-typedef struct OutgoingHandler {
-    void *opaque;
-    uint8_t buf[SEND_BUF_SIZE];
-    uint8_t *now;
-    uint32_t length;
-    void (*select)(void *opaque, int select);
-    void (*may_write)(void *opaque);
-} OutgoingHandler;
 
 typedef struct TicketAuthentication {
     char password[SPICE_MAX_PASSWORD_LENGTH];
@@ -205,17 +193,6 @@ typedef struct VDIPortState {
     int client_agent_started;
 } VDIPortState;
 
-typedef struct InputsState {
-    Channel *channel;
-    RedsStreamContext *peer;
-    IncomingHandler in_handler;
-    OutgoingHandler out_handler;
-    VDAgentMouseState mouse_state;
-    int pending_mouse_event;
-    uint32_t motion_count;
-    uint64_t serial; //migrate me
-} InputsState;
-
 typedef struct RedsOutgoingData {
     Ring pipe;
     RedsOutItem *item;
@@ -258,7 +235,7 @@ typedef struct RedsState {
     uint32_t link_id;
     uint64_t serial; //migrate me
     VDIPortState agent_state;
-    InputsState *inputs_state;
+    int pending_mouse_event;
 
     int mig_wait_connect;
     int mig_wait_disconnect;
@@ -274,7 +251,6 @@ typedef struct RedsState {
     int dispatcher_allows_client_mouse;
     MonitorMode monitor_mode;
     SpiceTimer *mig_timer;
-    SpiceTimer *key_modifiers_timer;
     SpiceTimer *mm_timer;
     SpiceTimer *vdi_port_write_timer;
     int vdi_port_write_timer_started;
@@ -727,7 +703,7 @@ static void reds_reset_outgoing()
     outgoing->vec = outgoing->vec_buf;
 }
 
-static void reds_disconnect()
+void reds_disconnect()
 {
     if (!reds->peer || reds->disconnecting) {
         return;
@@ -827,79 +803,6 @@ static int handle_incoming(RedsStreamContext *peer, IncomingHandler *handler)
             memmove(handler->buf, buf, (handler->end_pos = end - buf));
         }
     }
-}
-
-static int handle_outgoing(RedsStreamContext *peer, OutgoingHandler *handler)
-{
-    if (!handler->length) {
-        return 0;
-    }
-
-    while (handler->length) {
-        int n;
-
-        n = peer->cb_write(peer->ctx, handler->now, handler->length);
-        if (n <= 0) {
-            if (n == 0) {
-                return -1;
-            }
-            switch (errno) {
-            case EAGAIN:
-                return 0;
-            case EINTR:
-                break;
-            case EPIPE:
-                return -1;
-            default:
-                red_printf("%s", strerror(errno));
-                return -1;
-            }
-        } else {
-            handler->now += n;
-            handler->length -= n;
-        }
-    }
-    handler->select(handler->opaque, FALSE);
-    handler->may_write(handler->opaque);
-    return 0;
-}
-
-#define OUTGOING_OK 0
-#define OUTGOING_FAILED -1
-#define OUTGOING_BLOCKED 1
-
-static int outgoing_write(RedsStreamContext *peer, OutgoingHandler *handler, void *in_data,
-                          int length)
-{
-    uint8_t *data = in_data;
-    ASSERT(length <= SEND_BUF_SIZE);
-    if (handler->length) {
-        return OUTGOING_BLOCKED;
-    }
-
-    while (length) {
-        int n = peer->cb_write(peer->ctx, data, length);
-        if (n < 0) {
-            switch (errno) {
-            case EAGAIN:
-                handler->length = length;
-                memcpy(handler->buf, data, length);
-                handler->select(handler->opaque, TRUE);
-                return OUTGOING_OK;
-            case EINTR:
-                break;
-            case EPIPE:
-                return OUTGOING_FAILED;
-            default:
-                red_printf("%s", strerror(errno));
-                return OUTGOING_FAILED;
-            }
-        } else {
-            data += n;
-            length -= n;
-        }
-    }
-    return OUTGOING_OK;
 }
 
 static RedsOutItem *new_out_item(uint32_t type)
@@ -1039,6 +942,11 @@ static void reds_send_mouse_mode()
     reds_push_pipe_item(item);
 }
 
+int reds_get_mouse_mode(void)
+{
+    return reds->mouse_mode;
+}
+
 static void reds_set_mouse_mode(uint32_t mode)
 {
     if (reds->mouse_mode == mode) {
@@ -1049,12 +957,17 @@ static void reds_set_mouse_mode(uint32_t mode)
     reds_send_mouse_mode();
 }
 
+int reds_get_agent_mouse(void)
+{
+    return agent_mouse;
+}
+
 static void reds_update_mouse_mode()
 {
     int allowed = 0;
     int qxl_count = red_dispatcher_qxl_count();
 
-    if ((agent_mouse && vdagent) || (tablet && qxl_count == 1)) {
+    if ((agent_mouse && vdagent) || (inputs_has_tablet() && qxl_count == 1)) {
         allowed = reds->dispatcher_allows_client_mouse;
     }
     if (allowed == reds->is_client_mouse_allowed) {
@@ -1334,26 +1247,31 @@ void vdagent_char_device_wakeup(SpiceCharDeviceInstance *sin)
     while (read_from_vdi_port());
 }
 
-static void reds_handle_agent_mouse_event()
+int reds_has_vdagent(void)
+{
+    return !!vdagent;
+}
+
+void reds_handle_agent_mouse_event(const VDAgentMouseState *mouse_state)
 {
     RingItem *ring_item;
     VDInternalBuf *buf;
 
-    if (!reds->inputs_state) {
+    if (!inputs_inited()) {
         return;
     }
     if (reds->mig_target || !(ring_item = ring_get_head(&reds->agent_state.internal_bufs))) {
-        reds->inputs_state->pending_mouse_event = TRUE;
+        reds->pending_mouse_event = TRUE;
         vdi_port_write_timer_start();
         return;
     }
-    reds->inputs_state->pending_mouse_event = FALSE;
+    reds->pending_mouse_event = FALSE;
     ring_remove(ring_item);
     buf = (VDInternalBuf *)ring_item;
     buf->base.now = (uint8_t *)&buf->base.chunk_header;
     buf->base.write_len = sizeof(VDIChunkHeader) + sizeof(VDAgentMessage) +
                           sizeof(VDAgentMouseState);
-    buf->u.mouse_state = reds->inputs_state->mouse_state;
+    buf->u.mouse_state = *mouse_state;
     ring_add(&reds->agent_state.write_queue, &buf->base.link);
     write_to_vdi_port();
 }
@@ -2098,398 +2016,15 @@ static void reds_handle_main_link(RedLinkInfo *link)
      ((state & SPICE_MOUSE_BUTTON_MASK_MIDDLE) ? VD_AGENT_MBUTTON_MASK : 0) |    \
      ((state & SPICE_MOUSE_BUTTON_MASK_RIGHT) ? VD_AGENT_RBUTTON_MASK : 0))
 
-static void activate_modifiers_watch()
-{
-    core->timer_start(reds->key_modifiers_timer, KEY_MODIFIERS_TTL);
-}
-
-static void kbd_push_scan(SpiceKbdInstance *sin, uint8_t scan)
-{
-    SpiceKbdInterface *sif;
-
-    if (!sin) {
-        return;
-    }
-    sif = SPICE_CONTAINEROF(sin->base.sif, SpiceKbdInterface, base);
-    sif->push_scan_freg(sin, scan);
-}
-
-static uint8_t kbd_get_leds(SpiceKbdInstance *sin)
-{
-    SpiceKbdInterface *sif;
-
-    if (!sin) {
-        return 0;
-    }
-    sif = SPICE_CONTAINEROF(sin->base.sif, SpiceKbdInterface, base);
-    return sif->get_leds(sin);
-}
-
-static SpiceMarshaller *marshaller_new_for_outgoing(InputsState *state, int type)
-{
-    SpiceMarshaller *m;
-    SpiceDataHeader *header;
-
-    m = spice_marshaller_new();
-    header = (SpiceDataHeader *)
-        spice_marshaller_reserve_space(m, sizeof(SpiceDataHeader));
-    header->serial = ++state->serial;
-    header->type = type;
-    header->sub_list = 0;
-
-    return m;
-}
-
-static int marshaller_outgoing_write(SpiceMarshaller *m,
-                                     InputsState *state)
-{
-    SpiceDataHeader *header = (SpiceDataHeader *)spice_marshaller_get_ptr(m);
-    uint8_t *data;
-    size_t len;
-    int free_data;
-
-    spice_marshaller_flush(m);
-    header->size = spice_marshaller_get_total_size(m) - sizeof(SpiceDataHeader);
-
-    data = spice_marshaller_linearize(m, 0, &len, &free_data);
-
-    if (outgoing_write(state->peer, &state->out_handler, data, len) != OUTGOING_OK) {
-        return FALSE;
-    }
-
-    if (free_data) {
-        free(data);
-    }
-
-    return TRUE;
-}
-
-
-static void inputs_handle_input(void *opaque, size_t size, uint32_t type, void *message)
-{
-    InputsState *state = (InputsState *)opaque;
-    uint8_t *buf = (uint8_t *)message;
-    SpiceMarshaller *m;
-
-    switch (type) {
-    case SPICE_MSGC_INPUTS_KEY_DOWN: {
-        SpiceMsgcKeyDown *key_up = (SpiceMsgcKeyDown *)buf;
-        if (key_up->code == CAPS_LOCK_SCAN_CODE || key_up->code == NUM_LOCK_SCAN_CODE ||
-            key_up->code == SCROLL_LOCK_SCAN_CODE) {
-            activate_modifiers_watch();
-        }
-    }
-    case SPICE_MSGC_INPUTS_KEY_UP: {
-        SpiceMsgcKeyDown *key_down = (SpiceMsgcKeyDown *)buf;
-        uint8_t *now = (uint8_t *)&key_down->code;
-        uint8_t *end = now + sizeof(key_down->code);
-        for (; now < end && *now; now++) {
-            kbd_push_scan(keyboard, *now);
-        }
-        break;
-    }
-    case SPICE_MSGC_INPUTS_MOUSE_MOTION: {
-        SpiceMsgcMouseMotion *mouse_motion = (SpiceMsgcMouseMotion *)buf;
-
-        if (++state->motion_count % SPICE_INPUT_MOTION_ACK_BUNCH == 0) {
-            m = marshaller_new_for_outgoing(state, SPICE_MSG_INPUTS_MOUSE_MOTION_ACK);
-            if (!marshaller_outgoing_write(m, state)) {
-                red_printf("motion ack failed");
-                reds_disconnect();
-            }
-            spice_marshaller_destroy(m);
-        }
-        if (mouse && reds->mouse_mode == SPICE_MOUSE_MODE_SERVER) {
-            SpiceMouseInterface *sif;
-            sif = SPICE_CONTAINEROF(mouse->base.sif, SpiceMouseInterface, base);
-            sif->motion(mouse,
-                        mouse_motion->dx, mouse_motion->dy, 0,
-                        RED_MOUSE_STATE_TO_LOCAL(mouse_motion->buttons_state));
-        }
-        break;
-    }
-    case SPICE_MSGC_INPUTS_MOUSE_POSITION: {
-        SpiceMsgcMousePosition *pos = (SpiceMsgcMousePosition *)buf;
-
-        if (++state->motion_count % SPICE_INPUT_MOTION_ACK_BUNCH == 0) {
-            m = marshaller_new_for_outgoing(state, SPICE_MSG_INPUTS_MOUSE_MOTION_ACK);
-            if (!marshaller_outgoing_write(m, state)) {
-                red_printf("position ack failed");
-                reds_disconnect();
-            }
-            spice_marshaller_destroy(m);
-        }
-        if (reds->mouse_mode != SPICE_MOUSE_MODE_CLIENT) {
-            break;
-        }
-        ASSERT((agent_mouse && vdagent) || tablet);
-        if (!agent_mouse || !vdagent) {
-            SpiceTabletInterface *sif;
-            sif = SPICE_CONTAINEROF(tablet->base.sif, SpiceTabletInterface, base);
-            sif->position(tablet, pos->x, pos->y, RED_MOUSE_STATE_TO_LOCAL(pos->buttons_state));
-            break;
-        }
-        VDAgentMouseState *mouse_state = &state->mouse_state;
-        mouse_state->x = pos->x;
-        mouse_state->y = pos->y;
-        mouse_state->buttons = RED_MOUSE_BUTTON_STATE_TO_AGENT(pos->buttons_state);
-        mouse_state->display_id = pos->display_id;
-        reds_handle_agent_mouse_event();
-        break;
-    }
-    case SPICE_MSGC_INPUTS_MOUSE_PRESS: {
-        SpiceMsgcMousePress *mouse_press = (SpiceMsgcMousePress *)buf;
-        int dz = 0;
-        if (mouse_press->button == SPICE_MOUSE_BUTTON_UP) {
-            dz = -1;
-        } else if (mouse_press->button == SPICE_MOUSE_BUTTON_DOWN) {
-            dz = 1;
-        }
-        if (reds->mouse_mode == SPICE_MOUSE_MODE_CLIENT) {
-            if (agent_mouse && vdagent) {
-                reds->inputs_state->mouse_state.buttons =
-                    RED_MOUSE_BUTTON_STATE_TO_AGENT(mouse_press->buttons_state) |
-                    (dz == -1 ? VD_AGENT_UBUTTON_MASK : 0) |
-                    (dz == 1 ? VD_AGENT_DBUTTON_MASK : 0);
-                reds_handle_agent_mouse_event();
-            } else if (tablet) {
-                SpiceTabletInterface *sif;
-                sif = SPICE_CONTAINEROF(tablet->base.sif, SpiceTabletInterface, base);
-                sif->wheel(tablet, dz, RED_MOUSE_STATE_TO_LOCAL(mouse_press->buttons_state));
-            }
-        } else if (mouse) {
-            SpiceMouseInterface *sif;
-            sif = SPICE_CONTAINEROF(mouse->base.sif, SpiceMouseInterface, base);
-            sif->motion(mouse, 0, 0, dz,
-                        RED_MOUSE_STATE_TO_LOCAL(mouse_press->buttons_state));
-        }
-        break;
-    }
-    case SPICE_MSGC_INPUTS_MOUSE_RELEASE: {
-        SpiceMsgcMouseRelease *mouse_release = (SpiceMsgcMouseRelease *)buf;
-        if (reds->mouse_mode == SPICE_MOUSE_MODE_CLIENT) {
-            if (agent_mouse && vdagent) {
-                reds->inputs_state->mouse_state.buttons =
-                    RED_MOUSE_BUTTON_STATE_TO_AGENT(mouse_release->buttons_state);
-                reds_handle_agent_mouse_event();
-            } else if (tablet) {
-                SpiceTabletInterface *sif;
-                sif = SPICE_CONTAINEROF(tablet->base.sif, SpiceTabletInterface, base);
-                sif->buttons(tablet, RED_MOUSE_STATE_TO_LOCAL(mouse_release->buttons_state));
-            }
-        } else if (mouse) {
-            SpiceMouseInterface *sif;
-            sif = SPICE_CONTAINEROF(mouse->base.sif, SpiceMouseInterface, base);
-            sif->buttons(mouse,
-                         RED_MOUSE_STATE_TO_LOCAL(mouse_release->buttons_state));
-        }
-        break;
-    }
-    case SPICE_MSGC_INPUTS_KEY_MODIFIERS: {
-        SpiceMsgcKeyModifiers *modifiers = (SpiceMsgcKeyModifiers *)buf;
-        uint8_t leds;
-
-        if (!keyboard) {
-            break;
-        }
-        leds = kbd_get_leds(keyboard);
-        if ((modifiers->modifiers & SPICE_KEYBOARD_MODIFIER_FLAGS_SCROLL_LOCK) !=
-            (leds & SPICE_KEYBOARD_MODIFIER_FLAGS_SCROLL_LOCK)) {
-            kbd_push_scan(keyboard, SCROLL_LOCK_SCAN_CODE);
-            kbd_push_scan(keyboard, SCROLL_LOCK_SCAN_CODE | 0x80);
-        }
-        if ((modifiers->modifiers & SPICE_KEYBOARD_MODIFIER_FLAGS_NUM_LOCK) !=
-            (leds & SPICE_KEYBOARD_MODIFIER_FLAGS_NUM_LOCK)) {
-            kbd_push_scan(keyboard, NUM_LOCK_SCAN_CODE);
-            kbd_push_scan(keyboard, NUM_LOCK_SCAN_CODE | 0x80);
-        }
-        if ((modifiers->modifiers & SPICE_KEYBOARD_MODIFIER_FLAGS_CAPS_LOCK) !=
-            (leds & SPICE_KEYBOARD_MODIFIER_FLAGS_CAPS_LOCK)) {
-            kbd_push_scan(keyboard, CAPS_LOCK_SCAN_CODE);
-            kbd_push_scan(keyboard, CAPS_LOCK_SCAN_CODE | 0x80);
-        }
-        activate_modifiers_watch();
-        break;
-    }
-    case SPICE_MSGC_DISCONNECTING:
-        break;
-    default:
-        red_printf("unexpected type %d", type);
-    }
-}
-
 void reds_set_client_mouse_allowed(int is_client_mouse_allowed, int x_res, int y_res)
 {
     reds->monitor_mode.x_res = x_res;
     reds->monitor_mode.y_res = y_res;
     reds->dispatcher_allows_client_mouse = is_client_mouse_allowed;
     reds_update_mouse_mode();
-    if (reds->is_client_mouse_allowed && tablet) {
-        SpiceTabletInterface *sif;
-        sif = SPICE_CONTAINEROF(tablet->base.sif, SpiceTabletInterface, base);
-        sif->set_logical_size(tablet, reds->monitor_mode.x_res, reds->monitor_mode.y_res);
+    if (reds->is_client_mouse_allowed && inputs_has_tablet()) {
+        inputs_set_tablet_logical_size(reds->monitor_mode.x_res, reds->monitor_mode.y_res);
     }
-}
-
-static void inputs_relase_keys(void)
-{
-    kbd_push_scan(keyboard, 0x2a | 0x80); //LSHIFT
-    kbd_push_scan(keyboard, 0x36 | 0x80); //RSHIFT
-    kbd_push_scan(keyboard, 0xe0); kbd_push_scan(keyboard, 0x1d | 0x80); //RCTRL
-    kbd_push_scan(keyboard, 0x1d | 0x80); //LCTRL
-    kbd_push_scan(keyboard, 0xe0); kbd_push_scan(keyboard, 0x38 | 0x80); //RALT
-    kbd_push_scan(keyboard, 0x38 | 0x80); //LALT
-}
-
-static void inputs_event(int fd, int event, void *data)
-{
-    InputsState *inputs_state = data;
-
-    if (event & SPICE_WATCH_EVENT_READ) {
-        if (handle_incoming(inputs_state->peer, &inputs_state->in_handler)) {
-            inputs_relase_keys();
-            core->watch_remove(inputs_state->peer->watch);
-            inputs_state->peer->watch = NULL;
-            if (inputs_state->channel) {
-                inputs_state->channel->data = NULL;
-                reds->inputs_state = NULL;
-            }
-            inputs_state->peer->cb_free(inputs_state->peer);
-            free(inputs_state);
-        }
-    }
-    if (event & SPICE_WATCH_EVENT_WRITE) {
-        if (handle_outgoing(inputs_state->peer, &inputs_state->out_handler)) {
-            reds_disconnect();
-        }
-    }
-}
-
-
-static void inputs_shutdown(Channel *channel)
-{
-    InputsState *state = (InputsState *)channel->data;
-    if (state) {
-        state->in_handler.shut = TRUE;
-        shutdown(state->peer->socket, SHUT_RDWR);
-        channel->data = NULL;
-        state->channel = NULL;
-        reds->inputs_state = NULL;
-    }
-}
-
-static void inputs_migrate(Channel *channel)
-{
-    InputsState *state = (InputsState *)channel->data;
-    SpiceMarshaller *m;
-    SpiceMsgMigrate migrate;
-
-    m = marshaller_new_for_outgoing(state, SPICE_MSG_MIGRATE);
-
-    migrate.flags = 0;
-    spice_marshall_msg_migrate(m, &migrate);
-
-    if (!marshaller_outgoing_write(m, state)) {
-        red_printf("write failed");
-    }
-    spice_marshaller_destroy(m);
-}
-
-static void inputs_select(void *opaque, int select)
-{
-    InputsState *inputs_state;
-    int eventmask = SPICE_WATCH_EVENT_READ;
-    red_printf("");
-
-    inputs_state = (InputsState *)opaque;
-    if (select) {
-        eventmask |= SPICE_WATCH_EVENT_WRITE;
-    }
-    core->watch_update_mask(inputs_state->peer->watch, eventmask);
-}
-
-static void inputs_may_write(void *opaque)
-{
-    red_printf("");
-}
-
-static void inputs_link(Channel *channel, RedsStreamContext *peer, int migration,
-                        int num_common_caps, uint32_t *common_caps, int num_caps,
-                        uint32_t *caps)
-{
-    InputsState *inputs_state;
-    int delay_val;
-    int flags;
-
-    red_printf("");
-    ASSERT(channel->data == NULL);
-
-    inputs_state = spice_new0(InputsState, 1);
-
-    delay_val = 1;
-    if (setsockopt(peer->socket, IPPROTO_TCP, TCP_NODELAY, &delay_val, sizeof(delay_val)) == -1) {
-        red_printf("setsockopt failed, %s", strerror(errno));
-    }
-
-    if ((flags = fcntl(peer->socket, F_GETFL)) == -1 ||
-                                            fcntl(peer->socket, F_SETFL, flags | O_ASYNC) == -1) {
-        red_printf("fcntl failed, %s", strerror(errno));
-    }
-
-    inputs_state->peer = peer;
-    inputs_state->channel = channel;
-    inputs_state->in_handler.parser = spice_get_client_channel_parser(SPICE_CHANNEL_INPUTS, NULL);
-    inputs_state->in_handler.opaque = inputs_state;
-    inputs_state->in_handler.handle_message = inputs_handle_input;
-    inputs_state->out_handler.length = 0;
-    inputs_state->out_handler.opaque = inputs_state;
-    inputs_state->out_handler.select = inputs_select;
-    inputs_state->out_handler.may_write = inputs_may_write;
-    inputs_state->pending_mouse_event = FALSE;
-    channel->data = inputs_state;
-    reds->inputs_state = inputs_state;
-    peer->watch = core->watch_add(peer->socket, SPICE_WATCH_EVENT_READ,
-                                  inputs_event, inputs_state);
-
-    SpiceMarshaller *m;
-    SpiceMsgInputsInit inputs_init;
-    m = marshaller_new_for_outgoing(inputs_state, SPICE_MSG_INPUTS_INIT);
-    inputs_init.keyboard_modifiers = kbd_get_leds(keyboard);
-    spice_marshall_msg_inputs_init(m, &inputs_init);
-    if (!marshaller_outgoing_write(m, inputs_state)) {
-        red_printf("failed to send modifiers state");
-        reds_disconnect();
-    }
-    spice_marshaller_destroy(m);
-}
-
-static void reds_send_keyboard_modifiers(uint8_t modifiers)
-{
-    Channel *channel = reds_find_channel(SPICE_CHANNEL_INPUTS, 0);
-    InputsState *state;
-    SpiceMsgInputsKeyModifiers key_modifiers;
-    SpiceMarshaller *m;
-
-    if (!channel || !(state = (InputsState *)channel->data)) {
-        return;
-    }
-    ASSERT(state->peer);
-
-    m = marshaller_new_for_outgoing(state, SPICE_MSG_INPUTS_KEY_MODIFIERS);
-
-    key_modifiers.modifiers = modifiers;
-    spice_marshall_msg_inputs_key_modifiers(m, &key_modifiers);
-
-    if (!marshaller_outgoing_write(m, state)) {
-        red_printf("failed to send modifiers state");
-        reds_disconnect();
-    }
-    spice_marshaller_destroy(m);
-}
-
-static void reds_on_keyboard_leds_change(void *opaque, uint8_t leds)
-{
-    reds_send_keyboard_modifiers(leds);
 }
 
 static void openssl_init(RedLinkInfo *link)
@@ -2502,18 +2037,6 @@ static void openssl_init(RedLinkInfo *link)
     }
 
     BN_set_word(link->tiTicketing.bn, f4);
-}
-
-static void inputs_init()
-{
-    Channel *channel;
-
-    channel = spice_new0(Channel, 1);
-    channel->type = SPICE_CHANNEL_INPUTS;
-    channel->link = inputs_link;
-    channel->shutdown = inputs_shutdown;
-    channel->migrate = inputs_migrate;
-    reds_register_channel(channel);
 }
 
 static void reds_handle_other_links(RedLinkInfo *link)
@@ -3362,11 +2885,6 @@ static void migrate_timout(void *opaque)
     reds_mig_disconnect();
 }
 
-static void key_modifiers_sender(void *opaque)
-{
-    reds_send_keyboard_modifiers(kbd_get_leds(keyboard));
-}
-
 uint32_t reds_get_mm_time()
 {
     struct timespec time_space;
@@ -3505,32 +3023,24 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
 
     if (strcmp(interface->type, SPICE_INTERFACE_KEYBOARD) == 0) {
         red_printf("SPICE_INTERFACE_KEYBOARD");
-        if (keyboard) {
-            red_printf("already have keyboard");
-            return -1;
-        }
         if (interface->major_version != SPICE_INTERFACE_KEYBOARD_MAJOR ||
             interface->minor_version < SPICE_INTERFACE_KEYBOARD_MINOR) {
             red_printf("unsupported keyboard interface");
             return -1;
         }
-        keyboard = SPICE_CONTAINEROF(sin, SpiceKbdInstance, base);
-        keyboard->st = spice_new0(SpiceKbdState, 1);
-
-    } else if (strcmp(interface->type, SPICE_INTERFACE_MOUSE) == 0) {
-        red_printf("SPICE_INTERFACE_MOUSE");
-        if (mouse) {
-            red_printf("already have mouse");
+        if (inputs_set_keyboard(SPICE_CONTAINEROF(sin, SpiceKbdInstance, base)) != 0) {
             return -1;
         }
+    } else if (strcmp(interface->type, SPICE_INTERFACE_MOUSE) == 0) {
+        red_printf("SPICE_INTERFACE_MOUSE");
         if (interface->major_version != SPICE_INTERFACE_MOUSE_MAJOR ||
             interface->minor_version < SPICE_INTERFACE_MOUSE_MINOR) {
             red_printf("unsupported mouse interface");
             return -1;
         }
-        mouse = SPICE_CONTAINEROF(sin, SpiceMouseInstance, base);
-        mouse->st = spice_new0(SpiceMouseState, 1);
-
+        if (inputs_set_mouse(SPICE_CONTAINEROF(sin, SpiceMouseInstance, base)) != 0) {
+            return -1;
+        }
     } else if (strcmp(interface->type, SPICE_INTERFACE_QXL) == 0) {
         QXLInstance *qxl;
 
@@ -3548,23 +3058,17 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
 
     } else if (strcmp(interface->type, SPICE_INTERFACE_TABLET) == 0) {
         red_printf("SPICE_INTERFACE_TABLET");
-        if (tablet) {
-            red_printf("already have tablet");
-            return -1;
-        }
         if (interface->major_version != SPICE_INTERFACE_TABLET_MAJOR ||
             interface->minor_version < SPICE_INTERFACE_TABLET_MINOR) {
             red_printf("unsupported tablet interface");
             return -1;
         }
-        tablet = SPICE_CONTAINEROF(sin, SpiceTabletInstance, base);
-        tablet->st = spice_new0(SpiceTabletState, 1);
+        if (inputs_set_tablet(SPICE_CONTAINEROF(sin, SpiceTabletInstance, base)) != 0) {
+            return -1;
+        }
         reds_update_mouse_mode();
         if (reds->is_client_mouse_allowed) {
-            SpiceTabletInterface *sif;
-            sif = SPICE_CONTAINEROF(tablet->base.sif, SpiceTabletInterface, base);
-            sif->set_logical_size(tablet, reds->monitor_mode.x_res,
-                                  reds->monitor_mode.y_res);
+            inputs_set_tablet_logical_size(reds->monitor_mode.x_res, reds->monitor_mode.y_res);
         }
 
     } else if (strcmp(interface->type, SPICE_INTERFACE_PLAYBACK) == 0) {
@@ -3624,11 +3128,8 @@ __visible__ int spice_server_remove_interface(SpiceBaseInstance *sin)
 
     if (strcmp(interface->type, SPICE_INTERFACE_TABLET) == 0) {
         red_printf("remove SPICE_INTERFACE_TABLET");
-        if (sin == &tablet->base) {
-            tablet = NULL;
-            reds_update_mouse_mode();
-        }
-
+        inputs_detach_tablet(SPICE_CONTAINEROF(sin, SpiceTabletInstance, base));
+        reds_update_mouse_mode();
     } else if (strcmp(interface->type, SPICE_INTERFACE_PLAYBACK) == 0) {
         red_printf("remove SPICE_INTERFACE_PLAYBACK");
         snd_detach_playback(SPICE_CONTAINEROF(sin, SpicePlaybackInstance, base));
@@ -3660,8 +3161,8 @@ static void free_internal_agent_buff(VDIPortBuf *in_buf)
     VDIPortState *state = &reds->agent_state;
 
     ring_add(&state->internal_bufs, &in_buf->link);
-    if (reds->inputs_state && reds->inputs_state->pending_mouse_event) {
-        reds_handle_agent_mouse_event();
+    if (inputs_inited() && reds->pending_mouse_event) {
+        reds_handle_agent_mouse_event(inputs_get_mouse_state());
     }
 }
 
@@ -3729,9 +3230,6 @@ static void do_spice_init(SpiceCoreInterface *core_interface)
 
     if (!(reds->mig_timer = core->timer_add(migrate_timout, NULL))) {
         red_error("migration timer create failed");
-    }
-    if (!(reds->key_modifiers_timer = core->timer_add(key_modifiers_sender, NULL))) {
-        red_error("key modifiers timer create failed");
     }
     if (!(reds->vdi_port_write_timer = core->timer_add(vdi_port_write_retry, NULL)))
     {
@@ -4036,7 +3534,7 @@ __visible__ int spice_server_add_renderer(SpiceServer *s, const char *name)
 
 __visible__ int spice_server_kbd_leds(SpiceKbdInstance *sin, int leds)
 {
-    reds_on_keyboard_leds_change(NULL, leds);
+    inputs_on_keyboard_leds_change(NULL, leds);
     return 0;
 }
 
