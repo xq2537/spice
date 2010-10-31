@@ -208,8 +208,6 @@ typedef struct VDIPortState {
 typedef struct InputsState {
     Channel *channel;
     RedsStreamContext *peer;
-    uint8_t buf[RECIVE_BUF_SIZE];
-    uint32_t end_pos;
     IncomingHandler in_handler;
     OutgoingHandler out_handler;
     VDAgentMouseState mouse_state;
@@ -2431,7 +2429,6 @@ static void inputs_link(Channel *channel, RedsStreamContext *peer, int migration
     }
 
     inputs_state->peer = peer;
-    inputs_state->end_pos = 0;
     inputs_state->channel = channel;
     inputs_state->in_handler.parser = spice_get_client_channel_parser(SPICE_CHANNEL_INPUTS, NULL);
     inputs_state->in_handler.opaque = inputs_state;
