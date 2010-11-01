@@ -68,6 +68,9 @@ static int red_peer_receive(RedsStreamContext *peer, uint8_t *buf, uint32_t size
 static void red_peer_handle_incoming(RedsStreamContext *peer, IncomingHandler *handler)
 {
     int bytes_read;
+    uint8_t *parsed;
+    size_t parsed_size;
+    message_destructor_t parsed_free;
 
     for (;;) {
         int ret_handle;
@@ -105,8 +108,25 @@ static void red_peer_handle_incoming(RedsStreamContext *peer, IncomingHandler *h
             }
         }
 
-        ret_handle = handler->handle_message(handler->opaque, &handler->header,
-                                             handler->msg);
+        if (handler->parser) {
+            parsed = handler->parser(handler->msg, handler->msg + handler->header.size, handler->header.type,
+                                     SPICE_VERSION_MINOR, &parsed_size, &parsed_free);
+            if (parsed == NULL) {
+                red_printf("failed to parse message type %d", handler->header.type);
+                handler->on_error(handler->opaque);
+                return;
+            }
+            ret_handle = handler->handle_parsed(handler->opaque, parsed_size,
+                                    handler->header.type, parsed);
+            parsed_free(parsed);
+        } else {
+            ret_handle = handler->handle_message(handler->opaque, &handler->header,
+                                                 handler->msg);
+        }
+        if (handler->shut) {
+            handler->on_error(handler->opaque);
+            return;
+        }
         handler->msg_pos = 0;
         handler->msg = NULL;
         handler->header_pos = 0;
@@ -183,11 +203,25 @@ static void red_peer_handle_outgoing(RedsStreamContext *peer, OutgoingHandler *h
 
 static inline void red_channel_fill_iovec(RedChannel *channel, struct iovec *vec, int *vec_size);
 
-
 static void red_channel_peer_on_error(void *opaque)
 {
     RedChannel *channel = (RedChannel *)opaque;
+
     channel->disconnect(channel);
+}
+
+static void red_channel_peer_on_incoming_error(void *opaque)
+{
+    RedChannel *channel = (RedChannel *)opaque;
+
+    channel->on_incoming_error(channel);
+}
+
+static void red_channel_peer_on_outgoing_error(void *opaque)
+{
+    RedChannel *channel = (RedChannel *)opaque;
+
+    channel->on_outgoing_error(channel);
 }
 
 static int red_channel_peer_get_out_msg_size(void *opaque)
@@ -276,6 +310,8 @@ RedChannel *red_channel_create(int size, RedsStreamContext *peer,
     channel->outgoing.on_error = red_channel_peer_on_error;
     channel->outgoing.on_msg_done = red_channel_peer_on_out_msg_done;
 
+    channel->shut = 0; // came here from inputs, perhaps can be removed? XXX
+
     if (!config_socket(channel)) {
         goto error;
     }
@@ -291,6 +327,44 @@ error:
     peer->cb_free(peer);
 
     return NULL;
+}
+
+void do_nothing_disconnect(RedChannel *red_channel)
+{
+}
+
+int do_nothing_handle_message(RedChannel *red_channel, SpiceDataHeader *header, uint8_t *msg)
+{
+    return TRUE;
+}
+
+RedChannel *red_channel_create_parser(int size, RedsStreamContext *peer,
+                               SpiceCoreInterface *core,
+                               int migrate, int handle_acks,
+                               channel_configure_socket_proc config_socket,
+                               spice_parse_channel_func_t parser,
+                               channel_handle_parsed_proc handle_parsed,
+                               channel_alloc_msg_recv_buf_proc alloc_recv_buf,
+                               channel_release_msg_recv_buf_proc release_recv_buf,
+                               channel_send_pipe_item_proc send_item,
+                               channel_release_pipe_item_proc release_item,
+                               channel_on_incoming_error_proc incoming_error,
+                               channel_on_outgoing_error_proc outgoing_error)
+{
+    RedChannel *channel = red_channel_create(size, peer,
+        core, migrate, handle_acks, config_socket, do_nothing_disconnect, do_nothing_handle_message,
+        alloc_recv_buf, release_recv_buf, send_item, release_item);
+
+    if (channel == NULL) {
+        return NULL;
+    }
+    channel->incoming.handle_parsed = (handle_parsed_proc)handle_parsed;
+    channel->incoming.parser = parser;
+    channel->on_incoming_error = incoming_error;
+    channel->on_outgoing_error = outgoing_error;
+    channel->incoming.on_error = red_channel_peer_on_incoming_error;
+    channel->outgoing.on_error = red_channel_peer_on_outgoing_error;
+    return channel;
 }
 
 void red_channel_destroy(RedChannel *channel)
