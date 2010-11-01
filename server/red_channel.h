@@ -26,6 +26,7 @@
 #include "reds.h"
 #include "spice.h"
 #include "ring.h"
+#include "server/demarshallers.h"
 
 #define MAX_SEND_BUFS 1000
 #define MAX_SEND_VEC 50
@@ -37,6 +38,7 @@
 
 typedef int (*handle_message_proc)(void *opaque,
                                    SpiceDataHeader *header, uint8_t *msg);
+typedef int (*handle_parsed_proc)(void *opaque, size_t size, uint32_t type, void *message);
 typedef uint8_t *(*alloc_msg_recv_buf_proc)(void *opaque, SpiceDataHeader *msg_header);
 typedef void (*release_msg_recv_buf_proc)(void *opaque,
                                           SpiceDataHeader *msg_header, uint8_t *msg);
@@ -52,6 +54,10 @@ typedef struct IncomingHandler {
     alloc_msg_recv_buf_proc alloc_msg_buf;
     on_incoming_error_proc on_error; // recv error or handle_message error
     release_msg_recv_buf_proc release_msg_buf; // for errors
+    // The following is an optional alternative to handle_message, used if not null
+    spice_parse_channel_func_t parser;
+    handle_parsed_proc handle_parsed;
+    int shut; // came here from inputs_channel. Not sure if it is really required or can be removed. XXX
 } IncomingHandler;
 
 typedef int (*get_outgoing_msg_size_proc)(void *opaque);
@@ -89,6 +95,8 @@ typedef struct RedChannel RedChannel;
 
 typedef uint8_t *(*channel_alloc_msg_recv_buf_proc)(RedChannel *channel,
                                                     SpiceDataHeader *msg_header);
+typedef int (*channel_handle_parsed_proc)(RedChannel *channel, size_t size, uint32_t type,
+                                        void *message);
 typedef int (*channel_handle_message_proc)(RedChannel *channel,
                                            SpiceDataHeader *header, uint8_t *msg);
 typedef void (*channel_release_msg_recv_buf_proc)(RedChannel *channel,
@@ -98,6 +106,8 @@ typedef int (*channel_configure_socket_proc)(RedChannel *channel);
 typedef void (*channel_send_pipe_item_proc)(RedChannel *channel, PipeItem *item);
 typedef void (*channel_release_pipe_item_proc)(RedChannel *channel,
                                                PipeItem *item, int item_pushed);
+typedef void (*channel_on_incoming_error_proc)(RedChannel *channel);
+typedef void (*channel_on_outgoing_error_proc)(RedChannel *channel);
 
 struct RedChannel {
     RedsStreamContext *peer;
@@ -137,6 +147,11 @@ struct RedChannel {
     channel_release_pipe_item_proc release_item;
 
     int during_send;
+    /* Stuff below added for Main and Inputs channels switch to RedChannel
+     * (might be removed later) */
+    channel_on_incoming_error_proc on_incoming_error; /* alternative to disconnect */
+    channel_on_outgoing_error_proc on_outgoing_error;
+    int shut; /* signal channel is to be closed */
 };
 
 /* if one of the callbacks should cause disconnect, use red_channel_shutdown and don't
@@ -151,6 +166,21 @@ RedChannel *red_channel_create(int size, RedsStreamContext *peer,
                                channel_release_msg_recv_buf_proc release_recv_buf,
                                channel_send_pipe_item_proc send_item,
                                channel_release_pipe_item_proc release_item);
+
+/* alternative constructor, meant for marshaller based (inputs,main) channels,
+ * will become default eventually */
+RedChannel *red_channel_create_parser(int size, RedsStreamContext *peer,
+                               SpiceCoreInterface *core,
+                               int migrate, int handle_acks,
+                               channel_configure_socket_proc config_socket,
+                               spice_parse_channel_func_t parser,
+                               channel_handle_parsed_proc handle_parsed,
+                               channel_alloc_msg_recv_buf_proc alloc_recv_buf,
+                               channel_release_msg_recv_buf_proc release_recv_buf,
+                               channel_send_pipe_item_proc send_item,
+                               channel_release_pipe_item_proc release_item,
+                               channel_on_incoming_error_proc incoming_error,
+                               channel_on_outgoing_error_proc outgoing_error);
 
 void red_channel_destroy(RedChannel *channel);
 
