@@ -34,6 +34,7 @@ public:
     virtual void on_key_down(RedKey key);
     virtual void on_key_up(RedKey key);
     virtual void on_focus_in();
+    virtual void on_focus_out();
 
     void on_mouse_position(int x, int y, int buttons_state, int display_id);
 
@@ -72,6 +73,7 @@ private:
     bool _active_motion;
     int _motion_count;
     uint32_t _modifiers;
+    uint32_t _on_focus_modifiers;
     Mutex _update_modifiers_lock;
     bool _active_modifiers_event;
 
