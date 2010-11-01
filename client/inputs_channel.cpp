@@ -404,15 +404,27 @@ void InputsChannel::set_local_modifiers()
 
 void InputsChannel::on_focus_in()
 {
+    Lock lock(_update_modifiers_lock);
+    _active_modifiers_event = false;
+    _on_focus_modifiers = Platform::get_keyboard_lock_modifiers();
+
 #ifdef SYNC_REMOTE_MODIFIERS
     Message* message = new Message(SPICE_MSGC_INPUTS_KEY_MODIFIERS);
     SpiceMsgcKeyModifiers modifiers;
-    modifiers.modifiers = Platform::get_keyboard_lock_modifiers();
+    modifiers.modifiers = _on_focus_modifiers;
     _marshallers->msgc_inputs_key_modifiers(message->marshaller(), &modifiers);
     post_message(message);
 #else
     set_local_modifiers();
 #endif
+}
+
+void InputsChannel::on_focus_out()
+{
+    Lock lock(_update_modifiers_lock);
+    _active_modifiers_event = true;
+    _modifiers = _on_focus_modifiers;
+    set_local_modifiers();
 }
 
 void InputsChannel::init_scan_code(int index)
