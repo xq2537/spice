@@ -102,6 +102,7 @@ libspice_server_la_SOURCES =			\
 	red_parse_qxl.c				\
 	red_parse_qxl.h				\
 	reds.c					\
+	main_channel.c				\
 	inputs_channel.c			\
 	reds.h					\
 	stat.h					\
