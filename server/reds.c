@@ -3150,7 +3150,6 @@ static void reds_exit()
     shm_unlink(reds->stat_shm_name);
     free(reds->stat_shm_name);
 #endif
-    unsetenv("QEMU_AUDIO_DRV");
 }
 
 enum {
