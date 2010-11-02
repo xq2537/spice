@@ -1,3 +1,5 @@
+SUBDIRS = . tests
+
 NULL =
 
 INCLUDES = \
