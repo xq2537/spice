@@ -394,6 +394,7 @@ common/win/Makefile
 common/win/my_getopt-1.5/Makefile
 python_modules/Makefile
 server/Makefile
+server/tests/Makefile
 client/Makefile
 client/x11/Makefile
 client/x11/images/Makefile
