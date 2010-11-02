@@ -82,7 +82,7 @@ static SpiceTabletInstance *tablet = NULL;
 
 static SpiceTimer *key_modifiers_timer;
 
-static InputsChannel *inputs_channel;
+static InputsChannel *inputs_channel = NULL;
 
 #define KEY_MODIFIERS_TTL (1000 * 2) /*2sec*/
 
