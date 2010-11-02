@@ -44,6 +44,18 @@
 #define RECEIVE_BUF_SIZE \
     (4096 + (REDS_AGENT_WINDOW_SIZE + REDS_NUM_INTERNAL_AGENT_MESSAGES) * SPICE_AGENT_MAX_DATA_SIZE)
 
+struct SpiceKbdState {
+    int dummy;
+};
+
+struct SpiceMouseState {
+    int dummy;
+};
+
+struct SpiceTabletState {
+    int dummy;
+};
+
 typedef struct InputsChannel {
     RedChannel base;
     uint8_t recv_buf[RECEIVE_BUF_SIZE];

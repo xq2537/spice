@@ -61,18 +61,6 @@ typedef struct Channel {
     void *data;
 } Channel;
 
-struct SpiceKbdState {
-    int dummy;
-};
-
-struct SpiceMouseState {
-    int dummy;
-};
-
-struct SpiceTabletState {
-    int dummy;
-};
-
 struct QXLState {
     QXLInterface          *qif;
     struct RedDispatcher  *dispatcher;
