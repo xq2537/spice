@@ -22,6 +22,9 @@
 #include <openssl/ssl.h>
 #include <sys/uio.h>
 #include <spice/vd_agent.h>
+#include "common/marshaller.h"
+#include "common/messages.h"
+#include "spice.h"
 
 #define __visible__ __attribute__ ((visibility ("default")))
 
@@ -91,6 +94,25 @@ extern uint64_t bitrate_per_sec;
 
 // Temporary measures to make splitting reds.c to inputs_channel.c easier
 void reds_disconnect(void);
+
+// Temporary (?) for splitting main channel
+typedef struct MainMigrateData MainMigrateData;
+void reds_push_migrate_data_item(SpiceMarshaller *m, MainMigrateData *data);
+void reds_fill_channels(SpiceMsgChannels *channels_info);
+void reds_fill_mig_switch(SpiceMsgMainMigrationSwitchHost *migrate);
+void reds_mig_release(void);
+int reds_num_of_channels(void);
+#ifdef RED_STATISTICS
+void reds_update_stat_value(uint32_t value);
+#endif
+
+// callbacks from main channel messages
+void reds_on_main_agent_start();
+void reds_on_main_agent_data(void *message, size_t size);
+void reds_on_main_migrate_connected();
+void reds_on_main_migrate_connect_error();
+void reds_on_main_receive_migrate_data(MainMigrateData *data, uint8_t *end);
+void reds_on_main_mouse_mode_request(void *message, size_t size);
 
 #endif
 
