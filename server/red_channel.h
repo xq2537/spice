@@ -61,7 +61,7 @@ typedef struct IncomingHandler {
 } IncomingHandler;
 
 typedef int (*get_outgoing_msg_size_proc)(void *opaque);
-typedef void (*prepare_outgoing_proc)(void *opaque, struct iovec *vec, int *vec_size);
+typedef void (*prepare_outgoing_proc)(void *opaque, struct iovec *vec, int *vec_size, int pos);
 typedef void (*on_outgoing_error_proc)(void *opaque);
 typedef void (*on_outgoing_block_proc)(void *opaque);
 typedef void (*on_outgoing_msg_done_proc)(void *opaque);
@@ -125,18 +125,16 @@ struct RedChannel {
     uint32_t pipe_size;
 
     struct {
-        SpiceDataHeader header;
+        SpiceMarshaller *marshaller;
+        SpiceDataHeader *header;
         union {
             SpiceMsgSetAck ack;
             SpiceMsgMigrate migrate;
         } u;
-        uint32_t n_bufs;
-        BufDescriptor bufs[MAX_SEND_BUFS];
         uint32_t size;
-        uint32_t not_sent_buf_head;
-
         PipeItem *item;
         int blocked;
+        uint64_t serial;
     } send_data;
 
     OutgoingHandler outgoing;
@@ -198,6 +196,7 @@ void red_channel_init_send_data(RedChannel *channel, uint16_t msg_type, PipeItem
 void red_channel_add_buf(RedChannel *channel, void *data, uint32_t size);
 
 uint64_t red_channel_get_message_serial(RedChannel *channel);
+void red_channel_set_message_serial(RedChannel *channel, uint64_t);
 
 /* when sending a msg. should first call red_channel_begin_send_message */
 void red_channel_begin_send_message(RedChannel *channel);
