@@ -234,6 +234,7 @@ static void inputs_channel_release_pipe_item(RedChannel *channel,
     if (item->data) {
         free(item->data);
     }
+    free(item);
 }
 
 static void inputs_channel_send_item(RedChannel *channel, PipeItem *base)
