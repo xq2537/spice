@@ -72,9 +72,17 @@ enum {
 
 typedef struct InputsPipeItem {
     PipeItem base;
-    SpiceMarshaller *m;
-    uint8_t *data;      /* If the marshaller malloced, pointer is here */
 } InputsPipeItem;
+
+typedef struct KeyModifiersPipeItem {
+    PipeItem base;
+    uint8_t modifiers;
+} KeyModifiersPipeItem;
+
+typedef struct InputsInitPipeItem {
+    PipeItem base;
+    uint8_t modifiers;
+} InputsInitPipeItem;
 
 static SpiceKbdInstance *keyboard = NULL;
 static SpiceMouseInstance *mouse = NULL;
@@ -210,13 +218,22 @@ static uint8_t kbd_get_leds(SpiceKbdInstance *sin)
     return sif->get_leds(sin);
 }
 
-static InputsPipeItem *inputs_pipe_item_new(InputsChannel *channel, int type)
+static InputsPipeItem *inputs_pipe_item_new(InputsChannel *inputs_channel, int type)
 {
     InputsPipeItem *item = spice_malloc(sizeof(InputsPipeItem));
 
-    red_channel_pipe_item_init(&channel->base, &item->base, type);
-    item->m = spice_marshaller_new();
-    item->data = NULL;
+    red_channel_pipe_item_init(&inputs_channel->base, &item->base, type);
+    return item;
+}
+
+static KeyModifiersPipeItem *inputs_key_modifiers_item_new(
+    InputsChannel *inputs_channel, uint8_t modifiers)
+{
+    KeyModifiersPipeItem *item = spice_malloc(sizeof(KeyModifiersPipeItem));
+
+    red_channel_pipe_item_init(&inputs_channel->base, &item->base,
+                               PIPE_ITEM_KEY_MODIFIERS);
+    item->modifiers = modifiers;
     return item;
 }
 
@@ -232,33 +249,43 @@ static void inputs_pipe_add_type(InputsChannel *channel, int type)
 static void inputs_channel_release_pipe_item(RedChannel *channel,
     PipeItem *base, int item_pushed)
 {
-    // All PipeItems we push are InputsPipeItem
-    InputsPipeItem *item = (InputsPipeItem*)base;
-
-    if (item->data) {
-        free(item->data);
-    }
-    spice_marshaller_destroy(item->m);
-    free(item);
+    free(base);
 }
 
 static void inputs_channel_send_item(RedChannel *channel, PipeItem *base)
 {
-    InputsPipeItem *item = SPICE_CONTAINEROF(base, InputsPipeItem, base);
-    SpiceMarshaller *m = item->m;
-    uint8_t *data;
-    size_t len;
-    int free_data;
+    InputsChannel *inputs_channel = (InputsChannel *)channel;
+    SpiceMarshaller *m = inputs_channel->base.send_data.marshaller;
 
     red_channel_reset_send_data(channel);
     red_channel_init_send_data(channel, base->type, base);
-    spice_marshaller_flush(m);
-    // TODO: use spice_marshaller_fill_iovec. Right now we are doing something stupid,
-    // namely copying twice. See reds.c.
-    data = spice_marshaller_linearize(m, 0, &len, &free_data);
-    item->data = (free_data && len > 0) ? data : NULL;
-    if (len > 0) {
-        red_channel_add_buf(channel, data, len);
+    switch (base->type) {
+        case PIPE_ITEM_KEY_MODIFIERS:
+        {
+            SpiceMsgInputsKeyModifiers key_modifiers;
+
+            key_modifiers.modifiers =
+                SPICE_CONTAINEROF(base, KeyModifiersPipeItem, base)->modifiers;
+            spice_marshall_msg_inputs_key_modifiers(m, &key_modifiers);
+        }
+        case PIPE_ITEM_INIT:
+        {
+            SpiceMsgInputsInit inputs_init;
+
+            inputs_init.keyboard_modifiers =
+                SPICE_CONTAINEROF(base, InputsInitPipeItem, base)->modifiers;
+            spice_marshall_msg_inputs_init(m, &inputs_init);
+        }
+        case PIPE_ITEM_MIGRATE:
+        {
+            SpiceMsgMigrate migrate;
+
+            migrate.flags = 0;
+            spice_marshall_msg_migrate(m, &migrate);
+            break;
+        }
+        default:
+            break;
     }
     red_channel_begin_send_message(channel);
 }
@@ -431,10 +458,12 @@ static void inputs_channel_on_outgoing_error(RedChannel *channel)
 
 static void inputs_shutdown(Channel *channel)
 {
-    ASSERT(g_inputs_channel == (InputsChannel *)channel->data);
-    if (g_inputs_channel) {
-        red_channel_shutdown(&g_inputs_channel->base);
-        g_inputs_channel->base.incoming.shut = TRUE;
+    InputsChannel *inputs_channel = (InputsChannel *)channel->data;
+    ASSERT(g_inputs_channel == inputs_channel);
+
+    if (inputs_channel) {
+        red_channel_shutdown(&inputs_channel->base);
+        inputs_channel->base.incoming.shut = TRUE;
         channel->data = NULL;
         g_inputs_channel = NULL;
     }
@@ -442,28 +471,22 @@ static void inputs_shutdown(Channel *channel)
 
 static void inputs_migrate(Channel *channel)
 {
-    InputsChannel *inputs_channel = (InputsChannel *)channel->data;
-    InputsPipeItem *pipe_item;
-    SpiceMarshaller *m;
-    SpiceMsgMigrate migrate;
+    InputsChannel *inputs_channel = channel->data;
+    InputsPipeItem *item;
 
-    ASSERT(g_inputs_channel == inputs_channel);
-    pipe_item = inputs_pipe_item_new(inputs_channel, PIPE_ITEM_MIGRATE);
-    m = pipe_item->m;
-    migrate.flags = 0;
-    spice_marshall_msg_migrate(m, &migrate);
-    red_channel_pipe_add(&inputs_channel->base, &pipe_item->base);
+    ASSERT(g_inputs_channel == (InputsChannel *)channel->data);
+    item = inputs_pipe_item_new(inputs_channel, PIPE_ITEM_MIGRATE);
+    red_channel_pipe_add(&inputs_channel->base, &item->base);
 }
 
-static void inputs_pipe_add_init(InputsChannel *channel)
+static void inputs_pipe_add_init(InputsChannel *inputs_channel)
 {
-    SpiceMsgInputsInit inputs_init;
-    InputsPipeItem *pipe_item = inputs_pipe_item_new(channel, PIPE_ITEM_INIT);
-    SpiceMarshaller *m = pipe_item->m;
+    InputsInitPipeItem *item = spice_malloc(sizeof(InputsInitPipeItem));
 
-    inputs_init.keyboard_modifiers = kbd_get_leds(keyboard);
-    spice_marshall_msg_inputs_init(m, &inputs_init);
-    red_channel_pipe_add(&channel->base, &pipe_item->base);
+    red_channel_pipe_item_init(&inputs_channel->base, &item->base,
+                               PIPE_ITEM_INIT);
+    item->modifiers = kbd_get_leds(keyboard);
+    red_channel_pipe_add(&inputs_channel->base, &item->base);
 }
 
 static int inputs_channel_config_socket(RedChannel *channel)
@@ -509,30 +532,25 @@ static void inputs_link(Channel *channel, RedsStreamContext *peer, int migration
     inputs_pipe_add_init(inputs_channel);
 }
 
-void inputs_send_keyboard_modifiers(uint8_t modifiers)
+static void inputs_push_keyboard_modifiers(uint8_t modifiers)
 {
-    SpiceMsgInputsKeyModifiers key_modifiers;
-    InputsPipeItem *pipe_item;
-    SpiceMarshaller *m;
+    KeyModifiersPipeItem *item;
 
     if (!g_inputs_channel || !red_channel_is_connected(&g_inputs_channel->base)) {
         return;
     }
-    pipe_item = inputs_pipe_item_new(g_inputs_channel, PIPE_ITEM_KEY_MODIFIERS);
-    m = pipe_item->m;
-    key_modifiers.modifiers = modifiers;
-    spice_marshall_msg_inputs_key_modifiers(m, &key_modifiers);
-    red_channel_pipe_add(&g_inputs_channel->base, &pipe_item->base);
+    item = inputs_key_modifiers_item_new(g_inputs_channel, modifiers);
+    red_channel_pipe_add(&g_inputs_channel->base, &item->base);
 }
 
 void inputs_on_keyboard_leds_change(void *opaque, uint8_t leds)
 {
-    inputs_send_keyboard_modifiers(leds);
+    inputs_push_keyboard_modifiers(leds);
 }
 
 static void key_modifiers_sender(void *opaque)
 {
-    inputs_send_keyboard_modifiers(kbd_get_leds(keyboard));
+    inputs_push_keyboard_modifiers(kbd_get_leds(keyboard));
 }
 
 void inputs_init(void)
