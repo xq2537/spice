@@ -172,7 +172,7 @@ static void red_peer_handle_outgoing(RedsStreamContext *peer, OutgoingHandler *h
             }
         } else {
             handler->pos += n;
-            if (!handler->vec_size && handler->pos == handler->size) { // finished writing data
+            if (handler->pos == handler->size) { // finished writing data
                 handler->on_msg_done(handler->opaque);
                 handler->vec = handler->vec_buf;
                 handler->pos = 0;
