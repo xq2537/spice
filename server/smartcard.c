@@ -485,6 +485,10 @@ static int smartcard_channel_handle_message(RedChannel *channel, SpiceDataHeader
     return TRUE;
 }
 
+static void smartcard_channel_hold_pipe_item(PipeItem *item)
+{
+}
+
 static void smartcard_link(Channel *channel, RedsStreamContext *peer,
                         int migration, int num_common_caps,
                         uint32_t *common_caps, int num_caps,
@@ -502,6 +506,7 @@ static void smartcard_link(Channel *channel, RedsStreamContext *peer,
                                         smartcard_channel_handle_message,
                                         smartcard_channel_alloc_msg_rcv_buf,
                                         smartcard_channel_release_msg_rcv_buf,
+                                        smartcard_channel_hold_pipe_item,
                                         smartcard_channel_send_item,
                                         smartcard_channel_release_pipe_item);
     if (!g_smartcard_channel) {

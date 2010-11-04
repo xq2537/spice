@@ -508,6 +508,10 @@ static int inputs_channel_config_socket(RedChannel *channel)
     return TRUE;
 }
 
+static void inputs_channel_hold_pipe_item(PipeItem *item)
+{
+}
+
 static void inputs_link(Channel *channel, RedsStreamContext *peer, int migration,
                         int num_common_caps, uint32_t *common_caps, int num_caps,
                         uint32_t *caps)
@@ -523,6 +527,7 @@ static void inputs_link(Channel *channel, RedsStreamContext *peer, int migration
         ,inputs_channel_handle_parsed
         ,inputs_channel_alloc_msg_rcv_buf
         ,inputs_channel_release_msg_rcv_buf
+        ,inputs_channel_hold_pipe_item
         ,inputs_channel_send_item
         ,inputs_channel_release_pipe_item
         ,inputs_channel_on_incoming_error

@@ -224,6 +224,7 @@ static void red_channel_peer_prepare_out_msg(void *opaque, struct iovec *vec, in
 static void red_channel_peer_on_out_block(void *opaque)
 {
     RedChannel *channel = (RedChannel *)opaque;
+
     channel->send_data.blocked = TRUE;
     channel->core->watch_update_mask(channel->peer->watch,
                                      SPICE_WATCH_EVENT_READ |
@@ -253,6 +254,7 @@ RedChannel *red_channel_create(int size, RedsStreamContext *peer,
                                channel_handle_message_proc handle_message,
                                channel_alloc_msg_recv_buf_proc alloc_recv_buf,
                                channel_release_msg_recv_buf_proc release_recv_buf,
+                               channel_hold_pipe_item_proc hold_item,
                                channel_send_pipe_item_proc send_item,
                                channel_release_pipe_item_proc release_item)
 {
@@ -267,6 +269,7 @@ RedChannel *red_channel_create(int size, RedsStreamContext *peer,
     channel->disconnect = disconnect;
     channel->send_item = send_item;
     channel->release_item = release_item;
+    channel->hold_item = hold_item;
 
     channel->peer = peer;
     channel->core = core;
@@ -332,6 +335,7 @@ RedChannel *red_channel_create_parser(int size, RedsStreamContext *peer,
                                channel_handle_parsed_proc handle_parsed,
                                channel_alloc_msg_recv_buf_proc alloc_recv_buf,
                                channel_release_msg_recv_buf_proc release_recv_buf,
+                               channel_hold_pipe_item_proc hold_item,
                                channel_send_pipe_item_proc send_item,
                                channel_release_pipe_item_proc release_item,
                                channel_on_incoming_error_proc incoming_error,
@@ -339,7 +343,7 @@ RedChannel *red_channel_create_parser(int size, RedsStreamContext *peer,
 {
     RedChannel *channel = red_channel_create(size, peer,
         core, migrate, handle_acks, config_socket, do_nothing_disconnect, do_nothing_handle_message,
-        alloc_recv_buf, release_recv_buf, send_item, release_item);
+        alloc_recv_buf, release_recv_buf, hold_item, send_item, release_item);
 
     if (channel == NULL) {
         return NULL;
@@ -439,7 +443,11 @@ void red_channel_reset_send_data(RedChannel *channel)
 void red_channel_init_send_data(RedChannel *channel, uint16_t msg_type, PipeItem *item)
 {
     channel->send_data.header->type = msg_type;
-    channel->send_data.item = item;
+    if (item) {
+        ASSERT(channel->send_data.item == NULL);
+        channel->send_data.item = item;
+        channel->hold_item(item);
+    }
 }
 
 static void red_channel_send(RedChannel *channel)

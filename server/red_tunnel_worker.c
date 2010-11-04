@@ -3420,6 +3420,10 @@ static void on_new_tunnel_channel(TunnelChannel *channel)
     }
 }
 
+static void tunnel_channel_hold_pipe_item(PipeItem *item)
+{
+}
+
 static void handle_tunnel_channel_link(Channel *channel, RedsStreamContext *peer, int migration,
                                        int num_common_caps, uint32_t *common_caps, int num_caps,
                                        uint32_t *caps)
@@ -3438,6 +3442,7 @@ static void handle_tunnel_channel_link(Channel *channel, RedsStreamContext *peer
                                             tunnel_channel_handle_message,
                                             tunnel_channel_alloc_msg_rcv_buf,
                                             tunnel_channel_release_msg_rcv_buf,
+                                            tunnel_channel_hold_pipe_item,
                                             tunnel_channel_send_item,
                                             tunnel_channel_release_pipe_item);
 

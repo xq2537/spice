@@ -347,7 +347,7 @@ typedef struct LocalCursor {
 
 typedef struct RedChannel RedChannel;
 typedef void (*disconnect_channel_proc)(RedChannel *channel);
-typedef void (*hold_item_proc)(void *item);
+typedef void (*hold_pipe_item_proc)(void *item);
 typedef void (*release_item_proc)(RedChannel *channel, void *item);
 typedef int (*handle_message_proc)(RedChannel *channel, size_t size, uint32_t type, void *message);
 
@@ -385,7 +385,7 @@ struct RedChannel {
     } recive_data;
 
     disconnect_channel_proc disconnect;
-    hold_item_proc hold_item;
+    hold_pipe_item_proc hold_item;
     release_item_proc release_item;
     handle_message_proc handle_message;
 #ifdef RED_STATISTICS
@@ -9310,7 +9310,7 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
                                  RedsStreamContext *peer, int migrate,
                                  event_listener_action_proc handler,
                                  disconnect_channel_proc disconnect,
-                                 hold_item_proc hold_item,
+                                 hold_pipe_item_proc hold_item,
                                  release_item_proc release_item,
                                  handle_message_proc handle_message)
 {
@@ -9389,7 +9389,7 @@ static void handle_channel_events(EventListener *in_listener, uint32_t events)
     }
 }
 
-static void display_channel_hold_item(void *item)
+static void display_channel_hold_pipe_item(void *item)
 {
     ASSERT(item);
     switch (((PipeItem *)item)->type) {
@@ -9444,7 +9444,7 @@ static void handle_new_display_channel(RedWorker *worker, RedsStreamContext *pee
                                                             SPICE_CHANNEL_DISPLAY, peer,
                                                             migrate, handle_channel_events,
                                                             red_disconnect_display,
-                                                            display_channel_hold_item,
+                                                            display_channel_hold_pipe_item,
                                                             display_channel_release_item,
                                                             display_channel_handle_message))) {
         return;
@@ -9544,7 +9544,7 @@ static void on_new_cursor_channel(RedWorker *worker)
     }
 }
 
-static void cursor_channel_hold_item(void *item)
+static void cursor_channel_hold_pipe_item(void *item)
 {
     ASSERT(item);
     ((CursorItem *)item)->refs++;
@@ -9566,7 +9566,7 @@ static void red_connect_cursor(RedWorker *worker, RedsStreamContext *peer, int m
                                                    SPICE_CHANNEL_CURSOR, peer, migrate,
                                                    handle_channel_events,
                                                    red_disconnect_cursor,
-                                                   cursor_channel_hold_item,
+                                                   cursor_channel_hold_pipe_item,
                                                    cursor_channel_release_item,
                                                    channel_handle_message))) {
         return;

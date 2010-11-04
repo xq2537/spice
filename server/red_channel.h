@@ -107,6 +107,7 @@ typedef void (*channel_release_msg_recv_buf_proc)(RedChannel *channel,
 typedef void (*channel_disconnect_proc)(RedChannel *channel);
 typedef int (*channel_configure_socket_proc)(RedChannel *channel);
 typedef void (*channel_send_pipe_item_proc)(RedChannel *channel, PipeItem *item);
+typedef void (*channel_hold_pipe_item_proc)(PipeItem *item);
 typedef void (*channel_release_pipe_item_proc)(RedChannel *channel,
                                                PipeItem *item, int item_pushed);
 typedef void (*channel_on_incoming_error_proc)(RedChannel *channel);
@@ -145,6 +146,7 @@ struct RedChannel {
 
     channel_disconnect_proc disconnect;
     channel_send_pipe_item_proc send_item;
+    channel_hold_pipe_item_proc hold_item;
     channel_release_pipe_item_proc release_item;
 
     int during_send;
@@ -165,6 +167,7 @@ RedChannel *red_channel_create(int size, RedsStreamContext *peer,
                                channel_handle_message_proc handle_message,
                                channel_alloc_msg_recv_buf_proc alloc_recv_buf,
                                channel_release_msg_recv_buf_proc release_recv_buf,
+                               channel_hold_pipe_item_proc hold_item,
                                channel_send_pipe_item_proc send_item,
                                channel_release_pipe_item_proc release_item);
 
@@ -178,6 +181,7 @@ RedChannel *red_channel_create_parser(int size, RedsStreamContext *peer,
                                channel_handle_parsed_proc handle_parsed,
                                channel_alloc_msg_recv_buf_proc alloc_recv_buf,
                                channel_release_msg_recv_buf_proc release_recv_buf,
+                               channel_hold_pipe_item_proc hold_item,
                                channel_send_pipe_item_proc send_item,
                                channel_release_pipe_item_proc release_item,
                                channel_on_incoming_error_proc incoming_error,
