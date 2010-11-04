@@ -77,6 +77,9 @@ typedef struct OutgoingHandler {
     on_outgoing_error_proc on_error;
     on_outgoing_block_proc on_block;
     on_outgoing_msg_done_proc on_msg_done;
+#ifdef RED_STATISTICS
+    uint64_t *out_bytes_counter;
+#endif
 } OutgoingHandler;
 
 /* Red Channel interface */
