@@ -26,6 +26,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
+#include "stat.h"
 #include "red_channel.h"
 
 static void red_channel_push(RedChannel *channel);
@@ -167,6 +168,7 @@ static void red_peer_handle_outgoing(RedsStreamContext *peer, OutgoingHandler *h
             }
         } else {
             handler->pos += n;
+            stat_inc_counter(handler->out_bytes_counter, n);
             if (handler->pos == handler->size) { // finished writing data
                 handler->on_msg_done(handler->opaque);
                 handler->vec = handler->vec_buf;
@@ -280,6 +282,7 @@ RedChannel *red_channel_create(int size, RedsStreamContext *peer,
     channel->outgoing.opaque = channel;
     channel->outgoing.pos = 0;
     channel->outgoing.size = 0;
+    channel->outgoing.out_bytes_counter = 0;
 
     channel->outgoing.get_msg_size = red_channel_peer_get_out_msg_size;
     channel->outgoing.prepare = red_channel_peer_prepare_out_msg;
