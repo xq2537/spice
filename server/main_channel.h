@@ -44,29 +44,29 @@ struct MainMigrateData {
 };
 
 Channel *main_channel_init();
-void main_channel_close(Channel *main_chan); // not destroy, just socket close
-int main_channel_push_ping(Channel *main_chan, int size);
-void main_channel_push_mouse_mode(Channel *main_chan, int current_mode, int is_client_mouse_allowed);
-void main_channel_push_agent_connected(Channel *main_chan);
-void main_channel_push_agent_disconnected(Channel *main_chan);
-void main_channel_push_tokens(Channel *main_chan, uint32_t num_tokens);
-void main_channel_push_agent_data(Channel *main_chan, uint8_t* data, size_t len,
+void main_channel_close(Channel *channel); // not destroy, just socket close
+int main_channel_push_ping(Channel *channel, int size);
+void main_channel_push_mouse_mode(Channel *channel, int current_mode, int is_client_mouse_allowed);
+void main_channel_push_agent_connected(Channel *channel);
+void main_channel_push_agent_disconnected(Channel *channel);
+void main_channel_push_tokens(Channel *channel, uint32_t num_tokens);
+void main_channel_push_agent_data(Channel *channel, uint8_t* data, size_t len,
            spice_marshaller_item_free_func free_data, void *opaque);
-void main_channel_start_net_test(Channel *main_chan);
+void main_channel_start_net_test(Channel *channel);
 // TODO: huge. Consider making a reds_* interface for these functions
 // and calling from main.
-void main_channel_push_init(Channel *main_chan, int connection_id, int display_channels_hint,
+void main_channel_push_init(Channel *channel, int connection_id, int display_channels_hint,
     int current_mouse_mode, int is_client_mouse_allowed, int multi_media_time,
     int ram_hint);
-void main_channel_push_notify(Channel *main_chan, uint8_t *mess, const int mess_len);
+void main_channel_push_notify(Channel *channel, uint8_t *mess, const int mess_len);
 // TODO: consider exporting RedsMigSpice from reds.c
-void main_channel_push_migrate_begin(Channel *main_chan, int port, int sport, char *host,
+void main_channel_push_migrate_begin(Channel *channel, int port, int sport, char *host,
     uint16_t cert_pub_key_type, uint32_t cert_pub_key_len, uint8_t *cert_pub_key);
-void main_channel_push_migrate(Channel *main_chan);
-void main_channel_push_migrate_cancel(Channel *main_chan);
-void main_channel_push_multi_media_time(Channel *main_chan, int time);
-int main_channel_getsockname(Channel *main_chan, struct sockaddr *sa, socklen_t *salen);
-int main_channel_getpeername(Channel *main_chan, struct sockaddr *sa, socklen_t *salen);
+void main_channel_push_migrate(Channel *channel);
+void main_channel_push_migrate_cancel(Channel *channel);
+void main_channel_push_multi_media_time(Channel *channel, int time);
+int main_channel_getsockname(Channel *channel, struct sockaddr *sa, socklen_t *salen);
+int main_channel_getpeername(Channel *channel, struct sockaddr *sa, socklen_t *salen);
 
 // TODO: Defines used to calculate receive buffer size, and also by reds.c
 // other options: is to make a reds_main_consts.h, to duplicate defines.
