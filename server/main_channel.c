@@ -744,6 +744,10 @@ static int main_channel_config_socket(RedChannel *channel)
     return TRUE;
 }
 
+static void main_channel_hold_item(void *item)
+{
+}
+
 static void main_channel_link(Channel *channel, RedsStreamContext *peer, int migration,
                         int num_common_caps, uint32_t *common_caps, int num_caps,
                         uint32_t *caps)
@@ -759,6 +763,7 @@ static void main_channel_link(Channel *channel, RedsStreamContext *peer, int mig
         ,main_channel_handle_parsed
         ,main_channel_alloc_msg_rcv_buf
         ,main_channel_release_msg_rcv_buf
+        ,main_channel_hold_item
         ,main_channel_send_item
         ,main_channel_release_pipe_item
         ,main_channel_on_error
