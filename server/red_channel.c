@@ -501,7 +501,14 @@ void red_channel_pipe_add(RedChannel *channel, PipeItem *item)
 
     channel->pipe_size++;
     ring_add(&channel->pipe, &item->link);
+}
 
+void red_channel_pipe_add_push(RedChannel *channel, PipeItem *item)
+{
+    ASSERT(channel);
+
+    channel->pipe_size++;
+    ring_add(&channel->pipe, &item->link);
     red_channel_push(channel);
 }
 
