@@ -431,7 +431,7 @@ static void main_channel_push_migrate_data_item(MainChannel *main_chan)
     SpiceMarshaller *m = item->m;
     MainMigrateData *data = (MainMigrateData *)spice_marshaller_reserve_space(m, sizeof(MainMigrateData));
 
-    reds_push_migrate_data_item(m, data); // TODO: from reds split. ugly separation.
+    reds_marshall_migrate_data_item(m, data); // TODO: from reds split. ugly separation.
     data->serial = main_chan->serial;
     data->ping_id = main_chan->ping_id;
     main_channel_push_pipe_item(main_chan, item);
