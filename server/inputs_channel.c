@@ -82,7 +82,7 @@ static SpiceTabletInstance *tablet = NULL;
 
 static SpiceTimer *key_modifiers_timer;
 
-static InputsChannel *inputs_channel = NULL;
+static InputsChannel *g_inputs_channel = NULL;
 
 #define KEY_MODIFIERS_TTL (1000 * 2) /*2sec*/
 
@@ -92,7 +92,7 @@ static InputsChannel *inputs_channel = NULL;
 
 int inputs_inited(void)
 {
-    return !!inputs_channel;
+    return !!g_inputs_channel;
 }
 
 int inputs_set_keyboard(SpiceKbdInstance *_keyboard)
@@ -149,8 +149,8 @@ void inputs_set_tablet_logical_size(int x_res, int y_res)
 
 const VDAgentMouseState *inputs_get_mouse_state(void)
 {
-    ASSERT(inputs_channel);
-    return &inputs_channel->mouse_state;
+    ASSERT(g_inputs_channel);
+    return &g_inputs_channel->mouse_state;
 }
 
 static uint8_t *inputs_channel_alloc_msg_rcv_buf(RedChannel *channel, SpiceDataHeader *msg_header)
@@ -261,9 +261,10 @@ static void inputs_channel_send_item(RedChannel *channel, PipeItem *base)
 
 static int inputs_channel_handle_parsed(RedChannel *channel, size_t size, uint32_t type, void *message)
 {
+    InputsChannel *inputs_channel = (InputsChannel *)channel;
     uint8_t *buf = (uint8_t *)message;
 
-    ASSERT(inputs_channel == (InputsChannel*)channel);
+    ASSERT(g_inputs_channel == inputs_channel);
     switch (type) {
     case SPICE_MSGC_INPUTS_KEY_DOWN: {
         SpiceMsgcKeyDown *key_up = (SpiceMsgcKeyDown *)buf;
@@ -426,22 +427,25 @@ static void inputs_channel_on_outgoing_error(RedChannel *channel)
 
 static void inputs_shutdown(Channel *channel)
 {
-    ASSERT(inputs_channel == (InputsChannel *)channel->data);
-    if (inputs_channel) {
-        red_channel_shutdown(&inputs_channel->base);
-        inputs_channel->base.incoming.shut = TRUE;
+    ASSERT(g_inputs_channel == (InputsChannel *)channel->data);
+    if (g_inputs_channel) {
+        red_channel_shutdown(&g_inputs_channel->base);
+        g_inputs_channel->base.incoming.shut = TRUE;
         channel->data = NULL;
-        inputs_channel = NULL;
+        g_inputs_channel = NULL;
     }
 }
 
 static void inputs_migrate(Channel *channel)
 {
-    InputsPipeItem *pipe_item = inputs_pipe_item_new(inputs_channel, PIPE_ITEM_MIGRATE);
-    SpiceMarshaller *m = pipe_item->m;
+    InputsChannel *inputs_channel = (InputsChannel *)channel->data;
+    InputsPipeItem *pipe_item;
+    SpiceMarshaller *m;
     SpiceMsgMigrate migrate;
 
-    ASSERT(inputs_channel == (InputsChannel *)channel->data);
+    ASSERT(g_inputs_channel == inputs_channel);
+    pipe_item = inputs_pipe_item_new(inputs_channel, PIPE_ITEM_MIGRATE);
+    m = pipe_item->m;
     migrate.flags = 0;
     spice_marshall_msg_migrate(m, &migrate);
     red_channel_pipe_add(&inputs_channel->base, &pipe_item->base);
@@ -481,10 +485,11 @@ static void inputs_link(Channel *channel, RedsStreamContext *peer, int migration
                         int num_common_caps, uint32_t *common_caps, int num_caps,
                         uint32_t *caps)
 {
+    InputsChannel *inputs_channel;
     red_printf("");
     ASSERT(channel->data == NULL);
 
-    inputs_channel = (InputsChannel*)red_channel_create_parser(
+    g_inputs_channel = inputs_channel = (InputsChannel*)red_channel_create_parser(
         sizeof(*inputs_channel), peer, core, migration, FALSE /* handle_acks */
         ,inputs_channel_config_socket
         ,spice_get_client_channel_parser(SPICE_CHANNEL_INPUTS, NULL)
@@ -506,14 +511,14 @@ void inputs_send_keyboard_modifiers(uint8_t modifiers)
     InputsPipeItem *pipe_item;
     SpiceMarshaller *m;
 
-    if (!inputs_channel) {
+    if (!g_inputs_channel) {
         return;
     }
-    pipe_item = inputs_pipe_item_new(inputs_channel, PIPE_ITEM_KEY_MODIFIERS);
+    pipe_item = inputs_pipe_item_new(g_inputs_channel, PIPE_ITEM_KEY_MODIFIERS);
     m = pipe_item->m;
     key_modifiers.modifiers = modifiers;
     spice_marshall_msg_inputs_key_modifiers(m, &key_modifiers);
-    red_channel_pipe_add(&inputs_channel->base, &pipe_item->base);
+    red_channel_pipe_add(&g_inputs_channel->base, &pipe_item->base);
 }
 
 void inputs_on_keyboard_leds_change(void *opaque, uint8_t leds)
