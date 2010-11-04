@@ -211,6 +211,7 @@ void red_channel_set_message_serial(RedChannel *channel, uint64_t);
 void red_channel_begin_send_message(RedChannel *channel);
 
 void red_channel_pipe_item_init(RedChannel *channel, PipeItem *item, int type);
+void red_channel_pipe_add_push(RedChannel *channel, PipeItem *item);
 void red_channel_pipe_add(RedChannel *channel, PipeItem *item);
 int red_channel_pipe_item_is_linked(RedChannel *channel, PipeItem *item);
 void red_channel_pipe_item_remove(RedChannel *channel, PipeItem *item);

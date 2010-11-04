@@ -243,7 +243,7 @@ static void inputs_pipe_add_type(InputsChannel *channel, int type)
 {
     InputsPipeItem* pipe_item = inputs_pipe_item_new(channel, type);
 
-    red_channel_pipe_add(&channel->base, &pipe_item->base);
+    red_channel_pipe_add_push(&channel->base, &pipe_item->base);
 }
 
 static void inputs_channel_release_pipe_item(RedChannel *channel,
@@ -476,7 +476,7 @@ static void inputs_migrate(Channel *channel)
 
     ASSERT(g_inputs_channel == (InputsChannel *)channel->data);
     item = inputs_pipe_item_new(inputs_channel, PIPE_ITEM_MIGRATE);
-    red_channel_pipe_add(&inputs_channel->base, &item->base);
+    red_channel_pipe_add_push(&inputs_channel->base, &item->base);
 }
 
 static void inputs_pipe_add_init(InputsChannel *inputs_channel)
@@ -486,7 +486,7 @@ static void inputs_pipe_add_init(InputsChannel *inputs_channel)
     red_channel_pipe_item_init(&inputs_channel->base, &item->base,
                                PIPE_ITEM_INIT);
     item->modifiers = kbd_get_leds(keyboard);
-    red_channel_pipe_add(&inputs_channel->base, &item->base);
+    red_channel_pipe_add_push(&inputs_channel->base, &item->base);
 }
 
 static int inputs_channel_config_socket(RedChannel *channel)
@@ -545,7 +545,7 @@ static void inputs_push_keyboard_modifiers(uint8_t modifiers)
         return;
     }
     item = inputs_key_modifiers_item_new(g_inputs_channel, modifiers);
-    red_channel_pipe_add(&g_inputs_channel->base, &item->base);
+    red_channel_pipe_add_push(&g_inputs_channel->base, &item->base);
 }
 
 void inputs_on_keyboard_leds_change(void *opaque, uint8_t leds)

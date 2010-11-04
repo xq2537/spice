@@ -353,9 +353,9 @@ static void smartcard_channel_disconnect(RedChannel *channel)
 /* this is called from both device input and client input. since the device is
  * a usb device, the context is still the main thread (kvm_main_loop, timers)
  * so no mutex is required. */
-static void smartcard_channel_pipe_add(SmartCardChannel *channel, PipeItem *item)
+static void smartcard_channel_pipe_add_push(SmartCardChannel *channel, PipeItem *item)
 {
-    red_channel_pipe_add(&channel->base, item);
+    red_channel_pipe_add_push(&channel->base, item);
 }
 
 static void smartcard_push_error(SmartCardChannel* channel, reader_id_t reader_id, VSCErrorCode error)
@@ -365,7 +365,7 @@ static void smartcard_push_error(SmartCardChannel* channel, reader_id_t reader_i
     error_item->base.type = PIPE_ITEM_TYPE_ERROR;
     error_item->reader_id = reader_id;
     error_item->error = error;
-    smartcard_channel_pipe_add(channel, &error_item->base);
+    smartcard_channel_pipe_add_push(channel, &error_item->base);
 }
 
 static void smartcard_push_reader_add_response(SmartCardChannel *channel, uint32_t reader_id)
@@ -374,7 +374,7 @@ static void smartcard_push_reader_add_response(SmartCardChannel *channel, uint32
 
     rar_item->base.type = PIPE_ITEM_TYPE_READER_ADD_RESPONSE;
     rar_item->reader_id = reader_id;
-    smartcard_channel_pipe_add(channel, &rar_item->base);
+    smartcard_channel_pipe_add_push(channel, &rar_item->base);
 }
 
 static void smartcard_push_vscmsg(SmartCardChannel *channel, VSCMsgHeader *vheader)
@@ -383,7 +383,7 @@ static void smartcard_push_vscmsg(SmartCardChannel *channel, VSCMsgHeader *vhead
 
     msg_item->base.type = PIPE_ITEM_TYPE_MSG;
     msg_item->vheader = vheader;
-    smartcard_channel_pipe_add(channel, &msg_item->base);
+    smartcard_channel_pipe_add_push(channel, &msg_item->base);
 }
 
 void smartcard_on_message_from_device(SmartCardChannel *smartcard_channel,

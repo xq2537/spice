@@ -277,7 +277,7 @@ static void main_channel_push_channels(MainChannel *main_chan)
     RedsOutItem *item;
 
     item = main_pipe_item_new(main_chan, SPICE_MSG_MAIN_CHANNELS_LIST);
-    red_channel_pipe_add(&main_chan->base, &item->base);
+    red_channel_pipe_add_push(&main_chan->base, &item->base);
 }
 
 static void main_channel_marshall_channels(MainChannel *main_chan)
@@ -301,7 +301,7 @@ int main_channel_push_ping(Channel *channel, int size)
         return FALSE;
     }
     item = main_ping_item_new(main_chan, size);
-    red_channel_pipe_add(&main_chan->base, &item->base);
+    red_channel_pipe_add_push(&main_chan->base, &item->base);
     return TRUE;
 }
 
@@ -331,7 +331,7 @@ void main_channel_push_mouse_mode(Channel *channel, int current_mode,
 
     item = main_mouse_mode_item_new(main_chan, current_mode,
                                     is_client_mouse_allowed);
-    red_channel_pipe_add(&main_chan->base, &item->base);
+    red_channel_pipe_add_push(&main_chan->base, &item->base);
 }
 
 static void main_channel_marshall_mouse_mode(MainChannel *main_chan, int current_mode, int is_client_mouse_allowed)
@@ -352,7 +352,7 @@ void main_channel_push_agent_connected(Channel *channel)
     MainChannel *main_chan = channel->data;
 
     item = main_pipe_item_new(main_chan, SPICE_MSG_MAIN_AGENT_CONNECTED);
-    red_channel_pipe_add(&main_chan->base, &item->base);
+    red_channel_pipe_add_push(&main_chan->base, &item->base);
 }
 
 void main_channel_push_agent_disconnected(Channel *channel)
@@ -361,7 +361,7 @@ void main_channel_push_agent_disconnected(Channel *channel)
     MainChannel *main_chan = channel->data;
 
     item = main_pipe_item_new(main_chan, SPICE_MSG_MAIN_AGENT_DISCONNECTED);
-    red_channel_pipe_add(&main_chan->base, &item->base);
+    red_channel_pipe_add_push(&main_chan->base, &item->base);
 }
 
 static void main_channel_marshall_agent_disconnected(MainChannel *main_chan)
@@ -378,7 +378,7 @@ void main_channel_push_tokens(Channel *channel, uint32_t num_tokens)
     MainChannel *main_chan = channel->data;
     TokensPipeItem *item = main_tokens_item_new(main_chan, num_tokens);
 
-    red_channel_pipe_add(&main_chan->base, &item->base);
+    red_channel_pipe_add_push(&main_chan->base, &item->base);
 }
 
 static void main_channel_marshall_tokens(MainChannel *main_chan, uint32_t num_tokens)
@@ -397,7 +397,7 @@ void main_channel_push_agent_data(Channel *channel, uint8_t* data, size_t len,
     AgentDataPipeItem *item;
 
     item = main_agent_data_item_new(main_chan, data, len, free_data, opaque);
-    red_channel_pipe_add(&main_chan->base, &item->base);
+    red_channel_pipe_add_push(&main_chan->base, &item->base);
 }
 
 static void main_channel_marshall_agent_data(MainChannel *main_chan,
@@ -411,7 +411,7 @@ static void main_channel_push_migrate_data_item(MainChannel *main_chan)
 {
     RedsOutItem *item = main_pipe_item_new(main_chan, SPICE_MSG_MIGRATE_DATA);
 
-    red_channel_pipe_add(&main_chan->base, &item->base);
+    red_channel_pipe_add_push(&main_chan->base, &item->base);
 }
 
 static void main_channel_marshall_migrate_data_item(MainChannel *main_chan)
@@ -442,7 +442,7 @@ void main_channel_push_init(Channel *channel, int connection_id,
     item = main_init_item_new(main_chan,
              connection_id, display_channels_hint, current_mouse_mode,
              is_client_mouse_allowed, multi_media_time, ram_hint);
-    red_channel_pipe_add(&main_chan->base, &item->base);
+    red_channel_pipe_add_push(&main_chan->base, &item->base);
 }
 
 static void main_channel_marshall_init(MainChannel *main_chan,
@@ -469,7 +469,7 @@ void main_channel_push_notify(Channel *channel, uint8_t *mess, const int mess_le
     MainChannel *main_chan = channel->data;
     NotifyPipeItem *item = main_notify_item_new(main_chan, mess, mess_len);
 
-    red_channel_pipe_add(&main_chan->base, &item->base);
+    red_channel_pipe_add_push(&main_chan->base, &item->base);
 }
 
 static void main_channel_marshall_notify(MainChannel *main_chan, NotifyPipeItem *item)
@@ -494,7 +494,7 @@ void main_channel_push_migrate_begin(Channel *channel, int port, int sport,
     MigrateBeginPipeItem *item = main_migrate_begin_item_new(main_chan, port,
         sport, host, cert_pub_key_type, cert_pub_key_len, cert_pub_key);
 
-    red_channel_pipe_add(&main_chan->base, &item->base);
+    red_channel_pipe_add_push(&main_chan->base, &item->base);
 }
 
 static void main_channel_marshall_migrate_begin(MainChannel *main_chan,
@@ -518,7 +518,7 @@ void main_channel_push_migrate(Channel *channel)
     MainChannel *main_chan = channel->data;
     RedsOutItem *item = main_pipe_item_new(main_chan, SPICE_MSG_MIGRATE);
 
-    red_channel_pipe_add(&main_chan->base, &item->base);
+    red_channel_pipe_add_push(&main_chan->base, &item->base);
 }
 
 static void main_channel_marshall_migrate(MainChannel *main_chan)
@@ -535,7 +535,7 @@ void main_channel_push_migrate_cancel(Channel *channel)
     RedsOutItem *item = main_pipe_item_new(main_chan,
                                            SPICE_MSG_MAIN_MIGRATE_CANCEL);
 
-    red_channel_pipe_add(&main_chan->base, &item->base);
+    red_channel_pipe_add_push(&main_chan->base, &item->base);
 }
 
 void main_channel_push_multi_media_time(Channel *channel, int time)
@@ -544,7 +544,7 @@ void main_channel_push_multi_media_time(Channel *channel, int time)
 
     MultiMediaTimePipeItem *item =
         main_multi_media_time_item_new(main_chan, time);
-    red_channel_pipe_add(&main_chan->base, &item->base);
+    red_channel_pipe_add_push(&main_chan->base, &item->base);
 }
 
 static PipeItem *main_migrate_switch_item_new(MainChannel *main_chan)
@@ -560,7 +560,7 @@ void main_channel_push_migrate_switch(Channel *channel)
 {
     MainChannel *main_chan = channel->data;
 
-    red_channel_pipe_add(&main_chan->base,
+    red_channel_pipe_add_push(&main_chan->base,
         main_migrate_switch_item_new(main_chan));
 }
 
