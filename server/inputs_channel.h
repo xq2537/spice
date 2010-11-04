@@ -28,7 +28,6 @@ void inputs_init(void);
 int inputs_inited(void);
 int inputs_has_tablet(void);
 const VDAgentMouseState *inputs_get_mouse_state(void);
-void inputs_send_keyboard_modifiers(uint8_t modifiers);
 void inputs_on_keyboard_leds_change(void *opaque, uint8_t leds);
 int inputs_set_keyboard(SpiceKbdInstance *_keyboard);
 int inputs_set_mouse(SpiceMouseInstance *_mouse);
