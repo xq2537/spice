@@ -1097,7 +1097,7 @@ typedef struct WriteQueueInfo {
     uint32_t len;
 } WriteQueueInfo;
 
-void reds_push_migrate_data_item(SpiceMarshaller *m, MainMigrateData *data)
+void reds_marshall_migrate_data_item(SpiceMarshaller *m, MainMigrateData *data)
 {
     VDIPortState *state = &reds->agent_state;
     int buf_index;
