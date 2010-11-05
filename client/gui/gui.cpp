@@ -891,7 +891,6 @@ GUI::GUI(Application& app, Application::State state)
     , _pixmap (new RedPixmapSw(MAIN_GUI_WIDTH, MAIN_GUI_HEIGHT, RedDrawable::RGB32, true, 0))
     , _renderer (new CEGUI::SoftRenderer(_pixmap->get_data(), MAIN_GUI_WIDTH, MAIN_GUI_HEIGHT,
                                          _pixmap->get_stride()))
-    , _gui_system (new CEGUI::System(_renderer, new CEGUIResourceProvider()))
     , _dialog (NULL)
     , _prev_time (Platform::get_monolithic_time())
 
@@ -919,6 +918,14 @@ GUI::~GUI()
 
 void GUI::init_cegui()
 {
+    std::string log_file_name;
+
+    Platform::get_app_data_dir(log_file_name, "spicec");
+    Platform::path_append(log_file_name, "cegui.log");
+
+    _gui_system = new CEGUI::System(_renderer, new CEGUIResourceProvider(),
+                                    NULL, NULL, "", log_file_name);
+
     CEGUI::SchemeManager::getSingleton().loadScheme("TaharezLook.scheme");
     _gui_system->setDefaultMouseCursor("TaharezLook", "MouseArrow");
     _gui_system->setDefaultTooltip("TaharezLook/Tooltip");
