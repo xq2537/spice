@@ -351,7 +351,7 @@ typedef struct RedChannel RedChannel;
 typedef void (*channel_disconnect_proc)(RedChannel *channel);
 typedef void (*channel_hold_item_proc)(PipeItem *item);
 typedef void (*release_item_proc)(RedChannel *channel, void *item);
-typedef int (*handle_message_proc)(RedChannel *channel, size_t size, uint32_t type, void *message);
+typedef int (*handle_parsed_proc)(RedChannel *channel, uint32_t size, uint16_t type, void *message);
 
 struct RedChannel {
     spice_parse_channel_func_t parser;
@@ -388,7 +388,7 @@ struct RedChannel {
     channel_disconnect_proc disconnect;
     channel_hold_item_proc hold_item;
     release_item_proc release_item;
-    handle_message_proc handle_message;
+    handle_parsed_proc handle_message;
 #ifdef RED_STATISTICS
     uint64_t *out_bytes_counter;
 #endif
@@ -8957,7 +8957,7 @@ static void on_new_display_channel(RedWorker *worker)
     }
 }
 
-static int channel_handle_message(RedChannel *channel, size_t size, uint32_t type, void *message)
+static int channel_handle_message(RedChannel *channel, uint32_t size, uint16_t type, void *message)
 {
     switch (type) {
     case SPICE_MSGC_ACK_SYNC:
@@ -9264,7 +9264,7 @@ static int display_channel_handle_migrate_data(DisplayChannel *channel, size_t s
     return TRUE;
 }
 
-static int display_channel_handle_message(RedChannel *channel, size_t size, uint32_t type, void *message)
+static int display_channel_handle_message(RedChannel *channel, uint32_t size, uint16_t type, void *message)
 {
     switch (type) {
     case SPICE_MSGC_DISPLAY_INIT:
@@ -9368,7 +9368,7 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
                                  channel_disconnect_proc disconnect,
                                  channel_hold_item_proc hold_item,
                                  release_item_proc release_item,
-                                 handle_message_proc handle_message)
+                                 handle_parsed_proc handle_message)
 {
     struct epoll_event event;
     RedChannel *channel;
