@@ -8163,13 +8163,14 @@ static void red_send_local_cursor(CursorChannel *cursor_channel, LocalCursor *cu
     RedChannel *channel;
     SpiceMsgCursorSet cursor_set;
     AddBufInfo info;
+    RedWorker *worker;
 
     ASSERT(cursor_channel);
-
+    worker = cursor_channel->common.worker;
     channel = &cursor_channel->common.base;
     channel->send_data.header->type = SPICE_MSG_CURSOR_SET;
     cursor_set.position = cursor->position;
-    cursor_set.visible = cursor_channel->common.worker->cursor_visible;
+    cursor_set.visible = worker->cursor_visible;
 
     fill_cursor(cursor_channel, &cursor_set.cursor, &cursor->base, &info);
     spice_marshall_msg_cursor_set(channel->send_data.marshaller, &cursor_set);
@@ -8177,7 +8178,7 @@ static void red_send_local_cursor(CursorChannel *cursor_channel, LocalCursor *cu
 
     red_begin_send_message(channel, cursor);
 
-    red_release_cursor(cursor_channel->common.worker, (CursorItem *)cursor);
+    red_release_cursor(worker, (CursorItem *)cursor);
 }
 
 static void cursor_channel_send_migrate(CursorChannel *cursor_channel)
@@ -8196,10 +8197,12 @@ static void red_send_cursor(CursorChannel *cursor_channel, CursorItem *cursor)
     RedChannel *channel;
     RedCursorCmd *cmd;
     SpiceMarshaller *m;
+    RedWorker *worker;
 
     ASSERT(cursor_channel);
 
     channel = &cursor_channel->common.base;
+    worker = cursor_channel->common.worker;
     m = channel->send_data.marshaller;
 
     cmd = cursor->red_cursor;
@@ -8219,7 +8222,7 @@ static void red_send_cursor(CursorChannel *cursor_channel, CursorItem *cursor)
 
             channel->send_data.header->type = SPICE_MSG_CURSOR_SET;
             cursor_set.position = cmd->u.set.position;
-            cursor_set.visible = cursor_channel->common.worker->cursor_visible;
+            cursor_set.visible = worker->cursor_visible;
 
             fill_cursor(cursor_channel, &cursor_set.cursor, cursor, &info);
             spice_marshall_msg_cursor_set(m, &cursor_set);
@@ -8540,17 +8543,19 @@ static void red_disconnect_channel(RedChannel *channel)
 static void red_disconnect_display(RedChannel *channel)
 {
     DisplayChannel *display_channel;
+    CommonChannel *common = SPICE_CONTAINEROF(channel, CommonChannel, base);
+    RedWorker *worker;
 
     if (!channel || !channel->peer) {
         return;
     }
-
+    worker = common->worker;
     display_channel = (DisplayChannel *)channel;
-    ASSERT(display_channel == display_channel->common.worker->display_channel);
+    ASSERT(display_channel == worker->display_channel);
 #ifdef COMPRESS_STAT
     print_compress_stats(display_channel);
 #endif
-    display_channel->common.worker->display_channel = NULL;
+    worker->display_channel = NULL;
     red_display_unshare_stream_buf(display_channel);
     red_release_pixmap_cache(display_channel);
     red_release_glz(display_channel);
@@ -9962,6 +9967,8 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
 {
     RedWorker *worker = SPICE_CONTAINEROF(listener, RedWorker, dev_listener);
     RedWorkerMessage message;
+    RedChannel *cursor_red_channel = &worker->cursor_channel->common.base;
+    RedChannel *display_red_channel = &worker->display_channel->common.base;
     int ring_is_empty;
 
     read_message(worker->channel, &message);
@@ -9980,8 +9987,9 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
             display_channel_push(worker);
         }
         if (worker->qxl->st->qif->flush_resources(worker->qxl) == 0) {
-            red_printf("oom current %u pipe %u", worker->current_size, worker->display_channel ?
-                       worker->display_channel->common.base.pipe_size : 0);
+            red_printf("oom current %u pipe %u", worker->current_size,
+                       worker->display_channel ?
+                       display_red_channel->pipe_size : 0);
             red_free_some(worker);
             worker->qxl->st->qif->flush_resources(worker->qxl);
         }
@@ -9995,11 +10003,11 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
 
         red_wait_outgoing_item((RedChannel *)worker->cursor_channel);
         if (worker->cursor_channel) {
-            red_pipe_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
-            if (!worker->cursor_channel->common.base.migrate) {
-                red_pipe_add_verb(&worker->cursor_channel->common.base, SPICE_MSG_CURSOR_RESET);
+            red_pipe_add_type(cursor_red_channel, PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
+            if (!cursor_red_channel->migrate) {
+                red_pipe_add_verb(cursor_red_channel, SPICE_MSG_CURSOR_RESET);
             }
-            ASSERT(!worker->cursor_channel->common.base.send_data.item);
+            ASSERT(!cursor_red_channel->send_data.item);
 
             worker->cursor_visible = TRUE;
             worker->cursor_position.x = worker->cursor_position.y = 0;
@@ -10063,10 +10071,10 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         red_printf("start");
         ASSERT(!worker->running);
         if (worker->cursor_channel) {
-            worker->cursor_channel->common.base.migrate = FALSE;
+            cursor_red_channel->migrate = FALSE;
         }
         if (worker->display_channel) {
-            worker->display_channel->common.base.migrate = FALSE;
+            display_red_channel->migrate = FALSE;
         }
         worker->running = TRUE;
         break;
