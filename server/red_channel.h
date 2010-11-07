@@ -110,7 +110,7 @@ typedef void (*channel_release_msg_recv_buf_proc)(RedChannel *channel,
 typedef void (*channel_disconnect_proc)(RedChannel *channel);
 typedef int (*channel_configure_socket_proc)(RedChannel *channel);
 typedef void (*channel_send_pipe_item_proc)(RedChannel *channel, PipeItem *item);
-typedef void (*channel_hold_item_proc)(void *item);
+typedef void (*channel_hold_item_proc)(PipeItem *item);
 typedef void (*channel_release_pipe_item_proc)(RedChannel *channel,
                                                PipeItem *item, int item_pushed);
 typedef void (*channel_on_incoming_error_proc)(RedChannel *channel);
