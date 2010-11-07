@@ -406,6 +406,8 @@ int red_channel_handle_message(RedChannel *channel, uint32_t size,
             red_channel_push(channel);
         }
         break;
+    case SPICE_MSGC_DISCONNECTING:
+        break;
     default:
         red_printf("invalid message type %u", type);
         return FALSE;
