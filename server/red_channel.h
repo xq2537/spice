@@ -234,5 +234,13 @@ void red_channel_push(RedChannel *channel);
 // current red_channel_shutdown also closes the socket - is there a socket to close?
 // are we reading from an fd here? arghh
 void red_channel_pipe_clear(RedChannel *channel);
+// Again, used in various places outside of event handler context (or in other event handler
+// contexts):
+//  flush_display_commands/flush_cursor_commands
+//  display_channel_wait_for_init
+//  red_wait_outgoing_item
+//  red_wait_pipe_item_sent
+//  handle_channel_events - this is the only one that was used before, and was in red_channel.c
+void red_channel_receive(RedChannel *channel);
 
 #endif
