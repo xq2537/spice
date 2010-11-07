@@ -190,6 +190,8 @@ RedChannel *red_channel_create_parser(int size, RedsStreamContext *peer,
                                channel_on_incoming_error_proc incoming_error,
                                channel_on_outgoing_error_proc outgoing_error);
 
+int red_channel_is_connected(RedChannel *channel);
+
 void red_channel_destroy(RedChannel *channel);
 
 void red_channel_shutdown(RedChannel *channel);
