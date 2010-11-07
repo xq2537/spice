@@ -564,17 +564,18 @@ void red_channel_pipe_add_type(RedChannel *channel, int pipe_item_type)
     red_channel_push(channel);
 }
 
-static PipeItem *red_channel_pipe_get(RedChannel *channel)
+static inline PipeItem *red_channel_pipe_get(RedChannel *channel)
 {
     PipeItem *item;
 
     if (!channel || channel->send_data.blocked ||
-        (channel->handle_acks &&
-         (channel->ack_data.messages_window > channel->ack_data.client_window * 2)) ||
         !(item = (PipeItem *)ring_get_tail(&channel->pipe))) {
         return NULL;
     }
-
+    if (channel->handle_acks && (channel->ack_data.messages_window > channel->ack_data.client_window * 2)) {
+        channel->send_data.blocked = TRUE;
+        return NULL;
+    }
     --channel->pipe_size;
     ring_remove(&item->link);
     return item;
