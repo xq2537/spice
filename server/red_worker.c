@@ -969,7 +969,7 @@ typedef struct BitmapData {
 
 static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable);
 static void red_current_flush(RedWorker *worker, int surface_id);
-static void display_channel_push(RedWorker *worker);
+static void red_channel_push(RedChannel *channel);
 #ifdef DRAW_ALL
 #define red_update_area(worker, rect, surface_id)
 #define red_draw_drawable(worker, item)
@@ -4561,7 +4561,7 @@ static void red_add_surface_image(RedWorker *worker, int surface_id)
     /* not allowing lossy compression because probably, especially if it is a primary surface,
        it combines both "picture-like" areas with areas that are more "artificial"*/
     item = red_add_surface_area_image(worker, surface_id, &area, NULL, FALSE);
-    display_channel_push(worker);
+    red_channel_push(&worker->display_channel->common.base);
 }
 
 typedef struct {
@@ -8276,7 +8276,7 @@ static void red_send_cursor(CursorChannel *cursor_channel, CursorItem *cursor)
 
     red_channel_begin_send_message(channel);
 
-    red_release_cursor(cursor_channel->common.worker, cursor);
+    red_release_cursor(worker, cursor);
 }
 
 static void red_send_surface_create(DisplayChannel *display, SpiceMsgSurfaceCreate *surface_create)
@@ -8423,13 +8423,24 @@ static void display_channel_send_item(RedChannel *base, PipeItem *pipe_item)
     red_unref_channel((RedChannel *)display_channel);
 }
 
-static void display_channel_push(RedWorker *worker)
+void red_channel_push(RedChannel *channel)
 {
     PipeItem *pipe_item;
 
-    while ((pipe_item = red_channel_pipe_get((RedChannel *)worker->display_channel))) {
-        display_channel_send_item((RedChannel *)worker->display_channel, pipe_item);
+    if (!channel->during_send) {
+        channel->during_send = TRUE;
+    } else {
+        return;
     }
+
+    if (channel->send_data.blocked) {
+        red_channel_send(channel);
+    }
+
+    while ((pipe_item = red_channel_pipe_get(channel))) {
+        channel->send_item(channel, pipe_item);
+    }
+    channel->during_send = FALSE;
 }
 
 static void cursor_channel_send_item(RedChannel *channel, PipeItem *pipe_item)
@@ -8476,19 +8487,14 @@ static void cursor_channel_send_item(RedChannel *channel, PipeItem *pipe_item)
     red_unref_channel(channel);
 }
 
-static void cursor_channel_push(RedWorker *worker)
-{
-    PipeItem *pipe_item;
-
-    while ((pipe_item = red_channel_pipe_get((RedChannel *)worker->cursor_channel))) {
-        cursor_channel_send_item((RedChannel *)worker->cursor_channel, pipe_item);
-    }
-}
-
 static inline void red_push(RedWorker *worker)
 {
-    cursor_channel_push(worker);
-    display_channel_push(worker);
+    if (worker->cursor_channel) {
+        red_channel_push(&worker->cursor_channel->common.base);
+    }
+    if (worker->display_channel) {
+        red_channel_push(&worker->display_channel->common.base);
+    }
 }
 
 typedef struct ShowTreeData {
@@ -8818,7 +8824,7 @@ static inline void flush_display_commands(RedWorker *worker)
         }
 
         while (red_process_commands(worker, MAX_PIPE_SIZE, &ring_is_empty)) {
-            display_channel_push(worker);
+            red_channel_push(&worker->display_channel->common.base);
         }
 
         if (ring_is_empty) {
@@ -8827,7 +8833,7 @@ static inline void flush_display_commands(RedWorker *worker)
         end_time = red_now() + DISPLAY_CLIENT_TIMEOUT * 10;
         int sleep_count = 0;
         for (;;) {
-            display_channel_push(worker);
+            red_channel_push(&worker->display_channel->common.base);
             if (!worker->display_channel ||
                                          worker->display_channel->common.base.pipe_size <= MAX_PIPE_SIZE) {
                 break;
@@ -8860,7 +8866,7 @@ static inline void flush_cursor_commands(RedWorker *worker)
         }
 
         while (red_process_cursor(worker, MAX_PIPE_SIZE, &ring_is_empty)) {
-            cursor_channel_push(worker);
+            red_channel_push(&worker->cursor_channel->common.base);
         }
 
         if (ring_is_empty) {
@@ -8869,7 +8875,7 @@ static inline void flush_cursor_commands(RedWorker *worker)
         end_time = red_now() + DISPLAY_CLIENT_TIMEOUT * 10;
         int sleep_count = 0;
         for (;;) {
-            cursor_channel_push(worker);
+            red_channel_push(&worker->cursor_channel->common.base);
             if (!worker->cursor_channel ||
                                         worker->cursor_channel->common.base.pipe_size <= MAX_PIPE_SIZE) {
                 break;
@@ -8905,7 +8911,7 @@ static void push_new_primary_surface(RedWorker *worker)
         if (!display_channel->common.base.migrate) {
             red_create_surface_item(worker, 0);
         }
-        display_channel_push(worker);
+        red_channel_push(&worker->display_channel->common.base);
     }
 }
 
@@ -9954,7 +9960,7 @@ static inline void handle_dev_create_primary_surface(RedWorker *worker)
 
     if (worker->display_channel) {
         red_pipe_add_verb(&worker->display_channel->common.base, SPICE_MSG_DISPLAY_MARK);
-        display_channel_push(worker);
+        red_channel_push(&worker->display_channel->common.base);
     }
 
     if (worker->cursor_channel) {
@@ -10025,7 +10031,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
     case RED_WORKER_MESSAGE_OOM:
         ASSERT(worker->running);
         while (red_process_commands(worker, MAX_PIPE_SIZE, &ring_is_empty)) {
-            display_channel_push(worker);
+            red_channel_push(&worker->display_channel->common.base);
         }
         if (worker->qxl->st->qif->flush_resources(worker->qxl) == 0) {
             red_printf("oom current %u pipe %u", worker->current_size,
