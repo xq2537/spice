@@ -1354,63 +1354,69 @@ static void release_upgrade_item(RedWorker* worker, UpgradeItem *item)
     }
 }
 
+static void common_release_pipe_item(RedChannel *channel, PipeItem *item)
+{
+    CommonChannel *common = SPICE_CONTAINEROF(channel, CommonChannel, base);
+
+    switch (item->type) {
+    case PIPE_ITEM_TYPE_DRAW:
+        release_drawable(common->worker, SPICE_CONTAINEROF(item, Drawable, pipe_item));
+        break;
+    case PIPE_ITEM_TYPE_CURSOR:
+        red_release_cursor(common->worker, (CursorItem *)item);
+        break;
+    case PIPE_ITEM_TYPE_UPGRADE:
+        release_upgrade_item(common->worker, (UpgradeItem *)item);
+        break;
+    case PIPE_ITEM_TYPE_PIXMAP_RESET:
+    case PIPE_ITEM_TYPE_PIXMAP_SYNC:
+    case PIPE_ITEM_TYPE_INVAL_ONE:
+    case PIPE_ITEM_TYPE_MIGRATE:
+    case PIPE_ITEM_TYPE_SET_ACK:
+    case PIPE_ITEM_TYPE_CURSOR_INIT:
+    case PIPE_ITEM_TYPE_VERB:
+    case PIPE_ITEM_TYPE_MIGRATE_DATA:
+    case PIPE_ITEM_TYPE_INVAL_PALLET_CACHE:
+    case PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE:
+        free(item);
+        break;
+    case PIPE_ITEM_TYPE_IMAGE:
+        release_image_item((ImageItem *)item);
+        break;
+    case PIPE_ITEM_TYPE_STREAM_CREATE:
+        red_display_release_stream((DisplayChannel *)channel,
+                                   SPICE_CONTAINEROF(item, StreamAgent, create_item));
+        break;
+    case PIPE_ITEM_TYPE_STREAM_CLIP:
+        red_display_release_stream_clip((DisplayChannel *)channel, (StreamClipItem*)item);
+        break;
+    case PIPE_ITEM_TYPE_STREAM_DESTROY:
+        red_display_release_stream((DisplayChannel *)channel,
+                                   SPICE_CONTAINEROF(item, StreamAgent, destroy_item));
+        break;
+    case PIPE_ITEM_TYPE_CREATE_SURFACE: {
+        SurfaceCreateItem *surface_create = SPICE_CONTAINEROF(item, SurfaceCreateItem,
+                                                              pipe_item);
+        free(surface_create);
+        break;
+    }
+    case PIPE_ITEM_TYPE_DESTROY_SURFACE: {
+        SurfaceDestroyItem *surface_destroy = SPICE_CONTAINEROF(item, SurfaceDestroyItem,
+                                                                pipe_item);
+        free(surface_destroy);
+        break;
+    }
+    }
+}
+
 static void red_pipe_clear(RedChannel *channel)
 {
     PipeItem *item;
-    CommonChannel *common = SPICE_CONTAINEROF(channel, CommonChannel, base);
 
     ASSERT(channel);
     while ((item = (PipeItem *)ring_get_head(&channel->pipe))) {
         ring_remove(&item->link);
-        switch (item->type) {
-        case PIPE_ITEM_TYPE_DRAW:
-            release_drawable(common->worker, SPICE_CONTAINEROF(item, Drawable, pipe_item));
-            break;
-        case PIPE_ITEM_TYPE_CURSOR:
-            red_release_cursor(common->worker, (CursorItem *)item);
-            break;
-        case PIPE_ITEM_TYPE_UPGRADE:
-            release_upgrade_item(common->worker, (UpgradeItem *)item);
-            break;
-        case PIPE_ITEM_TYPE_PIXMAP_RESET:
-        case PIPE_ITEM_TYPE_PIXMAP_SYNC:
-        case PIPE_ITEM_TYPE_INVAL_ONE:
-        case PIPE_ITEM_TYPE_MIGRATE:
-        case PIPE_ITEM_TYPE_SET_ACK:
-        case PIPE_ITEM_TYPE_CURSOR_INIT:
-        case PIPE_ITEM_TYPE_VERB:
-        case PIPE_ITEM_TYPE_MIGRATE_DATA:
-        case PIPE_ITEM_TYPE_INVAL_PALLET_CACHE:
-        case PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE:
-            free(item);
-            break;
-        case PIPE_ITEM_TYPE_IMAGE:
-            release_image_item((ImageItem *)item);
-            break;
-        case PIPE_ITEM_TYPE_STREAM_CREATE:
-            red_display_release_stream((DisplayChannel *)channel,
-                                       SPICE_CONTAINEROF(item, StreamAgent, create_item));
-            break;
-        case PIPE_ITEM_TYPE_STREAM_CLIP:
-            red_display_release_stream_clip((DisplayChannel *)channel, (StreamClipItem*)item);
-            break;
-        case PIPE_ITEM_TYPE_STREAM_DESTROY:
-            red_display_release_stream((DisplayChannel *)channel,
-                                       SPICE_CONTAINEROF(item, StreamAgent, destroy_item));
-            break;
-        case PIPE_ITEM_TYPE_CREATE_SURFACE: {
-            SurfaceCreateItem *surface_create = SPICE_CONTAINEROF(item, SurfaceCreateItem,
-                                                                  pipe_item);
-            free(surface_create);
-            break;
-        }
-        case PIPE_ITEM_TYPE_DESTROY_SURFACE: {
-            SurfaceDestroyItem *surface_destroy = SPICE_CONTAINEROF(item, SurfaceDestroyItem,
-                                                                    pipe_item);
-            free(surface_destroy);
-            break;
-        }
-        }
+        common_release_pipe_item(channel, item);
     }
     channel->pipe_size = 0;
 }
