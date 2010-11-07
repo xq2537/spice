@@ -349,7 +349,7 @@ typedef struct LocalCursor {
 
 typedef struct RedChannel RedChannel;
 typedef void (*disconnect_channel_proc)(RedChannel *channel);
-typedef void (*hold_item_proc)(void *item);
+typedef void (*hold_item_proc)(PipeItem *item);
 typedef void (*release_item_proc)(RedChannel *channel, void *item);
 typedef int (*handle_message_proc)(RedChannel *channel, size_t size, uint32_t type, void *message);
 
@@ -9444,10 +9444,10 @@ static void handle_channel_events(EventListener *in_listener, uint32_t events)
     }
 }
 
-static void display_channel_hold_item(void *item)
+static void display_channel_hold_item(PipeItem *item)
 {
     ASSERT(item);
-    switch (((PipeItem *)item)->type) {
+    switch (item->type) {
     case PIPE_ITEM_TYPE_DRAW:
     case PIPE_ITEM_TYPE_STREAM_CREATE:
         SPICE_CONTAINEROF(item, Drawable, pipe_item)->refs++;
@@ -9603,7 +9603,7 @@ static void on_new_cursor_channel(RedWorker *worker)
     }
 }
 
-static void cursor_channel_hold_item(void *item)
+static void cursor_channel_hold_item(PipeItem *item)
 {
     ASSERT(item);
     ((CursorItem *)item)->refs++;
