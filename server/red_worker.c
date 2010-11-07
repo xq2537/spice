@@ -391,7 +391,9 @@ struct RedChannel {
     channel_handle_parsed_proc handle_parsed;
 
 #ifdef RED_STATISTICS
-    uint64_t *out_bytes_counter;
+    struct {
+        uint64_t *out_bytes_counter;
+    } outgoing;
 #endif
 };
 
@@ -7368,7 +7370,7 @@ static void red_send_data(RedChannel *channel)
             }
         } else {
             channel->send_data.pos += n;
-            stat_inc_counter(channel->out_bytes_counter, n);
+            stat_inc_counter(channel->outgoing.out_bytes_counter, n);
         }
     }
 }
@@ -9498,7 +9500,7 @@ static void handle_new_display_channel(RedWorker *worker, RedsStreamContext *pee
     }
 #ifdef RED_STATISTICS
     display_channel->stat = stat_add_node(worker->stat, "display_channel", TRUE);
-    display_channel->common.base.out_bytes_counter = stat_add_counter(display_channel->stat,
+    display_channel->common.base.outgoing.out_bytes_counter = stat_add_counter(display_channel->stat,
                                                                "out_bytes", TRUE);
     display_channel->cache_hits_counter = stat_add_counter(display_channel->stat,
                                                            "cache_hits", TRUE);
@@ -9624,7 +9626,7 @@ static void red_connect_cursor(RedWorker *worker, RedsStreamContext *peer, int m
     }
 #ifdef RED_STATISTICS
     channel->stat = stat_add_node(worker->stat, "cursor_channel", TRUE);
-    channel->common.base.out_bytes_counter = stat_add_counter(channel->stat, "out_bytes", TRUE);
+    channel->common.base.outgoing.out_bytes_counter = stat_add_counter(channel->stat, "out_bytes", TRUE);
 #endif
     ring_init(&channel->cursor_cache_lru);
     channel->cursor_cache_available = CLIENT_CURSOR_CACHE_SIZE;
