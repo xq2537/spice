@@ -350,7 +350,7 @@ typedef struct LocalCursor {
 typedef struct RedChannel RedChannel;
 typedef void (*channel_disconnect_proc)(RedChannel *channel);
 typedef void (*channel_hold_pipe_item_proc)(RedChannel *channel, PipeItem *item);
-typedef void (*channel_release_pipe_item_proc)(RedChannel *channel, void *item);
+typedef void (*channel_release_pipe_item_proc)(RedChannel *channel, PipeItem *item, int item_pushed);
 typedef int (*channel_handle_parsed_proc)(RedChannel *channel, uint32_t size, uint16_t type, void *message);
 
 struct RedChannel {
@@ -1845,7 +1845,8 @@ static void red_clear_surface_drawables_from_pipe(RedWorker *worker, int surface
             PipeItem *tmp_item = item;
             item = (PipeItem *)ring_prev(ring, (RingItem *)item);
             ring_remove(&tmp_item->link);
-            worker->display_channel->common.base.release_item(&worker->display_channel->common.base, tmp_item);
+            worker->display_channel->common.base.release_item(
+                &worker->display_channel->common.base, tmp_item, FALSE);
             worker->display_channel->common.base.pipe_size--;
 
             if (!item) {
@@ -7331,7 +7332,7 @@ static void inline channel_release_res(RedChannel *channel)
     if (!channel->send_data.item) {
         return;
     }
-    channel->release_item(channel, channel->send_data.item);
+    channel->release_item(channel, channel->send_data.item, FALSE);
     channel->send_data.item = NULL;
 }
 
@@ -7345,7 +7346,7 @@ static void red_send_data(RedChannel *channel)
         if (!n) {
             channel->send_data.blocked = FALSE;
             if (channel->send_data.item) {
-                channel->release_item(channel, channel->send_data.item);
+                channel->release_item(channel, channel->send_data.item, FALSE);
                 channel->send_data.item = NULL;
             }
             break;
@@ -9458,12 +9459,12 @@ static void display_channel_hold_pipe_item(RedChannel *channel, PipeItem *item)
     }
 }
 
-static void display_channel_release_item(RedChannel *channel, void *item)
+static void display_channel_release_item(RedChannel *channel, PipeItem *item, int item_pushed /* ignored */)
 {
     CommonChannel *common = SPICE_CONTAINEROF(channel, CommonChannel, base);
 
     ASSERT(item);
-    switch (((PipeItem *)item)->type) {
+    switch (item->type) {
     case PIPE_ITEM_TYPE_DRAW:
     case PIPE_ITEM_TYPE_STREAM_CREATE:
         release_drawable(common->worker, SPICE_CONTAINEROF(item, Drawable, pipe_item));
@@ -9601,12 +9602,12 @@ static void cursor_channel_hold_pipe_item(RedChannel *channel, PipeItem *item)
     ((CursorItem *)item)->refs++;
 }
 
-static void cursor_channel_release_item(RedChannel *channel, void *item)
+static void cursor_channel_release_item(RedChannel *channel, PipeItem *item, int item_pushed)
 {
     CommonChannel *common = SPICE_CONTAINEROF(channel, CommonChannel, base);
 
     ASSERT(item);
-    red_release_cursor(common->worker, item);
+    red_release_cursor(common->worker, SPICE_CONTAINEROF(item, CursorItem, pipe_data));
 }
 
 static void red_connect_cursor(RedWorker *worker, RedsStreamContext *peer, int migrate)
@@ -9755,7 +9756,7 @@ static void red_wait_pipe_item_sent(RedChannel *channel, PipeItem *item)
         }
     }
 
-    channel->release_item(channel, item);
+    channel->release_item(channel, item, FALSE);
     red_unref_channel(channel);
 }
 
