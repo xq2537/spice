@@ -138,6 +138,11 @@ static void red_peer_handle_incoming(RedsStreamContext *peer, IncomingHandler *h
     }
 }
 
+void red_channel_receive(RedChannel *channel)
+{
+    red_peer_handle_incoming(channel->peer, &channel->incoming);
+}
+
 static void red_peer_handle_outgoing(RedsStreamContext *peer, OutgoingHandler *handler)
 {
     int n;
