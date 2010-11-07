@@ -199,7 +199,9 @@ void red_channel_shutdown(RedChannel *channel);
 void red_channel_init_outgoing_messages_window(RedChannel *channel);
 
 /* handles general channel msgs from the client */
-int red_channel_handle_message(RedChannel *channel, SpiceDataHeader *header, uint8_t *msg);
+int red_channel_handle_message(RedChannel *channel, uint32_t size,
+                               uint16_t type, void *message);
+
 
 /* when preparing send_data: should call reset, then init and then add_buf per buffer that is
    being sent */

@@ -2247,7 +2247,7 @@ static int tunnel_channel_handle_message(RedChannel *channel, SpiceDataHeader *h
         }
         break;
     default:
-        return red_channel_handle_message(channel, header, msg);
+        return red_channel_handle_message(channel, header->size, header->type, msg);
     }
 
     switch (header->type) {
@@ -2325,7 +2325,7 @@ static int tunnel_channel_handle_message(RedChannel *channel, SpiceDataHeader *h
         }
         return tunnel_channel_handle_migrate_data(tunnel_channel, (TunnelMigrateData *)msg);
     default:
-        return red_channel_handle_message(channel, header, msg);
+        return red_channel_handle_message(channel, header->size, header->type, msg);
     }
     return TRUE;
 }

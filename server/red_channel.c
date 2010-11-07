@@ -385,15 +385,16 @@ void red_channel_init_outgoing_messages_window(RedChannel *channel)
     red_channel_push(channel);
 }
 
-int red_channel_handle_message(RedChannel *channel, SpiceDataHeader *header, uint8_t *msg)
+int red_channel_handle_message(RedChannel *channel, uint32_t size,
+                               uint16_t type, void *message)
 {
-    switch (header->type) {
+    switch (type) {
     case SPICE_MSGC_ACK_SYNC:
-        if (header->size != sizeof(uint32_t)) {
+        if (size != sizeof(uint32_t)) {
             red_printf("bad message size");
             return FALSE;
         }
-        channel->ack_data.client_generation = *(uint32_t *)(msg);
+        channel->ack_data.client_generation = *(uint32_t *)(message);
         break;
     case SPICE_MSGC_ACK:
         if (channel->ack_data.client_generation == channel->ack_data.generation) {
@@ -402,7 +403,7 @@ int red_channel_handle_message(RedChannel *channel, SpiceDataHeader *header, uin
         }
         break;
     default:
-        red_printf("invalid message type %u", header->type);
+        red_printf("invalid message type %u", type);
         return FALSE;
     }
     return TRUE;
