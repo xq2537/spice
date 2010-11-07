@@ -48,9 +48,9 @@ static int FUNC_NAME(hit)(CACHE *cache, uint64_t id, int *lossy, CHANNEL *channe
         if (item->id == id) {
             ring_remove(&item->lru_link);
             ring_add(&cache->lru, &item->lru_link);
-            ASSERT(channel->base.id < MAX_CACHE_CLIENTS)
-            item->sync[channel->base.id] = serial;
-            cache->sync[channel->base.id] = serial;
+            ASSERT(channel->common.id < MAX_CACHE_CLIENTS)
+            item->sync[channel->common.id] = serial;
+            cache->sync[channel->common.id] = serial;
             *lossy = item->lossy;
             break;
         }
@@ -108,7 +108,7 @@ static int FUNC_NAME(add)(CACHE *cache, uint64_t id, uint32_t size, int lossy, C
         NewCacheItem **now;
 
         if (!(tail = (NewCacheItem *)ring_get_tail(&cache->lru)) ||
-                                                   tail->sync[channel->base.id] == serial) {
+                                                   tail->sync[channel->common.id] == serial) {
             cache->available += size;
             pthread_mutex_unlock(&cache->lock);
             free(item);
@@ -127,7 +127,7 @@ static int FUNC_NAME(add)(CACHE *cache, uint64_t id, uint32_t size, int lossy, C
         ring_remove(&tail->lru_link);
         cache->items--;
         cache->available += tail->size;
-        cache->sync[channel->base.id] = serial;
+        cache->sync[channel->common.id] = serial;
         display_channel_push_release(channel, SPICE_RES_TYPE_PIXMAP, tail->id, tail->sync);
         free(tail);
     }
@@ -140,8 +140,8 @@ static int FUNC_NAME(add)(CACHE *cache, uint64_t id, uint32_t size, int lossy, C
     item->size = size;
     item->lossy = lossy;
     memset(item->sync, 0, sizeof(item->sync));
-    item->sync[channel->base.id] = serial;
-    cache->sync[channel->base.id] = serial;
+    item->sync[channel->common.id] = serial;
+    cache->sync[channel->common.id] = serial;
     pthread_mutex_unlock(&cache->lock);
     return TRUE;
 }
@@ -177,13 +177,13 @@ static void FUNC_NAME(reset)(CACHE *cache, CHANNEL *channel, SpiceMsgWaitForChan
     PRIVATE_FUNC_NAME(clear)(cache);
 
     channel->CACH_GENERATION = ++cache->generation;
-    cache->generation_initiator.client = channel->base.id;
+    cache->generation_initiator.client = channel->common.id;
     cache->generation_initiator.message = serial;
-    cache->sync[channel->base.id] = serial;
+    cache->sync[channel->common.id] = serial;
 
     wait_count = 0;
     for (i = 0; i < MAX_CACHE_CLIENTS; i++) {
-        if (cache->sync[i] && i != channel->base.id) {
+        if (cache->sync[i] && i != channel->common.id) {
             sync_data->wait_list[wait_count].channel_type = SPICE_CHANNEL_DISPLAY;
             sync_data->wait_list[wait_count].channel_id = i;
             sync_data->wait_list[wait_count++].message_serial = cache->sync[i];
