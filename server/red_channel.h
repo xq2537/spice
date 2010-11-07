@@ -29,7 +29,10 @@
 #include "server/demarshallers.h"
 
 #define MAX_SEND_BUFS 1000
-#define MAX_SEND_VEC 50
+// NOTE: MAX_SEND_VEC is 100 for DisplayChannel, was 50 before - make this configurable?
+// currently setting to the max - so effectively increased memory usage by
+// (100-50)*sizeof(iovec)*(num_of_channels-2) ==(arch 64bit) 50*16*6 ~ 5k. Not terrible
+#define MAX_SEND_VEC 100
 #define CLIENT_ACK_WINDOW 20
 
 /* Basic interface for channels, without using the RedChannel interface.
