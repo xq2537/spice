@@ -349,7 +349,7 @@ typedef struct LocalCursor {
 
 typedef struct RedChannel RedChannel;
 typedef void (*channel_disconnect_proc)(RedChannel *channel);
-typedef void (*hold_item_proc)(PipeItem *item);
+typedef void (*channel_hold_item_proc)(PipeItem *item);
 typedef void (*release_item_proc)(RedChannel *channel, void *item);
 typedef int (*handle_message_proc)(RedChannel *channel, size_t size, uint32_t type, void *message);
 
@@ -386,7 +386,7 @@ struct RedChannel {
     } recive_data;
 
     channel_disconnect_proc disconnect;
-    hold_item_proc hold_item;
+    channel_hold_item_proc hold_item;
     release_item_proc release_item;
     handle_message_proc handle_message;
 #ifdef RED_STATISTICS
@@ -9366,7 +9366,7 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
                                  RedsStreamContext *peer, int migrate,
                                  event_listener_action_proc handler,
                                  channel_disconnect_proc disconnect,
-                                 hold_item_proc hold_item,
+                                 channel_hold_item_proc hold_item,
                                  release_item_proc release_item,
                                  handle_message_proc handle_message)
 {
