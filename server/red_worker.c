@@ -362,10 +362,12 @@ struct RedChannel {
     Ring pipe;
     uint32_t pipe_size;
 
-    uint32_t client_ack_window;
-    uint32_t ack_generation;
-    uint32_t client_ack_generation;
-    uint32_t messages_window;
+    struct {
+        uint32_t client_window;
+        uint32_t generation;
+        uint32_t client_generation;
+        uint32_t messages_window;
+    } ack_data;
 
     struct {
         int blocked;
@@ -7386,7 +7388,7 @@ static inline void red_begin_send_message(RedChannel *channel, void *item)
     spice_marshaller_flush(channel->send_data.marshaller);
     channel->send_data.size = spice_marshaller_get_total_size(channel->send_data.marshaller);
     channel->send_data.header->size =  channel->send_data.size - sizeof(SpiceDataHeader);
-    channel->messages_window++;
+    channel->ack_data.messages_window++;
     channel->send_data.header = NULL; /* avoid writing to this until we have a new message */
     red_send_data(channel, item);
 }
@@ -7742,9 +7744,9 @@ static void red_send_set_ack(RedChannel *channel)
 
     ASSERT(channel);
     channel->send_data.header->type = SPICE_MSG_SET_ACK;
-    ack.generation = ++channel->ack_generation;
-    ack.window = channel->client_ack_window;
-    channel->messages_window = 0;
+    ack.generation = ++channel->ack_data.generation;
+    ack.window = channel->ack_data.client_window;
+    channel->ack_data.messages_window = 0;
 
     spice_marshall_msg_set_ack(channel->send_data.marshaller, &ack);
 
@@ -8274,7 +8276,7 @@ static inline PipeItem *red_pipe_get(RedChannel *channel)
         return NULL;
     }
 
-    if (channel->messages_window > channel->client_ack_window * 2) {
+    if (channel->ack_data.messages_window > channel->ack_data.client_window * 2) {
         channel->send_data.blocked = TRUE;
         return NULL;
     }
@@ -8896,7 +8898,7 @@ static void on_new_display_channel(RedWorker *worker)
     if (!display_channel_wait_for_init(display_channel)) {
         return;
     }
-    display_channel->base.messages_window = 0;
+    display_channel->base.ack_data.messages_window = 0;
     if (worker->surfaces[0].context.canvas) {
         red_current_flush(worker, 0);
         push_new_primary_surface(worker);
@@ -8912,11 +8914,11 @@ static int channel_handle_message(RedChannel *channel, size_t size, uint32_t typ
 {
     switch (type) {
     case SPICE_MSGC_ACK_SYNC:
-        channel->client_ack_generation = *(uint32_t *)message;
+        channel->ack_data.client_generation = *(uint32_t *)message;
         break;
     case SPICE_MSGC_ACK:
-        if (channel->client_ack_generation == channel->ack_generation) {
-            channel->messages_window -= channel->client_ack_window;
+        if (channel->ack_data.client_generation == channel->ack_data.generation) {
+            channel->ack_data.messages_window -= channel->ack_data.client_window;
         }
         break;
     case SPICE_MSGC_DISCONNECTING:
@@ -9211,7 +9213,7 @@ static int display_channel_handle_migrate_data(DisplayChannel *channel, size_t s
 
     red_pipe_add_type((RedChannel *)channel, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
 
-    channel->base.messages_window = 0;
+    channel->base.ack_data.messages_window = 0;
     return TRUE;
 }
 
@@ -9346,11 +9348,11 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
     channel->handle_message = handle_message;
     channel->peer = peer;
     channel->worker = worker;
-    channel->messages_window = ~0;  // blocks send message (maybe use send_data.blocked +
+    channel->ack_data.messages_window = ~0;  // blocks send message (maybe use send_data.blocked +
                                     // block flags)
-    channel->client_ack_window = IS_LOW_BANDWIDTH() ? WIDE_CLIENT_ACK_WINDOW :
+    channel->ack_data.client_window = IS_LOW_BANDWIDTH() ? WIDE_CLIENT_ACK_WINDOW :
                                                       NARROW_CLIENT_ACK_WINDOW;
-    channel->client_ack_generation = ~0;
+    channel->ack_data.client_generation = ~0;
     channel->recive_data.message = (SpiceDataHeader *)channel->recive_data.buf;
     channel->recive_data.now = channel->recive_data.buf;
     channel->recive_data.end = channel->recive_data.buf + sizeof(channel->recive_data.buf);
@@ -9537,7 +9539,7 @@ static void on_new_cursor_channel(RedWorker *worker)
 
     ASSERT(channel);
 
-    channel->base.messages_window = 0;
+    channel->base.ack_data.messages_window = 0;
     red_pipe_add_type(&channel->base, PIPE_ITEM_TYPE_SET_ACK);
     if (worker->surfaces[0].context.canvas && !channel->base.migrate) {
         red_pipe_add_type(&worker->cursor_channel->base, PIPE_ITEM_TYPE_CURSOR_INIT);
