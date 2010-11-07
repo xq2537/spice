@@ -8183,10 +8183,10 @@ static void red_send_local_cursor(CursorChannel *cursor_channel, LocalCursor *cu
     RedChannel *channel;
     SpiceMsgCursorSet cursor_set;
     AddBufInfo info;
-    RedWorker *worker = cursor_channel->common.worker;
+    RedWorker *worker;
 
     ASSERT(cursor_channel);
-
+    worker = cursor_channel->common.worker;
     channel = &cursor_channel->common.base;
     red_channel_init_send_data(channel, SPICE_MSG_CURSOR_SET, &cursor->base.pipe_data);
     cursor_set.position = cursor->position;
@@ -8198,7 +8198,7 @@ static void red_send_local_cursor(CursorChannel *cursor_channel, LocalCursor *cu
 
     red_channel_begin_send_message(channel);
 
-    red_release_cursor(cursor_channel->common.worker, (CursorItem *)cursor);
+    red_release_cursor(worker, (CursorItem *)cursor);
 }
 
 static void cursor_channel_send_migrate(CursorChannel *cursor_channel)
