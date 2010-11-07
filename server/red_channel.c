@@ -422,7 +422,12 @@ static void red_channel_event(int fd, int event, void *data)
     if (event & SPICE_WATCH_EVENT_READ) {
         red_channel_receive(channel);
     }
-    if (event & SPICE_WATCH_EVENT_WRITE) {
+    // TODO: || channel->send_data.blocked ? (from red_worker. doesn't really make sense if we have an event
+    // fired in that case)
+    if (event & SPICE_WATCH_EVENT_WRITE || channel->send_data.blocked) {
+        if (channel->send_data.blocked && ! (event & SPICE_WATCH_EVENT_WRITE)) {
+            red_printf("pushing because of blocked");
+        }
         red_channel_push(channel);
     }
 }
