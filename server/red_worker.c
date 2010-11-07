@@ -384,7 +384,7 @@ struct RedChannel {
         SpiceDataHeader *message;
         uint8_t *now;
         uint8_t *end;
-    } recive_data;
+    } incoming;
 
     channel_disconnect_proc disconnect;
     channel_hold_item_proc hold_item;
@@ -9301,10 +9301,10 @@ static void red_receive(RedChannel *channel)
 {
     for (;;) {
         ssize_t n;
-        n = channel->recive_data.end - channel->recive_data.now;
+        n = channel->incoming.end - channel->incoming.now;
         ASSERT(n);
         ASSERT(channel->peer);
-        if ((n = channel->peer->cb_read(channel->peer->ctx, channel->recive_data.now, n)) <= 0) {
+        if ((n = channel->peer->cb_read(channel->peer->ctx, channel->incoming.now, n)) <= 0) {
             if (n == 0) {
                 channel->disconnect(channel);
                 return;
@@ -9324,15 +9324,15 @@ static void red_receive(RedChannel *channel)
                 return;
             }
         } else {
-            channel->recive_data.now += n;
+            channel->incoming.now += n;
             for (;;) {
-                SpiceDataHeader *header = channel->recive_data.message;
+                SpiceDataHeader *header = channel->incoming.message;
                 uint8_t *data = (uint8_t *)(header+1);
                 size_t parsed_size;
                 uint8_t *parsed;
                 message_destructor_t parsed_free;
 
-                n = channel->recive_data.now - (uint8_t *)header;
+                n = channel->incoming.now - (uint8_t *)header;
                 if (n < sizeof(SpiceDataHeader) ||
                     n < sizeof(SpiceDataHeader) + header->size) {
                     break;
@@ -9352,18 +9352,18 @@ static void red_receive(RedChannel *channel)
                     return;
                 }
                 parsed_free(parsed);
-                channel->recive_data.message = (SpiceDataHeader *)((uint8_t *)header +
+                channel->incoming.message = (SpiceDataHeader *)((uint8_t *)header +
                                                                    sizeof(SpiceDataHeader) +
                                                                    header->size);
             }
 
-            if (channel->recive_data.now == (uint8_t *)channel->recive_data.message) {
-                channel->recive_data.now = channel->recive_data.buf;
-                channel->recive_data.message = (SpiceDataHeader *)channel->recive_data.buf;
-            } else if (channel->recive_data.now == channel->recive_data.end) {
-                memcpy(channel->recive_data.buf, channel->recive_data.message, n);
-                channel->recive_data.now = channel->recive_data.buf + n;
-                channel->recive_data.message = (SpiceDataHeader *)channel->recive_data.buf;
+            if (channel->incoming.now == (uint8_t *)channel->incoming.message) {
+                channel->incoming.now = channel->incoming.buf;
+                channel->incoming.message = (SpiceDataHeader *)channel->incoming.buf;
+            } else if (channel->incoming.now == channel->incoming.end) {
+                memcpy(channel->incoming.buf, channel->incoming.message, n);
+                channel->incoming.now = channel->incoming.buf + n;
+                channel->incoming.message = (SpiceDataHeader *)channel->incoming.buf;
             }
         }
     }
@@ -9427,9 +9427,9 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
     channel->ack_data.client_window = IS_LOW_BANDWIDTH() ? WIDE_CLIENT_ACK_WINDOW :
                                                       NARROW_CLIENT_ACK_WINDOW;
     channel->ack_data.client_generation = ~0;
-    channel->recive_data.message = (SpiceDataHeader *)channel->recive_data.buf;
-    channel->recive_data.now = channel->recive_data.buf;
-    channel->recive_data.end = channel->recive_data.buf + sizeof(channel->recive_data.buf);
+    channel->incoming.message = (SpiceDataHeader *)channel->incoming.buf;
+    channel->incoming.now = channel->incoming.buf;
+    channel->incoming.end = channel->incoming.buf + sizeof(channel->incoming.buf);
     ring_init(&channel->pipe);
     channel->send_data.marshaller = spice_marshaller_new();
 
