@@ -276,6 +276,7 @@ RedChannel *red_channel_create(int size, RedsStreamContext *peer,
     channel->ack_data.messages_window = ~0;  // blocks send message (maybe use send_data.blocked +
                                              // block flags)
     channel->ack_data.client_generation = ~0;
+    channel->ack_data.client_window = CLIENT_ACK_WINDOW;
 
     channel->migrate = migrate;
     ring_init(&channel->pipe);
@@ -400,7 +401,7 @@ int red_channel_handle_message(RedChannel *channel, uint32_t size,
         break;
     case SPICE_MSGC_ACK:
         if (channel->ack_data.client_generation == channel->ack_data.generation) {
-            channel->ack_data.messages_window -= CLIENT_ACK_WINDOW;
+            channel->ack_data.messages_window -= channel->ack_data.client_window;
             red_channel_push(channel);
         }
         break;
@@ -552,7 +553,8 @@ static PipeItem *red_channel_pipe_get(RedChannel *channel)
     PipeItem *item;
 
     if (!channel || channel->send_data.blocked ||
-        (channel->handle_acks && (channel->ack_data.messages_window > CLIENT_ACK_WINDOW * 2)) ||
+        (channel->handle_acks &&
+         (channel->ack_data.messages_window > channel->ack_data.client_window * 2)) ||
         !(item = (PipeItem *)ring_get_tail(&channel->pipe))) {
         return NULL;
     }
