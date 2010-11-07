@@ -655,7 +655,7 @@ static void main_channel_release_pipe_item(RedChannel *channel,
     free(base);
 }
 
-static int main_channel_handle_parsed(RedChannel *channel, size_t size, uint32_t type, void *message)
+static int main_channel_handle_parsed(RedChannel *channel, uint32_t size, uint16_t type, void *message)
 {
     MainChannel *main_chan = SPICE_CONTAINEROF(channel, MainChannel, base);
 
