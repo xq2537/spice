@@ -481,6 +481,10 @@ void red_channel_push(RedChannel *channel)
 {
     PipeItem *pipe_item;
 
+    if (!channel) {
+        return;
+    }
+
     if (!channel->during_send) {
         channel->during_send = TRUE;
     } else {
