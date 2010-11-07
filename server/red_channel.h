@@ -126,6 +126,7 @@ struct RedChannel {
         uint32_t generation;
         uint32_t client_generation;
         uint32_t messages_window;
+        uint32_t client_window;
     } ack_data;
 
     Ring pipe;
