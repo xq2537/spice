@@ -571,6 +571,11 @@ static PipeItem *red_channel_pipe_get(RedChannel *channel)
     return item;
 }
 
+int red_channel_is_connected(RedChannel *channel)
+{
+    return !!channel->peer;
+}
+
 static void red_channel_pipe_clear(RedChannel *channel)
 {
     PipeItem *item;
