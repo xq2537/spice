@@ -350,7 +350,7 @@ typedef struct LocalCursor {
 typedef struct RedChannel RedChannel;
 typedef void (*channel_disconnect_proc)(RedChannel *channel);
 typedef void (*channel_hold_item_proc)(PipeItem *item);
-typedef void (*release_item_proc)(RedChannel *channel, void *item);
+typedef void (*channel_release_pipe_item_proc)(RedChannel *channel, void *item);
 typedef int (*handle_parsed_proc)(RedChannel *channel, uint32_t size, uint16_t type, void *message);
 
 struct RedChannel {
@@ -387,8 +387,9 @@ struct RedChannel {
 
     channel_disconnect_proc disconnect;
     channel_hold_item_proc hold_item;
-    release_item_proc release_item;
+    channel_release_pipe_item_proc release_item;
     handle_parsed_proc handle_message;
+
 #ifdef RED_STATISTICS
     struct {
         uint64_t *out_bytes_counter;
@@ -9369,7 +9370,7 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
                                  event_listener_action_proc handler,
                                  channel_disconnect_proc disconnect,
                                  channel_hold_item_proc hold_item,
-                                 release_item_proc release_item,
+                                 channel_release_pipe_item_proc release_item,
                                  handle_parsed_proc handle_message)
 {
     struct epoll_event event;
