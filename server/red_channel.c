@@ -29,7 +29,6 @@
 #include "stat.h"
 #include "red_channel.h"
 
-static void red_channel_push(RedChannel *channel);
 static PipeItem *red_channel_pipe_get(RedChannel *channel);
 static void red_channel_pipe_clear(RedChannel *channel);
 static void red_channel_event(int fd, int event, void *data);
@@ -461,7 +460,7 @@ void red_channel_begin_send_message(RedChannel *channel)
     red_channel_send(channel);
 }
 
-static void red_channel_push(RedChannel *channel)
+void red_channel_push(RedChannel *channel)
 {
     PipeItem *pipe_item;
 
