@@ -420,7 +420,7 @@ static void red_channel_event(int fd, int event, void *data)
     RedChannel *channel = (RedChannel *)data;
 
     if (event & SPICE_WATCH_EVENT_READ) {
-        red_peer_handle_incoming(channel->peer, &channel->incoming);
+        red_channel_receive(channel);
     }
     if (event & SPICE_WATCH_EVENT_WRITE) {
         red_channel_push(channel);
