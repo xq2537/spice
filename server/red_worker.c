@@ -7349,7 +7349,7 @@ static void inline channel_release_res(RedChannel *channel)
     channel->send_data.item = NULL;
 }
 
-static void red_send_data(RedChannel *channel)
+static void red_channel_send(RedChannel *channel)
 {
     for (;;) {
         uint32_t n = channel->send_data.size - channel->send_data.pos;
@@ -7420,7 +7420,7 @@ static inline void red_channel_begin_send_message(RedChannel *channel)
     channel->send_data.header->size =  channel->send_data.size - sizeof(SpiceDataHeader);
     channel->ack_data.messages_window++;
     channel->send_data.header = NULL; /* avoid writing to this until we have a new message */
-    red_send_data(channel);
+    red_channel_send(channel);
 }
 
 static inline void display_begin_send_message(DisplayChannel *channel)
@@ -8831,7 +8831,7 @@ static inline void flush_display_commands(RedWorker *worker)
             RedChannel *channel = (RedChannel *)worker->display_channel;
             red_ref_channel(channel);
             red_receive(channel);
-            red_send_data(channel);
+            red_channel_send(channel);
             if (red_now() >= end_time) {
                 red_printf("update timeout");
                 red_disconnect_display(channel);
@@ -8873,7 +8873,7 @@ static inline void flush_cursor_commands(RedWorker *worker)
             RedChannel *channel = (RedChannel *)worker->cursor_channel;
             red_ref_channel(channel);
             red_receive(channel);
-            red_send_data(channel);
+            red_channel_send(channel);
             if (red_now() >= end_time) {
                 red_printf("flush cursor timeout");
                 red_disconnect_cursor(channel);
@@ -9450,7 +9450,7 @@ static void handle_channel_events(EventListener *in_listener, uint32_t events)
     }
 
     if (channel->send_data.blocked) {
-        red_send_data(channel);
+        red_channel_send(channel);
     }
 }
 
@@ -9723,7 +9723,7 @@ static void red_wait_outgoing_item(RedChannel *channel)
     do {
         usleep(DETACH_SLEEP_DURATION);
         red_receive(channel);
-        red_send_data(channel);
+        red_channel_send(channel);
     } while ((blocked = channel->send_data.blocked) && red_now() < end_time);
 
     if (blocked) {
@@ -9752,7 +9752,7 @@ static void red_wait_pipe_item_sent(RedChannel *channel, PipeItem *item)
 
     if (channel->send_data.blocked) {
         red_receive(channel);
-        red_send_data(channel);
+        red_channel_send(channel);
     }
     // todo: different push for each channel
     red_push(common->worker);
@@ -9760,7 +9760,7 @@ static void red_wait_pipe_item_sent(RedChannel *channel, PipeItem *item)
     while((item_in_pipe = ring_item_is_linked(&item->link)) && (red_now() < end_time)) {
         usleep(CHANNEL_PUSH_SLEEP_DURATION);
         red_receive(channel);
-        red_send_data(channel);
+        red_channel_send(channel);
         red_push(common->worker);
     }
 
