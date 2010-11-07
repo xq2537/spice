@@ -230,5 +230,9 @@ void red_channel_pipe_add_type(RedChannel *channel, int pipe_item_type);
 // should be that they ""try"" a little harder, but if the event system is correct it
 // should not make any difference.
 void red_channel_push(RedChannel *channel);
+// TODO: again - what is the context exactly? this happens in channel disconnect. but our
+// current red_channel_shutdown also closes the socket - is there a socket to close?
+// are we reading from an fd here? arghh
+void red_channel_pipe_clear(RedChannel *channel);
 
 #endif
