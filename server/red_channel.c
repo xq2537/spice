@@ -115,8 +115,9 @@ static void red_peer_handle_incoming(RedsStreamContext *peer, IncomingHandler *h
         }
 
         if (handler->parser) {
-            parsed = handler->parser(handler->msg, handler->msg + handler->header.size, handler->header.type,
-                                     SPICE_VERSION_MINOR, &parsed_size, &parsed_free);
+            parsed = handler->parser(handler->msg,
+                handler->msg + handler->header.size, handler->header.type,
+                SPICE_VERSION_MINOR, &parsed_size, &parsed_free);
             if (parsed == NULL) {
                 red_printf("failed to parse message type %d", handler->header.type);
                 handler->on_error(handler->opaque);
@@ -341,8 +342,9 @@ RedChannel *red_channel_create_parser(int size, RedsStreamContext *peer,
                                channel_on_outgoing_error_proc outgoing_error)
 {
     RedChannel *channel = red_channel_create(size, peer,
-        core, migrate, handle_acks, config_socket, do_nothing_disconnect, do_nothing_handle_message,
-        alloc_recv_buf, release_recv_buf, hold_item, send_item, release_item);
+        core, migrate, handle_acks, config_socket, do_nothing_disconnect,
+        do_nothing_handle_message, alloc_recv_buf, release_recv_buf, hold_item,
+        send_item, release_item);
 
     if (channel == NULL) {
         return NULL;
