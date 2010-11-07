@@ -514,6 +514,14 @@ void red_channel_pipe_add_push(RedChannel *channel, PipeItem *item)
     red_channel_push(channel);
 }
 
+void red_channel_pipe_add_after(RedChannel *channel, PipeItem *item, PipeItem *pos)
+{
+    ASSERT(channel && pos);
+
+    channel->pipe_size++;
+    ring_add_after(&item->link, &pos->link);
+}
+
 int red_channel_pipe_item_is_linked(RedChannel *channel, PipeItem *item)
 {
     return ring_item_is_linked(&item->link);
