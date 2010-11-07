@@ -8308,7 +8308,7 @@ static void red_send_surface_destroy(DisplayChannel *display, uint32_t surface_i
     red_channel_begin_send_message(channel);
 }
 
-static inline PipeItem *red_pipe_get(RedChannel *channel)
+static inline PipeItem *red_channel_pipe_get(RedChannel *channel)
 {
     PipeItem *item;
     if (!channel || channel->send_data.blocked ||
@@ -8423,7 +8423,7 @@ static void display_channel_push(RedWorker *worker)
 {
     PipeItem *pipe_item;
 
-    while ((pipe_item = red_pipe_get((RedChannel *)worker->display_channel))) {
+    while ((pipe_item = red_channel_pipe_get((RedChannel *)worker->display_channel))) {
         display_channel_send_item((RedChannel *)worker->display_channel, pipe_item);
     }
 }
@@ -8476,7 +8476,7 @@ static void cursor_channel_push(RedWorker *worker)
 {
     PipeItem *pipe_item;
 
-    while ((pipe_item = red_pipe_get((RedChannel *)worker->cursor_channel))) {
+    while ((pipe_item = red_channel_pipe_get((RedChannel *)worker->cursor_channel))) {
         cursor_channel_send_item((RedChannel *)worker->cursor_channel, pipe_item);
     }
 }
