@@ -495,7 +495,7 @@ static int inputs_channel_config_socket(RedChannel *channel)
     return TRUE;
 }
 
-static void inputs_channel_hold_item(void *item)
+static void inputs_channel_hold_item(PipeItem *item)
 {
 }
 
