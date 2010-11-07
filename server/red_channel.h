@@ -225,4 +225,10 @@ void red_channel_pipe_add_tail(RedChannel *channel, PipeItem *item);
 /* for types that use this routine -> the pipe item should be freed */
 void red_channel_pipe_add_type(RedChannel *channel, int pipe_item_type);
 
+// TODO: unstaticed for display/cursor channels. they do some specific pushes not through
+// adding elements or on events. but not sure if this is actually required (only result
+// should be that they ""try"" a little harder, but if the event system is correct it
+// should not make any difference.
+void red_channel_push(RedChannel *channel);
+
 #endif
