@@ -30,7 +30,6 @@
 #include "red_channel.h"
 
 static PipeItem *red_channel_pipe_get(RedChannel *channel);
-static void red_channel_pipe_clear(RedChannel *channel);
 static void red_channel_event(int fd, int event, void *data);
 
 /* return the number of bytes read. -1 in case of error */
@@ -570,7 +569,7 @@ int red_channel_is_connected(RedChannel *channel)
     return !!channel->peer;
 }
 
-static void red_channel_pipe_clear(RedChannel *channel)
+void red_channel_pipe_clear(RedChannel *channel)
 {
     PipeItem *item;
     if (channel->send_data.item) {
