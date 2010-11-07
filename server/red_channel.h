@@ -29,7 +29,7 @@
 #include "server/demarshallers.h"
 
 #define MAX_SEND_BUFS 1000
-#define MAX_SEND_VEC 50
+#define MAX_SEND_VEC 100
 #define CLIENT_ACK_WINDOW 20
 
 /* Basic interface for channels, without using the RedChannel interface.
