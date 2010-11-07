@@ -8424,53 +8424,56 @@ static void display_channel_push(RedWorker *worker)
     }
 }
 
+static void cursor_channel_send_item(RedChannel *channel, PipeItem *pipe_item)
+{
+    CursorChannel *cursor_channel = (CursorChannel *)red_ref_channel(channel);
+    red_channel_reset_send_data(channel);
+    switch (pipe_item->type) {
+    case PIPE_ITEM_TYPE_CURSOR:
+        red_send_cursor(cursor_channel, (CursorItem *)pipe_item);
+        break;
+    case PIPE_ITEM_TYPE_LOCAL_CURSOR:
+        red_send_local_cursor(cursor_channel, (LocalCursor *)pipe_item);
+        break;
+    case PIPE_ITEM_TYPE_INVAL_ONE:
+        red_cursor_send_inval(cursor_channel, (CacheItem *)pipe_item);
+        free(pipe_item);
+        break;
+    case PIPE_ITEM_TYPE_VERB:
+        red_send_verb(channel, ((VerbItem*)pipe_item)->verb);
+        free(pipe_item);
+        break;
+    case PIPE_ITEM_TYPE_MIGRATE:
+        red_printf("PIPE_ITEM_TYPE_MIGRATE");
+        cursor_channel_send_migrate(cursor_channel);
+        free(pipe_item);
+        break;
+    case PIPE_ITEM_TYPE_SET_ACK:
+        red_send_set_ack(channel);
+        free(pipe_item);
+        break;
+    case PIPE_ITEM_TYPE_CURSOR_INIT:
+        red_reset_cursor_cache(cursor_channel);
+        red_send_cursor_init(cursor_channel);
+        free(pipe_item);
+        break;
+    case PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE:
+        red_reset_cursor_cache(cursor_channel);
+        red_send_verb(channel, SPICE_MSG_CURSOR_INVAL_ALL);
+        free(pipe_item);
+        break;
+    default:
+        red_error("invalid pipe item type");
+    }
+    red_unref_channel(channel);
+}
+
 static void cursor_channel_push(RedWorker *worker)
 {
     PipeItem *pipe_item;
 
     while ((pipe_item = red_pipe_get((RedChannel *)worker->cursor_channel))) {
-        CursorChannel *cursor_channel;
-
-        cursor_channel = (CursorChannel *)red_ref_channel((RedChannel *)worker->cursor_channel);
-        red_channel_reset_send_data((RedChannel*)cursor_channel);
-        switch (pipe_item->type) {
-        case PIPE_ITEM_TYPE_CURSOR:
-            red_send_cursor(cursor_channel, (CursorItem *)pipe_item);
-            break;
-        case PIPE_ITEM_TYPE_LOCAL_CURSOR:
-            red_send_local_cursor(cursor_channel, (LocalCursor *)pipe_item);
-            break;
-        case PIPE_ITEM_TYPE_INVAL_ONE:
-            red_cursor_send_inval(cursor_channel, (CacheItem *)pipe_item);
-            free(pipe_item);
-            break;
-        case PIPE_ITEM_TYPE_VERB:
-            red_send_verb((RedChannel *)cursor_channel, ((VerbItem*)pipe_item)->verb);
-            free(pipe_item);
-            break;
-        case PIPE_ITEM_TYPE_MIGRATE:
-            red_printf("PIPE_ITEM_TYPE_MIGRATE");
-            cursor_channel_send_migrate(cursor_channel);
-            free(pipe_item);
-            break;
-        case PIPE_ITEM_TYPE_SET_ACK:
-            red_send_set_ack((RedChannel *)cursor_channel);
-            free(pipe_item);
-            break;
-        case PIPE_ITEM_TYPE_CURSOR_INIT:
-            red_reset_cursor_cache(cursor_channel);
-            red_send_cursor_init(cursor_channel);
-            free(pipe_item);
-            break;
-        case PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE:
-            red_reset_cursor_cache(cursor_channel);
-            red_send_verb((RedChannel *)cursor_channel, SPICE_MSG_CURSOR_INVAL_ALL);
-            free(pipe_item);
-            break;
-        default:
-            red_error("invalid pipe item type");
-        }
-        red_unref_channel((RedChannel *)cursor_channel);
+        cursor_channel_send_item((RedChannel *)worker->cursor_channel, pipe_item);
     }
 }
 
