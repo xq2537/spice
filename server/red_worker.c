@@ -8319,99 +8319,105 @@ static inline PipeItem *red_pipe_get(RedChannel *channel)
     return item;
 }
 
+static void display_channel_send_item(RedChannel *base, PipeItem *pipe_item)
+{
+    DisplayChannel *display_channel = (DisplayChannel *)red_ref_channel(base);
+    RedWorker *worker = display_channel->common.worker;
+
+    red_display_reset_send_data(display_channel);
+    switch (pipe_item->type) {
+    case PIPE_ITEM_TYPE_DRAW: {
+        Drawable *drawable = SPICE_CONTAINEROF(pipe_item, Drawable, pipe_item);
+        send_qxl_drawable(display_channel, drawable);
+        release_drawable(worker, drawable);
+        break;
+    }
+    case PIPE_ITEM_TYPE_INVAL_ONE:
+        red_display_send_inval(display_channel, (CacheItem *)pipe_item);
+        free(pipe_item);
+        break;
+    case PIPE_ITEM_TYPE_STREAM_CREATE: {
+        StreamAgent *agent = SPICE_CONTAINEROF(pipe_item, StreamAgent, create_item);
+        red_display_send_stream_start(display_channel, agent);
+        red_display_release_stream(display_channel, agent);
+        break;
+    }
+    case PIPE_ITEM_TYPE_STREAM_CLIP: {
+        StreamClipItem* clip_item = (StreamClipItem *)pipe_item;
+        red_display_send_stream_clip(display_channel, clip_item);
+        red_display_release_stream_clip(display_channel, clip_item);
+        break;
+    }
+    case PIPE_ITEM_TYPE_STREAM_DESTROY: {
+        StreamAgent *agent = SPICE_CONTAINEROF(pipe_item, StreamAgent, destroy_item);
+        red_display_send_stream_end(display_channel, agent);
+        red_display_release_stream(display_channel, agent);
+        break;
+    }
+    case PIPE_ITEM_TYPE_UPGRADE:
+        red_display_send_upgrade(display_channel, (UpgradeItem *)pipe_item);
+        release_upgrade_item(worker, (UpgradeItem *)pipe_item);
+        break;
+    case PIPE_ITEM_TYPE_VERB:
+        display_send_verb(display_channel, ((VerbItem*)pipe_item)->verb);
+        free(pipe_item);
+        break;
+    case PIPE_ITEM_TYPE_MIGRATE:
+        red_printf("PIPE_ITEM_TYPE_MIGRATE");
+        display_channel_send_migrate(display_channel);
+        free(pipe_item);
+        break;
+    case PIPE_ITEM_TYPE_MIGRATE_DATA:
+        display_channel_send_migrate_data(display_channel);
+        free(pipe_item);
+        break;
+    case PIPE_ITEM_TYPE_SET_ACK:
+        red_send_set_ack((RedChannel *)display_channel);
+        free(pipe_item);
+        break;
+    case PIPE_ITEM_TYPE_IMAGE:
+        red_send_image(display_channel, (ImageItem *)pipe_item);
+        release_image_item((ImageItem *)pipe_item);
+        break;
+    case PIPE_ITEM_TYPE_PIXMAP_SYNC:
+        display_channel_pixmap_sync(display_channel);
+        free(pipe_item);
+        break;
+    case PIPE_ITEM_TYPE_PIXMAP_RESET:
+        display_channel_reset_cache(display_channel);
+        free(pipe_item);
+        break;
+    case PIPE_ITEM_TYPE_INVAL_PALLET_CACHE:
+        red_reset_palette_cache(display_channel);
+        red_send_verb((RedChannel *)display_channel, SPICE_MSG_DISPLAY_INVAL_ALL_PALETTES);
+        free(pipe_item);
+        break;
+    case PIPE_ITEM_TYPE_CREATE_SURFACE: {
+        SurfaceCreateItem *surface_create = SPICE_CONTAINEROF(pipe_item, SurfaceCreateItem,
+                                                              pipe_item);
+        red_send_surface_create(display_channel, &surface_create->surface_create);
+        free(surface_create);
+        break;
+    }
+    case PIPE_ITEM_TYPE_DESTROY_SURFACE: {
+        SurfaceDestroyItem *surface_destroy = SPICE_CONTAINEROF(pipe_item, SurfaceDestroyItem,
+                                                                pipe_item);
+        red_send_surface_destroy(display_channel, surface_destroy->surface_destroy.surface_id);
+        free(surface_destroy);
+        break;
+    }
+    default:
+        red_error("invalid pipe item type");
+    }
+    red_unref_channel((RedChannel *)display_channel);
+}
+
 static void display_channel_push(RedWorker *worker)
 {
     PipeItem *pipe_item;
 
     while ((pipe_item = red_pipe_get((RedChannel *)worker->display_channel))) {
-        DisplayChannel *display_channel;
-        display_channel = (DisplayChannel *)red_ref_channel((RedChannel *)worker->display_channel);
-        red_display_reset_send_data(display_channel);
-        switch (pipe_item->type) {
-        case PIPE_ITEM_TYPE_DRAW: {
-            Drawable *drawable = SPICE_CONTAINEROF(pipe_item, Drawable, pipe_item);
-            send_qxl_drawable(display_channel, drawable);
-            release_drawable(worker, drawable);
-            break;
-        }
-        case PIPE_ITEM_TYPE_INVAL_ONE:
-            red_display_send_inval(display_channel, (CacheItem *)pipe_item);
-            free(pipe_item);
-            break;
-        case PIPE_ITEM_TYPE_STREAM_CREATE: {
-            StreamAgent *agent = SPICE_CONTAINEROF(pipe_item, StreamAgent, create_item);
-            red_display_send_stream_start(display_channel, agent);
-            red_display_release_stream(display_channel, agent);
-            break;
-        }
-        case PIPE_ITEM_TYPE_STREAM_CLIP: {
-            StreamClipItem* clip_item = (StreamClipItem *)pipe_item;
-            red_display_send_stream_clip(display_channel, clip_item);
-            red_display_release_stream_clip(display_channel, clip_item);
-            break;
-        }
-        case PIPE_ITEM_TYPE_STREAM_DESTROY: {
-            StreamAgent *agent = SPICE_CONTAINEROF(pipe_item, StreamAgent, destroy_item);
-            red_display_send_stream_end(display_channel, agent);
-            red_display_release_stream(display_channel, agent);
-            break;
-        }
-        case PIPE_ITEM_TYPE_UPGRADE:
-            red_display_send_upgrade(display_channel, (UpgradeItem *)pipe_item);
-            release_upgrade_item(worker, (UpgradeItem *)pipe_item);
-            break;
-        case PIPE_ITEM_TYPE_VERB:
-            display_send_verb(display_channel, ((VerbItem*)pipe_item)->verb);
-            free(pipe_item);
-            break;
-        case PIPE_ITEM_TYPE_MIGRATE:
-            red_printf("PIPE_ITEM_TYPE_MIGRATE");
-            display_channel_send_migrate(display_channel);
-            free(pipe_item);
-            break;
-        case PIPE_ITEM_TYPE_MIGRATE_DATA:
-            display_channel_send_migrate_data(display_channel);
-            free(pipe_item);
-            break;
-        case PIPE_ITEM_TYPE_SET_ACK:
-            red_send_set_ack((RedChannel *)display_channel);
-            free(pipe_item);
-            break;
-        case PIPE_ITEM_TYPE_IMAGE:
-            red_send_image(display_channel, (ImageItem *)pipe_item);
-            release_image_item((ImageItem *)pipe_item);
-            break;
-        case PIPE_ITEM_TYPE_PIXMAP_SYNC:
-            display_channel_pixmap_sync(display_channel);
-            free(pipe_item);
-            break;
-        case PIPE_ITEM_TYPE_PIXMAP_RESET:
-            display_channel_reset_cache(display_channel);
-            free(pipe_item);
-            break;
-        case PIPE_ITEM_TYPE_INVAL_PALLET_CACHE:
-            red_reset_palette_cache(display_channel);
-            red_send_verb((RedChannel *)display_channel, SPICE_MSG_DISPLAY_INVAL_ALL_PALETTES);
-            free(pipe_item);
-            break;
-        case PIPE_ITEM_TYPE_CREATE_SURFACE: {
-            SurfaceCreateItem *surface_create = SPICE_CONTAINEROF(pipe_item, SurfaceCreateItem,
-                                                                  pipe_item);
-            red_send_surface_create(display_channel, &surface_create->surface_create);
-            free(surface_create);
-            break;
-        }
-        case PIPE_ITEM_TYPE_DESTROY_SURFACE: {
-            SurfaceDestroyItem *surface_destroy = SPICE_CONTAINEROF(pipe_item, SurfaceDestroyItem,
-                                                                    pipe_item);
-            red_send_surface_destroy(display_channel, surface_destroy->surface_destroy.surface_id);
-            free(surface_destroy);
-            break;
-        }
-        default:
-            red_error("invalid pipe item type");
-        }
-        red_unref_channel((RedChannel *)display_channel);
+        display_channel_send_item((RedChannel *)worker->display_channel, pipe_item);
     }
 }
 
