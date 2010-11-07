@@ -203,6 +203,8 @@ void red_channel_init_outgoing_messages_window(RedChannel *channel);
 int red_channel_handle_message(RedChannel *channel, uint32_t size,
                                uint16_t type, void *message);
 
+/* default error handler that disconnects channel */
+void red_channel_default_peer_on_error(RedChannel *channel);
 
 /* when preparing send_data: should call reset, then init and then add_buf per buffer that is
    being sent */

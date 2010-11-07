@@ -180,10 +180,8 @@ static void red_peer_handle_outgoing(RedsStreamContext *peer, OutgoingHandler *h
     }
 }
 
-static void red_channel_peer_on_error(void *opaque)
+void red_channel_default_peer_on_error(RedChannel *channel)
 {
-    RedChannel *channel = (RedChannel *)opaque;
-
     channel->disconnect(channel);
 }
 
@@ -284,7 +282,7 @@ RedChannel *red_channel_create(int size, RedsStreamContext *peer,
     channel->incoming.alloc_msg_buf = (alloc_msg_recv_buf_proc)alloc_recv_buf;
     channel->incoming.release_msg_buf = (release_msg_recv_buf_proc)release_recv_buf;
     channel->incoming.handle_message = (handle_message_proc)handle_message;
-    channel->incoming.on_error = red_channel_peer_on_error;
+    channel->incoming.on_error = (on_incoming_error_proc)red_channel_default_peer_on_error;
 
     channel->outgoing.opaque = channel;
     channel->outgoing.pos = 0;
@@ -294,7 +292,7 @@ RedChannel *red_channel_create(int size, RedsStreamContext *peer,
     channel->outgoing.get_msg_size = red_channel_peer_get_out_msg_size;
     channel->outgoing.prepare = red_channel_peer_prepare_out_msg;
     channel->outgoing.on_block = red_channel_peer_on_out_block;
-    channel->outgoing.on_error = red_channel_peer_on_error;
+    channel->outgoing.on_error = (on_outgoing_error_proc)red_channel_default_peer_on_error;
     channel->outgoing.on_msg_done = red_channel_peer_on_out_msg_done;
 
     channel->shut = 0; // came here from inputs, perhaps can be removed? XXX
