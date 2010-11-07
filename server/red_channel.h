@@ -38,7 +38,7 @@
 
 typedef int (*handle_message_proc)(void *opaque,
                                    SpiceDataHeader *header, uint8_t *msg);
-typedef int (*handle_parsed_proc)(void *opaque, size_t size, uint32_t type, void *message);
+typedef int (*handle_parsed_proc)(void *opaque, uint32_t size, uint16_t type, void *message);
 typedef uint8_t *(*alloc_msg_recv_buf_proc)(void *opaque, SpiceDataHeader *msg_header);
 typedef void (*release_msg_recv_buf_proc)(void *opaque,
                                           SpiceDataHeader *msg_header, uint8_t *msg);
@@ -98,7 +98,7 @@ typedef struct RedChannel RedChannel;
 
 typedef uint8_t *(*channel_alloc_msg_recv_buf_proc)(RedChannel *channel,
                                                     SpiceDataHeader *msg_header);
-typedef int (*channel_handle_parsed_proc)(RedChannel *channel, size_t size, uint32_t type,
+typedef int (*channel_handle_parsed_proc)(RedChannel *channel, uint32_t size, uint16_t type,
                                         void *message);
 typedef int (*channel_handle_message_proc)(RedChannel *channel,
                                            SpiceDataHeader *header, uint8_t *msg);

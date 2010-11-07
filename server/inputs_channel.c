@@ -280,7 +280,7 @@ static void inputs_channel_send_item(RedChannel *channel, PipeItem *base)
     red_channel_begin_send_message(channel);
 }
 
-static int inputs_channel_handle_parsed(RedChannel *channel, size_t size, uint32_t type, void *message)
+static int inputs_channel_handle_parsed(RedChannel *channel, uint32_t size, uint16_t type, void *message)
 {
     InputsChannel *inputs_channel = (InputsChannel *)channel;
     uint8_t *buf = (uint8_t *)message;
