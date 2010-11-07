@@ -348,10 +348,10 @@ typedef struct LocalCursor {
 #define PALETTE_CACHE_HASH_KEY(id) ((id) & PALETTE_CACHE_HASH_MASK)
 
 typedef struct RedChannel RedChannel;
-typedef void (*disconnect_channel_proc)(RedChannel *channel);
-typedef void (*hold_pipe_item_proc)(PipeItem *item);
-typedef void (*release_item_proc)(RedChannel *channel, void *item);
-typedef int (*handle_message_proc)(RedChannel *channel, size_t size, uint32_t type, void *message);
+typedef void (*channel_disconnect_proc)(RedChannel *channel);
+typedef void (*channel_hold_pipe_item_proc)(RedChannel *channel, PipeItem *item);
+typedef void (*channel_release_pipe_item_proc)(RedChannel *channel, void *item);
+typedef int (*channel_handle_parsed_proc)(RedChannel *channel, uint32_t size, uint16_t type, void *message);
 
 struct RedChannel {
     spice_parse_channel_func_t parser;
@@ -385,10 +385,11 @@ struct RedChannel {
         uint8_t *end;
     } recive_data;
 
-    disconnect_channel_proc disconnect;
-    hold_pipe_item_proc hold_item;
-    release_item_proc release_item;
-    handle_message_proc handle_message;
+    channel_disconnect_proc disconnect;
+    channel_hold_pipe_item_proc hold_item;
+    channel_release_pipe_item_proc release_item;
+    channel_handle_parsed_proc handle_parsed;
+
 #ifdef RED_STATISTICS
     uint64_t *out_bytes_counter;
 #endif
@@ -1179,7 +1180,7 @@ static void show_draw_item(RedWorker *worker, DrawItem *draw_item, const char *p
 static void red_channel_init_send_data(RedChannel *channel, uint16_t type, PipeItem *item)
 {
     if (item) {
-        channel->hold_item(item);
+        channel->hold_item(channel, item);
         ASSERT(channel->send_data.item == NULL);
         channel->send_data.item = item;
     }
@@ -8940,7 +8941,7 @@ static void on_new_display_channel(RedWorker *worker)
     }
 }
 
-static int channel_handle_message(RedChannel *channel, size_t size, uint32_t type, void *message)
+static int channel_handle_message(RedChannel *channel, uint32_t size, uint16_t type, void *message)
 {
     switch (type) {
     case SPICE_MSGC_ACK_SYNC:
@@ -9247,7 +9248,7 @@ static int display_channel_handle_migrate_data(DisplayChannel *channel, size_t s
     return TRUE;
 }
 
-static int display_channel_handle_message(RedChannel *channel, size_t size, uint32_t type, void *message)
+static int display_channel_handle_message(RedChannel *channel, uint32_t size, uint16_t type, void *message)
 {
     switch (type) {
     case SPICE_MSGC_DISPLAY_INIT:
@@ -9315,7 +9316,7 @@ static void red_receive(RedChannel *channel)
                     return;
                 }
 
-                if (!channel->handle_message(channel, parsed_size, header->type, parsed)) {
+                if (!channel->handle_parsed(channel, parsed_size, header->type, parsed)) {
                     free(parsed);
                     channel->disconnect(channel);
                     return;
@@ -9348,10 +9349,10 @@ static void free_common_channel_from_listener(EventListener *ctx)
 static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_id,
                                  RedsStreamContext *peer, int migrate,
                                  event_listener_action_proc handler,
-                                 disconnect_channel_proc disconnect,
-                                 hold_pipe_item_proc hold_item,
-                                 release_item_proc release_item,
-                                 handle_message_proc handle_message)
+                                 channel_disconnect_proc disconnect,
+                                 channel_hold_pipe_item_proc hold_item,
+                                 channel_release_pipe_item_proc release_item,
+                                 channel_handle_parsed_proc handle_parsed)
 {
     struct epoll_event event;
     RedChannel *channel;
@@ -9386,7 +9387,7 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
     channel->disconnect = disconnect;
     channel->hold_item = hold_item;
     channel->release_item = release_item;
-    channel->handle_message = handle_message;
+    channel->handle_parsed = handle_parsed;
     channel->peer = peer;
     common->worker = worker;
     channel->ack_data.messages_window = ~0;  // blocks send message (maybe use send_data.blocked +
@@ -9433,7 +9434,7 @@ static void handle_channel_events(EventListener *in_listener, uint32_t events)
     }
 }
 
-static void display_channel_hold_pipe_item(PipeItem *item)
+static void display_channel_hold_pipe_item(RedChannel *channel, PipeItem *item)
 {
     ASSERT(item);
     switch (item->type) {
@@ -9592,7 +9593,7 @@ static void on_new_cursor_channel(RedWorker *worker)
     }
 }
 
-static void cursor_channel_hold_pipe_item(PipeItem *item)
+static void cursor_channel_hold_pipe_item(RedChannel *channel, PipeItem *item)
 {
     ASSERT(item);
     ((CursorItem *)item)->refs++;
@@ -9725,7 +9726,7 @@ static void red_wait_pipe_item_sent(RedChannel *channel, PipeItem *item)
     red_printf("");
     common = SPICE_CONTAINEROF(channel, CommonChannel, base);
     red_ref_channel(channel);
-    channel->hold_item(item);
+    channel->hold_item(channel, item);
 
     end_time = red_now() + CHANNEL_PUSH_TIMEOUT;
 
