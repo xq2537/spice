@@ -218,9 +218,11 @@ double inline stat_byte_to_mega(uint64_t size)
 
 typedef struct EventListener EventListener;
 typedef void (*event_listener_action_proc)(EventListener *ctx, uint32_t events);
+typedef void (*event_listener_free_proc)(EventListener *ctx);
 struct EventListener {
     uint32_t refs;
     event_listener_action_proc action;
+    event_listener_free_proc free;
 };
 
 enum {
@@ -9330,6 +9332,13 @@ static void red_receive(RedChannel *channel)
     }
 }
 
+static void free_common_channel_from_listener(EventListener *ctx)
+{
+    CommonChannel* common = SPICE_CONTAINEROF(ctx, CommonChannel, listener);
+
+    free(common);
+}
+
 static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_id,
                                  RedsStreamContext *peer, int migrate,
                                  event_listener_action_proc handler,
@@ -9367,6 +9376,7 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
     channel->parser = spice_get_client_channel_parser(channel_id, NULL);
     common->listener.refs = 1;
     common->listener.action = handler;
+    common->listener.free = free_common_channel_from_listener;
     channel->disconnect = disconnect;
     channel->hold_item = hold_item;
     channel->release_item = release_item;
@@ -10198,6 +10208,11 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
     }
 }
 
+static void handle_dev_free(EventListener *ctx)
+{
+    free(ctx);
+}
+
 static void red_init(RedWorker *worker, WorkerInitData *init_data)
 {
     struct epoll_event event;
@@ -10213,6 +10228,7 @@ static void red_init(RedWorker *worker, WorkerInitData *init_data)
     worker->pending = init_data->pending;
     worker->dev_listener.refs = 1;
     worker->dev_listener.action = handle_dev_input;
+    worker->dev_listener.free = handle_dev_free;
     worker->cursor_visible = TRUE;
     ASSERT(init_data->num_renderers > 0);
     worker->num_renderers = init_data->num_renderers;
@@ -10324,7 +10340,8 @@ void *red_worker_main(void *arg)
                     continue;
                 }
             }
-            free(evt_listener);
+            red_printf("freeing event listener");
+            evt_listener->free(evt_listener);
         }
 
         if (worker.running) {
