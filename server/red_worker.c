@@ -348,7 +348,7 @@ typedef struct LocalCursor {
 #define PALETTE_CACHE_HASH_KEY(id) ((id) & PALETTE_CACHE_HASH_MASK)
 
 typedef struct RedChannel RedChannel;
-typedef void (*disconnect_channel_proc)(RedChannel *channel);
+typedef void (*channel_disconnect_proc)(RedChannel *channel);
 typedef void (*hold_item_proc)(PipeItem *item);
 typedef void (*release_item_proc)(RedChannel *channel, void *item);
 typedef int (*handle_message_proc)(RedChannel *channel, size_t size, uint32_t type, void *message);
@@ -385,7 +385,7 @@ struct RedChannel {
         uint8_t *end;
     } recive_data;
 
-    disconnect_channel_proc disconnect;
+    channel_disconnect_proc disconnect;
     hold_item_proc hold_item;
     release_item_proc release_item;
     handle_message_proc handle_message;
@@ -9365,7 +9365,7 @@ static void free_common_channel_from_listener(EventListener *ctx)
 static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_id,
                                  RedsStreamContext *peer, int migrate,
                                  event_listener_action_proc handler,
-                                 disconnect_channel_proc disconnect,
+                                 channel_disconnect_proc disconnect,
                                  hold_item_proc hold_item,
                                  release_item_proc release_item,
                                  handle_message_proc handle_message)
