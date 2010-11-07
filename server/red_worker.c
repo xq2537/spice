@@ -383,7 +383,7 @@ struct RedChannel {
         SpiceDataHeader *message;
         uint8_t *now;
         uint8_t *end;
-    } recive_data;
+    } incoming;
 
     channel_disconnect_proc disconnect;
     channel_hold_pipe_item_proc hold_item;
@@ -981,7 +981,7 @@ static void red_stop_stream(RedWorker *worker, Stream *stream);
 static inline void red_stream_maintenance(RedWorker *worker, Drawable *candidate, Drawable *sect);
 static inline void red_channel_begin_send_message(RedChannel *channel);
 static inline void display_begin_send_message(DisplayChannel *channel);
-static void red_receive(RedChannel *channel);
+static void red_channel_receive(RedChannel *channel);
 static void red_release_pixmap_cache(DisplayChannel *channel);
 static void red_release_glz(DisplayChannel *channel);
 static void red_freeze_glz(DisplayChannel *channel);
@@ -1234,7 +1234,7 @@ static void red_pipe_add_verb(RedChannel* channel, uint16_t verb)
     red_channel_pipe_add(channel, &item->base);
 }
 
-static void red_pipe_add_type(RedChannel* channel, int pipe_item_type)
+static void red_channel_pipe_add_type(RedChannel* channel, int pipe_item_type)
 {
     PipeItem *item = spice_new(PipeItem, 1);
     red_pipe_item_init(item, pipe_item_type);
@@ -7336,7 +7336,7 @@ static void inline channel_release_res(RedChannel *channel)
     channel->send_data.item = NULL;
 }
 
-static void red_send_data(RedChannel *channel)
+static void red_channel_send(RedChannel *channel)
 {
     for (;;) {
         ssize_t n = channel->send_data.size - channel->send_data.pos;
@@ -7408,7 +7408,7 @@ static inline void red_channel_begin_send_message(RedChannel *channel)
     channel->send_data.header->size =  channel->send_data.size - sizeof(SpiceDataHeader);
     channel->ack_data.messages_window++;
     channel->send_data.header = NULL; /* avoid writing to this until we have a new message */
-    red_send_data(channel);
+    red_channel_send(channel);
 }
 
 static inline void display_begin_send_message(DisplayChannel *channel)
@@ -8292,7 +8292,7 @@ static void red_send_surface_destroy(DisplayChannel *display, uint32_t surface_i
     red_channel_begin_send_message(channel);
 }
 
-static inline PipeItem *red_pipe_get(RedChannel *channel)
+static inline PipeItem *red_channel_pipe_get(RedChannel *channel)
 {
     PipeItem *item;
     if (!channel || channel->send_data.blocked ||
@@ -8407,7 +8407,7 @@ static void display_channel_push(RedWorker *worker)
 {
     PipeItem *pipe_item;
 
-    while ((pipe_item = red_pipe_get((RedChannel *)worker->display_channel))) {
+    while ((pipe_item = red_channel_pipe_get((RedChannel *)worker->display_channel))) {
         display_channel_send_item((RedChannel *)worker->display_channel, pipe_item);
     }
 }
@@ -8462,7 +8462,7 @@ static void cursor_channel_push(RedWorker *worker)
 {
     PipeItem *pipe_item;
 
-    while ((pipe_item = red_pipe_get((RedChannel *)worker->cursor_channel))) {
+    while ((pipe_item = red_channel_pipe_get((RedChannel *)worker->cursor_channel))) {
         cursor_channel_send_item(worker->cursor_channel, pipe_item);
     }
 }
@@ -8540,7 +8540,7 @@ void red_show_tree(RedWorker *worker)
     }
 }
 
-static inline int channel_is_connected(RedChannel *channel)
+static inline int red_channel_is_connected(RedChannel *channel)
 {
     return !!channel->stream;
 }
@@ -8593,7 +8593,7 @@ static void red_migrate_display(RedWorker *worker)
 {
     if (worker->display_channel) {
         red_pipe_add_verb(&worker->display_channel->common.base, SPICE_MSG_DISPLAY_STREAM_DESTROY_ALL);
-        red_pipe_add_type(&worker->display_channel->common.base, PIPE_ITEM_TYPE_MIGRATE);
+        red_channel_pipe_add_type(&worker->display_channel->common.base, PIPE_ITEM_TYPE_MIGRATE);
     }
 }
 
@@ -8814,8 +8814,8 @@ static inline void flush_display_commands(RedWorker *worker)
             }
             RedChannel *channel = (RedChannel *)worker->display_channel;
             red_ref_channel(channel);
-            red_receive(channel);
-            red_send_data(channel);
+            red_channel_receive(channel);
+            red_channel_send(channel);
             if (red_now() >= end_time) {
                 red_printf("update timeout");
                 red_disconnect_display(channel);
@@ -8856,8 +8856,8 @@ static inline void flush_cursor_commands(RedWorker *worker)
             }
             RedChannel *channel = (RedChannel *)worker->cursor_channel;
             red_ref_channel(channel);
-            red_receive(channel);
-            red_send_data(channel);
+            red_channel_receive(channel);
+            red_channel_send(channel);
             if (red_now() >= end_time) {
                 red_printf("flush cursor timeout");
                 red_disconnect_cursor(channel);
@@ -8881,7 +8881,7 @@ static void push_new_primary_surface(RedWorker *worker)
     DisplayChannel *display_channel;
 
     if ((display_channel = worker->display_channel)) {
-        red_pipe_add_type(&display_channel->common.base, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
+        red_channel_pipe_add_type(&display_channel->common.base, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
         if (!display_channel->common.base.migrate) {
             red_create_surface_item(worker, 0);
         }
@@ -8894,7 +8894,7 @@ static int display_channel_wait_for_init(DisplayChannel *display_channel)
     display_channel->expect_init = TRUE;
     uint64_t end_time = red_now() + DISPLAY_CLIENT_TIMEOUT;
     for (;;) {
-        red_receive((RedChannel *)display_channel);
+        red_channel_receive((RedChannel *)display_channel);
         if (!display_channel->common.base.stream) {
             break;
         }
@@ -8923,7 +8923,7 @@ static void on_new_display_channel(RedWorker *worker)
     DisplayChannel *display_channel = worker->display_channel;
     ASSERT(display_channel);
 
-    red_pipe_add_type(&display_channel->common.base, PIPE_ITEM_TYPE_SET_ACK);
+    red_channel_pipe_add_type(&display_channel->common.base, PIPE_ITEM_TYPE_SET_ACK);
 
     if (display_channel->common.base.migrate) {
         display_channel->expect_migrate_data = TRUE;
@@ -8938,14 +8938,14 @@ static void on_new_display_channel(RedWorker *worker)
         red_current_flush(worker, 0);
         push_new_primary_surface(worker);
         red_add_surface_image(worker, 0);
-        if (channel_is_connected(&display_channel->common.base)) {
+        if (red_channel_is_connected(&display_channel->common.base)) {
             red_pipe_add_verb(&display_channel->common.base, SPICE_MSG_DISPLAY_MARK);
             red_disply_start_streams(display_channel);
         }
     }
 }
 
-static int channel_handle_message(RedChannel *channel, uint32_t size, uint16_t type, void *message)
+static int red_channel_handle_message(RedChannel *channel, uint32_t size, uint16_t type, void *message)
 {
     switch (type) {
     case SPICE_MSGC_ACK_SYNC:
@@ -9195,7 +9195,7 @@ static int display_channel_handle_migrate_mark(DisplayChannel *channel)
         return FALSE;
     }
     channel->expect_migrate_mark = FALSE;
-    red_pipe_add_type((RedChannel *)channel, PIPE_ITEM_TYPE_MIGRATE_DATA);
+    red_channel_pipe_add_type((RedChannel *)channel, PIPE_ITEM_TYPE_MIGRATE_DATA);
     return TRUE;
 }
 
@@ -9233,7 +9233,7 @@ static int display_channel_handle_migrate_data(DisplayChannel *channel, size_t s
 
     if (migrate_data->pixmap_cache_freezer) {
         channel->pixmap_cache->size = migrate_data->pixmap_cache_size;
-        red_pipe_add_type((RedChannel *)channel, PIPE_ITEM_TYPE_PIXMAP_RESET);
+        red_channel_pipe_add_type((RedChannel *)channel, PIPE_ITEM_TYPE_PIXMAP_RESET);
     }
 
     if (display_channel_handle_migrate_glz_dictionary(channel, migrate_data)) {
@@ -9246,7 +9246,7 @@ static int display_channel_handle_migrate_data(DisplayChannel *channel, size_t s
         PANIC("restoring global lz dictionary failed");
     }
 
-    red_pipe_add_type((RedChannel *)channel, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
+    red_channel_pipe_add_type((RedChannel *)channel, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
 
     channel->common.base.ack_data.messages_window = 0;
     return TRUE;
@@ -9267,18 +9267,18 @@ static int display_channel_handle_message(RedChannel *channel, uint32_t size, ui
     case SPICE_MSGC_MIGRATE_DATA:
         return display_channel_handle_migrate_data((DisplayChannel *)channel, size, message);
     default:
-        return channel_handle_message(channel, size, type, message);
+        return red_channel_handle_message(channel, size, type, message);
     }
 }
 
-static void red_receive(RedChannel *channel)
+static void red_channel_receive(RedChannel *channel)
 {
     for (;;) {
         ssize_t n;
-        n = channel->recive_data.end - channel->recive_data.now;
+        n = channel->incoming.end - channel->incoming.now;
         ASSERT(n);
         ASSERT(channel->stream);
-        n = reds_stream_read(channel->stream, channel->recive_data.now, n);
+        n = reds_stream_read(channel->stream, channel->incoming.now, n);
         if (n <= 0) {
             if (n == 0) {
                 channel->disconnect(channel);
@@ -9299,15 +9299,15 @@ static void red_receive(RedChannel *channel)
                 return;
             }
         } else {
-            channel->recive_data.now += n;
+            channel->incoming.now += n;
             for (;;) {
-                SpiceDataHeader *header = channel->recive_data.message;
+                SpiceDataHeader *header = channel->incoming.message;
                 uint8_t *data = (uint8_t *)(header+1);
                 size_t parsed_size;
                 uint8_t *parsed;
                 message_destructor_t parsed_free;
 
-                n = channel->recive_data.now - (uint8_t *)header;
+                n = channel->incoming.now - (uint8_t *)header;
                 if (n < sizeof(SpiceDataHeader) ||
                     n < sizeof(SpiceDataHeader) + header->size) {
                     break;
@@ -9327,18 +9327,18 @@ static void red_receive(RedChannel *channel)
                     return;
                 }
                 parsed_free(parsed);
-                channel->recive_data.message = (SpiceDataHeader *)((uint8_t *)header +
+                channel->incoming.message = (SpiceDataHeader *)((uint8_t *)header +
                                                                    sizeof(SpiceDataHeader) +
                                                                    header->size);
             }
 
-            if (channel->recive_data.now == (uint8_t *)channel->recive_data.message) {
-                channel->recive_data.now = channel->recive_data.buf;
-                channel->recive_data.message = (SpiceDataHeader *)channel->recive_data.buf;
-            } else if (channel->recive_data.now == channel->recive_data.end) {
-                memcpy(channel->recive_data.buf, channel->recive_data.message, n);
-                channel->recive_data.now = channel->recive_data.buf + n;
-                channel->recive_data.message = (SpiceDataHeader *)channel->recive_data.buf;
+            if (channel->incoming.now == (uint8_t *)channel->incoming.message) {
+                channel->incoming.now = channel->incoming.buf;
+                channel->incoming.message = (SpiceDataHeader *)channel->incoming.buf;
+            } else if (channel->incoming.now == channel->incoming.end) {
+                memcpy(channel->incoming.buf, channel->incoming.message, n);
+                channel->incoming.now = channel->incoming.buf + n;
+                channel->incoming.message = (SpiceDataHeader *)channel->incoming.buf;
             }
         }
     }
@@ -9400,9 +9400,9 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
     channel->ack_data.client_window = IS_LOW_BANDWIDTH() ? WIDE_CLIENT_ACK_WINDOW :
                                                       NARROW_CLIENT_ACK_WINDOW;
     channel->ack_data.client_generation = ~0;
-    channel->recive_data.message = (SpiceDataHeader *)channel->recive_data.buf;
-    channel->recive_data.now = channel->recive_data.buf;
-    channel->recive_data.end = channel->recive_data.buf + sizeof(channel->recive_data.buf);
+    channel->incoming.message = (SpiceDataHeader *)channel->incoming.buf;
+    channel->incoming.now = channel->incoming.buf;
+    channel->incoming.end = channel->incoming.buf + sizeof(channel->incoming.buf);
     ring_init(&channel->pipe);
     channel->send_data.marshaller = spice_marshaller_new();
 
@@ -9431,11 +9431,11 @@ static void handle_channel_events(EventListener *in_listener, uint32_t events)
     RedChannel *channel = &common->base;
 
     if ((events & EPOLLIN)) {
-        red_receive(channel);
+        red_channel_receive(channel);
     }
 
     if (channel->send_data.blocked) {
-        red_send_data(channel);
+        red_channel_send(channel);
     }
 }
 
@@ -9580,8 +9580,8 @@ static void red_disconnect_cursor(RedChannel *channel)
 static void red_migrate_cursor(RedWorker *worker)
 {
     if (worker->cursor_channel) {
-        red_pipe_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
-        red_pipe_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_MIGRATE);
+        red_channel_pipe_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
+        red_channel_pipe_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_MIGRATE);
     }
 }
 
@@ -9592,9 +9592,9 @@ static void on_new_cursor_channel(RedWorker *worker)
     ASSERT(channel);
 
     channel->common.base.ack_data.messages_window = 0;
-    red_pipe_add_type(&channel->common.base, PIPE_ITEM_TYPE_SET_ACK);
+    red_channel_pipe_add_type(&channel->common.base, PIPE_ITEM_TYPE_SET_ACK);
     if (worker->surfaces[0].context.canvas && !channel->common.base.migrate) {
-        red_pipe_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_CURSOR_INIT);
+        red_channel_pipe_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_CURSOR_INIT);
     }
 }
 
@@ -9624,7 +9624,7 @@ static void red_connect_cursor(RedWorker *worker, RedsStream *stream, int migrat
                                                    red_disconnect_cursor,
                                                    cursor_channel_hold_pipe_item,
                                                    cursor_channel_release_item,
-                                                   channel_handle_message))) {
+                                                   red_channel_handle_message))) {
         return;
     }
 #ifdef RED_STATISTICS
@@ -9707,8 +9707,8 @@ static void red_wait_outgoing_item(RedChannel *channel)
 
     do {
         usleep(DETACH_SLEEP_DURATION);
-        red_receive(channel);
-        red_send_data(channel);
+        red_channel_receive(channel);
+        red_channel_send(channel);
     } while ((blocked = channel->send_data.blocked) && red_now() < end_time);
 
     if (blocked) {
@@ -9736,16 +9736,16 @@ static void red_wait_pipe_item_sent(RedChannel *channel, PipeItem *item)
     end_time = red_now() + CHANNEL_PUSH_TIMEOUT;
 
     if (channel->send_data.blocked) {
-        red_receive(channel);
-        red_send_data(channel);
+        red_channel_receive(channel);
+        red_channel_send(channel);
     }
     // todo: different push for each channel
     red_push(common->worker);
 
     while((item_in_pipe = ring_item_is_linked(&item->link)) && (red_now() < end_time)) {
         usleep(CHANNEL_PUSH_SLEEP_DURATION);
-        red_receive(channel);
-        red_send_data(channel);
+        red_channel_receive(channel);
+        red_channel_send(channel);
         red_push(common->worker);
     }
 
@@ -9883,7 +9883,7 @@ static inline void handle_dev_destroy_surfaces(RedWorker *worker)
 
     red_wait_outgoing_item((RedChannel *)worker->cursor_channel);
     if (worker->cursor_channel) {
-        red_pipe_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
+        red_channel_pipe_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
         if (!worker->cursor_channel->common.base.migrate) {
             red_pipe_add_verb(&worker->cursor_channel->common.base, SPICE_MSG_CURSOR_RESET);
         }
@@ -9891,7 +9891,7 @@ static inline void handle_dev_destroy_surfaces(RedWorker *worker)
     }
 
     if (worker->display_channel) {
-        red_pipe_add_type(&worker->display_channel->common.base, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
+        red_channel_pipe_add_type(&worker->display_channel->common.base, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
         red_pipe_add_verb(&worker->display_channel->common.base, SPICE_MSG_DISPLAY_STREAM_DESTROY_ALL);
     }
 
@@ -9935,7 +9935,7 @@ static inline void handle_dev_create_primary_surface(RedWorker *worker)
     }
 
     if (worker->cursor_channel) {
-        red_pipe_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_CURSOR_INIT);
+        red_channel_pipe_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_CURSOR_INIT);
     }
 
     message = RED_WORKER_MESSAGE_READY;
@@ -9959,7 +9959,7 @@ static inline void handle_dev_destroy_primary_surface(RedWorker *worker)
 
     red_wait_outgoing_item((RedChannel *)worker->cursor_channel);
     if (worker->cursor_channel) {
-        red_pipe_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
+        red_channel_pipe_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
         if (!worker->cursor_channel->common.base.migrate) {
             red_pipe_add_verb(&worker->cursor_channel->common.base, SPICE_MSG_CURSOR_RESET);
         }
@@ -10021,7 +10021,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
 
         red_wait_outgoing_item((RedChannel *)worker->cursor_channel);
         if (worker->cursor_channel) {
-            red_pipe_add_type(cursor_red_channel, PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
+            red_channel_pipe_add_type(cursor_red_channel, PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
             if (!cursor_red_channel->migrate) {
                 red_pipe_add_verb(cursor_red_channel, SPICE_MSG_CURSOR_RESET);
             }

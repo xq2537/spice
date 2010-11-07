@@ -94,7 +94,7 @@ static int FUNC_NAME(add)(CACHE *cache, uint64_t id, uint32_t size, int lossy, C
 
     if (cache->generation != channel->CACH_GENERATION) {
         if (!channel->pending_pixmaps_sync) {
-            red_pipe_add_type((RedChannel *)channel, PIPE_ITEM_TYPE_PIXMAP_SYNC);
+            red_channel_pipe_add_type((RedChannel *)channel, PIPE_ITEM_TYPE_PIXMAP_SYNC);
             channel->pending_pixmaps_sync = TRUE;
         }
         pthread_mutex_unlock(&cache->lock);
