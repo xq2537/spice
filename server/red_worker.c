@@ -10100,10 +10100,10 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         red_printf("start");
         ASSERT(!worker->running);
         if (worker->cursor_channel) {
-            worker->cursor_channel->common.base.migrate = FALSE;
+            cursor_red_channel->migrate = FALSE;
         }
         if (worker->display_channel) {
-            worker->display_channel->common.base.migrate = FALSE;
+            display_red_channel->migrate = FALSE;
         }
         worker->running = TRUE;
         break;
