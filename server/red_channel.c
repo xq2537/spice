@@ -600,5 +600,6 @@ void red_channel_pipe_clear(RedChannel *channel)
         ring_remove(&item->link);
         channel->release_item(channel, item, FALSE);
     }
+    channel->pipe_size = 0;
 }
 
