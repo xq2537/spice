@@ -725,7 +725,10 @@ static void reds_update_mouse_mode()
         reds_set_mouse_mode(SPICE_MOUSE_MODE_SERVER);
         return;
     }
-    main_channel_push_mouse_mode(reds->main_channel, reds->mouse_mode, reds->is_client_mouse_allowed);
+    if (reds->main_channel) {
+        main_channel_push_mouse_mode(reds->main_channel, reds->mouse_mode,
+                                     reds->is_client_mouse_allowed);
+    }
 }
 
 static void reds_agent_remove()
