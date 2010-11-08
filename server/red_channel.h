@@ -242,5 +242,6 @@ void red_channel_pipe_clear(RedChannel *channel);
 //  red_wait_pipe_item_sent
 //  handle_channel_events - this is the only one that was used before, and was in red_channel.c
 void red_channel_receive(RedChannel *channel);
+void red_channel_send(RedChannel *channel);
 
 #endif

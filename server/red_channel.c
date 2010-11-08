@@ -462,7 +462,7 @@ void red_channel_init_send_data(RedChannel *channel, uint16_t msg_type, PipeItem
     }
 }
 
-static void red_channel_send(RedChannel *channel)
+void red_channel_send(RedChannel *channel)
 {
     red_peer_handle_outgoing(channel->peer, &channel->outgoing);
 }
