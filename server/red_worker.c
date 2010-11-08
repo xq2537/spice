@@ -8770,7 +8770,7 @@ static inline void flush_display_commands(RedWorker *worker)
         for (;;) {
             red_channel_push(&worker->display_channel->common.base);
             if (!worker->display_channel ||
-                                         worker->display_channel->common.base.pipe_size <= MAX_PIPE_SIZE) {
+                 worker->display_channel->common.base.pipe_size <= MAX_PIPE_SIZE) {
                 break;
             }
             RedChannel *channel = (RedChannel *)worker->display_channel;
