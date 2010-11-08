@@ -64,6 +64,10 @@ static int red_peer_receive(RedsStreamContext *peer, uint8_t *buf, uint32_t size
     return pos - buf;
 }
 
+// TODO: this implementation, as opposed to the old implementation in red_worker,
+// does many calls to red_peer_receive and through it cb_read, and thus avoids pointer
+// arithmetic for the case where a single cb_read could return multiple messages. But
+// this is suboptimal potentially. Profile and consider fixing.
 static void red_peer_handle_incoming(RedsStreamContext *peer, IncomingHandler *handler)
 {
     int bytes_read;
