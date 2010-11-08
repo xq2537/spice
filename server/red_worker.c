@@ -8515,7 +8515,7 @@ void red_show_tree(RedWorker *worker)
     }
 }
 
-static inline int channel_is_connected(RedChannel *channel)
+static inline int red_channel_is_connected(RedChannel *channel)
 {
     return !!channel->peer;
 }
@@ -8915,7 +8915,7 @@ static void on_new_display_channel(RedWorker *worker)
         red_current_flush(worker, 0);
         push_new_primary_surface(worker);
         red_add_surface_image(worker, 0);
-        if (channel_is_connected(&display_channel->common.base)) {
+        if (red_channel_is_connected(&display_channel->common.base)) {
             red_pipe_add_verb(&display_channel->common.base, SPICE_MSG_DISPLAY_MARK);
             red_disply_start_streams(display_channel);
         }
