@@ -8352,13 +8352,16 @@ static void display_channel_send_item(RedChannel *base, PipeItem *pipe_item)
     default:
         red_error("invalid pipe item type");
     }
-    red_unref_channel((RedChannel *)display_channel);
+    red_unref_channel(&display_channel->common.base);
 }
 
 void red_channel_push(RedChannel *channel)
 {
     PipeItem *pipe_item;
 
+    if (!channel) {
+        return;
+    }
     if (!channel->during_send) {
         channel->during_send = TRUE;
     } else {
