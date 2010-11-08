@@ -9320,6 +9320,30 @@ static void red_channel_receive(RedChannel *channel)
     }
 }
 
+int common_channel_config_socket(RedChannel *channel)
+{
+    int flags;
+    int delay_val;
+    RedsStreamContext *peer = channel->peer;
+
+    if ((flags = fcntl(peer->socket, F_GETFL)) == -1) {
+        red_printf("accept failed, %s", strerror(errno));
+        return FALSE;
+    }
+
+    if (fcntl(peer->socket, F_SETFL, flags | O_NONBLOCK) == -1) {
+        red_printf("accept failed, %s", strerror(errno));
+        return FALSE;
+    }
+
+    // TODO - this should be dynamic, not one time at channel creation
+    delay_val = IS_LOW_BANDWIDTH() ? 0 : 1;
+    if (setsockopt(peer->socket, IPPROTO_TCP, TCP_NODELAY, &delay_val, sizeof(delay_val)) == -1) {
+        red_printf("setsockopt failed, %s", strerror(errno));
+    }
+    return TRUE;
+}
+
 static void free_common_channel_from_listener(EventListener *ctx)
 {
     CommonChannel* common = SPICE_CONTAINEROF(ctx, CommonChannel, listener);
@@ -9339,28 +9363,15 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
     struct epoll_event event;
     RedChannel *channel;
     CommonChannel *common;
-    int flags;
-    int delay_val;
-
-    if ((flags = fcntl(peer->socket, F_GETFL)) == -1) {
-        red_printf("accept failed, %s", strerror(errno));
-        goto error1;
-    }
-
-    if (fcntl(peer->socket, F_SETFL, flags | O_NONBLOCK) == -1) {
-        red_printf("accept failed, %s", strerror(errno));
-        goto error1;
-    }
-
-    delay_val = IS_LOW_BANDWIDTH() ? 0 : 1;
-    if (setsockopt(peer->socket, IPPROTO_TCP, TCP_NODELAY, &delay_val, sizeof(delay_val)) == -1) {
-        red_printf("setsockopt failed, %s", strerror(errno));
-    }
 
     ASSERT(size >= sizeof(*channel));
     common = spice_malloc0(size);
     channel = &common->base;
     ASSERT(common == (CommonChannel*)channel);
+    channel->peer = peer;
+    if (!common_channel_config_socket(channel)) {
+        goto error;
+    }
     common->id = worker->id;
     channel->parser = spice_get_client_channel_parser(channel_id, NULL);
     common->listener.refs = 1;
@@ -9371,7 +9382,6 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
     channel->hold_item = hold_item;
     channel->release_item = release_item;
     channel->handle_message = handle_message;
-    channel->peer = peer;
     common->worker = worker;
     channel->ack_data.messages_window = ~0;  // blocks send message (maybe use send_data.blocked +
                                     // block flags)
@@ -9388,16 +9398,15 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
     event.data.ptr = &common->listener;
     if (epoll_ctl(worker->epoll, EPOLL_CTL_ADD, peer->socket, &event) == -1) {
         red_printf("epoll_ctl failed, %s", strerror(errno));
-        goto error2;
+        goto error;
     }
 
     channel->migrate = migrate;
 
     return channel;
 
-error2:
+error:
     free(channel);
-error1:
     peer->cb_free(peer);
 
     return NULL;
