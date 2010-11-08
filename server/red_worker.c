@@ -985,7 +985,7 @@ static void red_stop_stream(RedWorker *worker, Stream *stream);
 static inline void red_stream_maintenance(RedWorker *worker, Drawable *candidate, Drawable *sect);
 static inline void red_channel_begin_send_message(RedChannel *channel);
 static inline void display_begin_send_message(DisplayChannel *channel);
-static void red_receive(RedChannel *channel);
+static void red_channel_receive(RedChannel *channel);
 static void red_release_pixmap_cache(DisplayChannel *channel);
 static void red_release_glz(DisplayChannel *channel);
 static void red_freeze_glz(DisplayChannel *channel);
@@ -8840,7 +8840,7 @@ static inline void flush_display_commands(RedWorker *worker)
             }
             RedChannel *channel = (RedChannel *)worker->display_channel;
             red_ref_channel(channel);
-            red_receive(channel);
+            red_channel_receive(channel);
             red_channel_send(channel);
             if (red_now() >= end_time) {
                 red_printf("update timeout");
@@ -8882,7 +8882,7 @@ static inline void flush_cursor_commands(RedWorker *worker)
             }
             RedChannel *channel = (RedChannel *)worker->cursor_channel;
             red_ref_channel(channel);
-            red_receive(channel);
+            red_channel_receive(channel);
             red_channel_send(channel);
             if (red_now() >= end_time) {
                 red_printf("flush cursor timeout");
@@ -8920,7 +8920,7 @@ static int display_channel_wait_for_init(DisplayChannel *display_channel)
     display_channel->expect_init = TRUE;
     uint64_t end_time = red_now() + DISPLAY_CLIENT_TIMEOUT;
     for (;;) {
-        red_receive((RedChannel *)display_channel);
+        red_channel_receive((RedChannel *)display_channel);
         if (!display_channel->common.base.peer) {
             break;
         }
@@ -9297,7 +9297,7 @@ static int display_channel_handle_message(RedChannel *channel, uint32_t size, ui
     }
 }
 
-static void red_receive(RedChannel *channel)
+static void red_channel_receive(RedChannel *channel)
 {
     for (;;) {
         ssize_t n;
@@ -9458,7 +9458,7 @@ static void handle_channel_events(EventListener *in_listener, uint32_t events)
     RedChannel *channel = &common->base;
 
     if ((events & EPOLLIN)) {
-        red_receive(channel);
+        red_channel_receive(channel);
     }
 
     if (channel->send_data.blocked) {
@@ -9736,7 +9736,7 @@ static void red_wait_outgoing_item(RedChannel *channel)
 
     do {
         usleep(DETACH_SLEEP_DURATION);
-        red_receive(channel);
+        red_channel_receive(channel);
         red_channel_send(channel);
     } while ((blocked = channel->send_data.blocked) && red_now() < end_time);
 
@@ -9765,7 +9765,7 @@ static void red_wait_pipe_item_sent(RedChannel *channel, PipeItem *item)
     end_time = red_now() + CHANNEL_PUSH_TIMEOUT;
 
     if (channel->send_data.blocked) {
-        red_receive(channel);
+        red_channel_receive(channel);
         red_channel_send(channel);
     }
     // todo: different push for each channel
@@ -9773,7 +9773,7 @@ static void red_wait_pipe_item_sent(RedChannel *channel, PipeItem *item)
 
     while((item_in_pipe = ring_item_is_linked(&item->link)) && (red_now() < end_time)) {
         usleep(CHANNEL_PUSH_SLEEP_DURATION);
-        red_receive(channel);
+        red_channel_receive(channel);
         red_channel_send(channel);
         red_push(common->worker);
     }
