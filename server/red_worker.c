@@ -352,7 +352,7 @@ typedef void (*channel_disconnect_proc)(RedChannel *channel);
 typedef void (*channel_send_pipe_item_proc)(RedChannel *channel, PipeItem *item);
 typedef void (*channel_hold_item_proc)(PipeItem *item);
 typedef void (*channel_release_pipe_item_proc)(RedChannel *channel, PipeItem *item, int item_pushed);
-typedef int (*handle_parsed_proc)(RedChannel *channel, uint32_t size, uint16_t type, void *message);
+typedef int (*channel_handle_parsed_proc)(RedChannel *channel, uint32_t size, uint16_t type, void *message);
 
 struct RedChannel {
     spice_parse_channel_func_t parser;
@@ -390,7 +390,7 @@ struct RedChannel {
     channel_hold_item_proc hold_item;
     channel_release_pipe_item_proc release_item;
     channel_send_pipe_item_proc send_item;
-    handle_parsed_proc handle_message;
+    channel_handle_parsed_proc handle_message;
 
     int during_send;
 
@@ -9334,7 +9334,7 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
                                  channel_send_pipe_item_proc send_item,
                                  channel_hold_item_proc hold_item,
                                  channel_release_pipe_item_proc release_item,
-                                 handle_parsed_proc handle_message)
+                                 channel_handle_parsed_proc handle_message)
 {
     struct epoll_event event;
     RedChannel *channel;
