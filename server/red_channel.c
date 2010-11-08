@@ -458,10 +458,10 @@ void red_channel_reset_send_data(RedChannel *channel)
 
 void red_channel_init_send_data(RedChannel *channel, uint16_t msg_type, PipeItem *item)
 {
+    ASSERT(channel->send_data.item == NULL);
     channel->send_data.header->type = msg_type;
+    channel->send_data.item = item;
     if (item) {
-        ASSERT(channel->send_data.item == NULL);
-        channel->send_data.item = item;
         channel->hold_item(item);
     }
 }
