@@ -603,10 +603,11 @@ int red_channel_is_connected(RedChannel *channel)
 void red_channel_pipe_clear(RedChannel *channel)
 {
     PipeItem *item;
+
+    ASSERT(channel);
     if (channel->send_data.item) {
         channel->release_item(channel, channel->send_data.item, TRUE);
     }
-
     while ((item = (PipeItem *)ring_get_head(&channel->pipe))) {
         ring_remove(&item->link);
         channel->release_item(channel, item, FALSE);
