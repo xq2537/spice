@@ -72,11 +72,12 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="pixman-1D.lib libeay32MTd.lib ssleay32MTd.lib ws2_32.lib msimg32.lib winmm.lib libcelt_0_5_1D.lib pthreadVC2d.lib version.lib CEGUIBase_Static_d.lib CEGUITGAImageCodec_Static_d.lib CEGUIExpatParser_Static_d.lib freetype2312MT_D.lib libexpatMT_D.lib pcre_D.lib CEGUIFalagardWRBase_Static_d.lib libjpeg-static-mt-debug.lib zlibwapi.lib"
+				AdditionalDependencies="pixman-1D.lib libeay32MTd.lib ssleay32MTd.lib ws2_32.lib msimg32.lib winmm.lib libcelt_0_5_1D.lib pthreadVC2d.lib version.lib CEGUIBase_Static_d.lib CEGUITGAImageCodec_Static_d.lib CEGUIExpatParser_Static_d.lib freetype2312MT_D.lib libexpatMT_D.lib pcre_D.lib CEGUIFalagardWRBase_Static_d.lib libjpeg-static-mt-debug.lib zlibwapiD.lib"
 				OutputFile="$(OutDir)\spicec.exe"
 				LinkIncremental="2"
 				AdditionalLibraryDirectories="&quot;$(SPICE_LIBS)\lib&quot;"
 				IgnoreAllDefaultLibraries="false"
+				IgnoreDefaultLibraryNames="MSVCRT.lib"
 				GenerateDebugInformation="true"
 				SubSystem="2"
 				RandomizedBaseAddress="1"
@@ -243,7 +244,7 @@
 				OutputFile="$(OutDir)\spicec.exe"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories="&quot;$(SPICE_LIBS)\lib&quot;"
-				IgnoreDefaultLibraryNames=""
+				IgnoreDefaultLibraryNames="MSVCRT.lib"
 				GenerateDebugInformation="true"
 				SubSystem="2"
 				OptimizeReferences="2"
