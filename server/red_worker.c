@@ -8922,7 +8922,7 @@ static void on_new_display_channel(RedWorker *worker)
     }
 }
 
-static int channel_handle_message(RedChannel *channel, uint32_t size, uint16_t type, void *message)
+static int red_channel_handle_message(RedChannel *channel, uint32_t size, uint16_t type, void *message)
 {
     switch (type) {
     case SPICE_MSGC_ACK_SYNC:
@@ -9244,7 +9244,7 @@ static int display_channel_handle_message(RedChannel *channel, uint32_t size, ui
     case SPICE_MSGC_MIGRATE_DATA:
         return display_channel_handle_migrate_data((DisplayChannel *)channel, size, message);
     default:
-        return channel_handle_message(channel, size, type, message);
+        return red_channel_handle_message(channel, size, type, message);
     }
 }
 
@@ -9615,7 +9615,7 @@ static void red_connect_cursor(RedWorker *worker, RedsStreamContext *peer, int m
                                                    cursor_channel_send_item,
                                                    cursor_channel_hold_item,
                                                    cursor_channel_release_item,
-                                                   channel_handle_message))) {
+                                                   red_channel_handle_message))) {
         return;
     }
 #ifdef RED_STATISTICS
