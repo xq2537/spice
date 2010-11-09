@@ -602,14 +602,12 @@ void Application::on_start_running()
     }
     //FIXME: _client.connect() or use the following instead?
 #ifdef USE_GUI
-    if (_gui_mode != GUI_MODE_FULL) {
-        connect();
+    if (_gui_mode == GUI_MODE_FULL) {
+        show_gui();
+        return;
     }
-
-    show_gui();
-#else
-    connect();
 #endif // HAVE_GUI
+    connect();
 }
 
 RedScreen* Application::find_screen(int id)
