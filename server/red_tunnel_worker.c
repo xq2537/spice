@@ -67,8 +67,7 @@
 typedef struct TunnelWorker TunnelWorker;
 
 enum {
-    PIPE_ITEM_TYPE_SET_ACK,
-    PIPE_ITEM_TYPE_MIGRATE,
+    PIPE_ITEM_TYPE_MIGRATE = PIPE_ITEM_TYPE_CHANNEL_BASE,
     PIPE_ITEM_TYPE_MIGRATE_DATA,
     PIPE_ITEM_TYPE_TUNNEL_INIT,
     PIPE_ITEM_TYPE_SERVICE_IP_MAP,
@@ -2334,19 +2333,6 @@ static int tunnel_channel_handle_message(RedChannel *channel, SpiceDataHeader *h
 /* outgoing msgs
 ********************************/
 
-static void tunnel_channel_send_set_ack(TunnelChannel *channel, PipeItem *item)
-{
-    ASSERT(channel);
-
-    channel->base.send_data.u.ack.generation = ++channel->base.ack_data.generation;
-    channel->base.send_data.u.ack.window = CLIENT_ACK_WINDOW;
-
-    red_channel_init_send_data(&channel->base, SPICE_MSG_SET_ACK, item);
-    red_channel_add_buf(&channel->base, &channel->base.send_data.u.ack, sizeof(SpiceMsgSetAck));
-
-    red_channel_begin_send_message(&channel->base);
-}
-
 static void tunnel_channel_send_migrate(TunnelChannel *channel, PipeItem *item)
 {
     ASSERT(channel);
@@ -2813,9 +2799,6 @@ static void tunnel_channel_send_item(RedChannel *channel, PipeItem *item)
     TunnelChannel *tunnel_channel = (TunnelChannel *)channel;
 
     switch (item->type) {
-    case PIPE_ITEM_TYPE_SET_ACK:
-        tunnel_channel_send_set_ack(tunnel_channel, item);
-        break;
     case PIPE_ITEM_TYPE_TUNNEL_INIT:
         tunnel_channel_send_init(tunnel_channel, item);
         break;
@@ -2860,7 +2843,6 @@ static void tunnel_channel_release_pipe_item(RedChannel *channel, PipeItem *item
         return;
     }
     switch (item->type) {
-    case PIPE_ITEM_TYPE_SET_ACK:
     case PIPE_ITEM_TYPE_TUNNEL_INIT:
         free(item);
         break;
@@ -3409,7 +3391,7 @@ static void tunnel_channel_disconnect(RedChannel *channel)
 
 static void on_new_tunnel_channel(TunnelChannel *channel)
 {
-    red_channel_pipe_add_type(&channel->base, PIPE_ITEM_TYPE_SET_ACK);
+    red_channel_push_set_ack(&channel->base);
 
     if (channel->base.migrate) {
         channel->expect_migrate_data = TRUE;

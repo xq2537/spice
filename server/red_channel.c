@@ -28,6 +28,7 @@
 #include <errno.h>
 #include "stat.h"
 #include "red_channel.h"
+#include "generated_marshallers.h"
 
 static PipeItem *red_channel_pipe_get(RedChannel *channel);
 static void red_channel_event(int fd, int event, void *data);
@@ -253,10 +254,33 @@ static void red_channel_reset_send_data(RedChannel *channel)
     channel->send_data.header->serial = ++channel->send_data.serial;
 }
 
+void red_channel_push_set_ack(RedChannel *channel)
+{
+    red_channel_pipe_add_type(channel, PIPE_ITEM_TYPE_SET_ACK);
+}
+
+static void red_channel_send_set_ack(RedChannel *channel)
+{
+    SpiceMsgSetAck ack;
+
+    ASSERT(channel);
+    red_channel_init_send_data(channel, SPICE_MSG_SET_ACK, NULL);
+    ack.generation = ++channel->ack_data.generation;
+    ack.window = channel->ack_data.client_window;
+    channel->ack_data.messages_window = 0;
+
+    spice_marshall_msg_set_ack(channel->send_data.marshaller, &ack);
+
+    red_channel_begin_send_message(channel);
+}
+
 static void red_channel_send_item(RedChannel *channel, PipeItem *item)
 {
     red_channel_reset_send_data(channel);
     switch (item->type) {
+        case PIPE_ITEM_TYPE_SET_ACK:
+            red_channel_send_set_ack(channel);
+            return;
     }
     /* only reached if not handled here */
     channel->send_item(channel, item);
@@ -265,6 +289,9 @@ static void red_channel_send_item(RedChannel *channel, PipeItem *item)
 static void red_channel_release_item(RedChannel *channel, PipeItem *item, int item_pushed)
 {
     switch (item->type) {
+        case PIPE_ITEM_TYPE_SET_ACK:
+            free(item);
+            return;
     }
     /* only reached if not handled here */
     channel->release_item(channel, item, item_pushed);

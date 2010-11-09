@@ -231,12 +231,11 @@ enum {
 };
 
 enum {
-    PIPE_ITEM_TYPE_DRAW,
+    PIPE_ITEM_TYPE_DRAW = PIPE_ITEM_TYPE_CHANNEL_BASE,
     PIPE_ITEM_TYPE_INVAL_ONE,
     PIPE_ITEM_TYPE_CURSOR,
     PIPE_ITEM_TYPE_MIGRATE,
     PIPE_ITEM_TYPE_LOCAL_CURSOR,
-    PIPE_ITEM_TYPE_SET_ACK,
     PIPE_ITEM_TYPE_CURSOR_INIT,
     PIPE_ITEM_TYPE_IMAGE,
     PIPE_ITEM_TYPE_STREAM_CREATE,
@@ -7548,21 +7547,6 @@ static inline void send_qxl_drawable(DisplayChannel *display_channel, Drawable *
         red_lossy_send_qxl_drawable(display_channel->common.worker, display_channel, item);
 }
 
-static void red_send_set_ack(RedChannel *channel)
-{
-    SpiceMsgSetAck ack;
-
-    ASSERT(channel);
-    red_channel_init_send_data(channel, SPICE_MSG_SET_ACK, NULL);
-    ack.generation = ++channel->ack_data.generation;
-    ack.window = channel->ack_data.client_window;
-    channel->ack_data.messages_window = 0;
-
-    spice_marshall_msg_set_ack(channel->send_data.marshaller, &ack);
-
-    red_channel_begin_send_message(channel);
-}
-
 static inline void red_send_verb(RedChannel *channel, uint16_t verb)
 {
     ASSERT(channel);
@@ -8130,10 +8114,6 @@ static void display_channel_send_item(RedChannel *base, PipeItem *pipe_item)
         display_channel_send_migrate_data(display_channel);
         free(pipe_item);
         break;
-    case PIPE_ITEM_TYPE_SET_ACK:
-        red_send_set_ack((RedChannel *)display_channel);
-        free(pipe_item);
-        break;
     case PIPE_ITEM_TYPE_IMAGE:
         red_send_image(display_channel, (ImageItem *)pipe_item);
         release_image_item((ImageItem *)pipe_item);
@@ -8194,10 +8174,6 @@ static void cursor_channel_send_item(RedChannel *channel, PipeItem *pipe_item)
     case PIPE_ITEM_TYPE_MIGRATE:
         red_printf("PIPE_ITEM_TYPE_MIGRATE");
         cursor_channel_send_migrate(cursor_channel);
-        free(pipe_item);
-        break;
-    case PIPE_ITEM_TYPE_SET_ACK:
-        red_send_set_ack(channel);
         free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_CURSOR_INIT:
@@ -8672,7 +8648,7 @@ static void on_new_display_channel(RedWorker *worker)
     DisplayChannel *display_channel = worker->display_channel;
     ASSERT(display_channel);
 
-    red_channel_pipe_add_type(&display_channel->common.base, PIPE_ITEM_TYPE_SET_ACK);
+    red_channel_push_set_ack(&display_channel->common.base);
 
     if (display_channel->common.base.migrate) {
         display_channel->expect_migrate_data = TRUE;
@@ -9158,8 +9134,6 @@ static void display_channel_release_item(RedChannel *channel, PipeItem *item, in
     case PIPE_ITEM_TYPE_IMAGE:
         release_image_item((ImageItem *)item);
         break;
-    case PIPE_ITEM_TYPE_SET_ACK:
-        break;
     default:
         PANIC("invalid item type");
     }
@@ -9272,7 +9246,7 @@ static void on_new_cursor_channel(RedWorker *worker)
 
     ASSERT(channel);
     red_channel_ack_zero_messages_window(&channel->common.base);
-    red_channel_pipe_add_type(&channel->common.base, PIPE_ITEM_TYPE_SET_ACK);
+    red_channel_push_set_ack(&channel->common.base);
     if (worker->surfaces[0].context.canvas && !channel->common.base.migrate) {
         red_channel_pipe_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_CURSOR_INIT);
     }
@@ -9292,9 +9266,6 @@ static void cursor_channel_release_item(RedChannel *channel, PipeItem *item, int
     switch (item->type) {
         case PIPE_ITEM_TYPE_CURSOR:
             red_release_cursor(common->worker, SPICE_CONTAINEROF(item, CursorItem, pipe_data));
-            break;
-        case PIPE_ITEM_TYPE_SET_ACK:
-            free(item);
             break;
         default:
             PANIC("invalid item type");

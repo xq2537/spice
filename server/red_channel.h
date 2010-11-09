@@ -89,6 +89,16 @@ typedef struct BufDescriptor {
     uint8_t *data;
 } BufDescriptor;
 
+/* Messages handled by red_channel
+ * SET_ACK - sent to client on channel connection
+ * Note that the numbers don't have to correspond to spice message types,
+ * but we keep the 100 first allocated for base channel approach.
+ * */
+enum {
+    PIPE_ITEM_TYPE_SET_ACK=1,
+    PIPE_ITEM_TYPE_CHANNEL_BASE=101,
+};
+
 typedef struct PipeItem {
     RingItem link;
     int type;
@@ -226,6 +236,7 @@ void red_channel_pipe_add_type(RedChannel *channel, int pipe_item_type);
 
 void red_channel_ack_zero_messages_window(RedChannel *channel);
 void red_channel_ack_set_client_window(RedChannel *channel, int client_window);
+void red_channel_push_set_ack(RedChannel *channel);
 
 // TODO: unstaticed for display/cursor channels. they do some specific pushes not through
 // adding elements or on events. but not sure if this is actually required (only result
