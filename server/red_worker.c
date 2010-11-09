@@ -4454,16 +4454,15 @@ static inline void fill_rects_clip(SpiceMarshaller *m, SpiceClipRects *data)
     }
 }
 
-static void fill_base(DisplayChannel *display_channel, Drawable *drawable)
+static void fill_base(SpiceMarshaller *base_marshaller, Drawable *drawable)
 {
-    RedChannel *channel = &display_channel->common.base;
     SpiceMsgDisplayBase base;
 
     base.surface_id = drawable->surface_id;
     base.box = drawable->red_drawable->bbox;
     base.clip = drawable->red_drawable->clip;
 
-    spice_marshall_DisplayBase(channel->send_data.marshaller, &base);
+    spice_marshall_DisplayBase(base_marshaller, &base);
 }
 
 static inline void fill_palette(DisplayChannel *display_channel,
@@ -6293,6 +6292,7 @@ static void red_add_lossless_drawable_dependencies(RedWorker *worker,
 
 static void red_send_qxl_draw_fill(RedWorker *worker,
                                    DisplayChannel *display_channel,
+                                   SpiceMarshaller *base_marshaller,
                                    Drawable *item)
 {
     RedChannel *channel = &display_channel->common.base;
@@ -6302,9 +6302,9 @@ static void red_send_qxl_draw_fill(RedWorker *worker,
     SpiceFill fill;
 
     red_channel_init_send_data(channel, SPICE_MSG_DISPLAY_DRAW_FILL, &item->pipe_item);
-    fill_base(display_channel, item);
+    fill_base(base_marshaller, item);
     fill = drawable->u.fill;
-    spice_marshall_Fill(channel->send_data.marshaller,
+    spice_marshall_Fill(base_marshaller,
                         &fill,
                         &brush_pat_out,
                         &mask_bitmap_out);
@@ -6319,6 +6319,7 @@ static void red_send_qxl_draw_fill(RedWorker *worker,
 
 static void red_lossy_send_qxl_draw_fill(RedWorker *worker,
                                          DisplayChannel *display_channel,
+                                         SpiceMarshaller *m,
                                          Drawable *item)
 {
     RedDrawable *drawable = item->red_drawable;
@@ -6347,7 +6348,7 @@ static void red_lossy_send_qxl_draw_fill(RedWorker *worker,
         !(brush_is_lossy && (brush_bitmap_data.type == BITMAP_DATA_TYPE_SURFACE))) {
         int has_mask = !!drawable->u.fill.mask.bitmap;
 
-        red_send_qxl_draw_fill(worker, display_channel, item);
+        red_send_qxl_draw_fill(worker, display_channel, m, item);
 
         // either the brush operation is opaque, or the dest is not lossy
         surface_lossy_region_update(worker, display_channel, item, has_mask, FALSE);
@@ -6375,6 +6376,7 @@ static void red_lossy_send_qxl_draw_fill(RedWorker *worker,
 
 static FillBitsType red_send_qxl_draw_opaque(RedWorker *worker,
                                              DisplayChannel *display_channel,
+                                             SpiceMarshaller *base_marshaller,
                                              Drawable *item, int src_allowed_lossy)
 {
     RedChannel *channel = &display_channel->common.base;
@@ -6386,9 +6388,9 @@ static FillBitsType red_send_qxl_draw_opaque(RedWorker *worker,
     FillBitsType src_send_type;
 
     red_channel_init_send_data(channel, SPICE_MSG_DISPLAY_DRAW_OPAQUE, &item->pipe_item);
-    fill_base(display_channel, item);
+    fill_base(base_marshaller, item);
     opaque = drawable->u.opaque;
-    spice_marshall_Opaque(channel->send_data.marshaller,
+    spice_marshall_Opaque(base_marshaller,
                           &opaque,
                           &src_bitmap_out,
                           &brush_pat_out,
@@ -6407,6 +6409,7 @@ static FillBitsType red_send_qxl_draw_opaque(RedWorker *worker,
 
 static void red_lossy_send_qxl_draw_opaque(RedWorker *worker,
                                            DisplayChannel *display_channel,
+                                           SpiceMarshaller *m,
                                            Drawable *item)
 {
     RedDrawable *drawable = item->red_drawable;
@@ -6438,7 +6441,7 @@ static void red_lossy_send_qxl_draw_opaque(RedWorker *worker,
         FillBitsType src_send_type;
         int has_mask = !!drawable->u.opaque.mask.bitmap;
 
-        src_send_type = red_send_qxl_draw_opaque(worker, display_channel, item, src_allowed_lossy);
+        src_send_type = red_send_qxl_draw_opaque(worker, display_channel, m, item, src_allowed_lossy);
 
         if (src_send_type == FILL_BITS_TYPE_COMPRESS_LOSSY) {
             src_is_lossy = TRUE;
@@ -6471,6 +6474,7 @@ static void red_lossy_send_qxl_draw_opaque(RedWorker *worker,
 
 static FillBitsType red_send_qxl_draw_copy(RedWorker *worker,
                                            DisplayChannel *display_channel,
+                                           SpiceMarshaller *base_marshaller,
                                            Drawable *item, int src_allowed_lossy)
 {
     RedChannel *channel = &display_channel->common.base;
@@ -6481,9 +6485,9 @@ static FillBitsType red_send_qxl_draw_copy(RedWorker *worker,
     FillBitsType src_send_type;
 
     red_channel_init_send_data(channel, SPICE_MSG_DISPLAY_DRAW_COPY, &item->pipe_item);
-    fill_base(display_channel, item);
+    fill_base(base_marshaller, item);
     copy = drawable->u.copy;
-    spice_marshall_Copy(channel->send_data.marshaller,
+    spice_marshall_Copy(base_marshaller,
                         &copy,
                         &src_bitmap_out,
                         &mask_bitmap_out);
@@ -6496,6 +6500,7 @@ static FillBitsType red_send_qxl_draw_copy(RedWorker *worker,
 
 static void red_lossy_send_qxl_draw_copy(RedWorker *worker,
                                          DisplayChannel *display_channel,
+                                         SpiceMarshaller *base_marshaller,
                                          Drawable *item)
 {
     RedDrawable *drawable = item->red_drawable;
@@ -6507,7 +6512,7 @@ static void red_lossy_send_qxl_draw_copy(RedWorker *worker,
     src_is_lossy = is_bitmap_lossy(display_channel, drawable->u.copy.src_bitmap,
                                    &drawable->u.copy.src_area, item, &src_bitmap_data);
 
-    src_send_type = red_send_qxl_draw_copy(worker, display_channel, item, TRUE);
+    src_send_type = red_send_qxl_draw_copy(worker, display_channel, base_marshaller, item, TRUE);
 
     if (src_send_type == FILL_BITS_TYPE_COMPRESS_LOSSY) {
         src_is_lossy = TRUE;
@@ -6521,6 +6526,7 @@ static void red_lossy_send_qxl_draw_copy(RedWorker *worker,
 
 static void red_send_qxl_draw_transparent(RedWorker *worker,
                                           DisplayChannel *display_channel,
+                                          SpiceMarshaller *base_marshaller,
                                           Drawable *item)
 {
     RedChannel *channel = &display_channel->common.base;
@@ -6529,9 +6535,9 @@ static void red_send_qxl_draw_transparent(RedWorker *worker,
     SpiceTransparent transparent;
 
     red_channel_init_send_data(channel, SPICE_MSG_DISPLAY_DRAW_TRANSPARENT, &item->pipe_item);
-    fill_base(display_channel, item);
+    fill_base(base_marshaller, item);
     transparent = drawable->u.transparent;
-    spice_marshall_Transparent(channel->send_data.marshaller,
+    spice_marshall_Transparent(base_marshaller,
                                &transparent,
                                &src_bitmap_out);
     fill_bits(display_channel, src_bitmap_out, transparent.src_bitmap, item, FALSE);
@@ -6539,6 +6545,7 @@ static void red_send_qxl_draw_transparent(RedWorker *worker,
 
 static void red_lossy_send_qxl_draw_transparent(RedWorker *worker,
                                                 DisplayChannel *display_channel,
+                                                SpiceMarshaller *base_marshaller,
                                                 Drawable *item)
 {
     RedDrawable *drawable = item->red_drawable;
@@ -6549,7 +6556,7 @@ static void red_lossy_send_qxl_draw_transparent(RedWorker *worker,
                                    &drawable->u.transparent.src_area, item, &src_bitmap_data);
 
     if (!src_is_lossy || (src_bitmap_data.type != BITMAP_DATA_TYPE_SURFACE)) {
-        red_send_qxl_draw_transparent(worker, display_channel, item);
+        red_send_qxl_draw_transparent(worker, display_channel, base_marshaller, item);
 
         // don't update surface lossy region since transperent areas might be lossy
     } else {
@@ -6566,6 +6573,7 @@ static void red_lossy_send_qxl_draw_transparent(RedWorker *worker,
 
 static FillBitsType red_send_qxl_draw_alpha_blend(RedWorker *worker,
                                                   DisplayChannel *display_channel,
+                                                  SpiceMarshaller *base_marshaller,
                                                   Drawable *item,
                                                   int src_allowed_lossy)
 {
@@ -6576,9 +6584,9 @@ static FillBitsType red_send_qxl_draw_alpha_blend(RedWorker *worker,
     FillBitsType src_send_type;
 
     red_channel_init_send_data(channel, SPICE_MSG_DISPLAY_DRAW_ALPHA_BLEND, &item->pipe_item);
-    fill_base(display_channel, item);
+    fill_base(base_marshaller, item);
     alpha_blend = drawable->u.alpha_blend;
-    spice_marshall_AlphaBlend(channel->send_data.marshaller,
+    spice_marshall_AlphaBlend(base_marshaller,
                               &alpha_blend,
                               &src_bitmap_out);
     src_send_type = fill_bits(display_channel, src_bitmap_out, alpha_blend.src_bitmap, item, src_allowed_lossy);
@@ -6588,6 +6596,7 @@ static FillBitsType red_send_qxl_draw_alpha_blend(RedWorker *worker,
 
 static void red_lossy_send_qxl_draw_alpha_blend(RedWorker *worker,
                                                 DisplayChannel *display_channel,
+                                                SpiceMarshaller *base_marshaller,
                                                 Drawable *item)
 {
     RedDrawable *drawable = item->red_drawable;
@@ -6598,7 +6607,7 @@ static void red_lossy_send_qxl_draw_alpha_blend(RedWorker *worker,
     src_is_lossy = is_bitmap_lossy(display_channel, drawable->u.alpha_blend.src_bitmap,
                                    &drawable->u.alpha_blend.src_area, item, &src_bitmap_data);
 
-    src_send_type = red_send_qxl_draw_alpha_blend(worker, display_channel, item, TRUE);
+    src_send_type = red_send_qxl_draw_alpha_blend(worker, display_channel, base_marshaller, item, TRUE);
 
     if (src_send_type == FILL_BITS_TYPE_COMPRESS_LOSSY) {
         src_is_lossy = TRUE;
@@ -6613,6 +6622,7 @@ static void red_lossy_send_qxl_draw_alpha_blend(RedWorker *worker,
 
 static void red_send_qxl_copy_bits(RedWorker *worker,
                                    DisplayChannel *display_channel,
+                                   SpiceMarshaller *base_marshaller,
                                    Drawable *item)
 {
     RedChannel *channel = &display_channel->common.base;
@@ -6620,14 +6630,15 @@ static void red_send_qxl_copy_bits(RedWorker *worker,
     SpicePoint copy_bits;
 
     red_channel_init_send_data(channel, SPICE_MSG_DISPLAY_COPY_BITS, &item->pipe_item);
-    fill_base(display_channel, item);
+    fill_base(base_marshaller, item);
     copy_bits = drawable->u.copy_bits.src_pos;
-    spice_marshall_Point(channel->send_data.marshaller,
+    spice_marshall_Point(base_marshaller,
                          &copy_bits);
 }
 
 static void red_lossy_send_qxl_copy_bits(RedWorker *worker,
                                          DisplayChannel *display_channel,
+                                         SpiceMarshaller *base_marshaller,
                                          Drawable *item)
 {
     RedDrawable *drawable = item->red_drawable;
@@ -6637,7 +6648,7 @@ static void red_lossy_send_qxl_copy_bits(RedWorker *worker,
     int src_is_lossy;
     SpiceRect src_lossy_area;
 
-    red_send_qxl_copy_bits(worker, display_channel, item);
+    red_send_qxl_copy_bits(worker, display_channel, base_marshaller, item);
 
     horz_offset = drawable->u.copy_bits.src_pos.x - drawable->bbox.left;
     vert_offset = drawable->u.copy_bits.src_pos.y - drawable->bbox.top;
@@ -6656,6 +6667,7 @@ static void red_lossy_send_qxl_copy_bits(RedWorker *worker,
 
 static void red_send_qxl_draw_blend(RedWorker *worker,
                                     DisplayChannel *display_channel,
+                                    SpiceMarshaller *base_marshaller,
                                     Drawable *item)
 {
     RedChannel *channel = &display_channel->common.base;
@@ -6665,9 +6677,9 @@ static void red_send_qxl_draw_blend(RedWorker *worker,
     SpiceBlend blend;
 
     red_channel_init_send_data(channel, SPICE_MSG_DISPLAY_DRAW_BLEND, &item->pipe_item);
-    fill_base(display_channel, item);
+    fill_base(base_marshaller, item);
     blend = drawable->u.blend;
-    spice_marshall_Blend(channel->send_data.marshaller,
+    spice_marshall_Blend(base_marshaller,
                          &blend,
                          &src_bitmap_out,
                          &mask_bitmap_out);
@@ -6679,6 +6691,7 @@ static void red_send_qxl_draw_blend(RedWorker *worker,
 
 static void red_lossy_send_qxl_draw_blend(RedWorker *worker,
                                           DisplayChannel *display_channel,
+                                          SpiceMarshaller *base_marshaller,
                                           Drawable *item)
 {
     RedDrawable *drawable = item->red_drawable;
@@ -6694,7 +6707,7 @@ static void red_lossy_send_qxl_draw_blend(RedWorker *worker,
 
     if (!dest_is_lossy &&
         (!src_is_lossy || (src_bitmap_data.type != BITMAP_DATA_TYPE_SURFACE))) {
-        red_send_qxl_draw_blend(worker, display_channel, item);
+        red_send_qxl_draw_blend(worker, display_channel, base_marshaller, item);
     } else {
         int resend_surface_ids[2];
         SpiceRect *resend_areas[2];
@@ -6719,6 +6732,7 @@ static void red_lossy_send_qxl_draw_blend(RedWorker *worker,
 
 static void red_send_qxl_draw_blackness(RedWorker *worker,
                                         DisplayChannel *display_channel,
+                                        SpiceMarshaller *base_marshaller,
                                         Drawable *item)
 {
     RedChannel *channel = &display_channel->common.base;
@@ -6727,10 +6741,10 @@ static void red_send_qxl_draw_blackness(RedWorker *worker,
     SpiceBlackness blackness;
 
     red_channel_init_send_data(channel, SPICE_MSG_DISPLAY_DRAW_BLACKNESS, &item->pipe_item);
-    fill_base(display_channel, item);
+    fill_base(base_marshaller, item);
     blackness = drawable->u.blackness;
 
-    spice_marshall_Blackness(channel->send_data.marshaller,
+    spice_marshall_Blackness(base_marshaller,
                              &blackness,
                              &mask_bitmap_out);
 
@@ -6739,18 +6753,20 @@ static void red_send_qxl_draw_blackness(RedWorker *worker,
 
 static void red_lossy_send_qxl_draw_blackness(RedWorker *worker,
                                               DisplayChannel *display_channel,
+                                              SpiceMarshaller *base_marshaller,
                                               Drawable *item)
 {
     RedDrawable *drawable = item->red_drawable;
     int has_mask = !!drawable->u.blackness.mask.bitmap;
 
-    red_send_qxl_draw_blackness(worker, display_channel, item);
+    red_send_qxl_draw_blackness(worker, display_channel, base_marshaller, item);
 
     surface_lossy_region_update(worker, display_channel, item, has_mask, FALSE);
 }
 
 static void red_send_qxl_draw_whiteness(RedWorker *worker,
                                         DisplayChannel *display_channel,
+                                        SpiceMarshaller *base_marshaller,
                                         Drawable *item)
 {
     RedChannel *channel = &display_channel->common.base;
@@ -6759,10 +6775,10 @@ static void red_send_qxl_draw_whiteness(RedWorker *worker,
     SpiceWhiteness whiteness;
 
     red_channel_init_send_data(channel, SPICE_MSG_DISPLAY_DRAW_WHITENESS, &item->pipe_item);
-    fill_base(display_channel, item);
+    fill_base(base_marshaller, item);
     whiteness = drawable->u.whiteness;
 
-    spice_marshall_Whiteness(channel->send_data.marshaller,
+    spice_marshall_Whiteness(base_marshaller,
                              &whiteness,
                              &mask_bitmap_out);
 
@@ -6771,18 +6787,20 @@ static void red_send_qxl_draw_whiteness(RedWorker *worker,
 
 static void red_lossy_send_qxl_draw_whiteness(RedWorker *worker,
                                               DisplayChannel *display_channel,
+                                              SpiceMarshaller *base_marshaller,
                                               Drawable *item)
 {
     RedDrawable *drawable = item->red_drawable;
     int has_mask = !!drawable->u.whiteness.mask.bitmap;
 
-    red_send_qxl_draw_whiteness(worker, display_channel, item);
+    red_send_qxl_draw_whiteness(worker, display_channel, base_marshaller, item);
 
     surface_lossy_region_update(worker, display_channel, item, has_mask, FALSE);
 }
 
 static void red_send_qxl_draw_inverse(RedWorker *worker,
                                         DisplayChannel *display_channel,
+                                        SpiceMarshaller *base_marshaller,
                                         Drawable *item)
 {
     RedDrawable *drawable = item->red_drawable;
@@ -6791,10 +6809,10 @@ static void red_send_qxl_draw_inverse(RedWorker *worker,
     SpiceInvers inverse;
 
     red_channel_init_send_data(channel, SPICE_MSG_DISPLAY_DRAW_INVERS, NULL);
-    fill_base(display_channel, item);
+    fill_base(base_marshaller, item);
     inverse = drawable->u.invers;
 
-    spice_marshall_Invers(channel->send_data.marshaller,
+    spice_marshall_Invers(base_marshaller,
                           &inverse,
                           &mask_bitmap_out);
 
@@ -6803,13 +6821,15 @@ static void red_send_qxl_draw_inverse(RedWorker *worker,
 
 static void red_lossy_send_qxl_draw_inverse(RedWorker *worker,
                                             DisplayChannel *display_channel,
+                                            SpiceMarshaller *base_marshaller,
                                             Drawable *item)
 {
-    red_send_qxl_draw_inverse(worker, display_channel, item);
+    red_send_qxl_draw_inverse(worker, display_channel, base_marshaller, item);
 }
 
 static void red_send_qxl_draw_rop3(RedWorker *worker,
                                    DisplayChannel *display_channel,
+                                   SpiceMarshaller *base_marshaller,
                                    Drawable *item)
 {
     RedDrawable *drawable = item->red_drawable;
@@ -6820,9 +6840,9 @@ static void red_send_qxl_draw_rop3(RedWorker *worker,
     SpiceMarshaller *mask_bitmap_out;
 
     red_channel_init_send_data(channel, SPICE_MSG_DISPLAY_DRAW_ROP3, &item->pipe_item);
-    fill_base(display_channel, item);
+    fill_base(base_marshaller, item);
     rop3 = drawable->u.rop3;
-    spice_marshall_Rop3(channel->send_data.marshaller,
+    spice_marshall_Rop3(base_marshaller,
                         &rop3,
                         &src_bitmap_out,
                         &brush_pat_out,
@@ -6838,6 +6858,7 @@ static void red_send_qxl_draw_rop3(RedWorker *worker,
 
 static void red_lossy_send_qxl_draw_rop3(RedWorker *worker,
                                          DisplayChannel *display_channel,
+                                         SpiceMarshaller *base_marshaller,
                                          Drawable *item)
 {
     RedDrawable *drawable = item->red_drawable;
@@ -6859,7 +6880,7 @@ static void red_lossy_send_qxl_draw_rop3(RedWorker *worker,
         (!brush_is_lossy || (brush_bitmap_data.type != BITMAP_DATA_TYPE_SURFACE)) &&
         !dest_is_lossy) {
         int has_mask = !!drawable->u.rop3.mask.bitmap;
-        red_send_qxl_draw_rop3(worker, display_channel, item);
+        red_send_qxl_draw_rop3(worker, display_channel, base_marshaller, item);
 
         surface_lossy_region_update(worker, display_channel, item, has_mask, FALSE);
     } else {
@@ -6892,6 +6913,7 @@ static void red_lossy_send_qxl_draw_rop3(RedWorker *worker,
 
 static void red_send_qxl_draw_stroke(RedWorker *worker,
                                      DisplayChannel *display_channel,
+                                     SpiceMarshaller *base_marshaller,
                                      Drawable *item)
 {
     RedDrawable *drawable = item->red_drawable;
@@ -6901,9 +6923,9 @@ static void red_send_qxl_draw_stroke(RedWorker *worker,
     SpiceMarshaller *style_out;
 
     red_channel_init_send_data(channel, SPICE_MSG_DISPLAY_DRAW_STROKE, &item->pipe_item);
-    fill_base(display_channel, item);
+    fill_base(base_marshaller, item);
     stroke = drawable->u.stroke;
-    spice_marshall_Stroke(channel->send_data.marshaller,
+    spice_marshall_Stroke(base_marshaller,
                           &stroke,
                           &style_out,
                           &brush_pat_out);
@@ -6916,6 +6938,7 @@ static void red_send_qxl_draw_stroke(RedWorker *worker,
 
 static void red_lossy_send_qxl_draw_stroke(RedWorker *worker,
                                            DisplayChannel *display_channel,
+                                           SpiceMarshaller *base_marshaller,
                                            Drawable *item)
 {
     RedDrawable *drawable = item->red_drawable;
@@ -6943,7 +6966,7 @@ static void red_lossy_send_qxl_draw_stroke(RedWorker *worker,
     if (!dest_is_lossy &&
         (!brush_is_lossy || (brush_bitmap_data.type != BITMAP_DATA_TYPE_SURFACE)))
     {
-        red_send_qxl_draw_stroke(worker, display_channel, item);
+        red_send_qxl_draw_stroke(worker, display_channel, base_marshaller, item);
     } else {
         int resend_surface_ids[2];
         SpiceRect *resend_areas[2];
@@ -6970,6 +6993,7 @@ static void red_lossy_send_qxl_draw_stroke(RedWorker *worker,
 
 static void red_send_qxl_draw_text(RedWorker *worker,
                                    DisplayChannel *display_channel,
+                                   SpiceMarshaller *base_marshaller,
                                    Drawable *item)
 {
     RedDrawable *drawable = item->red_drawable;
@@ -6979,9 +7003,9 @@ static void red_send_qxl_draw_text(RedWorker *worker,
     SpiceMarshaller *back_brush_pat_out;
 
     red_channel_init_send_data(channel, SPICE_MSG_DISPLAY_DRAW_TEXT, &item->pipe_item);
-    fill_base(display_channel, item);
+    fill_base(base_marshaller, item);
     text = drawable->u.text;
-    spice_marshall_Text(channel->send_data.marshaller,
+    spice_marshall_Text(base_marshaller,
                         &text,
                         &brush_pat_out,
                         &back_brush_pat_out);
@@ -6996,6 +7020,7 @@ static void red_send_qxl_draw_text(RedWorker *worker,
 
 static void red_lossy_send_qxl_draw_text(RedWorker *worker,
                                          DisplayChannel *display_channel,
+                                         SpiceMarshaller *base_marshaller,
                                          Drawable *item)
 {
     RedDrawable *drawable = item->red_drawable;
@@ -7031,7 +7056,7 @@ static void red_lossy_send_qxl_draw_text(RedWorker *worker,
     if (!dest_is_lossy &&
         (!fg_is_lossy || (fg_bitmap_data.type != BITMAP_DATA_TYPE_SURFACE)) &&
         (!bg_is_lossy || (bg_bitmap_data.type != BITMAP_DATA_TYPE_SURFACE))) {
-        red_send_qxl_draw_text(worker, display_channel, item);
+        red_send_qxl_draw_text(worker, display_channel, base_marshaller, item);
     } else {
         int resend_surface_ids[3];
         SpiceRect *resend_areas[3];
@@ -7060,47 +7085,47 @@ static void red_lossy_send_qxl_draw_text(RedWorker *worker,
 }
 
 static void red_lossy_send_qxl_drawable(RedWorker *worker, DisplayChannel *display_channel,
-                                   Drawable *item)
+                                        SpiceMarshaller *base_marshaller, Drawable *item)
 {
     switch (item->red_drawable->type) {
     case QXL_DRAW_FILL:
-        red_lossy_send_qxl_draw_fill(worker, display_channel, item);
+        red_lossy_send_qxl_draw_fill(worker, display_channel, base_marshaller, item);
         break;
     case QXL_DRAW_OPAQUE:
-        red_lossy_send_qxl_draw_opaque(worker, display_channel, item);
+        red_lossy_send_qxl_draw_opaque(worker, display_channel, base_marshaller, item);
         break;
     case QXL_DRAW_COPY:
-        red_lossy_send_qxl_draw_copy(worker, display_channel, item);
+        red_lossy_send_qxl_draw_copy(worker, display_channel, base_marshaller, item);
         break;
     case QXL_DRAW_TRANSPARENT:
-        red_lossy_send_qxl_draw_transparent(worker, display_channel, item);
+        red_lossy_send_qxl_draw_transparent(worker, display_channel, base_marshaller, item);
         break;
     case QXL_DRAW_ALPHA_BLEND:
-        red_lossy_send_qxl_draw_alpha_blend(worker, display_channel, item);
+        red_lossy_send_qxl_draw_alpha_blend(worker, display_channel, base_marshaller, item);
         break;
     case QXL_COPY_BITS:
-        red_lossy_send_qxl_copy_bits(worker, display_channel, item);
+        red_lossy_send_qxl_copy_bits(worker, display_channel, base_marshaller, item);
         break;
     case QXL_DRAW_BLEND:
-        red_lossy_send_qxl_draw_blend(worker, display_channel, item);
+        red_lossy_send_qxl_draw_blend(worker, display_channel, base_marshaller, item);
         break;
     case QXL_DRAW_BLACKNESS:
-        red_lossy_send_qxl_draw_blackness(worker, display_channel, item);
+        red_lossy_send_qxl_draw_blackness(worker, display_channel, base_marshaller, item);
         break;
      case QXL_DRAW_WHITENESS:
-        red_lossy_send_qxl_draw_whiteness(worker, display_channel, item);
+        red_lossy_send_qxl_draw_whiteness(worker, display_channel, base_marshaller, item);
         break;
     case QXL_DRAW_INVERS:
-        red_lossy_send_qxl_draw_inverse(worker, display_channel, item);
+        red_lossy_send_qxl_draw_inverse(worker, display_channel, base_marshaller, item);
         break;
     case QXL_DRAW_ROP3:
-        red_lossy_send_qxl_draw_rop3(worker, display_channel, item);
+        red_lossy_send_qxl_draw_rop3(worker, display_channel, base_marshaller, item);
         break;
     case QXL_DRAW_STROKE:
-        red_lossy_send_qxl_draw_stroke(worker, display_channel, item);
+        red_lossy_send_qxl_draw_stroke(worker, display_channel, base_marshaller, item);
         break;
     case QXL_DRAW_TEXT:
-        red_lossy_send_qxl_draw_text(worker, display_channel, item);
+        red_lossy_send_qxl_draw_text(worker, display_channel, base_marshaller, item);
         break;
     default:
         red_error("invalid type");
@@ -7113,49 +7138,49 @@ static void red_lossy_send_qxl_drawable(RedWorker *worker, DisplayChannel *displ
 }
 
 static inline void red_send_qxl_drawable(RedWorker *worker, DisplayChannel *display_channel,
-                                         Drawable *item)
+                                         SpiceMarshaller *m, Drawable *item)
 {
     RedDrawable *drawable = item->red_drawable;
 
     switch (drawable->type) {
     case QXL_DRAW_FILL:
-        red_send_qxl_draw_fill(worker, display_channel, item);
+        red_send_qxl_draw_fill(worker, display_channel, m, item);
         break;
     case QXL_DRAW_OPAQUE:
-        red_send_qxl_draw_opaque(worker, display_channel, item, FALSE);
+        red_send_qxl_draw_opaque(worker, display_channel, m, item, FALSE);
         break;
     case QXL_DRAW_COPY:
-        red_send_qxl_draw_copy(worker, display_channel, item, FALSE);
+        red_send_qxl_draw_copy(worker, display_channel, m, item, FALSE);
         break;
     case QXL_DRAW_TRANSPARENT:
-        red_send_qxl_draw_transparent(worker, display_channel, item);
+        red_send_qxl_draw_transparent(worker, display_channel, m, item);
         break;
     case QXL_DRAW_ALPHA_BLEND:
-        red_send_qxl_draw_alpha_blend(worker, display_channel, item, FALSE);
+        red_send_qxl_draw_alpha_blend(worker, display_channel, m, item, FALSE);
         break;
     case QXL_COPY_BITS:
-        red_send_qxl_copy_bits(worker, display_channel, item);
+        red_send_qxl_copy_bits(worker, display_channel, m, item);
         break;
     case QXL_DRAW_BLEND:
-        red_send_qxl_draw_blend(worker, display_channel, item);
+        red_send_qxl_draw_blend(worker, display_channel, m, item);
         break;
     case QXL_DRAW_BLACKNESS:
-        red_send_qxl_draw_blackness(worker, display_channel, item);
+        red_send_qxl_draw_blackness(worker, display_channel, m, item);
         break;
     case QXL_DRAW_WHITENESS:
-        red_send_qxl_draw_whiteness(worker, display_channel, item);
+        red_send_qxl_draw_whiteness(worker, display_channel, m, item);
         break;
     case QXL_DRAW_INVERS:
-        red_send_qxl_draw_inverse(worker, display_channel, item);
+        red_send_qxl_draw_inverse(worker, display_channel, m, item);
         break;
     case QXL_DRAW_ROP3:
-        red_send_qxl_draw_rop3(worker, display_channel, item);
+        red_send_qxl_draw_rop3(worker, display_channel, m, item);
         break;
     case QXL_DRAW_STROKE:
-        red_send_qxl_draw_stroke(worker, display_channel, item);
+        red_send_qxl_draw_stroke(worker, display_channel, m, item);
         break;
     case QXL_DRAW_TEXT:
-        red_send_qxl_draw_text(worker, display_channel, item);
+        red_send_qxl_draw_text(worker, display_channel, m, item);
         break;
     default:
         red_error("invalid type");
@@ -7444,7 +7469,8 @@ static int red_rgb16bpp_to_24 (RedWorker *worker, const SpiceRect *src,
     return TRUE;
 }
 
-static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable *drawable)
+static inline int red_send_stream_data(DisplayChannel *display_channel,
+                  SpiceMarshaller *base_marshaller, Drawable *drawable)
 {
     Stream *stream = drawable->stream;
     SpiceImage *image;
@@ -7525,8 +7551,8 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
     stream_data.id = stream - worker->streams_buf;
     stream_data.multi_media_time = drawable->red_drawable->mm_time;
     stream_data.data_size = n;
-    spice_marshall_msg_display_stream_data(channel->send_data.marshaller, &stream_data);
-    spice_marshaller_add_ref(channel->send_data.marshaller,
+    spice_marshall_msg_display_stream_data(base_marshaller, &stream_data);
+    spice_marshaller_add_ref(base_marshaller,
                              display_channel->send_data.stream_outbuf, n);
 
     display_begin_send_message(display_channel);
@@ -7534,16 +7560,18 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
     return TRUE;
 }
 
-static inline void send_qxl_drawable(DisplayChannel *display_channel, Drawable *item)
+static inline void send_qxl_drawable(DisplayChannel *display_channel,
+    SpiceMarshaller *m, Drawable *item)
 {
     ASSERT(display_channel);
-    if (item->stream && red_send_stream_data(display_channel, item)) {
+
+    if (item->stream && red_send_stream_data(display_channel, m, item)) {
         return;
     }
     if (!display_channel->enable_jpeg)
-        red_send_qxl_drawable(display_channel->common.worker, display_channel, item);
+        red_send_qxl_drawable(display_channel->common.worker, display_channel, m, item);
     else
-        red_lossy_send_qxl_drawable(display_channel->common.worker, display_channel, item);
+        red_lossy_send_qxl_drawable(display_channel->common.worker, display_channel, m, item);
 }
 
 static inline void red_send_verb(RedChannel *channel, uint16_t verb)
@@ -7560,35 +7588,38 @@ static inline void display_send_verb(DisplayChannel *channel, uint16_t verb)
     display_begin_send_message(channel);
 }
 
-static inline void __red_send_inval(RedChannel *channel, CacheItem *cach_item)
+static inline void __red_send_inval(RedChannel *channel,
+        SpiceMarshaller *base_marshaller, CacheItem *cach_item)
 {
     SpiceMsgDisplayInvalOne inval_one;
 
     red_channel_init_send_data(channel, cach_item->inval_type, NULL);
     inval_one.id = *(uint64_t *)&cach_item->id;
 
-    spice_marshall_msg_cursor_inval_one(channel->send_data.marshaller, &inval_one);
+    spice_marshall_msg_cursor_inval_one(base_marshaller, &inval_one);
 }
 
-static void red_send_inval(RedChannel *channel, CacheItem *cach_item)
+static void red_send_inval(RedChannel *channel,
+            SpiceMarshaller *base_marshaller, CacheItem *cach_item)
 {
-    __red_send_inval(channel, cach_item);
+    __red_send_inval(channel, base_marshaller, cach_item);
     red_channel_begin_send_message(channel);
 }
 
-static void red_display_send_inval(DisplayChannel *display_channel, CacheItem *cach_item)
+static void red_display_send_inval(DisplayChannel *display_channel,
+                SpiceMarshaller *base_marshaller, CacheItem *cach_item)
 {
-    __red_send_inval((RedChannel *)display_channel, cach_item);
+    __red_send_inval((RedChannel *)display_channel, base_marshaller, cach_item);
     display_begin_send_message(display_channel);
 }
 
-static void display_channel_send_migrate(DisplayChannel *display_channel)
+static void display_channel_send_migrate(DisplayChannel *display_channel, SpiceMarshaller *base_marshaller)
 {
     SpiceMsgMigrate migrate;
 
     red_channel_init_send_data(&display_channel->common.base, SPICE_MSG_MIGRATE, NULL);
     migrate.flags = SPICE_MIGRATE_NEED_FLUSH | SPICE_MIGRATE_NEED_DATA_TRANSFER;
-    spice_marshall_msg_migrate(display_channel->common.base.send_data.marshaller, &migrate);
+    spice_marshall_msg_migrate(base_marshaller, &migrate);
     display_channel->expect_migrate_mark = TRUE;
     display_begin_send_message(display_channel);
 }
@@ -7662,7 +7693,7 @@ static void display_channel_reset_cache(DisplayChannel *display_channel)
     display_begin_send_message(display_channel);
 }
 
-static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
+static void red_send_image(DisplayChannel *display_channel, SpiceMarshaller *m, ImageItem *item)
 {
     RedChannel *channel;
     SpiceImage red_image;
@@ -7722,8 +7753,6 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
     copy.data.mask.pos.x = 0;
     copy.data.mask.pos.y = 0;
     copy.data.mask.bitmap = 0;
-
-    SpiceMarshaller *m = channel->send_data.marshaller;
 
     spice_marshall_msg_display_draw_copy(m, &copy,
                                          &src_bitmap_out, &mask_bitmap_out);
@@ -7800,7 +7829,7 @@ static void red_send_image(DisplayChannel *display_channel, ImageItem *item)
     spice_chunks_destroy(chunks);
 }
 
-static void red_display_send_upgrade(DisplayChannel *display_channel, UpgradeItem *item)
+static void red_display_send_upgrade(DisplayChannel *display_channel, SpiceMarshaller *m, UpgradeItem *item)
 {
     RedChannel *channel;
     RedDrawable *red_drawable;
@@ -7823,8 +7852,6 @@ static void red_display_send_upgrade(DisplayChannel *display_channel, UpgradeIte
     copy.base.clip.rects = item->rects;
     copy.data = red_drawable->u.copy;
 
-    SpiceMarshaller *m = channel->send_data.marshaller;
-
     spice_marshall_msg_display_draw_copy(m, &copy,
                                          &src_bitmap_out, &mask_bitmap_out);
 
@@ -7833,7 +7860,8 @@ static void red_display_send_upgrade(DisplayChannel *display_channel, UpgradeIte
     display_begin_send_message(display_channel);
 }
 
-static void red_display_send_stream_start(DisplayChannel *display_channel, StreamAgent *agent)
+static void red_display_send_stream_start(DisplayChannel *display_channel,
+                     SpiceMarshaller *base_marshaller, StreamAgent *agent)
 {
     RedChannel *channel = &display_channel->common.base;
     Stream *stream = agent->stream;
@@ -7865,13 +7893,14 @@ static void red_display_send_stream_start(DisplayChannel *display_channel, Strea
         stream_create.clip.rects = &clip_rects;
     }
 
-    spice_marshall_msg_display_stream_create(channel->send_data.marshaller, &stream_create);
+    spice_marshall_msg_display_stream_create(base_marshaller, &stream_create);
 
 
     display_begin_send_message(display_channel);
 }
 
 static void red_display_send_stream_clip(DisplayChannel *display_channel,
+                                         SpiceMarshaller *base_marshaller,
                                          StreamClipItem *item)
 {
     RedChannel *channel = &display_channel->common.base;
@@ -7888,12 +7917,13 @@ static void red_display_send_stream_clip(DisplayChannel *display_channel,
     stream_clip.clip.type = item->clip_type;
     stream_clip.clip.rects = item->rects;
 
-    spice_marshall_msg_display_stream_clip(channel->send_data.marshaller, &stream_clip);
+    spice_marshall_msg_display_stream_clip(base_marshaller, &stream_clip);
 
     display_begin_send_message(display_channel);
 }
 
-static void red_display_send_stream_end(DisplayChannel *display_channel, StreamAgent* agent)
+static void red_display_send_stream_end(DisplayChannel *display_channel,
+                   SpiceMarshaller *base_marshaller, StreamAgent* agent)
 {
     RedChannel *channel = &display_channel->common.base;
     SpiceMsgDisplayStreamDestroy destroy;
@@ -7901,15 +7931,16 @@ static void red_display_send_stream_end(DisplayChannel *display_channel, StreamA
     red_channel_init_send_data(channel, SPICE_MSG_DISPLAY_STREAM_DESTROY, NULL);
     destroy.id = agent - display_channel->stream_agents;
 
-    spice_marshall_msg_display_stream_destroy(channel->send_data.marshaller, &destroy);
+    spice_marshall_msg_display_stream_destroy(base_marshaller, &destroy);
 
     display_begin_send_message(display_channel);
 }
 
-static void red_cursor_send_inval(CursorChannel *channel, CacheItem *cach_item)
+static void red_cursor_send_inval(CursorChannel *channel,
+                SpiceMarshaller *m, CacheItem *cach_item)
 {
     ASSERT(channel);
-    red_send_inval((RedChannel *)channel, cach_item);
+    red_send_inval((RedChannel *)channel, m, cach_item);
 }
 
 static void red_send_cursor_init(CursorChannel *channel)
@@ -7935,7 +7966,8 @@ static void red_send_cursor_init(CursorChannel *channel)
     red_channel_begin_send_message(&channel->common.base);
 }
 
-static void red_send_local_cursor(CursorChannel *cursor_channel, LocalCursor *cursor)
+static void red_send_local_cursor(CursorChannel *cursor_channel,
+          SpiceMarshaller *base_marshaller, LocalCursor *cursor)
 {
     RedChannel *channel;
     SpiceMsgCursorSet cursor_set;
@@ -7950,8 +7982,8 @@ static void red_send_local_cursor(CursorChannel *cursor_channel, LocalCursor *cu
     cursor_set.visible = worker->cursor_visible;
 
     fill_cursor(cursor_channel, &cursor_set.cursor, &cursor->base, &info);
-    spice_marshall_msg_cursor_set(channel->send_data.marshaller, &cursor_set);
-    add_buf_from_info(channel, channel->send_data.marshaller, &info);
+    spice_marshall_msg_cursor_set(base_marshaller, &cursor_set);
+    add_buf_from_info(channel, base_marshaller, &info);
 
     red_channel_begin_send_message(channel);
 
@@ -7969,18 +8001,17 @@ static void cursor_channel_send_migrate(CursorChannel *cursor_channel)
     red_channel_begin_send_message((RedChannel*)cursor_channel);
 }
 
-static void red_send_cursor(CursorChannel *cursor_channel, CursorItem *cursor)
+static void red_send_cursor(CursorChannel *cursor_channel,
+                   SpiceMarshaller *m, CursorItem *cursor)
 {
     RedChannel *channel;
     RedCursorCmd *cmd;
-    SpiceMarshaller *m;
     RedWorker *worker;
 
     ASSERT(cursor_channel);
 
     channel = &cursor_channel->common.base;
     worker = cursor_channel->common.worker;
-    m = channel->send_data.marshaller;
 
     cmd = cursor->red_cursor;
     switch (cmd->type) {
@@ -8028,7 +8059,8 @@ static void red_send_cursor(CursorChannel *cursor_channel, CursorItem *cursor)
     red_release_cursor(worker, cursor);
 }
 
-static void red_send_surface_create(DisplayChannel *display, SpiceMsgSurfaceCreate *surface_create)
+static void red_send_surface_create(DisplayChannel *display,
+    SpiceMarshaller *base_marshaller, SpiceMsgSurfaceCreate *surface_create)
 {
     RedChannel *channel;
 
@@ -8038,12 +8070,13 @@ static void red_send_surface_create(DisplayChannel *display, SpiceMsgSurfaceCrea
     region_init(&display->surface_client_lossy_region[surface_create->surface_id]);
     red_channel_init_send_data(channel, SPICE_MSG_DISPLAY_SURFACE_CREATE, NULL);
 
-    spice_marshall_msg_display_surface_create(channel->send_data.marshaller, surface_create);
+    spice_marshall_msg_display_surface_create(base_marshaller, surface_create);
 
     red_channel_begin_send_message(channel);
 }
 
-static void red_send_surface_destroy(DisplayChannel *display, uint32_t surface_id)
+static void red_send_surface_destroy(DisplayChannel *display,
+       SpiceMarshaller *base_marshaller, uint32_t surface_id)
 {
     RedChannel *channel;
     SpiceMsgSurfaceDestroy surface_destroy;
@@ -8056,13 +8089,14 @@ static void red_send_surface_destroy(DisplayChannel *display, uint32_t surface_i
 
     surface_destroy.surface_id = surface_id;
 
-    spice_marshall_msg_display_surface_destroy(channel->send_data.marshaller, &surface_destroy);
+    spice_marshall_msg_display_surface_destroy(base_marshaller, &surface_destroy);
 
     red_channel_begin_send_message(channel);
 }
 
 static void display_channel_send_item(RedChannel *base, PipeItem *pipe_item)
 {
+    SpiceMarshaller *m = red_channel_get_marshaller(base);
     DisplayChannel *display_channel = (DisplayChannel *)red_ref_channel(base);
     RedWorker *worker = display_channel->common.worker;
 
@@ -8070,34 +8104,34 @@ static void display_channel_send_item(RedChannel *base, PipeItem *pipe_item)
     switch (pipe_item->type) {
     case PIPE_ITEM_TYPE_DRAW: {
         Drawable *drawable = SPICE_CONTAINEROF(pipe_item, Drawable, pipe_item);
-        send_qxl_drawable(display_channel, drawable);
+        send_qxl_drawable(display_channel, m, drawable);
         release_drawable(worker, drawable);
         break;
     }
     case PIPE_ITEM_TYPE_INVAL_ONE:
-        red_display_send_inval(display_channel, (CacheItem *)pipe_item);
+        red_display_send_inval(display_channel, m, (CacheItem *)pipe_item);
         free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_STREAM_CREATE: {
         StreamAgent *agent = SPICE_CONTAINEROF(pipe_item, StreamAgent, create_item);
-        red_display_send_stream_start(display_channel, agent);
+        red_display_send_stream_start(display_channel, m, agent);
         red_display_release_stream(display_channel, agent);
         break;
     }
     case PIPE_ITEM_TYPE_STREAM_CLIP: {
         StreamClipItem* clip_item = (StreamClipItem *)pipe_item;
-        red_display_send_stream_clip(display_channel, clip_item);
+        red_display_send_stream_clip(display_channel, m, clip_item);
         red_display_release_stream_clip(display_channel, clip_item);
         break;
     }
     case PIPE_ITEM_TYPE_STREAM_DESTROY: {
         StreamAgent *agent = SPICE_CONTAINEROF(pipe_item, StreamAgent, destroy_item);
-        red_display_send_stream_end(display_channel, agent);
+        red_display_send_stream_end(display_channel, m, agent);
         red_display_release_stream(display_channel, agent);
         break;
     }
     case PIPE_ITEM_TYPE_UPGRADE:
-        red_display_send_upgrade(display_channel, (UpgradeItem *)pipe_item);
+        red_display_send_upgrade(display_channel, m, (UpgradeItem *)pipe_item);
         release_upgrade_item(worker, (UpgradeItem *)pipe_item);
         break;
     case PIPE_ITEM_TYPE_VERB:
@@ -8106,7 +8140,7 @@ static void display_channel_send_item(RedChannel *base, PipeItem *pipe_item)
         break;
     case PIPE_ITEM_TYPE_MIGRATE:
         red_printf("PIPE_ITEM_TYPE_MIGRATE");
-        display_channel_send_migrate(display_channel);
+        display_channel_send_migrate(display_channel, m);
         free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_MIGRATE_DATA:
@@ -8114,7 +8148,7 @@ static void display_channel_send_item(RedChannel *base, PipeItem *pipe_item)
         free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_IMAGE:
-        red_send_image(display_channel, (ImageItem *)pipe_item);
+        red_send_image(display_channel, m, (ImageItem *)pipe_item);
         release_image_item((ImageItem *)pipe_item);
         break;
     case PIPE_ITEM_TYPE_PIXMAP_SYNC:
@@ -8133,14 +8167,14 @@ static void display_channel_send_item(RedChannel *base, PipeItem *pipe_item)
     case PIPE_ITEM_TYPE_CREATE_SURFACE: {
         SurfaceCreateItem *surface_create = SPICE_CONTAINEROF(pipe_item, SurfaceCreateItem,
                                                               pipe_item);
-        red_send_surface_create(display_channel, &surface_create->surface_create);
+        red_send_surface_create(display_channel, m, &surface_create->surface_create);
         free(surface_create);
         break;
     }
     case PIPE_ITEM_TYPE_DESTROY_SURFACE: {
         SurfaceDestroyItem *surface_destroy = SPICE_CONTAINEROF(pipe_item, SurfaceDestroyItem,
                                                                 pipe_item);
-        red_send_surface_destroy(display_channel, surface_destroy->surface_destroy.surface_id);
+        red_send_surface_destroy(display_channel, m, surface_destroy->surface_destroy.surface_id);
         free(surface_destroy);
         break;
     }
@@ -8152,18 +8186,19 @@ static void display_channel_send_item(RedChannel *base, PipeItem *pipe_item)
 
 static void cursor_channel_send_item(RedChannel *channel, PipeItem *pipe_item)
 {
+    SpiceMarshaller *m = red_channel_get_marshaller(channel);
     CursorChannel *cursor_channel = SPICE_CONTAINEROF(channel, CursorChannel, common.base);
 
     red_ref_channel(channel);
     switch (pipe_item->type) {
     case PIPE_ITEM_TYPE_CURSOR:
-        red_send_cursor(cursor_channel, (CursorItem *)pipe_item);
+        red_send_cursor(cursor_channel, m, (CursorItem *)pipe_item);
         break;
     case PIPE_ITEM_TYPE_LOCAL_CURSOR:
-        red_send_local_cursor(cursor_channel, (LocalCursor *)pipe_item);
+        red_send_local_cursor(cursor_channel, m, (LocalCursor *)pipe_item);
         break;
     case PIPE_ITEM_TYPE_INVAL_ONE:
-        red_cursor_send_inval(cursor_channel, (CacheItem *)pipe_item);
+        red_cursor_send_inval(cursor_channel, m, (CacheItem *)pipe_item);
         free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_VERB:
@@ -8277,7 +8312,6 @@ static void red_disconnect_channel(RedChannel *channel)
     channel->stream = NULL;
     channel->send_data.blocked = FALSE;
     channel->send_data.size = 0;
-    spice_marshaller_reset(channel->send_data.marshaller);
     red_unref_channel(channel);
 }
 

@@ -672,3 +672,7 @@ void red_channel_ack_set_client_window(RedChannel *channel, int client_window)
     channel->ack_data.client_window = client_window;
 }
 
+SpiceMarshaller *red_channel_get_marshaller(RedChannel *channel)
+{
+    return channel->send_data.marshaller;
+}

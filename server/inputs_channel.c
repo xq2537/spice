@@ -254,8 +254,7 @@ static void inputs_channel_release_pipe_item(RedChannel *channel,
 
 static void inputs_channel_send_item(RedChannel *channel, PipeItem *base)
 {
-    InputsChannel *inputs_channel = (InputsChannel *)channel;
-    SpiceMarshaller *m = inputs_channel->base.send_data.marshaller;
+    SpiceMarshaller *m = red_channel_get_marshaller(channel);
 
     red_channel_init_send_data(channel, base->type, base);
     switch (base->type) {
