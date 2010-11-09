@@ -854,6 +854,7 @@ void Application::on_visibility_start(int screen_id)
     }
     set_state(VISIBILITY);
     hide_gui();
+    show_info_layer();
 }
 
 void Application::on_disconnecting()
