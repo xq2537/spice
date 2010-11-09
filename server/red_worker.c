@@ -1259,11 +1259,6 @@ static inline void red_pipe_add_image_item_after(RedWorker *worker, ImageItem *i
     red_channel_pipe_add_after(&worker->display_channel->common.base, &item->link, pos);
 }
 
-static inline uint64_t channel_message_serial(RedChannel *channel)
-{
-    return channel->send_data.header->serial;
-}
-
 static void release_image_item(ImageItem *item)
 {
     if (!--item->refs) {
@@ -7626,7 +7621,7 @@ static void display_channel_send_migrate_data(DisplayChannel *display_channel)
     ASSERT(MAX_CACHE_CLIENTS == 4); //MIGRATE_DATA_VERSION dependent
     display_data.version = DISPLAY_MIGRATE_DATA_VERSION;
 
-    display_data.message_serial = channel_message_serial((RedChannel *)display_channel);
+    display_data.message_serial = red_channel_get_message_serial((RedChannel *)display_channel);
 
     display_data.pixmap_cache_freezer = pixmap_cache_freeze(display_channel->pixmap_cache);
     display_data.pixmap_cache_id = display_channel->pixmap_cache->id;

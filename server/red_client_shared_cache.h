@@ -40,7 +40,7 @@ static int FUNC_NAME(hit)(CACHE *cache, uint64_t id, int *lossy, CHANNEL *channe
     NewCacheItem *item;
     uint64_t serial;
 
-    serial = channel_message_serial((RedChannel *)channel);
+    serial = red_channel_get_message_serial((RedChannel *)channel);
     pthread_mutex_lock(&cache->lock);
     item = cache->hash_table[CACHE_HASH_KEY(id)];
 
@@ -88,7 +88,7 @@ static int FUNC_NAME(add)(CACHE *cache, uint64_t id, uint32_t size, int lossy, C
     ASSERT(size > 0);
 
     item = spice_new(NewCacheItem, 1);
-    serial = channel_message_serial((RedChannel *)channel);
+    serial = red_channel_get_message_serial((RedChannel *)channel);
 
     pthread_mutex_lock(&cache->lock);
 
@@ -172,7 +172,7 @@ static void FUNC_NAME(reset)(CACHE *cache, CHANNEL *channel, SpiceMsgWaitForChan
     uint64_t serial;
     uint32_t i;
 
-    serial = channel_message_serial((RedChannel *)channel);
+    serial = red_channel_get_message_serial((RedChannel *)channel);
     pthread_mutex_lock(&cache->lock);
     PRIVATE_FUNC_NAME(clear)(cache);
 
