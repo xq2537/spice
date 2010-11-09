@@ -322,7 +322,10 @@ RedChannel *red_channel_create(int size, RedsStream *stream,
                                channel_release_msg_recv_buf_proc release_recv_buf,
                                channel_hold_pipe_item_proc hold_item,
                                channel_send_pipe_item_proc send_item,
-                               channel_release_pipe_item_proc release_item)
+                               channel_release_pipe_item_proc release_item,
+                               channel_handle_migrate_flush_mark handle_migrate_flush_mark,
+                               channel_handle_migrate_data handle_migrate_data,
+                               channel_handle_migrate_data_get_serial handle_migrate_data_get_serial)
 {
     RedChannel *channel;
 
@@ -336,6 +339,9 @@ RedChannel *red_channel_create(int size, RedsStream *stream,
     channel->send_item = send_item;
     channel->release_item = release_item;
     channel->hold_item = hold_item;
+    channel->handle_migrate_flush_mark = handle_migrate_flush_mark;
+    channel->handle_migrate_data = handle_migrate_data;
+    channel->handle_migrate_data_get_serial = handle_migrate_data_get_serial;
 
     channel->stream = stream;
     channel->core = core;
@@ -406,12 +412,16 @@ RedChannel *red_channel_create_parser(int size, RedsStream *stream,
                                channel_send_pipe_item_proc send_item,
                                channel_release_pipe_item_proc release_item,
                                channel_on_incoming_error_proc incoming_error,
-                               channel_on_outgoing_error_proc outgoing_error)
+                               channel_on_outgoing_error_proc outgoing_error,
+                               channel_handle_migrate_flush_mark handle_migrate_flush_mark,
+                               channel_handle_migrate_data handle_migrate_data,
+                               channel_handle_migrate_data_get_serial handle_migrate_data_get_serial)
 {
     RedChannel *channel = red_channel_create(size, stream,
         core, migrate, handle_acks, config_socket, do_nothing_disconnect,
         do_nothing_handle_message, alloc_recv_buf, release_recv_buf, hold_item,
-        send_item, release_item);
+        send_item, release_item, handle_migrate_flush_mark, handle_migrate_data,
+        handle_migrate_data_get_serial);
 
     if (channel == NULL) {
         return NULL;
@@ -454,6 +464,24 @@ void red_channel_init_outgoing_messages_window(RedChannel *channel)
     red_channel_push(channel);
 }
 
+void red_channel_handle_migrate_flush_mark(RedChannel *channel)
+{
+    if (channel->handle_migrate_flush_mark) {
+        channel->handle_migrate_flush_mark(channel);
+    }
+}
+
+void red_channel_handle_migrate_data(RedChannel *channel, uint32_t size, void *message)
+{
+    if (!channel->handle_migrate_data) {
+        return;
+    }
+    ASSERT(red_channel_get_message_serial(channel) == 0);
+    red_channel_set_message_serial(channel,
+        channel->handle_migrate_data_get_serial(channel, size, message));
+    channel->handle_migrate_data(channel, size, message);
+}
+
 int red_channel_handle_message(RedChannel *channel, uint32_t size,
                                uint16_t type, void *message)
 {
@@ -472,6 +500,12 @@ int red_channel_handle_message(RedChannel *channel, uint32_t size,
         }
         break;
     case SPICE_MSGC_DISCONNECTING:
+        break;
+    case SPICE_MSGC_MIGRATE_FLUSH_MARK:
+        red_channel_handle_migrate_flush_mark(channel);
+        break;
+    case SPICE_MSGC_MIGRATE_DATA:
+        red_channel_handle_migrate_data(channel, size, message);
         break;
     default:
         red_printf("invalid message type %u", type);

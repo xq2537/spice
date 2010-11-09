@@ -418,11 +418,31 @@ static void main_channel_marshall_migrate_data_item(SpiceMarshaller *m, int seri
     data->ping_id = ping_id;
 }
 
-static void main_channel_receive_migrate_data(MainChannel *main_chan,
-                                  MainMigrateData *data, uint8_t *end)
+static uint64_t main_channel_handle_migrate_data_get_serial(RedChannel *base,
+    uint32_t size, void *message)
 {
-    red_channel_set_message_serial(&main_chan->base, data->serial);
+    MainMigrateData *data = message;
+
+    if (size < sizeof(*data)) {
+        red_printf("bad message size");
+        return 0;
+    }
+    return data->serial;
+}
+
+static uint64_t main_channel_handle_migrate_data(RedChannel *base,
+    uint32_t size, void *message)
+{
+    MainChannel *main_chan = SPICE_CONTAINEROF(base, MainChannel, base);
+    MainMigrateData *data = message;
+
+    if (size < sizeof(*data)) {
+        red_printf("bad message size");
+        return FALSE;
+    }
     main_chan->ping_id = data->ping_id;
+    reds_on_main_receive_migrate_data(data, ((uint8_t*)message) + size);
+    return TRUE;
 }
 
 void main_channel_push_init(Channel *channel, int connection_id,
@@ -729,15 +749,9 @@ static int main_channel_handle_parsed(RedChannel *channel, uint32_t size, uint16
         break;
     }
     case SPICE_MSGC_MIGRATE_FLUSH_MARK:
-        main_channel_push_migrate_data_item(main_chan);
         break;
     case SPICE_MSGC_MIGRATE_DATA: {
-            MainMigrateData *data = (MainMigrateData *)message;
-            uint8_t *end = ((uint8_t *)message) + size;
-            main_channel_receive_migrate_data(main_chan, data, end);
-            reds_on_main_receive_migrate_data(data, end);
-            break;
-        }
+                }
     case SPICE_MSGC_DISCONNECTING:
         break;
     default:
@@ -772,6 +786,12 @@ static void main_channel_hold_pipe_item(RedChannel *channel, PipeItem *item)
 {
 }
 
+static int main_channel_handle_migrate_flush_mark(RedChannel *base)
+{
+    main_channel_push_migrate_data_item(SPICE_CONTAINEROF(base, MainChannel, base));
+    return TRUE;
+}
+
 static void main_channel_link(Channel *channel, RedsStream *stream, int migration,
                         int num_common_caps, uint32_t *common_caps, int num_caps,
                         uint32_t *caps)
@@ -791,7 +811,10 @@ static void main_channel_link(Channel *channel, RedsStream *stream, int migratio
         ,main_channel_send_item
         ,main_channel_release_pipe_item
         ,main_channel_on_error
-        ,main_channel_on_error);
+        ,main_channel_on_error
+        ,main_channel_handle_migrate_flush_mark
+        ,main_channel_handle_migrate_data
+        ,main_channel_handle_migrate_data_get_serial);
     ASSERT(main_chan);
     channel->data = main_chan;
 }

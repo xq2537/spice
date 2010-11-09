@@ -529,7 +529,10 @@ static void inputs_link(Channel *channel, RedsStream *stream, int migration,
         ,inputs_channel_send_item
         ,inputs_channel_release_pipe_item
         ,inputs_channel_on_incoming_error
-        ,inputs_channel_on_outgoing_error);
+        ,inputs_channel_on_outgoing_error
+        ,NULL
+        ,NULL
+        ,NULL);
     ASSERT(inputs_channel);
     channel->data = inputs_channel;
     inputs_pipe_add_init(inputs_channel);

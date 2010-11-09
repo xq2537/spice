@@ -487,7 +487,10 @@ static void smartcard_link(Channel *channel, RedsStream *stream,
                                         smartcard_channel_release_msg_rcv_buf,
                                         smartcard_channel_hold_pipe_item,
                                         smartcard_channel_send_item,
-                                        smartcard_channel_release_pipe_item);
+                                        smartcard_channel_release_pipe_item,
+                                        NULL,
+                                        NULL,
+                                        NULL);
     if (!g_smartcard_channel) {
         return;
     }

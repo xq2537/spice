@@ -8926,8 +8926,10 @@ static int display_channel_handle_migrate_glz_dictionary(DisplayChannel *channel
                                                              &migrate_info->glz_dict_restore_data));
 }
 
-static int display_channel_handle_migrate_mark(DisplayChannel *channel)
+static int display_channel_handle_migrate_mark(RedChannel *base)
 {
+    DisplayChannel *channel = SPICE_CONTAINEROF(base, DisplayChannel, common.base);
+
     if (!channel->expect_migrate_mark) {
         red_printf("unexpected");
         return FALSE;
@@ -8937,28 +8939,44 @@ static int display_channel_handle_migrate_mark(DisplayChannel *channel)
     return TRUE;
 }
 
-static int display_channel_handle_migrate_data(DisplayChannel *channel, size_t size, void *message)
+static uint64_t display_channel_handle_migrate_data_get_serial(
+                RedChannel *base, uint32_t size, void *message)
+{
+    DisplayChannelMigrateData *migrate_data = message;
+
+    if (size < sizeof(*migrate_data)) {
+        red_printf("bad message size");
+        return 0;
+    }
+    if (migrate_data->magic != DISPLAY_MIGRATE_DATA_MAGIC ||
+        migrate_data->version != DISPLAY_MIGRATE_DATA_VERSION) {
+        red_printf("invalid content");
+        return 0;
+    }
+    return migrate_data->message_serial;
+}
+
+static uint64_t display_channel_handle_migrate_data(RedChannel *base, uint32_t size, void *message)
 {
     DisplayChannelMigrateData *migrate_data;
     int i;
+    DisplayChannel *channel = SPICE_CONTAINEROF(base, DisplayChannel, common.base);
 
-    if (!channel->expect_migrate_data) {
-        red_printf("unexpected");
-        return FALSE;
-    }
-    channel->expect_migrate_data = FALSE;
     if (size < sizeof(*migrate_data)) {
         red_printf("bad message size");
         return FALSE;
     }
     migrate_data = (DisplayChannelMigrateData *)message;
     if (migrate_data->magic != DISPLAY_MIGRATE_DATA_MAGIC ||
-                                            migrate_data->version != DISPLAY_MIGRATE_DATA_VERSION) {
+        migrate_data->version != DISPLAY_MIGRATE_DATA_VERSION) {
         red_printf("invalid content");
         return FALSE;
     }
-    ASSERT(channel->common.base.send_data.serial == 0);
-    channel->common.base.send_data.serial = migrate_data->message_serial;
+    if (!channel->expect_migrate_data) {
+        red_printf("unexpected");
+        return FALSE;
+    }
+    channel->expect_migrate_data = FALSE;
     if (!(channel->pixmap_cache = red_get_pixmap_cache(migrate_data->pixmap_cache_id, -1))) {
         return FALSE;
     }
@@ -8999,10 +9017,6 @@ static int display_channel_handle_message(RedChannel *channel, uint32_t size, ui
         }
         ((DisplayChannel *)channel)->expect_init = FALSE;
         return display_channel_init((DisplayChannel *)channel, (SpiceMsgcDisplayInit *)message);
-    case SPICE_MSGC_MIGRATE_FLUSH_MARK:
-        return display_channel_handle_migrate_mark((DisplayChannel *)channel);
-    case SPICE_MSGC_MIGRATE_DATA:
-        return display_channel_handle_migrate_data((DisplayChannel *)channel, size, message);
     default:
         return red_channel_handle_message(channel, size, type, message);
     }
@@ -9064,7 +9078,10 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
                                  channel_send_pipe_item_proc send_item,
                                  channel_hold_pipe_item_proc hold_item,
                                  channel_release_pipe_item_proc release_item,
-                                 channel_handle_parsed_proc handle_parsed)
+                                 channel_handle_parsed_proc handle_parsed,
+                                 channel_handle_migrate_flush_mark handle_migrate_flush_mark,
+                                 channel_handle_migrate_data handle_migrate_data,
+                                 channel_handle_migrate_data_get_serial handle_migrate_data_get_serial)
 {
     struct epoll_event event;
     RedChannel *channel;
@@ -9081,7 +9098,10 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
                                         send_item,
                                         release_item,
                                         red_channel_default_peer_on_error,
-                                        red_channel_default_peer_on_error);
+                                        red_channel_default_peer_on_error,
+                                        handle_migrate_flush_mark,
+                                        handle_migrate_data,
+                                        handle_migrate_data_get_serial);
     common = (CommonChannel *)channel;
     if (!channel) {
         goto error;
@@ -9186,7 +9206,11 @@ static void handle_new_display_channel(RedWorker *worker, RedsStream *stream, in
                                                             display_channel_send_item,
                                                             display_channel_hold_pipe_item,
                                                             display_channel_release_item,
-                                                            display_channel_handle_message))) {
+                                                            display_channel_handle_message,
+                                                            display_channel_handle_migrate_mark,
+                                                            display_channel_handle_migrate_data,
+                                                            display_channel_handle_migrate_data_get_serial
+                                                            ))) {
         return;
     }
 #ifdef RED_STATISTICS
@@ -9318,7 +9342,10 @@ static void red_connect_cursor(RedWorker *worker, RedsStream *stream, int migrat
                                                    cursor_channel_send_item,
                                                    cursor_channel_hold_pipe_item,
                                                    cursor_channel_release_item,
-                                                   red_channel_handle_message))) {
+                                                   red_channel_handle_message,
+                                                   NULL,
+                                                   NULL,
+                                                   NULL))) {
         return;
     }
 #ifdef RED_STATISTICS

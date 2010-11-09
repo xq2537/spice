@@ -1739,8 +1739,9 @@ static void __tunnel_channel_fill_socket_migrate_item(TunnelChannel *channel, Re
 }
 
 static void release_migrate_item(TunnelMigrateItem *item);
-static int tunnel_channel_handle_migrate_mark(TunnelChannel *channel)
+static int tunnel_channel_handle_migrate_mark(RedChannel *base)
 {
+    TunnelChannel *channel = SPICE_CONTAINEROF(base, TunnelChannel, base);
     TunnelMigrateItem *migrate_item = NULL;
     TunnelService *service;
     TunnelMigrateServiceItem *mig_service;
@@ -2153,13 +2154,32 @@ static inline void tunnel_channel_activate_migrated_sockets(TunnelChannel *chann
     }
 }
 
-static int tunnel_channel_handle_migrate_data(TunnelChannel *channel,
-                                              TunnelMigrateData *migrate_data)
+static uint64_t tunnel_channel_handle_migrate_data_get_serial(RedChannel *base,
+                                              uint32_t size, void *msg)
 {
+    TunnelMigrateData *migrate_data = msg;
+
+    if (size < sizeof(TunnelMigrateData)
+        || migrate_data->magic != TUNNEL_MIGRATE_DATA_MAGIC
+        || migrate_data->version != TUNNEL_MIGRATE_DATA_VERSION) {
+        return 0;
+    }
+    return migrate_data->message_serial;
+}
+
+static uint64_t tunnel_channel_handle_migrate_data(RedChannel *base,
+                                              uint32_t size, void *msg)
+{
+    TunnelChannel *channel = SPICE_CONTAINEROF(base, TunnelChannel, base);
     TunnelMigrateSocketList *sockets_list;
     TunnelMigrateServicesList *services_list;
+    TunnelMigrateData *migrate_data = msg;
     int i;
 
+    if (size < sizeof(TunnelMigrateData)) {
+        red_printf("bad message size");
+        goto error;
+    }
     if (!channel->expect_migrate_data) {
         red_printf("unexpected");
         goto error;
@@ -2171,9 +2191,6 @@ static int tunnel_channel_handle_migrate_data(TunnelChannel *channel,
         red_printf("invalid content");
         goto error;
     }
-
-    ASSERT(red_channel_get_message_serial(&channel->base) == 0);
-    red_channel_set_message_serial(&channel->base, migrate_data->message_serial);
 
     net_slirp_state_restore(migrate_data->data + migrate_data->slirp_state);
 
@@ -2314,15 +2331,6 @@ static int tunnel_channel_handle_message(RedChannel *channel, SpiceDataHeader *h
 
         return tunnel_channel_handle_socket_token(tunnel_channel, sckt,
                                                   (SpiceMsgcTunnelSocketTokens *)msg);
-    case SPICE_MSGC_MIGRATE_FLUSH_MARK:
-        return tunnel_channel_handle_migrate_mark(tunnel_channel);
-    case SPICE_MSGC_MIGRATE_DATA:
-        if (header->size < sizeof(TunnelMigrateData)) {
-            red_printf("bad message size");
-            free(msg);
-            return FALSE;
-        }
-        return tunnel_channel_handle_migrate_data(tunnel_channel, (TunnelMigrateData *)msg);
     default:
         return red_channel_handle_message(channel, header->size, header->type, msg);
     }
@@ -3425,7 +3433,10 @@ static void handle_tunnel_channel_link(Channel *channel, RedsStream *stream, int
                                             tunnel_channel_release_msg_rcv_buf,
                                             tunnel_channel_hold_pipe_item,
                                             tunnel_channel_send_item,
-                                            tunnel_channel_release_pipe_item);
+                                            tunnel_channel_release_pipe_item,
+                                            tunnel_channel_handle_migrate_mark,
+                                            tunnel_channel_handle_migrate_data,
+                                            tunnel_channel_handle_migrate_data_get_serial);
 
     if (!tunnel_channel) {
         return;

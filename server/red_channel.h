@@ -123,6 +123,12 @@ typedef void (*channel_release_pipe_item_proc)(RedChannel *channel,
 typedef void (*channel_on_incoming_error_proc)(RedChannel *channel);
 typedef void (*channel_on_outgoing_error_proc)(RedChannel *channel);
 
+typedef int (*channel_handle_migrate_flush_mark)(RedChannel *channel);
+typedef uint64_t (*channel_handle_migrate_data)(RedChannel *channel,
+                                                uint32_t size, void *message);
+typedef uint64_t (*channel_handle_migrate_data_get_serial)(RedChannel *channel,
+                                            uint32_t size, void *message);
+
 struct RedChannel {
     RedsStream *stream;
     SpiceCoreInterface *core;
@@ -166,6 +172,10 @@ struct RedChannel {
     channel_on_incoming_error_proc on_incoming_error; /* alternative to disconnect */
     channel_on_outgoing_error_proc on_outgoing_error;
     int shut; /* signal channel is to be closed */
+
+    channel_handle_migrate_flush_mark handle_migrate_flush_mark;
+    channel_handle_migrate_data handle_migrate_data;
+    channel_handle_migrate_data_get_serial handle_migrate_data_get_serial;
 };
 
 /* if one of the callbacks should cause disconnect, use red_channel_shutdown and don't
@@ -180,7 +190,10 @@ RedChannel *red_channel_create(int size, RedsStream *stream,
                                channel_release_msg_recv_buf_proc release_recv_buf,
                                channel_hold_pipe_item_proc hold_item,
                                channel_send_pipe_item_proc send_item,
-                               channel_release_pipe_item_proc release_item);
+                               channel_release_pipe_item_proc release_item,
+                               channel_handle_migrate_flush_mark handle_migrate_flush_mark,
+                               channel_handle_migrate_data handle_migrate_data,
+                               channel_handle_migrate_data_get_serial handle_migrate_data_get_serial);
 
 /* alternative constructor, meant for marshaller based (inputs,main) channels,
  * will become default eventually */
@@ -196,7 +209,10 @@ RedChannel *red_channel_create_parser(int size, RedsStream *stream,
                                channel_send_pipe_item_proc send_item,
                                channel_release_pipe_item_proc release_item,
                                channel_on_incoming_error_proc incoming_error,
-                               channel_on_outgoing_error_proc outgoing_error);
+                               channel_on_outgoing_error_proc outgoing_error,
+                               channel_handle_migrate_flush_mark handle_migrate_flush_mark,
+                               channel_handle_migrate_data handle_migrate_data,
+                               channel_handle_migrate_data_get_serial handle_migrate_data_get_serial);
 
 int red_channel_is_connected(RedChannel *channel);
 
