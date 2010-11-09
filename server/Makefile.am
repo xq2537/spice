@@ -23,14 +23,14 @@ INCLUDES = \
 spice_built_sources = generated_marshallers.c generated_marshallers.h generated_demarshallers.c
 
 generated_demarshallers.c: $(top_srcdir)/spice.proto
-	$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-demarshallers --server --include red_common.h $(top_srcdir)/spice.proto generated_demarshallers.c
+	$(AM_V_GEN)$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-demarshallers --server --include red_common.h $(top_srcdir)/spice.proto generated_demarshallers.c
 
 STRUCTS=-M String -M Rect -M Point -M DisplayBase -M Fill -M Opaque -M Copy -M Blend -M Blackness -M Whiteness -M Invers -M Rop3 -M Stroke -M Text -M Transparent -M AlphaBlend
 generated_marshallers.c: $(top_srcdir)/spice.proto
-	$(PYTHON) $(top_srcdir)/spice_codegen.py --include red_common.h --generate-marshallers $(STRUCTS) --server $(top_srcdir)/spice.proto generated_marshallers.c
+	$(AM_V_GEN)$(PYTHON) $(top_srcdir)/spice_codegen.py --include red_common.h --generate-marshallers $(STRUCTS) --server $(top_srcdir)/spice.proto generated_marshallers.c
 
 generated_marshallers.h: $(top_srcdir)/spice.proto
-	$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-marshallers $(STRUCTS) --server -H $(top_srcdir)/spice.proto generated_marshallers.h
+	$(AM_V_GEN)$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-marshallers $(STRUCTS) --server -H $(top_srcdir)/spice.proto generated_marshallers.h
 
 if SUPPORT_GL
 GL_SRCS =				\
