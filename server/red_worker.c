@@ -8682,7 +8682,7 @@ static void on_new_display_channel(RedWorker *worker)
     if (!display_channel_wait_for_init(display_channel)) {
         return;
     }
-    display_channel->common.base.ack_data.messages_window = 0;
+    red_channel_ack_zero_messages_window(&display_channel->common.base);
     if (worker->surfaces[0].context.canvas) {
         red_current_flush(worker, 0);
         push_new_primary_surface(worker);
@@ -8976,8 +8976,7 @@ static int display_channel_handle_migrate_data(DisplayChannel *channel, size_t s
     }
 
     red_channel_pipe_add_type((RedChannel *)channel, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
-
-    channel->common.base.ack_data.messages_window = 0;
+    red_channel_ack_zero_messages_window(&channel->common.base);
     return TRUE;
 }
 
@@ -9085,8 +9084,8 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
     common->worker = worker;
     // TODO: Should this be distinctive for the Display/Cursor channels? doesn't
     // make sense, does it?
-    channel->ack_data.client_window = IS_LOW_BANDWIDTH() ? WIDE_CLIENT_ACK_WINDOW :
-                                                      NARROW_CLIENT_ACK_WINDOW;
+    red_channel_ack_set_client_window(channel,
+        IS_LOW_BANDWIDTH() ? WIDE_CLIENT_ACK_WINDOW : NARROW_CLIENT_ACK_WINDOW);
 
     event.events = EPOLLIN | EPOLLOUT | EPOLLET;
     event.data.ptr = &common->listener;
@@ -9272,8 +9271,7 @@ static void on_new_cursor_channel(RedWorker *worker)
     CursorChannel *channel = worker->cursor_channel;
 
     ASSERT(channel);
-
-    channel->common.base.ack_data.messages_window = 0;
+    red_channel_ack_zero_messages_window(&channel->common.base);
     red_channel_pipe_add_type(&channel->common.base, PIPE_ITEM_TYPE_SET_ACK);
     if (worker->surfaces[0].context.canvas && !channel->common.base.migrate) {
         red_channel_pipe_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_CURSOR_INIT);

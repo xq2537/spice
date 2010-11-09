@@ -635,3 +635,13 @@ void red_channel_pipe_clear(RedChannel *channel)
     channel->pipe_size = 0;
 }
 
+void red_channel_ack_zero_messages_window(RedChannel *channel)
+{
+    channel->ack_data.messages_window = 0;
+}
+
+void red_channel_ack_set_client_window(RedChannel *channel, int client_window)
+{
+    channel->ack_data.client_window = client_window;
+}
+
