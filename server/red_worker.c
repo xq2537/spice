@@ -7265,8 +7265,7 @@ static inline void red_unref_channel(RedChannel *channel)
     ASSERT(channel);
     common = SPICE_CONTAINEROF(channel, CommonChannel, base);
     if (!--common->listener.refs) {
-        spice_marshaller_destroy(channel->send_data.marshaller);
-        free(channel);
+        red_channel_destroy(channel);
     }
 }
 
