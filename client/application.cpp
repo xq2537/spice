@@ -841,7 +841,9 @@ void Application::on_disconnected(int error_code)
 
     // todo: display special notification for host switch (during migration)
     set_state(DISCONNECTED);
+#ifdef USE_GUI
     show_gui();
+#endif
     if (host_switch) {
         _client.connect(true);
     }
@@ -853,7 +855,9 @@ void Application::on_visibility_start(int screen_id)
         return;
     }
     set_state(VISIBILITY);
+#ifdef USE_GUI
     hide_gui();
+#endif
     show_info_layer();
 }
 

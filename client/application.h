@@ -322,10 +322,6 @@ private:
     void create_gui_barrier(RedScreen& screen, int id);
     void destroyed_gui_barrier(int id);
     void destroyed_gui_barriers();
-#else // USE_GUI
-    void show_gui() {}
-    void hide_gui() {}
-
 #endif // USE_GUI
 
     // returns the press value before operation (i.e., if it was already pressed)
