@@ -241,12 +241,41 @@ static void red_channel_peer_on_out_block(void *opaque)
                                      SPICE_WATCH_EVENT_WRITE);
 }
 
+static void red_channel_reset_send_data(RedChannel *channel)
+{
+    spice_marshaller_reset(channel->send_data.marshaller);
+    channel->send_data.header = (SpiceDataHeader *)
+        spice_marshaller_reserve_space(channel->send_data.marshaller, sizeof(SpiceDataHeader));
+    spice_marshaller_set_base(channel->send_data.marshaller, sizeof(SpiceDataHeader));
+    channel->send_data.header->type = 0;
+    channel->send_data.header->size = 0;
+    channel->send_data.header->sub_list = 0;
+    channel->send_data.header->serial = ++channel->send_data.serial;
+}
+
+static void red_channel_send_item(RedChannel *channel, PipeItem *item)
+{
+    red_channel_reset_send_data(channel);
+    switch (item->type) {
+    }
+    /* only reached if not handled here */
+    channel->send_item(channel, item);
+}
+
+static void red_channel_release_item(RedChannel *channel, PipeItem *item, int item_pushed)
+{
+    switch (item->type) {
+    }
+    /* only reached if not handled here */
+    channel->release_item(channel, item, item_pushed);
+}
+
 static void red_channel_peer_on_out_msg_done(void *opaque)
 {
     RedChannel *channel = (RedChannel *)opaque;
     channel->send_data.size = 0;
     if (channel->send_data.item) {
-        channel->release_item(channel, channel->send_data.item, TRUE);
+        red_channel_release_item(channel, channel->send_data.item, TRUE);
         channel->send_data.item = NULL;
     }
     if (channel->send_data.blocked) {
@@ -447,18 +476,6 @@ void red_channel_add_buf(RedChannel *channel, void *data, uint32_t size)
     channel->send_data.header->size += size;
 }
 
-void red_channel_reset_send_data(RedChannel *channel)
-{
-    spice_marshaller_reset(channel->send_data.marshaller);
-    channel->send_data.header = (SpiceDataHeader *)
-        spice_marshaller_reserve_space(channel->send_data.marshaller, sizeof(SpiceDataHeader));
-    spice_marshaller_set_base(channel->send_data.marshaller, sizeof(SpiceDataHeader));
-    channel->send_data.header->type = 0;
-    channel->send_data.header->size = 0;
-    channel->send_data.header->sub_list = 0;
-    channel->send_data.header->serial = ++channel->send_data.serial;
-}
-
 void red_channel_init_send_data(RedChannel *channel, uint16_t msg_type, PipeItem *item)
 {
     ASSERT(channel->send_data.item == NULL);
@@ -503,7 +520,7 @@ void red_channel_push(RedChannel *channel)
     }
 
     while ((pipe_item = red_channel_pipe_get(channel))) {
-        channel->send_item(channel, pipe_item);
+        red_channel_send_item(channel, pipe_item);
     }
     channel->during_send = FALSE;
 }
@@ -609,11 +626,11 @@ void red_channel_pipe_clear(RedChannel *channel)
 
     ASSERT(channel);
     if (channel->send_data.item) {
-        channel->release_item(channel, channel->send_data.item, TRUE);
+        red_channel_release_item(channel, channel->send_data.item, TRUE);
     }
     while ((item = (PipeItem *)ring_get_head(&channel->pipe))) {
         ring_remove(&item->link);
-        channel->release_item(channel, item, FALSE);
+        red_channel_release_item(channel, item, FALSE);
     }
     channel->pipe_size = 0;
 }

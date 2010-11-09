@@ -2812,7 +2812,6 @@ static void tunnel_channel_send_item(RedChannel *channel, PipeItem *item)
 {
     TunnelChannel *tunnel_channel = (TunnelChannel *)channel;
 
-    red_channel_reset_send_data(channel);
     switch (item->type) {
     case PIPE_ITEM_TYPE_SET_ACK:
         tunnel_channel_send_set_ack(tunnel_channel, item);

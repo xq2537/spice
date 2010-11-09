@@ -309,7 +309,6 @@ static void smartcard_channel_send_item(RedChannel *channel, PipeItem *item)
 {
     SmartCardChannel *smartcard_channel = (SmartCardChannel *)channel;
 
-    red_channel_reset_send_data(channel);
     switch (item->type) {
     case PIPE_ITEM_TYPE_ERROR:
         smartcard_channel_send_error(smartcard_channel, item);

@@ -5928,7 +5928,6 @@ static void fill_cursor(CursorChannel *cursor_channel, SpiceCursor *red_cursor, 
 
 static inline void red_display_reset_send_data(DisplayChannel *channel)
 {
-    red_channel_reset_send_data((RedChannel *)channel);
     red_display_reset_compress_buf(channel);
     channel->send_data.free_list.res->count = 0;
     memset(channel->send_data.free_list.sync, 0, sizeof(channel->send_data.free_list.sync));
@@ -8182,7 +8181,6 @@ static void cursor_channel_send_item(RedChannel *channel, PipeItem *pipe_item)
     CursorChannel *cursor_channel = SPICE_CONTAINEROF(channel, CursorChannel, common.base);
 
     red_ref_channel(channel);
-    red_channel_reset_send_data(channel);
     switch (pipe_item->type) {
     case PIPE_ITEM_TYPE_CURSOR:
         red_send_cursor(cursor_channel, (CursorItem *)pipe_item);

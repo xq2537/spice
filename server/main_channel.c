@@ -591,7 +591,6 @@ static void main_channel_send_item(RedChannel *channel, PipeItem *base)
 {
     MainChannel *main_chan = SPICE_CONTAINEROF(channel, MainChannel, base);
 
-    red_channel_reset_send_data(channel);
     red_channel_init_send_data(channel, base->type, base);
     switch (base->type) {
         case SPICE_MSG_MAIN_CHANNELS_LIST:

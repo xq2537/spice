@@ -203,9 +203,8 @@ int red_channel_handle_message(RedChannel *channel, uint32_t size,
 /* default error handler that disconnects channel */
 void red_channel_default_peer_on_error(RedChannel *channel);
 
-/* when preparing send_data: should call reset, then init and then add_buf per buffer that is
+/* when preparing send_data: should call init and then add_buf per buffer that is
    being sent */
-void red_channel_reset_send_data(RedChannel *channel);
 void red_channel_init_send_data(RedChannel *channel, uint16_t msg_type, PipeItem *item);
 void red_channel_add_buf(RedChannel *channel, void *data, uint32_t size);
 
