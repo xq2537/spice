@@ -19,6 +19,8 @@
 #ifndef _H_RING2
 #define _H_RING2
 
+#include "spice_common.h"
+
 typedef struct Ring RingItem;
 typedef struct Ring {
     RingItem *prev;
@@ -128,6 +130,25 @@ static inline RingItem *ring_prev(Ring *ring, RingItem *pos)
     ret = pos->prev;
     return (ret == ring) ? NULL : ret;
 }
+
+#define RING_FOREACH_SAFE(var, next, ring)                    \
+    for ((var) = ring_get_head(ring),                         \
+         (next) = (var) ? ring_next(ring, (var)) : NULL;      \
+            (var);                                            \
+            (var) = (next),                                   \
+            (next) = (var) ? ring_next(ring, (var)) : NULL)
+
+
+#define RING_FOREACH(var, ring)                 \
+    for ((var) = ring_get_head(ring);           \
+            (var);                              \
+            (var) = ring_next(ring, var))
+
+#define RING_FOREACH_REVERSED(var, ring)        \
+    for ((var) = ring_get_tail(ring);           \
+            (var);                              \
+            (var) = ring_prev(ring, var))
+
 
 #endif
 
