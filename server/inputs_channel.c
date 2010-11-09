@@ -64,7 +64,7 @@ typedef struct InputsChannel {
 } InputsChannel;
 
 enum {
-    PIPE_ITEM_INIT = SPICE_MSG_INPUTS_INIT,
+    PIPE_ITEM_INPUTS_INIT = SPICE_MSG_INPUTS_INIT,
     PIPE_ITEM_MOUSE_MOTION_ACK = SPICE_MSG_INPUTS_MOUSE_MOTION_ACK,
     PIPE_ITEM_KEY_MODIFIERS = SPICE_MSG_INPUTS_KEY_MODIFIERS,
     PIPE_ITEM_MIGRATE = SPICE_MSG_MIGRATE,
@@ -267,7 +267,7 @@ static void inputs_channel_send_item(RedChannel *channel, PipeItem *base)
                 SPICE_CONTAINEROF(base, KeyModifiersPipeItem, base)->modifiers;
             spice_marshall_msg_inputs_key_modifiers(m, &key_modifiers);
         }
-        case PIPE_ITEM_INIT:
+        case PIPE_ITEM_INPUTS_INIT:
         {
             SpiceMsgInputsInit inputs_init;
 
@@ -483,7 +483,7 @@ static void inputs_pipe_add_init(InputsChannel *inputs_channel)
     InputsInitPipeItem *item = spice_malloc(sizeof(InputsInitPipeItem));
 
     red_channel_pipe_item_init(&inputs_channel->base, &item->base,
-                               PIPE_ITEM_INIT);
+                               PIPE_ITEM_INPUTS_INIT);
     item->modifiers = kbd_get_leds(keyboard);
     red_channel_pipe_add_push(&inputs_channel->base, &item->base);
 }
