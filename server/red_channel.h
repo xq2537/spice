@@ -272,6 +272,10 @@ void red_channel_pipe_clear(RedChannel *channel);
 //  handle_channel_events - this is the only one that was used before, and was in red_channel.c
 void red_channel_receive(RedChannel *channel);
 void red_channel_send(RedChannel *channel);
+
+/* accessors for RedChannel */
+/* Note: the valid times to call red_channel_get_marshaller are just during send_item callback. */
 SpiceMarshaller *red_channel_get_marshaller(RedChannel *channel);
+RedsStream *red_channel_get_stream(RedChannel *channel);
 
 #endif

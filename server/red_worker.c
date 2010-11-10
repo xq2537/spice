@@ -9026,7 +9026,7 @@ int common_channel_config_socket(RedChannel *channel)
 {
     int flags;
     int delay_val;
-    RedsStream *stream = channel->stream;
+    RedsStream *stream = red_channel_get_stream(channel);
 
     if ((flags = fcntl(stream->socket, F_GETFL)) == -1) {
         red_printf("accept failed, %s", strerror(errno));

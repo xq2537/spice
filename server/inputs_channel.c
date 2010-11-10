@@ -491,15 +491,16 @@ static int inputs_channel_config_socket(RedChannel *channel)
 {
     int flags;
     int delay_val = 1;
+    RedsStream *stream = red_channel_get_stream(channel);
 
-    if (setsockopt(channel->stream->socket, IPPROTO_TCP, TCP_NODELAY,
+    if (setsockopt(stream->socket, IPPROTO_TCP, TCP_NODELAY,
             &delay_val, sizeof(delay_val)) == -1) {
         red_printf("setsockopt failed, %s", strerror(errno));
         return FALSE;
     }
 
-    if ((flags = fcntl(channel->stream->socket, F_GETFL)) == -1 ||
-                 fcntl(channel->stream->socket, F_SETFL, flags | O_ASYNC) == -1) {
+    if ((flags = fcntl(stream->socket, F_GETFL)) == -1 ||
+                 fcntl(stream->socket, F_SETFL, flags | O_ASYNC) == -1) {
         red_printf("fcntl failed, %s", strerror(errno));
         return FALSE;
     }
