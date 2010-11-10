@@ -491,6 +491,7 @@ struct TunnelChannel {
 
     int tunnel_error;
 
+    /* TODO: this needs to be RCC specific (or bad things will happen) */
     struct {
         union {
             SpiceMsgTunnelInit init;
@@ -502,6 +503,7 @@ struct TunnelChannel {
             SpiceMsgTunnelSocketData socket_data;
             SpiceMsgTunnelSocketTokens socket_token;
             TunnelMigrateData migrate_data;
+            SpiceMsgMigrate migrate;
         } u;
     } send_data;
 
@@ -2341,14 +2343,16 @@ static int tunnel_channel_handle_message(RedChannel *channel, SpiceDataHeader *h
 /* outgoing msgs
 ********************************/
 
-static void tunnel_channel_marshall_migrate(TunnelChannel *channel, SpiceMarshaller *m, PipeItem *item)
+static void tunnel_channel_marshall_migrate(TunnelChannel *tunnel_channel, SpiceMarshaller *m, PipeItem *item)
 {
-    ASSERT(channel);
-    channel->base.send_data.u.migrate.flags = SPICE_MIGRATE_NEED_FLUSH |
-        SPICE_MIGRATE_NEED_DATA_TRANSFER;
-    channel->expect_migrate_mark = TRUE;
-    red_channel_init_send_data(&channel->base, SPICE_MSG_MIGRATE, item);
-    red_channel_add_buf(&channel->base, &channel->base.send_data.u.migrate, sizeof(SpiceMsgMigrate));
+    ASSERT(tunnel_channel);
+    tunnel_channel->send_data.u.migrate.flags =
+        SPICE_MIGRATE_NEED_FLUSH | SPICE_MIGRATE_NEED_DATA_TRANSFER;
+    tunnel_channel->expect_migrate_mark = TRUE;
+    red_channel_init_send_data(&tunnel_channel->base, SPICE_MSG_MIGRATE, item);
+    spice_marshaller_add_ref(m,
+        (uint8_t*)&tunnel_channel->send_data.u.migrate,
+        sizeof(SpiceMsgMigrate));
 }
 
 static int __tunnel_channel_marshall_process_bufs_migrate_data(TunnelChannel *channel,
@@ -2359,7 +2363,7 @@ static int __tunnel_channel_marshall_process_bufs_migrate_data(TunnelChannel *ch
     int size = 0;
 
     while (buf) {
-        red_channel_add_buf(&channel->base, buf->data + buf_offset, buf->size - buf_offset);
+        spice_marshaller_add_ref(m, (uint8_t*)buf->data + buf_offset, buf->size - buf_offset);
         size += buf->size - buf_offset;
         buf_offset = 0;
         buf = buf->next;
@@ -2376,7 +2380,7 @@ static int __tunnel_channel_marshall_ready_bufs_migrate_data(TunnelChannel *chan
     int size = 0;
 
     while (chunk) {
-        red_channel_add_buf(&channel->base, chunk->data + offset, chunk->size - offset);
+        spice_marshaller_add_ref(m, (uint8_t*)chunk->data + offset, chunk->size - offset);
         size += chunk->size - offset;
         offset = 0;
         chunk = chunk->next;
@@ -2396,12 +2400,12 @@ static int __tunnel_channel_marshall_service_migrate_data(TunnelChannel *channel
 
     if (service->type == SPICE_TUNNEL_SERVICE_TYPE_GENERIC) {
         generic_data = &item->u.generic_service;
-        red_channel_add_buf(&channel->base, &item->u.generic_service,
+        spice_marshaller_add_ref(m, (uint8_t*)&item->u.generic_service,
                             sizeof(item->u.generic_service));
         cur_offset += sizeof(item->u.generic_service);
     } else if (service->type == SPICE_TUNNEL_SERVICE_TYPE_IPP) {
         generic_data = &item->u.print_service.base;
-        red_channel_add_buf(&channel->base, &item->u.print_service,
+        spice_marshaller_add_ref(m, (uint8_t*)&item->u.print_service,
                             sizeof(item->u.print_service));
         cur_offset += sizeof(item->u.print_service);
     } else {
@@ -2409,11 +2413,11 @@ static int __tunnel_channel_marshall_service_migrate_data(TunnelChannel *channel
     }
 
     generic_data->name = cur_offset;
-    red_channel_add_buf(&channel->base, service->name, strlen(service->name) + 1);
+    spice_marshaller_add_ref(m, (uint8_t*)service->name, strlen(service->name) + 1);
     cur_offset += strlen(service->name) + 1;
 
     generic_data->description = cur_offset;
-    red_channel_add_buf(&channel->base, service->description, strlen(service->description) + 1);
+    spice_marshaller_add_ref(m, (uint8_t*)service->description, strlen(service->description) + 1);
     cur_offset += strlen(service->description) + 1;
 
     return (cur_offset - offset);
@@ -2426,7 +2430,7 @@ static int __tunnel_channel_marshall_socket_migrate_data(TunnelChannel *channel,
     RedSocket *sckt = item->socket;
     TunnelMigrateSocket *mig_sckt = &item->mig_socket;
     int cur_offset = offset;
-    red_channel_add_buf(&channel->base, mig_sckt, sizeof(*mig_sckt));
+    spice_marshaller_add_ref(m, (uint8_t*)mig_sckt, sizeof(*mig_sckt));
     cur_offset += sizeof(*mig_sckt);
 
     if ((sckt->client_status != CLIENT_SCKT_STATUS_CLOSED) &&
@@ -2439,7 +2443,7 @@ static int __tunnel_channel_marshall_socket_migrate_data(TunnelChannel *channel,
         cur_offset += mig_sckt->out_data.process_buf_size;
         if (mig_sckt->out_data.process_queue_size) {
             mig_sckt->out_data.process_queue = cur_offset;
-            red_channel_add_buf(&channel->base, item->out_process_queue,
+            spice_marshaller_add_ref(m, (uint8_t*)item->out_process_queue,
                                 mig_sckt->out_data.process_queue_size);
             cur_offset += mig_sckt->out_data.process_queue_size;
         }
@@ -2463,7 +2467,7 @@ static int __tunnel_channel_marshall_socket_migrate_data(TunnelChannel *channel,
         cur_offset += mig_sckt->in_data.process_buf_size;
         if (mig_sckt->in_data.process_queue_size) {
             mig_sckt->in_data.process_queue = cur_offset;
-            red_channel_add_buf(&channel->base, item->in_process_queue,
+            spice_marshaller_add_ref(m, (uint8_t*)item->in_process_queue,
                                 mig_sckt->in_data.process_queue_size);
             cur_offset += mig_sckt->in_data.process_queue_size;
         }
@@ -2478,7 +2482,7 @@ static int __tunnel_channel_marshall_socket_migrate_data(TunnelChannel *channel,
     }
 
     if (item->slirp_socket_size) { // zero if socket is closed
-        red_channel_add_buf(&channel->base, item->slirp_socket, item->slirp_socket_size);
+        spice_marshaller_add_ref(m, (uint8_t*)item->slirp_socket, item->slirp_socket_size);
         mig_sckt->slirp_sckt = cur_offset;
         cur_offset += item->slirp_socket_size;
     }
@@ -2499,14 +2503,14 @@ static void tunnel_channel_marshall_migrate_data(TunnelChannel *channel,
     migrate_data->version = TUNNEL_MIGRATE_DATA_VERSION;
     migrate_data->message_serial = red_channel_get_message_serial(&channel->base);
     red_channel_init_send_data(&channel->base, SPICE_MSG_MIGRATE_DATA, item);
-    red_channel_add_buf(&channel->base, migrate_data, sizeof(*migrate_data));
+    spice_marshaller_add_ref(m, (uint8_t*)migrate_data, sizeof(*migrate_data));
 
     migrate_data->slirp_state = data_buf_offset;
-    red_channel_add_buf(&channel->base, migrate_item->slirp_state, migrate_item->slirp_state_size);
+    spice_marshaller_add_ref(m, (uint8_t*)migrate_item->slirp_state, migrate_item->slirp_state_size);
     data_buf_offset += migrate_item->slirp_state_size;
 
     migrate_data->services_list = data_buf_offset;
-    red_channel_add_buf(&channel->base, migrate_item->services_list,
+    spice_marshaller_add_ref(m, (uint8_t*)migrate_item->services_list,
                         migrate_item->services_list_size);
     data_buf_offset += migrate_item->services_list_size;
 
@@ -2519,7 +2523,7 @@ static void tunnel_channel_marshall_migrate_data(TunnelChannel *channel,
 
 
     migrate_data->sockets_list = data_buf_offset;
-    red_channel_add_buf(&channel->base, migrate_item->sockets_list,
+    spice_marshaller_add_ref(m, (uint8_t*)migrate_item->sockets_list,
                         migrate_item->sockets_list_size);
     data_buf_offset += migrate_item->sockets_list_size;
 
@@ -2539,7 +2543,7 @@ static void tunnel_channel_marshall_init(TunnelChannel *channel, SpiceMarshaller
     channel->send_data.u.init.max_num_of_sockets = MAX_SOCKETS_NUM;
 
     red_channel_init_send_data(&channel->base, SPICE_MSG_TUNNEL_INIT, item);
-    red_channel_add_buf(&channel->base, &channel->send_data.u.init, sizeof(SpiceMsgTunnelInit));
+    spice_marshaller_add_ref(m, (uint8_t*)&channel->send_data.u.init, sizeof(SpiceMsgTunnelInit));
 }
 
 static void tunnel_channel_marshall_service_ip_map(TunnelChannel *channel, SpiceMarshaller *m, PipeItem *item)
@@ -2550,9 +2554,9 @@ static void tunnel_channel_marshall_service_ip_map(TunnelChannel *channel, Spice
     channel->send_data.u.service_ip.virtual_ip.type = SPICE_TUNNEL_IP_TYPE_IPv4;
 
     red_channel_init_send_data(&channel->base, SPICE_MSG_TUNNEL_SERVICE_IP_MAP, item);
-    red_channel_add_buf(&channel->base, &channel->send_data.u.service_ip,
+    spice_marshaller_add_ref(m, (uint8_t*)&channel->send_data.u.service_ip,
                         sizeof(SpiceMsgTunnelServiceIpMap));
-    red_channel_add_buf(&channel->base, &service->virt_ip.s_addr, sizeof(SpiceTunnelIPv4));
+    spice_marshaller_add_ref(m, (uint8_t*)&service->virt_ip.s_addr, sizeof(SpiceTunnelIPv4));
 }
 
 static void tunnel_channel_marshall_socket_open(TunnelChannel *channel, SpiceMarshaller *m, PipeItem *item)
@@ -2567,7 +2571,7 @@ static void tunnel_channel_marshall_socket_open(TunnelChannel *channel, SpiceMar
     sckt->in_data.client_total_num_tokens = SOCKET_WINDOW_SIZE;
     sckt->in_data.num_tokens = 0;
     red_channel_init_send_data(&channel->base, SPICE_MSG_TUNNEL_SOCKET_OPEN, item);
-    red_channel_add_buf(&channel->base, &channel->send_data.u.socket_open,
+    spice_marshaller_add_ref(m, (uint8_t*)&channel->send_data.u.socket_open,
                         sizeof(channel->send_data.u.socket_open));
 #ifdef DEBUG_NETWORK
     PRINT_SCKT(sckt);
@@ -2590,7 +2594,7 @@ static void tunnel_channel_marshall_socket_fin(TunnelChannel *channel, SpiceMars
     channel->send_data.u.socket_fin.connection_id = sckt->connection_id;
 
     red_channel_init_send_data(&channel->base, SPICE_MSG_TUNNEL_SOCKET_FIN, item);
-    red_channel_add_buf(&channel->base, &channel->send_data.u.socket_fin,
+    spice_marshaller_add_ref(m, (uint8_t*)&channel->send_data.u.socket_fin,
                         sizeof(channel->send_data.u.socket_fin));
 #ifdef DEBUG_NETWORK
     PRINT_SCKT(sckt);
@@ -2619,7 +2623,7 @@ static void tunnel_channel_marshall_socket_close(TunnelChannel *channel, SpiceMa
     channel->send_data.u.socket_close.connection_id = sckt->connection_id;
 
     red_channel_init_send_data(&channel->base, SPICE_MSG_TUNNEL_SOCKET_CLOSE, item);
-    red_channel_add_buf(&channel->base, &channel->send_data.u.socket_close,
+    spice_marshaller_add_ref(m, (uint8_t*)&channel->send_data.u.socket_close,
                         sizeof(channel->send_data.u.socket_close));
 #ifdef DEBUG_NETWORK
     PRINT_SCKT(sckt);
@@ -2635,7 +2639,7 @@ static void tunnel_channel_marshall_socket_closed_ack(TunnelChannel *channel, Sp
 
     // pipe item is null because we free the sckt.
     red_channel_init_send_data(&channel->base, SPICE_MSG_TUNNEL_SOCKET_CLOSED_ACK, NULL);
-    red_channel_add_buf(&channel->base, &channel->send_data.u.socket_close_ack,
+    spice_marshaller_add_ref(m, (uint8_t*)&channel->send_data.u.socket_close_ack,
                         sizeof(channel->send_data.u.socket_close_ack));
 #ifdef DEBUG_NETWORK
     PRINT_SCKT(sckt);
@@ -2669,7 +2673,7 @@ static void tunnel_channel_marshall_socket_token(TunnelChannel *channel, SpiceMa
     ASSERT(sckt->in_data.client_total_num_tokens <= SOCKET_WINDOW_SIZE);
 
     red_channel_init_send_data(&channel->base, SPICE_MSG_TUNNEL_SOCKET_TOKEN, item);
-    red_channel_add_buf(&channel->base, &channel->send_data.u.socket_token,
+    spice_marshaller_add_ref(m, (uint8_t*)&channel->send_data.u.socket_token,
                         sizeof(channel->send_data.u.socket_token));
 }
 
@@ -2697,14 +2701,14 @@ static void tunnel_channel_marshall_socket_out_data(TunnelChannel *channel, Spic
     channel->send_data.u.socket_data.connection_id = sckt->connection_id;
 
     red_channel_init_send_data(&channel->base, SPICE_MSG_TUNNEL_SOCKET_DATA, item);
-    red_channel_add_buf(&channel->base, &channel->send_data.u.socket_data,
+    spice_marshaller_add_ref(m, (uint8_t*)&channel->send_data.u.socket_data,
                         sizeof(channel->send_data.u.socket_data));
     pushed_bufs_num++;
 
     // the first chunk is in a valid size
     chunk = sckt->out_data.ready_chunks_queue.head;
     total_push_size = chunk->size - sckt->out_data.ready_chunks_queue.offset;
-    red_channel_add_buf(&channel->base, chunk->data + sckt->out_data.ready_chunks_queue.offset,
+    spice_marshaller_add_ref(m, (uint8_t*)chunk->data + sckt->out_data.ready_chunks_queue.offset,
                         total_push_size);
     pushed_bufs_num++;
     sckt->out_data.push_tail = chunk;
@@ -2714,7 +2718,7 @@ static void tunnel_channel_marshall_socket_out_data(TunnelChannel *channel, Spic
 
     while (chunk && (total_push_size < MAX_SOCKET_DATA_SIZE) && (pushed_bufs_num < MAX_SEND_BUFS)) {
         uint32_t cur_push_size = MIN(chunk->size, MAX_SOCKET_DATA_SIZE - total_push_size);
-        red_channel_add_buf(&channel->base, chunk->data, cur_push_size);
+        spice_marshaller_add_ref(m, (uint8_t*)chunk->data, cur_push_size);
         pushed_bufs_num++;
 
         sckt->out_data.push_tail = chunk;

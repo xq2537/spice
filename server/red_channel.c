@@ -455,6 +455,7 @@ void red_channel_shutdown(RedChannel *channel)
         red_channel_pipe_clear(channel);
         shutdown(channel->stream->socket, SHUT_RDWR);
         channel->stream->shutdown = TRUE;
+        channel->incoming.shut = TRUE;
     }
 }
 
@@ -529,12 +530,6 @@ static void red_channel_event(int fd, int event, void *data)
         }
         red_channel_push(channel);
     }
-}
-
-void red_channel_add_buf(RedChannel *channel, void *data, uint32_t size)
-{
-    spice_marshaller_add_ref(channel->send_data.marshaller, data, size);
-    channel->send_data.header->size += size;
 }
 
 void red_channel_init_send_data(RedChannel *channel, uint16_t msg_type, PipeItem *item)

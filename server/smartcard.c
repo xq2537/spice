@@ -257,20 +257,21 @@ static void smartcard_channel_release_msg_rcv_buf(RedChannel *channel, SpiceData
     free(msg);
 }
 
-static void smartcard_channel_send_data(RedChannel *channel, PipeItem *item, VSCMsgHeader *vheader)
+static void smartcard_channel_send_data(RedChannel *channel, SpiceMarshaller *m,
+                                        PipeItem *item, VSCMsgHeader *vheader)
 {
     ASSERT(channel);
     ASSERT(vheader);
     red_channel_init_send_data(channel, SPICE_MSG_SMARTCARD_DATA, item);
-    red_channel_add_buf(channel, vheader, sizeof(VSCMsgHeader));
+    spice_marshaller_add_ref(m, (uint8_t*)vheader, sizeof(VSCMsgHeader));
     if (vheader->length > 0) {
-        red_channel_add_buf(channel, (uint8_t*)(vheader+1), vheader->length);
+        spice_marshaller_add_ref(m, (uint8_t*)(vheader+1), vheader->length);
     }
     red_channel_begin_send_message(channel);
 }
 
-static void smartcard_channel_send_message(RedChannel *channel, PipeItem *item,
-    uint32_t reader_id, VSCMsgType type, uint8_t* data, uint32_t len)
+static void smartcard_channel_send_message(RedChannel *channel, SpiceMarshaller *m,
+    PipeItem *item, uint32_t reader_id, VSCMsgType type, uint8_t* data, uint32_t len)
 {
     VSCMsgHeader mhHeader;
     //SpiceMarshaller* m = msg->marshaller();
@@ -283,38 +284,39 @@ static void smartcard_channel_send_message(RedChannel *channel, PipeItem *item,
     //spice_marshaller_add(m, data, len);
     //marshaller_outgoing_write(msg);
 
-    smartcard_channel_send_data(channel, item, &mhHeader);
+    smartcard_channel_send_data(channel, m, item, &mhHeader);
 }
 
 static void smartcard_channel_send_error(
-    SmartCardChannel *smartcard_channel, PipeItem *item)
+    SmartCardChannel *smartcard_channel, SpiceMarshaller *m, PipeItem *item)
 {
     ErrorItem* error_item = (ErrorItem*)item;
     VSCMsgError error;
 
     error.code = error_item->error;
-    smartcard_channel_send_message(&smartcard_channel->base, item, error_item->reader_id,
-        VSC_Error, (uint8_t*)&error, sizeof(error));
+    smartcard_channel_send_message(&smartcard_channel->base, m, item,
+        error_item->reader_id, VSC_Error, (uint8_t*)&error, sizeof(error));
 }
 
 static void smartcard_channel_send_msg(
-    SmartCardChannel *smartcard_channel, PipeItem *item)
+    SmartCardChannel *smartcard_channel, SpiceMarshaller *m, PipeItem *item)
 {
     MsgItem* msg_item = (MsgItem*)item;
 
-    smartcard_channel_send_data(&smartcard_channel->base, item, msg_item->vheader);
+    smartcard_channel_send_data(&smartcard_channel->base, m, item, msg_item->vheader);
 }
 
 static void smartcard_channel_send_item(RedChannel *channel, PipeItem *item)
 {
     SmartCardChannel *smartcard_channel = (SmartCardChannel *)channel;
+    SpiceMarshaller *m = red_channel_get_marshaller(channel);
 
     switch (item->type) {
     case PIPE_ITEM_TYPE_ERROR:
-        smartcard_channel_send_error(smartcard_channel, item);
+        smartcard_channel_send_error(smartcard_channel, m, item);
         break;
     case PIPE_ITEM_TYPE_MSG:
-        smartcard_channel_send_msg(smartcard_channel, item);
+        smartcard_channel_send_msg(smartcard_channel, m, item);
     }
 }
 

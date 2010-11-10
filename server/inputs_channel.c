@@ -461,7 +461,6 @@ static void inputs_shutdown(Channel *channel)
 
     if (inputs_channel) {
         red_channel_shutdown(&inputs_channel->base);
-        inputs_channel->base.incoming.shut = TRUE;
         channel->data = NULL;
         g_inputs_channel = NULL;
     }

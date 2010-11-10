@@ -148,10 +148,6 @@ struct RedChannel {
     struct {
         SpiceMarshaller *marshaller;
         SpiceDataHeader *header;
-        union {
-            SpiceMsgSetAck ack;
-            SpiceMsgMigrate migrate;
-        } u;
         uint32_t size;
         PipeItem *item;
         int blocked;
@@ -218,7 +214,6 @@ int red_channel_is_connected(RedChannel *channel);
 
 void red_channel_destroy(RedChannel *channel);
 
-void red_channel_shutdown(RedChannel *channel);
 /* should be called when a new channel is ready to send messages */
 void red_channel_init_outgoing_messages_window(RedChannel *channel);
 
@@ -229,10 +224,8 @@ int red_channel_handle_message(RedChannel *channel, uint32_t size,
 /* default error handler that disconnects channel */
 void red_channel_default_peer_on_error(RedChannel *channel);
 
-/* when preparing send_data: should call init and then add_buf per buffer that is
-   being sent */
+/* when preparing send_data: should call init and then use marshaller */
 void red_channel_init_send_data(RedChannel *channel, uint16_t msg_type, PipeItem *item);
-void red_channel_add_buf(RedChannel *channel, void *data, uint32_t size);
 
 uint64_t red_channel_get_message_serial(RedChannel *channel);
 void red_channel_set_message_serial(RedChannel *channel, uint64_t);
@@ -253,6 +246,8 @@ void red_channel_pipe_add_type(RedChannel *channel, int pipe_item_type);
 void red_channel_ack_zero_messages_window(RedChannel *channel);
 void red_channel_ack_set_client_window(RedChannel *channel, int client_window);
 void red_channel_push_set_ack(RedChannel *channel);
+
+void red_channel_shutdown(RedChannel *channel);
 
 // TODO: unstaticed for display/cursor channels. they do some specific pushes not through
 // adding elements or on events. but not sure if this is actually required (only result
