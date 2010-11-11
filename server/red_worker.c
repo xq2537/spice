@@ -7574,10 +7574,16 @@ static inline void send_qxl_drawable(DisplayChannel *display_channel,
         red_lossy_send_qxl_drawable(display_channel->common.worker, display_channel, m, item);
 }
 
-static inline void red_send_verb(RedChannel *channel, uint16_t verb)
+static inline void red_marshall_verb(RedChannel *channel, uint16_t verb)
 {
     ASSERT(channel);
     red_channel_init_send_data(channel, verb, NULL);
+}
+
+static inline void red_send_verb(RedChannel *channel, uint16_t verb)
+{
+    ASSERT(channel);
+    red_marshall_verb(channel, verb);
     red_channel_begin_send_message(channel);
 }
 
@@ -7588,7 +7594,7 @@ static inline void display_send_verb(DisplayChannel *channel, uint16_t verb)
     display_begin_send_message(channel);
 }
 
-static inline void __red_send_inval(RedChannel *channel,
+static inline void red_marshall_inval(RedChannel *channel,
         SpiceMarshaller *base_marshaller, CacheItem *cach_item)
 {
     SpiceMsgDisplayInvalOne inval_one;
@@ -7599,17 +7605,10 @@ static inline void __red_send_inval(RedChannel *channel,
     spice_marshall_msg_cursor_inval_one(base_marshaller, &inval_one);
 }
 
-static void red_send_inval(RedChannel *channel,
-            SpiceMarshaller *base_marshaller, CacheItem *cach_item)
-{
-    __red_send_inval(channel, base_marshaller, cach_item);
-    red_channel_begin_send_message(channel);
-}
-
 static void red_display_send_inval(DisplayChannel *display_channel,
                 SpiceMarshaller *base_marshaller, CacheItem *cach_item)
 {
-    __red_send_inval((RedChannel *)display_channel, base_marshaller, cach_item);
+    red_marshall_inval((RedChannel *)display_channel, base_marshaller, cach_item);
     display_begin_send_message(display_channel);
 }
 
@@ -7936,14 +7935,14 @@ static void red_display_send_stream_end(DisplayChannel *display_channel,
     display_begin_send_message(display_channel);
 }
 
-static void red_cursor_send_inval(CursorChannel *channel,
+static void red_cursor_marshall_inval(CursorChannel *channel,
                 SpiceMarshaller *m, CacheItem *cach_item)
 {
     ASSERT(channel);
-    red_send_inval((RedChannel *)channel, m, cach_item);
+    red_marshall_inval((RedChannel *)channel, m, cach_item);
 }
 
-static void red_send_cursor_init(CursorChannel *channel)
+static void red_marshall_cursor_init(CursorChannel *channel)
 {
     RedWorker *worker;
     SpiceMsgCursorInit msg;
@@ -7962,11 +7961,9 @@ static void red_send_cursor_init(CursorChannel *channel)
     fill_cursor(channel, &msg.cursor, worker->cursor, &info);
     spice_marshall_msg_cursor_init(channel->common.base.send_data.marshaller, &msg);
     add_buf_from_info(&channel->common.base, channel->common.base.send_data.marshaller, &info);
-
-    red_channel_begin_send_message(&channel->common.base);
 }
 
-static void red_send_local_cursor(CursorChannel *cursor_channel,
+static void red_marshall_local_cursor(CursorChannel *cursor_channel,
           SpiceMarshaller *base_marshaller, LocalCursor *cursor)
 {
     RedChannel *channel;
@@ -7984,13 +7981,10 @@ static void red_send_local_cursor(CursorChannel *cursor_channel,
     fill_cursor(cursor_channel, &cursor_set.cursor, &cursor->base, &info);
     spice_marshall_msg_cursor_set(base_marshaller, &cursor_set);
     add_buf_from_info(channel, base_marshaller, &info);
-
-    red_channel_begin_send_message(channel);
-
     red_release_cursor(worker, (CursorItem *)cursor);
 }
 
-static void cursor_channel_send_migrate(CursorChannel *cursor_channel)
+static void cursor_channel_marshall_migrate(CursorChannel *cursor_channel)
 {
     SpiceMsgMigrate migrate;
 
@@ -7998,10 +7992,9 @@ static void cursor_channel_send_migrate(CursorChannel *cursor_channel)
     migrate.flags = 0;
 
     spice_marshall_msg_migrate(cursor_channel->common.base.send_data.marshaller, &migrate);
-    red_channel_begin_send_message((RedChannel*)cursor_channel);
 }
 
-static void red_send_cursor(CursorChannel *cursor_channel,
+static void red_marshall_cursor(CursorChannel *cursor_channel,
                    SpiceMarshaller *m, CursorItem *cursor)
 {
     RedChannel *channel;
@@ -8053,8 +8046,6 @@ static void red_send_cursor(CursorChannel *cursor_channel,
     default:
         red_error("bad cursor command %d", cmd->type);
     }
-
-    red_channel_begin_send_message(channel);
 
     red_release_cursor(worker, cursor);
 }
@@ -8192,37 +8183,38 @@ static void cursor_channel_send_item(RedChannel *channel, PipeItem *pipe_item)
     red_ref_channel(channel);
     switch (pipe_item->type) {
     case PIPE_ITEM_TYPE_CURSOR:
-        red_send_cursor(cursor_channel, m, (CursorItem *)pipe_item);
+        red_marshall_cursor(cursor_channel, m, (CursorItem *)pipe_item);
         break;
     case PIPE_ITEM_TYPE_LOCAL_CURSOR:
-        red_send_local_cursor(cursor_channel, m, (LocalCursor *)pipe_item);
+        red_marshall_local_cursor(cursor_channel, m, (LocalCursor *)pipe_item);
         break;
     case PIPE_ITEM_TYPE_INVAL_ONE:
-        red_cursor_send_inval(cursor_channel, m, (CacheItem *)pipe_item);
+        red_cursor_marshall_inval(cursor_channel, m, (CacheItem *)pipe_item);
         free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_VERB:
-        red_send_verb(channel, ((VerbItem*)pipe_item)->verb);
+        red_marshall_verb(channel, ((VerbItem*)pipe_item)->verb);
         free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_MIGRATE:
         red_printf("PIPE_ITEM_TYPE_MIGRATE");
-        cursor_channel_send_migrate(cursor_channel);
+        cursor_channel_marshall_migrate(cursor_channel);
         free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_CURSOR_INIT:
         red_reset_cursor_cache(cursor_channel);
-        red_send_cursor_init(cursor_channel);
+        red_marshall_cursor_init(cursor_channel);
         free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE:
         red_reset_cursor_cache(cursor_channel);
-        red_send_verb(channel, SPICE_MSG_CURSOR_INVAL_ALL);
+        red_marshall_verb(channel, SPICE_MSG_CURSOR_INVAL_ALL);
         free(pipe_item);
         break;
     default:
         red_error("invalid pipe item type");
     }
+    red_channel_begin_send_message(channel);
     red_unref_channel(channel);
 }
 
