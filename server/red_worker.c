@@ -9436,7 +9436,7 @@ static void red_wait_pipe_item_sent(RedChannel *channel, PipeItem *item)
         red_printf("timeout");
         channel->disconnect(channel);
     } else {
-        if (channel->send_data.item == item) {
+        if (red_channel_item_being_sent(channel, item)) {
             red_wait_outgoing_item(channel);
         }
     }
@@ -9522,7 +9522,7 @@ static inline void destroy_surface_wait(RedWorker *worker, int surface_id)
     // there is one during sending.
     red_wait_outgoing_item((RedChannel *)worker->display_channel);
     if (worker->display_channel) {
-        ASSERT(!worker->display_channel->common.base.send_data.item);
+        ASSERT(red_channel_no_item_being_sent(&worker->display_channel->common.base));
     }
 }
 
@@ -9570,7 +9570,7 @@ static inline void handle_dev_destroy_surfaces(RedWorker *worker)
         if (!worker->cursor_channel->common.base.migrate) {
             red_pipe_add_verb(&worker->cursor_channel->common.base, SPICE_MSG_CURSOR_RESET);
         }
-        ASSERT(!worker->cursor_channel->common.base.send_data.item);
+        ASSERT(red_channel_no_item_being_sent(&worker->cursor_channel->common.base));
     }
 
     if (worker->display_channel) {
@@ -9646,7 +9646,7 @@ static inline void handle_dev_destroy_primary_surface(RedWorker *worker)
         if (!worker->cursor_channel->common.base.migrate) {
             red_pipe_add_verb(&worker->cursor_channel->common.base, SPICE_MSG_CURSOR_RESET);
         }
-        ASSERT(!worker->cursor_channel->common.base.send_data.item);
+        ASSERT(red_channel_no_item_being_sent(&worker->cursor_channel->common.base));
     }
 
     flush_all_qxl_commands(worker);
@@ -9708,7 +9708,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
             if (!cursor_red_channel->migrate) {
                 red_pipe_add_verb(cursor_red_channel, SPICE_MSG_CURSOR_RESET);
             }
-            ASSERT(!cursor_red_channel->send_data.item);
+            ASSERT(red_channel_no_item_being_sent(cursor_red_channel));
 
             worker->cursor_visible = TRUE;
             worker->cursor_position.x = worker->cursor_position.y = 0;

@@ -727,6 +727,12 @@ RedsStream *red_channel_get_stream(RedChannel *channel)
     return channel->stream;
 }
 
+SpiceDataHeader *red_channel_get_header(RedChannel *channel)
+{
+    return channel->send_data.header;
+}
+/* end of accessors */
+
 int red_channel_get_first_socket(RedChannel *channel)
 {
     if (!channel->stream) {
@@ -735,7 +741,12 @@ int red_channel_get_first_socket(RedChannel *channel)
     return channel->stream->socket;
 }
 
-SpiceDataHeader *red_channel_get_header(RedChannel *channel)
+int red_channel_item_being_sent(RedChannel *channel, PipeItem *item)
 {
-    return channel->send_data.header;
+    return channel->send_data.item == item;
+}
+
+int red_channel_no_item_being_sent(RedChannel *channel)
+{
+    return channel->send_data.item == NULL;
 }

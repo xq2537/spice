@@ -260,6 +260,14 @@ int red_channel_any_blocked(RedChannel *channel);
 /* helper for channels that have complex logic that can possibly ready a send */
 int red_channel_send_message_pending(RedChannel *channel);
 
+/* returns TRUE if item is being sent by one of the channel clients. This will
+ * be true if someone called init_send_data but send has not completed (or perhaps
+ * hasn't even begun, i.e. no one called begin_send_)
+ * */
+int red_channel_item_being_sent(RedChannel *channel, PipeItem *item);
+
+int red_channel_no_item_being_sent(RedChannel *channel);
+
 // TODO: unstaticed for display/cursor channels. they do some specific pushes not through
 // adding elements or on events. but not sure if this is actually required (only result
 // should be that they ""try"" a little harder, but if the event system is correct it
