@@ -4432,7 +4432,7 @@ static void marshaller_add_compressed(RedWorker *worker, SpiceMarshaller *m,
 }
 
 
-static void add_buf_from_info(RedChannel *channel, SpiceMarshaller *m, AddBufInfo *info)
+static void add_buf_from_info(SpiceMarshaller *m, AddBufInfo *info)
 {
     if (info->data) {
         switch (info->type) {
@@ -7929,7 +7929,7 @@ static void red_marshall_cursor_init(CursorChannel *channel, SpiceMarshaller *ba
 
     fill_cursor(channel, &msg.cursor, worker->cursor, &info);
     spice_marshall_msg_cursor_init(base_marshaller, &msg);
-    add_buf_from_info(&channel->common.base, base_marshaller, &info);
+    add_buf_from_info(base_marshaller, &info);
 }
 
 static void red_marshall_local_cursor(CursorChannel *cursor_channel,
@@ -7949,7 +7949,7 @@ static void red_marshall_local_cursor(CursorChannel *cursor_channel,
 
     fill_cursor(cursor_channel, &cursor_set.cursor, &cursor->base, &info);
     spice_marshall_msg_cursor_set(base_marshaller, &cursor_set);
-    add_buf_from_info(channel, base_marshaller, &info);
+    add_buf_from_info(base_marshaller, &info);
     red_release_cursor(worker, (CursorItem *)cursor);
 }
 
@@ -7997,7 +7997,7 @@ static void red_marshall_cursor(CursorChannel *cursor_channel,
 
             fill_cursor(cursor_channel, &cursor_set.cursor, cursor, &info);
             spice_marshall_msg_cursor_set(m, &cursor_set);
-            add_buf_from_info(channel, m, &info);
+            add_buf_from_info(m, &info);
             break;
         }
     case QXL_CURSOR_HIDE:
