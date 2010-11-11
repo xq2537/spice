@@ -251,6 +251,12 @@ void red_channel_shutdown(RedChannel *channel);
 
 int red_channel_get_first_socket(RedChannel *channel);
 
+/* return TRUE if all of the connected clients to this channel are blocked */
+int red_channel_all_blocked(RedChannel *channel);
+
+/* return TRUE if any of the connected clients to this channel are blocked */
+int red_channel_any_blocked(RedChannel *channel);
+
 // TODO: unstaticed for display/cursor channels. they do some specific pushes not through
 // adding elements or on events. but not sure if this is actually required (only result
 // should be that they ""try"" a little harder, but if the event system is correct it

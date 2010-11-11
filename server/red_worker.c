@@ -4289,7 +4289,7 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
             red_error("bad command type");
         }
         n++;
-        if ((worker->display_channel && worker->display_channel->common.base.send_data.blocked) ||
+        if ((worker->display_channel && red_channel_all_blocked(&worker->display_channel->common.base)) ||
             red_now() - start > 10 * 1000 * 1000) {
             worker->epoll_timeout = 0;
             return n;
@@ -9133,7 +9133,7 @@ static void handle_channel_events(EventListener *in_listener, uint32_t events)
         red_channel_receive(channel);
     }
 
-    if (channel->send_data.blocked) {
+    if (red_channel_any_blocked(channel)) {
         red_channel_send(channel);
     }
 }
@@ -9410,7 +9410,7 @@ static void red_wait_outgoing_item(RedChannel *channel)
     uint64_t end_time;
     int blocked;
 
-    if (!channel || !channel->send_data.blocked) {
+    if (!channel || !red_channel_all_blocked(channel)) {
         return;
     }
     red_ref_channel(channel);
@@ -9422,7 +9422,7 @@ static void red_wait_outgoing_item(RedChannel *channel)
         usleep(DETACH_SLEEP_DURATION);
         red_channel_receive(channel);
         red_channel_send(channel);
-    } while ((blocked = channel->send_data.blocked) && red_now() < end_time);
+    } while ((blocked = red_channel_all_blocked(channel)) && red_now() < end_time);
 
     if (blocked) {
         red_printf("timeout");
@@ -9448,7 +9448,7 @@ static void red_wait_pipe_item_sent(RedChannel *channel, PipeItem *item)
 
     end_time = red_now() + CHANNEL_PUSH_TIMEOUT;
 
-    if (channel->send_data.blocked) {
+    if (red_channel_all_blocked(channel)) {
         red_channel_receive(channel);
         red_channel_send(channel);
     }

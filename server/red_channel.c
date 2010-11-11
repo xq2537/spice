@@ -701,6 +701,16 @@ void red_channel_ack_set_client_window(RedChannel *channel, int client_window)
     channel->ack_data.client_window = client_window;
 }
 
+int red_channel_all_blocked(RedChannel *channel)
+{
+    return channel->send_data.blocked;
+}
+
+int red_channel_any_blocked(RedChannel *channel)
+{
+    return channel->send_data.blocked;
+}
+
 /* accessors for RedChannel */
 SpiceMarshaller *red_channel_get_marshaller(RedChannel *channel)
 {
