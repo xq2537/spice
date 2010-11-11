@@ -719,3 +719,8 @@ int red_channel_get_first_socket(RedChannel *channel)
     }
     return channel->stream->socket;
 }
+
+SpiceDataHeader *red_channel_get_header(RedChannel *channel)
+{
+    return channel->send_data.header;
+}

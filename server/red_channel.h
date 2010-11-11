@@ -275,4 +275,11 @@ void red_channel_send(RedChannel *channel);
 SpiceMarshaller *red_channel_get_marshaller(RedChannel *channel);
 RedsStream *red_channel_get_stream(RedChannel *channel);
 
+/* this is a convenience function for sending messages, sometimes (migration only?)
+ * the serial from the header needs to be available for sending. Note that the header
+ * pointer retrieved is not valid except between red_channel_reset_send_data and
+ * red_channel_begin_send_message. red_channel_init_send_data changes the header (sets
+ * the type in it) as a convenience function. It is preffered to do that through it and
+ * not via the below accessor and direct header manipulation. */
+SpiceDataHeader *red_channel_get_header(RedChannel *channel);
 #endif
