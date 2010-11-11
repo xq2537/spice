@@ -7132,7 +7132,7 @@ static void red_lossy_send_qxl_drawable(RedWorker *worker, DisplayChannel *displ
     }
 
     // a message is pending
-    if (display_channel->common.base.send_data.header->type != 0) {
+    if (red_channel_send_message_pending(&display_channel->common.base)) {
         display_begin_send_message(display_channel);
     }
 }

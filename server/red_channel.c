@@ -711,6 +711,11 @@ int red_channel_any_blocked(RedChannel *channel)
     return channel->send_data.blocked;
 }
 
+int red_channel_send_message_pending(RedChannel *channel)
+{
+    return channel->send_data.header->type != 0;
+}
+
 /* accessors for RedChannel */
 SpiceMarshaller *red_channel_get_marshaller(RedChannel *channel)
 {
