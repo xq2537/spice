@@ -924,7 +924,7 @@ static void red_display_release_stream(DisplayChannel *display, StreamAgent *age
 static inline void red_detach_stream(RedWorker *worker, Stream *stream);
 static void red_stop_stream(RedWorker *worker, Stream *stream);
 static inline void red_stream_maintenance(RedWorker *worker, Drawable *candidate, Drawable *sect);
-static inline void display_begin_send_message(DisplayChannel *channel);
+static inline void display_begin_send_message(DisplayChannel *channel, SpiceMarshaller *base_marshaller);
 static void red_release_pixmap_cache(DisplayChannel *channel);
 static void red_release_glz(DisplayChannel *channel);
 static void red_freeze_glz(DisplayChannel *channel);
@@ -7215,9 +7215,10 @@ static void display_channel_push_release(DisplayChannel *channel, uint8_t type, 
     free_list->res->resources[free_list->res->count++].id = id;
 }
 
-static inline void display_begin_send_message(DisplayChannel *channel)
+static inline void display_begin_send_message(DisplayChannel *channel, SpiceMarshaller *base_marshaller)
 {
     FreeList *free_list = &channel->send_data.free_list;
+    SpiceDataHeader *header = red_channel_get_header(&channel->common.base);
 
     if (free_list->res->count) {
         int sub_list_len = 1;
@@ -7226,7 +7227,7 @@ static inline void display_begin_send_message(DisplayChannel *channel)
         int sync_count = 0;
         int i;
 
-        inval_m = spice_marshaller_get_submarshaller(channel->common.base.send_data.marshaller);
+        inval_m = spice_marshaller_get_submarshaller(base_marshaller);
 
         /* type + size + submessage */
         spice_marshaller_add_uint16(inval_m, SPICE_MSG_DISPLAY_INVAL_LIST);
@@ -7244,7 +7245,7 @@ static inline void display_begin_send_message(DisplayChannel *channel)
         free_list->wait.header.wait_count = sync_count;
 
         if (sync_count) {
-            wait_m = spice_marshaller_get_submarshaller(channel->common.base.send_data.marshaller);
+            wait_m = spice_marshaller_get_submarshaller(base_marshaller);
 
             /* type + size + submessage */
             spice_marshaller_add_uint16(wait_m, SPICE_MSG_WAIT_FOR_CHANNELS);
@@ -7254,13 +7255,13 @@ static inline void display_begin_send_message(DisplayChannel *channel)
             sub_list_len++;
         }
 
-        SpiceMarshaller *sub_list_m = spice_marshaller_get_submarshaller(channel->common.base.send_data.marshaller);
+        SpiceMarshaller *sub_list_m = spice_marshaller_get_submarshaller(base_marshaller);
         spice_marshaller_add_uint16(sub_list_m, sub_list_len);
         if (wait_m) {
             spice_marshaller_add_uint32(sub_list_m, spice_marshaller_get_offset(wait_m));
         }
         spice_marshaller_add_uint32(sub_list_m, spice_marshaller_get_offset(inval_m));
-        channel->common.base.send_data.header->sub_list = spice_marshaller_get_offset(sub_list_m);
+        header->sub_list = spice_marshaller_get_offset(sub_list_m);
     }
     red_channel_begin_send_message((RedChannel *)channel);
 }
@@ -7605,7 +7606,8 @@ static void display_channel_marshall_migrate(DisplayChannel *display_channel, Sp
     display_channel->expect_migrate_mark = TRUE;
 }
 
-static void display_channel_marshall_migrate_data(DisplayChannel *display_channel)
+static void display_channel_marshall_migrate_data(DisplayChannel *display_channel,
+                                                  SpiceMarshaller *base_marshaller)
 {
     DisplayChannelMigrateData display_data;
 
@@ -7631,11 +7633,12 @@ static void display_channel_marshall_migrate_data(DisplayChannel *display_channe
                                         &display_data.glz_dict_restore_data,
                                         &display_channel->glz_data.usr);
 
-    spice_marshaller_add_ref(display_channel->common.base.send_data.marshaller,
+    spice_marshaller_add_ref(base_marshaller,
                              (uint8_t *)&display_data, sizeof(display_data));
 }
 
-static void display_channel_marshall_pixmap_sync(DisplayChannel *display_channel)
+static void display_channel_marshall_pixmap_sync(DisplayChannel *display_channel,
+                                                 SpiceMarshaller *base_marshaller)
 {
     SpiceMsgWaitForChannels wait;
     PixmapCache *pixmap_cache;
@@ -7654,17 +7657,18 @@ static void display_channel_marshall_pixmap_sync(DisplayChannel *display_channel
 
     pthread_mutex_unlock(&pixmap_cache->lock);
 
-    spice_marshall_msg_wait_for_channels(display_channel->common.base.send_data.marshaller, &wait);
+    spice_marshall_msg_wait_for_channels(base_marshaller, &wait);
 }
 
-static void display_channel_marshall_reset_cache(DisplayChannel *display_channel)
+static void display_channel_marshall_reset_cache(DisplayChannel *display_channel,
+                                                 SpiceMarshaller *base_marshaller)
 {
     SpiceMsgWaitForChannels wait;
 
     red_channel_init_send_data(&display_channel->common.base, SPICE_MSG_DISPLAY_INVAL_ALL_PIXMAPS, NULL);
     pixmap_cache_reset(display_channel->pixmap_cache, display_channel, &wait);
 
-    spice_marshall_msg_display_inval_all_pixmaps(display_channel->common.base.send_data.marshaller,
+    spice_marshall_msg_display_inval_all_pixmaps(base_marshaller,
                                                  &wait);
 }
 
@@ -7907,7 +7911,7 @@ static void red_cursor_marshall_inval(CursorChannel *channel,
     red_marshall_inval((RedChannel *)channel, m, cach_item);
 }
 
-static void red_marshall_cursor_init(CursorChannel *channel)
+static void red_marshall_cursor_init(CursorChannel *channel, SpiceMarshaller *base_marshaller)
 {
     RedWorker *worker;
     SpiceMsgCursorInit msg;
@@ -7924,8 +7928,8 @@ static void red_marshall_cursor_init(CursorChannel *channel)
     msg.trail_frequency = worker->cursor_trail_frequency;
 
     fill_cursor(channel, &msg.cursor, worker->cursor, &info);
-    spice_marshall_msg_cursor_init(channel->common.base.send_data.marshaller, &msg);
-    add_buf_from_info(&channel->common.base, channel->common.base.send_data.marshaller, &info);
+    spice_marshall_msg_cursor_init(base_marshaller, &msg);
+    add_buf_from_info(&channel->common.base, base_marshaller, &info);
 }
 
 static void red_marshall_local_cursor(CursorChannel *cursor_channel,
@@ -7949,14 +7953,15 @@ static void red_marshall_local_cursor(CursorChannel *cursor_channel,
     red_release_cursor(worker, (CursorItem *)cursor);
 }
 
-static void cursor_channel_marshall_migrate(CursorChannel *cursor_channel)
+static void cursor_channel_marshall_migrate(CursorChannel *cursor_channel,
+                                            SpiceMarshaller *base_marshaller)
 {
     SpiceMsgMigrate migrate;
 
     red_channel_init_send_data(&cursor_channel->common.base, SPICE_MSG_MIGRATE, NULL);
     migrate.flags = 0;
 
-    spice_marshall_msg_migrate(cursor_channel->common.base.send_data.marshaller, &migrate);
+    spice_marshall_msg_migrate(base_marshaller, &migrate);
 }
 
 static void red_marshall_cursor(CursorChannel *cursor_channel,
@@ -8096,7 +8101,7 @@ static void display_channel_send_item(RedChannel *base, PipeItem *pipe_item)
         free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_MIGRATE_DATA:
-        display_channel_marshall_migrate_data(display_channel);
+        display_channel_marshall_migrate_data(display_channel, m);
         free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_IMAGE:
@@ -8104,11 +8109,11 @@ static void display_channel_send_item(RedChannel *base, PipeItem *pipe_item)
         release_image_item((ImageItem *)pipe_item);
         break;
     case PIPE_ITEM_TYPE_PIXMAP_SYNC:
-        display_channel_marshall_pixmap_sync(display_channel);
+        display_channel_marshall_pixmap_sync(display_channel, m);
         free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_PIXMAP_RESET:
-        display_channel_marshall_reset_cache(display_channel);
+        display_channel_marshall_reset_cache(display_channel, m);
         free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_INVAL_PALLET_CACHE:
@@ -8135,7 +8140,7 @@ static void display_channel_send_item(RedChannel *base, PipeItem *pipe_item)
     }
     // a message is pending
     if (red_channel_send_message_pending(&display_channel->common.base)) {
-        display_begin_send_message(display_channel);
+        display_begin_send_message(display_channel, m);
     }
     red_unref_channel(&display_channel->common.base);
 }
@@ -8163,12 +8168,12 @@ static void cursor_channel_send_item(RedChannel *channel, PipeItem *pipe_item)
         break;
     case PIPE_ITEM_TYPE_MIGRATE:
         red_printf("PIPE_ITEM_TYPE_MIGRATE");
-        cursor_channel_marshall_migrate(cursor_channel);
+        cursor_channel_marshall_migrate(cursor_channel, m);
         free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_CURSOR_INIT:
         red_reset_cursor_cache(cursor_channel);
-        red_marshall_cursor_init(cursor_channel);
+        red_marshall_cursor_init(cursor_channel, m);
         free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE:
