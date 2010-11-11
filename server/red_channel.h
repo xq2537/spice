@@ -249,6 +249,8 @@ void red_channel_push_set_ack(RedChannel *channel);
 
 void red_channel_shutdown(RedChannel *channel);
 
+int red_channel_get_first_socket(RedChannel *channel);
+
 // TODO: unstaticed for display/cursor channels. they do some specific pushes not through
 // adding elements or on events. but not sure if this is actually required (only result
 // should be that they ""try"" a little harder, but if the event system is correct it

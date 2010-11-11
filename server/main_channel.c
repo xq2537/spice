@@ -823,22 +823,23 @@ int main_channel_getsockname(Channel *channel, struct sockaddr *sa, socklen_t *s
 {
     MainChannel *main_chan = channel->data;
 
-    return main_chan ? getsockname(main_chan->base.stream->socket, sa, salen) : -1;
+    return main_chan ? getsockname(red_channel_get_first_socket(&main_chan->base), sa, salen) : -1;
 }
 
 int main_channel_getpeername(Channel *channel, struct sockaddr *sa, socklen_t *salen)
 {
     MainChannel *main_chan = channel->data;
 
-    return main_chan ? getpeername(main_chan->base.stream->socket, sa, salen) : -1;
+    return main_chan ? getpeername(red_channel_get_first_socket(&main_chan->base), sa, salen) : -1;
 }
 
 void main_channel_close(Channel *channel)
 {
     MainChannel *main_chan = channel->data;
+    int socketfd;
 
-    if (main_chan && main_chan->base.stream) {
-        close(main_chan->base.stream->socket);
+    if (main_chan && (socketfd = red_channel_get_first_socket(&main_chan->base)) != -1) {
+        close(socketfd);
     }
 }
 

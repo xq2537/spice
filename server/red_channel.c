@@ -711,3 +711,11 @@ RedsStream *red_channel_get_stream(RedChannel *channel)
 {
     return channel->stream;
 }
+
+int red_channel_get_first_socket(RedChannel *channel)
+{
+    if (!channel->stream) {
+        return -1;
+    }
+    return channel->stream->socket;
+}
