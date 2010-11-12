@@ -186,7 +186,7 @@ static void red_peer_handle_outgoing(RedsStream *stream, OutgoingHandler *handle
             }
         } else {
             handler->pos += n;
-            stat_inc_counter(handler->out_bytes_counter, n);
+            handler->cb->on_output(handler->opaque, n);
             if (handler->pos == handler->size) { // finished writing data
                 handler->cb->on_msg_done(handler->opaque);
                 handler->vec = handler->vec_buf;
@@ -196,6 +196,13 @@ static void red_peer_handle_outgoing(RedsStream *stream, OutgoingHandler *handle
             }
         }
     }
+}
+
+void red_channel_on_output(void *opaque, int n)
+{
+    RedChannel *channel = opaque;
+
+    stat_inc_counter(channel->out_bytes_counter, n);
 }
 
 void red_channel_default_peer_on_error(RedChannel *channel)
@@ -359,18 +366,19 @@ RedChannel *red_channel_create(int size, RedsStream *stream,
     channel->outgoing.opaque = channel;
     channel->outgoing.pos = 0;
     channel->outgoing.size = 0;
-    channel->outgoing.out_bytes_counter = NULL;
 
     channel->outgoing_cb.get_msg_size = red_channel_peer_get_out_msg_size;
     channel->outgoing_cb.prepare = red_channel_peer_prepare_out_msg;
     channel->outgoing_cb.on_block = red_channel_peer_on_out_block;
     channel->outgoing_cb.on_error = (on_outgoing_error_proc)red_channel_default_peer_on_error;
     channel->outgoing_cb.on_msg_done = red_channel_peer_on_out_msg_done;
+    channel->outgoing_cb.on_output = red_channel_on_output;
 
     channel->incoming.cb = &channel->incoming_cb;
     channel->outgoing.cb = &channel->outgoing_cb;
 
     channel->shut = 0; // came here from inputs, perhaps can be removed? XXX
+    channel->out_bytes_counter = 0;
 
     if (!config_socket(channel)) {
         goto error;

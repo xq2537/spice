@@ -69,6 +69,7 @@ typedef void (*prepare_outgoing_proc)(void *opaque, struct iovec *vec, int *vec_
 typedef void (*on_outgoing_error_proc)(void *opaque);
 typedef void (*on_outgoing_block_proc)(void *opaque);
 typedef void (*on_outgoing_msg_done_proc)(void *opaque);
+typedef void (*on_output_proc)(void *opaque, int n);
 
 typedef struct OutgoingHandlerInterface {
     get_outgoing_msg_size_proc get_msg_size;
@@ -76,6 +77,7 @@ typedef struct OutgoingHandlerInterface {
     on_outgoing_error_proc on_error;
     on_outgoing_block_proc on_block;
     on_outgoing_msg_done_proc on_msg_done;
+    on_output_proc on_output;
 } OutgoingHandlerInterface;
 
 typedef struct OutgoingHandler {
@@ -86,9 +88,6 @@ typedef struct OutgoingHandler {
     struct iovec *vec;
     int pos;
     int size;
-#ifdef RED_STATISTICS
-    uint64_t *out_bytes_counter;
-#endif
 } OutgoingHandler;
 
 /* Red Channel interface */
@@ -184,6 +183,9 @@ struct RedChannel {
     channel_handle_migrate_flush_mark handle_migrate_flush_mark;
     channel_handle_migrate_data handle_migrate_data;
     channel_handle_migrate_data_get_serial handle_migrate_data_get_serial;
+#ifdef RED_STATISTICS
+    uint64_t *out_bytes_counter;
+#endif
 };
 
 /* if one of the callbacks should cause disconnect, use red_channel_shutdown and don't
