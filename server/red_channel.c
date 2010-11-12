@@ -683,6 +683,7 @@ void red_channel_pipe_clear(RedChannel *channel)
     ASSERT(channel);
     if (channel->send_data.item) {
         red_channel_release_item(channel, channel->send_data.item, TRUE);
+        channel->send_data.item = NULL;
     }
     while ((item = (PipeItem *)ring_get_head(&channel->pipe))) {
         ring_remove(&item->link);
