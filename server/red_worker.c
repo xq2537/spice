@@ -8269,7 +8269,7 @@ static void red_disconnect_display(RedChannel *channel)
     CommonChannel *common = SPICE_CONTAINEROF(channel, CommonChannel, base);
     RedWorker *worker;
 
-    if (!channel || !channel->stream) {
+    if (!channel || !red_channel_is_connected(channel)) {
         return;
     }
     worker = common->worker;
@@ -8601,7 +8601,7 @@ static int display_channel_wait_for_init(DisplayChannel *display_channel)
     uint64_t end_time = red_now() + DISPLAY_CLIENT_TIMEOUT;
     for (;;) {
         red_channel_receive((RedChannel *)display_channel);
-        if (!display_channel->common.base.stream) {
+        if (!red_channel_is_connected(&display_channel->common.base)) {
             break;
         }
         if (display_channel->pixmap_cache && display_channel->glz_dict) {
@@ -9227,7 +9227,7 @@ static void red_disconnect_cursor(RedChannel *channel)
 {
     CommonChannel *common;
 
-    if (!channel || !channel->stream) {
+    if (!channel || !red_channel_is_connected(channel)) {
         return;
     }
     common = SPICE_CONTAINEROF(channel, CommonChannel, base);
