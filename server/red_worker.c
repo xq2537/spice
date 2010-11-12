@@ -7182,15 +7182,6 @@ static inline void red_marshall_qxl_drawable(RedWorker *worker, DisplayChannel *
     }
 }
 
-static void inline channel_release_res(RedChannel *channel)
-{
-    if (!channel->send_data.item) {
-        return;
-    }
-    channel->release_item(channel, channel->send_data.item, FALSE);
-    channel->send_data.item = NULL;
-}
-
 static void display_channel_push_release(DisplayChannel *channel, uint8_t type, uint64_t id,
                                          uint64_t* sync_data)
 {
@@ -8268,12 +8259,7 @@ void red_show_tree(RedWorker *worker)
 // TODO: move to red_channel
 static void red_disconnect_channel(RedChannel *channel)
 {
-    channel_release_res(channel);
-    red_channel_pipe_clear(channel);
-    reds_stream_free(channel->stream);
-    channel->stream = NULL;
-    channel->send_data.blocked = FALSE;
-    channel->send_data.size = 0;
+    red_channel_disconnect(channel);
     red_unref_channel(channel);
 }
 

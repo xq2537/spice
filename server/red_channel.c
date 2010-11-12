@@ -751,3 +751,12 @@ int red_channel_no_item_being_sent(RedChannel *channel)
 {
     return channel->send_data.item == NULL;
 }
+
+void red_channel_disconnect(RedChannel *channel)
+{
+    red_channel_pipe_clear(channel);
+    reds_stream_free(channel->stream);
+    channel->stream = NULL;
+    channel->send_data.blocked = FALSE;
+    channel->send_data.size = 0;
+}
