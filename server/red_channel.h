@@ -44,12 +44,7 @@ typedef void (*release_msg_recv_buf_proc)(void *opaque,
                                           SpiceDataHeader *msg_header, uint8_t *msg);
 typedef void (*on_incoming_error_proc)(void *opaque);
 
-typedef struct IncomingHandler {
-    void *opaque;
-    SpiceDataHeader header;
-    uint32_t header_pos;
-    uint8_t *msg; // data of the msg following the header. allocated by alloc_msg_buf.
-    uint32_t msg_pos;
+typedef struct IncomingHandlerInterface {
     handle_message_proc handle_message;
     alloc_msg_recv_buf_proc alloc_msg_buf;
     on_incoming_error_proc on_error; // recv error or handle_message error
@@ -57,6 +52,15 @@ typedef struct IncomingHandler {
     // The following is an optional alternative to handle_message, used if not null
     spice_parse_channel_func_t parser;
     handle_parsed_proc handle_parsed;
+} IncomingHandlerInterface;
+
+typedef struct IncomingHandler {
+    IncomingHandlerInterface *cb;
+    void *opaque;
+    SpiceDataHeader header;
+    uint32_t header_pos;
+    uint8_t *msg; // data of the msg following the header. allocated by alloc_msg_buf.
+    uint32_t msg_pos;
     int shut; // came here from inputs_channel. Not sure if it is really required or can be removed. XXX
 } IncomingHandler;
 
@@ -65,18 +69,23 @@ typedef void (*prepare_outgoing_proc)(void *opaque, struct iovec *vec, int *vec_
 typedef void (*on_outgoing_error_proc)(void *opaque);
 typedef void (*on_outgoing_block_proc)(void *opaque);
 typedef void (*on_outgoing_msg_done_proc)(void *opaque);
+
+typedef struct OutgoingHandlerInterface {
+    get_outgoing_msg_size_proc get_msg_size;
+    prepare_outgoing_proc prepare;
+    on_outgoing_error_proc on_error;
+    on_outgoing_block_proc on_block;
+    on_outgoing_msg_done_proc on_msg_done;
+} OutgoingHandlerInterface;
+
 typedef struct OutgoingHandler {
+    OutgoingHandlerInterface *cb;
     void *opaque;
     struct iovec vec_buf[MAX_SEND_VEC];
     int vec_size;
     struct iovec *vec;
     int pos;
     int size;
-    get_outgoing_msg_size_proc get_msg_size;
-    prepare_outgoing_proc prepare;
-    on_outgoing_error_proc on_error;
-    on_outgoing_block_proc on_block;
-    on_outgoing_msg_done_proc on_msg_done;
 #ifdef RED_STATISTICS
     uint64_t *out_bytes_counter;
 #endif
@@ -156,6 +165,9 @@ struct RedChannel {
 
     OutgoingHandler outgoing;
     IncomingHandler incoming;
+
+    OutgoingHandlerInterface outgoing_cb;
+    IncomingHandlerInterface incoming_cb;
 
     channel_disconnect_proc disconnect;
     channel_send_pipe_item_proc send_item;
