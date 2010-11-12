@@ -203,17 +203,13 @@ void red_channel_default_peer_on_error(RedChannel *channel)
     channel->disconnect(channel);
 }
 
-static void red_channel_peer_on_incoming_error(void *opaque)
+static void red_channel_peer_on_incoming_error(RedChannel *channel)
 {
-    RedChannel *channel = (RedChannel *)opaque;
-
     channel->on_incoming_error(channel);
 }
 
-static void red_channel_peer_on_outgoing_error(void *opaque)
+static void red_channel_peer_on_outgoing_error(RedChannel *channel)
 {
-    RedChannel *channel = (RedChannel *)opaque;
-
     channel->on_outgoing_error(channel);
 }
 
@@ -430,8 +426,8 @@ RedChannel *red_channel_create_parser(int size, RedsStream *stream,
     channel->incoming.parser = parser;
     channel->on_incoming_error = incoming_error;
     channel->on_outgoing_error = outgoing_error;
-    channel->incoming.on_error = red_channel_peer_on_incoming_error;
-    channel->outgoing.on_error = red_channel_peer_on_outgoing_error;
+    channel->incoming.on_error = (on_incoming_error_proc)red_channel_peer_on_incoming_error;
+    channel->outgoing.on_error = (on_outgoing_error_proc)red_channel_peer_on_outgoing_error;
     return channel;
 }
 
