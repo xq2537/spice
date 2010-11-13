@@ -1122,12 +1122,6 @@ static void show_draw_item(RedWorker *worker, DrawItem *draw_item, const char *p
            draw_item->base.rgn.extents.y2);
 }
 
-static inline void red_pipe_item_init(PipeItem *item, int type)
-{
-    ring_item_init(&item->link);
-    item->type = type;
-}
-
 static inline int pipe_item_is_linked(PipeItem *item)
 {
     return ring_item_is_linked(&item->link);
@@ -1148,7 +1142,7 @@ static inline void red_pipe_add_tail(RedChannel *channel, PipeItem *item)
 static void red_pipe_add_verb(RedChannel* channel, uint16_t verb)
 {
     VerbItem *item = spice_new(VerbItem, 1);
-    red_pipe_item_init(&item->base, PIPE_ITEM_TYPE_VERB);
+    red_channel_pipe_item_init(channel, &item->base, PIPE_ITEM_TYPE_VERB);
     item->verb = verb;
     red_channel_pipe_add(channel, &item->base);
 }
@@ -1338,7 +1332,8 @@ static void drawables_init(RedWorker *worker)
 
 static void red_reset_stream_trace(RedWorker *worker);
 
-static SurfaceDestroyItem *get_surface_destroy_item(uint32_t surface_id)
+static SurfaceDestroyItem *get_surface_destroy_item(RedChannel *channel,
+                                                    uint32_t surface_id)
 {
     SurfaceDestroyItem *destroy;
 
@@ -1347,7 +1342,8 @@ static SurfaceDestroyItem *get_surface_destroy_item(uint32_t surface_id)
 
     destroy->surface_destroy.surface_id = surface_id;
 
-    red_pipe_item_init(&destroy->pipe_item, PIPE_ITEM_TYPE_DESTROY_SURFACE);
+    red_channel_pipe_item_init(channel,
+        &destroy->pipe_item, PIPE_ITEM_TYPE_DESTROY_SURFACE);
 
     return destroy;
 }
@@ -1355,16 +1351,15 @@ static SurfaceDestroyItem *get_surface_destroy_item(uint32_t surface_id)
 static inline void red_destroy_surface_item(RedWorker *worker, uint32_t surface_id)
 {
     SurfaceDestroyItem *destroy;
+    RedChannel *channel;
 
     if (!worker->display_channel) {
         return;
     }
-
     worker->display_channel->surface_client_created[surface_id] = FALSE;
-
-    destroy = get_surface_destroy_item(surface_id);
-
-    red_channel_pipe_add(&worker->display_channel->common.base, &destroy->pipe_item);
+    channel = &worker->display_channel->common.base;
+    destroy = get_surface_destroy_item(channel, surface_id);
+    red_channel_pipe_add(channel, &destroy->pipe_item);
 }
 
 static inline void red_destroy_surface(RedWorker *worker, uint32_t surface_id)
@@ -2128,7 +2123,8 @@ static inline void red_detach_stream(RedWorker *worker, Stream *stream)
 static StreamClipItem *__new_stream_clip(DisplayChannel* channel, StreamAgent *agent)
 {
     StreamClipItem *item = spice_new(StreamClipItem, 1);
-    red_pipe_item_init((PipeItem *)item, PIPE_ITEM_TYPE_STREAM_CLIP);
+    red_channel_pipe_item_init(&channel->common.base,
+                    (PipeItem *)item, PIPE_ITEM_TYPE_STREAM_CLIP);
 
     item->stream_agent = agent;
     agent->stream->refs++;
@@ -2238,7 +2234,8 @@ static inline void red_detach_stream_gracefully(RedWorker *worker, Stream *strea
 
         upgrade_item = spice_new(UpgradeItem, 1);
         upgrade_item->refs = 1;
-        red_pipe_item_init(&upgrade_item->base, PIPE_ITEM_TYPE_UPGRADE);
+        red_channel_pipe_item_init(&channel->common.base,
+                &upgrade_item->base, PIPE_ITEM_TYPE_UPGRADE);
         upgrade_item->drawable = stream->current;
         upgrade_item->drawable->refs++;
         n_rects = pixman_region32_n_rects(&upgrade_item->drawable->tree_item.base.rgn);
@@ -2459,8 +2456,10 @@ static void red_display_init_streams(DisplayChannel *display)
         StreamAgent *agent = &display->stream_agents[i];
         agent->stream = &display->common.worker->streams_buf[i];
         region_init(&agent->vis_region);
-        red_pipe_item_init(&agent->create_item, PIPE_ITEM_TYPE_STREAM_CREATE);
-        red_pipe_item_init(&agent->destroy_item, PIPE_ITEM_TYPE_STREAM_DESTROY);
+        red_channel_pipe_item_init(&display->common.base,
+                    &agent->create_item, PIPE_ITEM_TYPE_STREAM_CREATE);
+        red_channel_pipe_item_init(&display->common.base,
+                    &agent->destroy_item, PIPE_ITEM_TYPE_STREAM_DESTROY);
     }
 }
 
@@ -3238,7 +3237,8 @@ static Drawable *get_drawable(RedWorker *worker, uint8_t effect, RedDrawable *re
     drawable->tree_item.base.type = TREE_ITEM_TYPE_DRAWABLE;
     region_init(&drawable->tree_item.base.rgn);
     drawable->tree_item.effect = effect;
-    red_pipe_item_init(&drawable->pipe_item, PIPE_ITEM_TYPE_DRAW);
+    red_channel_pipe_item_init(&worker->display_channel->common.base,
+        &drawable->pipe_item, PIPE_ITEM_TYPE_DRAW);
     drawable->red_drawable = red_drawable;
     drawable->group_id = group_id;
 
@@ -4122,7 +4122,8 @@ static CursorItem *get_cursor_item(RedWorker *worker, RedCursorCmd *cmd, uint32_
     PANIC_ON(!(cursor_item = alloc_cursor_item(worker)));
 
     cursor_item->refs = 1;
-    red_pipe_item_init(&cursor_item->pipe_data, PIPE_ITEM_TYPE_CURSOR);
+    red_channel_pipe_item_init(&worker->cursor_channel->common.base,
+                        &cursor_item->pipe_data, PIPE_ITEM_TYPE_CURSOR);
     cursor_item->type = CURSOR_TYPE_INVALID;
     cursor_item->group_id = group_id;
     cursor_item->red_cursor = cmd;
@@ -4350,7 +4351,8 @@ static ImageItem *red_add_surface_area_image(RedWorker *worker, int surface_id, 
                                       
     item = (ImageItem *)spice_malloc_n_m(height, stride, sizeof(ImageItem));
 
-    red_pipe_item_init(&item->link, PIPE_ITEM_TYPE_IMAGE);
+    red_channel_pipe_item_init(&worker->display_channel->common.base,
+                               &item->link, PIPE_ITEM_TYPE_IMAGE);
 
     item->refs = 1;
     item->surface_id = surface_id;
@@ -8390,8 +8392,10 @@ static inline void *create_canvas_for_surface(RedWorker *worker, RedSurface *sur
     };
 }
 
-static SurfaceCreateItem *get_surface_create_item(uint32_t surface_id, uint32_t width,
-                                                  uint32_t height, uint32_t format, uint32_t flags)
+static SurfaceCreateItem *get_surface_create_item(
+    RedChannel* channel,
+    uint32_t surface_id, uint32_t width,
+    uint32_t height, uint32_t format, uint32_t flags)
 {
     SurfaceCreateItem *create;
 
@@ -8404,8 +8408,8 @@ static SurfaceCreateItem *get_surface_create_item(uint32_t surface_id, uint32_t 
     create->surface_create.flags = flags;
     create->surface_create.format = format;
 
-    red_pipe_item_init(&create->pipe_item, PIPE_ITEM_TYPE_CREATE_SURFACE);
-
+    red_channel_pipe_item_init(channel,
+            &create->pipe_item, PIPE_ITEM_TYPE_CREATE_SURFACE);
     return create;
 }
 
@@ -8420,7 +8424,8 @@ static inline void __red_create_surface_item(RedWorker *worker, int surface_id, 
 
     surface = &worker->surfaces[surface_id];
 
-    create = get_surface_create_item(surface_id, surface->context.width, surface->context.height,
+    create = get_surface_create_item(&worker->display_channel->common.base,
+            surface_id, surface->context.width, surface->context.height,
                                      surface->context.format, flags);
 
     worker->display_channel->surface_client_created[surface_id] = TRUE;
@@ -9315,13 +9320,15 @@ typedef struct __attribute__ ((__packed__)) CursorData {
     SpiceCursor _cursor;
 } CursorData;
 
-static LocalCursor *_new_local_cursor(SpiceCursorHeader *header, int data_size, SpicePoint16 position)
+static LocalCursor *_new_local_cursor(RedChannel *channel,
+    SpiceCursorHeader *header, int data_size, SpicePoint16 position)
 {
     LocalCursor *local;
 
     local = (LocalCursor *)spice_malloc0(sizeof(LocalCursor) + data_size);
 
-    red_pipe_item_init(&local->base.pipe_data, PIPE_ITEM_TYPE_LOCAL_CURSOR);
+    red_channel_pipe_item_init(channel, &local->base.pipe_data,
+                               PIPE_ITEM_TYPE_LOCAL_CURSOR);
     local->base.refs = 1;
     local->base.type = CURSOR_TYPE_LOCAL;
 
@@ -9352,7 +9359,8 @@ static void red_cursor_flush(RedWorker *worker)
     ASSERT(cursor_cmd->type == QXL_CURSOR_SET);
     cursor = &cursor_cmd->u.set.shape;
 
-    local = _new_local_cursor(&cursor->header, cursor->data_size,
+    local = _new_local_cursor(&worker->cursor_channel->common.base,
+                              &cursor->header, cursor->data_size,
                               worker->cursor_position);
     ASSERT(local);
     memcpy(local->red_cursor.data, cursor->data, local->data_size);
