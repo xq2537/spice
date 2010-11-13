@@ -26,6 +26,7 @@
 #define FUNC_NAME(name) pixmap_cache_##name
 #define PRIVATE_FUNC_NAME(name) __pixmap_cache_##name
 #define CHANNEL DisplayChannel
+#define CHANNEL_FROM_RCC(rcc) SPICE_CONTAINEROF(rcc->channel, CHANNEL, common.base);
 #define CACH_GENERATION pixmap_cache_generation
 #define INVAL_ALL_VERB SPICE_MSG_DISPLAY_INVAL_ALL_PIXMAPS
 #else
@@ -35,12 +36,13 @@
 #endif
 
 
-static int FUNC_NAME(hit)(CACHE *cache, uint64_t id, int *lossy, CHANNEL *channel)
+static int FUNC_NAME(hit)(CACHE *cache, uint64_t id, int *lossy, RedChannelClient *rcc)
 {
+    CHANNEL *channel = CHANNEL_FROM_RCC(rcc);
     NewCacheItem *item;
     uint64_t serial;
 
-    serial = red_channel_get_message_serial((RedChannel *)channel);
+    serial = red_channel_client_get_message_serial(rcc);
     pthread_mutex_lock(&cache->lock);
     item = cache->hash_table[CACHE_HASH_KEY(id)];
 
@@ -79,8 +81,9 @@ static int FUNC_NAME(set_lossy)(CACHE *cache, uint64_t id, int lossy)
     return !!item;
 }
 
-static int FUNC_NAME(add)(CACHE *cache, uint64_t id, uint32_t size, int lossy, CHANNEL *channel)
+static int FUNC_NAME(add)(CACHE *cache, uint64_t id, uint32_t size, int lossy, RedChannelClient *rcc)
 {
+    CHANNEL *channel = CHANNEL_FROM_RCC(rcc);
     NewCacheItem *item;
     uint64_t serial;
     int key;
@@ -88,7 +91,7 @@ static int FUNC_NAME(add)(CACHE *cache, uint64_t id, uint32_t size, int lossy, C
     ASSERT(size > 0);
 
     item = spice_new(NewCacheItem, 1);
-    serial = red_channel_get_message_serial((RedChannel *)channel);
+    serial = red_channel_client_get_message_serial(rcc);
 
     pthread_mutex_lock(&cache->lock);
 
@@ -166,13 +169,14 @@ static void PRIVATE_FUNC_NAME(clear)(CACHE *cache)
     cache->items = 0;
 }
 
-static void FUNC_NAME(reset)(CACHE *cache, CHANNEL *channel, SpiceMsgWaitForChannels* sync_data)
+static void FUNC_NAME(reset)(CACHE *cache, RedChannelClient *rcc, SpiceMsgWaitForChannels* sync_data)
 {
+    CHANNEL *channel = CHANNEL_FROM_RCC(rcc);
     uint8_t wait_count;
     uint64_t serial;
     uint32_t i;
 
-    serial = red_channel_get_message_serial((RedChannel *)channel);
+    serial = red_channel_client_get_message_serial(rcc);
     pthread_mutex_lock(&cache->lock);
     PRIVATE_FUNC_NAME(clear)(cache);
 
@@ -230,4 +234,5 @@ static void FUNC_NAME(destroy)(CACHE *cache)
 #undef FUNC_NAME
 #undef VAR_NAME
 #undef CHANNEL
+#undef CHANNEL_FROM_RCC
 

@@ -164,9 +164,9 @@ const VDAgentMouseState *inputs_get_mouse_state(void)
     return &g_inputs_channel->mouse_state;
 }
 
-static uint8_t *inputs_channel_alloc_msg_rcv_buf(RedChannel *channel, SpiceDataHeader *msg_header)
+static uint8_t *inputs_channel_alloc_msg_rcv_buf(RedChannelClient *rcc, SpiceDataHeader *msg_header)
 {
-    InputsChannel *inputs_channel = SPICE_CONTAINEROF(channel, InputsChannel, base);
+    InputsChannel *inputs_channel = SPICE_CONTAINEROF(rcc->channel, InputsChannel, base);
 
     if (msg_header->size > RECEIVE_BUF_SIZE) {
         red_printf("error: too large incoming message");
@@ -175,7 +175,7 @@ static uint8_t *inputs_channel_alloc_msg_rcv_buf(RedChannel *channel, SpiceDataH
     return inputs_channel->recv_buf;
 }
 
-static void inputs_channel_release_msg_rcv_buf(RedChannel *channel, SpiceDataHeader *msg_header,
+static void inputs_channel_release_msg_rcv_buf(RedChannelClient *rcc, SpiceDataHeader *msg_header,
                                                uint8_t *msg)
 {
 }
@@ -249,17 +249,17 @@ static void inputs_pipe_add_type(InputsChannel *channel, int type)
     red_channel_pipe_add_push(&channel->base, &pipe_item->base);
 }
 
-static void inputs_channel_release_pipe_item(RedChannel *channel,
+static void inputs_channel_release_pipe_item(RedChannelClient *rcc,
     PipeItem *base, int item_pushed)
 {
     free(base);
 }
 
-static void inputs_channel_send_item(RedChannel *channel, PipeItem *base)
+static void inputs_channel_send_item(RedChannelClient *rcc, PipeItem *base)
 {
-    SpiceMarshaller *m = red_channel_get_marshaller(channel);
+    SpiceMarshaller *m = red_channel_client_get_marshaller(rcc);
 
-    red_channel_init_send_data(channel, base->type, base);
+    red_channel_client_init_send_data(rcc, base->type, base);
     switch (base->type) {
         case PIPE_ITEM_KEY_MODIFIERS:
         {
@@ -288,12 +288,12 @@ static void inputs_channel_send_item(RedChannel *channel, PipeItem *base)
         default:
             break;
     }
-    red_channel_begin_send_message(channel);
+    red_channel_client_begin_send_message(rcc);
 }
 
-static int inputs_channel_handle_parsed(RedChannel *channel, uint32_t size, uint16_t type, void *message)
+static int inputs_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint16_t type, void *message)
 {
-    InputsChannel *inputs_channel = (InputsChannel *)channel;
+    InputsChannel *inputs_channel = (InputsChannel *)rcc->channel;
     uint8_t *buf = (uint8_t *)message;
 
     ASSERT(g_inputs_channel == inputs_channel);
@@ -446,10 +446,10 @@ static void inputs_relase_keys(void)
     kbd_push_scan(keyboard, 0x38 | 0x80); //LALT
 }
 
-static void inputs_channel_on_error(RedChannel *channel)
+static void inputs_channel_on_error(RedChannelClient *rcc)
 {
     inputs_relase_keys();
-    reds_disconnect();
+    red_channel_client_destroy(rcc);
 }
 
 static void inputs_shutdown(Channel *channel)
@@ -485,11 +485,11 @@ static void inputs_pipe_add_init(InputsChannel *inputs_channel)
     red_channel_pipe_add_push(&inputs_channel->base, &item->base);
 }
 
-static int inputs_channel_config_socket(RedChannel *channel)
+static int inputs_channel_config_socket(RedChannelClient *rcc)
 {
     int flags;
     int delay_val = 1;
-    RedsStream *stream = red_channel_get_stream(channel);
+    RedsStream *stream = red_channel_client_get_stream(rcc);
 
     if (setsockopt(stream->socket, IPPROTO_TCP, TCP_NODELAY,
             &delay_val, sizeof(delay_val)) == -1) {
@@ -505,7 +505,7 @@ static int inputs_channel_config_socket(RedChannel *channel)
     return TRUE;
 }
 
-static void inputs_channel_hold_pipe_item(RedChannel *channel, PipeItem *item)
+static void inputs_channel_hold_pipe_item(RedChannelClient *rcc, PipeItem *item)
 {
 }
 
@@ -514,11 +514,13 @@ static void inputs_link(Channel *channel, RedsStream *stream, int migration,
                         uint32_t *caps)
 {
     InputsChannel *inputs_channel;
-    red_printf("");
+    RedChannelClient *rcc;
+
     ASSERT(channel->data == NULL);
 
+    red_printf("input channel create");
     g_inputs_channel = inputs_channel = (InputsChannel*)red_channel_create_parser(
-        sizeof(*inputs_channel), stream, core, migration, FALSE /* handle_acks */
+        sizeof(*inputs_channel), core, migration, FALSE /* handle_acks */
         ,inputs_channel_config_socket
         ,spice_get_client_channel_parser(SPICE_CHANNEL_INPUTS, NULL)
         ,inputs_channel_handle_parsed
@@ -533,6 +535,9 @@ static void inputs_link(Channel *channel, RedsStream *stream, int migration,
         ,NULL
         ,NULL);
     ASSERT(inputs_channel);
+    red_printf("input channel client create");
+    rcc = red_channel_client_create(sizeof(RedChannelClient), &g_inputs_channel->base, stream);
+    ASSERT(rcc);
     channel->data = inputs_channel;
     inputs_pipe_add_init(inputs_channel);
 }

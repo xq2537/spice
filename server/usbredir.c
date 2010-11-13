@@ -38,6 +38,7 @@ typedef struct UsbRedirPipeItem {
 typedef struct UsbRedirState {
     Channel channel;
     RedChannel *red_channel;
+    RedChannelClient *rcc;
     SpiceCharDeviceState chardev_st;
     SpiceCharDeviceInstance *chardev_sin;
     UsbRedirPipeItem *pipe_item;
@@ -81,46 +82,46 @@ static void usbredir_chardev_wakeup(SpiceCharDeviceInstance *sin)
     } while (n > 0);
 }
 
-static int usbredir_red_channel_config_socket(RedChannel *red_channel)
+static int usbredir_red_channel_config_socket(RedChannelClient *rcc)
 {
     return TRUE;
 }
 
-static void usbredir_red_channel_disconnect(RedChannel *red_channel)
+static void usbredir_red_channel_disconnect(RedChannelClient *rcc)
 {
     UsbRedirState *state;
     SpiceCharDeviceInstance *sin;
     SpiceCharDeviceInterface *sif;
 
-    if (!red_channel) {
+    if (!rcc) {
         return;
     }
 
-    state = SPICE_CONTAINEROF(red_channel, UsbRedirChannel, base)->state;
+    state = SPICE_CONTAINEROF(rcc->channel, UsbRedirChannel, base)->state;
     sin = state->chardev_sin;
     sif = SPICE_CONTAINEROF(sin->base.sif, SpiceCharDeviceInterface, base);
 
-    red_channel_destroy(red_channel);
-    state->red_channel = NULL;
+    red_channel_client_destroy(rcc);
+    state->rcc = NULL;
     if (sif->state) {
         sif->state(sin, 0);
     }
 }
 
-static int usbredir_red_channel_handle_message(RedChannel *red_channel,
+static int usbredir_red_channel_client_handle_message(RedChannelClient *rcc,
     SpiceDataHeader *header, uint8_t *msg)
 {
     UsbRedirState *state;
     SpiceCharDeviceInstance *sin;
     SpiceCharDeviceInterface *sif;
 
-    state = SPICE_CONTAINEROF(red_channel, UsbRedirChannel, base)->state;
+    state = SPICE_CONTAINEROF(rcc->channel, UsbRedirChannel, base)->state;
     sin = state->chardev_sin;
     sif = SPICE_CONTAINEROF(sin->base.sif, SpiceCharDeviceInterface, base);
 
     if (header->type != SPICE_MSGC_USBREDIR_DATA) {
-        return red_channel_handle_message(red_channel, header->size,
-                                          header->type, msg);
+        return red_channel_client_handle_message(rcc, header->size,
+                                                 header->type, msg);
     }
 
     /*
@@ -132,12 +133,12 @@ static int usbredir_red_channel_handle_message(RedChannel *red_channel,
     return TRUE;
 }
 
-static uint8_t *usbredir_red_channel_alloc_msg_rcv_buf(RedChannel *red_channel,
+static uint8_t *usbredir_red_channel_alloc_msg_rcv_buf(RedChannelClient *rcc,
     SpiceDataHeader *msg_header)
 {
     UsbRedirState *state;
 
-    state = SPICE_CONTAINEROF(red_channel, UsbRedirChannel, base)->state;
+    state = SPICE_CONTAINEROF(rcc->channel, UsbRedirChannel, base)->state;
 
     if (msg_header->size > state->rcv_buf_size) {
         state->rcv_buf = spice_realloc(state->rcv_buf, msg_header->size);
@@ -147,30 +148,30 @@ static uint8_t *usbredir_red_channel_alloc_msg_rcv_buf(RedChannel *red_channel,
     return state->rcv_buf;
 }
 
-static void usbredir_red_channel_release_msg_rcv_buf(RedChannel *red_channel,
+static void usbredir_red_channel_release_msg_rcv_buf(RedChannelClient *rcc,
     SpiceDataHeader *msg_header, uint8_t *msg)
 {
     /* NOOP, we re-use the buffer every time and only free it on destruction */
 }
 
-static void usbredir_red_channel_hold_pipe_item(RedChannel *red_channel,
+static void usbredir_red_channel_hold_pipe_item(RedChannelClient *rcc,
     PipeItem *item)
 {
     /* NOOP */
 }
 
-static void usbredir_red_channel_send_item(RedChannel *red_channel,
+static void usbredir_red_channel_send_item(RedChannelClient *rcc,
     PipeItem *item)
 {
     UsbRedirPipeItem *i = SPICE_CONTAINEROF(item, UsbRedirPipeItem, base);
-    SpiceMarshaller *m = red_channel_get_marshaller(red_channel);
+    SpiceMarshaller *m = red_channel_client_get_marshaller(rcc);
 
-    red_channel_init_send_data(red_channel, SPICE_MSG_USBREDIR_DATA, item);
+    red_channel_client_init_send_data(rcc, SPICE_MSG_USBREDIR_DATA, item);
     spice_marshaller_add_ref(m, i->buf, i->buf_used);
-    red_channel_begin_send_message(red_channel);
+    red_channel_client_begin_send_message(rcc);
 }
 
-static void usbredir_red_channel_release_pipe_item(RedChannel *red_channel,
+static void usbredir_red_channel_release_pipe_item(RedChannelClient *rcc,
     PipeItem *item, int item_pushed)
 {
     free(item);
@@ -188,28 +189,36 @@ static void usbredir_link(Channel *channel, RedsStream *stream, int migration,
     sin = state->chardev_sin;
     sif = SPICE_CONTAINEROF(sin->base.sif, SpiceCharDeviceInterface, base);
 
-    if (state->red_channel) {
-        WARN("channel %d:%d already connected, refusing second connection\n",
-             channel->type, channel->id);
+    if (state->rcc) {
+        WARN("channel client %d:%d (%p) already connected, refusing second connection\n",
+             channel->type, channel->id, state->rcc);
+        // TODO: notify client in advance about the in use channel using
+        // SPICE_MSG_MAIN_CHANNEL_IN_USE (for example)
         reds_stream_free(stream);
         return;
     }
 
-    state->red_channel = red_channel_create(sizeof(UsbRedirChannel),
-                                    stream, core,
-                                    migration, FALSE /* handle_acks */,
-                                    usbredir_red_channel_config_socket,
-                                    usbredir_red_channel_disconnect,
-                                    usbredir_red_channel_handle_message,
-                                    usbredir_red_channel_alloc_msg_rcv_buf,
-                                    usbredir_red_channel_release_msg_rcv_buf,
-                                    usbredir_red_channel_hold_pipe_item,
-                                    usbredir_red_channel_send_item,
-                                    usbredir_red_channel_release_pipe_item,
-                                    NULL,
-                                    NULL,
-                                    NULL);
     if (!state->red_channel) {
+        state->red_channel = red_channel_create(sizeof(UsbRedirChannel),
+                                        core, migration, FALSE /* handle_acks */,
+                                        usbredir_red_channel_config_socket,
+                                        usbredir_red_channel_disconnect,
+                                        usbredir_red_channel_client_handle_message,
+                                        usbredir_red_channel_alloc_msg_rcv_buf,
+                                        usbredir_red_channel_release_msg_rcv_buf,
+                                        usbredir_red_channel_hold_pipe_item,
+                                        usbredir_red_channel_send_item,
+                                        usbredir_red_channel_release_pipe_item,
+                                        NULL,
+                                        NULL,
+                                        NULL);
+    }
+    if (!state->red_channel) {
+        return;
+    }
+    state->rcc = red_channel_client_create(sizeof(RedChannelClient), state->red_channel, stream);
+    if (!state->rcc) {
+        red_printf("failed to create usbredir channel client\n");
         return;
     }
     red_channel_init_outgoing_messages_window(state->red_channel);
@@ -225,7 +234,9 @@ static void usbredir_shutdown(Channel *channel)
 {
     UsbRedirState *state = SPICE_CONTAINEROF(channel, UsbRedirState, channel);
 
-    usbredir_red_channel_disconnect(state->red_channel);
+    usbredir_red_channel_disconnect(state->rcc);
+    red_channel_destroy(state->red_channel);
+    state->red_channel = NULL;
 }
 
 static void usbredir_migrate(Channel *channel)
@@ -264,7 +275,7 @@ void usbredir_device_disconnect(SpiceCharDeviceInstance *sin)
 
     reds_unregister_channel(&state->channel);
 
-    usbredir_red_channel_disconnect(state->red_channel);
+    usbredir_red_channel_disconnect(state->rcc);
 
     free(state->pipe_item);
     free(state->rcv_buf);

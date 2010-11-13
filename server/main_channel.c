@@ -421,7 +421,8 @@ static void main_channel_marshall_migrate_data_item(SpiceMarshaller *m, int seri
     data->ping_id = ping_id;
 }
 
-static uint64_t main_channel_handle_migrate_data_get_serial(RedChannel *base,
+static uint64_t main_channel_handle_migrate_data_get_serial(
+    RedChannelClient *rcc,
     uint32_t size, void *message)
 {
     MainMigrateData *data = message;
@@ -433,10 +434,10 @@ static uint64_t main_channel_handle_migrate_data_get_serial(RedChannel *base,
     return data->serial;
 }
 
-static uint64_t main_channel_handle_migrate_data(RedChannel *base,
+static uint64_t main_channel_handle_migrate_data(RedChannelClient *rcc,
     uint32_t size, void *message)
 {
-    MainChannel *main_chan = SPICE_CONTAINEROF(base, MainChannel, base);
+    MainChannel *main_chan = SPICE_CONTAINEROF(rcc->channel, MainChannel, base);
     MainMigrateData *data = message;
 
     if (size < sizeof(*data)) {
@@ -607,12 +608,12 @@ static void main_channel_marshall_multi_media_time(SpiceMarshaller *m,
     spice_marshall_msg_main_multi_media_time(m, &time_mes);
 }
 
-static void main_channel_send_item(RedChannel *channel, PipeItem *base)
+static void main_channel_send_item(RedChannelClient *rcc, PipeItem *base)
 {
-    SpiceMarshaller *m = red_channel_get_marshaller(channel);
-    MainChannel *main_chan = SPICE_CONTAINEROF(channel, MainChannel, base);
+    MainChannel *main_chan = SPICE_CONTAINEROF(rcc->channel, MainChannel, base);
+    SpiceMarshaller *m = red_channel_client_get_marshaller(rcc);
 
-    red_channel_init_send_data(channel, base->type, base);
+    red_channel_client_init_send_data(rcc, base->type, base);
     switch (base->type) {
         case SPICE_MSG_MAIN_CHANNELS_LIST:
             main_channel_marshall_channels(m);
@@ -642,7 +643,7 @@ static void main_channel_send_item(RedChannel *channel, PipeItem *base)
             break;
         case SPICE_MSG_MIGRATE_DATA:
             main_channel_marshall_migrate_data_item(m,
-                red_channel_get_message_serial(&main_chan->base),
+                red_channel_client_get_message_serial(rcc),
                 main_chan->ping_id);
             break;
         case SPICE_MSG_MAIN_INIT:
@@ -668,18 +669,18 @@ static void main_channel_send_item(RedChannel *channel, PipeItem *base)
             main_channel_marshall_migrate_switch(m);
             break;
     };
-    red_channel_begin_send_message(channel);
+    red_channel_client_begin_send_message(rcc);
 }
 
-static void main_channel_release_pipe_item(RedChannel *channel,
+static void main_channel_release_pipe_item(RedChannelClient *rcc,
     PipeItem *base, int item_pushed)
 {
     free(base);
 }
 
-static int main_channel_handle_parsed(RedChannel *channel, uint32_t size, uint16_t type, void *message)
+static int main_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint16_t type, void *message)
 {
-    MainChannel *main_chan = SPICE_CONTAINEROF(channel, MainChannel, base);
+    MainChannel *main_chan = SPICE_CONTAINEROF(rcc->channel, MainChannel, base);
 
     switch (type) {
     case SPICE_MSGC_MAIN_AGENT_START:
@@ -770,35 +771,36 @@ static int main_channel_handle_parsed(RedChannel *channel, uint32_t size, uint16
     return TRUE;
 }
 
-static void main_channel_on_error(RedChannel *channel)
+static void main_channel_on_error(RedChannelClient *rcc)
 {
     reds_disconnect();
 }
 
-static uint8_t *main_channel_alloc_msg_rcv_buf(RedChannel *channel, SpiceDataHeader *msg_header)
+static uint8_t *main_channel_alloc_msg_rcv_buf(RedChannelClient *rcc, SpiceDataHeader *msg_header)
 {
-    MainChannel *main_chan = SPICE_CONTAINEROF(channel, MainChannel, base);
+    MainChannel *main_chan = SPICE_CONTAINEROF(rcc->channel, MainChannel, base);
 
     return main_chan->recv_buf;
 }
 
-static void main_channel_release_msg_rcv_buf(RedChannel *channel, SpiceDataHeader *msg_header,
+static void main_channel_release_msg_rcv_buf(RedChannelClient *rcc, SpiceDataHeader *msg_header,
                                                uint8_t *msg)
 {
 }
 
-static int main_channel_config_socket(RedChannel *channel)
+static int main_channel_config_socket(RedChannelClient *rcc)
 {
     return TRUE;
 }
 
-static void main_channel_hold_pipe_item(RedChannel *channel, PipeItem *item)
+static void main_channel_hold_pipe_item(RedChannelClient *rcc, PipeItem *item)
 {
 }
 
-static int main_channel_handle_migrate_flush_mark(RedChannel *base)
+static int main_channel_handle_migrate_flush_mark(RedChannelClient *rcc)
 {
-    main_channel_push_migrate_data_item(SPICE_CONTAINEROF(base, MainChannel, base));
+    main_channel_push_migrate_data_item(SPICE_CONTAINEROF(rcc->channel,
+                                        MainChannel, base));
     return TRUE;
 }
 
@@ -807,26 +809,30 @@ static void main_channel_link(Channel *channel, RedsStream *stream, int migratio
                         uint32_t *caps)
 {
     MainChannel *main_chan;
-    red_printf("");
     ASSERT(channel->data == NULL);
 
-    main_chan = (MainChannel*)red_channel_create_parser(
-        sizeof(*main_chan), stream, core, migration, FALSE /* handle_acks */
-        ,main_channel_config_socket
-        ,spice_get_client_channel_parser(SPICE_CHANNEL_MAIN, NULL)
-        ,main_channel_handle_parsed
-        ,main_channel_alloc_msg_rcv_buf
-        ,main_channel_release_msg_rcv_buf
-        ,main_channel_hold_pipe_item
-        ,main_channel_send_item
-        ,main_channel_release_pipe_item
-        ,main_channel_on_error
-        ,main_channel_on_error
-        ,main_channel_handle_migrate_flush_mark
-        ,main_channel_handle_migrate_data
-        ,main_channel_handle_migrate_data_get_serial);
-    ASSERT(main_chan);
-    channel->data = main_chan;
+    if (channel->data == NULL) {
+        red_printf("create main channel");
+        channel->data = red_channel_create_parser(
+            sizeof(*main_chan), core, migration, FALSE /* handle_acks */
+            ,main_channel_config_socket
+            ,spice_get_client_channel_parser(SPICE_CHANNEL_MAIN, NULL)
+            ,main_channel_handle_parsed
+            ,main_channel_alloc_msg_rcv_buf
+            ,main_channel_release_msg_rcv_buf
+            ,main_channel_hold_pipe_item
+            ,main_channel_send_item
+            ,main_channel_release_pipe_item
+            ,main_channel_on_error
+            ,main_channel_on_error
+            ,main_channel_handle_migrate_flush_mark
+            ,main_channel_handle_migrate_data
+            ,main_channel_handle_migrate_data_get_serial);
+        ASSERT(channel->data);
+    }
+    main_chan = (MainChannel*)channel->data;
+    red_printf("add main channel client");
+    red_channel_client_create(sizeof(RedChannelClient), channel->data, stream);
 }
 
 int main_channel_getsockname(Channel *channel, struct sockaddr *sa, socklen_t *salen)
