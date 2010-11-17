@@ -733,7 +733,9 @@ void RedWindow_p::handle_key_press_event(RedWindow& window, XKeyEvent* event)
 
     if (x_input_context != NULL) {
         for (;;) {
+            XLockDisplay(x_display);
             len = XwcLookupString(x_input_context, event, utf32_buf, buf_size, &key_sym, &status);
+            XUnlockDisplay(x_display);
             if (status != XBufferOverflow) {
                 break;
             }
@@ -767,7 +769,9 @@ void RedWindow_p::handle_key_press_event(RedWindow& window, XKeyEvent* event)
         unsigned char buffer[16];
         int i;
 
+        XLockDisplay(x_display);
         len = XLookupString(event, (char *)buffer, sizeof(buffer), NULL, NULL);
+        XUnlockDisplay(x_display);
         for (i = 0; i < len; i++) {
             window.get_listener().on_char((uint32_t)buffer[i]);
         }
@@ -2135,7 +2139,9 @@ void RedWindow::on_focus_in()
     }
     _focused = true;
     if (x_input_context) {
+        XLockDisplay(x_display);
         XwcResetIC(x_input_context);
+        XUnlockDisplay(x_display);
     }
     XPlatform::on_focus_in();
     get_listener().on_activate();
