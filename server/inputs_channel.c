@@ -511,7 +511,7 @@ void inputs_send_keyboard_modifiers(uint8_t modifiers)
     InputsPipeItem *pipe_item;
     SpiceMarshaller *m;
 
-    if (!g_inputs_channel) {
+    if (!g_inputs_channel || !red_channel_is_connected(&g_inputs_channel->base)) {
         return;
     }
     pipe_item = inputs_pipe_item_new(g_inputs_channel, PIPE_ITEM_KEY_MODIFIERS);
