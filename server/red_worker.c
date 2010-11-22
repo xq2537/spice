@@ -1172,9 +1172,21 @@ static inline void red_handle_drawable_surfaces_client_synced(RedWorker *worker,
     red_add_surface_image(worker, drawable->surface_id);
 }
 
+static int display_is_connected(RedWorker *worker)
+{
+    return (worker->display_channel && red_channel_is_connected(
+        &worker->display_channel->common.base));
+}
+
+static int cursor_is_connected(RedWorker *worker)
+{
+    return (worker->cursor_channel && red_channel_is_connected(
+        &worker->cursor_channel->common.base));
+}
+
 static inline void red_pipe_add_drawable(RedWorker *worker, Drawable *drawable)
 {
-    if (!worker->display_channel) {
+    if (!display_is_connected(worker)) {
         return;
     }
 
@@ -1186,7 +1198,7 @@ static inline void red_pipe_add_drawable(RedWorker *worker, Drawable *drawable)
 
 static inline void red_pipe_add_drawable_to_tail(RedWorker *worker, Drawable *drawable)
 {
-    if (!worker->display_channel) {
+    if (!display_is_connected(worker)) {
         return;
     }
     red_handle_drawable_surfaces_client_synced(worker, drawable);
@@ -1197,7 +1209,7 @@ static inline void red_pipe_add_drawable_to_tail(RedWorker *worker, Drawable *dr
 static inline void red_pipe_add_drawable_after(RedWorker *worker, Drawable *drawable,
                                                Drawable *pos_after)
 {
-    if (!worker->display_channel) {
+    if (!display_is_connected(worker)) {
         return;
     }
 
@@ -1212,7 +1224,7 @@ static inline void red_pipe_add_drawable_after(RedWorker *worker, Drawable *draw
 
 static inline PipeItem *red_pipe_get_tail(RedWorker *worker)
 {
-    if (!worker->display_channel) {
+    if (!display_is_connected(worker)) {
         return NULL;
     }
 
@@ -1232,7 +1244,7 @@ static inline void red_pipe_remove_drawable(RedWorker *worker, Drawable *drawabl
 
 static inline void red_pipe_add_image_item(RedWorker *worker, ImageItem *item)
 {
-    if (!worker->display_channel) {
+    if (!display_is_connected(worker)) {
         return;
     }
     item->refs++;
@@ -1242,7 +1254,7 @@ static inline void red_pipe_add_image_item(RedWorker *worker, ImageItem *item)
 static inline void red_pipe_add_image_item_after(RedWorker *worker, ImageItem *item,
                                                  PipeItem *pos)
 {
-    if (!worker->display_channel) {
+    if (!display_is_connected(worker)) {
         return;
     }
     item->refs++;
@@ -1350,7 +1362,7 @@ static inline void red_destroy_surface_item(RedWorker *worker, uint32_t surface_
     SurfaceDestroyItem *destroy;
     RedChannel *channel;
 
-    if (!worker->display_channel) {
+    if (!display_is_connected(worker)) {
         return;
     }
     worker->display_channel->surface_client_created[surface_id] = FALSE;
@@ -1665,7 +1677,7 @@ static void red_clear_surface_drawables_from_pipe(RedWorker *worker, int surface
     PipeItem *item;
     int x;
 
-    if (!worker->display_channel) {
+    if (!display_is_connected(worker)) {
         return;
     }
 
@@ -2273,11 +2285,11 @@ static void red_detach_streams_behind(RedWorker *worker, QRegion *region)
 
 static void red_streams_update_clip(RedWorker *worker, Drawable *drawable)
 {
-    DisplayChannel *channel;
+    DisplayChannel *channel = worker->display_channel;
     Ring *ring;
     RingItem *item;
 
-    if (!(channel = worker->display_channel)) {
+    if (!display_is_connected(worker)) {
         return;
     }
 
@@ -2548,7 +2560,7 @@ static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream)
 {
     ASSERT(stream->current);
 
-    if (!worker->display_channel || !IS_LOW_BANDWIDTH()) {
+    if (!display_is_connected(worker) || !IS_LOW_BANDWIDTH()) {
         return;
     }
 
@@ -4131,8 +4143,10 @@ static CursorItem *get_cursor_item(RedWorker *worker, RedCursorCmd *cmd, uint32_
 
 static void qxl_process_cursor(RedWorker *worker, RedCursorCmd *cursor_cmd, uint32_t group_id)
 {
-    CursorItem *item = get_cursor_item(worker, cursor_cmd, group_id);
+    CursorItem *item;
     int cursor_show = FALSE;
+
+    item = get_cursor_item(worker, cursor_cmd, group_id);
 
     switch (cursor_cmd->type) {
     case QXL_CURSOR_SET:
@@ -4183,7 +4197,7 @@ static int red_process_cursor(RedWorker *worker, uint32_t max_pipe_size, int *ri
     }
 
     *ring_is_empty = FALSE;
-    while (!worker->cursor_channel || worker->cursor_channel->common.base.pipe_size <= max_pipe_size) {
+    while (!cursor_is_connected(worker) || worker->cursor_channel->common.base.pipe_size <= max_pipe_size) {
         if (!worker->qxl->st->qif->get_cursor_command(worker->qxl, &ext_cmd)) {
             *ring_is_empty = TRUE;
             if (worker->repoll_cursor_ring < CMD_RING_POLL_RETRIES) {
@@ -4228,7 +4242,7 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
     }
 
     *ring_is_empty = FALSE;
-    while (!worker->display_channel || worker->display_channel->common.base.pipe_size <= max_pipe_size) {
+    while (!display_is_connected(worker) || worker->display_channel->common.base.pipe_size <= max_pipe_size) {
         if (!worker->qxl->st->qif->get_command(worker->qxl, &ext_cmd)) {
             *ring_is_empty = TRUE;;
             if (worker->repoll_cmd_ring < CMD_RING_POLL_RETRIES) {
@@ -4406,7 +4420,7 @@ static void red_add_surface_image(RedWorker *worker, int surface_id)
 
     surface = &worker->surfaces[surface_id];
 
-    if (!worker->display_channel || !surface->context.canvas) {
+    if (!display_is_connected(worker) || !surface->context.canvas) {
         return;
     }
 
@@ -8223,7 +8237,7 @@ static inline void __red_create_surface_item(RedWorker *worker, int surface_id, 
     RedSurface *surface;
     SurfaceCreateItem *create;
 
-    if (!worker->display_channel) {
+    if (!display_is_connected(worker)) {
         return;
     }
 
@@ -8334,7 +8348,7 @@ static inline void flush_display_commands(RedWorker *worker)
         int sleep_count = 0;
         for (;;) {
             red_channel_push(&worker->display_channel->common.base);
-            if (!worker->display_channel ||
+            if (!display_is_connected(worker) ||
                  worker->display_channel->common.base.pipe_size <= MAX_PIPE_SIZE) {
                 break;
             }
@@ -8378,7 +8392,7 @@ static inline void flush_cursor_commands(RedWorker *worker)
         int sleep_count = 0;
         for (;;) {
             red_channel_push(&worker->cursor_channel->common.base);
-            if (!worker->cursor_channel ||
+            if (!cursor_is_connected(worker) ||
                                         worker->cursor_channel->common.base.pipe_size <= MAX_PIPE_SIZE) {
                 break;
             }
