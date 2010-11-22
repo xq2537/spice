@@ -866,6 +866,11 @@ void RedWindow_p::win_proc(XEvent& event)
         break;
     }
     case FocusIn:
+        /* Ignore focus events caused by grabbed (hotkeys) */
+        if (event.xfocus.mode == NotifyWhileGrabbed) {
+            break;
+        }
+
         if (event.xany.serial < focus_serial) {
             DBG(0, "Ignored FocusIn win=%p (serial=%d, Last foucs serial=%d)",
                    red_window,  event.xany.serial, focus_serial);
@@ -886,6 +891,11 @@ void RedWindow_p::win_proc(XEvent& event)
         }
         break;
     case FocusOut:
+        /* Ignore focus events caused by grabbed (hotkeys) */
+        if (event.xfocus.mode == NotifyWhileGrabbed) {
+            break;
+        }
+
         if (event.xany.serial <= focus_serial) {
             DBG(0, "Ignored FocusOut win=%p (serial=%d, Last foucs serial=%d)",
                    red_window, event.xany.serial, focus_serial);
