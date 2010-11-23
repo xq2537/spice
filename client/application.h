@@ -217,6 +217,7 @@ public:
     void enter_full_screen();
     void exit_full_screen();
     bool toggle_full_screen();
+    void resize_screen(RedScreen *screen, int width, int height);
     void minimize();
     void set_title(const std::string& title);
     void hide();
@@ -352,6 +353,7 @@ private:
     bool _active;
     bool _full_screen;
     bool _changing_screens;
+    bool _out_of_sync;
     int _exit_code;
     RedScreen* _active_screen;
     bool _keyboard_state[REDKEY_NUM_KEYS];

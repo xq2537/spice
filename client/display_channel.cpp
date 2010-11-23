@@ -57,7 +57,7 @@ public:
     {
         Application* app = (Application*)events_loop.get_owner();
         _channel.screen()->lock_size();
-        _channel.screen()->resize(_width, _height);
+        app->resize_screen(_channel.screen(), _width, _height);
         _channel.create_canvas(0, app->get_canvas_types(), _width, _height, _format);
     }
 
