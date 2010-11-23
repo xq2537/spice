@@ -295,7 +295,15 @@ void XEventHandler::on_event()
 	}
 
         if (XFindContext(&_x_display, event.xany.window, _win_proc_context, &proc_pointer)) {
-            THROW("no window proc");
+            /* When XIM + ibus is in use XIM creates an invisible window for
+               its own purposes, we sometimes get a _GTK_LOAD_ICONTHEMES
+               ClientMessage event on this window -> skip logging. */
+            if (event.type != ClientMessage) {
+                LOG_WARN(
+                    "Event on window without a win proc, type: %d, window: %u",
+                    event.type, (unsigned int)event.xany.window);
+            }
+            continue;
         }
         XUnlockDisplay(x_display);
         ((XPlatform::win_proc_t)proc_pointer)(event);
