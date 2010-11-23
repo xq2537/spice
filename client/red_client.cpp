@@ -888,7 +888,7 @@ void RedClient::on_clipboard_release()
 
 void RedClient::send_agent_clipboard_notify_message(uint32_t type, uint8_t *data, uint32_t size)
 {
-    ASSERT(size && data);
+    ASSERT(data || !size);
     if (!_agent_connected) {
         return;
     }
