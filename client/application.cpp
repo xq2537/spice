@@ -348,6 +348,7 @@ Application::Application()
     , _active (false)
     , _full_screen (false)
     , _changing_screens (false)
+    , _out_of_sync (false)
     , _exit_code (0)
     , _active_screen (NULL)
     , _num_keys_pressed (0)
@@ -674,6 +675,12 @@ RedScreen* Application::get_screen(int id)
                 prepare_monitors();
                 position_screens();
                 screen->show_full_screen();
+                if (screen->is_out_of_sync()) {
+                    _out_of_sync = true;
+                    /* If the client monitor cannot handle the guest resolution
+                       drop back to windowed mode */
+                    exit_full_screen();
+                }
 
                 if (capture) {
                     _main_screen->activate();
@@ -1492,6 +1499,9 @@ void Application::show_full_screen()
     for (int i = 0; i < (int)_screens.size(); i++) {
         if (_screens[i]) {
             _screens[i]->show_full_screen();
+            if (_screens[i]->is_out_of_sync()) {
+                _out_of_sync = true;
+            }
         }
     }
 }
@@ -1512,6 +1522,11 @@ void Application::enter_full_screen()
     }
     _changing_screens = false;
     _full_screen = true;
+    /* If the client monitor cannot handle the guest resolution drop back
+       to windowed mode */
+    if (_out_of_sync) {
+        exit_full_screen();
+    }
 }
 
 void Application::restore_screens_size()
@@ -1529,6 +1544,9 @@ void Application::exit_full_screen()
     if (!_full_screen) {
         return;
     }
+    if (_out_of_sync) {
+        LOG_WARN("Falling back to windowed mode (guest resolution too large for client?)");
+    }
     LOG_INFO("");
     _changing_screens = true;
     release_capture();
@@ -1544,6 +1562,7 @@ void Application::exit_full_screen()
         }
     }
     _full_screen = false;
+    _out_of_sync = false;
     restore_screens_size();
     show();
     _main_screen->activate();
@@ -1558,6 +1577,17 @@ bool Application::toggle_full_screen()
         enter_full_screen();
     }
     return _full_screen;
+}
+
+void Application::resize_screen(RedScreen *screen, int width, int height)
+{
+    screen->resize(width, height);
+    if (screen->is_out_of_sync()) {
+        _out_of_sync = true;
+        /* If the client monitor cannot handle the guest resolution
+           drop back to windowed mode */
+        exit_full_screen();
+    }
 }
 
 void Application::minimize()

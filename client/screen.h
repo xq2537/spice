@@ -78,6 +78,7 @@ public:
     void set_monitor(Monitor *monitor) { _monitor = monitor;}
     Monitor* get_monitor() { return _monitor;}
     RedWindow* get_window() { return &_window;}
+    bool is_out_of_sync() { return _out_of_sync;}
     void set_cursor(LocalCursor* cursor);
     void hide_cursor();
     void exit_full_screen();
@@ -118,7 +119,6 @@ private:
     void notify_new_size();
     void adjust_window_rect(int x, int y);
     void save_position();
-    bool is_out_of_sync() { return _out_of_sync;}
     void __show_full_screen();
 
     bool _invalidate(const SpiceRect& rect, bool urgent, uint64_t& update_mark);
