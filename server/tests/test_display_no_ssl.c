@@ -24,8 +24,8 @@ void test_spice_destroy_update(SimpleSpiceUpdate *update)
     free(update);
 }
 
-#define WIDTH 800
-#define HEIGHT 600
+#define WIDTH 320
+#define HEIGHT 320
 
 static float angle = 0;
 static int unique = 1;
@@ -45,8 +45,8 @@ SimpleSpiceUpdate *test_spice_create_update()
     int bw, bh;
     int i;
 
-    angle += 0.1;
-    color = (color + 1) % 10;
+    angle += 0.2;
+    color = (color + 1) % 2;
     unique++;
 
     update   = calloc(sizeof(*update), 1);
@@ -164,7 +164,7 @@ void get_init_info(QXLInstance *qin, QXLDevInitInfo *info)
     info->n_surfaces = 1;
 }
 
-#define NOTIFY_BATCH 5
+#define NOTIFY_BATCH 1
 
 int notify = NOTIFY_BATCH;
 
