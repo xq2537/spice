@@ -119,6 +119,7 @@ libspice_server_la_SOURCES =			\
 	generated_marshallers.h			\
 	zlib_encoder.c				\
 	zlib_encoder.h				\
+	char_device.h				\
 	$(TUNNEL_SRCS)				\
 	$(COMMON_SRCS)				\
 	$(GL_SRCS)				\
