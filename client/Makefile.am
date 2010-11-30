@@ -28,8 +28,10 @@ else
 GL_SRCS =
 endif
 
+SMARTCARD_SRC_ENABLED = smartcard_channel.cpp smartcard_channel.h
+
 if SUPPORT_SMARTCARD
-SMARTCARD_SRCS = smartcard_channel.cpp
+SMARTCARD_SRCS = $(SMARTCARD_SRC_ENABLED)
 else
 SMARTCARD_SRCS =
 endif
@@ -140,6 +142,6 @@ GDI_FILES =				\
 
 MAINTAINERCLEANFILES = $(spice_built_sources)
 
-EXTRA_DIST = $(RED_COMMON_SRCS) $(spice_built_sources) $(GL_SRCS) $(GDI_FILES) $(SMARTCARD_SRCS)
+EXTRA_DIST = $(RED_COMMON_SRCS) $(spice_built_sources) $(GL_SRCS) $(GDI_FILES) $(SMARTCARD_SRC_ENABLED)
 
 BUILT_SOURCES = $(spice_built_sources)
