@@ -20,6 +20,9 @@ typedef struct SimpleSpiceUpdate {
 
 void test_spice_destroy_update(SimpleSpiceUpdate *update)
 {
+    if (!update) {
+        return;
+    }
     free(update->bitmap);
     free(update);
 }
@@ -164,17 +167,20 @@ void get_init_info(QXLInstance *qin, QXLDevInitInfo *info)
     info->n_surfaces = 1;
 }
 
-#define NOTIFY_BATCH 1
+#define NOTIFY_DISPLAY_BATCH 0
+#define NOTIFY_CURSOR_BATCH 1
 
-int notify = NOTIFY_BATCH;
+int notify = NOTIFY_DISPLAY_BATCH;
+int cursor_notify = NOTIFY_CURSOR_BATCH;
 
 int get_command(QXLInstance *qin, struct QXLCommandExt *ext)
 {
     SimpleSpiceUpdate *update;
 
-    if (!notify--) {
+    if (!notify) {
         return FALSE;
     }
+    notify--;
     update = test_spice_create_update();
     *ext = update->ext;
     notify = FALSE;
@@ -193,7 +199,8 @@ int req_cmd_notification(QXLInstance *qin)
 
 void do_wakeup()
 {
-    notify = NOTIFY_BATCH;
+    notify = NOTIFY_DISPLAY_BATCH;
+    cursor_notify = NOTIFY_CURSOR_BATCH;
     qxl_worker->wakeup(qxl_worker);
 }
 
@@ -204,10 +211,64 @@ void release_resource(QXLInstance *qin, struct QXLReleaseInfoExt release_info)
     test_spice_destroy_update((void*)release_info.info->id);
 }
 
-int get_cursor_command(QXLInstance *qin, struct QXLCommandExt *cmd)
+#define CURSOR_WIDTH 32
+#define CURSOR_HEIGHT 32
+
+static struct {
+    QXLCursor cursor;
+    uint8_t data[CURSOR_WIDTH * CURSOR_HEIGHT * 4]; // 32bit per pixel
+} cursor;
+
+void init_cursor()
 {
+    cursor.cursor.header.unique = 0; // TODO ??
+    cursor.cursor.header.type = SPICE_CURSOR_TYPE_COLOR32;
+    cursor.cursor.header.width = CURSOR_WIDTH;
+    cursor.cursor.header.height = CURSOR_HEIGHT;
+    cursor.cursor.header.hot_spot_x = 0;
+    cursor.cursor.header.hot_spot_y = 0;
+    cursor.cursor.data_size = CURSOR_WIDTH * CURSOR_HEIGHT;
+    cursor.cursor.chunk.data_size = cursor.cursor.data_size;
+    cursor.cursor.chunk.prev_chunk = cursor.cursor.chunk.next_chunk = 0;
+}
+
+int get_cursor_command(QXLInstance *qin, struct QXLCommandExt *ext)
+{
+    static int color = 0;
+    QXLCursorCmd *cursor_cmd;
+    int i, x, y, p;
+    QXLCommandExt cmd;
+
+    if (!cursor_notify) {
+        return FALSE;
+    }
+    cursor_notify--;
+    cursor_cmd = calloc(sizeof(QXLCursorCmd), 1);
+    color = 100 + ((color + 1) % 100);
+    cursor_cmd->type = QXL_CURSOR_SET;
+    cursor_cmd->release_info.id = 0; // TODO: we leak the QXLCommandExt's
+    cursor_cmd->u.set.position.x = 0;
+    cursor_cmd->u.set.position.y = 0;
+    cursor_cmd->u.set.visible = TRUE;
+    cursor_cmd->u.set.shape = (uint64_t)&cursor;
+    for (x = 0 ; x < CURSOR_WIDTH; ++x) {
+        for (y = 0 ; y < CURSOR_HEIGHT; ++y) {
+            p = 0;
+            cursor.data[p] = (y*10 > color) ? color : 0;
+            cursor.data[p+1] = cursor.data[p+2] = cursor.data[p+3] = 0;
+        }
+    }
+    // TODO - shape has the, well, shape. device_data has?
+    for (i = 0 ; i < QXL_CURSUR_DEVICE_DATA_SIZE ; ++i) {
+        cursor_cmd->device_data[i] = color;
+    }
+    cmd.cmd.data = (uint64_t)cursor_cmd;
+    cmd.cmd.type = QXL_CMD_CURSOR;
+    cmd.group_id = MEM_SLOT_GROUP_ID;
+    cmd.flags    = 0; // TODO - cursor flags (qxl->cmdflags in qxl/pointer.c)?
+    *ext = cmd;
     //printf("%s\n", __func__);
-    return FALSE;
+    return TRUE;
 }
 
 int req_cursor_notification(QXLInstance *qin)
