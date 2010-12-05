@@ -238,24 +238,32 @@ AC_SUBST(GL_CFLAGS)
 AC_SUBST(GL_LIBS)
 SPICE_NONPKGCONFIG_LIBS+=" $GL_LIBS"
 
-PKG_CHECK_MODULES(XRANDR, xrandr)
-PKG_CHECK_MODULES(XFIXES, xfixes)
-AC_SUBST(XRANDR_CFLAGS)
-AC_SUBST(XRANDR_LIBS)
+if test "$red_target" = "x11"; then
+	PKG_CHECK_MODULES(XRANDR, xrandr)
+	PKG_CHECK_MODULES(XFIXES, xfixes)
+	AC_SUBST(XRANDR_CFLAGS)
+	AC_SUBST(XRANDR_LIBS)
+	SPICE_REQUIRES+=" xrandr xfixes"
 
-PKG_CHECK_MODULES(XRANDR12,
-        xrandr >= 1.2,
-        have_xrandr12=yes,
-        have_xrandr12=no)
+	PKG_CHECK_MODULES(XRANDR12,
+	        xrandr >= 1.2,
+	        have_xrandr12=yes,
+	        have_xrandr12=no)
+else
+	have_xrandr12=no
+fi
 
 AM_CONDITIONAL([HAVE_XRANDR12], [test "x$have_xrandr12" = "xyes"])
 if test "x$have_xrandr12" = "xyes" ; then
   AC_DEFINE([HAVE_XRANDR12], [], [Define if we have XRANDR 12])
 fi
 
-PKG_CHECK_MODULES(MISC_X, x11 xext xrender)
-AC_SUBST(MISC_X_CFLAGS)
-AC_SUBST(MISC_X_LIBS)
+if test "$red_target" = "x11"; then
+	PKG_CHECK_MODULES(MISC_X, x11 xext xrender)
+	AC_SUBST(MISC_X_CFLAGS)
+	AC_SUBST(MISC_X_LIBS)
+	SPICE_REQUIRES+=" x11 xext xrender"
+fi
 
 # Add parameter for (partial) static linkage of spice client.
 # this is used to achive single binary package for all (?) distros.
