@@ -1213,11 +1213,16 @@ static void dispatch_vdi_port_data(int port, VDIReadBuf *buf)
 
     switch (port) {
     case VDP_CLIENT_PORT: {
-        item = new_out_item(SPICE_MSG_MAIN_AGENT_DATA);
+        if (reds->agent_state.connected) {
+            item = new_out_item(SPICE_MSG_MAIN_AGENT_DATA);
 
-        spice_marshaller_add_ref_full(item->m, buf->data, buf->len,
-                                      vdi_read_buf_release, buf);
-        reds_push_pipe_item(item);
+            spice_marshaller_add_ref_full(item->m, buf->data, buf->len,
+                                          vdi_read_buf_release, buf);
+            reds_push_pipe_item(item);
+        } else {
+            red_printf("throwing away, no client: %d", buf->len);
+            vdi_read_buf_release(buf->data, buf);
+        }
         break;
     }
     case VDP_SERVER_PORT:
@@ -1254,13 +1259,15 @@ static int read_from_vdi_port(void)
     }
     inside_call = 1;
 
-    if (!reds->agent_state.connected || reds->mig_target) {
+    if (reds->mig_target || !vdagent) {
+        // discard data only if we are migrating or vdagent has not been
+        // initialized.
         inside_call = 0;
         return 0;
     }
 
     sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceCharDeviceInterface, base);
-    while (!quit_loop && reds->agent_state.connected) {
+    while (!quit_loop) {
         switch (state->read_state) {
         case VDI_PORT_READ_STATE_READ_HADER:
             n = sif->read(vdagent, state->recive_pos, state->recive_len);
