@@ -167,8 +167,8 @@ void get_init_info(QXLInstance *qin, QXLDevInitInfo *info)
     info->n_surfaces = 1;
 }
 
-#define NOTIFY_DISPLAY_BATCH 0
-#define NOTIFY_CURSOR_BATCH 1
+#define NOTIFY_DISPLAY_BATCH 1
+#define NOTIFY_CURSOR_BATCH 0
 
 int notify = NOTIFY_DISPLAY_BATCH;
 int cursor_notify = NOTIFY_CURSOR_BATCH;
