@@ -154,7 +154,7 @@ for yield_func in pthread_yield pthread_yield_np sched_yield \
 		[$yield_func()],
 		[posix_yield_func="$yield_func"
 		break])
-    CPPFLAGS="spice_save_CPPFLAGS"
+    CPPFLAGS="$spice_save_CPPFLAGS"
 done
 if test x"$posix_yield_func" = xnone; then
     AC_MSG_ERROR([No posix yield function found])
