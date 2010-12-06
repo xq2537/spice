@@ -197,7 +197,6 @@ spicec_DEPENDENCIES = redc.res
 
 redc.res: redc.rc
 	$(WINDRES) -J rc -i $< -O coff -o $@
-NULL =
 
 EXTRA_DIST = \
 	atomic_count.h		\
