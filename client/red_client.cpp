@@ -770,8 +770,8 @@ void RedClient::calc_pixmap_cach_and_glz_window_size(uint32_t display_channels_h
 {
 #ifdef WIN32
     display_channels_hint = MAX(1, display_channels_hint);
-    int max_cache_size = display_channels_hint * MAX_DISPLAY_PIXMAP_CACHE;
-    int min_cache_size = display_channels_hint * MIN_DISPLAY_PIXMAP_CACHE;
+    uint64_t max_cache_size = display_channels_hint * MAX_DISPLAY_PIXMAP_CACHE;
+    uint64_t min_cache_size = display_channels_hint * MIN_DISPLAY_PIXMAP_CACHE;
 
     MEMORYSTATUSEX mem_status;
     mem_status.dwLength = sizeof(mem_status);

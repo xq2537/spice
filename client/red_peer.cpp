@@ -364,7 +364,7 @@ bool RedPeer::verify_subject(X509* cert, const HostAuthOptions::CertFieldValueLi
         return false;
     }
 
-    if (X509_NAME_entry_count(cert_subject) != subject.size()) {
+    if ((size_t)X509_NAME_entry_count(cert_subject) != subject.size()) {
         DBG(0, "subject mismatch: #entries cert=%d, input=%d",
             X509_NAME_entry_count(cert_subject), subject.size());
         return false;

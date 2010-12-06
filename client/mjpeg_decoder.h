@@ -59,13 +59,13 @@ private:
     size_t _data_end;
     size_t _extra_skip;
 
-    int _width;
-    int _height;
+    unsigned _width;
+    unsigned _height;
     int _stride;
     uint8_t *_frame;
     bool _back_compat;
 
-    int _y;
+    unsigned _y;
     uint8_t *_scanline;
 
     int _state;

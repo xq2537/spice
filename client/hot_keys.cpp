@@ -114,7 +114,7 @@ void HotKeysParser::add_key(HotkeySet& keys, const char* key)
         { "f12", REDKEY_F12, REDKEY_INVALID }
     };
 
-    for (int i = 0; i < (sizeof(keyboard) / sizeof(keyboard[0])); ++i) {
+    for (unsigned i = 0; i < (sizeof(keyboard) / sizeof(keyboard[0])); ++i) {
         if (strcasecmp(key, keyboard[i].name) == 0) {
             HotkeyKey hotkey;
             hotkey.main = keyboard[i].main;

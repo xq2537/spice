@@ -133,7 +133,7 @@ private:
     int _in_msg_len;
 
     std::string _out_msg;  // <virtual ip>\n
-    int _out_msg_pos;
+    unsigned _out_msg_pos;
 };
 #endif
 

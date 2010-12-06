@@ -221,7 +221,7 @@ void TimersQueue::deactivate_interval_timer(Timer* timer)
     }
 }
 
-int TimersQueue::get_soonest_timeout()
+unsigned int TimersQueue::get_soonest_timeout()
 {
     RecurciveLock lock(_timers_lock);
     TimersSet::iterator iter;
@@ -236,7 +236,7 @@ int TimersQueue::get_soonest_timeout()
     if (next_time <= now) {
         return 0;
     }
-    return (int)(next_time - now);
+    return (next_time - now);
 }
 
 
@@ -392,7 +392,7 @@ void ProcessLoop::deactivate_interval_timer(Timer* timer)
     _timers_queue.deactivate_interval_timer(timer);
 }
 
-int ProcessLoop::get_soonest_timeout()
+unsigned ProcessLoop::get_soonest_timeout()
 {
     return _timers_queue.get_soonest_timeout();
 }

@@ -108,7 +108,7 @@ void Platform::send_quit_request()
 static uint32_t get_clipboard_type(uint32_t format) {
     uint32_t* types = NULL;
 
-    for (int i = 0; i < clipboard_formats_count && !types; i++) {
+    for (size_t i = 0; i < clipboard_formats_count && !types; i++) {
         if (clipboard_formats[i].format == format) {
             types = clipboard_formats[i].types;
         }
@@ -125,7 +125,7 @@ static uint32_t get_clipboard_type(uint32_t format) {
 }
 
 static uint32_t get_clipboard_format(uint32_t type) {
-    for (int i = 0; i < clipboard_formats_count; i++) {
+    for (size_t i = 0; i < clipboard_formats_count; i++) {
         for (uint32_t* ptype = clipboard_formats[i].types; *ptype; ptype++) {
             if (*ptype == type) {
                 return clipboard_formats[i].format; 
@@ -140,7 +140,7 @@ static int get_available_clipboard_types(uint32_t** types)
     int count = 0;
 
     *types = new uint32_t[clipboard_formats_count * CLIPBOARD_FORMAT_MAX_TYPES];
-    for (int i = 0; i < clipboard_formats_count; i++) {
+    for (size_t i = 0; i < clipboard_formats_count; i++) {
         if (IsClipboardFormatAvailable(clipboard_formats[i].format)) {
             for (uint32_t* ptype = clipboard_formats[i].types; *ptype; ptype++) {
                 (*types)[count++] = *ptype;
@@ -156,7 +156,7 @@ static int get_available_clipboard_types(uint32_t** types)
 
 static DWORD get_cximage_format(uint32_t type)
 {
-    for (int i = 0; i < sizeof(image_types) / sizeof(image_types[0]); i++) {
+    for (size_t i = 0; i < sizeof(image_types) / sizeof(image_types[0]); i++) {
         if (image_types[i].type == type) {
             return image_types[i].cximage_format;
         }
@@ -503,7 +503,7 @@ bool WinMonitor::best_display_setting(uint32_t width, uint32_t height, uint32_t 
             }
         }
     }
-    if (mod_waste == ~0) {
+    if (mod_waste == ~0u) {
         return false;
     }
     mode.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL | DM_DISPLAYFREQUENCY;
@@ -882,7 +882,7 @@ void WinPlatform::enter_modal_loop()
 
 static bool set_modal_loop_timer()
 {
-    int timeout = main_loop->get_soonest_timeout();
+    unsigned timeout = main_loop->get_soonest_timeout();
     if (timeout == INFINITE) {
         timeout = MODAL_LOOP_DEFAULT_TIMEOUT; /* for cases timeouts are added after
                                                  the enterance to the loop*/

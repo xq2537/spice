@@ -436,7 +436,7 @@ char* CmdLineParser::next_argument()
 void CmdLineParser::show_help()
 {
     static const int HELP_START_POS = 30;
-    static const int HELP_WIDTH = 80 - HELP_START_POS;
+    static const unsigned HELP_WIDTH = 80 - HELP_START_POS;
     std::ostringstream os;
 
     os << _argv[0] << " - " << _description.c_str() << "\n\noptions:\n\n";

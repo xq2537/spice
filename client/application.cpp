@@ -1233,7 +1233,7 @@ ModifierKey modifier_keys[] = {
 void Application::sync_keyboard_modifiers()
 {
     uint32_t modifiers = Platform::get_keyboard_modifiers();
-    for (int i = 0; i < sizeof(modifier_keys) / sizeof(modifier_keys[0]); i++) {
+    for (size_t i = 0; i < sizeof(modifier_keys) / sizeof(modifier_keys[0]); i++) {
         if (modifiers & modifier_keys[i].modifier) {
             on_key_down(modifier_keys[i].key);
         } else {
@@ -2012,7 +2012,7 @@ bool Application::set_host_cert_subject(const char* subject, const char* arg0)
     while (true) {
         if ((iter == subject_str.end()) || (*iter == ',')) {
             RedPeer::HostAuthOptions::CertFieldValuePair entry_pair;
-            int value_pos = entry.find_first_of('=');
+            size_t value_pos = entry.find_first_of('=');
             if ((value_pos == std::string::npos) || (value_pos == (entry.length() - 1))) {
                 Platform::term_printf("%s: host_subject bad format: assignment for %s is missing\n",
                                       arg0, entry.c_str());

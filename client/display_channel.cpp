@@ -363,7 +363,7 @@ void VideoStream::remove_dead_frames(uint32_t mm_time)
 void VideoStream::drop_one_frame()
 {
     ASSERT(MAX_VIDEO_FRAMES > 2 && (_frames_head - _frames_tail) == MAX_VIDEO_FRAMES);
-    int frame_index = _frames_head - _kill_mark++ % (MAX_VIDEO_FRAMES - 2) - 2;
+    unsigned frame_index = _frames_head - _kill_mark++ % (MAX_VIDEO_FRAMES - 2) - 2;
 
     free_frame(frame_index);
 

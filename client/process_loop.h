@@ -165,7 +165,7 @@ public:
     void activate_interval_timer(Timer* timer, unsigned int millisec);
     void deactivate_interval_timer(Timer* timer);
 
-    int get_soonest_timeout();
+    unsigned int get_soonest_timeout();
     void timers_action();
 
 private:
@@ -207,7 +207,7 @@ public:
     void process_events_queue();
     /* can be used for handling timers in modal loop state in Windows (mainly,
        for updating the screen) */
-    int get_soonest_timeout();
+    unsigned int get_soonest_timeout();
     void timers_action();
 
     void* get_owner() { return _owner;}

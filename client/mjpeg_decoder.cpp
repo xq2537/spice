@@ -108,7 +108,7 @@ void MJpegDecoder::convert_scanline(void)
     uint32_t *row;
     uint32_t c;
     uint8_t *s;
-    int x;
+    unsigned x;
 
     ASSERT(_width % 2 == 0);
     ASSERT(_height % 2 == 0);
