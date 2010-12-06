@@ -366,7 +366,7 @@ void RedWindow_p::destroy(PixelsSource_p& pixels_source)
 
     ReleaseDC(_win, pixels_source.dc);
     SetWindowLongPtr(_win, GWLP_WNDPROC, (LONG_PTR)DefWindowProc);
-    SetWindowLongPtr(_win, GWLP_USERDATA, NULL);
+    SetWindowLongPtr(_win, GWLP_USERDATA, (LONG_PTR)NULL);
     DestroyWindow(_win);
 }
 
