@@ -71,7 +71,11 @@ RedPixmapGdi::RedPixmapGdi(int width, int height, RedDrawable::Format format, bo
         pixel_format[1] = 0x07e0;
         pixel_format[2] = 0x001f;
         break;
-   }
+     case RedDrawable::ARGB32:
+     case RedDrawable::RGB32:
+     case RedDrawable::RGB16_555:
+        break;
+    }
     AutoDC dc(create_compatible_dc());
     AutoGDIObject bitmap(CreateDIBSection(dc.get(), &bitmap_info.inf, 0,
                                           (VOID **)&_data, NULL, 0));
