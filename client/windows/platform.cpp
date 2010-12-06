@@ -199,7 +199,7 @@ static LRESULT CALLBACK PlatformWinProc(HWND hWnd, UINT message, WPARAM wParam, 
             int type_count;
             uint32_t* types;
             Platform::set_clipboard_owner(Platform::owner_none);
-            if (type_count = get_available_clipboard_types(&types)) {
+            if ((type_count = get_available_clipboard_types(&types))) {
                 clipboard_listener->on_clipboard_grab(types, type_count);
                 delete[] types;
             } else {
