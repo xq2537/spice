@@ -351,7 +351,7 @@ RedClient::RedClient(Application& application)
     , _mouse_mode (SPICE_MOUSE_MODE_SERVER)
     , _notify_disconnect (false)
     , _auto_display_res (false)
-    , _agent_reply_wait_type (-1)
+    , _agent_reply_wait_type (VD_AGENT_END_MESSAGE)
     , _aborting (false)
     , _agent_connected (false)
     , _agent_mon_config_sent (false)
@@ -1060,7 +1060,7 @@ void RedClient::on_agent_reply(VDAgentReply* reply)
         if (_agent_reply_wait_type == reply->type) {
             post_message(new Message(SPICE_MSGC_MAIN_ATTACH_CHANNELS));
             _application.deactivate_interval_timer(*_agent_timer);
-            _agent_reply_wait_type = -1;
+            _agent_reply_wait_type = VD_AGENT_END_MESSAGE;
         }
         break;
     default:

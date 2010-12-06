@@ -318,7 +318,7 @@ private:
     bool _notify_disconnect;
     bool _auto_display_res;
     DisplaySetting _display_setting;
-    int _agent_reply_wait_type;
+    uint32_t _agent_reply_wait_type;
 
     bool _aborting;
 

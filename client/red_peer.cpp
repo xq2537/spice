@@ -91,7 +91,7 @@ void RedPeer::connect_unsecure(const char* host, int portnr)
             THROW_ERR(SPICEC_ERROR_CODE_GETHOSTBYNAME_FAILED, "cannot resolve host address %s", host);
         }
         Lock lock(_lock);
-        _peer = -1;
+        _peer = INVALID_SOCKET;
         for (e = result; e != NULL; e = e->ai_next) {
             if ((_peer = socket(e->ai_family, e->ai_socktype, e->ai_protocol)) == INVALID_SOCKET) {
                 int err = sock_error();
@@ -112,7 +112,7 @@ void RedPeer::connect_unsecure(const char* host, int portnr)
                 LOG_INFO("Connect failed: %s (%d)",
                          sock_err_message(err), err);
                 closesocket(_peer);
-                _peer = -1;
+                _peer = INVALID_SOCKET;
                 continue;
             }
             LOG_INFO("Connected to %s %s", uaddr, uport);
@@ -120,7 +120,7 @@ void RedPeer::connect_unsecure(const char* host, int portnr)
         }
         lock.unlock();
         freeaddrinfo(result);
-        if (_peer == -1) {
+        if (_peer == INVALID_SOCKET) {
             THROW_ERR(SPICEC_ERROR_CODE_CONNECT_FAILED, "failed to connect: %s (%d)",
                       sock_err_message(err), err);
         }
