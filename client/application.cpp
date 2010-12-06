@@ -15,6 +15,8 @@
    License along with this library; if not, see <http://www.gnu.org/licenses/>.
 */
 
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
 #include "common.h"
 #ifdef WIN32
 #include <io.h>
@@ -2499,8 +2501,10 @@ void spice_log(unsigned int type, const char *function, const char *format, ...)
     va_end(ap);
 
     if (type >= log_level && log_file != NULL) {
-        fprintf(log_file, "%ld %s [%llu:%llu] %s: %s\n", (long)time(NULL), type_as_char[type],
-                (long long int)Platform::get_process_id(), (long long int)Platform::get_thread_id(),
+        fprintf(log_file,"%ld %s [%" PRIu64 ":%" PRIu64 "] %s: %s\n",
+                (long)time(NULL), type_as_char[type],
+                Platform::get_process_id(),
+                Platform::get_thread_id(),
                 function_to_func_name(function).c_str(),
                 formated_message.c_str());
 		fflush(log_file);
