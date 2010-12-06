@@ -49,6 +49,8 @@ RED_COMMON_SRCS =					\
 	$(CLIENT_DIR)/client_net_socket.cpp		\
 	$(CLIENT_DIR)/client_net_socket.h		\
 	$(CLIENT_DIR)/common.h				\
+	$(CLIENT_DIR)/controller.cpp			\
+	$(CLIENT_DIR)/controller.h			\
 	$(CLIENT_DIR)/cursor_channel.cpp		\
 	$(CLIENT_DIR)/cursor_channel.h			\
 	$(CLIENT_DIR)/cursor.cpp			\
@@ -56,6 +58,8 @@ RED_COMMON_SRCS =					\
 	$(CLIENT_DIR)/debug.h				\
 	$(CLIENT_DIR)/display_channel.cpp		\
 	$(CLIENT_DIR)/display_channel.h			\
+	$(CLIENT_DIR)/foreign_menu.cpp			\
+	$(CLIENT_DIR)/foreign_menu.h			\
 	$(CLIENT_DIR)/glz_decoded_image.h		\
 	$(CLIENT_DIR)/glz_decoder_config.h		\
 	$(CLIENT_DIR)/glz_decoder.cpp			\
