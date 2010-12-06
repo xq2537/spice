@@ -29,7 +29,7 @@ typedef HWND Window;
 
 class CommandInfo {
 public:
-    CommandInfo() : menu (0), command (NULL) {}
+    CommandInfo() : menu (0), command (0) {}
     CommandInfo(Menu* in_menu, int in_command) : menu (in_menu), command (in_command) {}
 
     Menu* menu;

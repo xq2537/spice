@@ -38,7 +38,7 @@ static void init_winsock()
     }
 }
 
-char* version_string = "???";
+const char* version_string = "???";
 static char _version_string[40];
 
 static void init_version_string()
@@ -59,10 +59,10 @@ static void init_version_string()
         return;
     }
     sprintf(_version_string, "%d.%d.%d.%d",
-        file_info->dwFileVersionMS >> 16,
-        file_info->dwFileVersionMS & 0x0ffff,
-        file_info->dwFileVersionLS >> 16,
-        file_info->dwFileVersionLS & 0x0ffff);
+        (int)(file_info->dwFileVersionMS >> 16),
+        (int)(file_info->dwFileVersionMS & 0x0ffff),
+        (int)(file_info->dwFileVersionLS >> 16),
+        (int)(file_info->dwFileVersionLS & 0x0ffff));
     version_string = _version_string;
 }
 
