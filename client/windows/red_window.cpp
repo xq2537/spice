@@ -80,11 +80,6 @@ static inline RedKey translate_key(int virtual_key, uint32_t scan, bool escape)
     }
 }
 
-static int menu_cmd_to_app(WPARAM wparam)
-{
-    return 0;
-}
-
 static inline void send_filtered_keys(RedWindow* window)
 {
     KeysList::iterator iter;

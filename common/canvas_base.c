@@ -115,7 +115,7 @@ static inline uint32_t canvas_16bpp_to_32bpp(uint32_t color)
 
     return ret;
 }
-#ifdef WIN32
+#if defined(WIN32) && defined(GDI_CANVAS)
 static HDC create_compatible_dc()
 {
     HDC dc = CreateCompatibleDC(NULL);
