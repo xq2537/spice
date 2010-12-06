@@ -461,10 +461,10 @@ bool WinMonitor::best_display_setting(uint32_t width, uint32_t height, uint32_t 
     DEVMODE mode;
     DWORD mode_id = 0;
     uint32_t mod_waste = ~0;
-    DWORD mod_width;
-    DWORD mod_height;
-    DWORD mod_depth;
-    DWORD mod_frequency;
+    DWORD mod_width = 0;
+    DWORD mod_height = 0;
+    DWORD mod_depth = 0;
+    DWORD mod_frequency = 0;
 
     mode.dmSize = sizeof(DEVMODE);
     mode.dmDriverExtra = 0;

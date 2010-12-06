@@ -44,14 +44,13 @@ WavePlayer::WavePlayer(uint32_t sampels_per_sec, uint32_t bits_per_sample, uint3
     info.nAvgBytesPerSec = sampels_per_sec * info.nBlockAlign;
     info.wBitsPerSample = bits_per_sample;
 
-    if (waveOutOpen(&_wave_out, WAVE_MAPPER, &info, NULL, NULL, CALLBACK_NULL)
+    if (waveOutOpen(&_wave_out, WAVE_MAPPER, &info, 0, 0, CALLBACK_NULL)
                                                             != MMSYSERR_NOERROR) {
         throw Exception("can not open playback device");
     }
 
     int frame_size = WavePlaybackAbstract::FRAME_SIZE;
     _ring_size = (sampels_per_sec * RING_SIZE_MS / 1000) / frame_size;
-    int low_mark = (sampels_per_sec * LOW_MARK_MS / 1000) / frame_size;
     _start_mark = (sampels_per_sec * START_MARK_MS / 1000) / frame_size;
     _frame_bytes = frame_size * channels * bits_per_sample / 8;
     _ring_item_size = sizeof(WAVEHDR) + _frame_bytes + sample_bytes;

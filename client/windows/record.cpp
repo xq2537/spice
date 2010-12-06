@@ -33,9 +33,9 @@ WaveRecorder::WaveRecorder(Platform::RecordClient& client, uint32_t sampels_per_
                            uint32_t bits_per_sample, uint32_t channels)
     : _client (client)
     , _ring (NULL)
-    , _frame (NULL)
     , _head (0)
     , _in_use (0)
+    , _frame (NULL)
 {
     WAVEFORMATEX info;
     uint32_t frame_align;

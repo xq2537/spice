@@ -347,7 +347,9 @@ bool ControllerConnection::handle_message(ControllerMsg *hdr)
 bool ControllerConnection::create_menu(char* resource)
 {
     bool ret = true;
+#ifndef WIN32
     char* item_state = 0;
+#endif
     char* next_item;
     const char* param;
     const char* text;
