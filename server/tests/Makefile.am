@@ -7,7 +7,7 @@ INCLUDES =                          \
 	$(SPICE_NONPKGCONFIG_CFLAGS)    \
 	$(NULL)
 
-LDFLAGS = -L../.libs -lspice-server
+AM_LDFLAGS = -L../.libs -lspice-server
 
 noinst_PROGRAMS = test_just_sockets_no_ssl test_empty_success test_fail_on_null_core_interface test_display_no_ssl
 
