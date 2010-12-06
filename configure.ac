@@ -378,6 +378,33 @@ AC_CACHE_CHECK([for supported warning flags], spice_cv_warn_cflags, [
 WARN_CFLAGS="$spice_cv_warn_cflags"
 SPICE_CFLAGS="$SPICE_CFLAGS $WARN_CFLAGS"
 
+# use ximage.h for win32 build if it is found (no package for mingw32 atm)
+if test $os_win32 == "yes" ; then
+    AC_MSG_CHECKING([for cximage])
+    AC_TRY_CPP(
+[#include <ximage.h>
+int main()
+{
+ return CXIMAGE_FORMAT_RAW;
+)}
+],[
+ AC_MSG_RESULT([found])
+ have_cximage="yes"
+]
+,[AC_MSG_RESULT([missing])
+ CXIMAGE_CFLAGS='-DDISABLE_CXIMAGE'
+ have_cximage="no"
+ ]
+)
+fi
+AC_SUBST(CXIMAGE_CFLAGS)
+
+# check for windres for mingw32 builds
+if test $os_win32 == "yes" ; then
+    AC_CHECK_PROGS(WINDRES,i686-pc-mingw32-windres mingw-windres mingw32-windres,false)
+    AC_SUBST(WINDRES)
+fi
+
 # We only wish to enable attribute(warn_unused_result) if we can prevent
 # gcc from generating thousands of warnings about the misapplication of the
 # attribute to void functions and variables.
@@ -459,6 +486,14 @@ echo "
         GUI:                      ${use_gui}
 
         Smartcard:                ${have_smartcard}
+"
 
-        Now type 'make' to build $PACKAGE
+if test $os_win32 == "yes" ; then
+echo \
+"        Copy & Paste Images:     ${have_cximage}
+"
+fi
+
+echo \
+"        Now type 'make' to build $PACKAGE
 "

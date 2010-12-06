@@ -21,6 +21,7 @@ INCLUDES = \
 	$(CEGUI_CFLAGS)					\
 	$(WARN_CFLAGS)                                  \
 	$(SPICE_NONPKGCONFIG_CFLAGS)			\
+	$(CXIMAGE_CFLAGS)               \
 	$(NULL)
 
 

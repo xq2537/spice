@@ -32,7 +32,14 @@
 #include "playback.h"
 #include "cursor.h"
 #include "named_pipe.h"
+
+#ifndef DISABLE_CXIMAGE
+#define USE_CXIMAGE
+#endif
+
+#ifdef USE_CXIMAGE
 #include "ximage.h"
+#endif
 #include <spice/vd_agent.h>
 
 int gdi_handlers = 0;
@@ -82,6 +89,7 @@ static ClipboardFormat clipboard_formats[] = {
 
 #define clipboard_formats_count (sizeof(clipboard_formats) / sizeof(clipboard_formats[0]))
 
+#ifdef USE_CXIMAGE
 typedef struct ImageType {
     uint32_t type;
     DWORD cximage_format;
@@ -91,6 +99,7 @@ static ImageType image_types[] = {
     {VD_AGENT_CLIPBOARD_IMAGE_PNG, CXIMAGE_FORMAT_PNG},
     {VD_AGENT_CLIPBOARD_IMAGE_BMP, CXIMAGE_FORMAT_BMP},
 };
+#endif
 
 static std::set<uint32_t> grab_types;
 
@@ -154,6 +163,7 @@ static int get_available_clipboard_types(uint32_t** types)
     return count;
 }
 
+#ifdef USE_CXIMAGE
 static DWORD get_cximage_format(uint32_t type)
 {
     for (size_t i = 0; i < sizeof(image_types) / sizeof(image_types[0]); i++) {
@@ -163,6 +173,7 @@ static DWORD get_cximage_format(uint32_t type)
     }
     return 0;
 }
+#endif
 
 static LRESULT CALLBACK PlatformWinProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -1005,6 +1016,7 @@ bool Platform::on_clipboard_notify(uint32_t type, const uint8_t* data, int32_t s
     case VD_AGENT_CLIPBOARD_UTF8_TEXT:
         clip_data = utf8_alloc((LPCSTR)data, size);
         break;
+#ifdef USE_CXIMAGE
     case VD_AGENT_CLIPBOARD_IMAGE_PNG:
     case VD_AGENT_CLIPBOARD_IMAGE_BMP: {
         DWORD cximage_format = get_cximage_format(type);
@@ -1013,6 +1025,7 @@ bool Platform::on_clipboard_notify(uint32_t type, const uint8_t* data, int32_t s
         clip_data = image.CopyToHandle();
         break;
     }
+#endif
     default:
         LOG_INFO("Unsupported clipboard type %u", type);
         return true;
@@ -1072,6 +1085,7 @@ bool Platform::on_clipboard_request(uint32_t type)
         GlobalUnlock(clip_data);
         break;
     }
+#ifdef USE_CXIMAGE
     case VD_AGENT_CLIPBOARD_IMAGE_PNG:
     case VD_AGENT_CLIPBOARD_IMAGE_BMP: {
         DWORD cximage_format = get_cximage_format(type);
@@ -1091,6 +1105,7 @@ bool Platform::on_clipboard_request(uint32_t type)
         ret = true;
         break;
     }
+#endif
     default:
         LOG_INFO("Unsupported clipboard type %u", type);
     }
