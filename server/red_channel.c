@@ -89,6 +89,11 @@ static void red_peer_handle_incoming(RedsStreamContext *peer, IncomingHandler *h
         if (handler->msg_pos < handler->header.size) {
             if (!handler->msg) {
                 handler->msg = handler->alloc_msg_buf(handler->opaque, &handler->header);
+                if (handler->msg == NULL) {
+                    red_printf("ERROR: channel refused to allocate buffer.");
+                    handler->on_error(handler->opaque);
+                    return;
+                }
             }
 
             bytes_read = red_peer_receive(peer,
