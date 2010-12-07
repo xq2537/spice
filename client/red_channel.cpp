@@ -217,8 +217,10 @@ void RedChannelBase::connect(const ConnectionOptions& options, uint32_t connecti
                 RedPeer::connect_unsecure(host, options.unsecure_port);
                 link(connection_id, password, protocol);
                 return;
-            } catch (...) {
-                if (!options.allow_secure()) {
+            } catch (Exception& e) {
+                // On protocol version mismatch, don't connect_secure with the same version
+                if (e.get_error_code() == SPICEC_ERROR_CODE_VERSION_MISMATCH ||
+                                                        !options.allow_secure()) {
                     throw;
                 }
                 RedPeer::close();
@@ -228,9 +230,9 @@ void RedChannelBase::connect(const ConnectionOptions& options, uint32_t connecti
         RedPeer::connect_secure(options, host);
         link(connection_id, password, protocol);
     } catch (Exception& e) {
-        if (protocol == 2 &&
-            options.protocol == 0 &&
-            e.get_error_code() == SPICEC_ERROR_CODE_VERSION_MISMATCH) {
+        // On protocol version mismatch, retry with older version
+        if (e.get_error_code() == SPICEC_ERROR_CODE_VERSION_MISMATCH &&
+                                 protocol == 2 && options.protocol == 0) {
             RedPeer::cleanup();
             protocol = 1;
             goto retry;
