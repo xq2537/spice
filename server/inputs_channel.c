@@ -157,6 +157,10 @@ static uint8_t *inputs_channel_alloc_msg_rcv_buf(RedChannel *channel, SpiceDataH
 {
     InputsChannel *inputs_channel = SPICE_CONTAINEROF(channel, InputsChannel, base);
 
+    if (msg_header->size > RECEIVE_BUF_SIZE) {
+        red_printf("error: too large incoming message");
+        return NULL;
+    }
     return inputs_channel->recv_buf;
 }
 
