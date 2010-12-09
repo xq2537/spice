@@ -2498,8 +2498,8 @@ static int reds_init_socket(const char *addr, int portnr, int family)
         }
         close(slisten);
     }
-    red_error("%s: binding socket to %s:%d failed\n", __FUNCTION__,
-              addr, portnr);
+    red_printf("%s: binding socket to %s:%d failed\n", __FUNCTION__,
+               addr, portnr);
     freeaddrinfo(res);
     return -1;
 
@@ -2513,10 +2513,13 @@ listen:
     return slisten;
 }
 
-static void reds_init_net()
+static int reds_init_net(void)
 {
     if (spice_port != -1) {
         reds->listen_socket = reds_init_socket(spice_addr, spice_port, spice_family);
+        if (-1 == reds->listen_socket) {
+            return -1;
+        }
         reds->listen_watch = core->watch_add(reds->listen_socket,
                                              SPICE_WATCH_EVENT_READ,
                                              reds_accept, NULL);
@@ -2528,6 +2531,9 @@ static void reds_init_net()
     if (spice_secure_port != -1) {
         reds->secure_listen_socket = reds_init_socket(spice_addr, spice_secure_port,
                                                       spice_family);
+        if (-1 == reds->secure_listen_socket) {
+            return -1;
+        }
         reds->secure_listen_watch = core->watch_add(reds->secure_listen_socket,
                                                     SPICE_WATCH_EVENT_READ,
                                                     reds_accept_ssl_connection, NULL);
@@ -2535,6 +2541,7 @@ static void reds_init_net()
             red_error("set fd handle failed");
         }
     }
+    return 0;
 }
 
 static void load_dh_params(SSL_CTX *ctx, char *file)
@@ -3210,12 +3217,13 @@ static void init_vd_agent_resources()
 
 const char *version_string = VERSION;
 
-static void do_spice_init(SpiceCoreInterface *core_interface)
+static int do_spice_init(SpiceCoreInterface *core_interface)
 {
     red_printf("starting %s", version_string);
 
     if (core_interface->base.major_version != SPICE_INTERFACE_CORE_MAJOR) {
-        red_error("bad core interface version");
+        red_printf("bad core interface version");
+        goto err;
     }
     core = core_interface;
     reds->listen_socket = -1;
@@ -3271,7 +3279,9 @@ static void do_spice_init(SpiceCoreInterface *core_interface)
     }
     core->timer_start(reds->mm_timer, MM_TIMER_GRANULARITY_MS);
 
-    reds_init_net();
+    if (reds_init_net() < 0) {
+        goto err;
+    }
     if (reds->secure_listen_socket != -1) {
         reds_init_ssl();
     }
@@ -3283,6 +3293,10 @@ static void do_spice_init(SpiceCoreInterface *core_interface)
 
     reds->mouse_mode = SPICE_MOUSE_MODE_SERVER;
     atexit(reds_exit);
+    return 0;
+
+err:
+    return -1;
 }
 
 /* new interface */
@@ -3297,12 +3311,14 @@ __visible__ SpiceServer *spice_server_new(void)
 
 __visible__ int spice_server_init(SpiceServer *s, SpiceCoreInterface *core)
 {
+    int ret;
+
     ASSERT(reds == s);
-    do_spice_init(core);
+    ret = do_spice_init(core);
     if (default_renderer) {
         red_dispatcher_add_renderer(default_renderer);
     }
-    return 0;
+    return ret;
 }
 
 __visible__ void spice_server_destroy(SpiceServer *s)
