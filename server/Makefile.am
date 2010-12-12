@@ -19,6 +19,7 @@ INCLUDES = \
 	$(WARN_CFLAGS)                          \
 	$(VISIBILITY_HIDDEN_CFLAGS)		\
 	$(SMARTCARD_CFLAGS)				\
+	-std=gnu99 \
 	$(NULL)
 
 spice_built_sources = generated_marshallers.c generated_marshallers.h generated_demarshallers.c
