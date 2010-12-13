@@ -205,9 +205,7 @@ private:
     void update_sticky_rect();
 
 private:
-    AlphaImageFromRes _info_pixmap;
     AlphaImageFromRes _sticky_pixmap;
-    SpicePoint _info_pos;
     SpicePoint _sticky_pos;
     SpiceRect _sticky_rect;
     bool _sticky_on;
@@ -216,7 +214,6 @@ private:
 
 InfoLayer::InfoLayer()
     : ScreenLayer(SCREEN_LAYER_INFO, false)
-    , _info_pixmap (INFO_IMAGE_RES_ID)
     , _sticky_pixmap (STICKY_KEY_PIXMAP)
     , _sticky_on (false)
 {
@@ -236,11 +233,9 @@ void InfoLayer::draw_info(const QRegion& dest_region, RedDrawable& dest)
         r.right = rects[i].x2;
         r.bottom = rects[i].y2;
 
-        /* is rect inside sticky region or info region? */
+        /* is rect inside sticky region ? */
         if (_sticky_on && rect_intersects(r, _sticky_rect)) {
             dest.blend_pixels(_sticky_pixmap, r.left - _sticky_pos.x, r.top - _sticky_pos.y, r);
-        } else {
-            dest.blend_pixels(_info_pixmap, r.left - _info_pos.x, r.top - _info_pos.y, r);
         }
     }
 }
@@ -253,21 +248,9 @@ void InfoLayer::copy_pixels(const QRegion& dest_region, RedDrawable& dest_dc)
 
 void InfoLayer::set_info_mode()
 {
-    RecurciveLock lock(_update_lock);
-
     ASSERT(screen());
 
-    SpicePoint size = _info_pixmap.get_size();
-    SpicePoint screen_size = screen()->get_size();
-    SpiceRect r;
-
-    r.left = (screen_size.x - size.x) / 2;
-    r.right = r.left + size.x;
-    _info_pos.x = r.right - size.x;
-    _info_pos.y = r.top = 0;
-    r.bottom = r.top + size.y;
-    lock.unlock();
-    set_rect_area(r);
+    clear_area();
     update_sticky_rect();
     set_sticky(_sticky_on);
 }

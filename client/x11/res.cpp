@@ -18,15 +18,6 @@
 #include "common.h"
 #include "resource.h"
 
-#include "images/info_image.c"
-
-static const PixmapHeader info_image = {
-    (uint8_t *)_info_image.pixel_data,
-    _info_image.width,
-    _info_image.height,
-    _info_image.width * 4,
-};
-
 #include "images/alt_image.c"
 
 static const PixmapHeader alt_image = {
@@ -42,7 +33,6 @@ typedef struct ResImage {
 } ResImage;
 
 static const ResImage res_image_map[] = {
-    { INFO_IMAGE_RES_ID, &info_image},
     { ALT_IMAGE_RES_ID, &alt_image},
     {0, NULL},
 };

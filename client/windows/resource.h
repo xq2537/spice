@@ -3,7 +3,6 @@
 // Used by redc.rc
 //
 #define RED_ICON_RES_ID                 5
-#define INFO_IMAGE_RES_ID               102
 #define IDI_ICON_APPLICATION            103
 #define ALT_IMAGE_RES_ID                104
 
