@@ -4,10 +4,10 @@
 #include "mutex.h"
 
 extern "C" {
-#include "vscard_common.h"
-#include "vreader.h"
-#include "vcard_emul.h"
-#include "vevent.h"
+#include <vscard_common.h>
+#include <vreader.h>
+#include <vcard_emul.h>
+#include <vevent.h>
 }
 
 #include "smartcard_channel.h"
