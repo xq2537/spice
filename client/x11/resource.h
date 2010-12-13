@@ -18,7 +18,6 @@
 #ifndef _H_RED_RESOURCES
 #define _H_RED_RESOURCES
 
-#define INFO_IMAGE_RES_ID 2
 #define RED_ICON_RES_ID 3
 #define ALT_IMAGE_RES_ID 4
 
