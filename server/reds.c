@@ -2761,6 +2761,7 @@ struct RedsMigSpice {
     char pub_key[SPICE_TICKET_PUBKEY_BYTES];
     uint32_t mig_key;
     char *host;
+    char *cert_subject;
     int port;
     int sport;
     uint16_t cert_pub_key_type;
@@ -2776,6 +2777,16 @@ typedef struct RedsMigCertPubKeyInfo {
     uint16_t type;
     uint32_t len;
 } RedsMigCertPubKeyInfo;
+
+static void reds_mig_release(void)
+{
+    if (reds->mig_spice) {
+        free(reds->mig_spice->cert_subject);
+        free(reds->mig_spice->host);
+        free(reds->mig_spice);
+        reds->mig_spice = NULL;
+    }
+}
 
 static void reds_mig_continue(void)
 {
@@ -2797,9 +2808,7 @@ static void reds_mig_continue(void)
 
     reds_push_pipe_item(item);
 
-    free(reds->mig_spice->host);
-    free(reds->mig_spice);
-    reds->mig_spice = NULL;
+    reds_mig_release();
 
     reds->mig_wait_connect = TRUE;
     core->timer_start(reds->mig_timer, MIGRATE_TIMEOUT);
@@ -2834,11 +2843,7 @@ static void reds_mig_started(void)
     return;
 
 error:
-    if (reds->mig_spice) {
-        free(reds->mig_spice->host);
-        free(reds->mig_spice);
-        reds->mig_spice = NULL;
-    }
+    reds_mig_release();
     reds_mig_disconnect();
 }
 
@@ -2883,6 +2888,33 @@ static void reds_mig_finished(int completed)
         reds_push_pipe_item(item);
         reds_mig_cleanup();
     }
+}
+
+static void reds_mig_switch(void)
+{
+    RedsMigSpice *s = reds->mig_spice;
+    SpiceMsgMainMigrationSwitchHost migrate;
+    RedsOutItem *item;
+
+    red_printf("");
+    item = new_out_item(SPICE_MSG_MAIN_MIGRATE_SWITCH_HOST);
+
+    migrate.port = s->port;
+    migrate.sport = s->sport;
+    migrate.host_size = strlen(s->host) + 1;
+    migrate.host_data = (uint8_t *)s->host;
+    if (s->cert_subject) {
+        migrate.cert_subject_size = strlen(s->cert_subject) + 1;
+        migrate.cert_subject_data = (uint8_t *)s->cert_subject;
+    } else {
+        migrate.cert_subject_size = 0;
+        migrate.cert_subject_data = NULL;
+    }
+    spice_marshall_msg_main_migrate_switch_host(item->m, &migrate);
+
+    reds_push_pipe_item(item);
+
+    reds_mig_release();
 }
 
 static void migrate_timout(void *opaque)
@@ -3596,18 +3628,24 @@ __visible__ int spice_server_migrate_info(SpiceServer *s, const char* dest,
     spice_migration->port = port;
     spice_migration->sport = secure_port;
     spice_migration->host = strdup(dest);
-
     if (cert_subject) {
-        /* TODO */
+        spice_migration->cert_subject = strdup(cert_subject);
     }
 
+    reds_mig_release();
     reds->mig_spice = spice_migration;
     return 0;
 }
 
+/* interface for seamless migration */
 __visible__ int spice_server_migrate_start(SpiceServer *s)
 {
     ASSERT(reds == s);
+
+    if (1) {
+        /* seamless doesn't work, fixing needs protocol change. */
+        return -1;
+    }
 
     if (!reds->mig_spice) {
         return -1;
@@ -3634,5 +3672,13 @@ __visible__ int spice_server_migrate_end(SpiceServer *s, int completed)
 {
     ASSERT(reds == s);
     reds_mig_finished(completed);
+    return 0;
+}
+
+/* interface for switch-host migration */
+__visible__ int spice_server_migrate_switch(SpiceServer *s)
+{
+    ASSERT(reds == s);
+    reds_mig_switch();
     return 0;
 }
