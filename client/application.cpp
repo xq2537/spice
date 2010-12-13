@@ -2177,6 +2177,7 @@ bool Application::process_cmd_line(int argc, char** argv)
         SPICE_OPT_DISPLAY_COLOR_DEPTH,
         SPICE_OPT_DISABLE_DISPLAY_EFFECTS,
         SPICE_OPT_CONTROLLER,
+        SPICE_OPT_TITLE,
     };
 
 #ifdef USE_GUI
@@ -2234,6 +2235,8 @@ bool Application::process_cmd_line(int argc, char** argv)
     parser.set_multi(SPICE_OPT_DISABLE_DISPLAY_EFFECTS, ',');
 
     parser.add(SPICE_OPT_CONTROLLER, "controller", "enable external controller");
+
+    parser.add(SPICE_OPT_TITLE, "title", "set window title", "title", true, 't');
 
     for (int i = SPICE_CHANNEL_MAIN; i < SPICE_END_CHANNEL; i++) {
         _peer_con_opt[i] = RedPeer::ConnectionOptions::CON_OP_INVALID;
@@ -2340,6 +2343,9 @@ bool Application::process_cmd_line(int argc, char** argv)
             }
             _enable_controller = true;
             return true;
+        case SPICE_OPT_TITLE:
+            set_title(val);
+            break;
         case CmdLineParser::OPTION_HELP:
             parser.show_help();
             return false;
