@@ -2213,6 +2213,7 @@ bool Application::process_cmd_line(int argc, char** argv)
         SPICE_OPT_DISPLAY_COLOR_DEPTH,
         SPICE_OPT_DISABLE_DISPLAY_EFFECTS,
         SPICE_OPT_CONTROLLER,
+        SPICE_OPT_TITLE,
 #ifdef USE_SMARTCARD
         SPICE_OPT_SMARTCARD,
         SPICE_OPT_NOSMARTCARD,
@@ -2276,6 +2277,8 @@ bool Application::process_cmd_line(int argc, char** argv)
     parser.set_multi(SPICE_OPT_DISABLE_DISPLAY_EFFECTS, ',');
 
     parser.add(SPICE_OPT_CONTROLLER, "controller", "enable external controller");
+
+    parser.add(SPICE_OPT_TITLE, "title", "set window title", "title", true, 't');
 
 #ifdef USE_SMARTCARD
     parser.add(SPICE_OPT_SMARTCARD, "smartcard", "enable smartcard channel");
@@ -2391,6 +2394,9 @@ bool Application::process_cmd_line(int argc, char** argv)
             }
             _enable_controller = true;
             return true;
+        case SPICE_OPT_TITLE:
+            set_title(val);
+            break;
 #ifdef USE_SMARTCARD
         case SPICE_OPT_SMARTCARD:
             _smartcard_options->enable= true;
