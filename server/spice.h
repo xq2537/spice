@@ -404,4 +404,11 @@ int spice_server_set_agent_mouse(SpiceServer *s, int enable);
 int spice_server_get_sock_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen);
 int spice_server_get_peer_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen);
 
+/* spice switch-host client migration */
+
+int spice_server_migrate_info(SpiceServer *s, const char* dest,
+                              int port, int secure_port,
+                              const char* cert_subject);
+int spice_server_migrate_switch(SpiceServer *s);
+
 #endif
