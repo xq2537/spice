@@ -183,7 +183,6 @@ int get_command(QXLInstance *qin, struct QXLCommandExt *ext)
     notify--;
     update = test_spice_create_update();
     *ext = update->ext;
-    notify = FALSE;
     return TRUE;
 }
 
@@ -201,6 +200,7 @@ void do_wakeup()
 {
     notify = NOTIFY_DISPLAY_BATCH;
     cursor_notify = NOTIFY_CURSOR_BATCH;
+    core->timer_start(wakeup_timer, wakeup_ms);
     qxl_worker->wakeup(qxl_worker);
 }
 
