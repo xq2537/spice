@@ -3,31 +3,6 @@
 
 #include "spice.h"
 
-/* char device interfaces */
-#define SPICE_INTERFACE_CHAR_DEVICE "char_device"
-#define SPICE_INTERFACE_CHAR_DEVICE_MAJOR 1
-#define SPICE_INTERFACE_CHAR_DEVICE_MINOR 1
-typedef struct SpiceCharDeviceInterface SpiceCharDeviceInterface;
-typedef struct SpiceCharDeviceInstance SpiceCharDeviceInstance;
-typedef struct SpiceCharDeviceState SpiceCharDeviceState;
-
-struct SpiceCharDeviceInterface {
-    SpiceBaseInterface base;
-
-    void (*state)(SpiceCharDeviceInstance *sin, int connected);
-    int (*write)(SpiceCharDeviceInstance *sin, const uint8_t *buf, int len);
-    int (*read)(SpiceCharDeviceInstance *sin, uint8_t *buf, int len);
-};
-
-struct SpiceCharDeviceInstance {
-    SpiceBaseInstance base;
-    const char* subtype;
-    SpiceCharDeviceState *st;
-};
-
-void spice_server_char_device_wakeup(SpiceCharDeviceInstance *sin);
-const char** spice_server_char_device_recognized_subtypes(void);
-
 /* tunnel interface */
 
 #define SPICE_INTERFACE_NET_WIRE "net_wire"
