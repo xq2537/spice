@@ -53,7 +53,7 @@ struct SpiceNetWireInstance {
 void spice_server_net_wire_recv_packet(SpiceNetWireInstance *sin,
                                        const uint8_t *pkt, int len);
 
-/* spice client migration */
+/* spice seamless client migration (broken) */
 
 enum {
     SPICE_MIGRATE_CLIENT_NONE = 1,
@@ -61,13 +61,9 @@ enum {
     SPICE_MIGRATE_CLIENT_READY,
 };
 
-int spice_server_migrate_info(SpiceServer *s, const char* dest,
-                              int port, int secure_port,
-                              const char* cert_subject);
 int spice_server_migrate_start(SpiceServer *s);
 int spice_server_migrate_client_state(SpiceServer *s);
 int spice_server_migrate_end(SpiceServer *s, int completed);
-int spice_server_migrate_switch(SpiceServer *s);
 
 #endif // __SPICE_EXPERIMENTAL_H__
 
