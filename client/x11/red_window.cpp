@@ -1213,6 +1213,7 @@ void RedWindow_p::create(RedWindow& red_window, PixelsSource_p& pix_source,
 
     try {
         int res;
+        XClassHint *class_hint;
 
         XLockDisplay(x_display);
         res = XSaveContext(x_display, window, user_data_context, (XPointer)&red_window);
@@ -1222,8 +1223,16 @@ void RedWindow_p::create(RedWindow& red_window, PixelsSource_p& pix_source,
         }
 
         XSetWMProtocols(x_display, window, &wm_delete_window_atom, 1);
-        XGCValues gc_vals;
+        class_hint = XAllocClassHint();
+        if (!class_hint) {
+            THROW("allocating class hint failed");
+        }
+        class_hint->res_name = (char *)"spicec";
+        class_hint->res_class = (char *)"spicec";
+        XSetClassHint(x_display, window, class_hint);
+        XFree(class_hint);
 
+        XGCValues gc_vals;
         XLockDisplay(x_display);
         gc = XCreateGC(x_display, window, 0, &gc_vals);
         XUnlockDisplay(x_display);
