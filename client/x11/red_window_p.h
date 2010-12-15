@@ -66,6 +66,7 @@ protected:
     bool _visibale;
     bool _expect_parent;
     SpicePoint _show_pos;
+    bool _show_pos_valid;
 #ifdef USE_OGL
     GLXContext _glcont_copy;
 #endif // USE_OGL
