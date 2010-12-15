@@ -1123,6 +1123,7 @@ Cursor RedWindow_p::create_invisible_cursor(Window window)
 
 RedWindow_p::RedWindow_p()
     : _win (None)
+    , _show_pos_valid (false)
 #ifdef USE_OGL
     , _glcont_copy (NULL)
 #endif // USE_OGL
@@ -1565,7 +1566,9 @@ void RedWindow::show(int screen_id)
     move_to_current_desktop();
     _expect_parent = wait_parent;
     wait_for_map();
-    move(_show_pos.x, _show_pos.y);
+    if (_show_pos_valid) {
+        move(_show_pos.x, _show_pos.y);
+    }
 }
 
 static bool get_prop_32(Window win, Atom prop, uint32_t &val)
@@ -1644,6 +1647,7 @@ void RedWindow::hide()
     on_focus_out();
     XUnmapWindow(x_display, _win);
     _show_pos = get_position();
+    _show_pos_valid = true;
     wait_for_unmap();
     ASSERT(!_focused);
     ASSERT(!_pointer_in_window);
@@ -1672,6 +1676,7 @@ void RedWindow::move_and_resize(int x, int y, int width, int height)
     XMoveResizeWindow(x_display, _win, x, y, width, height);
     _show_pos.x = x;
     _show_pos.y = y;
+    _show_pos_valid = true;
     if (_visibale) {
         send_expose(_win, width, height);
     }
@@ -1682,6 +1687,7 @@ void RedWindow::move(int x, int y)
     XMoveWindow(x_display, _win, x, y);
     _show_pos.x = x;
     _show_pos.y = y;
+    _show_pos_valid = true;
 }
 
 void RedWindow::resize(int width, int height)
