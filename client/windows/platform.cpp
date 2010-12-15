@@ -45,7 +45,6 @@
 #endif
 #include <spice/vd_agent.h>
 
-int gdi_handlers = 0;
 extern HINSTANCE instance;
 
 class DefaultEventListener: public Platform::EventListener {

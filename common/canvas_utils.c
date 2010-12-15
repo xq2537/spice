@@ -30,7 +30,7 @@
 #include "mem.h"
 
 #ifdef WIN32
-extern int gdi_handlers;
+static int gdi_handlers = 0;
 #endif
 
 #ifndef CANVAS_ERROR
