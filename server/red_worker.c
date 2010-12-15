@@ -2136,6 +2136,7 @@ static inline void __current_add_drawable(RedWorker *worker, Drawable *drawable,
     surface = &worker->surfaces[surface_id];
     ring_add_after(&drawable->tree_item.base.siblings_link, pos);
     ring_add(&worker->current_list, &drawable->list_link);
+    worker->drawable_count++;
     ring_add(&surface->current_list, &drawable->surface_list_link);
     drawable->refs++;
 }
@@ -3501,7 +3502,6 @@ static inline void red_process_drawable(RedWorker *worker, RedDrawable *drawable
 
     if (red_current_add_qxl(worker, &worker->surfaces[surface_id].current, item,
                             drawable)) {
-        worker->drawable_count++;
         if (item->tree_item.effect != QXL_EFFECT_OPAQUE) {
             worker->transparent_count++;
         }
