@@ -1,8 +1,8 @@
 AC_PREREQ([2.57])
 
 m4_define([SPICE_MAJOR], 0)
-m4_define([SPICE_MINOR], 6)
-m4_define([SPICE_MICRO], 3)
+m4_define([SPICE_MINOR], 7)
+m4_define([SPICE_MICRO], 0)
 
 AC_INIT(spice, [SPICE_MAJOR.SPICE_MINOR.SPICE_MICRO], [], spice)
 
@@ -126,7 +126,7 @@ fi
 dnl =========================================================================
 dnl Check deps
 
-PKG_CHECK_MODULES(PROTOCOL, spice-protocol >= 0.6.0)
+PKG_CHECK_MODULES(PROTOCOL, spice-protocol >= 0.7.0)
 AC_SUBST(PROTOCOL_CFLAGS)
 
 AC_CHECK_LIBM
