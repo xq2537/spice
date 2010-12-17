@@ -2,7 +2,6 @@ Major changes in 0.7.0:
 =======================
 * Many small bugfixes to the spice client
 * Support for smartcards (CAC)
-* Support for building the client with mingw32 (wip, not working yet)
 
 Major changes in 0.6.3:
 =======================
