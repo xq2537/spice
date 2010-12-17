@@ -1,3 +1,10 @@
+Major changes in 0.7.1:
+=======================
+* Brown paper bag release
+* Update SPICE_SERVER_VERSION
+* Include server/tests/test_util.h in the make dist generated tarbals, so
+  that they actually compile
+
 Major changes in 0.7.0:
 =======================
 * Many small bugfixes to the spice client
