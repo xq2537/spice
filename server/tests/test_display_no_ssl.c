@@ -30,9 +30,11 @@ void test_spice_destroy_update(SimpleSpiceUpdate *update)
 #define WIDTH 320
 #define HEIGHT 320
 
-static float angle = 0;
+static int angle_parts = 64;
+static int angle = 0;
 static int unique = 1;
 static int color = 0;
+static int c_i = 0;
 
 SimpleSpiceUpdate *test_spice_create_update()
 {
@@ -41,14 +43,17 @@ SimpleSpiceUpdate *test_spice_create_update()
     QXLImage *image;
     QXLCommand *cmd;
     QXLRect bbox = {
-        .top = HEIGHT/2 + (HEIGHT/3)*cos(angle),
-        .left = WIDTH/2 + (WIDTH/3)*sin(angle),
+        .top = HEIGHT/2 + (HEIGHT/3)*cos(angle*2*M_PI/angle_parts),
+        .left = WIDTH/2 + (WIDTH/3)*sin(angle*2*M_PI/angle_parts),
     };
     uint8_t *dst;
     int bw, bh;
     int i;
 
-    angle += 0.2;
+    angle++;
+    if ((angle % angle_parts) == 0) {
+        c_i++;
+    }
     color = (color + 1) % 2;
     unique++;
 
@@ -91,9 +96,9 @@ SimpleSpiceUpdate *test_spice_create_update()
     dst = update->bitmap;
     for (i = 0 ; i < bh * bw ; ++i, dst+=4) {
         *dst = (color+i % 255);
-        *(dst+1) = 255 - color;
-        *(dst+2) = (color * (color + i)) & 0xff;
-        *(dst+3) = 0;
+        *(dst+((1+c_i)%3)) = 255 - color;
+        *(dst+((2+c_i)%3)) = (color * (color + i)) & 0xff;
+        *(dst+((3+c_i)%3)) = 0;
     }
 
     cmd->type = QXL_CMD_DRAW;
@@ -167,7 +172,7 @@ void get_init_info(QXLInstance *qin, QXLDevInitInfo *info)
     info->n_surfaces = 1;
 }
 
-#define NOTIFY_DISPLAY_BATCH 1
+#define NOTIFY_DISPLAY_BATCH 10
 #define NOTIFY_CURSOR_BATCH 0
 
 int notify = NOTIFY_DISPLAY_BATCH;
@@ -188,7 +193,7 @@ int get_command(QXLInstance *qin, struct QXLCommandExt *ext)
 
 
 SpiceTimer *wakeup_timer;
-int wakeup_ms = 500;
+int wakeup_ms = 100;
 
 int req_cmd_notification(QXLInstance *qin)
 {
