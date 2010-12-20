@@ -277,8 +277,8 @@ void timeout_timers()
         if (next->ms && left.tv_usec == 0 && left.tv_sec == 0) {
             count++;
             DPRINTF(1, "calling timer");
-            next->func(next->opaque);
             next->ms = 0;
+            next->func(next->opaque);
         }
         next = (SpiceTimer*)ring_next(&timers, &next->link);
     }
