@@ -9,14 +9,21 @@
 #include "test_util.h"
 #include "basic_event_loop.h"
 
+#define MEM_SLOT_GROUP_ID 0
+
 /* Parts cribbed from spice-display.h/.c/qxl.c */
 
 typedef struct SimpleSpiceUpdate {
+    QXLCommandExt ext; // first
     QXLDrawable drawable;
     QXLImage image;
-    QXLCommandExt ext;
     uint8_t *bitmap;
 } SimpleSpiceUpdate;
+
+typedef struct SimpleSurfaceCmd {
+    QXLCommandExt ext; // first
+    QXLSurfaceCmd surface_cmd;
+} SimpleSurfaceCmd;
 
 void test_spice_destroy_update(SimpleSpiceUpdate *update)
 {
@@ -30,28 +37,47 @@ void test_spice_destroy_update(SimpleSpiceUpdate *update)
 #define WIDTH 320
 #define HEIGHT 320
 
-static int angle_parts = 64;
+#define SINGLE_PART 8
+static const int angle_parts = 64 / SINGLE_PART;
 static int angle = 0;
 static int unique = 1;
-static int color = 0;
+static int color = -1;
 static int c_i = 0;
 
-SimpleSpiceUpdate *test_spice_create_update()
+void set_cmd(QXLCommandExt *ext, uint32_t type, QXLPHYSICAL data)
+{
+    ext->cmd.type = type;
+    ext->cmd.data = data;
+    ext->cmd.padding = 0;
+    ext->group_id = MEM_SLOT_GROUP_ID;
+    ext->flags = 0;
+}
+
+void simple_set_release_info(QXLReleaseInfo *info, intptr_t ptr)
+{
+    info->id = ptr;
+    //info->group_id = MEM_SLOT_GROUP_ID;
+}
+
+SimpleSpiceUpdate *test_spice_create_update(uint32_t surface_id)
 {
     SimpleSpiceUpdate *update;
     QXLDrawable *drawable;
     QXLImage *image;
-    QXLCommand *cmd;
     QXLRect bbox = {
+#ifdef CIRCLE
         .top = HEIGHT/2 + (HEIGHT/3)*cos(angle*2*M_PI/angle_parts),
         .left = WIDTH/2 + (WIDTH/3)*sin(angle*2*M_PI/angle_parts),
+#else
+        .top = HEIGHT*(angle % SINGLE_PART)/SINGLE_PART,
+        .left = ((WIDTH/SINGLE_PART)*(angle / SINGLE_PART)) % WIDTH,
+#endif
     };
     uint8_t *dst;
     int bw, bh;
     int i;
 
-    angle++;
-    if ((angle % angle_parts) == 0) {
+    if ((angle++ % angle_parts) == 0) {
         c_i++;
     }
     color = (color + 1) % 2;
@@ -60,19 +86,20 @@ SimpleSpiceUpdate *test_spice_create_update()
     update   = calloc(sizeof(*update), 1);
     drawable = &update->drawable;
     image    = &update->image;
-    cmd      = &update->ext.cmd;
 
-    bw       = 64;
+    bw       = WIDTH/SINGLE_PART;
     bh       = 48;
     bbox.right = bbox.left + bw;
     bbox.bottom = bbox.top + bh;
     update->bitmap = malloc(bw * bh * 4);
     //printf("allocated %p, %p\n", update, update->bitmap);
 
+    drawable->surface_id      = surface_id;
+
     drawable->bbox            = bbox;
     drawable->clip.type       = SPICE_CLIP_TYPE_NONE;
     drawable->effect          = QXL_EFFECT_OPAQUE;
-    drawable->release_info.id = (intptr_t)update;
+    simple_set_release_info(&drawable->release_info, (intptr_t)update);
     drawable->type            = QXL_DRAW_COPY;
     drawable->surfaces_dest[0] = -1;
     drawable->surfaces_dest[1] = -1;
@@ -101,13 +128,53 @@ SimpleSpiceUpdate *test_spice_create_update()
         *(dst+((3+c_i)%3)) = 0;
     }
 
-    cmd->type = QXL_CMD_DRAW;
-    cmd->data = (intptr_t)drawable;
+    set_cmd(&update->ext, QXL_CMD_DRAW, (intptr_t)drawable);
 
     return update;
 }
 
-#define MEM_SLOT_GROUP_ID 0
+/*
+void dispatch_update_area(QXLWorker *worker)
+{
+    worker->update_area();
+}
+
+ update_area()
+{
+    QXL_CMD_UPDATE
+}
+*/
+
+SimpleSurfaceCmd *create_surface(int surface_id, int width, int height, uint8_t *data)
+{
+    SimpleSurfaceCmd *simple_cmd = calloc(sizeof(SimpleSurfaceCmd), 1);
+    QXLSurfaceCmd *surface_cmd = &simple_cmd->surface_cmd;
+
+    set_cmd(&simple_cmd->ext, QXL_CMD_SURFACE, (intptr_t)surface_cmd);
+    simple_set_release_info(&surface_cmd->release_info, (intptr_t)simple_cmd);
+    surface_cmd->type = QXL_SURFACE_CMD_CREATE;
+    surface_cmd->flags = 0; // ?
+    surface_cmd->surface_id = surface_id;
+    surface_cmd->u.surface_create.format = SPICE_SURFACE_FMT_32_xRGB;
+    surface_cmd->u.surface_create.width = width;
+    surface_cmd->u.surface_create.height = height;
+    surface_cmd->u.surface_create.stride = -width * 4;
+    surface_cmd->u.surface_create.data = (intptr_t)data;
+    return simple_cmd;
+}
+
+SimpleSurfaceCmd *destroy_surface(int surface_id)
+{
+    SimpleSurfaceCmd *simple_cmd = calloc(sizeof(SimpleSurfaceCmd), 1);
+    QXLSurfaceCmd *surface_cmd = &simple_cmd->surface_cmd;
+
+    set_cmd(&simple_cmd->ext, QXL_CMD_SURFACE, (intptr_t)surface_cmd);
+    simple_set_release_info(&surface_cmd->release_info, (intptr_t)simple_cmd);
+    surface_cmd->type = QXL_SURFACE_CMD_DESTROY;
+    surface_cmd->flags = 0; // ?
+    surface_cmd->surface_id = surface_id;
+    return simple_cmd;
+}
 
 static QXLWorker *qxl_worker = NULL;
 static uint8_t primary_surface[HEIGHT * WIDTH * 4];
@@ -162,6 +229,9 @@ void set_mm_time(QXLInstance *qin, uint32_t mm_time)
 {
 }
 
+// we now have a secondary surface
+#define MAX_SURFACE_NUM 2
+
 void get_init_info(QXLInstance *qin, QXLDevInitInfo *info)
 {
     bzero(info, sizeof(*info));
@@ -169,31 +239,75 @@ void get_init_info(QXLInstance *qin, QXLDevInitInfo *info)
     info->num_memslots_groups = 1;
     info->memslot_id_bits = 1;
     info->memslot_gen_bits = 1;
-    info->n_surfaces = 1;
+    info->n_surfaces = MAX_SURFACE_NUM;
 }
 
-#define NOTIFY_DISPLAY_BATCH 10
+#define NOTIFY_DISPLAY_BATCH (SINGLE_PART*2)
 #define NOTIFY_CURSOR_BATCH 0
 
 int notify = NOTIFY_DISPLAY_BATCH;
 int cursor_notify = NOTIFY_CURSOR_BATCH;
 
+// simple queue for commands
+enum {
+    SIMPLE_CREATE_SURFACE,
+    SIMPLE_DRAW,
+    SIMPLE_DESTROY_SURFACE
+};
+
+int commands[] = {
+    //SIMPLE_CREATE_SURFACE,
+    //SIMPLE_DRAW,
+    //SIMPLE_DESTROY_SURFACE,
+    SIMPLE_DRAW,
+};
+
+#define NUM_COMMANDS (sizeof(commands)/sizeof(commands[0]))
+
+#define SURF_WIDTH 320
+#define SURF_HEIGHT 240
+uint8_t secondary_surface[SURF_WIDTH * SURF_HEIGHT * 4];
+
+// called from spice_server thread (i.e. red_worker thread)
 int get_command(QXLInstance *qin, struct QXLCommandExt *ext)
 {
-    SimpleSpiceUpdate *update;
+    static int cmd_index = 0;
+    static uint32_t target_surface = 0;
 
     if (!notify) {
         return FALSE;
     }
     notify--;
-    update = test_spice_create_update();
-    *ext = update->ext;
+    switch (commands[cmd_index]) {
+        case SIMPLE_DRAW: {
+            SimpleSpiceUpdate *update;
+            update = test_spice_create_update(target_surface);
+            *ext = update->ext;
+            break;
+        }
+        case SIMPLE_CREATE_SURFACE: {
+            SimpleSurfaceCmd *update;
+            target_surface = MAX_SURFACE_NUM - 1;
+            update = create_surface(target_surface, SURF_WIDTH, SURF_HEIGHT,
+                                    secondary_surface);
+            *ext = update->ext;
+            break;
+        }
+        case SIMPLE_DESTROY_SURFACE: {
+            SimpleSurfaceCmd *update;
+            update = destroy_surface(target_surface);
+            target_surface = 0;
+            *ext = update->ext;
+            break;
+        }
+    }
+    cmd_index = (cmd_index + 1) % NUM_COMMANDS;
     return TRUE;
 }
 
 
 SpiceTimer *wakeup_timer;
-int wakeup_ms = 100;
+int wakeup_ms = 500;
 
 int req_cmd_notification(QXLInstance *qin)
 {
@@ -211,9 +325,19 @@ void do_wakeup()
 
 void release_resource(QXLInstance *qin, struct QXLReleaseInfoExt release_info)
 {
+    QXLCommandExt *ext = (void*)release_info.info->id;
     //printf("%s\n", __func__);
     ASSERT(release_info.group_id == MEM_SLOT_GROUP_ID);
-    test_spice_destroy_update((void*)release_info.info->id);
+    switch (ext->cmd.type) {
+        case QXL_CMD_DRAW:
+            test_spice_destroy_update((void*)ext);
+            break;
+        case QXL_CMD_SURFACE:
+            free(ext);
+            break;
+        default:
+            abort();
+    }
 }
 
 #define CURSOR_WIDTH 32
@@ -340,6 +464,7 @@ int main()
     core = basic_event_loop_init();
     server = spice_server_new();
     bzero(primary_surface, sizeof(primary_surface));
+    bzero(secondary_surface, sizeof(secondary_surface));
     spice_server_set_port(server, 5912);
     spice_server_set_noauth(server);
     spice_server_init(server, core);
