@@ -2075,13 +2075,13 @@ bool RedWindow::get_mouse_anchor_point(SpicePoint& pt)
 #ifdef USE_OGL
 RedGlContext RedWindow::create_context_gl()
 {
-    RedGlContext *context = NULL;
     if (XPlatform::get_fbconfig()[_screen]) {
         XLockDisplay(x_display);
-        context = glXCreateContext(x_display, XPlatform::get_vinfo()[_screen], NULL, GL_TRUE);
+        RedGlContext context = glXCreateContext(x_display, XPlatform::get_vinfo()[_screen], NULL, GL_TRUE);
         XUnlockDisplay(x_display);
+        return context;
     }
-    return context;
+    return NULL;
 }
 
 RedPbuffer RedWindow::create_pbuff(int width, int height)
