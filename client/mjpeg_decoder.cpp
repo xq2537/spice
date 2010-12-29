@@ -21,7 +21,7 @@
 #include "utils.h"
 #include "mjpeg_decoder.h"
 
-#if JPEG_LIB_VERSION < 70
+#ifndef jpeg_boolean
 #define jpeg_boolean boolean
 #endif
 
