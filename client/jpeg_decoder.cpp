@@ -20,7 +20,7 @@
 #include "debug.h"
 #include "utils.h"
 
-#ifndef jpeg_boolean
+#if !defined(jpeg_boolean) && !defined(__MINGW32__)
 #define jpeg_boolean boolean
 #endif
 
