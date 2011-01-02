@@ -30,7 +30,9 @@ void test_spice_destroy_update(SimpleSpiceUpdate *update)
     if (!update) {
         return;
     }
-    free(update->bitmap);
+    if (update->bitmap) {
+        free(update->bitmap);
+    }
     free(update);
 }
 
@@ -59,25 +61,53 @@ void simple_set_release_info(QXLReleaseInfo *info, intptr_t ptr)
     //info->group_id = MEM_SLOT_GROUP_ID;
 }
 
-SimpleSpiceUpdate *test_spice_create_update(uint32_t surface_id)
+typedef struct Path {
+    int t;
+    int min_t;
+    int max_t;
+} Path;
+
+void path_init(Path *path, int min, int max)
+{
+    path->t = min;
+    path->min_t = min;
+    path->max_t = max;
+}
+
+void path_progress(Path *path)
+{
+    path->t = (path->t+1)% (path->max_t - path->min_t) + path->min_t;
+}
+
+Path path;
+
+void draw_pos(int t, int *x, int *y)
+{
+#ifdef CIRCLE
+    *y = HEIGHT/2 + (HEIGHT/3)*cos(t*2*M_PI/angle_parts);
+    *x = WIDTH/2 + (WIDTH/3)*sin(t*2*M_PI/angle_parts);
+#else
+    *y = HEIGHT*(t % SINGLE_PART)/SINGLE_PART;
+    *x = ((WIDTH/SINGLE_PART)*(t / SINGLE_PART)) % WIDTH;
+#endif
+}
+
+SimpleSpiceUpdate *test_spice_create_update_draw(uint32_t surface_id, int t)
 {
     SimpleSpiceUpdate *update;
     QXLDrawable *drawable;
     QXLImage *image;
+    int top, left;
+    draw_pos(t, &left, &top);
     QXLRect bbox = {
-#ifdef CIRCLE
-        .top = HEIGHT/2 + (HEIGHT/3)*cos(angle*2*M_PI/angle_parts),
-        .left = WIDTH/2 + (WIDTH/3)*sin(angle*2*M_PI/angle_parts),
-#else
-        .top = HEIGHT*(angle % SINGLE_PART)/SINGLE_PART,
-        .left = ((WIDTH/SINGLE_PART)*(angle / SINGLE_PART)) % WIDTH,
-#endif
+        .top = top,
+        .left = left,
     };
     uint8_t *dst;
     int bw, bh;
     int i;
 
-    if ((angle++ % angle_parts) == 0) {
+    if ((t % angle_parts) == 0) {
         c_i++;
     }
     color = (color + 1) % 2;
@@ -132,6 +162,45 @@ SimpleSpiceUpdate *test_spice_create_update(uint32_t surface_id)
 
     return update;
 }
+
+SimpleSpiceUpdate *test_spice_create_update_copy_bits(uint32_t surface_id)
+{
+    SimpleSpiceUpdate *update;
+    QXLDrawable *drawable;
+    int bw, bh;
+    QXLRect bbox = {
+        .left = 10,
+        .top = 0,
+    };
+
+    update   = calloc(sizeof(*update), 1);
+    drawable = &update->drawable;
+
+    bw       = WIDTH/SINGLE_PART;
+    bh       = 48;
+    bbox.right = bbox.left + bw;
+    bbox.bottom = bbox.top + bh;
+    //printf("allocated %p, %p\n", update, update->bitmap);
+
+    drawable->surface_id      = surface_id;
+
+    drawable->bbox            = bbox;
+    drawable->clip.type       = SPICE_CLIP_TYPE_NONE;
+    drawable->effect          = QXL_EFFECT_OPAQUE;
+    simple_set_release_info(&drawable->release_info, (intptr_t)update);
+    drawable->type            = QXL_COPY_BITS;
+    drawable->surfaces_dest[0] = -1;
+    drawable->surfaces_dest[1] = -1;
+    drawable->surfaces_dest[2] = -1;
+
+    drawable->u.copy_bits.src_pos.x = 0;
+    drawable->u.copy_bits.src_pos.y = 0;
+
+    set_cmd(&update->ext, QXL_CMD_DRAW, (intptr_t)drawable);
+
+    return update;
+}
+
 
 /*
 void dispatch_update_area(QXLWorker *worker)
@@ -242,47 +311,108 @@ void get_init_info(QXLInstance *qin, QXLDevInitInfo *info)
     info->n_surfaces = MAX_SURFACE_NUM;
 }
 
-#define NOTIFY_DISPLAY_BATCH (SINGLE_PART*2)
+#define NOTIFY_DISPLAY_BATCH (SINGLE_PART/2)
 #define NOTIFY_CURSOR_BATCH 0
 
-int notify = NOTIFY_DISPLAY_BATCH;
 int cursor_notify = NOTIFY_CURSOR_BATCH;
 
 // simple queue for commands
 enum {
+    PATH_PROGRESS,
     SIMPLE_CREATE_SURFACE,
     SIMPLE_DRAW,
-    SIMPLE_DESTROY_SURFACE
+    SIMPLE_COPY_BITS,
+    SIMPLE_DESTROY_SURFACE,
+    SIMPLE_UPDATE,
 };
 
-int commands[] = {
+int simple_commands[] = {
     //SIMPLE_CREATE_SURFACE,
     //SIMPLE_DRAW,
     //SIMPLE_DESTROY_SURFACE,
     SIMPLE_DRAW,
+    SIMPLE_COPY_BITS,
+    SIMPLE_UPDATE,
 };
 
-#define NUM_COMMANDS (sizeof(commands)/sizeof(commands[0]))
+
+#define COUNT(x) ((sizeof(x)/sizeof(x[0])))
+#define NUM_SIMPLE_COMMANDS COUNT(simple_commands)
 
 #define SURF_WIDTH 320
 #define SURF_HEIGHT 240
 uint8_t secondary_surface[SURF_WIDTH * SURF_HEIGHT * 4];
 
+// We shall now have a ring of commands, so that we can update
+// it from a separate thread - since get_command is called from
+// the worker thread, and we need to sometimes do an update_area,
+// which cannot be done from red_worker context (not via dispatcher,
+// since you get a deadlock, and it isn't designed to be done
+// any other way, so no point testing that).
+int commands_end = 0;
+int commands_start = 0;
+struct QXLCommandExt* commands[1024];
+
+#define COMMANDS_SIZE COUNT(commands)
+
+void push_command(QXLCommandExt *ext)
+{
+    ASSERT(commands_end - commands_start < COMMANDS_SIZE);
+    commands[commands_end%COMMANDS_SIZE] = ext;
+    commands_end++;
+}
+
+struct QXLCommandExt *get_simple_command()
+{
+    struct QXLCommandExt *ret = commands[commands_start%COMMANDS_SIZE];
+    ASSERT(commands_start < commands_end);
+    commands_start++;
+    return ret;
+}
+
+int num_commands()
+{
+    return commands_end - commands_start;
+}
+
 // called from spice_server thread (i.e. red_worker thread)
 int get_command(QXLInstance *qin, struct QXLCommandExt *ext)
 {
-    static int cmd_index = 0;
-    static uint32_t target_surface = 0;
-
-    if (!notify) {
+    if (num_commands() == 0) {
         return FALSE;
     }
-    notify--;
-    switch (commands[cmd_index]) {
+    *ext = *get_simple_command();
+    return TRUE;
+}
+
+void produce_command()
+{
+    static int target_surface = 0;
+    static int simple_command_index = 0;
+    static int cmd_index = 0;
+
+    switch (simple_commands[cmd_index]) {
+        case PATH_PROGRESS:
+            path_progress(&path);
+            break;
+        case SIMPLE_UPDATE: {
+            QXLRect rect = {.left = 0, .right = WIDTH,
+                            .top = 0, .bottom = HEIGHT};
+            qxl_worker->update_area(qxl_worker, 0, &rect, NULL, 0, 1);
+            break;
+        }
+        case SIMPLE_COPY_BITS:
         case SIMPLE_DRAW: {
             SimpleSpiceUpdate *update;
-            update = test_spice_create_update(target_surface);
-            *ext = update->ext;
+            switch (simple_commands[cmd_index]) {
+                case SIMPLE_COPY_BITS:
+                    update = test_spice_create_update_copy_bits(target_surface);
+                    break;
+                case SIMPLE_DRAW:
+                    update = test_spice_create_update_draw(target_surface, path.t);
+                    break;
+            }
+            push_command(&update->ext);
             break;
         }
         case SIMPLE_CREATE_SURFACE: {
@@ -290,21 +420,19 @@ int get_command(QXLInstance *qin, struct QXLCommandExt *ext)
             target_surface = MAX_SURFACE_NUM - 1;
             update = create_surface(target_surface, SURF_WIDTH, SURF_HEIGHT,
                                     secondary_surface);
-            *ext = update->ext;
+            push_command(&update->ext);
             break;
         }
         case SIMPLE_DESTROY_SURFACE: {
             SimpleSurfaceCmd *update;
             update = destroy_surface(target_surface);
             target_surface = 0;
-            *ext = update->ext;
+            push_command(&update->ext);
             break;
         }
     }
-    cmd_index = (cmd_index + 1) % NUM_COMMANDS;
-    return TRUE;
+    cmd_index = (cmd_index + 1) % NUM_SIMPLE_COMMANDS;
 }
-
 
 SpiceTimer *wakeup_timer;
 int wakeup_ms = 500;
@@ -317,8 +445,13 @@ int req_cmd_notification(QXLInstance *qin)
 
 void do_wakeup()
 {
-    notify = NOTIFY_DISPLAY_BATCH;
+    int notify;
     cursor_notify = NOTIFY_CURSOR_BATCH;
+
+    for (notify = NOTIFY_DISPLAY_BATCH; notify > 0;--notify) {
+        produce_command();
+    }
+
     core->timer_start(wakeup_timer, wakeup_ms);
     qxl_worker->wakeup(qxl_worker);
 }
@@ -463,6 +596,7 @@ int main()
 {
     core = basic_event_loop_init();
     server = spice_server_new();
+    path_init(&path, 0, angle_parts);
     bzero(primary_surface, sizeof(primary_surface));
     bzero(secondary_surface, sizeof(secondary_surface));
     spice_server_set_port(server, 5912);
