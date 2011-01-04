@@ -5439,7 +5439,8 @@ static inline int red_lz_compress_image(DisplayChannel *display_channel,
     lz_data->data.u.lines_data.reverse = 0;
     lz_data->usr.more_lines = lz_usr_more_lines;
 
-    size = lz_encode(lz, type, src->x, src->y, (src->flags & SPICE_BITMAP_FLAGS_TOP_DOWN),
+    size = lz_encode(lz, type, src->x, src->y,
+                     !!(src->flags & SPICE_BITMAP_FLAGS_TOP_DOWN),
                      NULL, 0, src->stride,
                      (uint8_t*)lz_data->data.bufs_head->buf,
                      sizeof(lz_data->data.bufs_head->buf));
@@ -5588,7 +5589,7 @@ static int red_jpeg_compress_image(DisplayChannel *display_channel, SpiceImage *
      lz_data->usr.more_lines = lz_usr_more_lines;
 
      alpha_lz_size = lz_encode(lz, LZ_IMAGE_TYPE_XXXA, src->x, src->y,
-                               (src->flags & SPICE_BITMAP_FLAGS_TOP_DOWN),
+                               !!(src->flags & SPICE_BITMAP_FLAGS_TOP_DOWN),
                                NULL, 0, src->stride,
                                lz_out_start_byte,
                                comp_head_left);
