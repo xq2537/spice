@@ -25,6 +25,7 @@ INCLUDES = \
 	$(XFIXES_CFLAGS)				\
 	$(MISC_X_CFLAGS)				\
 	$(CEGUI_CFLAGS)					\
+	$(CEGUI06_CFLAGS)					\
 	$(WARN_CFLAGS)                                  \
 	$(SPICE_NONPKGCONFIG_CFLAGS)			\
 	$(NULL)
@@ -198,6 +199,7 @@ spicec_LDFLAGS = \
 	$(CELT051_LIBS)					\
 	$(SSL_LIBS)					\
 	$(CEGUI_LIBS)					\
+	$(CEGUI06_LIBS)					\
 	$(JPEG_LIBS)					\
 	$(Z_LIBS)					\
 	$(SPICE_NONPKGCONFIG_LIBS)
