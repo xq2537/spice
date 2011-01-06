@@ -346,10 +346,13 @@ int CmdLineParser::get_option(char** val)
         }
 
 #ifdef DISABLE_ABBREVIATE
-        int name_pos = (opt_obj->type == REQUIRED_ARGUMENT) ? optind - 2 : optind - 1;
+        int name_pos =
+            (opt_obj->type == REQUIRED_ARGUMENT && optarg[-1] != '=')
+            ? optind - 2
+            : optind - 1;
         std::string cmd_name(_argv[name_pos] + 2);
         if (cmd_name.find(opt_obj->name) != 0) {
-            Platform::term_printf("%s: invalid option '--%s'\n", _argv[0], cmd_name.c_str());
+            Platform::term_printf("%s: invalid abbreviated option '--%s'\n", _argv[0], cmd_name.c_str());
             return OPTION_ERROR;
         }
 #endif
