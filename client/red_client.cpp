@@ -259,7 +259,7 @@ void Migrate::start(const SpiceMsgMainMigrationBegin* migrate)
 {
     DBG(0, "");
     abort();
-    if ((_client.get_peer_major() == 1) && (_client.get_peer_minor() < 2)) {
+    if ((_client.get_peer_major() == 1) && (_client.get_peer_minor() < 1)) {
         LOG_INFO("server minor version incompatible for destination authentication"
                  "(missing dest pubkey in SpiceMsgMainMigrationBegin)");
         OldRedMigrationBegin* old_migrate = (OldRedMigrationBegin*)migrate;
