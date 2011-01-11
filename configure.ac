@@ -195,7 +195,6 @@ if test "x$have_smartcard" = "xyes"; then
     PKG_CHECK_MODULES(CAC_CARD, libcacard >= 0.1.0)
     SMARTCARD_LIBS="$CAC_CARD_LIBS"
     SMARTCARD_CFLAGS="$CAC_CARD_CFLAGS"
-    SPICE_REQUIRES+=" libcacard"
     AC_SUBST(SMARTCARD_LIBS)
     AC_SUBST(SMARTCARD_CFLAGS)
 fi
