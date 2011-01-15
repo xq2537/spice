@@ -365,7 +365,7 @@ void red_channel_destroy(RedChannel *channel)
 void red_channel_shutdown(RedChannel *channel)
 {
     red_printf("");
-    if (!channel->peer->shutdown) {
+    if (channel->peer && !channel->peer->shutdown) {
         channel->core->watch_update_mask(channel->peer->watch,
                                          SPICE_WATCH_EVENT_READ);
         red_channel_pipe_clear(channel);
