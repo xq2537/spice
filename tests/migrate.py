@@ -22,7 +22,7 @@ Will leave a log file, migrate_test.log, in current directory.
 #  active migrate tcp:localhost:9000
 #  _wait for event of quit
 #  active stop, active<->passive
-# 
+#
 # wait until it's active
 #  command query-status, if running good
 #  if not listen to events until event of running
@@ -47,9 +47,10 @@ import atexit
 QMP_1, QMP_2 = "/tmp/migrate_test.1.qmp", "/tmp/migrate_test.2.qmp"
 SPICE_PORT_1, SPICE_PORT_2 = 5911, 6911
 MIGRATE_PORT = 9000
+SPICEC_COUNT = 1
 QEMU = "qemu.upstream"
 LOG_FILENAME = "migrate_log.log"
-IMAGE = "/store/images/f14_regular.qcow2"
+IMAGE = "/store/images/F14_CCID.testing.qcow2"
 
 qemu_exec = os.popen("which %s" % QEMU).read().strip()
 
@@ -105,54 +106,83 @@ def wait_for_event(q, event):
                 return
         time.sleep(0.5)
 
-def cleanup(*args):
+def cleanup(migrator):
     print "doing cleanup"
-    os.system("killall %s" % qemu_exec)
-    for x in [QMP_1, QMP_2]:
-        if os.path.exists(x):
-            os.unlink(x)
+    migrator.close()
 
-#################### Main #######################
+class Migrator(object):
 
-cleanup()
-atexit.register(cleanup)
+    migration_count = 0
 
-active = start_qemu(spice_port=SPICE_PORT_1, qmp_filename=QMP_1)
-target = start_qemu(spice_port=SPICE_PORT_2, qmp_filename=QMP_2,
-                    incoming_port=MIGRATE_PORT)
+    def __init__(self, log, monitor_files, spicec_count, spice_ports, migration_port):
+        self.log = log
+        self.migration_port = migration_port
+        self.spicec_count = spicec_count
+        self.monitor_files = monitor_files
+        self.spice_ports = spice_ports
+        self.active = start_qemu(spice_port=SPICE_PORT_1, qmp_filename=QMP_1)
+        self.target = start_qemu(spice_port=SPICE_PORT_2, qmp_filename=QMP_2,
+                            incoming_port=MIGRATE_PORT)
+        self.remove_monitor_files()
+        self.spicec = []
 
-i = 0
-spicec = None
-log = open(LOG_FILENAME, "a+")
-log.write("# "+str(datetime.datetime.now())+"\n")
+    def close(self):
+        self.remove_monitor_files()
+        self.kill_qemu()
 
-while True:
-    wait_active(active.qmp, True)
-    wait_active(target.qmp, False)
-    if spicec == None:
-        spicec = start_spicec(spice_port=SPICE_PORT_1)
-        wait_for_event(active.qmp, 'SPICE_INITIALIZED')
-        print "waiting for Enter to start migrations"
-        raw_input()
-    active.qmp.cmd('client_migrate_info', {'protocol':'spice',
-        'hostname':'localhost', 'port':target.spice_port})
-    active.qmp.cmd('migrate', {'uri': 'tcp:localhost:%s' % MIGRATE_PORT})
-    wait_active(active.qmp, False)
-    wait_active(target.qmp, True)
-    wait_for_event(target.qmp, 'SPICE_CONNECTED')
-    dead = active
-    dead.qmp.cmd("quit")
-    dead.qmp.close()
-    dead.wait()
-    new_spice_port = dead.spice_port
-    new_qmp_filename = dead.qmp_filename
-    log.write("# STDOUT dead %s\n" % dead.pid)
-    log.write(dead.stdout.read())
-    del dead
-    active = target
-    target = start_qemu(spice_port=new_spice_port,
-                        qmp_filename=new_qmp_filename,
-                        incoming_port=MIGRATE_PORT)
-    print i
-    i += 1
+    def kill_qemu(self):
+        for p in [self.active, self.target]:
+            print "killing and waiting for qemu pid %s" % p.pid
+            p.kill()
+            p.wait()
+
+    def remove_monitor_files(self):
+        for x in self.monitor_files:
+            if os.path.exists(x):
+                os.unlink(x)
+
+    def iterate(self, wait_for_user_input=False):
+        wait_active(self.active.qmp, True)
+        wait_active(self.target.qmp, False)
+        if len(self.spicec) == 0:
+            for i in range(self.spicec_count):
+                self.spicec.append(start_spicec(spice_port=SPICE_PORT_1))
+                wait_for_event(self.active.qmp, 'SPICE_INITIALIZED')
+            if wait_for_user_input:
+                print "waiting for Enter to start migrations"
+                raw_input()
+        self.active.qmp.cmd('client_migrate_info', {'protocol':'spice',
+            'hostname':'localhost', 'port':self.target.spice_port})
+        self.active.qmp.cmd('migrate', {'uri': 'tcp:localhost:%s' % MIGRATE_PORT})
+        wait_active(self.active.qmp, False)
+        wait_active(self.target.qmp, True)
+        wait_for_event(self.target.qmp, 'SPICE_CONNECTED')
+        dead = self.active
+        dead.qmp.cmd("quit")
+        dead.qmp.close()
+        dead.wait()
+        new_spice_port = dead.spice_port
+        new_qmp_filename = dead.qmp_filename
+        self.log.write("# STDOUT dead %s\n" % dead.pid)
+        self.log.write(dead.stdout.read())
+        del dead
+        self.active = self.target
+        self.target = start_qemu(spice_port=new_spice_port,
+                            qmp_filename=new_qmp_filename,
+                            incoming_port=MIGRATE_PORT)
+        print self.migration_count
+        self.migration_count += 1
+
+def main():
+    log = open(LOG_FILENAME, "a+")
+    log.write("# "+str(datetime.datetime.now())+"\n")
+
+    migrator = Migrator(log = log, monitor_files = [QMP_1, QMP_2], migration_port = MIGRATE_PORT,
+        spice_ports = [SPICE_PORT_1, SPICE_PORT_2], spicec_count = SPICEC_COUNT)
+    atexit.register(cleanup, migrator)
+    while True:
+        migrator.iterate()
+
+if __name__ == '__main__':
+    main()
 
