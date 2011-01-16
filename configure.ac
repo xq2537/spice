@@ -309,7 +309,7 @@ AC_DEFUN([SPICE_CC_TRY_FLAG], [
   spice_save_CFLAGS="$CFLAGS"
   CFLAGS="$CFLAGS $1"
 
-  AC_COMPILE_IFELSE([ ], [spice_cc_flag=yes], [spice_cc_flag=no])
+  AC_COMPILE_IFELSE([AC_LANG_SOURCE([ ])], [spice_cc_flag=yes], [spice_cc_flag=no])
   CFLAGS="$spice_save_CFLAGS"
 
   if test "x$spice_cc_flag" = "xyes"; then
@@ -430,13 +430,13 @@ dnl -fvisibility stuff
 
 have_gcc4=no
 AC_MSG_CHECKING(for -fvisibility)
-AC_COMPILE_IFELSE([
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 #if defined(__GNUC__) && (__GNUC__ >= 4)
 #else
 error Need GCC 4.0 for visibility
 #endif
 int main () { return 0; }
-], have_gcc4=yes)
+])], have_gcc4=yes)
 
 if test "x$have_gcc4" = "xyes" -a ! "$os_win32" = "yes" ; then
    VISIBILITY_HIDDEN_CFLAGS="-fvisibility=hidden"
