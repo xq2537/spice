@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/time.h>
+#include <strings.h>
 
 #include "test_util.h"
 #include "basic_event_loop.h"
