@@ -365,7 +365,7 @@ bool RedPeer::verify_subject(X509* cert, const HostAuthOptions::CertFieldValueLi
     }
 
     if ((size_t)X509_NAME_entry_count(cert_subject) != subject.size()) {
-        DBG(0, "subject mismatch: #entries cert=%d, input=%d",
+        LOG_ERROR("subject mismatch: #entries cert=%d, input=%d",
             X509_NAME_entry_count(cert_subject), subject.size());
         return false;
     }
@@ -396,7 +396,7 @@ bool RedPeer::verify_subject(X509* cert, const HostAuthOptions::CertFieldValueLi
          DBG(0, "subjects match");
          return true;
     } else {
-         DBG(0, "subjects mismatch");
+         LOG_ERROR("host-subject mismatch");
          return false;
     }
 }
@@ -505,7 +505,7 @@ void RedPeer::connect_secure(const ConnectionOptions& options, const char* host)
                     auth_data.info.type_flags = RedPeer::HostAuthOptions::HOST_AUTH_OP_PUBKEY;
                 }
                 else {
-                    LOG_WARN("SSL_CTX_load_verify_locations failed CA_file=%s", CA_file.c_str());
+                    LOG_ERROR("SSL_CTX_load_verify_locations failed CA_file=%s", CA_file.c_str());
                     ssl_error();
                 }
             }
@@ -517,7 +517,7 @@ void RedPeer::connect_secure(const ConnectionOptions& options, const char* host)
 
         return_code = SSL_CTX_set_cipher_list(_ctx, options.ciphers.c_str());
         if (return_code != 1) {
-            LOG_WARN("SSL_CTX_set_cipher_list failed, ciphers=%s", options.ciphers.c_str());
+            LOG_ERROR("SSL_CTX_set_cipher_list failed, ciphers=%s", options.ciphers.c_str());
             ssl_error();
         }
 
@@ -537,7 +537,7 @@ void RedPeer::connect_secure(const ConnectionOptions& options, const char* host)
         return_code = SSL_connect(_ssl);
         if (return_code <= 0) {
             int ssl_error_code = SSL_get_error(_ssl, return_code);
-            LOG_WARN("failed to connect w/SSL, ssl_error %s",
+            LOG_ERROR("failed to connect w/SSL, ssl_error %s",
                      ERR_error_string(ssl_error_code, NULL));
             ssl_error();
         }
