@@ -167,14 +167,12 @@ if test "x$use_gui" = "xyes"; then
     [
         AC_SUBST(CEGUI06_CFLAGS)
         AC_SUBST(CEGUI06_LIBS)
-        SPICE_REQUIRES+=" CEGUI-0.6"
         CEGUI06_CFLAGS+="-DUSE_GUI"
     ],
     [
         PKG_CHECK_MODULES(CEGUI, CEGUI >= 0.6.0 CEGUI < 0.7.0)
         AC_SUBST(CEGUI_CFLAGS)
         AC_SUBST(CEGUI_LIBS)
-        SPICE_REQUIRES+=" CEGUI"
         CEGUI_CFLAGS+="-DUSE_GUI"
     ])
 fi
