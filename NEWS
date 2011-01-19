@@ -1,3 +1,12 @@
+Major changes in 0.7.2:
+=======================
+* cmd-line-parser: fix wrong reporting of bad argument in --bla=val case
+* Server: do not depend on libcacard and CEGUI (when enabled for the client)
+* Server: send 1 instead of 4 as topdown flag "true" value
+* Client: accept 4 as top down flag value for compatibility with older servers
+* Client: stop blinking keyboard when out of focus
+* Client: log subject-host mismatch, and raise ssl warnings to errors
+
 Major changes in 0.7.1:
 =======================
 * Brown paper bag release
