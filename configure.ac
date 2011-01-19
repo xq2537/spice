@@ -14,6 +14,10 @@ AM_INIT_AUTOMAKE([dist-bzip2 no-dist-gzip subdir-objects])
 AM_MAINTAINER_MODE
 
 AC_PROG_CC
+AC_PROG_CC_C99
+if test x"$ac_cv_prog_cc_c99" = xno; then
+    AC_MSG_ERROR([C99 compiler is required.])
+fi
 AC_PROG_CXX
 AC_PROG_INSTALL
 AC_CANONICAL_HOST
