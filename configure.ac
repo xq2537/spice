@@ -219,7 +219,6 @@ if test "$os_linux" = yes; then
 	PKG_CHECK_MODULES(ALSA, alsa)
 	AC_SUBST(ALSA_CFLAGS)
 	AC_SUBST(ALSA_LIBS)
-	SPICE_REQUIRES+=" alsa"
 fi
 
 PKG_CHECK_MODULES(SSL, openssl)
@@ -253,7 +252,6 @@ if test "$red_target" = "x11"; then
 	PKG_CHECK_MODULES(XFIXES, xfixes)
 	AC_SUBST(XRANDR_CFLAGS)
 	AC_SUBST(XRANDR_LIBS)
-	SPICE_REQUIRES+=" xrandr xfixes"
 
 	PKG_CHECK_MODULES(XRANDR12,
 	        xrandr >= 1.2,
@@ -272,7 +270,6 @@ if test "$red_target" = "x11"; then
 	PKG_CHECK_MODULES(MISC_X, x11 xext xrender)
 	AC_SUBST(MISC_X_CFLAGS)
 	AC_SUBST(MISC_X_LIBS)
-	SPICE_REQUIRES+=" x11 xext xrender"
 fi
 
 # Add parameter for (partial) static linkage of spice client.
