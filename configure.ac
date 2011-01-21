@@ -189,7 +189,6 @@ SPICE_REQUIRES+=" celt051 >= 0.5.1.1"
 PKG_CHECK_MODULES(ALSA, alsa)
 AC_SUBST(ALSA_CFLAGS)
 AC_SUBST(ALSA_LIBS)
-SPICE_REQUIRES+=" alsa"
 
 PKG_CHECK_MODULES(SSL, openssl)
 AC_SUBST(SSL_CFLAGS)
@@ -221,7 +220,6 @@ PKG_CHECK_MODULES(XRANDR, xrandr)
 PKG_CHECK_MODULES(XFIXES, xfixes)
 AC_SUBST(XRANDR_CFLAGS)
 AC_SUBST(XRANDR_LIBS)
-SPICE_REQUIRES+=" xrandr xfixes"
 
 PKG_CHECK_MODULES(XRANDR12,
         xrandr >= 1.2,
@@ -236,7 +234,6 @@ fi
 PKG_CHECK_MODULES(MISC_X, x11 xext xrender)
 AC_SUBST(MISC_X_CFLAGS)
 AC_SUBST(MISC_X_LIBS)
-SPICE_REQUIRES+=" x11 xext xrender"
 
 # Add parameter for (partial) static linkage of spice client.
 # this is used to achive single binary package for all (?) distros.
