@@ -1180,7 +1180,6 @@ static SpiceCanvas *canvas_create_common(pixman_image_t *image,
                            )
 {
     SwCanvas *canvas;
-    int init_ok;
 
     if (need_init) {
         return NULL;
@@ -1189,7 +1188,7 @@ static SpiceCanvas *canvas_create_common(pixman_image_t *image,
                                   spice_surface_format_to_pixman (format));
 
     canvas = spice_new0(SwCanvas, 1);
-    init_ok = canvas_base_init(&canvas->base, &sw_canvas_ops,
+    canvas_base_init(&canvas->base, &sw_canvas_ops,
                                pixman_image_get_width (image),
                                pixman_image_get_height (image),
                                format
