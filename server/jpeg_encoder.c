@@ -174,10 +174,9 @@ static void do_jpeg_encode(JpegEncoder *jpeg, uint8_t *lines, unsigned int num_l
 {    
     uint8_t *lines_end;
     uint8_t *RGB24_line;
-    int stride, width, height;
+    int stride, width;
     JSAMPROW row_pointer[1];
     width = jpeg->cur_image.width;
-    height = jpeg->cur_image.height;
     stride = jpeg->cur_image.stride;
 
     if (jpeg->cur_image.type != JPEG_IMAGE_TYPE_RGB24) {
