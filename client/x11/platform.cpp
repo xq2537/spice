@@ -3050,8 +3050,8 @@ void Platform::init()
 {
 #ifdef USE_OGL
     int err, ev;
-#endif // USE_OGL
     int threads_enable;
+#endif // USE_OGL
     int major, minor;
     Bool pixmaps;
 
@@ -3059,8 +3059,11 @@ void Platform::init()
 
     setlocale(LC_ALL, "");
 
+#ifdef USE_OGL
     threads_enable = XInitThreads();
-
+#else
+    XInitThreads();
+#endif
 
     if (!(x_display = XOpenDisplay(NULL))) {
         THROW("open X display failed");

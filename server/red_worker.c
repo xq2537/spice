@@ -4512,7 +4512,6 @@ static void red_add_surface_image(RedWorker *worker, int surface_id)
 {
     SpiceRect area;
     RedSurface *surface;
-    ImageItem *item;
 
     surface = &worker->surfaces[surface_id];
 
@@ -4526,7 +4525,7 @@ static void red_add_surface_image(RedWorker *worker, int surface_id)
 
     /* not allowing lossy compression because probably, especially if it is a primary surface,
        it combines both "picture-like" areas with areas that are more "artificial"*/
-    item = red_add_surface_area_image(worker, surface_id, &area, NULL, FALSE);
+    red_add_surface_area_image(worker, surface_id, &area, NULL, FALSE);
     display_channel_push(worker);
 }
 
@@ -4659,14 +4658,11 @@ static void red_display_reset_compress_buf(DisplayChannel *display_channel)
    in the channel (2) to the Drawable*/
 static RedGlzDrawable *red_display_get_glz_drawable(DisplayChannel *channel, Drawable *drawable)
 {
-    RedSurface *surface;
     RedGlzDrawable *ret;
 
     if (drawable->red_glz_drawable) {
         return drawable->red_glz_drawable;
     }
-
-    surface = &channel->base.worker->surfaces[drawable->surface_id];
 
     ret = spice_new(RedGlzDrawable, 1);
 
@@ -5921,15 +5917,11 @@ static FillBitsType fill_bits(DisplayChannel *display_channel, SpiceMarshaller *
            global dictionary (in cases of multiple monitors) */
         if (!red_compress_image(display_channel, &image, &simage->u.bitmap,
                                 drawable, can_lossy, &comp_send_data)) {
-            uint32_t y;
-            uint32_t stride;
             SpicePalette *palette;
 
             red_display_add_image_to_pixmap_cache(display_channel, simage, &image, FALSE);
 
             *bitmap = simage->u.bitmap;
-            y = bitmap->y;
-            stride = bitmap->stride;
             bitmap->flags = bitmap->flags & SPICE_BITMAP_FLAGS_TOP_DOWN;
 
             palette = bitmap->palette;
@@ -7734,11 +7726,7 @@ static inline int red_send_stream_data(DisplayChannel *display_channel, Drawable
 
 static inline void send_qxl_drawable(DisplayChannel *display_channel, Drawable *item)
 {
-    RedChannel *channel;
-
     ASSERT(display_channel);
-    channel = &display_channel->base;
-
     if (item->stream && red_send_stream_data(display_channel, item)) {
         return;
     }

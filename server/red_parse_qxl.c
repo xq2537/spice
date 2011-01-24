@@ -236,7 +236,7 @@ static SpiceClipRects *red_get_clip_rects(RedMemSlotInfo *slots, int group_id,
     RedDataChunk chunks;
     QXLClipRects *qxl;
     SpiceClipRects *red;
-    QXLRect *start, *end;
+    QXLRect *start;
     uint8_t *data;
     bool free_data;
     size_t size;
@@ -254,7 +254,6 @@ static SpiceClipRects *red_get_clip_rects(RedMemSlotInfo *slots, int group_id,
     red->num_rects = qxl->num_rects;
 
     start = (QXLRect*)data;
-    end = (QXLRect*)(data + size);
     for (i = 0; i < red->num_rects; i++) {
         red_get_rect_ptr(red->rects + i, start++);
     }

@@ -344,6 +344,7 @@ static int reds_ssl_write(void *ctx, void *buf, size_t size)
 
     if (return_code < 0) {
         ssl_error = SSL_get_error(ssl, return_code);
+        (void)ssl_error;
     }
 
     return (return_code);
@@ -359,6 +360,7 @@ static int reds_ssl_read(void *ctx, void *buf, size_t size)
 
     if (return_code < 0) {
         ssl_error = SSL_get_error(ssl, return_code);
+        (void)ssl_error;
     }
 
     return (return_code);
@@ -376,6 +378,7 @@ static int reds_ssl_writev(void *ctx, const struct iovec *vector, int count)
         n = SSL_write(ssl, vector[i].iov_base, vector[i].iov_len);
         if (n <= 0) {
             ssl_error = SSL_get_error(ssl, n);
+            (void)ssl_error;
             if (return_code <= 0) {
                 return n;
             } else {
@@ -2508,9 +2511,7 @@ static int spice_server_char_device_add_interface(SpiceServer *s,
 {
     SpiceCharDeviceInstance* char_device =
             SPICE_CONTAINEROF(sin, SpiceCharDeviceInstance, base);
-    SpiceCharDeviceInterface* sif;
 
-    sif = SPICE_CONTAINEROF(char_device->base.sif, SpiceCharDeviceInterface, base);
     red_printf("CHAR_DEVICE %s", char_device->subtype);
     if (strcmp(char_device->subtype, SUBTYPE_VDAGENT) == 0) {
         if (vdagent) {
