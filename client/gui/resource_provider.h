@@ -1,6 +1,9 @@
 #ifndef _H_RESOURCE_PROVIDER
 #define _H_RESOURCE_PROVIDER
 
+/* CEGUI 0.6 bug, CEGUITexture.h doesn't include this, we need to */
+#include <cstddef>
+
 #include "CEGUIDefaultResourceProvider.h"
 
 class CEGUIResourceProvider: public CEGUI::ResourceProvider {
