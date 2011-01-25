@@ -135,8 +135,6 @@ void HotKeysParser::add_hotkey(const std::string& hotkey, const CommandsMap& com
     }
     std::string command_name = hotkey.substr(0, key_start);
 
-    CommandsMap::const_iterator command = commands_map.find(command_name);
-
     if (commands_map.find(command_name) == commands_map.end()) {
         char buf[1000];
         sprintf(buf, "invalid action bname %s", command_name.c_str());
