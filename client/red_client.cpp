@@ -464,7 +464,6 @@ void RedClient::on_disconnect()
 void RedClient::delete_channels()
 {
     Lock lock(_channels_lock);
-    Channels::iterator iter = _channels.begin();
     while (!_channels.empty()) {
         RedChannel *channel = *_channels.begin();
         _channels.pop_front();
