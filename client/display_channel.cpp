@@ -880,15 +880,16 @@ void DisplayChannel::set_capture_mode(bool on)
 
 void DisplayChannel::update_interrupt()
 {
+#ifdef USE_OGL
     Canvas *canvas;
+#endif
 
     if (!surfaces_mngr.is_present_canvas(0) || !screen()) {
         return;
     }
 
-    canvas = surfaces_mngr.get_canvas(0);
-
 #ifdef USE_OGL
+    canvas = surfaces_mngr.get_canvas(0);
     if (canvas->get_pixmap_type() == CANVAS_TYPE_GL) {
         ((GCanvas *)(canvas))->pre_gl_copy();
     }
@@ -1404,7 +1405,9 @@ void DisplayChannel::handle_stream_destroy_all(RedPeer::InMessage* message)
 
 void DisplayChannel::create_primary_surface(int width, int height, uint32_t format)
 {
+#ifdef USE_OGL
    Canvas *canvas;
+#endif
    _mark = false;
     attach_to_screen(get_client().get_application(), get_id());
     clear_area();
@@ -1421,9 +1424,9 @@ void DisplayChannel::create_primary_surface(int width, int height, uint32_t form
     _y_res = height;
     _format = format;
 
+#ifdef USE_OGL
     canvas = surfaces_mngr.get_canvas(0);
 
-#ifdef USE_OGL
     if (canvas->get_pixmap_type() == CANVAS_TYPE_GL) {
         ((GCanvas *)(canvas))->touch_context();
         screen()->set_update_interrupt_trigger(&_interrupt_update);
@@ -1434,8 +1437,9 @@ void DisplayChannel::create_primary_surface(int width, int height, uint32_t form
 
 void DisplayChannel::create_surface(int surface_id, int width, int height, uint32_t format)
 {
-   Canvas *canvas;
-
+#ifdef USE_OGL
+    Canvas *canvas;
+#endif
     AutoRef<CreateSurfaceEvent> event(new CreateSurfaceEvent(*this, surface_id, width, height,
                                                              format));
     get_client().push_event(*event);
@@ -1444,9 +1448,11 @@ void DisplayChannel::create_surface(int surface_id, int width, int height, uint3
         THROW("Create surface failed");
     }
 
+#ifdef USE_OGL
+    Canvas *canvas;
+
     canvas = surfaces_mngr.get_canvas(surface_id);
 
-#ifdef USE_OGL
     if (canvas->get_pixmap_type() == CANVAS_TYPE_GL) {
         ((GCanvas *)(canvas))->touch_context();
     }
