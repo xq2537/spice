@@ -234,7 +234,6 @@ const decode_function DECODE_TO_SAME[] = {
 
 void GlzDecoder::decode(uint8_t *data, SpicePalette *palette, void *opaque_usr_info)
 {
-    int out_size;
     DecodedImageWinId image_window_id;
     GlzDecodedImage *decoded_image;
     size_t n_in_bytes_decoded;
@@ -247,7 +246,6 @@ void GlzDecoder::decode(uint8_t *data, SpicePalette *palette, void *opaque_usr_i
     decode_header();
 
 #ifdef GLZ_DECODE_TO_RGB32
-    out_size = _image.gross_pixels << 2;
     bytes_per_pixel = 4;
 
     if (_image.type == LZ_IMAGE_TYPE_RGBA) {
@@ -259,9 +257,6 @@ void GlzDecoder::decode(uint8_t *data, SpicePalette *palette, void *opaque_usr_i
 #else
     if (IS_IMAGE_TYPE_PLT[_image.type]) {
         GLZ_ASSERT(_debug_calls, !(_image.gross_pixels % PLT_PIXELS_PER_BYTE[_image.type]));
-        out_size = _image.gross_pixels / PLT_PIXELS_PER_BYTE[_image.type];
-    } else {
-        out_size = _image.gross_pixels * RGB_BYTES_PER_PIXEL[_image.type];
     }
     bytes_per_pixel = RGB_BYTES_PER_PIXEL[_image.type];
     decoded_type = _image.type;
