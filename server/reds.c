@@ -4029,7 +4029,9 @@ __visible__ int spice_server_set_channel_security(SpiceServer *s, const char *ch
         [ SPICE_CHANNEL_CURSOR   ] = "cursor",
         [ SPICE_CHANNEL_PLAYBACK ] = "playback",
         [ SPICE_CHANNEL_RECORD   ] = "record",
+#ifdef USE_TUNNEL
         [ SPICE_CHANNEL_TUNNEL   ] = "tunnel",
+#endif
 #ifdef USE_SMARTCARD
         [ SPICE_CHANNEL_SMARTCARD] = "smartcard",
 #endif
