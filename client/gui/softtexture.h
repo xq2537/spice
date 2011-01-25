@@ -3,6 +3,9 @@
 #define _softtexture_h_
 
 #include <stdint.h>
+/* CEGUI 0.6 bug, CEGUITexture.h doesn't include this, we need to */
+#include <cstddef>
+
 #include "CEGUIBase.h"
 #include "CEGUITexture.h"
 
