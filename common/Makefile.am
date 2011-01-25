@@ -34,6 +34,8 @@ libspice_common_la_SOURCES =		\
 	rop3.c				\
 	rop3.h				\
 	spice_common.h			\
+	ssl_verify.c			\
+	ssl_verify.h			\
 	$(NULL)
 
 if SUPPORT_GL
