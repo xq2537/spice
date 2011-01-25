@@ -4030,6 +4030,9 @@ __visible__ int spice_server_set_channel_security(SpiceServer *s, const char *ch
         [ SPICE_CHANNEL_PLAYBACK ] = "playback",
         [ SPICE_CHANNEL_RECORD   ] = "record",
         [ SPICE_CHANNEL_TUNNEL   ] = "tunnel",
+#ifdef USE_SMARTCARD
+        [ SPICE_CHANNEL_SMARTCARD] = "smartcard",
+#endif
     };
     int i;
 

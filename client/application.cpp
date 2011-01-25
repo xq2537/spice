@@ -1929,6 +1929,9 @@ bool Application::set_channels_security(CmdLineParser& parser, bool on, char *va
     channels_names["playback"] = SPICE_CHANNEL_PLAYBACK;
     channels_names["record"] = SPICE_CHANNEL_RECORD;
     channels_names["tunnel"] = SPICE_CHANNEL_TUNNEL;
+#ifdef USE_SMARTCARD
+    channels_names["smartcard"] = SPICE_CHANNEL_SMARTCARD;
+#endif
 
     if (!strcmp(val, "all")) {
         if ((val = parser.next_argument())) {
@@ -2088,6 +2091,9 @@ bool Application::set_enable_channels(CmdLineParser& parser, bool enable, char *
     channels_names["playback"] = SPICE_CHANNEL_PLAYBACK;
     channels_names["record"] = SPICE_CHANNEL_RECORD;
     channels_names["tunnel"] = SPICE_CHANNEL_TUNNEL;
+#ifdef USE_SMARTCARD
+    channels_names["smartcard"] = SPICE_CHANNEL_SMARTCARD;
+#endif
 
     if (!strcmp(val, "all")) {
         if ((val = parser.next_argument())) {
