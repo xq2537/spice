@@ -290,7 +290,7 @@ private:
     bool set_disabled_display_effects(CmdLineParser& parser, char *val, const char* arg0,
                                       DisplaySetting& disp_setting);
     void on_cmd_line_invalid_arg(const char* arg0, const char* what, const char* val);
-    bool process_cmd_line(int argc, char** argv);
+    bool process_cmd_line(int argc, char** argv, bool& full_screen);
     void register_channels();
     void abort();
     void init_menu();
@@ -343,7 +343,10 @@ private:
 
     static void init_logger();
     static void init_globals();
+    static void init_platform_globals();
+    static void cleanup_platform_globals();
     static void cleanup_globals();
+    void init_remainder();
 
     friend class DisconnectedEvent;
     friend class ConnectionErrorEvent;

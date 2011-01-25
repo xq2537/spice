@@ -377,14 +377,6 @@ Application::Application()
 #endif
 {
     DBG(0, "");
-    Platform::set_process_loop(*this);
-    init_monitors();
-    memset(_keyboard_state, 0, sizeof(_keyboard_state));
-    init_menu();
-    _main_screen = get_screen(0);
-
-    Platform::set_event_listener(this);
-    Platform::set_display_mode_listner(this);
 
     _commands_map["toggle-fullscreen"] = APP_CMD_TOGGLE_FULL_SCREEN;
     _commands_map["release-cursor"] = APP_CMD_RELEASE_CAPTURE;
@@ -435,37 +427,37 @@ Application::Application()
     _sticky_info.key  = REDKEY_INVALID;
     _sticky_info.timer.reset(new StickyKeyTimer());
 
-#ifdef USE_GUI
-    _gui.reset(new GUI(*this, DISCONNECTED));
-    _gui_timer.reset(new GUITimer(*_gui.get()));
-    activate_interval_timer(*_gui_timer, 1000 / 30);
-#ifdef GUI_DEMO
-    _gui_test_timer.reset(new TestTimer(*this));
-    activate_interval_timer(*_gui_test_timer, 1000 * 30);
-#endif
-#endif // USE_GUI
     for (int i = SPICE_CHANNEL_MAIN; i < SPICE_END_CHANNEL; i++) {
         _peer_con_opt[i] = RedPeer::ConnectionOptions::CON_OP_BOTH;
     }
+    memset(_keyboard_state, 0, sizeof(_keyboard_state));
 }
 
 Application::~Application()
 {
 #ifdef USE_GUI
-    deactivate_interval_timer(*_gui_timer);
+    if (*_gui_timer != NULL) {
+        deactivate_interval_timer(*_gui_timer);
+    }
 #ifdef GUI_DEMO
-    deactivate_interval_timer(*_gui_test_timer);
+    if (*_gui_test_timer != NULL) {
+        deactivate_interval_timer(*_gui_test_timer);
+    }
 #endif
     destroyed_gui_barriers();
-    _gui->set_screen(NULL);
+    if (_gui.get() != NULL) {
+        _gui->set_screen(NULL);
+    }
 #endif // USE_GUI
 
     if (_info_layer->screen()) {
         _main_screen->detach_layer(*_info_layer);
     }
 
-    _main_screen->unref();
-    destroy_monitors();
+    if (_main_screen != NULL) {
+        _main_screen->unref();
+        destroy_monitors();
+    }
 #ifdef USE_SMARTCARD
     delete _smartcard_options;
 #endif
@@ -2196,13 +2188,12 @@ void Application::register_channels()
 #endif
 }
 
-bool Application::process_cmd_line(int argc, char** argv)
+bool Application::process_cmd_line(int argc, char** argv, bool &full_screen)
 {
     std::string host = "";
     int sport = -1;
     int port = -1;
     bool auto_display_res = false;
-    bool full_screen = false;
     std::string password;
     DisplaySetting display_setting;
 
@@ -2232,11 +2223,12 @@ bool Application::process_cmd_line(int argc, char** argv)
 #endif
     };
 
+    full_screen = false;
+
 #ifdef USE_GUI
     if (argc == 1) {
         _gui_mode = GUI_MODE_FULL;
         register_channels();
-        _main_screen->show(true, NULL);
         return true;
     }
 #endif // USE_GUI
@@ -2454,11 +2446,6 @@ bool Application::process_cmd_line(int argc, char** argv)
     _client.set_auto_display_res(auto_display_res);
     _client.set_display_setting(display_setting);
 
-    if (full_screen) {
-        enter_full_screen();
-    } else {
-        _main_screen->show(true, NULL);
-    }
     return true;
 }
 
@@ -2558,26 +2545,65 @@ void Application::init_globals()
 #ifdef WIN32
     gdi_canvas_init();
 #endif
+}
 
+/* seperated from init_globals to allow --help to work
+ * faster and not require X on linux. */
+void Application::init_platform_globals()
+{
     Platform::init();
     RedWindow::init();
 }
 
-void Application::cleanup_globals()
+void Application::init_remainder()
+{
+    Platform::set_process_loop(*this);
+    init_monitors();
+    init_menu();
+    _main_screen = get_screen(0);
+
+    Platform::set_event_listener(this);
+    Platform::set_display_mode_listner(this);
+
+#ifdef USE_GUI
+    _gui.reset(new GUI(*this, DISCONNECTED));
+    _gui_timer.reset(new GUITimer(*_gui.get()));
+    activate_interval_timer(*_gui_timer, 1000 / 30);
+#ifdef GUI_DEMO
+    _gui_test_timer.reset(new TestTimer(*this));
+    activate_interval_timer(*_gui_test_timer, 1000 * 30);
+#endif
+#endif // USE_GUI
+}
+
+void Application::cleanup_platform_globals()
 {
     RedWindow::cleanup();
+}
+
+void Application::cleanup_globals()
+{
 }
 
 int Application::main(int argc, char** argv, const char* version_str)
 {
     int ret;
+    bool full_screen;
 
     init_globals();
     LOG_INFO("starting %s", version_str);
     std::auto_ptr<Application> app(new Application());
     AutoAbort auto_abort(*app.get());
-    if (app->process_cmd_line(argc, argv)) {
+    if (app->process_cmd_line(argc, argv, full_screen)) {
+        init_platform_globals();
+        app->init_remainder();
+        if (full_screen) {
+            app->enter_full_screen();
+        } else {
+            app->_main_screen->show(true, NULL);
+        }
         ret = app->run();
+        cleanup_platform_globals();
     } else {
         ret = app->_exit_code;
     }
