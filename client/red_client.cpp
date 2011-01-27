@@ -24,6 +24,10 @@
 #include "debug.h"
 #include "marshallers.h"
 
+#ifndef INFINITY
+#define INFINITY HUGE
+#endif
+
 #ifdef __GNUC__
 typedef struct __attribute__ ((__packed__)) OldRedMigrationBegin {
 #else
