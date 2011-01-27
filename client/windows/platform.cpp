@@ -1106,6 +1106,7 @@ void Platform::on_clipboard_release()
 }
 
 static bool has_console = false;
+static BOOL parent_console;
 
 static void create_console()
 {
@@ -1117,27 +1118,44 @@ static void create_console()
         return;
     }
 
-    AllocConsole();
+    parent_console = AttachConsole(-1 /* parent */);
+
+    if (!parent_console) {
+        AllocConsole();
+    }
+
     HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
     int hConHandle = _open_osfhandle((intptr_t)h, _O_TEXT);
-    FILE * fp = _fdopen(hConHandle, "w");
-    *stdout = *fp;
+    FILE * fp;
+    /* _open_osfhandle can fail, for instance this will fail:
+        start /wait spicec.exe --help | more
+       however this actually works:
+        cmd /c spicec --help | more
+       */
+    if (hConHandle != -1) {
+        fp = _fdopen(hConHandle, "w");
+        *stdout = *fp;
+    }
 
     h = GetStdHandle(STD_INPUT_HANDLE);
     hConHandle = _open_osfhandle((intptr_t)h, _O_TEXT);
-    fp = _fdopen(hConHandle, "r");
-    *stdin = *fp;
+    if (hConHandle != -1) {
+        fp = _fdopen(hConHandle, "r");
+        *stdin = *fp;
+    }
 
     h = GetStdHandle(STD_ERROR_HANDLE);
     hConHandle = _open_osfhandle((intptr_t)h, _O_TEXT);
-    fp = _fdopen(hConHandle, "w");
-    *stderr = *fp;
+    if (hConHandle != -1) {
+        fp = _fdopen(hConHandle, "w");
+        *stderr = *fp;
+    }
 
     has_console = true;
 
     HWND consol_window = GetConsoleWindow();
 
-    if (consol_window) {
+    if (consol_window && !parent_console) {
         SetForegroundWindow(consol_window);
     }
 }
@@ -1146,7 +1164,7 @@ class ConsoleWait {
 public:
     ~ConsoleWait()
     {
-        if (has_console) {
+        if (has_console && !parent_console) {
             Platform::term_printf("\n\nPress any key to exit...");
             _getch();
         }
