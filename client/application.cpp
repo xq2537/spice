@@ -15,8 +15,6 @@
    License along with this library; if not, see <http://www.gnu.org/licenses/>.
 */
 
-#define __STDC_FORMAT_MACROS
-#include <inttypes.h>
 #include "common.h"
 #ifdef WIN32
 #include <io.h>

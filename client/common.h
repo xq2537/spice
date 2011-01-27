@@ -26,7 +26,11 @@
 #include <errno.h>
 #endif
 
-#include <spice/types.h>
+#define __STDC_FORMAT_MACROS
+#ifndef _WIN32
+#include <inttypes.h>
+#endif
+
 #include <stdio.h>
 #include <string>
 #include <vector>
@@ -74,6 +78,11 @@
 #define RED64
 #endif
 
+#if defined(_WIN32) && !defined(PRIu64)
+#define PRIu64 "I64u"
+#endif
+
+#include <spice/types.h>
 #include "red_types.h"
 
 #endif

@@ -236,7 +236,7 @@ unsigned int TimersQueue::get_soonest_timeout()
     if (next_time <= now) {
         return 0;
     }
-    return (next_time - now);
+    return (int)(next_time - now);
 }
 
 
