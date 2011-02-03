@@ -7,7 +7,7 @@
 
 typedef struct SmartCardDeviceState {
     SpiceCharDeviceState base;
-    reader_id_t          reader_id;
+    uint32_t             reader_id;
     uint32_t             attached;
     uint8_t             *buf;
     uint32_t             buf_size;
@@ -23,7 +23,7 @@ enum {
 
 typedef struct ErrorItem {
     PipeItem base;
-    reader_id_t reader_id;
+    uint32_t reader_id;
     uint32_t error;
 } ErrorItem;
 
@@ -49,7 +49,7 @@ static struct Readers {
 } g_smartcard_readers = {0, {NULL}};
 
 static SpiceCharDeviceInstance* smartcard_readers_get_unattached();
-static SpiceCharDeviceInstance* smartcard_readers_get(reader_id_t reader_id);
+static SpiceCharDeviceInstance* smartcard_readers_get(uint32_t reader_id);
 static int smartcard_char_device_add_to_readers(SpiceCharDeviceInstance *sin);
 static void smartcard_char_device_attach(
     SpiceCharDeviceInstance *char_device, SmartCardChannel *smartcard_channel);
@@ -150,7 +150,7 @@ static int smartcard_char_device_add_to_readers(SpiceCharDeviceInstance *char_de
     return 0;
 }
 
-static SpiceCharDeviceInstance *smartcard_readers_get(reader_id_t reader_id)
+static SpiceCharDeviceInstance *smartcard_readers_get(uint32_t reader_id)
 {
     ASSERT(reader_id < g_smartcard_readers.num);
     return g_smartcard_readers.sin[reader_id];
@@ -358,7 +358,7 @@ static void smartcard_channel_pipe_add(SmartCardChannel *channel, PipeItem *item
     red_channel_pipe_add(&channel->base, item);
 }
 
-static void smartcard_push_error(SmartCardChannel* channel, reader_id_t reader_id, VSCErrorCode error)
+static void smartcard_push_error(SmartCardChannel* channel, uint32_t reader_id, VSCErrorCode error)
 {
     ErrorItem *error_item = spice_new0(ErrorItem, 1);
 
@@ -392,7 +392,7 @@ void smartcard_on_message_from_device(SmartCardChannel *smartcard_channel,
     smartcard_push_vscmsg(smartcard_channel, vheader);
 }
 
-static void smartcard_remove_reader(SmartCardChannel *smartcard_channel, reader_id_t reader_id)
+static void smartcard_remove_reader(SmartCardChannel *smartcard_channel, uint32_t reader_id)
 {
     SpiceCharDeviceInstance *char_device = smartcard_readers_get(reader_id);
     SmartCardDeviceState *state;
