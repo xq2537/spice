@@ -29,7 +29,7 @@ struct ReaderData {
         card_insert_pending(false)
     {}
     VReader *vreader;
-    reader_id_t reader_id;
+    uint32_t reader_id;
     char* name;
     bool card_insert_pending;
 };
@@ -102,26 +102,26 @@ protected:
 private:
     static void* cac_card_events_thread_entry(void* data);
     void cac_card_events_thread_main();
-    void send_message(reader_id_t reader_id, VSCMsgType type, uint8_t* data, uint32_t len);
+    void send_message(uint32_t reader_id, VSCMsgType type, uint8_t* data, uint32_t len);
 
     Thread* _event_thread;
 
     Application* _app;
 
     VReaderList *_reader_list;
-    typedef std::map<reader_id_t, ReaderData*> readers_by_id_t;
+    typedef std::map<uint32_t, ReaderData*> readers_by_id_t;
     readers_by_id_t _readers_by_id;
     typedef std::map<VReader*, ReaderData*> readers_by_vreader_t;
     readers_by_vreader_t _readers_by_vreader;
     readers_by_vreader_t _unallocated_readers_by_vreader;
 
     ReaderData* reader_data_from_vreader(VReader* vreader);
-    ReaderData* reader_data_from_reader_id(reader_id_t reader_id);
+    ReaderData* reader_data_from_reader_id(uint32_t reader_id);
     void add_unallocated_reader(VReader* vreader, const char* name);
-    ReaderData* add_reader(reader_id_t reader_id);
+    ReaderData* add_reader(uint32_t reader_id);
     void remove_reader(ReaderData* data);
     void send_reader_added(const char* reader_name);
-    void send_reader_removed(reader_id_t reader_id);
+    void send_reader_removed(uint32_t reader_id);
     void send_atr(VReader* vreader);
 
     friend class ReaderAddEvent;

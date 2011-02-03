@@ -66,7 +66,7 @@ ReaderData* SmartCardChannel::reader_data_from_vreader(VReader* vreader)
     return _unallocated_readers_by_vreader.find(vreader)->second;
 }
 
-ReaderData* SmartCardChannel::reader_data_from_reader_id(reader_id_t reader_id)
+ReaderData* SmartCardChannel::reader_data_from_reader_id(uint32_t reader_id)
 {
     if (_readers_by_id.count(reader_id) > 0) {
         return _readers_by_id.find(reader_id)->second;
@@ -88,7 +88,7 @@ void SmartCardChannel::add_unallocated_reader(VReader* vreader, const char* name
 
 /** called upon the VSC_ReaderAddResponse
  */
-ReaderData* SmartCardChannel::add_reader(reader_id_t reader_id)
+ReaderData* SmartCardChannel::add_reader(uint32_t reader_id)
 {
     ReaderData* data;
     size_t unallocated = _unallocated_readers_by_vreader.size();
@@ -99,7 +99,7 @@ ReaderData* SmartCardChannel::add_reader(reader_id_t reader_id)
     _readers_by_vreader.insert(
         std::pair<VReader*, ReaderData*>(data->vreader, data));
     assert(_readers_by_vreader.count(data->vreader) == 1);
-    _readers_by_id.insert(std::pair<reader_id_t, ReaderData*>(reader_id, data));
+    _readers_by_id.insert(std::pair<uint32_t, ReaderData*>(reader_id, data));
     assert(_readers_by_id.count(reader_id) == 1);
     _unallocated_readers_by_vreader.erase(_unallocated_readers_by_vreader.begin());
     assert(_unallocated_readers_by_vreader.size() == unallocated - 1);
@@ -328,7 +328,7 @@ void SmartCardChannel::on_disconnect()
 }
 
 
-void SmartCardChannel::send_reader_removed(reader_id_t reader_id)
+void SmartCardChannel::send_reader_removed(uint32_t reader_id)
 {
     send_message(reader_id, VSC_ReaderRemove, NULL, 0);
 }
@@ -343,7 +343,7 @@ void SmartCardChannel::send_atr(VReader* vreader)
 {
     unsigned char atr[ MAX_ATR_LEN];
     int atr_len = MAX_ATR_LEN;
-    reader_id_t reader_id = reader_data_from_vreader(vreader)->reader_id;
+    uint32_t reader_id = reader_data_from_vreader(vreader)->reader_id;
 
     assert(reader_id != VSCARD_UNDEFINED_READER_ID);
     vreader_power_on(vreader, atr, &atr_len);
