@@ -114,7 +114,9 @@ void smartcard_char_device_on_message_from_device(
             break;
     }
     /* We pass any VSC_Error right now - might need to ignore some? */
-    ASSERT(state->reader_id != VSCARD_UNDEFINED_READER_ID);
+    if (state->reader_id == VSCARD_UNDEFINED_READER_ID && vheader->type != VSC_Init) {
+        red_printf("error: reader_id not assigned for message of type %d", vheader->type);
+    }
     ASSERT(g_smartcard_channel != NULL);
     sent_header = spice_memdup(vheader, sizeof(*vheader) + vheader->length);
     /* We patch the reader_id, since the device only knows about itself, and
