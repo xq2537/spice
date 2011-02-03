@@ -17,7 +17,6 @@ typedef struct SmartCardDeviceState {
 
 enum {
     PIPE_ITEM_TYPE_ERROR=1,
-    PIPE_ITEM_TYPE_READER_ADD_RESPONSE,
     PIPE_ITEM_TYPE_MSG,
 };
 
@@ -26,11 +25,6 @@ typedef struct ErrorItem {
     uint32_t reader_id;
     uint32_t error;
 } ErrorItem;
-
-typedef struct ReaderAddResponseItem {
-    PipeItem base;
-    uint32_t reader_id;
-} ReaderAddResponseItem;
 
 typedef struct MsgItem {
     PipeItem base;
@@ -108,21 +102,15 @@ void smartcard_char_device_on_message_from_device(
         case VSC_Init:
             return;
             break;
-        case VSC_ReaderAddResponse:
-            /* The device sends this for vscclient, we send one ourselves,
-             * a second would be an error. */
-            return;
-            break;
-        case VSC_Reconnect:
-            /* Ignore VSC_Reconnect messages, spice channel reconnection does the same. */
-            return;
-            break;
         default:
             break;
     }
+    /* We pass any VSC_Error right now - might need to ignore some? */
     ASSERT(state->reader_id != VSCARD_UNDEFINED_READER_ID);
     ASSERT(g_smartcard_channel != NULL);
     sent_header = spice_memdup(vheader, sizeof(*vheader) + vheader->length);
+    /* We patch the reader_id, since the device only knows about itself, and
+     * we know about the sum of readers. */
     sent_header->reader_id = state->reader_id;
     smartcard_on_message_from_device(g_smartcard_channel, sent_header);
 }
@@ -299,16 +287,6 @@ static void smartcard_channel_send_error(
         VSC_Error, (uint8_t*)&error, sizeof(error));
 }
 
-static void smartcard_channel_send_reader_add_response(
-    SmartCardChannel *smartcard_channel, PipeItem *item)
-{
-    ReaderAddResponseItem* rar_item = (ReaderAddResponseItem*)item;
-    VSCMsgReaderAddResponse rar;
-
-    smartcard_channel_send_message(&smartcard_channel->base, item, rar_item->reader_id,
-        VSC_ReaderAddResponse, (uint8_t*)&rar, sizeof(rar));
-}
-
 static void smartcard_channel_send_msg(
     SmartCardChannel *smartcard_channel, PipeItem *item)
 {
@@ -325,9 +303,6 @@ static void smartcard_channel_send_item(RedChannel *channel, PipeItem *item)
     switch (item->type) {
     case PIPE_ITEM_TYPE_ERROR:
         smartcard_channel_send_error(smartcard_channel, item);
-        break;
-    case PIPE_ITEM_TYPE_READER_ADD_RESPONSE:
-        smartcard_channel_send_reader_add_response(smartcard_channel, item);
         break;
     case PIPE_ITEM_TYPE_MSG:
         smartcard_channel_send_msg(smartcard_channel, item);
@@ -366,15 +341,6 @@ static void smartcard_push_error(SmartCardChannel* channel, uint32_t reader_id, 
     error_item->reader_id = reader_id;
     error_item->error = error;
     smartcard_channel_pipe_add_push(channel, &error_item->base);
-}
-
-static void smartcard_push_reader_add_response(SmartCardChannel *channel, uint32_t reader_id)
-{
-    ReaderAddResponseItem *rar_item = spice_new0(ReaderAddResponseItem, 1);
-
-    rar_item->base.type = PIPE_ITEM_TYPE_READER_ADD_RESPONSE;
-    rar_item->reader_id = reader_id;
-    smartcard_channel_pipe_add_push(channel, &rar_item->base);
 }
 
 static void smartcard_push_vscmsg(SmartCardChannel *channel, VSCMsgHeader *vheader)
@@ -422,7 +388,7 @@ static void smartcard_add_reader(SmartCardChannel *smartcard_channel, uint8_t *n
     if (char_device != NULL) {
         state = SPICE_CONTAINEROF(char_device->st, SmartCardDeviceState, base);
         smartcard_char_device_attach(char_device, smartcard_channel);
-        smartcard_push_reader_add_response(smartcard_channel, state->reader_id);
+        smartcard_push_error(smartcard_channel, state->reader_id, VSC_SUCCESS);
     } else {
         smartcard_push_error(smartcard_channel, VSCARD_UNDEFINED_READER_ID,
             VSC_CANNOT_ADD_MORE_READERS);
@@ -459,10 +425,6 @@ static int smartcard_channel_handle_message(RedChannel *channel, SpiceDataHeader
             break;
         case VSC_ReaderRemove:
             smartcard_remove_reader(smartcard_channel, vheader->reader_id);
-            return TRUE;
-            break;
-        case VSC_ReaderAddResponse:
-            /* We shouldn't get this - we only send it */
             return TRUE;
             break;
         case VSC_Init:
