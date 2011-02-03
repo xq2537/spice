@@ -45,6 +45,7 @@ public:
 
 SmartCardChannel::SmartCardChannel(RedClient& client, uint32_t id)
     : RedChannel(client, SPICE_CHANNEL_SMARTCARD, id, new SmartCardHandler(*this))
+    , _next_sync_vevent(VEVENT_LAST)
 {
     SmartCardHandler* handler = static_cast<SmartCardHandler*>(get_message_handler());
 
@@ -84,6 +85,7 @@ void SmartCardChannel::add_unallocated_reader(VReader* vreader, const char* name
     data->reader_id = VSCARD_UNDEFINED_READER_ID;
     data->name = spice_strdup(name);
     _unallocated_readers_by_vreader.insert(std::pair<VReader*, ReaderData*>(vreader, data));
+    LOG_INFO("adding unallocated reader %p", data);
 }
 
 /** called upon the VSC_ReaderAddResponse
@@ -96,6 +98,7 @@ ReaderData* SmartCardChannel::add_reader(uint32_t reader_id)
     assert(unallocated > 0);
     data = _unallocated_readers_by_vreader.begin()->second;
     data->reader_id = reader_id;
+    LOG_INFO("adding %p->%d", data, reader_id);
     _readers_by_vreader.insert(
         std::pair<VReader*, ReaderData*>(data->vreader, data));
     assert(_readers_by_vreader.count(data->vreader) == 1);
@@ -179,6 +182,65 @@ void SmartCardChannel::remove_reader(ReaderData* data)
     delete data;
 }
 
+/* Sync events need to be sent one by one, waiting for VSC_Error
+ * messages from the server in between. */
+void SmartCardChannel::push_sync_event(VEventType type, Event *event)
+{
+    event->ref();
+    _sync_events.push_back(SmartCardEvent(type, event));
+    if (_next_sync_vevent != VEVENT_LAST) {
+        return;
+    }
+    send_next_sync_event();
+}
+
+void SmartCardChannel::send_next_sync_event()
+{
+    if (_sync_events.empty()) {
+        _next_sync_vevent = VEVENT_LAST;
+        return;
+    }
+    SmartCardEvent sync_event = _sync_events.front();
+    _sync_events.pop_front();
+    get_client().push_event(sync_event.second);
+    sync_event.second->unref();
+    _next_sync_vevent = sync_event.first;
+}
+
+void SmartCardChannel::handle_reader_add_response(VSCMsgHeader *vheader,
+                                                  VSCMsgError *error)
+{
+    ReaderData* data;
+
+    if (error->code == VSC_SUCCESS) {
+        data = add_reader(vheader->reader_id);
+        if (data->card_insert_pending) {
+            data->card_insert_pending = false;
+            send_atr(data->vreader);
+        }
+    } else {
+        LOG_WARN("VSC Error: reader %d, code %d",
+            vheader->reader_id, error->code);
+    }
+}
+
+void SmartCardChannel::handle_error_message(VSCMsgHeader *vheader,
+    VSCMsgError *error)
+{
+    switch (_next_sync_vevent) {
+        case VEVENT_READER_INSERT:
+            handle_reader_add_response(vheader, error);
+            break;
+        case VEVENT_CARD_INSERT:
+        case VEVENT_CARD_REMOVE:
+        case VEVENT_READER_REMOVE:
+            break;
+        default:
+            LOG_WARN("Unexpected Error message: %d", error->code);
+    }
+    send_next_sync_event();
+}
+
 void SmartCardChannel::cac_card_events_thread_main()
 {
     VEvent *vevent = NULL;
@@ -194,28 +256,28 @@ void SmartCardChannel::cac_card_events_thread_main()
             LOG_INFO("VEVENT_READER_INSERT");
             {
                 AutoRef<ReaderAddEvent> event(new ReaderAddEvent(this, vevent));
-                get_client().push_event(*event);
+                push_sync_event(vevent->type, *event);
             }
             break;
         case VEVENT_READER_REMOVE:
             LOG_INFO("VEVENT_READER_REMOVE");
             {
                 AutoRef<ReaderRemoveEvent> event(new ReaderRemoveEvent(this, vevent));
-                get_client().push_event(*event);
+                push_sync_event(vevent->type, *event);
             }
             break;
         case VEVENT_CARD_INSERT:
             LOG_INFO("VEVENT_CARD_INSERT");
             {
                 AutoRef<CardInsertEvent> event(new CardInsertEvent(this, vevent));
-                get_client().push_event(*event);
+                push_sync_event(vevent->type, *event);
             }
             break;
         case VEVENT_CARD_REMOVE:
             LOG_INFO("VEVENT_CARD_REMOVE");
             {
                 AutoRef<CardRemoveEvent> event(new CardRemoveEvent(this, vevent));
-                get_client().push_event(*event);
+                push_sync_event(vevent->type, *event);
             }
             break;
         case VEVENT_LAST:
@@ -390,25 +452,14 @@ void VSCMessageEvent::response(AbstractProcessLoop& loop)
     uint8_t pbRecvBuffer[APDUBufSize+sizeof(uint32_t)];
     VReaderStatus reader_status;
     uint32_t rv;
-    ReaderData* data;
 
     switch (_vheader->type) {
-        case (VSC_ReaderAddResponse):
-            data = _smartcard_channel->add_reader(_vheader->reader_id);
-            if (data->card_insert_pending) {
-                data->card_insert_pending = false;
-                _smartcard_channel->send_atr(data->vreader);
-            }
-            return;
-            break;
         case VSC_APDU:
             break;
         case VSC_Error:
-            {
-                VSCMsgError *error = (VSCMsgError*)_vheader->data;
-                LOG_WARN("VSC Error: reader %d, code %d",
-                    _vheader->reader_id, error->code);
-            }
+            _smartcard_channel->handle_error_message(
+                            _vheader,
+                            (VSCMsgError*)_vheader->data);
             return;
         case VSC_Init:
             break;
