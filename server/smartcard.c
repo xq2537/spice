@@ -443,6 +443,9 @@ static int smartcard_channel_handle_message(RedChannel *channel, SpiceDataHeader
             return TRUE;
             break;
         case VSC_Init:
+            // ignore - we should never get this anyway
+            return TRUE;
+            break;
         case VSC_Error:
         case VSC_ATR:
         case VSC_CardRemove:
