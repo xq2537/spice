@@ -410,6 +410,8 @@ void VSCMessageEvent::response(AbstractProcessLoop& loop)
                     _vheader->reader_id, error->code);
             }
             return;
+        case VSC_Init:
+            break;
         default:
             LOG_WARN("unhandled VSC %d of length %d, reader %d",
                 _vheader->type, _vheader->length, _vheader->reader_id);
