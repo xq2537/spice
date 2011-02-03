@@ -1,3 +1,5 @@
+#include <arpa/inet.h>
+
 #include "server/char_device.h"
 #include "server/red_channel.h"
 #include "server/smartcard.h"
@@ -67,6 +69,7 @@ void smartcard_char_device_wakeup(SpiceCharDeviceInstance *sin)
     VSCMsgHeader *vheader = (VSCMsgHeader*)state->buf;
     int n;
     int remaining;
+    int actual_length;
 
     while ((n = sif->read(sin, state->buf_pos, state->buf_size - state->buf_used)) > 0) {
         state->buf_pos += n;
@@ -74,16 +77,17 @@ void smartcard_char_device_wakeup(SpiceCharDeviceInstance *sin)
         if (state->buf_used < sizeof(VSCMsgHeader)) {
             continue;
         }
-        if (vheader->length > state->buf_size) {
-            state->buf_size = MAX(state->buf_size*2, vheader->length + sizeof(VSCMsgHeader));
+        actual_length = ntohl(vheader->length);
+        if (actual_length > state->buf_size) {
+            state->buf_size = MAX(state->buf_size*2, actual_length + sizeof(VSCMsgHeader));
             state->buf = spice_realloc(state->buf, state->buf_size);
             ASSERT(state->buf != NULL);
         }
-        if (state->buf_used - sizeof(VSCMsgHeader) < vheader->length) {
+        if (state->buf_used - sizeof(VSCMsgHeader) < actual_length) {
             continue;
         }
         smartcard_char_device_on_message_from_device(state, vheader);
-        remaining = state->buf_used - sizeof(VSCMsgHeader) > vheader->length;
+        remaining = state->buf_used - sizeof(VSCMsgHeader) > actual_length;
         if (remaining > 0) {
             memcpy(state->buf, state->buf_pos, remaining);
         }
@@ -97,6 +101,10 @@ void smartcard_char_device_on_message_from_device(
     VSCMsgHeader *vheader)
 {
     VSCMsgHeader *sent_header;
+
+    vheader->type = ntohl(vheader->type);
+    vheader->length = ntohl(vheader->length);
+    vheader->reader_id = ntohl(vheader->reader_id);
 
     switch (vheader->type) {
         case VSC_Init:
@@ -401,15 +409,20 @@ static void smartcard_channel_write_to_reader(
     SpiceCharDeviceInstance *sin;
     SpiceCharDeviceInterface *sif;
     uint32_t n;
+    uint32_t actual_length = vheader->length;
 
     ASSERT(vheader->reader_id >= 0 &&
            vheader->reader_id <= g_smartcard_readers.num);
     sin = g_smartcard_readers.sin[vheader->reader_id];
     sif = SPICE_CONTAINEROF(sin->base.sif, SpiceCharDeviceInterface, base);
+    /* protocol requires messages to be in network endianess */
+    vheader->type = htonl(vheader->type);
+    vheader->length = htonl(vheader->length);
+    vheader->reader_id = htonl(vheader->reader_id);
     n = sif->write(sin, (uint8_t*)vheader,
-                   vheader->length + sizeof(VSCMsgHeader));
+                   actual_length + sizeof(VSCMsgHeader));
     // TODO - add ring
-    ASSERT(n == vheader->length + sizeof(VSCMsgHeader));
+    ASSERT(n == actual_length + sizeof(VSCMsgHeader));
 }
 
 static int smartcard_channel_handle_message(RedChannel *channel, SpiceDataHeader *header, uint8_t *msg)
