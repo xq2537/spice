@@ -86,6 +86,8 @@ public:
     virtual void response(AbstractProcessLoop& events_loop);
 };
 
+typedef std::pair<VEventType, Event*> SmartCardEvent;
+
 class SmartCardChannel : public RedChannel {
 
 public:
@@ -114,6 +116,13 @@ private:
     typedef std::map<VReader*, ReaderData*> readers_by_vreader_t;
     readers_by_vreader_t _readers_by_vreader;
     readers_by_vreader_t _unallocated_readers_by_vreader;
+    VEventType _next_sync_vevent;
+    std::list<SmartCardEvent> _sync_events;
+
+    void push_sync_event(VEventType type, Event *event);
+    void send_next_sync_event();
+    void handle_reader_add_response(VSCMsgHeader *vheader, VSCMsgError *error);
+    void handle_error_message(VSCMsgHeader *vheader, VSCMsgError *error);
 
     ReaderData* reader_data_from_vreader(VReader* vreader);
     ReaderData* reader_data_from_reader_id(uint32_t reader_id);
