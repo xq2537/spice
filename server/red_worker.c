@@ -6219,7 +6219,7 @@ static inline int drawable_depends_on_areas(Drawable *drawable,
     int i;
     RedDrawable *red_drawable;
     int drawable_has_shadow;
-    SpiceRect shadow_rect;
+    SpiceRect shadow_rect = {0, 0, 0, 0};
 
     red_drawable = drawable->red_drawable;
     drawable_has_shadow = has_shadow(red_drawable);
