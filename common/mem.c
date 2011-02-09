@@ -237,3 +237,56 @@ void spice_chunks_linearize(SpiceChunks *chunks)
         chunks->chunk[0].len = chunks->data_size;
     }
 }
+
+void spice_buffer_reserve(SpiceBuffer *buffer, size_t len)
+{
+    if ((buffer->capacity - buffer->offset) < len) {
+        buffer->capacity += (len + 1024);
+        buffer->buffer = (uint8_t*)spice_realloc(buffer->buffer, buffer->capacity);
+    }
+}
+
+int spice_buffer_empty(SpiceBuffer *buffer)
+{
+    return buffer->offset == 0;
+}
+
+uint8_t *spice_buffer_end(SpiceBuffer *buffer)
+{
+    return buffer->buffer + buffer->offset;
+}
+
+void spice_buffer_reset(SpiceBuffer *buffer)
+{
+    buffer->offset = 0;
+}
+
+void spice_buffer_free(SpiceBuffer *buffer)
+{
+    free(buffer->buffer);
+    buffer->offset = 0;
+    buffer->capacity = 0;
+    buffer->buffer = NULL;
+}
+
+void spice_buffer_append(SpiceBuffer *buffer, const void *data, size_t len)
+{
+    spice_buffer_reserve(buffer, len);
+    memcpy(buffer->buffer + buffer->offset, data, len);
+    buffer->offset += len;
+}
+
+size_t spice_buffer_copy(SpiceBuffer *buffer, void *dest, size_t len)
+{
+    len = MIN(buffer->offset, len);
+    memcpy(dest, buffer->buffer, len);
+    return len;
+}
+
+size_t spice_buffer_remove(SpiceBuffer *buffer, size_t len)
+{
+    len = MIN(buffer->offset, len);
+    memmove(buffer->buffer, buffer->buffer + len, buffer->offset - len);
+    buffer->offset -= len;
+    return len;
+}
