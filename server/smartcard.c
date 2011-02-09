@@ -393,12 +393,12 @@ static void smartcard_add_reader(SmartCardChannel *smartcard_channel, uint8_t *n
     // TODO - save name somewhere
     SpiceCharDeviceInstance *char_device =
             smartcard_readers_get_unattached();
-    SmartCardDeviceState *state;
 
     if (char_device != NULL) {
-        state = SPICE_CONTAINEROF(char_device->st, SmartCardDeviceState, base);
         smartcard_char_device_attach(char_device, smartcard_channel);
-        smartcard_push_error(smartcard_channel, state->reader_id, VSC_SUCCESS);
+        // The device sends a VSC_Error message, we will let it through, no
+        // need to send our own. We already set the correct reader_id, from
+        // our SmartCardDeviceState.
     } else {
         smartcard_push_error(smartcard_channel, VSCARD_UNDEFINED_READER_ID,
             VSC_CANNOT_ADD_MORE_READERS);
