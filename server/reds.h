@@ -44,7 +44,6 @@ typedef struct RedsStreamContext {
     int (*cb_write)(void *, void *, int);
     int (*cb_read)(void *, void *, int);
 
-    int (*cb_readv)(void *, const struct iovec *vector, int count);
     int (*cb_writev)(void *, const struct iovec *vector, int count);
     int (*cb_free)(struct RedsStreamContext *);
 } RedsStreamContext;
