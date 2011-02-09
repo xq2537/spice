@@ -356,7 +356,7 @@ struct RedChannel {
     uint32_t id;
     spice_parse_channel_func_t parser;
     struct RedWorker *worker;
-    RedsStream *peer;
+    RedsStream *stream;
     int migrate;
 
     Ring pipe;
@@ -7330,8 +7330,8 @@ static void red_send_data(RedChannel *channel, void *item)
         }
         vec_size = spice_marshaller_fill_iovec(channel->send_data.marshaller,
                                                vec, MAX_SEND_VEC, channel->send_data.pos);
-        ASSERT(channel->peer);
-        n = reds_stream_writev(channel->peer, vec, vec_size);
+        ASSERT(channel->stream);
+        n = reds_stream_writev(channel->stream, vec, vec_size);
         if (n == -1) {
             switch (errno) {
             case EAGAIN:
@@ -8506,15 +8506,15 @@ void red_show_tree(RedWorker *worker)
 
 static inline int channel_is_connected(RedChannel *channel)
 {
-    return !!channel->peer;
+    return !!channel->stream;
 }
 
 static void red_disconnect_channel(RedChannel *channel)
 {
     channel_release_res(channel);
     red_pipe_clear(channel);
-    reds_stream_free(channel->peer);
-    channel->peer = NULL;
+    reds_stream_free(channel->stream);
+    channel->stream = NULL;
     channel->send_data.blocked = FALSE;
     channel->send_data.size = channel->send_data.pos = 0;
     spice_marshaller_reset(channel->send_data.marshaller);
@@ -8525,7 +8525,7 @@ static void red_disconnect_display(RedChannel *channel)
 {
     DisplayChannel *display_channel;
 
-    if (!channel || !channel->peer) {
+    if (!channel || !channel->stream) {
         return;
     }
 
@@ -8857,7 +8857,7 @@ static int display_channel_wait_for_init(DisplayChannel *display_channel)
     uint64_t end_time = red_now() + DISPLAY_CLIENT_TIMEOUT;
     for (;;) {
         red_receive((RedChannel *)display_channel);
-        if (!display_channel->base.peer) {
+        if (!display_channel->base.stream) {
             break;
         }
         if (display_channel->pixmap_cache && display_channel->glz_dict) {
@@ -9239,8 +9239,8 @@ static void red_receive(RedChannel *channel)
         ssize_t n;
         n = channel->recive_data.end - channel->recive_data.now;
         ASSERT(n);
-        ASSERT(channel->peer);
-        n = reds_stream_read(channel->peer, channel->recive_data.now, n);
+        ASSERT(channel->stream);
+        n = reds_stream_read(channel->stream, channel->recive_data.now, n);
         if (n <= 0) {
             if (n == 0) {
                 channel->disconnect(channel);
@@ -9307,7 +9307,7 @@ static void red_receive(RedChannel *channel)
 }
 
 static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_id,
-                                 RedsStream *peer, int migrate,
+                                 RedsStream *stream, int migrate,
                                  event_listener_action_proc handler,
                                  disconnect_channel_proc disconnect,
                                  hold_item_proc hold_item,
@@ -9319,18 +9319,18 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
     int flags;
     int delay_val;
 
-    if ((flags = fcntl(peer->socket, F_GETFL)) == -1) {
+    if ((flags = fcntl(stream->socket, F_GETFL)) == -1) {
         red_printf("accept failed, %s", strerror(errno));
         goto error1;
     }
 
-    if (fcntl(peer->socket, F_SETFL, flags | O_NONBLOCK) == -1) {
+    if (fcntl(stream->socket, F_SETFL, flags | O_NONBLOCK) == -1) {
         red_printf("accept failed, %s", strerror(errno));
         goto error1;
     }
 
     delay_val = IS_LOW_BANDWIDTH() ? 0 : 1;
-    if (setsockopt(peer->socket, IPPROTO_TCP, TCP_NODELAY, &delay_val, sizeof(delay_val)) == -1) {
+    if (setsockopt(stream->socket, IPPROTO_TCP, TCP_NODELAY, &delay_val, sizeof(delay_val)) == -1) {
         red_printf("setsockopt failed, %s", strerror(errno));
     }
 
@@ -9344,7 +9344,7 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
     channel->hold_item = hold_item;
     channel->release_item = release_item;
     channel->handle_message = handle_message;
-    channel->peer = peer;
+    channel->stream = stream;
     channel->worker = worker;
     channel->messages_window = ~0;  // blocks send message (maybe use send_data.blocked +
                                     // block flags)
@@ -9359,7 +9359,7 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
 
     event.events = EPOLLIN | EPOLLOUT | EPOLLET;
     event.data.ptr = channel;
-    if (epoll_ctl(worker->epoll, EPOLL_CTL_ADD, peer->socket, &event) == -1) {
+    if (epoll_ctl(worker->epoll, EPOLL_CTL_ADD, stream->socket, &event) == -1) {
         red_printf("epoll_ctl failed, %s", strerror(errno));
         goto error2;
     }
@@ -9371,7 +9371,7 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
 error2:
     free(channel);
 error1:
-    reds_stream_free(peer);
+    reds_stream_free(stream);
 
     return NULL;
 }
@@ -9433,7 +9433,7 @@ static void display_channel_release_item(RedChannel *channel, void *item)
     }
 }
 
-static void handle_new_display_channel(RedWorker *worker, RedsStream *peer, int migrate)
+static void handle_new_display_channel(RedWorker *worker, RedsStream *stream, int migrate)
 {
     DisplayChannel *display_channel;
     size_t stream_buf_size;
@@ -9441,7 +9441,7 @@ static void handle_new_display_channel(RedWorker *worker, RedsStream *peer, int 
     red_disconnect_display((RedChannel *)worker->display_channel);
 
     if (!(display_channel = (DisplayChannel *)__new_channel(worker, sizeof(*display_channel),
-                                                            SPICE_CHANNEL_DISPLAY, peer,
+                                                            SPICE_CHANNEL_DISPLAY, stream,
                                                             migrate, handle_channel_events,
                                                             red_disconnect_display,
                                                             display_channel_hold_item,
@@ -9513,7 +9513,7 @@ static void handle_new_display_channel(RedWorker *worker, RedsStream *peer, int 
 
 static void red_disconnect_cursor(RedChannel *channel)
 {
-    if (!channel || !channel->peer) {
+    if (!channel || !channel->stream) {
         return;
     }
 
@@ -9556,14 +9556,14 @@ static void cursor_channel_release_item(RedChannel *channel, void *item)
     red_release_cursor(channel->worker, item);
 }
 
-static void red_connect_cursor(RedWorker *worker, RedsStream *peer, int migrate)
+static void red_connect_cursor(RedWorker *worker, RedsStream *stream, int migrate)
 {
     CursorChannel *channel;
 
     red_disconnect_cursor((RedChannel *)worker->cursor_channel);
 
     if (!(channel = (CursorChannel *)__new_channel(worker, sizeof(*channel),
-                                                   SPICE_CHANNEL_CURSOR, peer, migrate,
+                                                   SPICE_CHANNEL_CURSOR, stream, migrate,
                                                    handle_channel_events,
                                                    red_disconnect_cursor,
                                                    cursor_channel_hold_item,
@@ -9992,13 +9992,13 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         handle_dev_destroy_primary_surface(worker);
         break;
     case RED_WORKER_MESSAGE_DISPLAY_CONNECT: {
-        RedsStream *peer;
+        RedsStream *stream;
         int migrate;
         red_printf("connect");
 
-        receive_data(worker->channel, &peer, sizeof(RedsStream *));
+        receive_data(worker->channel, &stream, sizeof(RedsStream *));
         receive_data(worker->channel, &migrate, sizeof(int));
-        handle_new_display_channel(worker, peer, migrate);
+        handle_new_display_channel(worker, stream, migrate);
         break;
     }
     case RED_WORKER_MESSAGE_DISPLAY_DISCONNECT:
@@ -10040,13 +10040,13 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         red_migrate_display(worker);
         break;
     case RED_WORKER_MESSAGE_CURSOR_CONNECT: {
-        RedsStream *peer;
+        RedsStream *stream;
         int migrate;
 
         red_printf("cursor connect");
-        receive_data(worker->channel, &peer, sizeof(RedsStream *));
+        receive_data(worker->channel, &stream, sizeof(RedsStream *));
         receive_data(worker->channel, &migrate, sizeof(int));
-        red_connect_cursor(worker, peer, migrate);
+        red_connect_cursor(worker, stream, migrate);
         break;
     }
     case RED_WORKER_MESSAGE_CURSOR_DISCONNECT:

@@ -209,7 +209,7 @@ typedef struct VDIPortState {
 
 typedef struct InputsState {
     Channel *channel;
-    RedsStream *peer;
+    RedsStream *stream;
     IncomingHandler in_handler;
     OutgoingHandler out_handler;
     VDAgentMouseState mouse_state;
@@ -255,7 +255,7 @@ typedef struct RedsState {
     int secure_listen_socket;
     SpiceWatch *listen_watch;
     SpiceWatch *secure_listen_watch;
-    RedsStream *peer;
+    RedsStream *stream;
     int disconnecting;
     uint32_t link_id;
     uint64_t serial; //migrate me
@@ -304,7 +304,7 @@ static uint64_t latency = 0;
 static RedsState *reds = NULL;
 
 typedef struct AsyncRead {
-    RedsStream *peer;
+    RedsStream *stream;
     void *opaque;
     uint8_t *now;
     uint8_t *end;
@@ -313,7 +313,7 @@ typedef struct AsyncRead {
 } AsyncRead;
 
 typedef struct RedLinkInfo {
-    RedsStream *peer;
+    RedsStream *stream;
     AsyncRead asyc_read;
     SpiceLinkHeader link_header;
     SpiceLinkMess *link_mess;
@@ -384,11 +384,11 @@ static ChannelSecurityOptions *find_channel_security(int id)
     return now;
 }
 
-static void reds_channel_event(RedsStream *peer, int event)
+static void reds_channel_event(RedsStream *stream, int event)
 {
     if (core->base.minor_version < 3 || core->channel_event == NULL)
         return;
-    core->channel_event(event, &peer->info);
+    core->channel_event(event, &stream->info);
 }
 
 static ssize_t stream_write_cb(RedsStream *s, const void *buf, size_t size)
@@ -468,8 +468,8 @@ static void reds_stream_remove_watch(RedsStream* s)
 
 static void reds_link_free(RedLinkInfo *link)
 {
-    reds_stream_free(link->peer);
-    link->peer = NULL;
+    reds_stream_free(link->stream);
+    link->stream = NULL;
 
     free(link->link_mess);
     link->link_mess = NULL;
@@ -714,7 +714,7 @@ static void reds_reset_outgoing()
 
 static void reds_disconnect()
 {
-    if (!reds->peer || reds->disconnecting) {
+    if (!reds->stream || reds->disconnecting) {
         return;
     }
 
@@ -739,8 +739,8 @@ static void reds_disconnect()
     }
 
     reds_shatdown_channels();
-    reds_stream_free(reds->peer);
-    reds->peer = NULL;
+    reds_stream_free(reds->stream);
+    reds->stream = NULL;
     reds->in_handler.shut = TRUE;
     reds->link_id = 0;
     reds->serial = 0;
@@ -758,14 +758,14 @@ static void reds_disconnect()
 
 static void reds_mig_disconnect()
 {
-    if (reds->peer) {
+    if (reds->stream) {
         reds_disconnect();
     } else {
         reds_mig_cleanup();
     }
 }
 
-static int handle_incoming(RedsStream *peer, IncomingHandler *handler)
+static int handle_incoming(RedsStream *stream, IncomingHandler *handler)
 {
     for (;;) {
         uint8_t *buf = handler->buf;
@@ -773,7 +773,7 @@ static int handle_incoming(RedsStream *peer, IncomingHandler *handler)
         uint8_t *end = buf + pos;
         SpiceDataHeader *header;
         int n;
-        n = reds_stream_read(peer, buf + pos, RECIVE_BUF_SIZE - pos);
+        n = reds_stream_read(stream, buf + pos, RECIVE_BUF_SIZE - pos);
         if (n <= 0) {
             if (n == 0) {
                 return -1;
@@ -818,7 +818,7 @@ static int handle_incoming(RedsStream *peer, IncomingHandler *handler)
     }
 }
 
-static int handle_outgoing(RedsStream *peer, OutgoingHandler *handler)
+static int handle_outgoing(RedsStream *stream, OutgoingHandler *handler)
 {
     if (!handler->length) {
         return 0;
@@ -827,8 +827,7 @@ static int handle_outgoing(RedsStream *peer, OutgoingHandler *handler)
     while (handler->length) {
         int n;
 
-        n = reds_stream_write(peer, handler->now, handler->length);
-
+        n = reds_stream_write(stream, handler->now, handler->length);
         if (n <= 0) {
             if (n == 0) {
                 return -1;
@@ -858,7 +857,7 @@ static int handle_outgoing(RedsStream *peer, OutgoingHandler *handler)
 #define OUTGOING_FAILED -1
 #define OUTGOING_BLOCKED 1
 
-static int outgoing_write(RedsStream *peer, OutgoingHandler *handler, void *in_data,
+static int outgoing_write(RedsStream *stream, OutgoingHandler *handler, void *in_data,
                           int length)
 {
     uint8_t *data = in_data;
@@ -868,7 +867,7 @@ static int outgoing_write(RedsStream *peer, OutgoingHandler *handler, void *in_d
     }
 
     while (length) {
-        int n = reds_stream_write(peer, data, length);
+        int n = reds_stream_write(stream, data, length);
         if (n < 0) {
             switch (errno) {
             case EAGAIN:
@@ -952,7 +951,7 @@ static int send_ping(int size)
     RedsOutItem *item;
     SpiceMsgPing ping;
 
-    if (!reds->peer) {
+    if (!reds->stream) {
         return FALSE;
     }
     item = new_out_item(SPICE_MSG_PING);
@@ -976,8 +975,8 @@ static int send_ping(int size)
 
 static void do_ping_client(const char *opt, int has_interval, int interval)
 {
-    if (!reds->peer) {
-        red_printf("not connected to peer");
+    if (!reds->stream) {
+        red_printf("not connected to stream");
         return;
     }
 
@@ -997,8 +996,8 @@ static void do_ping_client(const char *opt, int has_interval, int interval)
 
 static void ping_timer_cb()
 {
-    if (!reds->peer) {
-        red_printf("not connected to peer, ping off");
+    if (!reds->stream) {
+        red_printf("not connected to stream, ping off");
         core->timer_cancel(reds->ping_timer);
         return;
     }
@@ -1013,7 +1012,7 @@ static void reds_send_mouse_mode()
     SpiceMsgMainMouseMode mouse_mode;
     RedsOutItem *item;
 
-    if (!reds->peer) {
+    if (!reds->stream) {
         return;
     }
 
@@ -1089,7 +1088,7 @@ static void reds_agent_remove()
     reds->agent_state.connected = 0;
     vdagent = NULL;
     reds_update_mouse_mode();
-    if (!reds->peer || !sin) {
+    if (!reds->stream || !sin) {
         return;
     }
     sif = SPICE_CONTAINEROF(sin->base.sif, SpiceCharDeviceInterface, base);
@@ -1108,7 +1107,7 @@ static void reds_send_tokens()
     SpiceMsgMainAgentTokens tokens;
     RedsOutItem *item;
 
-    if (!reds->peer) {
+    if (!reds->stream) {
         return;
     }
 
@@ -1665,7 +1664,7 @@ static void reds_main_handle_message(void *opaque, size_t size, uint32_t type, v
     switch (type) {
     case SPICE_MSGC_MAIN_AGENT_START:
         red_printf("agent start");
-        if (!reds->peer || !vdagent) {
+        if (!reds->stream || !vdagent) {
             return;
         }
         reds->agent_state.write_filter.discard_all = FALSE;
@@ -1819,10 +1818,10 @@ static int reds_send_data()
 
     ASSERT(outgoing->vec_size);
     for (;;) {
-        if ((n = reds_stream_writev(reds->peer, outgoing->vec, outgoing->vec_size)) == -1) {
+        if ((n = reds_stream_writev(reds->stream, outgoing->vec, outgoing->vec_size)) == -1) {
             switch (errno) {
             case EAGAIN:
-                core->watch_update_mask(reds->peer->watch,
+                core->watch_update_mask(reds->stream->watch,
                                         SPICE_WATCH_EVENT_READ | SPICE_WATCH_EVENT_WRITE);
                 return FALSE;
             case EINTR:
@@ -1854,7 +1853,7 @@ static void reds_push()
     RedsOutItem *item;
 
     for (;;) {
-        if (!reds->peer || outgoing->item || !(ring_item = ring_get_tail(&outgoing->pipe))) {
+        if (!reds->stream || outgoing->item || !(ring_item = ring_get_tail(&outgoing->pipe))) {
             return;
         }
         ring_remove(ring_item);
@@ -1873,7 +1872,7 @@ static void reds_push()
 static void reds_main_event(int fd, int event, void *data)
 {
     if (event & SPICE_WATCH_EVENT_READ) {
-        if (handle_incoming(reds->peer, &reds->in_handler)) {
+        if (handle_incoming(reds->stream, &reds->in_handler)) {
             reds_disconnect();
         }
     }
@@ -1881,19 +1880,19 @@ static void reds_main_event(int fd, int event, void *data)
         RedsOutgoingData *outgoing = &reds->outgoing;
         if (reds_send_data()) {
             reds_push();
-            if (!outgoing->item && reds->peer) {
-                core->watch_update_mask(reds->peer->watch,
+            if (!outgoing->item && reds->stream) {
+                core->watch_update_mask(reds->stream->watch,
                                         SPICE_WATCH_EVENT_READ);
             }
         }
     }
 }
 
-static int sync_write(RedsStream *peer, void *in_buf, size_t n)
+static int sync_write(RedsStream *stream, void *in_buf, size_t n)
 {
     uint8_t *buf = (uint8_t *)in_buf;
     while (n) {
-        int now = reds_stream_write(peer, buf, n);
+        int now = reds_stream_write(stream, buf, n);
         if (now <= 0) {
             if (now == -1 && (errno == EINTR || errno == EAGAIN)) {
                 continue;
@@ -1950,12 +1949,12 @@ static int reds_send_link_ack(RedLinkInfo *link)
     BIO_get_mem_ptr(bio, &bmBuf);
     memcpy(ack.pub_key, bmBuf->data, sizeof(ack.pub_key));
 
-    ret = sync_write(link->peer, &header, sizeof(header)) && sync_write(link->peer, &ack,
+    ret = sync_write(link->stream, &header, sizeof(header)) && sync_write(link->stream, &ack,
                                                                         sizeof(ack));
     if (channel) {
-        ret = ret && sync_write(link->peer, channel->common_caps,
+        ret = ret && sync_write(link->stream, channel->common_caps,
                                 channel->num_common_caps * sizeof(uint32_t)) &&
-              sync_write(link->peer, channel->caps, channel->num_caps * sizeof(uint32_t));
+              sync_write(link->stream, channel->caps, channel->num_caps * sizeof(uint32_t));
     }
     BIO_free(bio);
     return ret;
@@ -1972,8 +1971,8 @@ static int reds_send_link_error(RedLinkInfo *link, uint32_t error)
     header.minor_version = SPICE_VERSION_MINOR;
     memset(&reply, 0, sizeof(reply));
     reply.error = error;
-    return sync_write(link->peer, &header, sizeof(header)) && sync_write(link->peer, &reply,
-                                                                         sizeof(reply));
+    return sync_write(link->stream, &header, sizeof(header)) && sync_write(link->stream, &reply,
+                                                                           sizeof(reply));
 }
 
 static void reds_show_new_channel(RedLinkInfo *link, int connection_id)
@@ -1981,25 +1980,25 @@ static void reds_show_new_channel(RedLinkInfo *link, int connection_id)
     red_printf("channel %d:%d, connected successfully, over %s link",
                link->link_mess->channel_type,
                link->link_mess->channel_id,
-               link->peer->ssl == NULL ? "Non Secure" : "Secure");
+               link->stream->ssl == NULL ? "Non Secure" : "Secure");
     /* add info + send event */
-    if (link->peer->ssl) {
-        link->peer->info.flags |= SPICE_CHANNEL_EVENT_FLAG_TLS;
+    if (link->stream->ssl) {
+        link->stream->info.flags |= SPICE_CHANNEL_EVENT_FLAG_TLS;
     }
-    link->peer->info.connection_id = connection_id;
-    link->peer->info.type = link->link_mess->channel_type;
-    link->peer->info.id   = link->link_mess->channel_id;
-    reds_channel_event(link->peer, SPICE_CHANNEL_EVENT_INITIALIZED);
+    link->stream->info.connection_id = connection_id;
+    link->stream->info.type = link->link_mess->channel_type;
+    link->stream->info.id   = link->link_mess->channel_id;
+    reds_channel_event(link->stream, SPICE_CHANNEL_EVENT_INITIALIZED);
 }
 
 static void reds_send_link_result(RedLinkInfo *link, uint32_t error)
 {
-    sync_write(link->peer, &error, sizeof(error));
+    sync_write(link->stream, &error, sizeof(error));
 }
 
 static void reds_start_net_test()
 {
-    if (!reds->peer || reds->net_test_id) {
+    if (!reds->stream || reds->net_test_id) {
         return;
     }
 
@@ -2038,12 +2037,12 @@ static void reds_handle_main_link(RedLinkInfo *link)
     reds->mig_inprogress = FALSE;
     reds->mig_wait_connect = FALSE;
     reds->mig_wait_disconnect = FALSE;
-    reds->peer = link->peer;
+    reds->stream = link->stream;
     reds->in_handler.shut = FALSE;
 
     reds_show_new_channel(link, connection_id);
-    reds_stream_remove_watch(link->peer);
-    link->peer = NULL;
+    reds_stream_remove_watch(link->stream);
+    link->stream = NULL;
     link->link_mess = NULL;
     reds_link_free(link);
     if (vdagent) {
@@ -2056,7 +2055,7 @@ static void reds_handle_main_link(RedLinkInfo *link)
         }
         reds->agent_state.plug_generation++;
     }
-    reds->peer->watch = core->watch_add(reds->peer->socket,
+    reds->stream->watch = core->watch_add(reds->stream->socket,
                                         SPICE_WATCH_EVENT_READ,
                                         reds_main_event, NULL);
 
@@ -2152,7 +2151,7 @@ static int marshaller_outgoing_write(SpiceMarshaller *m,
 
     data = spice_marshaller_linearize(m, 0, &len, &free_data);
 
-    if (outgoing_write(state->peer, &state->out_handler, data, len) != OUTGOING_OK) {
+    if (outgoing_write(state->stream, &state->out_handler, data, len) != OUTGOING_OK) {
         return FALSE;
     }
 
@@ -2345,18 +2344,18 @@ static void inputs_event(int fd, int event, void *data)
     InputsState *inputs_state = data;
 
     if (event & SPICE_WATCH_EVENT_READ) {
-        if (handle_incoming(inputs_state->peer, &inputs_state->in_handler)) {
+        if (handle_incoming(inputs_state->stream, &inputs_state->in_handler)) {
             inputs_relase_keys();
             if (inputs_state->channel) {
                 inputs_state->channel->data = NULL;
                 reds->inputs_state = NULL;
             }
-            reds_stream_free(inputs_state->peer);
+            reds_stream_free(inputs_state->stream);
             free(inputs_state);
         }
     }
     if (event & SPICE_WATCH_EVENT_WRITE) {
-        if (handle_outgoing(inputs_state->peer, &inputs_state->out_handler)) {
+        if (handle_outgoing(inputs_state->stream, &inputs_state->out_handler)) {
             reds_disconnect();
         }
     }
@@ -2368,7 +2367,7 @@ static void inputs_shutdown(Channel *channel)
     InputsState *state = (InputsState *)channel->data;
     if (state) {
         state->in_handler.shut = TRUE;
-        shutdown(state->peer->socket, SHUT_RDWR);
+        shutdown(state->stream->socket, SHUT_RDWR);
         channel->data = NULL;
         state->channel = NULL;
         reds->inputs_state = NULL;
@@ -2402,7 +2401,7 @@ static void inputs_select(void *opaque, int select)
     if (select) {
         eventmask |= SPICE_WATCH_EVENT_WRITE;
     }
-    core->watch_update_mask(inputs_state->peer->watch, eventmask);
+    core->watch_update_mask(inputs_state->stream->watch, eventmask);
 }
 
 static void inputs_may_write(void *opaque)
@@ -2410,7 +2409,7 @@ static void inputs_may_write(void *opaque)
     red_printf("");
 }
 
-static void inputs_link(Channel *channel, RedsStream *peer, int migration,
+static void inputs_link(Channel *channel, RedsStream *stream, int migration,
                         int num_common_caps, uint32_t *common_caps, int num_caps,
                         uint32_t *caps)
 {
@@ -2424,16 +2423,16 @@ static void inputs_link(Channel *channel, RedsStream *peer, int migration,
     inputs_state = spice_new0(InputsState, 1);
 
     delay_val = 1;
-    if (setsockopt(peer->socket, IPPROTO_TCP, TCP_NODELAY, &delay_val, sizeof(delay_val)) == -1) {
+    if (setsockopt(stream->socket, IPPROTO_TCP, TCP_NODELAY, &delay_val, sizeof(delay_val)) == -1) {
         red_printf("setsockopt failed, %s", strerror(errno));
     }
 
-    if ((flags = fcntl(peer->socket, F_GETFL)) == -1 ||
-                                            fcntl(peer->socket, F_SETFL, flags | O_ASYNC) == -1) {
+    if ((flags = fcntl(stream->socket, F_GETFL)) == -1 ||
+                                            fcntl(stream->socket, F_SETFL, flags | O_ASYNC) == -1) {
         red_printf("fcntl failed, %s", strerror(errno));
     }
 
-    inputs_state->peer = peer;
+    inputs_state->stream = stream;
     inputs_state->channel = channel;
     inputs_state->in_handler.parser = spice_get_client_channel_parser(SPICE_CHANNEL_INPUTS, NULL);
     inputs_state->in_handler.opaque = inputs_state;
@@ -2445,7 +2444,7 @@ static void inputs_link(Channel *channel, RedsStream *peer, int migration,
     inputs_state->pending_mouse_event = FALSE;
     channel->data = inputs_state;
     reds->inputs_state = inputs_state;
-    peer->watch = core->watch_add(peer->socket, SPICE_WATCH_EVENT_READ,
+    stream->watch = core->watch_add(stream->socket, SPICE_WATCH_EVENT_READ,
                                   inputs_event, inputs_state);
 
     SpiceMarshaller *m;
@@ -2470,7 +2469,7 @@ static void reds_send_keyboard_modifiers(uint8_t modifiers)
     if (!channel || !(state = (InputsState *)channel->data)) {
         return;
     }
-    ASSERT(state->peer);
+    ASSERT(state->stream);
 
     m = marshaller_new_for_outgoing(state, SPICE_MSG_INPUTS_KEY_MODIFIERS);
 
@@ -2516,7 +2515,7 @@ static void inputs_init()
 static void reds_handle_other_links(RedLinkInfo *link)
 {
     Channel *channel;
-    RedsStream *peer;
+    RedsStream *stream;
     SpiceLinkMess *link_mess;
     uint32_t *caps;
 
@@ -2537,7 +2536,7 @@ static void reds_handle_other_links(RedLinkInfo *link)
 
     reds_send_link_result(link, SPICE_LINK_ERR_OK);
     reds_show_new_channel(link, reds->link_id);
-    if (link_mess->channel_type == SPICE_CHANNEL_INPUTS && !link->peer->ssl) {
+    if (link_mess->channel_type == SPICE_CHANNEL_INPUTS && !link->stream->ssl) {
         RedsOutItem *item;
         SpiceMsgNotify notify;
         char *mess = "keyboard channel is insecure";
@@ -2556,13 +2555,13 @@ static void reds_handle_other_links(RedLinkInfo *link)
 
         reds_push_pipe_item(item);
     }
-    peer = link->peer;
-    reds_stream_remove_watch(peer);
-    link->peer = NULL;
+    stream = link->stream;
+    reds_stream_remove_watch(stream);
+    link->stream = NULL;
     link->link_mess = NULL;
     reds_link_free(link);
     caps = (uint32_t *)((uint8_t *)link_mess + link_mess->caps_offset);
-    channel->link(channel, peer, reds->mig_target, link_mess->num_common_caps,
+    channel->link(channel, stream, reds->mig_target, link_mess->num_common_caps,
                   link_mess->num_common_caps ? caps : NULL, link_mess->num_channel_caps,
                   link_mess->num_channel_caps ? caps + link_mess->num_common_caps : NULL);
     free(link_mess);
@@ -2607,10 +2606,10 @@ static void reds_handle_ticket(void *opaque)
 
 static inline void async_read_clear_handlers(AsyncRead *obj)
 {
-    if (!obj->peer->watch) {
+    if (!obj->stream->watch) {
         return;
     }
-    reds_stream_remove_watch(obj->peer);
+    reds_stream_remove_watch(obj->stream);
 }
 
 static void async_read_handler(int fd, int event, void *data)
@@ -2621,15 +2620,15 @@ static void async_read_handler(int fd, int event, void *data)
         int n = obj->end - obj->now;
 
         ASSERT(n > 0);
-        n = reds_stream_read(obj->peer, obj->now, n);
+        n = reds_stream_read(obj->stream, obj->now, n);
         if (n <= 0) {
             if (n < 0) {
                 switch (errno) {
                 case EAGAIN:
-                    if (!obj->peer->watch) {
-                        obj->peer->watch = core->watch_add(obj->peer->socket,
-                                                           SPICE_WATCH_EVENT_READ,
-                                                           async_read_handler, obj);
+                    if (!obj->stream->watch) {
+                        obj->stream->watch = core->watch_add(obj->stream->socket,
+                                                             SPICE_WATCH_EVENT_READ,
+                                                             async_read_handler, obj);
                     }
                     return;
                 case EINTR:
@@ -2659,8 +2658,8 @@ static int reds_security_check(RedLinkInfo *link)
 {
     ChannelSecurityOptions *security_option = find_channel_security(link->link_mess->channel_type);
     uint32_t security = security_option ? security_option->options : default_channel_security;
-    return (link->peer->ssl && (security & SPICE_CHANNEL_SECURITY_SSL)) ||
-        (!link->peer->ssl && (security & SPICE_CHANNEL_SECURITY_NONE));
+    return (link->stream->ssl && (security & SPICE_CHANNEL_SECURITY_SSL)) ||
+        (!link->stream->ssl && (security & SPICE_CHANNEL_SECURITY_NONE));
 }
 
 static void reds_handle_read_link_done(void *opaque)
@@ -2679,7 +2678,7 @@ static void reds_handle_read_link_done(void *opaque)
     }
 
     if (!reds_security_check(link)) {
-        if (link->peer->ssl) {
+        if (link->stream->ssl) {
             red_printf("spice channels %d should not be encrypted", link_mess->channel_type);
             reds_send_link_error(link, SPICE_LINK_ERR_NEED_UNSECURED);
         } else {
@@ -2758,7 +2757,7 @@ static void reds_handle_new_link(RedLinkInfo *link)
 {
     AsyncRead *obj = &link->asyc_read;
     obj->opaque = link;
-    obj->peer = link->peer;
+    obj->stream = link->stream;
     obj->now = (uint8_t *)&link->link_header;
     obj->end = (uint8_t *)((SpiceLinkHeader *)&link->link_header + 1);
     obj->done = reds_handle_read_header_done;
@@ -2771,28 +2770,28 @@ static void reds_handle_ssl_accept(int fd, int event, void *data)
     RedLinkInfo *link = (RedLinkInfo *)data;
     int return_code;
 
-    if ((return_code = SSL_accept(link->peer->ssl)) != 1) {
-        int ssl_error = SSL_get_error(link->peer->ssl, return_code);
+    if ((return_code = SSL_accept(link->stream->ssl)) != 1) {
+        int ssl_error = SSL_get_error(link->stream->ssl, return_code);
         if (ssl_error != SSL_ERROR_WANT_READ && ssl_error != SSL_ERROR_WANT_WRITE) {
             red_printf("SSL_accept failed, error=%d", ssl_error);
             reds_link_free(link);
         } else {
             if (ssl_error == SSL_ERROR_WANT_READ) {
-                core->watch_update_mask(link->peer->watch, SPICE_WATCH_EVENT_READ);
+                core->watch_update_mask(link->stream->watch, SPICE_WATCH_EVENT_READ);
             } else {
-                core->watch_update_mask(link->peer->watch, SPICE_WATCH_EVENT_WRITE);
+                core->watch_update_mask(link->stream->watch, SPICE_WATCH_EVENT_WRITE);
             }
         }
         return;
     }
-    reds_stream_remove_watch(link->peer);
+    reds_stream_remove_watch(link->stream);
     reds_handle_new_link(link);
 }
 
 static RedLinkInfo *__reds_accept_connection(int listen_socket)
 {
     RedLinkInfo *link;
-    RedsStream *peer;
+    RedsStream *stream;
     int delay_val = 1;
     int flags;
     int socket;
@@ -2817,16 +2816,16 @@ static RedLinkInfo *__reds_accept_connection(int listen_socket)
     }
 
     link = spice_new0(RedLinkInfo, 1);
-    peer = spice_new0(RedsStream, 1);
-    link->peer = peer;
-    peer->socket = socket;
+    stream = spice_new0(RedsStream, 1);
+    link->stream = stream;
+    stream->socket = socket;
 
     /* gather info + send event */
-    peer->info.llen = sizeof(peer->info.laddr);
-    peer->info.plen = sizeof(peer->info.paddr);
-    getsockname(peer->socket, (struct sockaddr*)(&peer->info.laddr), &peer->info.llen);
-    getpeername(peer->socket, (struct sockaddr*)(&peer->info.paddr), &peer->info.plen);
-    reds_channel_event(peer, SPICE_CHANNEL_EVENT_CONNECTED);
+    stream->info.llen = sizeof(stream->info.laddr);
+    stream->info.plen = sizeof(stream->info.paddr);
+    getsockname(stream->socket, (struct sockaddr*)(&stream->info.laddr), &stream->info.llen);
+    getpeername(stream->socket, (struct sockaddr*)(&stream->info.paddr), &stream->info.plen);
+    reds_channel_event(stream, SPICE_CHANNEL_EVENT_CONNECTED);
 
     openssl_init(link);
 
@@ -2841,15 +2840,15 @@ error:
 static RedLinkInfo *reds_accept_connection(int listen_socket)
 {
     RedLinkInfo *link;
-    RedsStream *peer;
+    RedsStream *stream;
 
     if (!(link = __reds_accept_connection(listen_socket))) {
         return NULL;
     }
-    peer = link->peer;
-    peer->read = stream_read_cb;
-    peer->write = stream_write_cb;
-    peer->writev = stream_writev_cb;
+    stream = link->stream;
+    stream->read = stream_read_cb;
+    stream->write = stream_write_cb;
+    stream->writev = stream_writev_cb;
 
     return link;
 }
@@ -2867,47 +2866,47 @@ static void reds_accept_ssl_connection(int fd, int event, void *data)
     }
 
     // Handle SSL handshaking
-    if (!(sbio = BIO_new_socket(link->peer->socket, BIO_NOCLOSE))) {
+    if (!(sbio = BIO_new_socket(link->stream->socket, BIO_NOCLOSE))) {
         red_printf("could not allocate ssl bio socket");
         goto error;
     }
 
-    link->peer->ssl = SSL_new(reds->ctx);
-    if (!link->peer->ssl) {
+    link->stream->ssl = SSL_new(reds->ctx);
+    if (!link->stream->ssl) {
         red_printf("could not allocate ssl context");
         BIO_free(sbio);
         goto error;
     }
 
-    SSL_set_bio(link->peer->ssl, sbio, sbio);
+    SSL_set_bio(link->stream->ssl, sbio, sbio);
 
-    link->peer->write = stream_ssl_write_cb;
-    link->peer->read = stream_ssl_read_cb;
-    link->peer->writev = stream_ssl_writev_cb;
+    link->stream->write = stream_ssl_write_cb;
+    link->stream->read = stream_ssl_read_cb;
+    link->stream->writev = stream_ssl_writev_cb;
 
-    return_code = SSL_accept(link->peer->ssl);
+    return_code = SSL_accept(link->stream->ssl);
     if (return_code == 1) {
         reds_handle_new_link(link);
         return;
     }
 
-    ssl_error = SSL_get_error(link->peer->ssl, return_code);
+    ssl_error = SSL_get_error(link->stream->ssl, return_code);
     if (return_code == -1 && (ssl_error == SSL_ERROR_WANT_READ ||
                               ssl_error == SSL_ERROR_WANT_WRITE)) {
         int eventmask = ssl_error == SSL_ERROR_WANT_READ ?
             SPICE_WATCH_EVENT_READ : SPICE_WATCH_EVENT_WRITE;
-        link->peer->watch = core->watch_add(link->peer->socket, eventmask,
+        link->stream->watch = core->watch_add(link->stream->socket, eventmask,
                                             reds_handle_ssl_accept, link);
         return;
     }
 
     ERR_print_errors_fp(stderr);
     red_printf("SSL_accept failed, error=%d", ssl_error);
-    SSL_free(link->peer->ssl);
+    SSL_free(link->stream->ssl);
 
 error:
-    close(link->peer->socket);
-    free(link->peer);
+    close(link->stream->socket);
+    free(link->stream);
     BN_free(link->tiTicketing.bn);
     free(link);
 }
@@ -3150,8 +3149,8 @@ static void reds_init_ssl()
 
 static void reds_exit()
 {
-    if (reds->peer) {
-        close(reds->peer->socket);
+    if (reds->stream) {
+        close(reds->stream->socket);
     }
 #ifdef RED_STATISTICS
     shm_unlink(reds->stat_shm_name);
@@ -3194,7 +3193,7 @@ enum {
 
 static inline void on_activating_ticketing()
 {
-    if (!ticketing_enabled && reds->peer) {
+    if (!ticketing_enabled && reds->stream) {
         red_printf("disconnecting");
         reds_disconnect();
     }
@@ -3297,8 +3296,8 @@ static void reds_mig_started(void)
         core->watch_update_mask(reds->secure_listen_watch, 0);
     }
 
-    if (reds->peer == NULL) {
-        red_printf("not connected to peer");
+    if (reds->stream == NULL) {
+        red_printf("not connected to stream");
         goto error;
     }
 
@@ -3329,8 +3328,8 @@ static void reds_mig_finished(int completed)
         core->watch_update_mask(reds->secure_listen_watch, SPICE_WATCH_EVENT_READ);
     }
 
-    if (reds->peer == NULL) {
-        red_printf("no peer connected");
+    if (reds->stream == NULL) {
+        red_printf("no stream connected");
         return;
     }
     reds->mig_inprogress = TRUE;
@@ -3420,7 +3419,7 @@ void reds_enable_mm_timer()
     RedsOutItem *item;
 
     core->timer_start(reds->mm_timer, MM_TIMER_GRANULARITY_MS);
-    if (!reds->peer) {
+    if (!reds->stream) {
         return;
     }
 
@@ -3448,7 +3447,7 @@ static void attach_to_red_agent(SpiceCharDeviceInstance *sin)
 
     vdagent = sin;
     reds_update_mouse_mode();
-    if (!reds->peer) {
+    if (!reds->stream) {
         return;
     }
     sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceCharDeviceInterface, base);
@@ -3756,7 +3755,7 @@ static int do_spice_init(SpiceCoreInterface *core_interface)
     core = core_interface;
     reds->listen_socket = -1;
     reds->secure_listen_socket = -1;
-    reds->peer = NULL;
+    reds->stream = NULL;
     reds->in_handler.parser = spice_get_client_channel_parser(SPICE_CHANNEL_MAIN, NULL);
     reds->in_handler.handle_message = reds_main_handle_message;
     ring_init(&reds->outgoing.pipe);
@@ -3915,7 +3914,7 @@ __visible__ int spice_server_set_ticket(SpiceServer *s,
 {
     ASSERT(reds == s);
 
-    if (reds->peer) {
+    if (reds->stream) {
         if (fail_if_connected) {
             return -1;
         }
@@ -4053,10 +4052,10 @@ __visible__ int spice_server_set_channel_security(SpiceServer *s, const char *ch
 __visible__ int spice_server_get_sock_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen)
 {
     ASSERT(reds == s);
-    if (!reds->peer) {
+    if (!reds->stream) {
         return -1;
     }
-    if (getsockname(reds->peer->socket, sa, salen) < 0) {
+    if (getsockname(reds->stream->socket, sa, salen) < 0) {
         return -1;
     }
     return 0;
@@ -4065,10 +4064,10 @@ __visible__ int spice_server_get_sock_info(SpiceServer *s, struct sockaddr *sa, 
 __visible__ int spice_server_get_peer_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen)
 {
     ASSERT(reds == s);
-    if (!reds->peer) {
+    if (!reds->stream) {
         return -1;
     }
-    if (getpeername(reds->peer->socket, sa, salen) < 0) {
+    if (getpeername(reds->stream->socket, sa, salen) < 0) {
         return -1;
     }
     return 0;
@@ -4171,7 +4170,7 @@ __visible__ int spice_server_migrate_client_state(SpiceServer *s)
 {
     ASSERT(reds == s);
 
-    if (!reds->peer) {
+    if (!reds->stream) {
         return SPICE_MIGRATE_CLIENT_NONE;
     } else if (reds->mig_wait_connect) {
         return SPICE_MIGRATE_CLIENT_WAITING;

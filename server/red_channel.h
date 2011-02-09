@@ -100,7 +100,7 @@ typedef void (*channel_release_pipe_item_proc)(RedChannel *channel,
                                                PipeItem *item, int item_pushed);
 
 struct RedChannel {
-    RedsStream *peer;
+    RedsStream *stream;
     SpiceCoreInterface *core;
     int migrate;
     int handle_acks;
@@ -141,7 +141,7 @@ struct RedChannel {
 
 /* if one of the callbacks should cause disconnect, use red_channel_shutdown and don't
    explicitly destroy the channel */
-RedChannel *red_channel_create(int size, RedsStream *peer,
+RedChannel *red_channel_create(int size, RedsStream *stream,
                                SpiceCoreInterface *core,
                                int migrate, int handle_acks,
                                channel_configure_socket_proc config_socket,
