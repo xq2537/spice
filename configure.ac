@@ -190,7 +190,7 @@ if test "x$have_tunnel" = "xyes"; then
 fi
 
 if test "x$have_smartcard" = "xyes"; then
-    PKG_CHECK_MODULES(CAC_CARD, libcacard >= 0.1.0)
+    PKG_CHECK_MODULES(CAC_CARD, libcacard >= 0.1.2)
     SMARTCARD_LIBS="$CAC_CARD_LIBS"
     SMARTCARD_CFLAGS="$CAC_CARD_CFLAGS"
     AC_SUBST(SMARTCARD_LIBS)
