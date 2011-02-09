@@ -2874,7 +2874,6 @@ static RedLinkInfo *reds_accept_connection(int listen_socket)
     peer->ctx = (void *)((unsigned long)link->peer->socket);
     peer->cb_read = (int (*)(void *, void *, int))reds_read;
     peer->cb_write = (int (*)(void *, void *, int))reds_write;
-    peer->cb_readv = (int (*)(void *, const struct iovec *vector, int count))readv;
     peer->cb_writev = (int (*)(void *, const struct iovec *vector, int count))writev;
     peer->cb_free = (int (*)(RedsStreamContext *))reds_free;
 
@@ -2911,7 +2910,6 @@ static void reds_accept_ssl_connection(int fd, int event, void *data)
     link->peer->ctx = (void *)(link->peer->ssl);
     link->peer->cb_write = (int (*)(void *, void *, int))reds_ssl_write;
     link->peer->cb_read = (int (*)(void *, void *, int))reds_ssl_read;
-    link->peer->cb_readv = NULL;
     link->peer->cb_writev = reds_ssl_writev;
     link->peer->cb_free = (int (*)(RedsStreamContext *))reds_ssl_free;
 
