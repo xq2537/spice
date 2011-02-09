@@ -598,7 +598,7 @@ static void arm_timer(SlirpUsrNetworkInterface *usr_interface, UserTimer *timer,
 
 
 /* reds interface */
-static void handle_tunnel_channel_link(Channel *channel, RedsStream *peer, int migration,
+static void handle_tunnel_channel_link(Channel *channel, RedsStream *stream, int migration,
                                        int num_common_caps, uint32_t *common_caps, int num_caps,
                                        uint32_t *caps);
 static void handle_tunnel_channel_shutdown(struct Channel *channel);
@@ -3347,19 +3347,19 @@ static int tunnel_channel_config_socket(RedChannel *channel)
     int flags;
     int delay_val;
 
-    if ((flags = fcntl(channel->peer->socket, F_GETFL)) == -1) {
+    if ((flags = fcntl(channel->stream->socket, F_GETFL)) == -1) {
         red_printf("accept failed, %s", strerror(errno)); // can't we just use red_error?
         return FALSE;
     }
 
-    if (fcntl(channel->peer->socket, F_SETFL, flags | O_NONBLOCK) == -1) {
+    if (fcntl(channel->stream->socket, F_SETFL, flags | O_NONBLOCK) == -1) {
         red_printf("accept failed, %s", strerror(errno));
         return FALSE;
     }
 
     delay_val = 1;
 
-    if (setsockopt(channel->peer->socket, IPPROTO_TCP, TCP_NODELAY, &delay_val,
+    if (setsockopt(channel->stream->socket, IPPROTO_TCP, TCP_NODELAY, &delay_val,
                    sizeof(delay_val)) == -1) {
         red_printf("setsockopt failed, %s", strerror(errno));
     }
@@ -3424,7 +3424,7 @@ static void tunnel_channel_hold_pipe_item(PipeItem *item)
 {
 }
 
-static void handle_tunnel_channel_link(Channel *channel, RedsStream *peer, int migration,
+static void handle_tunnel_channel_link(Channel *channel, RedsStream *stream, int migration,
                                        int num_common_caps, uint32_t *common_caps, int num_caps,
                                        uint32_t *caps)
 {
@@ -3435,7 +3435,7 @@ static void handle_tunnel_channel_link(Channel *channel, RedsStream *peer, int m
     }
 
     tunnel_channel =
-        (TunnelChannel *)red_channel_create(sizeof(*tunnel_channel), peer, worker->core_interface,
+        (TunnelChannel *)red_channel_create(sizeof(*tunnel_channel), stream, worker->core_interface,
                                             migration, TRUE,
                                             tunnel_channel_config_socket,
                                             tunnel_channel_disconnect,

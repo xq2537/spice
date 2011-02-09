@@ -33,15 +33,15 @@ static PipeItem *red_channel_pipe_get(RedChannel *channel);
 static void red_channel_event(int fd, int event, void *data);
 
 /* return the number of bytes read. -1 in case of error */
-static int red_peer_receive(RedsStream *peer, uint8_t *buf, uint32_t size)
+static int red_peer_receive(RedsStream *stream, uint8_t *buf, uint32_t size)
 {
     uint8_t *pos = buf;
     while (size) {
         int now;
-        if (peer->shutdown) {
+        if (stream->shutdown) {
             return -1;
         }
-        now = reds_stream_read(peer, pos, size);
+        now = reds_stream_read(stream, pos, size);
         if (now <= 0) {
             if (now == 0) {
                 return -1;
@@ -69,7 +69,7 @@ static int red_peer_receive(RedsStream *peer, uint8_t *buf, uint32_t size)
 // does many calls to red_peer_receive and through it cb_read, and thus avoids pointer
 // arithmetic for the case where a single cb_read could return multiple messages. But
 // this is suboptimal potentially. Profile and consider fixing.
-static void red_peer_handle_incoming(RedsStream *peer, IncomingHandler *handler)
+static void red_peer_handle_incoming(RedsStream *stream, IncomingHandler *handler)
 {
     int bytes_read;
     uint8_t *parsed;
@@ -79,7 +79,7 @@ static void red_peer_handle_incoming(RedsStream *peer, IncomingHandler *handler)
     for (;;) {
         int ret_handle;
         if (handler->header_pos < sizeof(SpiceDataHeader)) {
-            bytes_read = red_peer_receive(peer,
+            bytes_read = red_peer_receive(stream,
                                           ((uint8_t *)&handler->header) + handler->header_pos,
                                           sizeof(SpiceDataHeader) - handler->header_pos);
             if (bytes_read == -1) {
@@ -103,7 +103,7 @@ static void red_peer_handle_incoming(RedsStream *peer, IncomingHandler *handler)
                 }
             }
 
-            bytes_read = red_peer_receive(peer,
+            bytes_read = red_peer_receive(stream,
                                           handler->msg + handler->msg_pos,
                                           handler->header.size - handler->msg_pos);
             if (bytes_read == -1) {
@@ -150,10 +150,10 @@ static void red_peer_handle_incoming(RedsStream *peer, IncomingHandler *handler)
 
 void red_channel_receive(RedChannel *channel)
 {
-    red_peer_handle_incoming(channel->peer, &channel->incoming);
+    red_peer_handle_incoming(channel->stream, &channel->incoming);
 }
 
-static void red_peer_handle_outgoing(RedsStream *peer, OutgoingHandler *handler)
+static void red_peer_handle_outgoing(RedsStream *stream, OutgoingHandler *handler)
 {
     ssize_t n;
 
@@ -167,7 +167,7 @@ static void red_peer_handle_outgoing(RedsStream *peer, OutgoingHandler *handler)
 
     for (;;) {
         handler->prepare(handler->opaque, handler->vec, &handler->vec_size, handler->pos);
-        n = reds_stream_writev(peer, handler->vec, handler->vec_size);
+        n = reds_stream_writev(stream, handler->vec, handler->vec_size);
         if (n == -1) {
             switch (errno) {
             case EAGAIN:
@@ -236,7 +236,7 @@ static void red_channel_peer_on_out_block(void *opaque)
     RedChannel *channel = (RedChannel *)opaque;
 
     channel->send_data.blocked = TRUE;
-    channel->core->watch_update_mask(channel->peer->watch,
+    channel->core->watch_update_mask(channel->stream->watch,
                                      SPICE_WATCH_EVENT_READ |
                                      SPICE_WATCH_EVENT_WRITE);
 }
@@ -251,12 +251,12 @@ static void red_channel_peer_on_out_msg_done(void *opaque)
     }
     if (channel->send_data.blocked) {
         channel->send_data.blocked = FALSE;
-        channel->core->watch_update_mask(channel->peer->watch,
+        channel->core->watch_update_mask(channel->stream->watch,
                                          SPICE_WATCH_EVENT_READ);
     }
 }
 
-RedChannel *red_channel_create(int size, RedsStream *peer,
+RedChannel *red_channel_create(int size, RedsStream *stream,
                                SpiceCoreInterface *core,
                                int migrate, int handle_acks,
                                channel_configure_socket_proc config_socket,
@@ -281,7 +281,7 @@ RedChannel *red_channel_create(int size, RedsStream *peer,
     channel->release_item = release_item;
     channel->hold_item = hold_item;
 
-    channel->peer = peer;
+    channel->stream = stream;
     channel->core = core;
     channel->ack_data.messages_window = ~0;  // blocks send message (maybe use send_data.blocked +
                                              // block flags)
@@ -315,7 +315,7 @@ RedChannel *red_channel_create(int size, RedsStream *peer,
         goto error;
     }
 
-    channel->peer->watch = channel->core->watch_add(channel->peer->socket,
+    channel->stream->watch = channel->core->watch_add(channel->stream->socket,
                                                     SPICE_WATCH_EVENT_READ,
                                                     red_channel_event, channel);
 
@@ -324,7 +324,7 @@ RedChannel *red_channel_create(int size, RedsStream *peer,
 error:
     spice_marshaller_destroy(channel->send_data.marshaller);
     free(channel);
-    reds_stream_free(peer);
+    reds_stream_free(stream);
 
     return NULL;
 }
@@ -338,7 +338,7 @@ int do_nothing_handle_message(RedChannel *red_channel, SpiceDataHeader *header, 
     return TRUE;
 }
 
-RedChannel *red_channel_create_parser(int size, RedsStream *peer,
+RedChannel *red_channel_create_parser(int size, RedsStream *stream,
                                SpiceCoreInterface *core,
                                int migrate, int handle_acks,
                                channel_configure_socket_proc config_socket,
@@ -352,7 +352,7 @@ RedChannel *red_channel_create_parser(int size, RedsStream *peer,
                                channel_on_incoming_error_proc incoming_error,
                                channel_on_outgoing_error_proc outgoing_error)
 {
-    RedChannel *channel = red_channel_create(size, peer,
+    RedChannel *channel = red_channel_create(size, stream,
         core, migrate, handle_acks, config_socket, do_nothing_disconnect,
         do_nothing_handle_message, alloc_recv_buf, release_recv_buf, hold_item,
         send_item, release_item);
@@ -375,7 +375,7 @@ void red_channel_destroy(RedChannel *channel)
         return;
     }
     red_channel_pipe_clear(channel);
-    reds_stream_free(channel->peer);
+    reds_stream_free(channel->stream);
     spice_marshaller_destroy(channel->send_data.marshaller);
     free(channel);
 }
@@ -383,12 +383,12 @@ void red_channel_destroy(RedChannel *channel)
 void red_channel_shutdown(RedChannel *channel)
 {
     red_printf("");
-    if (channel->peer && !channel->peer->shutdown) {
-        channel->core->watch_update_mask(channel->peer->watch,
+    if (channel->stream && !channel->stream->shutdown) {
+        channel->core->watch_update_mask(channel->stream->watch,
                                          SPICE_WATCH_EVENT_READ);
         red_channel_pipe_clear(channel);
-        shutdown(channel->peer->socket, SHUT_RDWR);
-        channel->peer->shutdown = TRUE;
+        shutdown(channel->stream->socket, SHUT_RDWR);
+        channel->stream->shutdown = TRUE;
     }
 }
 
@@ -471,7 +471,7 @@ void red_channel_init_send_data(RedChannel *channel, uint16_t msg_type, PipeItem
 
 void red_channel_send(RedChannel *channel)
 {
-    red_peer_handle_outgoing(channel->peer, &channel->outgoing);
+    red_peer_handle_outgoing(channel->stream, &channel->outgoing);
 }
 
 void red_channel_begin_send_message(RedChannel *channel)
@@ -600,7 +600,7 @@ static inline PipeItem *red_channel_pipe_get(RedChannel *channel)
 
 int red_channel_is_connected(RedChannel *channel)
 {
-    return !!channel->peer;
+    return !!channel->stream;
 }
 
 void red_channel_pipe_clear(RedChannel *channel)

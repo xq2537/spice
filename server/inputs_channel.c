@@ -494,14 +494,14 @@ static int inputs_channel_config_socket(RedChannel *channel)
     int flags;
     int delay_val = 1;
 
-    if (setsockopt(channel->peer->socket, IPPROTO_TCP, TCP_NODELAY,
+    if (setsockopt(channel->stream->socket, IPPROTO_TCP, TCP_NODELAY,
             &delay_val, sizeof(delay_val)) == -1) {
         red_printf("setsockopt failed, %s", strerror(errno));
         return FALSE;
     }
 
-    if ((flags = fcntl(channel->peer->socket, F_GETFL)) == -1 ||
-                 fcntl(channel->peer->socket, F_SETFL, flags | O_ASYNC) == -1) {
+    if ((flags = fcntl(channel->stream->socket, F_GETFL)) == -1 ||
+                 fcntl(channel->stream->socket, F_SETFL, flags | O_ASYNC) == -1) {
         red_printf("fcntl failed, %s", strerror(errno));
         return FALSE;
     }
@@ -512,7 +512,7 @@ static void inputs_channel_hold_pipe_item(PipeItem *item)
 {
 }
 
-static void inputs_link(Channel *channel, RedsStream *peer, int migration,
+static void inputs_link(Channel *channel, RedsStream *stream, int migration,
                         int num_common_caps, uint32_t *common_caps, int num_caps,
                         uint32_t *caps)
 {
@@ -521,7 +521,7 @@ static void inputs_link(Channel *channel, RedsStream *peer, int migration,
     ASSERT(channel->data == NULL);
 
     g_inputs_channel = inputs_channel = (InputsChannel*)red_channel_create_parser(
-        sizeof(*inputs_channel), peer, core, migration, FALSE /* handle_acks */
+        sizeof(*inputs_channel), stream, core, migration, FALSE /* handle_acks */
         ,inputs_channel_config_socket
         ,spice_get_client_channel_parser(SPICE_CHANNEL_INPUTS, NULL)
         ,inputs_channel_handle_parsed

@@ -469,7 +469,7 @@ static void smartcard_channel_hold_pipe_item(PipeItem *item)
 {
 }
 
-static void smartcard_link(Channel *channel, RedsStream *peer,
+static void smartcard_link(Channel *channel, RedsStream *stream,
                         int migration, int num_common_caps,
                         uint32_t *common_caps, int num_caps,
                         uint32_t *caps)
@@ -479,7 +479,7 @@ static void smartcard_link(Channel *channel, RedsStream *peer,
     }
     g_smartcard_channel =
         (SmartCardChannel *)red_channel_create(sizeof(*g_smartcard_channel),
-                                        peer, core,
+                                        stream, core,
                                         migration, FALSE /* handle_acks */,
                                         smartcard_channel_config_socket,
                                         smartcard_channel_disconnect,

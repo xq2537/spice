@@ -780,7 +780,7 @@ static void main_channel_hold_pipe_item(PipeItem *item)
 {
 }
 
-static void main_channel_link(Channel *channel, RedsStream *peer, int migration,
+static void main_channel_link(Channel *channel, RedsStream *stream, int migration,
                         int num_common_caps, uint32_t *common_caps, int num_caps,
                         uint32_t *caps)
 {
@@ -789,7 +789,7 @@ static void main_channel_link(Channel *channel, RedsStream *peer, int migration,
     ASSERT(channel->data == NULL);
 
     main_chan = (MainChannel*)red_channel_create_parser(
-        sizeof(*main_chan), peer, core, migration, FALSE /* handle_acks */
+        sizeof(*main_chan), stream, core, migration, FALSE /* handle_acks */
         ,main_channel_config_socket
         ,spice_get_client_channel_parser(SPICE_CHANNEL_MAIN, NULL)
         ,main_channel_handle_parsed
@@ -808,22 +808,22 @@ int main_channel_getsockname(Channel *channel, struct sockaddr *sa, socklen_t *s
 {
     MainChannel *main_chan = channel->data;
 
-    return main_chan ? getsockname(main_chan->base.peer->socket, sa, salen) : -1;
+    return main_chan ? getsockname(main_chan->base.stream->socket, sa, salen) : -1;
 }
 
 int main_channel_getpeername(Channel *channel, struct sockaddr *sa, socklen_t *salen)
 {
     MainChannel *main_chan = channel->data;
 
-    return main_chan ? getpeername(main_chan->base.peer->socket, sa, salen) : -1;
+    return main_chan ? getpeername(main_chan->base.stream->socket, sa, salen) : -1;
 }
 
 void main_channel_close(Channel *channel)
 {
     MainChannel *main_chan = channel->data;
 
-    if (main_chan && main_chan->base.peer) {
-        close(main_chan->base.peer->socket);
+    if (main_chan && main_chan->base.stream) {
+        close(main_chan->base.stream->socket);
     }
 }
 

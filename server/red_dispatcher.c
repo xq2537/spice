@@ -71,7 +71,7 @@ extern spice_wan_compression_t zlib_glz_state;
 
 static RedDispatcher *dispatchers = NULL;
 
-static void red_dispatcher_set_peer(Channel *channel, RedsStream *peer, int migration,
+static void red_dispatcher_set_peer(Channel *channel, RedsStream *stream, int migration,
                                     int num_common_caps, uint32_t *common_caps, int num_caps,
                                     uint32_t *caps)
 {
@@ -81,7 +81,7 @@ static void red_dispatcher_set_peer(Channel *channel, RedsStream *peer, int migr
     dispatcher = (RedDispatcher *)channel->data;
     RedWorkerMessage message = RED_WORKER_MESSAGE_DISPLAY_CONNECT;
     write_message(dispatcher->channel, &message);
-    send_data(dispatcher->channel, &peer, sizeof(RedsStream *));
+    send_data(dispatcher->channel, &stream, sizeof(RedsStream *));
     send_data(dispatcher->channel, &migration, sizeof(int));
 }
 
@@ -101,7 +101,7 @@ static void red_dispatcher_migrate(Channel *channel)
     write_message(dispatcher->channel, &message);
 }
 
-static void red_dispatcher_set_cursor_peer(Channel *channel, RedsStream *peer,
+static void red_dispatcher_set_cursor_peer(Channel *channel, RedsStream *stream,
                                            int migration, int num_common_caps,
                                            uint32_t *common_caps, int num_caps,
                                            uint32_t *caps)
@@ -110,7 +110,7 @@ static void red_dispatcher_set_cursor_peer(Channel *channel, RedsStream *peer,
     red_printf("");
     RedWorkerMessage message = RED_WORKER_MESSAGE_CURSOR_CONNECT;
     write_message(dispatcher->channel, &message);
-    send_data(dispatcher->channel, &peer, sizeof(RedsStream *));
+    send_data(dispatcher->channel, &stream, sizeof(RedsStream *));
     send_data(dispatcher->channel, &migration, sizeof(int));
 }
 
