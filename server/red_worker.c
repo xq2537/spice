@@ -8411,9 +8411,11 @@ static void display_channel_push(RedWorker *worker)
     }
 }
 
-static void cursor_channel_send_item(RedChannel *channel, PipeItem *pipe_item)
+static void cursor_channel_send_item(CursorChannel *cursor_channel, PipeItem *pipe_item)
 {
-    CursorChannel *cursor_channel = (CursorChannel *)red_ref_channel(channel);
+    RedChannel *channel = &cursor_channel->common.base;
+
+    red_ref_channel(channel);
     red_channel_reset_send_data(channel);
     switch (pipe_item->type) {
     case PIPE_ITEM_TYPE_CURSOR:
@@ -8460,7 +8462,7 @@ static void cursor_channel_push(RedWorker *worker)
     PipeItem *pipe_item;
 
     while ((pipe_item = red_pipe_get((RedChannel *)worker->cursor_channel))) {
-        cursor_channel_send_item((RedChannel *)worker->cursor_channel, pipe_item);
+        cursor_channel_send_item(worker->cursor_channel, pipe_item);
     }
 }
 
