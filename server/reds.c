@@ -2847,7 +2847,6 @@ static RedLinkInfo *reds_accept_connection(int listen_socket)
         return NULL;
     }
     peer = link->peer;
-    peer->ctx = (void *)((unsigned long)link->peer->socket);
     peer->read = stream_read_cb;
     peer->write = stream_write_cb;
     peer->writev = stream_writev_cb;
@@ -2882,7 +2881,6 @@ static void reds_accept_ssl_connection(int fd, int event, void *data)
 
     SSL_set_bio(link->peer->ssl, sbio, sbio);
 
-    link->peer->ctx = (void *)(link->peer->ssl);
     link->peer->write = stream_ssl_write_cb;
     link->peer->read = stream_ssl_read_cb;
     link->peer->writev = stream_ssl_writev_cb;

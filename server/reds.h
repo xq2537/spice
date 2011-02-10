@@ -27,8 +27,6 @@
 typedef struct RedsStream RedsStream;
 
 struct RedsStream {
-    void *ctx;
-
     int socket;
     SpiceWatch *watch;
 
