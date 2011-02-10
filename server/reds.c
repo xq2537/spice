@@ -434,30 +434,6 @@ static ssize_t stream_ssl_read_cb(RedsStream *s, void *buf, size_t size)
     return return_code;
 }
 
-static ssize_t stream_ssl_writev_cb(RedsStream *s, const struct iovec *vector, int count)
-{
-    int i;
-    int n;
-    ssize_t return_code = 0;
-    int ssl_error;
-
-    for (i = 0; i < count; ++i) {
-        n = SSL_write(s->ssl, vector[i].iov_base, vector[i].iov_len);
-        if (n <= 0) {
-            ssl_error = SSL_get_error(s->ssl, n);
-            if (return_code <= 0) {
-                return n;
-            } else {
-                break;
-            }
-        } else {
-            return_code += n;
-        }
-    }
-
-    return return_code;
-}
-
 static void reds_stream_remove_watch(RedsStream* s)
 {
     if (s->watch) {
@@ -2882,7 +2858,7 @@ static void reds_accept_ssl_connection(int fd, int event, void *data)
 
     link->stream->write = stream_ssl_write_cb;
     link->stream->read = stream_ssl_read_cb;
-    link->stream->writev = stream_ssl_writev_cb;
+    link->stream->writev = NULL;
 
     return_code = SSL_accept(link->stream->ssl);
     if (return_code == 1) {
@@ -4207,7 +4183,22 @@ ssize_t reds_stream_write(RedsStream *s, const void *buf, size_t nbyte)
 
 ssize_t reds_stream_writev(RedsStream *s, const struct iovec *iov, int iovcnt)
 {
-    return s->writev(s, iov, iovcnt);
+    int i;
+    int n;
+    ssize_t ret = 0;
+
+    if (s->writev != NULL) {
+        return s->writev(s, iov, iovcnt);
+    }
+
+    for (i = 0; i < iovcnt; ++i) {
+        n = reds_stream_write(s, iov[i].iov_base, iov[i].iov_len);
+        if (n <= 0)
+            return ret == 0 ? n : ret;
+        ret += n;
+    }
+
+    return ret;
 }
 
 void reds_stream_free(RedsStream *s)
