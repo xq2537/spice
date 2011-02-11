@@ -230,7 +230,6 @@ EXTRA_DIST = \
 	resource.h		\
 	spicec.exe.manifest	\
 	spice.ico		\
-	static_title.bmp	\
 	stdint.h		\
 	sticky_alt.bmp		\
 	win_platform.h		\
