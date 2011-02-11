@@ -300,6 +300,57 @@ AC_SUBST(JPEG_LIBS)
 AC_CHECK_LIB(z, deflate, Z_LIBS='-lz', AC_MSG_ERROR([zlib not found]))
 AC_SUBST(Z_LIBS)
 
+dnl Cyrus SASL, check from gtk-vnc
+AC_ARG_WITH([sasl],
+  [AS_HELP_STRING([--with-sasl],
+    [use cyrus SASL for authentication @<:@default=check@:>@])],
+  [],
+  [with_sasl=check])
+
+SASL_CFLAGS=
+SASL_LIBS=
+enable_sasl=no
+if test "x$with_sasl" != "xno"; then
+  if test "x$with_sasl" != "xyes" -a "x$with_sasl" != "xcheck"; then
+    SASL_CFLAGS="-I$with_sasl"
+    SASL_LIBS="-L$with_sasl"
+  fi
+  fail=0
+  old_cflags="$CFLAGS"
+  old_libs="$LIBS"
+  CFLAGS="$CFLAGS $SASL_CFLAGS"
+  LIBS="$LIBS $SASL_LIBS"
+  AC_CHECK_HEADER([sasl/sasl.h],[],[
+    if test "x$with_sasl" != "xcheck" ; then
+        with_sasl=no
+    else
+        fail=1
+    fi])
+  if test "x$with_sasl" != "xno" ; then
+    AC_CHECK_LIB([sasl2], [sasl_client_init],[with_sasl2=yes],[with_sasl2=no])
+  fi
+  if test "x$with_sasl2" = "xno" -a "x$with_sasl" != "xno" ; then
+    AC_CHECK_LIB([sasl], [sasl_client_init],[with_sasl=yes],[with_sasl=no])
+  fi
+  if test "x$with_sasl2" = "xyes"; then
+    SASL_LIBS="$SASL_LIBS -lsasl2"
+  elif test "x$with_sasl" = "xyes"; then
+    SASL_LIBS="$SASL_LIBS -lsasl"
+  else
+    AC_MSG_ERROR([You must install the Cyrus SASL development package in order to compile GTK-VNC])
+  fi
+  CFLAGS="$old_cflags"
+  LIBS="$old_libs"
+  if test "x$with_sasl2" = "xyes" -o "x$with_sasl" = "xyes" ; then
+    AC_DEFINE_UNQUOTED([HAVE_SASL], 1,
+      [whether Cyrus SASL is available for authentication])
+    enable_sasl=yes
+  fi
+fi
+AM_CONDITIONAL([HAVE_SASL], [test "x$with_sasl2" = "xyes" -o "x$with_sasl" = "xyes"])
+AC_SUBST([SASL_CFLAGS])
+AC_SUBST([SASL_LIBS])
+
 dnl ===========================================================================
 dnl check compiler flags
 
@@ -491,6 +542,8 @@ echo "
         GUI:                      ${use_gui}
 
         Smartcard:                ${have_smartcard}
+
+        SASL support:             ${enable_sasl}
 "
 
 if test $os_win32 == "yes" ; then
