@@ -465,7 +465,7 @@ void red_channel_init_send_data(RedChannel *channel, uint16_t msg_type, PipeItem
     channel->send_data.header->type = msg_type;
     channel->send_data.item = item;
     if (item) {
-        channel->hold_item(item);
+        channel->hold_item(channel, item);
     }
 }
 

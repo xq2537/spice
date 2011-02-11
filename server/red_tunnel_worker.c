@@ -3420,7 +3420,7 @@ static void on_new_tunnel_channel(TunnelChannel *channel)
     }
 }
 
-static void tunnel_channel_hold_pipe_item(PipeItem *item)
+static void tunnel_channel_hold_pipe_item(RedChannel *channel, PipeItem *item)
 {
 }
 

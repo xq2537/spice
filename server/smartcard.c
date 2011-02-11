@@ -465,7 +465,7 @@ static int smartcard_channel_handle_message(RedChannel *channel, SpiceDataHeader
     return TRUE;
 }
 
-static void smartcard_channel_hold_pipe_item(PipeItem *item)
+static void smartcard_channel_hold_pipe_item(RedChannel *channel, PipeItem *item)
 {
 }
 

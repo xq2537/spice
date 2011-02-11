@@ -776,7 +776,7 @@ static int main_channel_config_socket(RedChannel *channel)
     return TRUE;
 }
 
-static void main_channel_hold_pipe_item(PipeItem *item)
+static void main_channel_hold_pipe_item(RedChannel *channel, PipeItem *item)
 {
 }
 
