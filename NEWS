@@ -1,3 +1,11 @@
+Major changes in 0.7.3:
+=======================
+* Suport building with (and requires) libcacard-0.1.2
+* Fixes for building with gcc-4.6
+* Server: Drop unnecessary X11 and alsa requires from spice-server.pc
+* Client: fix minor for old migration support
+* Client: Remove spice-client watermark (rhbz#662450)
+
 Major changes in 0.7.2:
 =======================
 * cmd-line-parser: fix wrong reporting of bad argument in --bla=val case
