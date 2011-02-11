@@ -1574,6 +1574,15 @@ static void reds_handle_other_links(RedLinkInfo *link)
     free(link_mess);
 }
 
+static void reds_handle_link(RedLinkInfo *link)
+{
+    if (link->link_mess->channel_type == SPICE_CHANNEL_MAIN) {
+        reds_handle_main_link(link);
+    } else {
+        reds_handle_other_links(link);
+    }
+}
+
 static void reds_handle_ticket(void *opaque)
 {
     RedLinkInfo *link = (RedLinkInfo *)opaque;
@@ -1604,11 +1613,8 @@ static void reds_handle_ticket(void *opaque)
             return;
         }
     }
-    if (link->link_mess->channel_type == SPICE_CHANNEL_MAIN) {
-        reds_handle_main_link(link);
-    } else {
-        reds_handle_other_links(link);
-    }
+
+    reds_handle_link(link);
 }
 
 static inline void async_read_clear_handlers(AsyncRead *obj)
@@ -1678,8 +1684,8 @@ static void reds_handle_read_link_done(void *opaque)
     uint32_t num_caps = link_mess->num_common_caps + link_mess->num_channel_caps;
 
     if (num_caps && (num_caps * sizeof(uint32_t) + link_mess->caps_offset >
-                                                   link->link_header.size ||
-                                                     link_mess->caps_offset < sizeof(*link_mess))) {
+                     link->link_header.size ||
+                     link_mess->caps_offset < sizeof(*link_mess))) {
         reds_send_link_error(link, SPICE_LINK_ERR_INVALID_DATA);
         reds_link_free(link);
         return;
@@ -1853,6 +1859,7 @@ static RedLinkInfo *reds_accept_connection(int listen_socket)
     if (!(link = __reds_accept_connection(listen_socket))) {
         return NULL;
     }
+
     stream = link->stream;
     stream->read = stream_read_cb;
     stream->write = stream_write_cb;
@@ -1948,7 +1955,7 @@ static int reds_init_socket(const char *addr, int portnr, int family)
     snprintf(port, sizeof(port), "%d", portnr);
     rc = getaddrinfo(strlen(addr) ? addr : NULL, port, &ai, &res);
     if (rc != 0) {
-        red_error("getaddrinfo(%s,%s): %s\n", addr, port,
+        red_error("getaddrinfo(%s,%s): %s", addr, port,
                   gai_strerror(rc));
     }
 
@@ -1974,7 +1981,7 @@ static int reds_init_socket(const char *addr, int portnr, int family)
         }
         close(slisten);
     }
-    red_printf("%s: binding socket to %s:%d failed\n", __FUNCTION__,
+    red_printf("%s: binding socket to %s:%d failed", __FUNCTION__,
                addr, portnr);
     freeaddrinfo(res);
     return -1;
