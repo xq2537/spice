@@ -18,10 +18,16 @@
 #ifndef _H_REDS
 #define _H_REDS
 
+#include "config.h"
+
 #include <stdint.h>
 #include <openssl/ssl.h>
 #include <sys/uio.h>
 #include <spice/vd_agent.h>
+#if HAVE_SASL
+#include <sasl/sasl.h>
+#endif
+
 #include "common/marshaller.h"
 #include "common/messages.h"
 #include "spice.h"
@@ -29,6 +35,35 @@
 #define __visible__ __attribute__ ((visibility ("default")))
 
 typedef struct RedsStream RedsStream;
+
+#if HAVE_SASL
+typedef struct RedsSASL {
+    sasl_conn_t *conn;
+
+    /* If we want to negotiate an SSF layer with client */
+    int wantSSF :1;
+    /* If we are now running the SSF layer */
+    int runSSF :1;
+
+    /*
+     * Buffering encoded data to allow more clear data
+     * to be stuffed onto the output buffer
+     */
+    const uint8_t *encoded;
+    unsigned int encodedLength;
+    unsigned int encodedOffset;
+
+    SpiceBuffer inbuffer;
+
+    char *username;
+    char *mechlist;
+    char *mechname;
+
+    /* temporary data during authentication */
+    unsigned int len;
+    char *data;
+} RedsSASL;
+#endif
 
 struct RedsStream {
     int socket;
@@ -38,6 +73,10 @@ struct RedsStream {
        receive may return data afterward. check the flag before calling receive*/
     int shutdown;
     SSL *ssl;
+
+#if HAVE_SASL
+    RedsSASL sasl;
+#endif
 
     SpiceChannelEventInfo info;
 

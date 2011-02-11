@@ -16,6 +16,8 @@
    License along with this library; if not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "config.h"
+
 #include <stdint.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -38,6 +40,9 @@
 #include <openssl/rsa.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#if HAVE_SASL
+#include <sasl/sasl.h>
+#endif
 
 #include "spice.h"
 #include "spice-experimental.h"
@@ -53,7 +58,6 @@
 #include <spice/stats.h>
 #include "stat.h"
 #include "ring.h"
-#include "config.h"
 #include "demarshallers.h"
 #include "marshaller.h"
 #include "generated_marshallers.h"
@@ -83,6 +87,10 @@ static int spice_secure_port = -1;
 static char spice_addr[256];
 static int spice_family = PF_UNSPEC;
 static char *default_renderer = "sw";
+static int sasl_enabled = 0; // sasl disabled by default
+#if HAVE_SASL
+static char *sasl_appname = NULL; // default to "spice" if NULL
+#endif
 
 static int ticketing_enabled = 1; //Ticketing is enabled by default
 static pthread_mutex_t *lock_cs;
@@ -1349,15 +1357,20 @@ static void reds_channel_set_common_caps(Channel *channel, int cap, int active)
     channel->common_caps = spice_renew(uint32_t, channel->common_caps, channel->num_common_caps);
     memset(channel->common_caps + nbefore, 0,
            (channel->num_common_caps - nbefore) * sizeof(uint32_t));
-    if (active)
+    if (active) {
         channel->common_caps[n] |= (1 << cap);
-    else
+    } else {
         channel->common_caps[n] &= ~(1 << cap);
+    }
 }
 
 void reds_channel_init_auth_caps(Channel *channel)
 {
-    reds_channel_set_common_caps(channel, SPICE_COMMON_CAP_AUTH_SPICE, TRUE);
+    if (sasl_enabled) {
+        reds_channel_set_common_caps(channel, SPICE_COMMON_CAP_AUTH_SASL, TRUE);
+    } else {
+        reds_channel_set_common_caps(channel, SPICE_COMMON_CAP_AUTH_SPICE, TRUE);
+    }
     reds_channel_set_common_caps(channel, SPICE_COMMON_CAP_PROTOCOL_AUTH_SELECTION, TRUE);
 }
 
@@ -1486,7 +1499,7 @@ static void reds_handle_main_link(RedLinkInfo *link)
     link_mess = link->link_mess;
     reds_disconnect();
 
-    if (!link_mess->connection_id) {
+    if (link_mess->connection_id == 0) {
         reds_send_link_result(link, SPICE_LINK_ERR_OK);
         while((connection_id = rand()) == 0);
         reds->agent_state.num_tokens = 0;
@@ -1670,6 +1683,104 @@ static inline void async_read_clear_handlers(AsyncRead *obj)
     reds_stream_remove_watch(obj->stream);
 }
 
+#if HAVE_SASL
+static int sync_write_u8(RedsStream *s, uint8_t n)
+{
+    return sync_write(s, &n, sizeof(uint8_t));
+}
+
+static int sync_write_u32(RedsStream *s, uint32_t n)
+{
+    return sync_write(s, &n, sizeof(uint32_t));
+}
+
+ssize_t reds_stream_sasl_write(RedsStream *s, const void *buf, size_t nbyte)
+{
+    ssize_t ret;
+
+    if (!s->sasl.encoded) {
+        int err;
+        err = sasl_encode(s->sasl.conn, (char *)buf, nbyte,
+                          (const char **)&s->sasl.encoded,
+                          &s->sasl.encodedLength);
+        if (err != SASL_OK) {
+            red_printf("sasl_encode error: %d", err);
+            return -1;
+        }
+
+        if (s->sasl.encodedLength == 0) {
+            return 0;
+        }
+
+        if (!s->sasl.encoded) {
+            red_printf("sasl_encode didn't return a buffer!");
+            return 0;
+        }
+
+        s->sasl.encodedOffset = 0;
+    }
+
+    ret = s->write(s, s->sasl.encoded + s->sasl.encodedOffset,
+                   s->sasl.encodedLength - s->sasl.encodedOffset);
+
+    if (ret <= 0) {
+        return ret;
+    }
+
+    s->sasl.encodedOffset += ret;
+    if (s->sasl.encodedOffset == s->sasl.encodedLength) {
+        s->sasl.encoded = NULL;
+        s->sasl.encodedOffset = s->sasl.encodedLength = 0;
+        return nbyte;
+    }
+
+    /* we didn't flush the encoded buffer */
+    errno = EAGAIN;
+    return -1;
+}
+
+static ssize_t reds_stream_sasl_read(RedsStream *s, void *buf, size_t nbyte)
+{
+    uint8_t encoded[4096];
+    const char *decoded;
+    unsigned int decodedlen;
+    int err;
+    int n;
+
+    n = spice_buffer_copy(&s->sasl.inbuffer, buf, nbyte);
+    if (n > 0) {
+        spice_buffer_remove(&s->sasl.inbuffer, n);
+        if (n == nbyte)
+            return n;
+        nbyte -= n;
+        buf += n;
+    }
+
+    n = s->read(s, encoded, sizeof(encoded));
+    if (n <= 0) {
+        return n;
+    }
+
+    err = sasl_decode(s->sasl.conn,
+                      (char *)encoded, n,
+                      &decoded, &decodedlen);
+    if (err != SASL_OK) {
+        red_printf("sasl_decode error: %d", err);
+        return -1;
+    }
+
+    if (decodedlen == 0) {
+        errno = EAGAIN;
+        return -1;
+    }
+
+    n = MIN(nbyte, decodedlen);
+    memcpy(buf, decoded, n);
+    spice_buffer_append(&s->sasl.inbuffer, decoded + n, decodedlen - n);
+    return n;
+}
+#endif
+
 static void async_read_handler(int fd, int event, void *data)
 {
     AsyncRead *obj = (AsyncRead *)data;
@@ -1722,16 +1833,537 @@ static void reds_get_spice_ticket(RedLinkInfo *link)
     async_read_handler(0, 0, &link->asyc_read);
 }
 
+#if HAVE_SASL
+static char *addr_to_string(const char *format,
+                            struct sockaddr *sa,
+                            socklen_t salen) {
+    char *addr;
+    char host[NI_MAXHOST];
+    char serv[NI_MAXSERV];
+    int err;
+    size_t addrlen;
+
+    if ((err = getnameinfo(sa, salen,
+                           host, sizeof(host),
+                           serv, sizeof(serv),
+                           NI_NUMERICHOST | NI_NUMERICSERV)) != 0) {
+        red_printf("Cannot resolve address %d: %s",
+                   err, gai_strerror(err));
+        return NULL;
+    }
+
+    /* Enough for the existing format + the 2 vars we're
+     * substituting in. */
+    addrlen = strlen(format) + strlen(host) + strlen(serv);
+    addr = spice_malloc(addrlen + 1);
+    snprintf(addr, addrlen, format, host, serv);
+    addr[addrlen] = '\0';
+
+    return addr;
+}
+
+static int auth_sasl_check_ssf(RedsSASL *sasl, int *runSSF)
+{
+    const void *val;
+    int err, ssf;
+
+    *runSSF = 0;
+    if (!sasl->wantSSF) {
+        return 1;
+    }
+
+    err = sasl_getprop(sasl->conn, SASL_SSF, &val);
+    if (err != SASL_OK) {
+        return 0;
+    }
+
+    ssf = *(const int *)val;
+    red_printf("negotiated an SSF of %d", ssf);
+    if (ssf < 56) {
+        return 0; /* 56 is good for Kerberos */
+    }
+
+    *runSSF = 1;
+
+    /* We have a SSF that's good enough */
+    return 1;
+}
+
+/*
+ * Step Msg
+ *
+ * Input from client:
+ *
+ * u32 clientin-length
+ * u8-array clientin-string
+ *
+ * Output to client:
+ *
+ * u32 serverout-length
+ * u8-array serverout-strin
+ * u8 continue
+ */
+#define SASL_DATA_MAX_LEN (1024 * 1024)
+
+static void reds_handle_auth_sasl_steplen(void *opaque);
+
+static void reds_handle_auth_sasl_step(void *opaque)
+{
+    const char *serverout;
+    unsigned int serveroutlen;
+    int err;
+    char *clientdata = NULL;
+    RedLinkInfo *link = (RedLinkInfo *)opaque;
+    RedsSASL *sasl = &link->stream->sasl;
+    uint32_t datalen = sasl->len;
+    AsyncRead *obj = &link->asyc_read;
+
+    /* NB, distinction of NULL vs "" is *critical* in SASL */
+    if (datalen) {
+        clientdata = sasl->data;
+        clientdata[datalen - 1] = '\0'; /* Wire includes '\0', but make sure */
+        datalen--; /* Don't count NULL byte when passing to _start() */
+    }
+
+    red_printf("Step using SASL Data %p (%d bytes)",
+               clientdata, datalen);
+    err = sasl_server_step(sasl->conn,
+                           clientdata,
+                           datalen,
+                           &serverout,
+                           &serveroutlen);
+    if (err != SASL_OK &&
+        err != SASL_CONTINUE) {
+        red_printf("sasl step failed %d (%s)",
+                   err, sasl_errdetail(sasl->conn));
+        goto authabort;
+    }
+
+    if (serveroutlen > SASL_DATA_MAX_LEN) {
+        red_printf("sasl step reply data too long %d",
+                   serveroutlen);
+        goto authabort;
+    }
+
+    red_printf("SASL return data %d bytes, %p", serveroutlen, serverout);
+
+    if (serveroutlen) {
+        serveroutlen += 1;
+        sync_write(link->stream, &serveroutlen, sizeof(uint32_t));
+        sync_write(link->stream, serverout, serveroutlen);
+    } else {
+        sync_write(link->stream, &serveroutlen, sizeof(uint32_t));
+    }
+
+    /* Whether auth is complete */
+    sync_write_u8(link->stream, err == SASL_CONTINUE ? 0 : 1);
+
+    if (err == SASL_CONTINUE) {
+        red_printf("%s", "Authentication must continue (step)");
+        /* Wait for step length */
+        obj->now = (uint8_t *)&sasl->len;
+        obj->end = obj->now + sizeof(uint32_t);
+        obj->done = reds_handle_auth_sasl_steplen;
+        async_read_handler(0, 0, &link->asyc_read);
+    } else {
+        int ssf;
+
+        if (auth_sasl_check_ssf(sasl, &ssf) == 0) {
+            red_printf("Authentication rejected for weak SSF");
+            goto authreject;
+        }
+
+        red_printf("Authentication successful");
+        sync_write_u32(link->stream, SPICE_LINK_ERR_OK); /* Accept auth */
+
+        /*
+         * Delay writing in SSF encoded until now
+         */
+        sasl->runSSF = ssf;
+        link->stream->writev = NULL; /* make sure writev isn't called directly anymore */
+
+        reds_handle_link(link);
+    }
+
+    return;
+
+authreject:
+    sync_write_u32(link->stream, 1); /* Reject auth */
+    sync_write_u32(link->stream, sizeof("Authentication failed"));
+    sync_write(link->stream, "Authentication failed", sizeof("Authentication failed"));
+
+authabort:
+    reds_link_free(link);
+    return;
+}
+
+static void reds_handle_auth_sasl_steplen(void *opaque)
+{
+    RedLinkInfo *link = (RedLinkInfo *)opaque;
+    AsyncRead *obj = &link->asyc_read;
+    RedsSASL *sasl = &link->stream->sasl;
+
+    red_printf("Got steplen %d", sasl->len);
+    if (sasl->len > SASL_DATA_MAX_LEN) {
+        red_printf("Too much SASL data %d", sasl->len);
+        reds_link_free(link);
+        return;
+    }
+
+    if (sasl->len == 0) {
+        return reds_handle_auth_sasl_step(opaque);
+    } else {
+        sasl->data = spice_realloc(sasl->data, sasl->len);
+        obj->now = (uint8_t *)sasl->data;
+        obj->end = obj->now + sasl->len;
+        obj->done = reds_handle_auth_sasl_step;
+        async_read_handler(0, 0, &link->asyc_read);
+    }
+}
+
+/*
+ * Start Msg
+ *
+ * Input from client:
+ *
+ * u32 clientin-length
+ * u8-array clientin-string
+ *
+ * Output to client:
+ *
+ * u32 serverout-length
+ * u8-array serverout-strin
+ * u8 continue
+ */
+
+
+static void reds_handle_auth_sasl_start(void *opaque)
+{
+    RedLinkInfo *link = (RedLinkInfo *)opaque;
+    AsyncRead *obj = &link->asyc_read;
+    const char *serverout;
+    unsigned int serveroutlen;
+    int err;
+    char *clientdata = NULL;
+    RedsSASL *sasl = &link->stream->sasl;
+    uint32_t datalen = sasl->len;
+
+    /* NB, distinction of NULL vs "" is *critical* in SASL */
+    if (datalen) {
+        clientdata = sasl->data;
+        clientdata[datalen - 1] = '\0'; /* Should be on wire, but make sure */
+        datalen--; /* Don't count NULL byte when passing to _start() */
+    }
+
+    red_printf("Start SASL auth with mechanism %s. Data %p (%d bytes)",
+              sasl->mechlist, clientdata, datalen);
+    err = sasl_server_start(sasl->conn,
+                            sasl->mechlist,
+                            clientdata,
+                            datalen,
+                            &serverout,
+                            &serveroutlen);
+    if (err != SASL_OK &&
+        err != SASL_CONTINUE) {
+        red_printf("sasl start failed %d (%s)",
+                   err, sasl_errdetail(sasl->conn));
+        goto authabort;
+    }
+
+    if (serveroutlen > SASL_DATA_MAX_LEN) {
+        red_printf("sasl start reply data too long %d",
+                   serveroutlen);
+        goto authabort;
+    }
+
+    red_printf("SASL return data %d bytes, %p", serveroutlen, serverout);
+
+    if (serveroutlen) {
+        serveroutlen += 1;
+        sync_write(link->stream, &serveroutlen, sizeof(uint32_t));
+        sync_write(link->stream, serverout, serveroutlen);
+    } else {
+        sync_write(link->stream, &serveroutlen, sizeof(uint32_t));
+    }
+
+    /* Whether auth is complete */
+    sync_write_u8(link->stream, err == SASL_CONTINUE ? 0 : 1);
+
+    if (err == SASL_CONTINUE) {
+        red_printf("%s", "Authentication must continue (start)");
+        /* Wait for step length */
+        obj->now = (uint8_t *)&sasl->len;
+        obj->end = obj->now + sizeof(uint32_t);
+        obj->done = reds_handle_auth_sasl_steplen;
+        async_read_handler(0, 0, &link->asyc_read);
+    } else {
+        int ssf;
+
+        if (auth_sasl_check_ssf(sasl, &ssf) == 0) {
+            red_printf("Authentication rejected for weak SSF");
+            goto authreject;
+        }
+
+        red_printf("Authentication successful");
+        sync_write_u32(link->stream, SPICE_LINK_ERR_OK); /* Accept auth */
+
+        /*
+         * Delay writing in SSF encoded until now
+         */
+        sasl->runSSF = ssf;
+        link->stream->writev = NULL; /* make sure writev isn't called directly anymore */
+
+        reds_handle_link(link);
+    }
+
+    return;
+
+authreject:
+    sync_write_u32(link->stream, 1); /* Reject auth */
+    sync_write_u32(link->stream, sizeof("Authentication failed"));
+    sync_write(link->stream, "Authentication failed", sizeof("Authentication failed"));
+
+authabort:
+    reds_link_free(link);
+    return;
+}
+
+static void reds_handle_auth_startlen(void *opaque)
+{
+    RedLinkInfo *link = (RedLinkInfo *)opaque;
+    AsyncRead *obj = &link->asyc_read;
+    RedsSASL *sasl = &link->stream->sasl;
+
+    red_printf("Got client start len %d", sasl->len);
+    if (sasl->len > SASL_DATA_MAX_LEN) {
+        red_printf("Too much SASL data %d", sasl->len);
+        reds_send_link_error(link, SPICE_LINK_ERR_INVALID_DATA);
+        reds_link_free(link);
+        return;
+    }
+
+    if (sasl->len == 0) {
+        reds_handle_auth_sasl_start(opaque);
+        return;
+    }
+
+    sasl->data = spice_realloc(sasl->data, sasl->len);
+    obj->now = (uint8_t *)sasl->data;
+    obj->end = obj->now + sasl->len;
+    obj->done = reds_handle_auth_sasl_start;
+    async_read_handler(0, 0, &link->asyc_read);
+}
+
+static void reds_handle_auth_mechname(void *opaque)
+{
+    RedLinkInfo *link = (RedLinkInfo *)opaque;
+    AsyncRead *obj = &link->asyc_read;
+    RedsSASL *sasl = &link->stream->sasl;
+
+    sasl->mechname[sasl->len] = '\0';
+    red_printf("Got client mechname '%s' check against '%s'",
+               sasl->mechname, sasl->mechlist);
+
+    if (strncmp(sasl->mechlist, sasl->mechname, sasl->len) == 0) {
+        if (sasl->mechlist[sasl->len] != '\0' &&
+            sasl->mechlist[sasl->len] != ',') {
+            red_printf("One %d", sasl->mechlist[sasl->len]);
+            reds_link_free(link);
+            return;
+        }
+    } else {
+        char *offset = strstr(sasl->mechlist, sasl->mechname);
+        red_printf("Two %p", offset);
+        if (!offset) {
+            reds_send_link_error(link, SPICE_LINK_ERR_INVALID_DATA);
+            return;
+        }
+        red_printf("Two '%s'", offset);
+        if (offset[-1] != ',' ||
+            (offset[sasl->len] != '\0'&&
+             offset[sasl->len] != ',')) {
+            reds_send_link_error(link, SPICE_LINK_ERR_INVALID_DATA);
+            return;
+        }
+    }
+
+    free(sasl->mechlist);
+    sasl->mechlist = strdup(sasl->mechname);
+
+    red_printf("Validated mechname '%s'", sasl->mechname);
+
+    obj->now = (uint8_t *)&sasl->len;
+    obj->end = obj->now + sizeof(uint32_t);
+    obj->done = reds_handle_auth_startlen;
+    async_read_handler(0, 0, &link->asyc_read);
+
+    return;
+}
+
+static void reds_handle_auth_mechlen(void *opaque)
+{
+    RedLinkInfo *link = (RedLinkInfo *)opaque;
+    AsyncRead *obj = &link->asyc_read;
+    RedsSASL *sasl = &link->stream->sasl;
+
+    if (sasl->len < 1 || sasl->len > 100) {
+        red_printf("Got bad client mechname len %d", sasl->len);
+        reds_link_free(link);
+        return;
+    }
+
+    sasl->mechname = spice_malloc(sasl->len + 1);
+
+    red_printf("Wait for client mechname");
+    obj->now = (uint8_t *)sasl->mechname;
+    obj->end = obj->now + sasl->len;
+    obj->done = reds_handle_auth_mechname;
+    async_read_handler(0, 0, &link->asyc_read);
+}
+
+static void reds_start_auth_sasl(RedLinkInfo *link)
+{
+    const char *mechlist = NULL;
+    sasl_security_properties_t secprops;
+    int err;
+    char *localAddr, *remoteAddr;
+    int mechlistlen;
+    AsyncRead *obj = &link->asyc_read;
+    RedsSASL *sasl = &link->stream->sasl;
+
+    /* Get local & remote client addresses in form  IPADDR;PORT */
+    if (!(localAddr = addr_to_string("%s;%s", &link->stream->info.laddr, link->stream->info.llen))) {
+        goto error;
+    }
+
+    if (!(remoteAddr = addr_to_string("%s;%s", &link->stream->info.paddr, link->stream->info.plen))) {
+        free(localAddr);
+        goto error;
+    }
+
+    err = sasl_server_new("spice",
+                          NULL, /* FQDN - just delegates to gethostname */
+                          NULL, /* User realm */
+                          localAddr,
+                          remoteAddr,
+                          NULL, /* Callbacks, not needed */
+                          SASL_SUCCESS_DATA,
+                          &sasl->conn);
+    free(localAddr);
+    free(remoteAddr);
+    localAddr = remoteAddr = NULL;
+
+    if (err != SASL_OK) {
+        red_printf("sasl context setup failed %d (%s)",
+                   err, sasl_errstring(err, NULL, NULL));
+        sasl->conn = NULL;
+        goto error;
+    }
+
+    /* Inform SASL that we've got an external SSF layer from TLS */
+    if (link->stream->ssl) {
+        sasl_ssf_t ssf;
+
+        ssf = SSL_get_cipher_bits(link->stream->ssl, NULL);
+        err = sasl_setprop(sasl->conn, SASL_SSF_EXTERNAL, &ssf);
+        if (err != SASL_OK) {
+            red_printf("cannot set SASL external SSF %d (%s)",
+                       err, sasl_errstring(err, NULL, NULL));
+            sasl_dispose(&sasl->conn);
+            sasl->conn = NULL;
+            goto error;
+        }
+    } else {
+        sasl->wantSSF = 1;
+    }
+
+    memset(&secprops, 0, sizeof secprops);
+    /* Inform SASL that we've got an external SSF layer from TLS */
+    if (link->stream->ssl) {
+        /* If we've got TLS (or UNIX domain sock), we don't care about SSF */
+        secprops.min_ssf = 0;
+        secprops.max_ssf = 0;
+        secprops.maxbufsize = 8192;
+        secprops.security_flags = 0;
+    } else {
+        /* Plain TCP, better get an SSF layer */
+        secprops.min_ssf = 56; /* Good enough to require kerberos */
+        secprops.max_ssf = 100000; /* Arbitrary big number */
+        secprops.maxbufsize = 8192;
+        /* Forbid any anonymous or trivially crackable auth */
+        secprops.security_flags =
+            SASL_SEC_NOANONYMOUS | SASL_SEC_NOPLAINTEXT;
+    }
+
+    err = sasl_setprop(sasl->conn, SASL_SEC_PROPS, &secprops);
+    if (err != SASL_OK) {
+        red_printf("cannot set SASL security props %d (%s)",
+                   err, sasl_errstring(err, NULL, NULL));
+        sasl_dispose(&sasl->conn);
+        sasl->conn = NULL;
+        goto error;
+    }
+
+    err = sasl_listmech(sasl->conn,
+                        NULL, /* Don't need to set user */
+                        "", /* Prefix */
+                        ",", /* Separator */
+                        "", /* Suffix */
+                        &mechlist,
+                        NULL,
+                        NULL);
+    if (err != SASL_OK) {
+        red_printf("cannot list SASL mechanisms %d (%s)",
+                   err, sasl_errdetail(sasl->conn));
+        sasl_dispose(&sasl->conn);
+        sasl->conn = NULL;
+        goto error;
+    }
+    red_printf("Available mechanisms for client: '%s'", mechlist);
+
+    sasl->mechlist = strdup(mechlist);
+
+    mechlistlen = strlen(mechlist);
+    if (!sync_write(link->stream, &mechlistlen, sizeof(uint32_t))
+        || !sync_write(link->stream, sasl->mechlist, mechlistlen)) {
+        red_printf("SASL mechanisms write error");
+        goto error;
+    }
+
+    red_printf("Wait for client mechname length");
+    obj->now = (uint8_t *)&sasl->len;
+    obj->end = obj->now + sizeof(uint32_t);
+    obj->done = reds_handle_auth_mechlen;
+    async_read_handler(0, 0, &link->asyc_read);
+
+    return;
+
+error:
+    reds_link_free(link);
+    return;
+}
+#endif
+
 static void reds_handle_auth_mechanism(void *opaque)
 {
     RedLinkInfo *link = (RedLinkInfo *)opaque;
 
     red_printf("Auth method: %d", link->auth_mechanism.auth_mechanism);
 
-    if (link->auth_mechanism.auth_mechanism == SPICE_COMMON_CAP_AUTH_SPICE) {
+    if (link->auth_mechanism.auth_mechanism == SPICE_COMMON_CAP_AUTH_SPICE
+        && !sasl_enabled
+        ) {
         reds_get_spice_ticket(link);
+#if HAVE_SASL
+    } else if (link->auth_mechanism.auth_mechanism == SPICE_COMMON_CAP_AUTH_SASL) {
+        red_printf("Starting SASL");
+        reds_start_auth_sasl(link);
+#endif
     } else {
         red_printf("Unknown auth method, disconnecting");
+        if (sasl_enabled) {
+            red_printf("Your client doesn't handle SASL?");
+        }
         reds_send_link_error(link, SPICE_LINK_ERR_INVALID_DATA);
         reds_link_free(link);
     }
@@ -1783,6 +2415,11 @@ static void reds_handle_read_link_done(void *opaque)
     }
 
     if (!auth_selection) {
+        if (sasl_enabled) {
+            red_printf("SASL enabled, but peer supports only spice authentication");
+            reds_send_link_error(link, SPICE_LINK_ERR_VERSION_MISMATCH);
+            return;
+        }
         red_printf("Peer doesn't support AUTH selection");
         reds_get_spice_ticket(link);
     } else {
@@ -2842,6 +3479,16 @@ static int do_spice_init(SpiceCoreInterface *core_interface)
     if (reds->secure_listen_socket != -1) {
         reds_init_ssl();
     }
+#if HAVE_SASL
+    int saslerr;
+    if ((saslerr = sasl_server_init(NULL, sasl_appname ?
+                                    sasl_appname : "spice")) != SASL_OK) {
+        red_error("Failed to initialize SASL auth %s",
+                  sasl_errstring(saslerr, NULL, NULL));
+        goto err;
+    }
+#endif
+
     reds->main_channel = NULL;
     inputs_init();
 
@@ -2933,6 +3580,29 @@ __visible__ int spice_server_set_noauth(SpiceServer *s)
     memset(taTicket.password, 0, sizeof(taTicket.password));
     ticketing_enabled = 0;
     return 0;
+}
+
+__visible__ int spice_server_set_sasl(SpiceServer *s, int enabled)
+{
+    ASSERT(reds == s);
+#if HAVE_SASL
+    sasl_enabled = enabled;
+    return 0;
+#else
+    return -1;
+#endif
+}
+
+__visible__ int spice_server_set_sasl_appname(SpiceServer *s, const char *appname)
+{
+    ASSERT(reds == s);
+#if HAVE_SASL
+    free(sasl_appname);
+    sasl_appname = strdup(appname);
+    return 0;
+#else
+    return -1;
+#endif
 }
 
 __visible__ int spice_server_set_ticket(SpiceServer *s,
@@ -3210,12 +3880,30 @@ __visible__ int spice_server_migrate_switch(SpiceServer *s)
 
 ssize_t reds_stream_read(RedsStream *s, void *buf, size_t nbyte)
 {
-    return s->read(s, buf, nbyte);
+    ssize_t ret;
+
+#if HAVE_SASL
+    if (s->sasl.conn && s->sasl.runSSF) {
+        ret = reds_stream_sasl_read(s, buf, nbyte);
+    } else
+#endif
+        ret = s->read(s, buf, nbyte);
+
+    return ret;
 }
 
 ssize_t reds_stream_write(RedsStream *s, const void *buf, size_t nbyte)
 {
-    return s->write(s, buf, nbyte);
+    ssize_t ret;
+
+#if HAVE_SASL
+    if (s->sasl.conn && s->sasl.runSSF) {
+        ret = reds_stream_sasl_write(s, buf, nbyte);
+    } else
+#endif
+        ret = s->write(s, buf, nbyte);
+
+    return ret;
 }
 
 ssize_t reds_stream_writev(RedsStream *s, const struct iovec *iov, int iovcnt)
@@ -3245,6 +3933,20 @@ void reds_stream_free(RedsStream *s)
     }
 
     reds_stream_channel_event(s, SPICE_CHANNEL_EVENT_DISCONNECTED);
+
+#if HAVE_SASL
+    if (s->sasl.conn) {
+        s->sasl.runSSF = s->sasl.wantSSF = 0;
+        s->sasl.len = 0;
+        s->sasl.encodedLength = s->sasl.encodedOffset = 0;
+        s->sasl.encoded = NULL;
+        free(s->sasl.mechlist);
+        free(s->sasl.mechname);
+        s->sasl.mechlist = NULL;
+        sasl_dispose(&s->sasl.conn);
+        s->sasl.conn = NULL;
+    }
+#endif
 
     if (s->ssl) {
         SSL_free(s->ssl);
