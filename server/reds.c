@@ -1321,9 +1321,9 @@ void reds_on_main_receive_migrate_data(MainMigrateData *data, uint8_t *end)
     while (write_to_vdi_port() || read_from_vdi_port());
 }
 
-static int sync_write(RedsStream *stream, void *in_buf, size_t n)
+static int sync_write(RedsStream *stream, const void *in_buf, size_t n)
 {
-    uint8_t *buf = (uint8_t *)in_buf;
+    const uint8_t *buf = (uint8_t *)in_buf;
     while (n) {
         int now = reds_stream_write(stream, buf, n);
         if (now <= 0) {
@@ -1342,10 +1342,11 @@ static int reds_send_link_ack(RedLinkInfo *link)
 {
     SpiceLinkHeader header;
     SpiceLinkReply ack;
+    Channel caps = { 0, };
     Channel *channel;
     BUF_MEM *bmBuf;
     BIO *bio;
-    int ret;
+    int ret = FALSE;
 
     header.magic = SPICE_MAGIC;
     header.size = sizeof(ack);
@@ -1354,14 +1355,14 @@ static int reds_send_link_ack(RedLinkInfo *link)
 
     ack.error = SPICE_LINK_ERR_OK;
 
-    if ((channel = reds_find_channel(link->link_mess->channel_type, 0))) {
-        ack.num_common_caps = channel->num_common_caps;
-        ack.num_channel_caps = channel->num_caps;
-        header.size += (ack.num_common_caps + ack.num_channel_caps) * sizeof(uint32_t);
-    } else {
-        ack.num_common_caps = 0;
-        ack.num_channel_caps = 0;
+    channel = reds_find_channel(link->link_mess->channel_type, 0);
+    if (!channel) {
+        channel = &caps;
     }
+
+    ack.num_common_caps = channel->num_common_caps;
+    ack.num_channel_caps = channel->num_caps;
+    header.size += (ack.num_common_caps + ack.num_channel_caps) * sizeof(uint32_t);
     ack.caps_offset = sizeof(SpiceLinkReply);
 
     if (!(link->tiTicketing.rsa = RSA_new())) {
@@ -1382,13 +1383,20 @@ static int reds_send_link_ack(RedLinkInfo *link)
     BIO_get_mem_ptr(bio, &bmBuf);
     memcpy(ack.pub_key, bmBuf->data, sizeof(ack.pub_key));
 
-    ret = sync_write(link->stream, &header, sizeof(header)) && sync_write(link->stream, &ack,
-                                                                        sizeof(ack));
-    if (channel) {
-        ret = ret && sync_write(link->stream, channel->common_caps,
-                                channel->num_common_caps * sizeof(uint32_t)) &&
-              sync_write(link->stream, channel->caps, channel->num_caps * sizeof(uint32_t));
-    }
+
+    if (!sync_write(link->stream, &header, sizeof(header)))
+        goto end;
+    if (!sync_write(link->stream, &ack, sizeof(ack)))
+        goto end;
+    if (!sync_write(link->stream, channel->common_caps, channel->num_common_caps * sizeof(uint32_t)))
+        goto end;
+    if (!sync_write(link->stream, channel->caps, channel->num_caps * sizeof(uint32_t)))
+        goto end;
+
+    ret = TRUE;
+
+end:
+    reds_channel_dispose(&caps);
     BIO_free(bio);
     return ret;
 }
