@@ -11,6 +11,7 @@ INCLUDES = \
 	$(PIXMAN_CFLAGS)			\
 	$(GL_CFLAGS)				\
 	$(SSL_CFLAGS)				\
+	$(SASL_CFLAGS)				\
 	$(CELT051_CFLAGS)			\
 	$(SLIRP_CFLAGS)				\
 	-DSW_CANVAS_IMAGE_CACHE			\
@@ -68,6 +69,7 @@ libspice_server_la_LIBADD =			\
 	$(JPEG_LIBS)				\
 	$(PIXMAN_LIBS)				\
 	$(SSL_LIBS)				\
+	$(SASL_LIBS)				\
 	$(CELT051_LIBS)				\
 	$(SLIRP_LIBS)				\
 	$(LIBRT)				\
