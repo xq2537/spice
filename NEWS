@@ -1,3 +1,23 @@
+Changes in 0.6.4:
+=================
+* cmd-line-parser: fix wrong reporting of bad argument in --bla=val case
+* Client: various bugfixes to the controller support:
+  * Make title and controller menu text UTF-8
+  * Change source of controller socket name, fixing CVE-2010-2792
+* Client: Add a --title cmdline option (rhbz#662452)
+* Client: fix minor for old migration support
+* Client: Remove spice-client watermark (rhbz#662450)
+* Client: accept 4 as top down flag value for compatibility with older servers
+* Client: stop blinking keyboard when out of focus
+* Client: More verbose error logging in various cases
+* Client-x11: Make sure we get focus (Don't set NET_WM_USER_TIME to 0) on start  
+* Client-x11: Fix a lockup (rhbz#654265)
+* Client-x11: Fix a crash in combination with xim (rhbz#655836)
+* Client-x11: Fix modifier keys getting stuck (rhbz#655048)
+* Client-x11: Allow window manager to place the spice window (rhbz#662407)
+* Server: send 1 instead of 4 as topdown flag "true" value
+* Server: Drop unnecessary CEGUI, X11 and alsa requires from spice-server.pc
+
 Major changes in 0.6.3:
 =======================
 Major changes in this release:
