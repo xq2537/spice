@@ -49,7 +49,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories=".;..;..\..\common;&quot;..\..\..\spice-protocol&quot;;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;;&quot;$(SPICE_LIBS)\include\CxImage&quot;"
+				AdditionalIncludeDirectories=".;..;$(SPICE_PROTOCOL_DIR);..\..\common;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;;&quot;$(SPICE_LIBS)\include\CxImage&quot;"
 				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;SW_CANVAS_CACHE;RED_DEBUG;SW_CANVAS_NO_CHUNKS;_WIN32_WINNT=0x0500;USE_GUI;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC"
 				MinimalRebuild="false"
 				BasicRuntimeChecks="3"
@@ -137,7 +137,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories=".;..;..\..\common;&quot;..\..\..\spice-protocol&quot;;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;;&quot;$(SPICE_LIBS)\include\CxImage&quot;"
+				AdditionalIncludeDirectories=".;..;$(SPICE_PROTOCOL_DIR);..\..\common;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;;&quot;$(SPICE_LIBS)\include\CxImage&quot;"
 				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;SW_CANVAS_CACHE;RED_DEBUG;SW_CANVAS_NO_CHUNKS;_WIN32_WINNT=0x0500;USE_GUI;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC"
 				MinimalRebuild="false"
 				BasicRuntimeChecks="3"
@@ -220,7 +220,7 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalIncludeDirectories=".;..;&quot;..\..\..\spice-protocol&quot;;..\..\common;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;;&quot;$(SPICE_LIBS)\include\CxImage&quot;"
+				AdditionalIncludeDirectories=".;..;$(SPICE_PROTOCOL_DIR);..\..\common;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;;&quot;$(SPICE_LIBS)\include\CxImage&quot;"
 				PreprocessorDefinitions="WIN32;_WINDOWS;SW_CANVAS_CACHE;SW_CANVAS_NO_CHUNKS;_WIN32_WINNT=0x0500;USE_GUI;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
@@ -303,7 +303,7 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalIncludeDirectories=".;..;&quot;..\..\..\spice-protocol&quot;;..\..\common;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;;&quot;$(SPICE_LIBS)\include\CxImage&quot;"
+				AdditionalIncludeDirectories=".;..;$(SPICE_PROTOCOL_DIR);..\..\common;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;;&quot;$(SPICE_LIBS)\include\CxImage&quot;"
 				PreprocessorDefinitions="WIN32;_WINDOWS;SW_CANVAS_CACHE;SW_CANVAS_NO_CHUNKS;_WIN32_WINNT=0x0500;USE_GUI;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
