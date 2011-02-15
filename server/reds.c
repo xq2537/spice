@@ -3376,6 +3376,10 @@ static void reds_mig_switch(void)
     SpiceMsgMainMigrationSwitchHost migrate;
     RedsOutItem *item;
 
+    if (s == NULL) {
+        return;
+    }
+
     red_printf("");
     item = new_out_item(SPICE_MSG_MAIN_MIGRATE_SWITCH_HOST);
 
