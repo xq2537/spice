@@ -1236,8 +1236,7 @@ static void snd_detach_common(SndWorker *worker)
     snd_disconnect_channel(worker->connection);
     reds_unregister_channel(&worker->base);
 
-    free(worker->base.common_caps);
-    free(worker->base.caps);
+    reds_channel_dispose(&worker->base);
 }
 
 void snd_detach_playback(SpicePlaybackInstance *sin)
