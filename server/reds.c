@@ -1881,6 +1881,17 @@ static int sync_write(RedsStream *stream, const void *in_buf, size_t n)
     return TRUE;
 }
 
+void reds_channel_dispose(Channel *channel)
+{
+    free(channel->caps);
+    channel->caps = NULL;
+    channel->num_caps = 0;
+
+    free(channel->common_caps);
+    channel->common_caps = NULL;
+    channel->num_common_caps = 0;
+}
+
 static int reds_send_link_ack(RedLinkInfo *link)
 {
     SpiceLinkHeader header;
