@@ -304,8 +304,7 @@ void red_channel_destroy(RedChannel *channel)
         return;
     }
     red_channel_pipe_clear(channel);
-    channel->core->watch_remove(channel->peer->watch);
-    channel->peer->cb_free(channel->peer);
+    reds_stream_free(channel->peer);
     free(channel);
 }
 
