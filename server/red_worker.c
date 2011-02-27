@@ -8512,9 +8512,7 @@ static void red_disconnect_channel(RedChannel *channel)
 {
     channel_release_res(channel);
     red_pipe_clear(channel);
-
-    channel->peer->cb_free(channel->peer);
-
+    reds_stream_free(channel->peer);
     channel->peer = NULL;
     channel->send_data.blocked = FALSE;
     channel->send_data.size = channel->send_data.pos = 0;
@@ -9371,7 +9369,7 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
 error2:
     free(channel);
 error1:
-    peer->cb_free(peer);
+    reds_stream_free(peer);
 
     return NULL;
 }

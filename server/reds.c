@@ -479,13 +479,40 @@ static int reds_ssl_writev(void *ctx, const struct iovec *vector, int count)
     return return_code;
 }
 
-static int reds_ssl_free(RedsStream *peer)
+static int reds_ssl_free(RedsStream* peer)
 {
     reds_channel_event(peer, SPICE_CHANNEL_EVENT_DISCONNECTED);
     SSL_free(peer->ssl);
     close(peer->socket);
     free(peer);
     return 0;
+}
+
+static void reds_stream_remove_watch(RedsStream* s)
+{
+    if (s->watch) {
+        core->watch_remove(s->watch);
+        s->watch = NULL;
+    }
+}
+
+static void reds_link_free(RedLinkInfo *link)
+{
+    reds_stream_free(link->peer);
+    link->peer = NULL;
+
+    free(link->link_mess);
+    link->link_mess = NULL;
+
+    BN_free(link->tiTicketing.bn);
+    link->tiTicketing.bn = NULL;
+
+    if (link->tiTicketing.rsa) {
+        RSA_free(link->tiTicketing.rsa);
+        link->tiTicketing.rsa = NULL;
+    }
+
+    free(link);
 }
 
 static void __reds_release_link(RedLinkInfo *link)
@@ -4222,4 +4249,37 @@ __visible__ int spice_server_migrate_switch(SpiceServer *s)
     ASSERT(reds == s);
     reds_mig_switch();
     return 0;
+}
+
+ssize_t reds_stream_read(RedsStream *s, void *buf, size_t nbyte)
+{
+    return s->read(s, buf, nbyte);
+}
+
+ssize_t reds_stream_write(RedsStream *s, const void *buf, size_t nbyte)
+{
+    return s->write(s, buf, nbyte);
+}
+
+ssize_t reds_stream_writev(RedsStream *s, const struct iovec *iov, int iovcnt)
+{
+    return s->writev(s, iov, iovcnt);
+}
+
+void reds_stream_free(RedsStream *s)
+{
+    if (!s) {
+        return;
+    }
+
+    reds_channel_event(s, SPICE_CHANNEL_EVENT_DISCONNECTED);
+
+    if (s->ssl) {
+        SSL_free(s->ssl);
+    }
+
+    reds_stream_remove_watch(s);
+    close(s->socket);
+
+    free(s);
 }

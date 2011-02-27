@@ -24,7 +24,9 @@
 
 #define __visible__ __attribute__ ((visibility ("default")))
 
-typedef struct RedsStream {
+typedef struct RedsStream RedsStream;
+
+struct RedsStream {
     void *ctx;
 
     int socket;
@@ -42,7 +44,12 @@ typedef struct RedsStream {
 
     int (*cb_writev)(void *, const struct iovec *vector, int count);
     int (*cb_free)(struct RedsStream *);
-} RedsStream;
+
+    /* private */
+    ssize_t (*read)(RedsStream *s, void *buf, size_t nbyte);
+    ssize_t (*write)(RedsStream *s, const void *buf, size_t nbyte);
+    ssize_t (*writev)(RedsStream *s, const struct iovec *iov, int iovcnt);
+};
 
 typedef struct Channel {
     struct Channel *next;
@@ -80,6 +87,11 @@ struct TunnelWorker;
 struct SpiceNetWireState {
     struct TunnelWorker *worker;
 };
+
+ssize_t reds_stream_read(RedsStream *s, void *buf, size_t nbyte);
+ssize_t reds_stream_write(RedsStream *s, const void *buf, size_t nbyte);
+ssize_t reds_stream_writev(RedsStream *s, const struct iovec *iov, int iovcnt);
+void reds_stream_free(RedsStream *s);
 
 void reds_desable_mm_timer();
 void reds_enable_mm_timer();

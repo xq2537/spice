@@ -188,7 +188,7 @@ static void snd_disconnect_channel(SndChannel *channel)
     worker->connection = NULL;
     core->watch_remove(channel->peer->watch);
     channel->peer->watch = NULL;
-    channel->peer->cb_free(channel->peer);
+    reds_stream_free(channel->peer);
     spice_marshaller_destroy(channel->send_data.marshaller);
     free(channel);
 }
@@ -800,7 +800,7 @@ error2:
     free(channel);
 
 error1:
-    peer->cb_free(peer);
+    reds_stream_free(peer);
     return NULL;
 }
 

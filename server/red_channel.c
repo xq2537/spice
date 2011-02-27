@@ -293,7 +293,7 @@ RedChannel *red_channel_create(int size, RedsStream *peer,
 
 error:
     free(channel);
-    peer->cb_free(peer);
+    reds_stream_free(peer);
 
     return NULL;
 }
