@@ -41,7 +41,8 @@ static int red_peer_receive(RedsStream *peer, uint8_t *buf, uint32_t size)
         if (peer->shutdown) {
             return -1;
         }
-        if ((now = peer->cb_read(peer->ctx, pos, size)) <= 0) {
+        now = reds_stream_read(peer, pos, size);
+        if (now <= 0) {
             if (now == 0) {
                 return -1;
             }
@@ -154,7 +155,8 @@ void red_channel_receive(RedChannel *channel)
 
 static void red_peer_handle_outgoing(RedsStream *peer, OutgoingHandler *handler)
 {
-    int n;
+    ssize_t n;
+
     if (handler->size == 0) {
         handler->vec = handler->vec_buf;
         handler->size = handler->get_msg_size(handler->opaque);
@@ -162,9 +164,11 @@ static void red_peer_handle_outgoing(RedsStream *peer, OutgoingHandler *handler)
             return;
         }
     }
+
     for (;;) {
         handler->prepare(handler->opaque, handler->vec, &handler->vec_size, handler->pos);
-        if ((n = peer->cb_writev(peer->ctx, handler->vec, handler->vec_size)) == -1) {
+        n = reds_stream_writev(peer, handler->vec, handler->vec_size);
+        if (n == -1) {
             switch (errno) {
             case EAGAIN:
                 handler->on_block(handler->opaque);

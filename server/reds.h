@@ -43,11 +43,6 @@ struct RedsStream {
 
     SpiceChannelEventInfo info;
 
-    int (*cb_write)(void *, void *, int);
-    int (*cb_read)(void *, void *, int);
-
-    int (*cb_writev)(void *, const struct iovec *vector, int count);
-
     /* private */
     ssize_t (*read)(RedsStream *s, void *buf, size_t nbyte);
     ssize_t (*write)(RedsStream *s, const void *buf, size_t nbyte);

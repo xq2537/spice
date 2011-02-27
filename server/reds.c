@@ -304,73 +304,60 @@ static void reds_channel_event(RedsStream *peer, int event)
     core->channel_event(event, &peer->info);
 }
 
-static int reds_write(void *ctx, void *buf, size_t size)
+static ssize_t stream_write_cb(RedsStream *s, const void *buf, size_t size)
 {
-    int return_code;
-    int sock = (long)ctx;
-    size_t count = size;
-
-    return_code = write(sock, buf, count);
-
-    return (return_code);
+    return write(s->socket, buf, size);
 }
 
-static int reds_read(void *ctx, void *buf, size_t size)
+static ssize_t stream_writev_cb(RedsStream *s, const struct iovec *iov, int iovcnt)
 {
-    int return_code;
-    int sock = (long)ctx;
-    size_t count = size;
-
-    return_code = read(sock, buf, count);
-
-    return (return_code);
+    return writev(s->socket, iov, iovcnt);
 }
 
-static int reds_ssl_write(void *ctx, void *buf, size_t size)
+static ssize_t stream_read_cb(RedsStream *s, void *buf, size_t size)
+{
+    return read(s->socket, buf, size);
+}
+
+static ssize_t stream_ssl_write_cb(RedsStream *s, const void *buf, size_t size)
 {
     int return_code;
-    int ssl_error;
-    SSL *ssl = ctx;
+    SPICE_GNUC_UNUSED int ssl_error;
 
-    return_code = SSL_write(ssl, buf, size);
+    return_code = SSL_write(s->ssl, buf, size);
 
     if (return_code < 0) {
-        ssl_error = SSL_get_error(ssl, return_code);
-        (void)ssl_error;
+        ssl_error = SSL_get_error(s->ssl, return_code);
     }
 
-    return (return_code);
+    return return_code;
 }
 
-static int reds_ssl_read(void *ctx, void *buf, size_t size)
+static ssize_t stream_ssl_read_cb(RedsStream *s, void *buf, size_t size)
 {
     int return_code;
-    int ssl_error;
-    SSL *ssl = ctx;
+    SPICE_GNUC_UNUSED int ssl_error;
 
-    return_code = SSL_read(ssl, buf, size);
+    return_code = SSL_read(s->ssl, buf, size);
 
     if (return_code < 0) {
-        ssl_error = SSL_get_error(ssl, return_code);
-        (void)ssl_error;
+        ssl_error = SSL_get_error(s->ssl, return_code);
     }
 
-    return (return_code);
+    return return_code;
 }
 
-static int reds_ssl_writev(void *ctx, const struct iovec *vector, int count)
+static ssize_t stream_ssl_writev_cb(RedsStream *s, const struct iovec *vector, int count)
 {
     int i;
     int n;
-    int return_code = 0;
+    ssize_t return_code = 0;
     int ssl_error;
-    SSL *ssl = ctx;
 
     for (i = 0; i < count; ++i) {
-        n = SSL_write(ssl, vector[i].iov_base, vector[i].iov_len);
+        n = SSL_write(s->ssl, vector[i].iov_base, vector[i].iov_len);
         if (n <= 0) {
-            ssl_error = SSL_get_error(ssl, n);
-            (void)ssl_error;
+            ssl_error = SSL_get_error(s->ssl, n);
             if (return_code <= 0) {
                 return n;
             } else {
@@ -1362,7 +1349,7 @@ static int sync_write(RedsStream *peer, void *in_buf, size_t n)
 {
     uint8_t *buf = (uint8_t *)in_buf;
     while (n) {
-        int now = peer->cb_write(peer->ctx, buf, n);
+        int now = reds_stream_write(peer, buf, n);
         if (now <= 0) {
             if (now == -1 && (errno == EINTR || errno == EAGAIN)) {
                 continue;
@@ -1664,7 +1651,8 @@ static void async_read_handler(int fd, int event, void *data)
         int n = obj->end - obj->now;
 
         ASSERT(n > 0);
-        if ((n = obj->peer->cb_read(obj->peer->ctx, obj->now, n)) <= 0) {
+        n = reds_stream_read(obj->peer, obj->now, n);
+        if (n <= 0) {
             if (n < 0) {
                 switch (errno) {
                 case EAGAIN:
@@ -1890,9 +1878,9 @@ static RedLinkInfo *reds_accept_connection(int listen_socket)
     }
     peer = link->peer;
     peer->ctx = (void *)((unsigned long)link->peer->socket);
-    peer->cb_read = (int (*)(void *, void *, int))reds_read;
-    peer->cb_write = (int (*)(void *, void *, int))reds_write;
-    peer->cb_writev = (int (*)(void *, const struct iovec *vector, int count))writev;
+    peer->read = stream_read_cb;
+    peer->write = stream_write_cb;
+    peer->writev = stream_writev_cb;
 
     return link;
 }
@@ -1925,9 +1913,9 @@ static void reds_accept_ssl_connection(int fd, int event, void *data)
     SSL_set_bio(link->peer->ssl, sbio, sbio);
 
     link->peer->ctx = (void *)(link->peer->ssl);
-    link->peer->cb_write = (int (*)(void *, void *, int))reds_ssl_write;
-    link->peer->cb_read = (int (*)(void *, void *, int))reds_ssl_read;
-    link->peer->cb_writev = reds_ssl_writev;
+    link->peer->write = stream_ssl_write_cb;
+    link->peer->read = stream_ssl_read_cb;
+    link->peer->writev = stream_ssl_writev_cb;
 
     return_code = SSL_accept(link->peer->ssl);
     if (return_code == 1) {

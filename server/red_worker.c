@@ -7339,9 +7339,9 @@ static void inline channel_release_res(RedChannel *channel)
 static void red_send_data(RedChannel *channel)
 {
     for (;;) {
-        uint32_t n = channel->send_data.size - channel->send_data.pos;
+        ssize_t n = channel->send_data.size - channel->send_data.pos;
         struct iovec vec[MAX_SEND_VEC];
-        int vec_size;
+        size_t vec_size;
 
         if (!n) {
             channel->send_data.blocked = FALSE;
@@ -7354,7 +7354,8 @@ static void red_send_data(RedChannel *channel)
         vec_size = spice_marshaller_fill_iovec(channel->send_data.marshaller,
                                                vec, MAX_SEND_VEC, channel->send_data.pos);
         ASSERT(channel->peer);
-        if ((n = channel->peer->cb_writev(channel->peer->ctx, vec, vec_size)) == -1) {
+        n = reds_stream_writev(channel->peer, vec, vec_size);
+        if (n == -1) {
             switch (errno) {
             case EAGAIN:
                 channel->send_data.blocked = TRUE;
@@ -9277,7 +9278,8 @@ static void red_receive(RedChannel *channel)
         n = channel->recive_data.end - channel->recive_data.now;
         ASSERT(n);
         ASSERT(channel->peer);
-        if ((n = channel->peer->cb_read(channel->peer->ctx, channel->recive_data.now, n)) <= 0) {
+        n = reds_stream_read(channel->peer, channel->recive_data.now, n);
+        if (n <= 0) {
             if (n == 0) {
                 channel->disconnect(channel);
                 return;
