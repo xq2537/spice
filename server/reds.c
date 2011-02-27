@@ -224,7 +224,7 @@ typedef struct RedsState {
 static RedsState *reds = NULL;
 
 typedef struct AsyncRead {
-    RedsStreamContext *peer;
+    RedsStream *peer;
     void *opaque;
     uint8_t *now;
     uint8_t *end;
@@ -233,7 +233,7 @@ typedef struct AsyncRead {
 } AsyncRead;
 
 typedef struct RedLinkInfo {
-    RedsStreamContext *peer;
+    RedsStream *peer;
     AsyncRead asyc_read;
     SpiceLinkHeader link_header;
     SpiceLinkMess *link_mess;
@@ -297,7 +297,7 @@ static ChannelSecurityOptions *find_channel_security(int id)
     return now;
 }
 
-static void reds_channel_event(RedsStreamContext *peer, int event)
+static void reds_channel_event(RedsStream *peer, int event)
 {
     if (core->base.minor_version < 3 || core->channel_event == NULL)
         return;
@@ -326,7 +326,7 @@ static int reds_read(void *ctx, void *buf, size_t size)
     return (return_code);
 }
 
-static int reds_free(RedsStreamContext *peer)
+static int reds_free(RedsStream *peer)
 {
     reds_channel_event(peer, SPICE_CHANNEL_EVENT_DISCONNECTED);
     close(peer->socket);
@@ -392,7 +392,7 @@ static int reds_ssl_writev(void *ctx, const struct iovec *vector, int count)
     return return_code;
 }
 
-static int reds_ssl_free(RedsStreamContext *peer)
+static int reds_ssl_free(RedsStream *peer)
 {
     reds_channel_event(peer, SPICE_CHANNEL_EVENT_DISCONNECTED);
     SSL_free(peer->ssl);
@@ -418,7 +418,7 @@ static void __reds_release_link(RedLinkInfo *link)
 
 static inline void reds_release_link(RedLinkInfo *link)
 {
-    RedsStreamContext *peer = link->peer;
+    RedsStream *peer = link->peer;
     __reds_release_link(link);
     peer->cb_free(peer);
 }
@@ -1370,7 +1370,7 @@ void reds_on_main_receive_migrate_data(MainMigrateData *data, uint8_t *end)
     while (write_to_vdi_port() || read_from_vdi_port());
 }
 
-static int sync_write(RedsStreamContext *peer, void *in_buf, size_t n)
+static int sync_write(RedsStream *peer, void *in_buf, size_t n)
 {
     uint8_t *buf = (uint8_t *)in_buf;
     while (n) {
@@ -1482,7 +1482,7 @@ static void reds_send_link_result(RedLinkInfo *link, uint32_t error)
 // actually be joined with reds_handle_other_links, ebcome reds_handle_link
 static void reds_handle_main_link(RedLinkInfo *link)
 {
-    RedsStreamContext *peer;
+    RedsStream *peer;
     SpiceLinkMess *link_mess;
     uint32_t *caps;
     uint32_t connection_id;
@@ -1583,7 +1583,7 @@ static void openssl_init(RedLinkInfo *link)
 static void reds_handle_other_links(RedLinkInfo *link)
 {
     Channel *channel;
-    RedsStreamContext *peer;
+    RedsStream *peer;
     SpiceLinkMess *link_mess;
     uint32_t *caps;
 
@@ -1844,7 +1844,7 @@ static void reds_handle_ssl_accept(int fd, int event, void *data)
 static RedLinkInfo *__reds_accept_connection(int listen_socket)
 {
     RedLinkInfo *link;
-    RedsStreamContext *peer;
+    RedsStream *peer;
     int delay_val = 1;
     int flags;
     int socket;
@@ -1869,7 +1869,7 @@ static RedLinkInfo *__reds_accept_connection(int listen_socket)
     }
 
     link = spice_new0(RedLinkInfo, 1);
-    peer = spice_new0(RedsStreamContext, 1);
+    peer = spice_new0(RedsStream, 1);
     link->peer = peer;
     peer->socket = socket;
 
@@ -1893,7 +1893,7 @@ error:
 static RedLinkInfo *reds_accept_connection(int listen_socket)
 {
     RedLinkInfo *link;
-    RedsStreamContext *peer;
+    RedsStream *peer;
 
     if (!(link = __reds_accept_connection(listen_socket))) {
         return NULL;
@@ -1903,7 +1903,7 @@ static RedLinkInfo *reds_accept_connection(int listen_socket)
     peer->cb_read = (int (*)(void *, void *, int))reds_read;
     peer->cb_write = (int (*)(void *, void *, int))reds_write;
     peer->cb_writev = (int (*)(void *, const struct iovec *vector, int count))writev;
-    peer->cb_free = (int (*)(RedsStreamContext *))reds_free;
+    peer->cb_free = (int (*)(RedsStream *))reds_free;
 
     return link;
 }
@@ -1939,7 +1939,7 @@ static void reds_accept_ssl_connection(int fd, int event, void *data)
     link->peer->cb_write = (int (*)(void *, void *, int))reds_ssl_write;
     link->peer->cb_read = (int (*)(void *, void *, int))reds_ssl_read;
     link->peer->cb_writev = reds_ssl_writev;
-    link->peer->cb_free = (int (*)(RedsStreamContext *))reds_ssl_free;
+    link->peer->cb_free = (int (*)(RedsStream *))reds_ssl_free;
 
     return_code = SSL_accept(link->peer->ssl);
     if (return_code == 1) {

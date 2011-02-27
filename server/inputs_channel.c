@@ -512,7 +512,7 @@ static void inputs_channel_hold_pipe_item(PipeItem *item)
 {
 }
 
-static void inputs_link(Channel *channel, RedsStreamContext *peer, int migration,
+static void inputs_link(Channel *channel, RedsStream *peer, int migration,
                         int num_common_caps, uint32_t *common_caps, int num_caps,
                         uint32_t *caps)
 {

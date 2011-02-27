@@ -114,7 +114,7 @@ typedef void (*channel_on_incoming_error_proc)(RedChannel *channel);
 typedef void (*channel_on_outgoing_error_proc)(RedChannel *channel);
 
 struct RedChannel {
-    RedsStreamContext *peer;
+    RedsStream *peer;
     SpiceCoreInterface *core;
     int migrate;
     int handle_acks;
@@ -160,7 +160,7 @@ struct RedChannel {
 
 /* if one of the callbacks should cause disconnect, use red_channel_shutdown and don't
    explicitly destroy the channel */
-RedChannel *red_channel_create(int size, RedsStreamContext *peer,
+RedChannel *red_channel_create(int size, RedsStream *peer,
                                SpiceCoreInterface *core,
                                int migrate, int handle_acks,
                                channel_configure_socket_proc config_socket,
@@ -174,7 +174,7 @@ RedChannel *red_channel_create(int size, RedsStreamContext *peer,
 
 /* alternative constructor, meant for marshaller based (inputs,main) channels,
  * will become default eventually */
-RedChannel *red_channel_create_parser(int size, RedsStreamContext *peer,
+RedChannel *red_channel_create_parser(int size, RedsStream *peer,
                                SpiceCoreInterface *core,
                                int migrate, int handle_acks,
                                channel_configure_socket_proc config_socket,
