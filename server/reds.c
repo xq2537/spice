@@ -791,8 +791,7 @@ static void reds_disconnect()
     }
 
     reds_shatdown_channels();
-    core->watch_remove(reds->peer->watch);
-    reds->peer->watch = NULL;
+    reds_stream_remove_watch(reds->peer);
     reds->peer->cb_free(reds->peer);
     reds->peer = NULL;
     reds->in_handler.shut = TRUE;
@@ -2397,8 +2396,7 @@ static void inputs_event(int fd, int event, void *data)
     if (event & SPICE_WATCH_EVENT_READ) {
         if (handle_incoming(inputs_state->peer, &inputs_state->in_handler)) {
             inputs_relase_keys();
-            core->watch_remove(inputs_state->peer->watch);
-            inputs_state->peer->watch = NULL;
+            reds_stream_remove_watch(inputs_state->peer);
             if (inputs_state->channel) {
                 inputs_state->channel->data = NULL;
                 reds->inputs_state = NULL;
@@ -2660,8 +2658,7 @@ static inline void async_read_clear_handlers(AsyncRead *obj)
     if (!obj->peer->watch) {
         return;
     }
-    core->watch_remove(obj->peer->watch);
-    obj->peer->watch = NULL;
+    reds_stream_remove_watch(obj->peer);
 }
 
 static void async_read_handler(int fd, int event, void *data)
@@ -2835,8 +2832,7 @@ static void reds_handle_ssl_accept(int fd, int event, void *data)
         }
         return;
     }
-    core->watch_remove(link->peer->watch);
-    link->peer->watch = NULL;
+    reds_stream_remove_watch(link->peer);
     reds_handle_new_link(link);
 }
 
