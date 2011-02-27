@@ -428,28 +428,6 @@ static void reds_link_free(RedLinkInfo *link)
     free(link);
 }
 
-static void __reds_release_link(RedLinkInfo *link)
-{
-    ASSERT(link->peer);
-    if (link->peer->watch) {
-        core->watch_remove(link->peer->watch);
-        link->peer->watch = NULL;
-    }
-    free(link->link_mess);
-    BN_free(link->tiTicketing.bn);
-    if (link->tiTicketing.rsa) {
-        RSA_free(link->tiTicketing.rsa);
-    }
-    free(link);
-}
-
-static inline void reds_release_link(RedLinkInfo *link)
-{
-    RedsStream *peer = link->peer;
-    __reds_release_link(link);
-    peer->cb_free(peer);
-}
-
 #ifdef RED_STATISTICS
 
 void insert_stat_node(StatNodeRef parent, StatNodeRef ref)
@@ -1527,7 +1505,7 @@ static void reds_handle_main_link(RedLinkInfo *link)
     } else {
         if (link_mess->connection_id != reds->link_id) {
             reds_send_link_result(link, SPICE_LINK_ERR_BAD_CONNECTION_ID);
-            reds_release_link(link);
+            reds_link_free(link);
             return;
         }
         reds_send_link_result(link, SPICE_LINK_ERR_OK);
@@ -1542,8 +1520,10 @@ static void reds_handle_main_link(RedLinkInfo *link)
 
     reds_show_new_channel(link, connection_id);
     peer = link->peer;
+    reds_stream_remove_watch(peer);
+    link->peer = NULL;
     link->link_mess = NULL;
-    __reds_release_link(link);
+    reds_link_free(link);
     caps = (uint32_t *)((uint8_t *)link_mess + link_mess->caps_offset);
     reds->main_channel = main_channel_init();
     reds->main_channel->link(reds->main_channel, peer, reds->mig_target, link_mess->num_common_caps,
@@ -1618,14 +1598,14 @@ static void reds_handle_other_links(RedLinkInfo *link)
 
     if (!reds->link_id || reds->link_id != link_mess->connection_id) {
         reds_send_link_result(link, SPICE_LINK_ERR_BAD_CONNECTION_ID);
-        reds_release_link(link);
+        reds_link_free(link);
         return;
     }
 
     if (!(channel = reds_find_channel(link_mess->channel_type,
                                       link_mess->channel_id))) {
         reds_send_link_result(link, SPICE_LINK_ERR_CHANNEL_NOT_AVAILABLE);
-        reds_release_link(link);
+        reds_link_free(link);
         return;
     }
 
@@ -1637,8 +1617,10 @@ static void reds_handle_other_links(RedLinkInfo *link)
         main_channel_push_notify(reds->main_channel, (uint8_t*)mess, mess_len);
     }
     peer = link->peer;
+    reds_stream_remove_watch(peer);
+    link->peer = NULL;
     link->link_mess = NULL;
-    __reds_release_link(link);
+    reds_link_free(link);
     caps = (uint32_t *)((uint8_t *)link_mess + link_mess->caps_offset);
     channel->link(channel, peer, reds->mig_target, link_mess->num_common_caps,
                   link_mess->num_common_caps ? caps : NULL, link_mess->num_channel_caps,
@@ -1666,13 +1648,13 @@ static void reds_handle_ticket(void *opaque)
             reds_send_link_result(link, SPICE_LINK_ERR_PERMISSION_DENIED);
             red_printf("Ticketing is enabled, but no password is set. "
                        "please set a ticket first");
-            reds_release_link(link);
+            reds_link_free(link);
             return;
         }
 
         if (expired || strncmp(password, actual_sever_pass, SPICE_MAX_PASSWORD_LENGTH) != 0) {
             reds_send_link_result(link, SPICE_LINK_ERR_PERMISSION_DENIED);
-            reds_release_link(link);
+            reds_link_free(link);
             return;
         }
     }
@@ -1751,7 +1733,7 @@ static void reds_handle_read_link_done(void *opaque)
                                                    link->link_header.size ||
                                                      link_mess->caps_offset < sizeof(*link_mess))) {
         reds_send_link_error(link, SPICE_LINK_ERR_INVALID_DATA);
-        reds_release_link(link);
+        reds_link_free(link);
         return;
     }
 
@@ -1763,12 +1745,12 @@ static void reds_handle_read_link_done(void *opaque)
             red_printf("spice channels %d should be encrypted", link_mess->channel_type);
             reds_send_link_error(link, SPICE_LINK_ERR_NEED_SECURED);
         }
-        reds_release_link(link);
+        reds_link_free(link);
         return;
     }
 
     if (!reds_send_link_ack(link)) {
-        reds_release_link(link);
+        reds_link_free(link);
         return;
     }
 
@@ -1789,7 +1771,7 @@ static void reds_handle_link_error(void *opaque, int err)
         red_printf("%s", strerror(errno));
         break;
     }
-    reds_release_link(link);
+    reds_link_free(link);
 }
 
 static void reds_handle_read_header_done(void *opaque)
@@ -1800,7 +1782,7 @@ static void reds_handle_read_header_done(void *opaque)
 
     if (header->magic != SPICE_MAGIC) {
         reds_send_link_error(link, SPICE_LINK_ERR_INVALID_MAGIC);
-        reds_release_link(link);
+        reds_link_free(link);
         return;
     }
 
@@ -1810,7 +1792,7 @@ static void reds_handle_read_header_done(void *opaque)
         }
 
         red_printf("version mismatch");
-        reds_release_link(link);
+        reds_link_free(link);
         return;
     }
 
@@ -1819,7 +1801,7 @@ static void reds_handle_read_header_done(void *opaque)
     if (header->size < sizeof(SpiceLinkMess)) {
         reds_send_link_error(link, SPICE_LINK_ERR_INVALID_DATA);
         red_printf("bad size %u", header->size);
-        reds_release_link(link);
+        reds_link_free(link);
         return;
     }
 
@@ -1852,7 +1834,7 @@ static void reds_handle_ssl_accept(int fd, int event, void *data)
         int ssl_error = SSL_get_error(link->peer->ssl, return_code);
         if (ssl_error != SSL_ERROR_WANT_READ && ssl_error != SSL_ERROR_WANT_WRITE) {
             red_printf("SSL_accept failed, error=%d", ssl_error);
-            reds_release_link(link);
+            reds_link_free(link);
         } else {
             if (ssl_error == SSL_ERROR_WANT_READ) {
                 core->watch_update_mask(link->peer->watch, SPICE_WATCH_EVENT_READ);
