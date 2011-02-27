@@ -1688,8 +1688,7 @@ static inline void async_read_clear_handlers(AsyncRead *obj)
     if (!obj->peer->watch) {
         return;
     }
-    core->watch_remove(obj->peer->watch);
-    obj->peer->watch = NULL;
+    reds_stream_remove_watch(obj->peer);
 }
 
 static void async_read_handler(int fd, int event, void *data)
@@ -1863,8 +1862,7 @@ static void reds_handle_ssl_accept(int fd, int event, void *data)
         }
         return;
     }
-    core->watch_remove(link->peer->watch);
-    link->peer->watch = NULL;
+    reds_stream_remove_watch(link->peer);
     reds_handle_new_link(link);
 }
 
