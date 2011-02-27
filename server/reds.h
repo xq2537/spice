@@ -24,7 +24,7 @@
 
 #define __visible__ __attribute__ ((visibility ("default")))
 
-typedef struct RedsStreamContext {
+typedef struct RedsStream {
     void *ctx;
 
     int socket;
@@ -41,8 +41,8 @@ typedef struct RedsStreamContext {
     int (*cb_read)(void *, void *, int);
 
     int (*cb_writev)(void *, const struct iovec *vector, int count);
-    int (*cb_free)(struct RedsStreamContext *);
-} RedsStreamContext;
+    int (*cb_free)(struct RedsStream *);
+} RedsStream;
 
 typedef struct Channel {
     struct Channel *next;
@@ -52,7 +52,7 @@ typedef struct Channel {
     uint32_t *common_caps;
     int num_caps;
     uint32_t *caps;
-    void (*link)(struct Channel *, RedsStreamContext *peer, int migration, int num_common_caps,
+    void (*link)(struct Channel *, RedsStream *peer, int migration, int num_common_caps,
                  uint32_t *common_caps, int num_caps, uint32_t *caps);
     void (*shutdown)(struct Channel *);
     void (*migrate)(struct Channel *);

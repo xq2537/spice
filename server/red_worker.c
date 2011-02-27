@@ -356,7 +356,7 @@ struct RedChannel {
     uint32_t id;
     spice_parse_channel_func_t parser;
     struct RedWorker *worker;
-    RedsStreamContext *peer;
+    RedsStream *peer;
     int migrate;
 
     Ring pipe;
@@ -9307,7 +9307,7 @@ static void red_receive(RedChannel *channel)
 }
 
 static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_id,
-                                 RedsStreamContext *peer, int migrate,
+                                 RedsStream *peer, int migrate,
                                  event_listener_action_proc handler,
                                  disconnect_channel_proc disconnect,
                                  hold_item_proc hold_item,
@@ -9433,7 +9433,7 @@ static void display_channel_release_item(RedChannel *channel, void *item)
     }
 }
 
-static void handle_new_display_channel(RedWorker *worker, RedsStreamContext *peer, int migrate)
+static void handle_new_display_channel(RedWorker *worker, RedsStream *peer, int migrate)
 {
     DisplayChannel *display_channel;
     size_t stream_buf_size;
@@ -9556,7 +9556,7 @@ static void cursor_channel_release_item(RedChannel *channel, void *item)
     red_release_cursor(channel->worker, item);
 }
 
-static void red_connect_cursor(RedWorker *worker, RedsStreamContext *peer, int migrate)
+static void red_connect_cursor(RedWorker *worker, RedsStream *peer, int migrate)
 {
     CursorChannel *channel;
 
@@ -9992,11 +9992,11 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         handle_dev_destroy_primary_surface(worker);
         break;
     case RED_WORKER_MESSAGE_DISPLAY_CONNECT: {
-        RedsStreamContext *peer;
+        RedsStream *peer;
         int migrate;
         red_printf("connect");
 
-        receive_data(worker->channel, &peer, sizeof(RedsStreamContext *));
+        receive_data(worker->channel, &peer, sizeof(RedsStream *));
         receive_data(worker->channel, &migrate, sizeof(int));
         handle_new_display_channel(worker, peer, migrate);
         break;
@@ -10040,11 +10040,11 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         red_migrate_display(worker);
         break;
     case RED_WORKER_MESSAGE_CURSOR_CONNECT: {
-        RedsStreamContext *peer;
+        RedsStream *peer;
         int migrate;
 
         red_printf("cursor connect");
-        receive_data(worker->channel, &peer, sizeof(RedsStreamContext *));
+        receive_data(worker->channel, &peer, sizeof(RedsStream *));
         receive_data(worker->channel, &migrate, sizeof(int));
         red_connect_cursor(worker, peer, migrate);
         break;

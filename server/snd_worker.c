@@ -73,7 +73,7 @@ typedef void (*cleanup_channel_proc)(SndChannel *channel);
 typedef struct SndWorker SndWorker;
 
 struct SndChannel {
-    RedsStreamContext *peer;
+    RedsStream *peer;
     SndWorker *worker;
     spice_parse_channel_func_t parser;
 
@@ -734,7 +734,7 @@ static void snd_record_send(void* data)
 }
 
 static SndChannel *__new_channel(SndWorker *worker, int size, uint32_t channel_id,
-                                 RedsStreamContext *peer,
+                                 RedsStream *peer,
                                  int migrate, send_messages_proc send_messages,
                                  handle_message_proc handle_message,
                                  on_message_done_proc on_message_done,
@@ -931,7 +931,7 @@ static void snd_playback_cleanup(SndChannel *channel)
     celt051_mode_destroy(playback_channel->celt_mode);
 }
 
-static void snd_set_playback_peer(Channel *channel, RedsStreamContext *peer, int migration,
+static void snd_set_playback_peer(Channel *channel, RedsStream *peer, int migration,
                                   int num_common_caps, uint32_t *common_caps, int num_caps,
                                   uint32_t *caps)
 {
@@ -1097,7 +1097,7 @@ static void snd_record_cleanup(SndChannel *channel)
     celt051_mode_destroy(record_channel->celt_mode);
 }
 
-static void snd_set_record_peer(Channel *channel, RedsStreamContext *peer, int migration,
+static void snd_set_record_peer(Channel *channel, RedsStream *peer, int migration,
                                 int num_common_caps, uint32_t *common_caps, int num_caps,
                                 uint32_t *caps)
 {

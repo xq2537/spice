@@ -34,7 +34,7 @@ static void red_channel_pipe_clear(RedChannel *channel);
 static void red_channel_event(int fd, int event, void *data);
 
 /* return the number of bytes read. -1 in case of error */
-static int red_peer_receive(RedsStreamContext *peer, uint8_t *buf, uint32_t size)
+static int red_peer_receive(RedsStream *peer, uint8_t *buf, uint32_t size)
 {
     uint8_t *pos = buf;
     while (size) {
@@ -65,7 +65,7 @@ static int red_peer_receive(RedsStreamContext *peer, uint8_t *buf, uint32_t size
     return pos - buf;
 }
 
-static void red_peer_handle_incoming(RedsStreamContext *peer, IncomingHandler *handler)
+static void red_peer_handle_incoming(RedsStream *peer, IncomingHandler *handler)
 {
     int bytes_read;
 
@@ -138,7 +138,7 @@ static struct iovec *__iovec_skip(struct iovec vec[], int skip, int *vec_size)
     return now;
 }
 
-static void red_peer_handle_outgoing(RedsStreamContext *peer, OutgoingHandler *handler)
+static void red_peer_handle_outgoing(RedsStream *peer, OutgoingHandler *handler)
 {
     int n;
     if (handler->size == 0) {
@@ -233,7 +233,7 @@ static void red_channel_peer_on_out_msg_done(void *opaque)
     }
 }
 
-RedChannel *red_channel_create(int size, RedsStreamContext *peer,
+RedChannel *red_channel_create(int size, RedsStream *peer,
                                SpiceCoreInterface *core,
                                int migrate, int handle_acks,
                                channel_configure_socket_proc config_socket,
