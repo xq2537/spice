@@ -243,7 +243,8 @@ static int snd_send_data(SndChannel *channel)
 
         vec_size = spice_marshaller_fill_iovec(channel->send_data.marshaller,
                                                vec, MAX_SEND_VEC, channel->send_data.pos);
-        if ((n = channel->peer->cb_writev(channel->peer->ctx, vec, vec_size)) == -1) {
+        n = reds_stream_writev(channel->peer, vec, vec_size);
+        if (n == -1) {
             switch (errno) {
             case EAGAIN:
                 channel->blocked = TRUE;
@@ -389,7 +390,8 @@ static void snd_receive(void* data)
         ssize_t n;
         n = channel->recive_data.end - channel->recive_data.now;
         ASSERT(n);
-        if ((n = channel->peer->cb_read(channel->peer->ctx, channel->recive_data.now, n)) <= 0) {
+        n = reds_stream_read(channel->peer, channel->recive_data.now, n);
+        if (n <= 0) {
             if (n == 0) {
                 snd_disconnect_channel(channel);
                 return;
