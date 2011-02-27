@@ -47,7 +47,6 @@ struct RedsStream {
     int (*cb_read)(void *, void *, int);
 
     int (*cb_writev)(void *, const struct iovec *vector, int count);
-    int (*cb_free)(struct RedsStream *);
 
     /* private */
     ssize_t (*read)(RedsStream *s, void *buf, size_t nbyte);

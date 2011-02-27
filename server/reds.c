@@ -326,14 +326,6 @@ static int reds_read(void *ctx, void *buf, size_t size)
     return (return_code);
 }
 
-static int reds_free(RedsStream *peer)
-{
-    reds_channel_event(peer, SPICE_CHANNEL_EVENT_DISCONNECTED);
-    close(peer->socket);
-    free(peer);
-    return 0;
-}
-
 static int reds_ssl_write(void *ctx, void *buf, size_t size)
 {
     int return_code;
@@ -390,15 +382,6 @@ static int reds_ssl_writev(void *ctx, const struct iovec *vector, int count)
     }
 
     return return_code;
-}
-
-static int reds_ssl_free(RedsStream* peer)
-{
-    reds_channel_event(peer, SPICE_CHANNEL_EVENT_DISCONNECTED);
-    SSL_free(peer->ssl);
-    close(peer->socket);
-    free(peer);
-    return 0;
 }
 
 static void reds_stream_remove_watch(RedsStream* s)
@@ -1910,7 +1893,6 @@ static RedLinkInfo *reds_accept_connection(int listen_socket)
     peer->cb_read = (int (*)(void *, void *, int))reds_read;
     peer->cb_write = (int (*)(void *, void *, int))reds_write;
     peer->cb_writev = (int (*)(void *, const struct iovec *vector, int count))writev;
-    peer->cb_free = (int (*)(RedsStream *))reds_free;
 
     return link;
 }
@@ -1946,7 +1928,6 @@ static void reds_accept_ssl_connection(int fd, int event, void *data)
     link->peer->cb_write = (int (*)(void *, void *, int))reds_ssl_write;
     link->peer->cb_read = (int (*)(void *, void *, int))reds_ssl_read;
     link->peer->cb_writev = reds_ssl_writev;
-    link->peer->cb_free = (int (*)(RedsStream *))reds_ssl_free;
 
     return_code = SSL_accept(link->peer->ssl);
     if (return_code == 1) {
