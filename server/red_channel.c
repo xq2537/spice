@@ -320,7 +320,7 @@ RedChannel *red_channel_create(int size, RedsStream *peer,
 error:
     spice_marshaller_destroy(channel->send_data.marshaller);
     free(channel);
-    peer->cb_free(peer);
+    reds_stream_free(peer);
 
     return NULL;
 }
