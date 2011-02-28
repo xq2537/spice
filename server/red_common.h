@@ -23,46 +23,9 @@
 
 #include "spice.h"
 #include "mem.h"
+#include "spice_common.h"
 #include <messages.h>
 #include <spice/macros.h>
-
-#define ASSERT(x) if (!(x)) {                               \
-    printf("%s: ASSERT %s failed\n", __FUNCTION__, #x);     \
-    abort();                                                \
-}
-
-#define PANIC(format, ...) {                              \
-    printf("%s: panic: " format "\n", __FUNCTION__, ## __VA_ARGS__ );   \
-    abort();                                        \
-}
-
-#define PANIC_ON(x) if ((x)) {                             \
-    printf("%s: panic %s\n", __FUNCTION__, #x);             \
-    abort();                                                \
-}
-
-#define red_error(format, ...) {                                 \
-    printf("%s: " format "\n", __FUNCTION__, ## __VA_ARGS__ );   \
-    abort();                                                     \
-}
-
-#define red_printf(format, ...) \
-    printf("%s: " format "\n", __FUNCTION__, ## __VA_ARGS__ )
-
-#define red_printf_once(format, ...) {                              \
-    static int do_print = TRUE;                                     \
-    if (do_print) {                                                 \
-        do_print = FALSE;                                           \
-        printf("%s: " format "\n", __FUNCTION__, ## __VA_ARGS__ );  \
-    }                                                               \
-}
-
-#define red_printf_some(every, format, ...) {                       \
-    static int count = 0;                                           \
-    if (count++ % (every) == 0) {                                   \
-        printf("%s: " format "\n", __FUNCTION__, ## __VA_ARGS__ );  \
-    }                                                               \
-}
 
 enum {
     STREAM_VIDEO_INVALID,
@@ -70,13 +33,6 @@ enum {
     STREAM_VIDEO_ALL,
     STREAM_VIDEO_FILTER
 };
-
-static inline uint64_t get_time_stamp()
-{
-    struct timespec time_space;
-    clock_gettime(CLOCK_MONOTONIC, &time_space);
-    return time_space.tv_sec * 1000 * 1000 * 1000 + time_space.tv_nsec;
-}
 
 #endif
 
