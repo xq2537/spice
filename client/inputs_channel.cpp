@@ -423,8 +423,10 @@ void InputsChannel::on_focus_out()
 {
     Lock lock(_update_modifiers_lock);
     _active_modifiers_event = true;
+#ifndef SYNC_REMOTE_MODIFIERS
     _modifiers = _on_focus_modifiers;
     set_local_modifiers();
+#endif
 }
 
 void InputsChannel::init_scan_code(int index)
