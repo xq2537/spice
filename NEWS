@@ -1,3 +1,10 @@
+Major changes in 0.8.0:
+=======================
+* client: exit nicely for --controller with no SPICE_XPI_SOCKET (rhbz#644292)
+* client-x11: Use _exit rather then exit on X errors (rhbz#680763)
+* client-x11: Fix keyb modifiers not syncing from guest to client (rhbz#679467)
+* server: fix segfault on migration
+
 Major changes in 0.7.3:
 =======================
 * Suport building with (and requires) libcacard-0.1.2
