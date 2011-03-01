@@ -44,6 +44,7 @@ Controller::Controller(ControllerInterface *handler)
     char *p_socket = getenv("SPICE_XPI_SOCKET");
     if (!p_socket) {
         LOG_ERROR("Failed to get a controller connection (SPICE_XPI_SOCKET)");
+        throw Exception("Failed to get a controller connection (SPICE_XPI_SOCKET)");
     }
     strncpy(pipe_name, p_socket, sizeof(pipe_name));
 #endif
