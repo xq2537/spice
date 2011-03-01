@@ -3024,14 +3024,14 @@ static int x_error_handler(Display* display, XErrorEvent* error_event)
               error_str,
               (uint32_t)error_event->minor_code,
               request_str);
-    exit(-1);
+    _exit(-1);
     return 0;
 }
 
 static int x_io_error_handler(Display* display)
 {
     LOG_ERROR("x io error on %s", XDisplayString(display));
-    exit(-1);
+    _exit(-1);
     return 0;
 }
 
