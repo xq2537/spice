@@ -2173,8 +2173,8 @@ static int tunnel_channel_handle_migrate_data(TunnelChannel *channel,
         goto error;
     }
 
-    ASSERT(channel->base.send_data.header.serial == 0);
-    channel->base.send_data.header.serial = migrate_data->message_serial;
+    ASSERT(red_channel_get_message_serial(&channel->base) == 0);
+    red_channel_set_message_serial(&channel->base, migrate_data->message_serial);
 
     net_slirp_state_restore(migrate_data->data + migrate_data->slirp_state);
 
