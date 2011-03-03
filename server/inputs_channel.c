@@ -443,14 +443,9 @@ static void inputs_relase_keys(void)
     kbd_push_scan(keyboard, 0x38 | 0x80); //LALT
 }
 
-static void inputs_channel_on_incoming_error(RedChannel *channel)
+static void inputs_channel_on_error(RedChannel *channel)
 {
     inputs_relase_keys();
-    red_channel_destroy(channel);
-}
-
-static void inputs_channel_on_outgoing_error(RedChannel *channel)
-{
     reds_disconnect();
 }
 
@@ -461,6 +456,7 @@ static void inputs_shutdown(Channel *channel)
 
     if (inputs_channel) {
         red_channel_shutdown(&inputs_channel->base);
+        red_channel_destroy(&inputs_channel->base);
         channel->data = NULL;
         g_inputs_channel = NULL;
     }
@@ -528,8 +524,8 @@ static void inputs_link(Channel *channel, RedsStream *stream, int migration,
         ,inputs_channel_hold_pipe_item
         ,inputs_channel_send_item
         ,inputs_channel_release_pipe_item
-        ,inputs_channel_on_incoming_error
-        ,inputs_channel_on_outgoing_error
+        ,inputs_channel_on_error
+        ,inputs_channel_on_error
         ,NULL
         ,NULL
         ,NULL);
