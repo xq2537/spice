@@ -2271,7 +2271,7 @@ bool Application::process_cmd_line(int argc, char** argv, bool &full_screen)
     parser.add(SPICE_OPT_SMARTCARD_CERT, "smartcard-cert", "Use virtual reader+card with given cert(s)",
         "smartcard-cert", true);
     parser.set_multi(SPICE_OPT_SMARTCARD_CERT, ',');
-    parser.add(SPICE_OPT_SMARTCARD_DB, "smartcard-db", "Use given db for smartcard certs");
+    parser.add(SPICE_OPT_SMARTCARD_DB, "smartcard-db", "Use given db for smartcard certs", "smartcard-db", true);
 #endif
 
     for (int i = SPICE_CHANNEL_MAIN; i < SPICE_END_CHANNEL; i++) {
@@ -2394,6 +2394,9 @@ bool Application::process_cmd_line(int argc, char** argv, bool &full_screen)
                 _smartcard_options->certs.insert(
                     _smartcard_options->certs.end(), std::string(val));
             } while ((val=parser.next_argument()));
+            break;
+        case SPICE_OPT_SMARTCARD_DB:
+            _smartcard_options->dbname = val;
             break;
 #endif
         case CmdLineParser::OPTION_HELP:
