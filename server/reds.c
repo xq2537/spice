@@ -1095,16 +1095,17 @@ static void reds_agent_remove()
     SpiceCharDeviceInstance *sin = vdagent;
     SpiceCharDeviceInterface *sif;
 
+    if (!reds->agent_state.connected) {
+        return;
+    }
+    reds->agent_state.connected = 0;
     vdagent = NULL;
     reds_update_mouse_mode();
 
     if (!reds->peer || !sin) {
         return;
     }
-
-    ASSERT(reds->agent_state.connected)
     sif = SPICE_CONTAINEROF(sin->base.sif, SpiceCharDeviceInterface, base);
-    reds->agent_state.connected = 0;
     if (sif->state) {
         sif->state(sin, reds->agent_state.connected);
     }
@@ -1112,7 +1113,6 @@ static void reds_agent_remove()
     if (reds->mig_target) {
         return;
     }
-
     reds_reset_vdp();
     reds_send_agent_disconnected();
 }
