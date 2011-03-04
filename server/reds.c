@@ -699,7 +699,9 @@ static void reds_agent_remove()
     SpiceCharDeviceInstance *sin = vdagent;
     SpiceCharDeviceInterface *sif;
 
-    ASSERT(reds->agent_state.connected)
+    if (!reds->agent_state.connected) {
+        return;
+    }
     reds->agent_state.connected = 0;
     vdagent = NULL;
     reds_update_mouse_mode();
