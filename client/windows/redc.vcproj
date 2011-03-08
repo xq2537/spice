@@ -72,12 +72,12 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="pixman-1D.lib libeay32MTd.lib ssleay32MTd.lib ws2_32.lib msimg32.lib winmm.lib libcelt_0_5_1D.lib pthreadVC2d.lib version.lib CEGUIBase_Static_d.lib CEGUITGAImageCodec_Static_d.lib CEGUIExpatParser_Static_d.lib freetype2312MT_D.lib libexpatMT_D.lib pcre_D.lib CEGUIFalagardWRBase_Static_d.lib libjpeg-static-mt-debug.lib zlibwapiD.lib png_d.lib cximage_d.lib"
+				AdditionalDependencies="pixman-1D.lib libeay32MTd.lib ssleay32MTd.lib ws2_32.lib msimg32.lib winmm.lib libcelt_0_5_1D.lib pthreadVC2d.lib version.lib CEGUIBase_Static_d.lib CEGUITGAImageCodec_Static_d.lib CEGUIExpatParser_Static_d.lib freetype2311MT_D.lib libexpatMT_D.lib pcre_D.lib CEGUIFalagardWRBase_Static_d.lib libjpeg-static-mt-debug.lib zlibwapiD.lib png_d.lib cximage_d.lib"
 				OutputFile="$(OutDir)\spicec.exe"
 				LinkIncremental="2"
 				AdditionalLibraryDirectories="&quot;$(SPICE_LIBS)\lib&quot;"
 				IgnoreAllDefaultLibraries="false"
-				IgnoreDefaultLibraryNames="MSVCRT.lib"
+				IgnoreDefaultLibraryNames=""
 				GenerateDebugInformation="true"
 				SubSystem="2"
 				RandomizedBaseAddress="1"
@@ -160,12 +160,12 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="pixman-1D.lib libeay32MTd.lib ssleay32MTd.lib ws2_32.lib msimg32.lib winmm.lib zlibwapiD.lib version.lib pthreadVC2D.lib libjpeg-static-mt-debug.lib libcelt_0_5_1D.lib CEGUIBase_Static_d.lib CEGUIExpatParser_Static_d.lib CEGUIFalagardWRBase_Static_d.lib CEGUITGAImageCodec_Static_d.lib freetype2312MT.lib libexpatMT.lib pcre.lib png_d.lib cximage_d.lib"
+				AdditionalDependencies="pixman-1D.lib libeay32MTd.lib ssleay32MTd.lib ws2_32.lib msimg32.lib winmm.lib zlibwapiD.lib version.lib pthreadVC2D.lib libjpeg-static-mt-debug.lib libcelt_0_5_1D.lib CEGUIBase_Static_d.lib CEGUIExpatParser_Static_d.lib CEGUIFalagardWRBase_Static_d.lib CEGUITGAImageCodec_Static_d.lib freetype2311MT.lib libexpatMT.lib pcre.lib png_d.lib cximage_d.lib"
 				OutputFile="$(OutDir)\spicec.exe"
 				LinkIncremental="2"
 				AdditionalLibraryDirectories="&quot;$(SPICE_LIBS)\lib64&quot;"
 				IgnoreAllDefaultLibraries="false"
-				IgnoreDefaultLibraryNames="MSVCRT.lib"
+				IgnoreDefaultLibraryNames=""
 				GenerateDebugInformation="true"
 				SubSystem="2"
 				RandomizedBaseAddress="1"
@@ -240,11 +240,11 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="pixman-1.lib libeay32MT.lib ssleay32MT.lib ws2_32.lib msimg32.lib winmm.lib libcelt_0_5_1.lib pthreadVC2.lib version.lib CEGUIBase_Static.lib CEGUITGAImageCodec_Static.lib CEGUIExpatParser_Static.lib freetype2312MT.lib libexpatMT.lib pcre.lib CEGUIFalagardWRBase_Static.lib libjpeg-static-mt.lib zlibwapi.lib png.lib cximage.lib"
+				AdditionalDependencies="pixman-1.lib libeay32MT.lib ssleay32MT.lib ws2_32.lib msimg32.lib winmm.lib libcelt_0_5_1.lib pthreadVC2.lib version.lib CEGUIBase_Static.lib CEGUITGAImageCodec_Static.lib CEGUIExpatParser_Static.lib freetype2311MT.lib libexpatMT.lib pcre.lib CEGUIFalagardWRBase_Static.lib libjpeg-static-mt.lib zlibwapi.lib png.lib cximage.lib"
 				OutputFile="$(OutDir)\spicec.exe"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories="&quot;$(SPICE_LIBS)\lib&quot;"
-				IgnoreDefaultLibraryNames="MSVCRT.lib"
+				IgnoreDefaultLibraryNames=""
 				GenerateDebugInformation="true"
 				SubSystem="2"
 				OptimizeReferences="2"
@@ -323,12 +323,12 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="pixman-1.lib libeay32MT.lib ssleay32MT.lib ws2_32.lib msimg32.lib winmm.lib zlibwapi.lib version.lib pthreadVC2.lib libjpeg-static-mt.lib libcelt_0_5_1.lib CEGUIBase_Static.lib CEGUIExpatParser_Static.lib CEGUIFalagardWRBase_Static.lib CEGUITGAImageCodec_Static.lib freetype2312MT.lib libexpatMT.lib pcre.lib png.lib cximage.lib"
+				AdditionalDependencies="pixman-1.lib libeay32MT.lib ssleay32MT.lib ws2_32.lib msimg32.lib winmm.lib zlibwapi.lib version.lib pthreadVC2.lib libjpeg-static-mt.lib libcelt_0_5_1.lib CEGUIBase_Static.lib CEGUIExpatParser_Static.lib CEGUIFalagardWRBase_Static.lib CEGUITGAImageCodec_Static.lib freetype2311MT.lib libexpatMT.lib pcre.lib png.lib cximage.lib"
 				OutputFile="$(OutDir)\spicec.exe"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories="&quot;$(SPICE_LIBS)\lib64&quot;"
 				IgnoreAllDefaultLibraries="false"
-				IgnoreDefaultLibraryNames="MSVCRT.lib"
+				IgnoreDefaultLibraryNames=""
 				GenerateDebugInformation="true"
 				SubSystem="2"
 				OptimizeReferences="2"
