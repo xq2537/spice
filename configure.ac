@@ -337,7 +337,7 @@ if test "x$with_sasl" != "xno"; then
   elif test "x$with_sasl" = "xyes"; then
     SASL_LIBS="$SASL_LIBS -lsasl"
   else
-    AC_MSG_ERROR([You must install the Cyrus SASL development package in order to compile GTK-VNC])
+    AC_MSG_ERROR([Missing required Cyrus SASL development package])
   fi
   CFLAGS="$old_cflags"
   LIBS="$old_libs"
