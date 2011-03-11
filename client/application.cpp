@@ -1247,10 +1247,12 @@ void Application::on_key_down(RedKey key)
         }
     }
 
-    int command = get_hotkeys_commnad();
-    if (command != APP_CMD_INVALID) {
-        do_command(command);
-        return;
+    if (!_sticky_info.sticky_mode) {
+        int command = get_hotkeys_commnad();
+        if (command != APP_CMD_INVALID) {
+            do_command(command);
+            return;
+        }
     }
 
 #ifdef WIN32
