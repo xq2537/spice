@@ -40,7 +40,6 @@ static void test_spice_destroy_update(SimpleSpiceUpdate *update)
 
 #define SINGLE_PART 8
 static const int angle_parts = 64 / SINGLE_PART;
-static int angle = 0;
 static int unique = 1;
 static int color = -1;
 static int c_i = 0;
@@ -354,7 +353,6 @@ static int num_simple_commands = 0;
 static void produce_command()
 {
     static int target_surface = 0;
-    static int simple_command_index = 0;
     static int cmd_index = 0;
 
     ASSERT(num_simple_commands);
@@ -449,6 +447,7 @@ static struct {
     uint8_t data[CURSOR_WIDTH * CURSOR_HEIGHT * 4]; // 32bit per pixel
 } cursor;
 
+#if 0
 static void init_cursor()
 {
     cursor.cursor.header.unique = 0; // TODO ??
@@ -461,6 +460,7 @@ static void init_cursor()
     cursor.cursor.chunk.data_size = cursor.cursor.data_size;
     cursor.cursor.chunk.prev_chunk = cursor.cursor.chunk.next_chunk = 0;
 }
+#endif
 
 static int get_cursor_command(QXLInstance *qin, struct QXLCommandExt *ext)
 {
@@ -515,6 +515,7 @@ static void notify_update(QXLInstance *qin, uint32_t update_id)
 static int flush_resources(QXLInstance *qin)
 {
     printf("%s\n", __func__);
+    return TRUE;
 }
 
 QXLInterface display_sif = {

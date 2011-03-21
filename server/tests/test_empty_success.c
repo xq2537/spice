@@ -1,8 +1,10 @@
+#include <stdlib.h>
 #include <strings.h>
 #include <spice.h>
 
 SpiceTimer* timer_add(SpiceTimerFunc func, void *opaque)
 {
+    return NULL;
 }
 
 void timer_start(SpiceTimer *timer, uint32_t ms)
@@ -19,6 +21,7 @@ void timer_remove(SpiceTimer *timer)
 
 SpiceWatch *watch_add(int fd, int event_mask, SpiceWatchFunc func, void *opaque)
 {
+    return NULL;
 }
 
 void watch_update_mask(SpiceWatch *watch, int event_mask)

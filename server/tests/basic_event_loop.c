@@ -319,7 +319,7 @@ void basic_event_loop_mainloop(void)
         if ((next_timer = get_next_timer()) != NULL) {
             calc_next_timeout(next_timer, &next_timer_timeout);
             timeout = &next_timer_timeout;
-            DPRINTF(1, "timeout of %d.%06d",
+            DPRINTF(1, "timeout of %zd.%06zd",
                     timeout->tv_sec, timeout->tv_usec);
         } else {
             timeout = NULL;
