@@ -300,7 +300,6 @@ void basic_event_loop_mainloop(void)
     while (1) {
         FD_ZERO(&rfds);
         FD_ZERO(&wfds);
-        watch = (SpiceWatch*)watches.next;
         i = 0;
         RING_FOREACH_SAFE(link, next, &watches) {
             watch = (SpiceWatch*)link;
