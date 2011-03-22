@@ -1147,10 +1147,9 @@ static double glc_stroke_line_dash(double x1, double y1, double x2, double y2,
 
 static void glc_vertex2d(InternaCtx *ctx, double x, double y)
 {
-    double len;
     if (ctx->path_stroke.state == GLC_STROKE_ACTIVE) {
-        len = glc_stroke_line_dash(ctx->path_stroke.x, ctx->path_stroke.y, x, y,
-                                   ctx->line_width, &ctx->line_dash);
+        glc_stroke_line_dash(ctx->path_stroke.x, ctx->path_stroke.y, x, y,
+                             ctx->line_width, &ctx->line_dash);
         ctx->path_stroke.x = x;
         ctx->path_stroke.y = y;
     } else if (ctx->path_stroke.state == GLC_STROKE_FIRST) {
