@@ -785,9 +785,7 @@ void spice_pixman_blit_colorkey (pixman_image_t *dest,
 
         while (height--) {
             uint8_t *d = (uint8_t *)byte_line;
-            uint8_t *s = (uint8_t *)byte_line;
-
-            s = (uint8_t *)src_line;
+            uint8_t *s = (uint8_t *)src_line;
             for (x = 0; x < width; x++) {
                 uint8_t val = *s;
                 if (val != (uint8_t)transparent_color) {
@@ -805,9 +803,8 @@ void spice_pixman_blit_colorkey (pixman_image_t *dest,
 
         while (height--) {
             uint16_t *d = (uint16_t *)byte_line;
-            uint16_t *s = (uint16_t *)byte_line;
+            uint16_t *s = (uint16_t *)src_line;
 
-            s = (uint16_t *)src_line;
             for (x = 0; x < width; x++) {
                 uint16_t val = *s;
                 if (val != (uint16_t)transparent_color) {
@@ -826,10 +823,9 @@ void spice_pixman_blit_colorkey (pixman_image_t *dest,
 
         while (height--) {
             uint32_t *d = (uint32_t *)byte_line;
-            uint32_t *s = (uint32_t *)byte_line;
+            uint32_t *s = (uint32_t *)src_line;
 
             transparent_color &= 0xffffff;
-            s = (uint32_t *)src_line;
             for (x = 0; x < width; x++) {
                 uint32_t val = *s;
                 if ((0xffffff & val) != transparent_color) {
