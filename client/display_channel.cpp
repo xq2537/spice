@@ -1437,9 +1437,6 @@ void DisplayChannel::create_primary_surface(int width, int height, uint32_t form
 
 void DisplayChannel::create_surface(int surface_id, int width, int height, uint32_t format)
 {
-#ifdef USE_OGL
-    Canvas *canvas;
-#endif
     AutoRef<CreateSurfaceEvent> event(new CreateSurfaceEvent(*this, surface_id, width, height,
                                                              format));
     get_client().push_event(*event);
