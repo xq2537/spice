@@ -180,6 +180,18 @@ public:
 static DefaultClipboardListener default_clipboard_listener;
 static Platform::ClipboardListener* clipboard_listener = &default_clipboard_listener;
 
+static void handle_x_errors_start(void)
+{
+    handle_x_error = True;
+    x_error_code = 0;
+}
+
+static int handle_x_errors_stop(void)
+{
+    handle_x_error = False;
+    return x_error_code;
+}
+
 static const char *atom_name(Atom atom)
 {
     const char *name;
@@ -188,7 +200,11 @@ static const char *atom_name(Atom atom)
         return "None";
 
     XLockDisplay(x_display);
+    handle_x_errors_start();
     name = XGetAtomName(x_display, atom);
+    if (handle_x_errors_stop()) {
+        name = "Bad Atom";
+    }
     XUnlockDisplay(x_display);
 
     return name;
@@ -315,18 +331,6 @@ void XEventHandler::on_event()
 Display* XPlatform::get_display()
 {
     return x_display;
-}
-
-static void handle_x_errors_start(void)
-{
-    handle_x_error = True;
-    x_error_code = 0;
-}
-
-static int handle_x_errors_stop(void)
-{
-    handle_x_error = False;
-    return x_error_code;
 }
 
 bool XPlatform::is_x_shm_avail()
