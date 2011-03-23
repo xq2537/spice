@@ -2676,7 +2676,9 @@ static void handle_selection_notify(XEvent& event, bool incr)
 
     if (clipboard_request_target == None)
         LOG_INFO("SelectionNotify received without a target");
-    else if (!incr && event.xselection.target != clipboard_request_target)
+    else if (!incr &&
+             event.xselection.target != clipboard_request_target &&
+             event.xselection.target != incr_atom)
         LOG_WARN("Requested %s target got %s",
                  atom_name(clipboard_request_target),
                  atom_name(event.xselection.target));
