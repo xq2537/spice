@@ -833,7 +833,7 @@ static void dispatch_vdi_port_data(int port, VDIReadBuf *buf)
                                          vdi_read_buf_release, buf);
         } else {
             red_printf("throwing away, no client: %d", buf->len);
-            vdi_read_buf_release(buf->data, buf);
+            ring_add(&state->read_bufs, &buf->link);
         }
         break;
     }
