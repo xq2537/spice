@@ -8857,9 +8857,9 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
                                  channel_hold_pipe_item_proc hold_item,
                                  channel_release_pipe_item_proc release_item,
                                  channel_handle_parsed_proc handle_parsed,
-                                 channel_handle_migrate_flush_mark handle_migrate_flush_mark,
-                                 channel_handle_migrate_data handle_migrate_data,
-                                 channel_handle_migrate_data_get_serial handle_migrate_data_get_serial)
+                                 channel_handle_migrate_flush_mark_proc handle_migrate_flush_mark,
+                                 channel_handle_migrate_data_proc handle_migrate_data,
+                                 channel_handle_migrate_data_get_serial_proc handle_migrate_data_get_serial)
 {
     struct epoll_event event;
     RedChannel *channel;

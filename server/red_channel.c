@@ -329,9 +329,9 @@ RedChannel *red_channel_create(int size, RedsStream *stream,
                                channel_hold_pipe_item_proc hold_item,
                                channel_send_pipe_item_proc send_item,
                                channel_release_pipe_item_proc release_item,
-                               channel_handle_migrate_flush_mark handle_migrate_flush_mark,
-                               channel_handle_migrate_data handle_migrate_data,
-                               channel_handle_migrate_data_get_serial handle_migrate_data_get_serial)
+                               channel_handle_migrate_flush_mark_proc handle_migrate_flush_mark,
+                               channel_handle_migrate_data_proc handle_migrate_data,
+                               channel_handle_migrate_data_get_serial_proc handle_migrate_data_get_serial)
 {
     RedChannel *channel;
 
@@ -423,9 +423,9 @@ RedChannel *red_channel_create_parser(int size, RedsStream *stream,
                                channel_release_pipe_item_proc release_item,
                                channel_on_incoming_error_proc incoming_error,
                                channel_on_outgoing_error_proc outgoing_error,
-                               channel_handle_migrate_flush_mark handle_migrate_flush_mark,
-                               channel_handle_migrate_data handle_migrate_data,
-                               channel_handle_migrate_data_get_serial handle_migrate_data_get_serial)
+                               channel_handle_migrate_flush_mark_proc handle_migrate_flush_mark,
+                               channel_handle_migrate_data_proc handle_migrate_data,
+                               channel_handle_migrate_data_get_serial_proc handle_migrate_data_get_serial)
 {
     RedChannel *channel = red_channel_create(size, stream,
         core, migrate, handle_acks, config_socket, do_nothing_disconnect,
