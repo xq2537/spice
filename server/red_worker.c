@@ -1134,13 +1134,6 @@ static inline void pipe_item_remove(PipeItem *item)
     ring_remove(&item->link);
 }
 
-static inline void red_pipe_add_tail(RedChannel *channel, PipeItem *item)
-{
-    ASSERT(channel);
-    channel->pipe_size++;
-    ring_add_before(&item->link, &channel->pipe);
-}
-
 static void red_pipe_add_verb(RedChannel* channel, uint16_t verb)
 {
     VerbItem *item = spice_new(VerbItem, 1);
@@ -1198,7 +1191,7 @@ static inline void red_pipe_add_drawable_to_tail(RedWorker *worker, Drawable *dr
     }
     red_handle_drawable_surfaces_client_synced(worker, drawable);
     drawable->refs++;
-    red_pipe_add_tail(&worker->display_channel->common.base, &drawable->pipe_item);
+    red_channel_pipe_add_tail(&worker->display_channel->common.base, &drawable->pipe_item);
 }
 
 static inline void red_pipe_add_drawable_after(RedWorker *worker, Drawable *drawable,
