@@ -49,6 +49,7 @@
 #include "reds.h"
 #include <spice/protocol.h>
 #include <spice/vd_agent.h>
+#include "agent-msg-filter.h"
 
 #include "inputs_channel.h"
 #include "main_channel.h"
@@ -158,6 +159,7 @@ typedef struct VDIPortState {
     Ring external_bufs;
     Ring internal_bufs;
     Ring write_queue;
+    AgentMsgFilter write_filter;
 
     Ring read_bufs;
     uint32_t read_state;
@@ -165,6 +167,7 @@ typedef struct VDIPortState {
     uint8_t *recive_pos;
     uint32_t recive_len;
     VDIReadBuf *current_read_buf;
+    AgentMsgFilter read_filter;
 
     VDIChunkHeader vdi_chunk_header;
 
@@ -806,9 +809,24 @@ void vdi_read_buf_release(uint8_t *data, void *opaque)
 static void dispatch_vdi_port_data(int port, VDIReadBuf *buf)
 {
     VDIPortState *state = &reds->agent_state;
+    int res;
 
     switch (port) {
     case VDP_CLIENT_PORT: {
+        res = agent_msg_filter_process_data(&state->read_filter,
+                                            buf->data, buf->len);
+        switch (res) {
+        case AGENT_MSG_FILTER_OK:
+            break;
+        case AGENT_MSG_FILTER_DISCARD:
+            ring_add(&state->read_bufs, &buf->link);
+            return;
+        case AGENT_MSG_FILTER_PROTO_ERROR:
+            ring_add(&state->read_bufs, &buf->link);
+            reds_agent_remove();
+            return;
+        }
+
         if (reds->agent_state.connected) {
             main_channel_push_agent_data(reds->main_channel, buf->data, buf->len,
                                          vdi_read_buf_release, buf);
@@ -994,6 +1012,7 @@ void reds_on_main_agent_data(void *message, size_t size)
 {
     RingItem *ring_item;
     VDAgentExtBuf *buf;
+    int res;
 
     if (!reds->agent_state.num_client_tokens) {
         red_printf("token violation");
@@ -1013,8 +1032,15 @@ void reds_on_main_agent_data(void *message, size_t size)
         return;
     }
 
-    if (size > SPICE_AGENT_MAX_DATA_SIZE) {
-        red_printf("invalid agent message");
+    res = agent_msg_filter_process_data(&reds->agent_state.write_filter,
+                                        message, size);
+    switch (res) {
+    case AGENT_MSG_FILTER_OK:
+        break;
+    case AGENT_MSG_FILTER_DISCARD:
+        add_token();
+        return;
+    case AGENT_MSG_FILTER_PROTO_ERROR:
         reds_disconnect();
         return;
     }
@@ -3384,6 +3410,8 @@ static void init_vd_agent_resources()
     ring_init(&state->internal_bufs);
     ring_init(&state->write_queue);
     ring_init(&state->read_bufs);
+    agent_msg_filter_init(&state->write_filter, TRUE);
+    agent_msg_filter_init(&state->read_filter, TRUE);
 
     state->read_state = VDI_PORT_READ_STATE_READ_HADER;
     state->recive_pos = (uint8_t *)&state->vdi_chunk_header;

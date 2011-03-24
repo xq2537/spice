@@ -95,6 +95,8 @@ SMARTCARD_SRCS =
 endif
 
 libspice_server_la_SOURCES =			\
+	agent-msg-filter.c			\
+	agent-msg-filter.h			\
 	demarshallers.h				\
 	glz_encoder.c				\
 	glz_encoder_config.h			\
