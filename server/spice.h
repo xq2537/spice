@@ -21,7 +21,7 @@
 #include <stdint.h>
 #include <sys/socket.h>
 
-#define SPICE_SERVER_VERSION 0x000800 /* release 0.8.0 */
+#define SPICE_SERVER_VERSION 0x000801 /* release 0.8.1 */
 
 /* interface base type */
 
@@ -426,6 +426,7 @@ enum {
 int spice_server_set_streaming_video(SpiceServer *s, int value);
 int spice_server_set_playback_compression(SpiceServer *s, int enable);
 int spice_server_set_agent_mouse(SpiceServer *s, int enable);
+int spice_server_set_agent_copypaste(SpiceServer *s, int enable);
 
 int spice_server_get_sock_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen);
 int spice_server_get_peer_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen);

@@ -103,6 +103,7 @@ spice_wan_compression_t zlib_glz_state = SPICE_WAN_COMPRESSION_AUTO;
 void *red_tunnel = NULL;
 #endif
 int agent_mouse = TRUE;
+int agent_copypaste = TRUE;
 
 static void openssl_init();
 
@@ -3745,8 +3746,8 @@ static void init_vd_agent_resources()
     ring_init(&state->internal_bufs);
     ring_init(&state->write_queue);
     ring_init(&state->read_bufs);
-    agent_msg_filter_init(&state->write_filter, TRUE);
-    agent_msg_filter_init(&state->read_filter, TRUE);
+    agent_msg_filter_init(&state->write_filter, agent_copypaste);
+    agent_msg_filter_init(&state->read_filter, agent_copypaste);
 
     state->read_state = VDI_PORT_READ_STATE_READ_HADER;
     state->recive_pos = (uint8_t *)&state->vdi_chunk_header;
@@ -4151,6 +4152,15 @@ __visible__ int spice_server_set_agent_mouse(SpiceServer *s, int enable)
     ASSERT(reds == s);
     agent_mouse = enable;
     reds_update_mouse_mode();
+    return 0;
+}
+
+__visible__ int spice_server_set_agent_copypaste(SpiceServer *s, int enable)
+{
+    ASSERT(reds == s);
+    agent_copypaste = enable;
+    reds->agent_state.write_filter.copy_paste_enabled = agent_copypaste;
+    reds->agent_state.read_filter.copy_paste_enabled = agent_copypaste;
     return 0;
 }
 
