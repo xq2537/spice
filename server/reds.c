@@ -601,7 +601,7 @@ void reds_disconnect()
         if (sif->state) {
             sif->state(vdagent, reds->agent_state.connected);
         }
-        reds_reset_vdp();
+        reds->agent_state.client_agent_started = FALSE;
     }
 
     reds_shatdown_channels();
@@ -703,6 +703,10 @@ static void reds_agent_remove()
     SpiceCharDeviceInstance *sin = vdagent;
     SpiceCharDeviceInterface *sif;
 
+    if (!reds->mig_target) {
+        reds_reset_vdp();
+    }
+
     if (!reds->agent_state.connected) {
         return;
     }
@@ -723,7 +727,6 @@ static void reds_agent_remove()
         return;
     }
 
-    reds_reset_vdp();
     main_channel_push_agent_disconnected(reds->main_channel);
 }
 
