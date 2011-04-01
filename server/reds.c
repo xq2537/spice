@@ -1710,17 +1710,6 @@ static void reds_main_handle_message(void *opaque, size_t size, uint32_t type, v
         }
         --reds->agent_state.num_client_tokens;
 
-        if (!vdagent) {
-            add_token();
-            break;
-        }
-
-        if (!reds->agent_state.client_agent_started) {
-            red_printf("SPICE_MSGC_MAIN_AGENT_DATA race");
-            add_token();
-            break;
-        }
-
         res = agent_msg_filter_process_data(&reds->agent_state.write_filter,
                                             message, size);
         switch (res) {
@@ -1732,6 +1721,17 @@ static void reds_main_handle_message(void *opaque, size_t size, uint32_t type, v
         case AGENT_MSG_FILTER_PROTO_ERROR:
             reds_disconnect();
             return;
+        }
+
+        if (!vdagent) {
+            add_token();
+            break;
+        }
+
+        if (!reds->agent_state.client_agent_started) {
+            red_printf("SPICE_MSGC_MAIN_AGENT_DATA race");
+            add_token();
+            break;
         }
 
         if (!(ring_item = ring_get_head(&reds->agent_state.external_bufs))) {
