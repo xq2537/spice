@@ -1013,6 +1013,9 @@ void reds_fill_channels(SpiceMsgChannels *channels_info)
 
 void reds_on_main_agent_start()
 {
+    if (!vdagent) {
+        return;
+    }
     reds->agent_state.write_filter.discard_all = FALSE;
 }
 
