@@ -1027,17 +1027,6 @@ void reds_on_main_agent_data(void *message, size_t size)
     }
     --reds->agent_state.num_client_tokens;
 
-    if (!vdagent) {
-        add_token();
-        return;
-    }
-
-    if (!reds->agent_state.client_agent_started) {
-        red_printf("SPICE_MSGC_MAIN_AGENT_DATA race");
-        add_token();
-        return;
-    }
-
     res = agent_msg_filter_process_data(&reds->agent_state.write_filter,
                                         message, size);
     switch (res) {
@@ -1048,6 +1037,17 @@ void reds_on_main_agent_data(void *message, size_t size)
         return;
     case AGENT_MSG_FILTER_PROTO_ERROR:
         reds_disconnect();
+        return;
+    }
+
+    if (!vdagent) {
+        add_token();
+        return;
+    }
+
+    if (!reds->agent_state.client_agent_started) {
+        red_printf("SPICE_MSGC_MAIN_AGENT_DATA race");
+        add_token();
         return;
     }
 
