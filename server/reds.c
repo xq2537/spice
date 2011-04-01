@@ -1170,12 +1170,12 @@ static int write_to_vdi_port()
     int total = 0;
     int n;
 
-    if (!reds->agent_state.connected || reds->mig_target) {
+    if (!vdagent || reds->mig_target) {
         return 0;
     }
 
     sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceCharDeviceInterface, base);
-    while (reds->agent_state.connected) {
+    while (vdagent) {
         if (!(ring_item = ring_get_tail(&state->write_queue))) {
             break;
         }
