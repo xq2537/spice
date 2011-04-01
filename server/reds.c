@@ -717,9 +717,6 @@ static void reds_agent_remove()
         reds_reset_vdp();
     }
 
-    if (!reds->agent_state.connected) {
-        return;
-    }
     reds->agent_state.connected = 0;
     vdagent = NULL;
     reds_update_mouse_mode();
