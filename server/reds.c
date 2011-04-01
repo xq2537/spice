@@ -1694,7 +1694,7 @@ static void reds_main_handle_message(void *opaque, size_t size, uint32_t type, v
     switch (type) {
     case SPICE_MSGC_MAIN_AGENT_START:
         red_printf("agent start");
-        if (!reds->peer) {
+        if (!reds->peer || !vdagent) {
             return;
         }
         reds->agent_state.write_filter.discard_all = FALSE;
