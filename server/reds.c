@@ -713,6 +713,7 @@ static void reds_reset_vdp()
         ring_add(&state->read_bufs, &state->current_read_buf->link);
         state->current_read_buf = NULL;
     }
+    agent_msg_filter_init(&state->read_filter, agent_copypaste);
     state->client_agent_started = FALSE;
 }
 
@@ -743,6 +744,7 @@ static void reds_disconnect()
     red_printf("");
     reds->disconnecting = TRUE;
     reds_reset_outgoing();
+    agent_msg_filter_init(&reds->agent_state.write_filter, agent_copypaste);
 
     if (reds->agent_state.connected) {
         SpiceCharDeviceInterface *sif;
