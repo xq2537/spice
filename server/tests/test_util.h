@@ -9,6 +9,4 @@
     abort();                                                \
 }
 
-#define MIN(a,b) ((a) > (b) ? (b) : (a))
-
 #endif // __TEST_UTIL_H__
