@@ -459,20 +459,6 @@ if test $os_win32 == "yes" ; then
     AC_SUBST(WINDRES)
 fi
 
-# We only wish to enable attribute(warn_unused_result) if we can prevent
-# gcc from generating thousands of warnings about the misapplication of the
-# attribute to void functions and variables.
-AC_MSG_CHECKING([how to enable unused result warnings])
-warn_unused_result=""
-if echo $WARN_CFLAGS | grep -e '-Wno-attributes' >/dev/null; then
-    AC_TRY_COMPILE([__attribute__((__warn_unused_result__))
-	int f (int i) { return i; }], [],
-	[warn_unused_result="__attribute__((__warn_unused_result__))"])
-fi
-AC_DEFINE_UNQUOTED([WARN_UNUSED_RESULT], [$warn_unused_result],
-	  [Define to the value your compiler uses to support the warn-unused-result attribute])
-AC_MSG_RESULT([$warn_unused_result])
-
 AC_SUBST(WARN_CFLAGS)
 AC_SUBST(CFLAGS_CFLAGS)
 
