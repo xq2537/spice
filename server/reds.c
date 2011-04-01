@@ -1292,7 +1292,7 @@ static int read_from_vdi_port(void)
     }
 
     sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceCharDeviceInterface, base);
-    while (!quit_loop) {
+    while (!quit_loop && vdagent) {
         switch (state->read_state) {
         case VDI_PORT_READ_STATE_READ_HADER:
             n = sif->read(vdagent, state->recive_pos, state->recive_len);
