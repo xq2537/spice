@@ -32,13 +32,14 @@ enum {
 };
 
 typedef struct AgentMsgFilter {
-    struct VDAgentMessage msg_header;
     int msg_data_to_read;
     int result;
     int copy_paste_enabled;
+    int discard_all;
 } AgentMsgFilter;
 
-void agent_msg_filter_init(struct AgentMsgFilter *filter, int copy_paste);
+void agent_msg_filter_init(struct AgentMsgFilter *filter,
+                           int copy_paste, int discard_all);
 int agent_msg_filter_process_data(struct AgentMsgFilter *filter,
                                   uint8_t *data, uint32_t len);
 

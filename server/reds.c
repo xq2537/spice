@@ -713,7 +713,7 @@ static void reds_reset_vdp()
         ring_add(&state->read_bufs, &state->current_read_buf->link);
         state->current_read_buf = NULL;
     }
-    agent_msg_filter_init(&state->read_filter, agent_copypaste);
+    agent_msg_filter_init(&state->read_filter, agent_copypaste, FALSE);
     state->client_agent_started = FALSE;
 }
 
@@ -744,7 +744,8 @@ static void reds_disconnect()
     red_printf("");
     reds->disconnecting = TRUE;
     reds_reset_outgoing();
-    agent_msg_filter_init(&reds->agent_state.write_filter, agent_copypaste);
+    agent_msg_filter_init(&reds->agent_state.write_filter, agent_copypaste,
+                          FALSE);
 
     if (reds->agent_state.connected) {
         SpiceCharDeviceInterface *sif;
@@ -3750,8 +3751,8 @@ static void init_vd_agent_resources()
     ring_init(&state->internal_bufs);
     ring_init(&state->write_queue);
     ring_init(&state->read_bufs);
-    agent_msg_filter_init(&state->write_filter, agent_copypaste);
-    agent_msg_filter_init(&state->read_filter, agent_copypaste);
+    agent_msg_filter_init(&state->write_filter, agent_copypaste, FALSE);
+    agent_msg_filter_init(&state->read_filter, agent_copypaste, FALSE);
 
     state->read_state = VDI_PORT_READ_STATE_READ_HADER;
     state->recive_pos = (uint8_t *)&state->vdi_chunk_header;

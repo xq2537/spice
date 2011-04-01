@@ -22,10 +22,12 @@
 #include "red_common.h"
 #include "agent-msg-filter.h"
 
-void agent_msg_filter_init(struct AgentMsgFilter *filter, int copy_paste)
+void agent_msg_filter_init(struct AgentMsgFilter *filter,
+    int copy_paste, int discard_all)
 {
     memset(filter, 0, sizeof(*filter));
     filter->copy_paste_enabled = copy_paste;
+    filter->discard_all = discard_all;
 }
 
 int agent_msg_filter_process_data(struct AgentMsgFilter *filter,
@@ -61,19 +63,23 @@ data_to_read:
         return AGENT_MSG_FILTER_PROTO_ERROR;
     }
 
-    switch (msg_header.type) {
-    case VD_AGENT_CLIPBOARD:
-    case VD_AGENT_CLIPBOARD_GRAB:
-    case VD_AGENT_CLIPBOARD_REQUEST:
-    case VD_AGENT_CLIPBOARD_RELEASE:
-        if (filter->copy_paste_enabled) {
+    if (filter->discard_all) {
+        filter->result = AGENT_MSG_FILTER_DISCARD;
+    } else {
+        switch (msg_header.type) {
+        case VD_AGENT_CLIPBOARD:
+        case VD_AGENT_CLIPBOARD_GRAB:
+        case VD_AGENT_CLIPBOARD_REQUEST:
+        case VD_AGENT_CLIPBOARD_RELEASE:
+            if (filter->copy_paste_enabled) {
+                filter->result = AGENT_MSG_FILTER_OK;
+            } else {
+                filter->result = AGENT_MSG_FILTER_DISCARD;
+            }
+            break;
+        default:
             filter->result = AGENT_MSG_FILTER_OK;
-        } else {
-            filter->result = AGENT_MSG_FILTER_DISCARD;
         }
-        break;
-    default:
-        filter->result = AGENT_MSG_FILTER_OK;
     }
 
     filter->msg_data_to_read = msg_header.size;
