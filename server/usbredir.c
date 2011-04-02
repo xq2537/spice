@@ -75,8 +75,8 @@ static void usbredir_chardev_wakeup(SpiceCharDeviceInstance *sin)
                       sizeof(state->pipe_item->buf));
         if (n > 0) {
             state->pipe_item->buf_used = n;
-            red_channel_pipe_add_push(state->red_channel,
-                                      &state->pipe_item->base);
+            red_channel_client_pipe_add_push(state->rcc,
+                                             &state->pipe_item->base);
             state->pipe_item = NULL;
         }
     } while (n > 0);

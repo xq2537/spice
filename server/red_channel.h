@@ -161,6 +161,9 @@ struct RedChannelClient {
     OutgoingHandler outgoing;
     IncomingHandler incoming;
     int during_send;
+    int id; // debugging purposes
+    Ring pipe;
+    uint32_t pipe_size;
 };
 
 struct RedChannel {
@@ -169,9 +172,6 @@ struct RedChannel {
     int handle_acks;
 
     RedChannelClient *rcc;
-
-    Ring pipe;
-    uint32_t pipe_size;
 
     OutgoingHandlerInterface outgoing_cb;
     IncomingHandlerInterface incoming_cb;
@@ -258,15 +258,16 @@ void red_channel_client_set_message_serial(RedChannelClient *channel, uint64_t);
 void red_channel_client_begin_send_message(RedChannelClient *rcc);
 
 void red_channel_pipe_item_init(RedChannel *channel, PipeItem *item, int type);
-void red_channel_pipe_add_push(RedChannel *channel, PipeItem *item);
-void red_channel_pipe_add(RedChannel *channel, PipeItem *item);
-void red_channel_pipe_add_after(RedChannel *channel, PipeItem *item, PipeItem *pos);
+void red_channel_client_pipe_add_push(RedChannelClient *rcc, PipeItem *item);
+void red_channel_client_pipe_add(RedChannelClient *rcc, PipeItem *item);
+void red_channel_client_pipe_add_after(RedChannelClient *rcc, PipeItem *item, PipeItem *pos);
 int red_channel_pipe_item_is_linked(RedChannel *channel, PipeItem *item);
 void red_channel_pipe_item_remove(RedChannel *channel, PipeItem *item);
 void red_channel_client_pipe_remove_and_release(RedChannelClient *rcc, PipeItem *item);
-void red_channel_pipe_add_tail(RedChannel *channel, PipeItem *item);
+void red_channel_client_pipe_add_tail(RedChannelClient *rcc, PipeItem *item);
 /* for types that use this routine -> the pipe item should be freed */
-void red_channel_pipe_add_type(RedChannel *channel, int pipe_item_type);
+void red_channel_client_pipe_add_type(RedChannelClient *rcc, int pipe_item_type);
+void red_channel_pipes_add_type(RedChannel *channel, int pipe_item_type);
 
 void red_channel_client_ack_zero_messages_window(RedChannelClient *rcc);
 void red_channel_client_ack_set_client_window(RedChannelClient *rcc, int client_window);
@@ -296,19 +297,24 @@ int red_channel_client_send_message_pending(RedChannelClient *rcc);
  * hasn't even begun, i.e. no one called begin_send_)
  * */
 int red_channel_item_being_sent(RedChannel *channel, PipeItem *item);
+int red_channel_client_item_being_sent(RedChannelClient *rcc, PipeItem *item);
 
 int red_channel_no_item_being_sent(RedChannel *channel);
 int red_channel_client_no_item_being_sent(RedChannelClient *rcc);
+
+void red_channel_pipes_remove(RedChannel *channel, PipeItem *item);
 
 // TODO: unstaticed for display/cursor channels. they do some specific pushes not through
 // adding elements or on events. but not sure if this is actually required (only result
 // should be that they ""try"" a little harder, but if the event system is correct it
 // should not make any difference.
 void red_channel_push(RedChannel *channel);
+void red_channel_client_push(RedChannelClient *rcc);
 // TODO: again - what is the context exactly? this happens in channel disconnect. but our
 // current red_channel_shutdown also closes the socket - is there a socket to close?
 // are we reading from an fd here? arghh
-void red_channel_pipe_clear(RedChannel *channel);
+void red_channel_pipes_clear(RedChannel *channel);
+void red_channel_client_pipe_clear(RedChannelClient *rcc);
 // Again, used in various places outside of event handler context (or in other event handler
 // contexts):
 //  flush_display_commands/flush_cursor_commands

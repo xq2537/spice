@@ -24,6 +24,7 @@
 #define FUNC_NAME(name) red_cursor_cache_##name
 #define VAR_NAME(name) cursor_cache_##name
 #define CHANNEL CursorChannel
+#define CHANNELCLIENT RedChannelClient
 
 #elif defined(CLIENT_PALETTE_CACHE)
 
@@ -34,11 +35,14 @@
 #define FUNC_NAME(name) red_palette_cache_##name
 #define VAR_NAME(name) palette_cache_##name
 #define CHANNEL DisplayChannel
+#define CHANNELCLIENT RedChannelClient
 #else
 
 #error "no cache type."
 
 #endif
+
+#define CHANNEL_FROM_RCC(rcc) SPICE_CONTAINEROF((rcc)->channel, CHANNEL, common.base);
 
 static CacheItem *FUNC_NAME(find)(CHANNEL *channel, uint64_t id)
 {
@@ -55,9 +59,10 @@ static CacheItem *FUNC_NAME(find)(CHANNEL *channel, uint64_t id)
     return item;
 }
 
-static void FUNC_NAME(remove)(CHANNEL *channel, CacheItem *item)
+static void FUNC_NAME(remove)(CHANNELCLIENT *channel_client, CacheItem *item)
 {
     CacheItem **now;
+    CHANNEL *channel = CHANNEL_FROM_RCC(channel_client);
     ASSERT(item);
 
     now = &channel->CACHE_NAME[CACHE_HASH_KEY(item->id)];
@@ -74,11 +79,12 @@ static void FUNC_NAME(remove)(CHANNEL *channel, CacheItem *item)
     channel->VAR_NAME(available) += item->size;
 
     red_channel_pipe_item_init(&channel->common.base, &item->u.pipe_data, PIPE_ITEM_TYPE_INVAL_ONE);
-    red_channel_pipe_add_tail(&channel->common.base, &item->u.pipe_data); // for now
+    red_channel_client_pipe_add_tail(channel_client, &item->u.pipe_data); // for now
 }
 
-static int FUNC_NAME(add)(CHANNEL *channel, uint64_t id, size_t size)
+static int FUNC_NAME(add)(CHANNELCLIENT *channel_client, uint64_t id, size_t size)
 {
+    CHANNEL *channel = CHANNEL_FROM_RCC(channel_client);
     CacheItem *item;
     int key;
 
@@ -92,7 +98,7 @@ static int FUNC_NAME(add)(CHANNEL *channel, uint64_t id, size_t size)
             free(item);
             return FALSE;
         }
-        FUNC_NAME(remove)(channel, tail);
+        FUNC_NAME(remove)(channel_client, tail);
     }
     ++channel->VAR_NAME(items);
     item->u.cache_data.next = channel->CACHE_NAME[(key = CACHE_HASH_KEY(id))];
@@ -130,4 +136,4 @@ static void FUNC_NAME(reset)(CHANNEL *channel, long size)
 #undef FUNC_NAME
 #undef VAR_NAME
 #undef CHANNEL
-
+#undef CHANNEL_FROM_RCC

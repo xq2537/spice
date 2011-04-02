@@ -221,14 +221,6 @@ static uint8_t kbd_get_leds(SpiceKbdInstance *sin)
     return sif->get_leds(sin);
 }
 
-static InputsPipeItem *inputs_pipe_item_new(InputsChannel *inputs_channel, int type)
-{
-    InputsPipeItem *item = spice_malloc(sizeof(InputsPipeItem));
-
-    red_channel_pipe_item_init(&inputs_channel->base, &item->base, type);
-    return item;
-}
-
 static KeyModifiersPipeItem *inputs_key_modifiers_item_new(
     InputsChannel *inputs_channel, uint8_t modifiers)
 {
@@ -238,15 +230,6 @@ static KeyModifiersPipeItem *inputs_key_modifiers_item_new(
                                PIPE_ITEM_KEY_MODIFIERS);
     item->modifiers = modifiers;
     return item;
-}
-
-// Right now every PipeItem we add is an InputsPipeItem, later maybe make it simpler
-// for type only PipeItems
-static void inputs_pipe_add_type(InputsChannel *channel, int type)
-{
-    InputsPipeItem* pipe_item = inputs_pipe_item_new(channel, type);
-
-    red_channel_pipe_add_push(&channel->base, &pipe_item->base);
 }
 
 static void inputs_channel_release_pipe_item(RedChannelClient *rcc,
@@ -318,7 +301,7 @@ static int inputs_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, ui
         SpiceMsgcMouseMotion *mouse_motion = (SpiceMsgcMouseMotion *)buf;
 
         if (++inputs_channel->motion_count % SPICE_INPUT_MOTION_ACK_BUNCH == 0) {
-            inputs_pipe_add_type(inputs_channel, PIPE_ITEM_MOUSE_MOTION_ACK);
+            red_channel_client_pipe_add_type(rcc, PIPE_ITEM_MOUSE_MOTION_ACK);
         }
         if (mouse && reds_get_mouse_mode() == SPICE_MOUSE_MODE_SERVER) {
             SpiceMouseInterface *sif;
@@ -333,7 +316,7 @@ static int inputs_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, ui
         SpiceMsgcMousePosition *pos = (SpiceMsgcMousePosition *)buf;
 
         if (++inputs_channel->motion_count % SPICE_INPUT_MOTION_ACK_BUNCH == 0) {
-            inputs_pipe_add_type(inputs_channel, PIPE_ITEM_MOUSE_MOTION_ACK);
+            red_channel_client_pipe_add_type(rcc, PIPE_ITEM_MOUSE_MOTION_ACK);
         }
         if (reds_get_mouse_mode() != SPICE_MOUSE_MODE_CLIENT) {
             break;
@@ -468,21 +451,20 @@ static void inputs_shutdown(Channel *channel)
 static void inputs_migrate(Channel *channel)
 {
     InputsChannel *inputs_channel = channel->data;
-    InputsPipeItem *item;
+    RedChannelClient *rcc = inputs_channel->base.rcc;
 
     ASSERT(g_inputs_channel == (InputsChannel *)channel->data);
-    item = inputs_pipe_item_new(inputs_channel, PIPE_ITEM_MIGRATE);
-    red_channel_pipe_add_push(&inputs_channel->base, &item->base);
+    red_channel_client_pipe_add_type(rcc, PIPE_ITEM_MIGRATE);
 }
 
-static void inputs_pipe_add_init(InputsChannel *inputs_channel)
+static void inputs_pipe_add_init(RedChannelClient *rcc)
 {
     InputsInitPipeItem *item = spice_malloc(sizeof(InputsInitPipeItem));
 
-    red_channel_pipe_item_init(&inputs_channel->base, &item->base,
+    red_channel_pipe_item_init(rcc->channel, &item->base,
                                PIPE_ITEM_INPUTS_INIT);
     item->modifiers = kbd_get_leds(keyboard);
-    red_channel_pipe_add_push(&inputs_channel->base, &item->base);
+    red_channel_client_pipe_add_push(rcc, &item->base);
 }
 
 static int inputs_channel_config_socket(RedChannelClient *rcc)
@@ -539,7 +521,7 @@ static void inputs_link(Channel *channel, RedsStream *stream, int migration,
     rcc = red_channel_client_create(sizeof(RedChannelClient), &g_inputs_channel->base, stream);
     ASSERT(rcc);
     channel->data = inputs_channel;
-    inputs_pipe_add_init(inputs_channel);
+    inputs_pipe_add_init(rcc);
 }
 
 static void inputs_push_keyboard_modifiers(uint8_t modifiers)
@@ -550,7 +532,7 @@ static void inputs_push_keyboard_modifiers(uint8_t modifiers)
         return;
     }
     item = inputs_key_modifiers_item_new(g_inputs_channel, modifiers);
-    red_channel_pipe_add_push(&g_inputs_channel->base, &item->base);
+    red_channel_client_pipe_add_push(g_inputs_channel->base.rcc, &item->base);
 }
 
 void inputs_on_keyboard_leds_change(void *opaque, uint8_t leds)

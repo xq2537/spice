@@ -267,13 +267,12 @@ static void red_channel_client_reset_send_data(RedChannelClient *rcc)
 
 void red_channel_client_push_set_ack(RedChannelClient *rcc)
 {
-    red_channel_pipe_add_type(rcc->channel, PIPE_ITEM_TYPE_SET_ACK);
+    red_channel_client_pipe_add_type(rcc, PIPE_ITEM_TYPE_SET_ACK);
 }
 
 void red_channel_push_set_ack(RedChannel *channel)
 {
-    // TODO - MC, should replace with add_type_all (or whatever I'll name it)
-    red_channel_pipe_add_type(channel, PIPE_ITEM_TYPE_SET_ACK);
+    red_channel_pipes_add_type(channel, PIPE_ITEM_TYPE_SET_ACK);
 }
 
 static void red_channel_client_send_set_ack(RedChannelClient *rcc)
@@ -347,6 +346,12 @@ static void red_channel_peer_on_out_msg_done(void *opaque)
     }
 }
 
+static void red_channel_client_pipe_remove(RedChannelClient *rcc, PipeItem *item)
+{
+    rcc->pipe_size--;
+    ring_remove(&item->link);
+}
+
 static void red_channel_add_client(RedChannel *channel, RedChannelClient *rcc)
 {
     ASSERT(rcc);
@@ -381,9 +386,13 @@ RedChannelClient *red_channel_client_create(
         goto error;
     }
 
+    ring_init(&rcc->pipe);
+    rcc->pipe_size = 0;
+
     stream->watch = channel->core->watch_add(stream->socket,
                                            SPICE_WATCH_EVENT_READ,
                                            red_channel_client_event, rcc);
+    rcc->id = 0;
     red_channel_add_client(channel, rcc);
     return rcc;
 error:
@@ -425,7 +434,6 @@ RedChannel *red_channel_create(int size,
 
     channel->core = core;
     channel->migrate = migrate;
-    ring_init(&channel->pipe);
 
     channel->incoming_cb.alloc_msg_buf = (alloc_msg_recv_buf_proc)alloc_recv_buf;
     channel->incoming_cb.release_msg_buf = (release_msg_recv_buf_proc)release_recv_buf;
@@ -501,6 +509,7 @@ void red_channel_destroy(RedChannel *channel)
     if (!channel) {
         return;
     }
+    red_channel_pipes_clear(channel);
     if (channel->rcc) {
         red_channel_client_destroy(channel->rcc);
     }
@@ -524,7 +533,7 @@ void red_channel_shutdown(RedChannel *channel)
     if (channel->rcc) {
         red_channel_client_shutdown(channel->rcc);
     }
-    red_channel_pipe_clear(channel);
+    red_channel_pipes_clear(channel);
 }
 
 void red_channel_client_send(RedChannelClient *rcc)
@@ -545,23 +554,20 @@ static inline int red_channel_client_waiting_for_ack(RedChannelClient *rcc)
             (rcc->ack_data.messages_window > rcc->ack_data.client_window * 2));
 }
 
-// TODO: add refs and target to PipeItem. Right now this only works for a
-// single client (or actually, it's worse - first come first served)
-static inline PipeItem *red_channel_client_pipe_get(RedChannelClient *rcc)
+static inline PipeItem *red_channel_client_pipe_item_get(RedChannelClient *rcc)
 {
     PipeItem *item;
 
     if (!rcc || rcc->send_data.blocked
              || red_channel_client_waiting_for_ack(rcc)
-             || !(item = (PipeItem *)ring_get_tail(&rcc->channel->pipe))) {
+             || !(item = (PipeItem *)ring_get_tail(&rcc->pipe))) {
         return NULL;
     }
-    --rcc->channel->pipe_size;
-    ring_remove(&item->link);
+    red_channel_client_pipe_remove(rcc, item);
     return item;
 }
 
-static void red_channel_client_push(RedChannelClient *rcc)
+void red_channel_client_push(RedChannelClient *rcc)
 {
     PipeItem *pipe_item;
 
@@ -575,7 +581,7 @@ static void red_channel_client_push(RedChannelClient *rcc)
         red_channel_client_send(rcc);
     }
 
-    while ((pipe_item = red_channel_client_pipe_get(rcc))) {
+    while ((pipe_item = red_channel_client_pipe_item_get(rcc))) {
         red_channel_client_send_item(rcc, pipe_item);
     }
     rcc->during_send = FALSE;
@@ -599,13 +605,15 @@ static void red_channel_client_init_outgoing_messages_window(RedChannelClient *r
 // specific
 void red_channel_init_outgoing_messages_window(RedChannel *channel)
 {
-    red_channel_client_init_outgoing_messages_window(channel->rcc);
+    if (channel->rcc) {
+        red_channel_client_init_outgoing_messages_window(channel->rcc);
+    }
 }
 
-static void red_channel_handle_migrate_flush_mark(RedChannel *channel)
+static void red_channel_handle_migrate_flush_mark(RedChannelClient *rcc)
 {
-    if (channel->handle_migrate_flush_mark) {
-        channel->handle_migrate_flush_mark(channel->rcc);
+    if (rcc->channel->handle_migrate_flush_mark) {
+        rcc->channel->handle_migrate_flush_mark(rcc);
     }
 }
 
@@ -647,7 +655,7 @@ int red_channel_client_handle_message(RedChannelClient *rcc, uint32_t size,
     case SPICE_MSGC_DISCONNECTING:
         break;
     case SPICE_MSGC_MIGRATE_FLUSH_MARK:
-        red_channel_handle_migrate_flush_mark(rcc->channel);
+        red_channel_handle_migrate_flush_mark(rcc);
         break;
     case SPICE_MSGC_MIGRATE_DATA:
         red_channel_handle_migrate_data(rcc, size, message);
@@ -715,36 +723,76 @@ void red_channel_pipe_item_init(RedChannel *channel, PipeItem *item, int type)
     item->type = type;
 }
 
-void red_channel_pipe_add(RedChannel *channel, PipeItem *item)
+void red_channel_client_pipe_add(RedChannelClient *rcc, PipeItem *item)
 {
-    ASSERT(channel);
-
-    channel->pipe_size++;
-    ring_add(&channel->pipe, &item->link);
+    ASSERT(rcc && item);
+    rcc->pipe_size++;
+    ring_add(&rcc->pipe, &item->link);
 }
 
-void red_channel_pipe_add_push(RedChannel *channel, PipeItem *item)
+void red_channel_client_pipe_add_push(RedChannelClient *rcc, PipeItem *item)
 {
-    ASSERT(channel);
-
-    channel->pipe_size++;
-    ring_add(&channel->pipe, &item->link);
-    red_channel_push(channel);
+    red_channel_client_pipe_add(rcc, item);
+    red_channel_client_push(rcc);
 }
 
-void red_channel_pipe_add_after(RedChannel *channel, PipeItem *item, PipeItem *pos)
+void red_channel_client_pipe_add_after(RedChannelClient *rcc,
+                                       PipeItem *item, PipeItem *pos)
 {
-    ASSERT(channel);
+    ASSERT(rcc);
     ASSERT(pos);
     ASSERT(item);
 
-    channel->pipe_size++;
+    rcc->pipe_size++;
     ring_add_after(&item->link, &pos->link);
+}
+
+int red_channel_client_pipe_item_is_linked(RedChannelClient *rcc,
+                                           PipeItem *item)
+{
+    return ring_item_is_linked(&item->link);
 }
 
 int red_channel_pipe_item_is_linked(RedChannel *channel, PipeItem *item)
 {
-    return ring_item_is_linked(&item->link);
+    return channel->rcc && red_channel_client_pipe_item_is_linked(channel->rcc, item);
+}
+
+void red_channel_client_pipe_add_tail_no_push(RedChannelClient *rcc,
+                                              PipeItem *item)
+{
+    ASSERT(rcc);
+    rcc->pipe_size++;
+    ring_add_before(&item->link, &rcc->pipe);
+}
+
+void red_channel_client_pipe_add_tail(RedChannelClient *rcc, PipeItem *item)
+{
+    ASSERT(rcc);
+    rcc->pipe_size++;
+    ring_add_before(&item->link, &rcc->pipe);
+    red_channel_client_push(rcc);
+}
+
+void red_channel_client_pipe_add_type(RedChannelClient *rcc, int pipe_item_type)
+{
+    PipeItem *item = spice_new(PipeItem, 1);
+
+    red_channel_pipe_item_init(rcc->channel, item, pipe_item_type);
+    red_channel_client_pipe_add(rcc, item);
+    red_channel_client_push(rcc);
+}
+
+void red_channel_pipes_add_type(RedChannel *channel, int pipe_item_type)
+{
+    if (channel->rcc) {
+        red_channel_client_pipe_add_type(channel->rcc, pipe_item_type);
+    }
+}
+
+int red_channel_client_is_connected(RedChannelClient *rcc)
+{
+    return rcc->stream != NULL;
 }
 
 void red_channel_pipe_item_remove(RedChannel *channel, PipeItem *item)
@@ -752,27 +800,9 @@ void red_channel_pipe_item_remove(RedChannel *channel, PipeItem *item)
     ring_remove(&item->link);
 }
 
-void red_channel_pipe_add_tail(RedChannel *channel, PipeItem *item)
-{
-    ASSERT(channel);
-    channel->pipe_size++;
-    ring_add_before(&item->link, &channel->pipe);
-
-    red_channel_push(channel);
-}
-
-void red_channel_pipe_add_type(RedChannel *channel, int pipe_item_type)
-{
-    PipeItem *item = spice_new(PipeItem, 1);
-    red_channel_pipe_item_init(channel, item, pipe_item_type);
-    red_channel_pipe_add(channel, item);
-
-    red_channel_push(channel);
-}
-
 int red_channel_is_connected(RedChannel *channel)
 {
-    return channel->rcc != NULL;
+    return (channel->rcc != NULL) && red_channel_client_is_connected(channel->rcc);
 }
 
 void red_channel_client_clear_sent_item(RedChannelClient *rcc)
@@ -785,19 +815,26 @@ void red_channel_client_clear_sent_item(RedChannelClient *rcc)
     rcc->send_data.size = 0;
 }
 
-void red_channel_pipe_clear(RedChannel *channel)
+void red_channel_client_pipe_clear(RedChannelClient *rcc)
 {
     PipeItem *item;
 
-    ASSERT(channel);
-    if (channel->rcc) {
-        red_channel_client_clear_sent_item(channel->rcc);
+    if (rcc) {
+        red_channel_client_clear_sent_item(rcc);
     }
-    while ((item = (PipeItem *)ring_get_head(&channel->pipe))) {
+    while ((item = (PipeItem *)ring_get_head(&rcc->pipe))) {
         ring_remove(&item->link);
-        red_channel_client_release_item(channel->rcc, item, FALSE);
+        red_channel_client_release_item(rcc, item, FALSE);
     }
-    channel->pipe_size = 0;
+    rcc->pipe_size = 0;
+}
+
+void red_channel_pipes_clear(RedChannel *channel)
+{
+    if (!channel || !channel->rcc) {
+        return;
+    }
+    red_channel_client_pipe_clear(channel->rcc);
 }
 
 void red_channel_client_ack_zero_messages_window(RedChannelClient *rcc)
@@ -839,7 +876,7 @@ void red_channel_client_disconnect(RedChannelClient *rcc)
 
 void red_channel_disconnect(RedChannel *channel)
 {
-    red_channel_pipe_clear(channel);
+    red_channel_pipes_clear(channel);
     if (channel->rcc) {
         red_channel_client_disconnect(channel->rcc);
     }
@@ -934,12 +971,6 @@ int red_channel_no_item_being_sent(RedChannel *channel)
 int red_channel_client_no_item_being_sent(RedChannelClient *rcc)
 {
     return !rcc || (rcc->send_data.size == 0);
-}
-
-static void red_channel_client_pipe_remove(RedChannelClient *rcc, PipeItem *item)
-{
-    rcc->channel->pipe_size--;
-    ring_remove(&item->link);
 }
 
 void red_channel_client_pipe_remove_and_release(RedChannelClient *rcc,

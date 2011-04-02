@@ -1134,16 +1134,26 @@ static inline void pipe_item_remove(PipeItem *item)
     ring_remove(&item->link);
 }
 
-static void red_pipe_add_verb(RedChannel* channel, uint16_t verb)
+static void red_pipe_add_verb(RedChannelClient* rcc, uint16_t verb)
 {
     VerbItem *item = spice_new(VerbItem, 1);
-    red_channel_pipe_item_init(channel, &item->base, PIPE_ITEM_TYPE_VERB);
+
+    red_channel_pipe_item_init(rcc->channel, &item->base, PIPE_ITEM_TYPE_VERB);
     item->verb = verb;
-    red_channel_pipe_add(channel, &item->base);
+    red_channel_client_pipe_add(rcc, &item->base);
 }
 
 static inline void red_create_surface_item(RedWorker *worker, int surface_id);
 static void red_add_surface_image(RedWorker *worker, int surface_id);
+static void red_pipes_add_verb(RedChannel *channel, uint16_t verb)
+{
+    RedChannelClient *rcc = channel->rcc;
+
+    if (!rcc) {
+        return;
+    }
+    red_pipe_add_verb(rcc, verb);
+}
 
 static inline void red_handle_drawable_surfaces_client_synced(RedWorker *worker, Drawable *drawable)
 {
@@ -1193,7 +1203,7 @@ static inline void red_pipe_add_drawable(RedWorker *worker, Drawable *drawable)
     red_handle_drawable_surfaces_client_synced(worker, drawable);
 
     drawable->refs++;
-    red_channel_pipe_add(&worker->display_channel->common.base, &drawable->pipe_item);
+    red_channel_client_pipe_add(worker->display_channel->common.base.rcc, &drawable->pipe_item);
 }
 
 static inline void red_pipe_add_drawable_to_tail(RedWorker *worker, Drawable *drawable)
@@ -1203,7 +1213,7 @@ static inline void red_pipe_add_drawable_to_tail(RedWorker *worker, Drawable *dr
     }
     red_handle_drawable_surfaces_client_synced(worker, drawable);
     drawable->refs++;
-    red_channel_pipe_add_tail(&worker->display_channel->common.base, &drawable->pipe_item);
+    red_channel_client_pipe_add_tail(worker->display_channel->common.base.rcc, &drawable->pipe_item);
 }
 
 static inline void red_pipe_add_drawable_after(RedWorker *worker, Drawable *drawable,
@@ -1219,7 +1229,7 @@ static inline void red_pipe_add_drawable_after(RedWorker *worker, Drawable *draw
     }
     red_handle_drawable_surfaces_client_synced(worker, drawable);
     drawable->refs++;
-    red_channel_pipe_add_after(&worker->display_channel->common.base, &drawable->pipe_item, &pos_after->pipe_item);
+    red_channel_client_pipe_add_after(worker->display_channel->common.base.rcc, &drawable->pipe_item, &pos_after->pipe_item);
 }
 
 static inline PipeItem *red_pipe_get_tail(RedWorker *worker)
@@ -1228,17 +1238,16 @@ static inline PipeItem *red_pipe_get_tail(RedWorker *worker)
         return NULL;
     }
 
-    return (PipeItem*)ring_get_tail(&worker->display_channel->common.base.pipe);
+    return (PipeItem*)ring_get_tail(&worker->display_channel->common.base.rcc->pipe);
 }
 
 static inline void red_destroy_surface(RedWorker *worker, uint32_t surface_id);
 
 static inline void red_pipe_remove_drawable(RedWorker *worker, Drawable *drawable)
 {
-    if (ring_item_is_linked(&drawable->pipe_item.link)) {
-        worker->display_channel->common.base.pipe_size--;
-        ring_remove(&drawable->pipe_item.link);
-        release_drawable(worker, drawable);
+    if (pipe_item_is_linked(&drawable->pipe_item)) {
+        red_channel_client_pipe_remove_and_release(
+            worker->display_channel->common.base.rcc, &drawable->pipe_item);
     }
 }
 
@@ -1248,7 +1257,7 @@ static inline void red_pipe_add_image_item(RedWorker *worker, ImageItem *item)
         return;
     }
     item->refs++;
-    red_channel_pipe_add(&worker->display_channel->common.base, &item->link);
+    red_channel_client_pipe_add(worker->display_channel->common.base.rcc, &item->link);
 }
 
 static inline void red_pipe_add_image_item_after(RedWorker *worker, ImageItem *item,
@@ -1258,7 +1267,7 @@ static inline void red_pipe_add_image_item_after(RedWorker *worker, ImageItem *i
         return;
     }
     item->refs++;
-    red_channel_pipe_add_after(&worker->display_channel->common.base, &item->link, pos);
+    red_channel_client_pipe_add_after(worker->display_channel->common.base.rcc, &item->link, pos);
 }
 
 static void release_image_item(ImageItem *item)
@@ -1368,7 +1377,7 @@ static inline void red_destroy_surface_item(RedWorker *worker, uint32_t surface_
     worker->display_channel->surface_client_created[surface_id] = FALSE;
     channel = &worker->display_channel->common.base;
     destroy = get_surface_destroy_item(channel, surface_id);
-    red_channel_pipe_add(channel, &destroy->pipe_item);
+    red_channel_client_pipe_add(channel->rcc, &destroy->pipe_item);
 }
 
 static inline void red_destroy_surface(RedWorker *worker, uint32_t surface_id)
@@ -1684,7 +1693,7 @@ static void red_clear_surface_drawables_from_pipe(RedWorker *worker, int surface
     /* removing the newest drawables that their destination is surface_id and
        no other drawable depends on them */
 
-    ring = &worker->display_channel->common.base.pipe;
+    ring = &worker->display_channel->common.base.rcc->pipe;
     item = (PipeItem *) ring;
     while ((item = (PipeItem *)ring_next(ring, (RingItem *)item))) {
         Drawable *drawable;
@@ -1703,7 +1712,7 @@ static void red_clear_surface_drawables_from_pipe(RedWorker *worker, int surface
             ring_remove(&tmp_item->link);
             worker->display_channel->common.base.release_item(
                 worker->display_channel->common.base.rcc, tmp_item, FALSE);
-            worker->display_channel->common.base.pipe_size--;
+            worker->display_channel->common.base.rcc->pipe_size--;
 
             if (!item) {
                 item = (PipeItem *)ring;
@@ -2163,7 +2172,7 @@ static void push_stream_clip_by_drawable(DisplayChannel* channel, StreamAgent *a
         item->rects->num_rects = n_rects;
         region_ret_rects(&drawable->tree_item.base.rgn, item->rects->rects, n_rects);
     }
-    red_channel_pipe_add((RedChannel*)channel, (PipeItem *)item);
+    red_channel_client_pipe_add(channel->common.base.rcc, (PipeItem *)item);
 }
 
 static void push_stream_clip(DisplayChannel* channel, StreamAgent *agent)
@@ -2181,7 +2190,7 @@ static void push_stream_clip(DisplayChannel* channel, StreamAgent *agent)
     item->rects = spice_malloc_n_m(n_rects, sizeof(SpiceRect), sizeof(SpiceClipRects));
     item->rects->num_rects = n_rects;
     region_ret_rects(&agent->vis_region, item->rects->rects, n_rects);
-    red_channel_pipe_add((RedChannel*)channel, (PipeItem *)item);
+    red_channel_client_pipe_add(channel->common.base.rcc, (PipeItem *)item);
 }
 
 static void red_display_release_stream_clip(DisplayChannel* channel, StreamClipItem *item)
@@ -2226,7 +2235,7 @@ static void red_stop_stream(RedWorker *worker, Stream *stream)
         region_clear(&stream_agent->vis_region);
         ASSERT(!pipe_item_is_linked(&stream_agent->destroy_item));
         stream->refs++;
-        red_channel_pipe_add(&channel->common.base, &stream_agent->destroy_item);
+        red_channel_client_pipe_add(channel->common.base.rcc, &stream_agent->destroy_item);
     }
     ring_remove(&stream->link);
     red_release_stream(worker, stream);
@@ -2251,7 +2260,7 @@ static inline void red_detach_stream_gracefully(RedWorker *worker, Stream *strea
         upgrade_item->rects = spice_malloc_n_m(n_rects, sizeof(SpiceRect), sizeof(SpiceClipRects));
         upgrade_item->rects->num_rects = n_rects;
         region_ret_rects(&upgrade_item->drawable->tree_item.base.rgn, upgrade_item->rects->rects, n_rects);
-        red_channel_pipe_add((RedChannel *)channel, &upgrade_item->base);
+        red_channel_client_pipe_add(channel->common.base.rcc, &upgrade_item->base);
     }
     red_detach_stream(worker, stream);
 }
@@ -2404,7 +2413,7 @@ static void red_display_create_stream(DisplayChannel *display, Stream *stream)
     agent->drops = 0;
     agent->fps = MAX_FPS;
     reset_rate(agent);
-    red_channel_pipe_add(&display->common.base, &agent->create_item);
+    red_channel_client_pipe_add(display->common.base.rcc, &agent->create_item);
 }
 
 static void red_create_stream(RedWorker *worker, Drawable *drawable)
@@ -4171,7 +4180,7 @@ static void qxl_process_cursor(RedWorker *worker, RedCursorCmd *cursor_cmd, uint
 
     if (worker->cursor_channel && (worker->mouse_mode == SPICE_MOUSE_MODE_SERVER ||
                                    cursor_cmd->type != QXL_CURSOR_MOVE || cursor_show)) {
-        red_channel_pipe_add(&worker->cursor_channel->common.base, &item->pipe_data);
+        red_channel_client_pipe_add(worker->cursor_channel->common.base.rcc, &item->pipe_data);
     } else {
         red_release_cursor(worker, item);
     }
@@ -4197,7 +4206,8 @@ static int red_process_cursor(RedWorker *worker, uint32_t max_pipe_size, int *ri
     }
 
     *ring_is_empty = FALSE;
-    while (!cursor_is_connected(worker) || worker->cursor_channel->common.base.pipe_size <= max_pipe_size) {
+    while (!cursor_is_connected(worker) ||
+           worker->cursor_channel->common.base.rcc->pipe_size <= max_pipe_size) {
         if (!worker->qxl->st->qif->get_cursor_command(worker->qxl, &ext_cmd)) {
             *ring_is_empty = TRUE;
             if (worker->repoll_cursor_ring < CMD_RING_POLL_RETRIES) {
@@ -4242,7 +4252,8 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
     }
 
     *ring_is_empty = FALSE;
-    while (!display_is_connected(worker) || worker->display_channel->common.base.pipe_size <= max_pipe_size) {
+    while (!display_is_connected(worker)
+           || worker->display_channel->common.base.rcc->pipe_size <= max_pipe_size) {
         if (!worker->qxl->st->qif->get_command(worker->qxl, &ext_cmd)) {
             *ring_is_empty = TRUE;;
             if (worker->repoll_cmd_ring < CMD_RING_POLL_RETRIES) {
@@ -4500,7 +4511,7 @@ static inline void fill_palette(DisplayChannel *display_channel,
             *flags |= SPICE_BITMAP_FLAGS_PAL_FROM_CACHE;
             return;
         }
-        if (red_palette_cache_add(display_channel, palette->unique, 1)) {
+        if (red_palette_cache_add(display_channel->common.base.rcc, palette->unique, 1)) {
             *flags |= SPICE_BITMAP_FLAGS_PAL_CACHE_ME;
         }
     }
@@ -5924,7 +5935,7 @@ static void fill_cursor(CursorChannel *cursor_channel, SpiceCursor *red_cursor, 
             red_cursor->flags |= SPICE_CURSOR_FLAGS_FROM_CACHE;
             return;
         }
-        if (red_cursor_cache_add(cursor_channel, red_cursor->header.unique, 1)) {
+        if (red_cursor_cache_add(cursor_channel->common.base.rcc, red_cursor->header.unique, 1)) {
             red_cursor->flags |= SPICE_CURSOR_FLAGS_CACHE_ME;
         }
     }
@@ -6164,7 +6175,7 @@ static int pipe_rendered_drawables_intersect_with_areas(RedWorker *worker,
     Ring *pipe;
 
     ASSERT(num_surfaces);
-    pipe = &display_channel->common.base.pipe;
+    pipe = &display_channel->common.base.rcc->pipe;
 
     for (pipe_item = (PipeItem *)ring_get_head(pipe);
          pipe_item;
@@ -6202,7 +6213,7 @@ static void red_pipe_replace_rendered_drawables_with_images(RedWorker *worker,
     resent_areas[0] = *first_area;
     num_resent = 1;
 
-    pipe = &display_channel->common.base.pipe;
+    pipe = &display_channel->common.base.rcc->pipe;
 
     // going from the oldest to the newest
     for (pipe_item = (PipeItem *)ring_get_tail(pipe);
@@ -8119,8 +8130,9 @@ void red_disconnect_all_display_TODO_remove_me(RedChannel *channel)
 static void red_migrate_display(RedWorker *worker)
 {
     if (worker->display_channel) {
-        red_pipe_add_verb(&worker->display_channel->common.base, SPICE_MSG_DISPLAY_STREAM_DESTROY_ALL);
-        red_channel_pipe_add_type(&worker->display_channel->common.base, PIPE_ITEM_TYPE_MIGRATE);
+        red_pipes_add_verb(&worker->display_channel->common.base,
+                           SPICE_MSG_DISPLAY_STREAM_DESTROY_ALL);
+        red_channel_pipes_add_type(&worker->display_channel->common.base, PIPE_ITEM_TYPE_MIGRATE);
     }
 }
 
@@ -8249,7 +8261,7 @@ static inline void __red_create_surface_item(RedWorker *worker, int surface_id, 
 
     worker->display_channel->surface_client_created[surface_id] = TRUE;
 
-    red_channel_pipe_add(&worker->display_channel->common.base, &create->pipe_item);
+    red_channel_client_pipe_add(worker->display_channel->common.base.rcc, &create->pipe_item);
 }
 
 static inline void red_create_surface_item(RedWorker *worker, int surface_id)
@@ -8349,7 +8361,7 @@ static inline void flush_display_commands(RedWorker *worker)
         for (;;) {
             red_channel_push(&worker->display_channel->common.base);
             if (!display_is_connected(worker) ||
-                 worker->display_channel->common.base.pipe_size <= MAX_PIPE_SIZE) {
+                 worker->display_channel->common.base.rcc->pipe_size <= MAX_PIPE_SIZE) {
                 break;
             }
             RedChannel *channel = (RedChannel *)worker->display_channel;
@@ -8392,8 +8404,8 @@ static inline void flush_cursor_commands(RedWorker *worker)
         int sleep_count = 0;
         for (;;) {
             red_channel_push(&worker->cursor_channel->common.base);
-            if (!cursor_is_connected(worker) ||
-                                        worker->cursor_channel->common.base.pipe_size <= MAX_PIPE_SIZE) {
+            if (!cursor_is_connected(worker)
+                || worker->cursor_channel->common.base.rcc->pipe_size <= MAX_PIPE_SIZE) {
                 break;
             }
             RedChannel *channel = (RedChannel *)worker->cursor_channel;
@@ -8423,7 +8435,7 @@ static void push_new_primary_surface(RedWorker *worker)
     DisplayChannel *display_channel;
 
     if ((display_channel = worker->display_channel)) {
-        red_channel_pipe_add_type(&display_channel->common.base, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
+        red_channel_client_pipe_add_type(display_channel->common.base.rcc, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
         if (!display_channel->common.base.migrate) {
             red_create_surface_item(worker, 0);
         }
@@ -8481,7 +8493,7 @@ static void on_new_display_channel(RedWorker *worker)
         push_new_primary_surface(worker);
         red_add_surface_image(worker, 0);
         if (red_channel_is_connected(&display_channel->common.base)) {
-            red_pipe_add_verb(&display_channel->common.base, SPICE_MSG_DISPLAY_MARK);
+            red_pipe_add_verb(display_channel->common.base.rcc, SPICE_MSG_DISPLAY_MARK);
             red_disply_start_streams(display_channel);
         }
     }
@@ -8719,7 +8731,7 @@ static int display_channel_handle_migrate_mark(RedChannelClient *rcc)
         return FALSE;
     }
     channel->expect_migrate_mark = FALSE;
-    red_channel_pipe_add_type((RedChannel *)channel, PIPE_ITEM_TYPE_MIGRATE_DATA);
+    red_channel_client_pipe_add_type(channel->common.base.rcc, PIPE_ITEM_TYPE_MIGRATE_DATA);
     return TRUE;
 }
 
@@ -8773,7 +8785,7 @@ static uint64_t display_channel_handle_migrate_data(RedChannelClient *rcc, uint3
 
     if (migrate_data->pixmap_cache_freezer) {
         channel->pixmap_cache->size = migrate_data->pixmap_cache_size;
-        red_channel_pipe_add_type((RedChannel *)channel, PIPE_ITEM_TYPE_PIXMAP_RESET);
+        red_channel_client_pipe_add_type(channel->common.base.rcc, PIPE_ITEM_TYPE_PIXMAP_RESET);
     }
 
     if (display_channel_handle_migrate_glz_dictionary(channel, migrate_data)) {
@@ -8786,7 +8798,7 @@ static uint64_t display_channel_handle_migrate_data(RedChannelClient *rcc, uint3
         PANIC("restoring global lz dictionary failed");
     }
 
-    red_channel_pipe_add_type((RedChannel *)channel, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
+    red_channel_client_pipe_add_type(channel->common.base.rcc, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
     red_channel_ack_zero_messages_window(&channel->common.base);
     return TRUE;
 }
@@ -9146,9 +9158,11 @@ static void red_disconnect_cursor(RedChannel *channel)
 
 static void red_migrate_cursor(RedWorker *worker)
 {
-    if (worker->cursor_channel) {
-        red_channel_pipe_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
-        red_channel_pipe_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_MIGRATE);
+    if (cursor_is_connected(worker)) {
+        red_channel_pipes_add_type(&worker->cursor_channel->common.base,
+                                   PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
+        red_channel_pipes_add_type(&worker->cursor_channel->common.base,
+                                   PIPE_ITEM_TYPE_MIGRATE);
     }
 }
 
@@ -9160,7 +9174,7 @@ static void on_new_cursor_channel(RedWorker *worker)
     red_channel_ack_zero_messages_window(&channel->common.base);
     red_channel_push_set_ack(&channel->common.base);
     if (worker->surfaces[0].context.canvas && !channel->common.base.migrate) {
-        red_channel_pipe_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_CURSOR_INIT);
+        red_channel_client_pipe_add_type(worker->cursor_channel->common.base.rcc, PIPE_ITEM_TYPE_CURSOR_INIT);
     }
 }
 
@@ -9481,9 +9495,9 @@ static inline void red_cursor_reset(RedWorker *worker)
     worker->cursor_trail_length = worker->cursor_trail_frequency = 0;
 
     if (worker->cursor_channel) {
-        red_channel_pipe_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
+        red_channel_pipes_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
         if (!worker->cursor_channel->common.base.migrate) {
-            red_pipe_add_verb(&worker->cursor_channel->common.base, SPICE_MSG_CURSOR_RESET);
+            red_pipes_add_verb(&worker->cursor_channel->common.base, SPICE_MSG_CURSOR_RESET);
         }
         red_wait_outgoing_item((RedChannel *)worker->cursor_channel);
         ASSERT(red_channel_no_item_being_sent(&worker->cursor_channel->common.base));
@@ -9509,8 +9523,8 @@ static inline void handle_dev_destroy_surfaces(RedWorker *worker)
     ASSERT(ring_is_empty(&worker->streams));
 
     if (worker->display_channel) {
-        red_channel_pipe_add_type(&worker->display_channel->common.base, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
-        red_pipe_add_verb(&worker->display_channel->common.base, SPICE_MSG_DISPLAY_STREAM_DESTROY_ALL);
+        red_channel_client_pipe_add_type(worker->display_channel->common.base.rcc, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
+        red_pipe_add_verb(worker->display_channel->common.base.rcc, SPICE_MSG_DISPLAY_STREAM_DESTROY_ALL);
     }
 
     red_display_clear_glz_drawables(worker->display_channel);
@@ -9541,13 +9555,15 @@ static inline void handle_dev_create_primary_surface(RedWorker *worker)
     red_create_surface(worker, 0, surface.width, surface.height, surface.stride, surface.format,
                        line_0, surface.flags & QXL_SURF_FLAG_KEEP_DATA, TRUE);
 
-    if (worker->display_channel) {
-        red_pipe_add_verb(&worker->display_channel->common.base, SPICE_MSG_DISPLAY_MARK);
+    if (display_is_connected(worker)) {
+        red_pipes_add_verb(&worker->display_channel->common.base,
+                           SPICE_MSG_DISPLAY_MARK);
         red_channel_push(&worker->display_channel->common.base);
     }
 
-    if (worker->cursor_channel) {
-        red_channel_pipe_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_CURSOR_INIT);
+    if (cursor_is_connected(worker)) {
+        red_channel_pipes_add_type(&worker->cursor_channel->common.base,
+                                   PIPE_ITEM_TYPE_CURSOR_INIT);
     }
 }
 
@@ -9673,7 +9689,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         if (worker->qxl->st->qif->flush_resources(worker->qxl) == 0) {
             red_printf("oom current %u pipe %u", worker->current_size,
                        worker->display_channel ?
-                       display_red_channel->pipe_size : 0);
+                       display_red_channel->rcc->pipe_size : 0);
             red_free_some(worker);
             worker->qxl->st->qif->flush_resources(worker->qxl);
         }

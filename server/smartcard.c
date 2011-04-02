@@ -342,7 +342,7 @@ static void smartcard_channel_disconnect(RedChannelClient *rcc)
  * so no mutex is required. */
 static void smartcard_channel_pipe_add_push(RedChannelClient *rcc, PipeItem *item)
 {
-    red_channel_pipe_add_push(rcc->channel, item);
+    red_channel_client_pipe_add_push(rcc, item);
 }
 
 static void smartcard_push_error(RedChannelClient *rcc, uint32_t reader_id, VSCErrorCode error)

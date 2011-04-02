@@ -734,7 +734,7 @@ static inline void __process_rcv_buf_tokens(TunnelChannel *channel, RedSocket *s
     if ((sckt->in_data.num_tokens >= SOCKET_TOKENS_TO_SEND) ||
         (!sckt->in_data.client_total_num_tokens && !sckt->in_data.ready_chunks_queue.head)) {
         sckt->out_data.token_pipe_item.type = PIPE_ITEM_TYPE_SOCKET_TOKEN;
-        red_channel_pipe_add(&channel->base, &sckt->out_data.token_pipe_item);
+        red_channel_client_pipe_add(channel->base.rcc, &sckt->out_data.token_pipe_item);
     }
 }
 
@@ -1094,7 +1094,7 @@ static inline TunnelService *__tunnel_worker_add_service(TunnelWorker *worker, u
 #endif
     if (!virt_ip) {
         new_service->pipe_item.type = PIPE_ITEM_TYPE_SERVICE_IP_MAP;
-        red_channel_pipe_add(&worker->channel->base, &new_service->pipe_item);
+        red_channel_client_pipe_add(worker->channel->base.rcc, &new_service->pipe_item);
     }
 
     return new_service;
@@ -1347,7 +1347,7 @@ static inline void __tunnel_socket_add_fin_to_pipe(TunnelChannel *channel, RedSo
 {
     ASSERT(!red_channel_pipe_item_is_linked(&channel->base, &sckt->out_data.status_pipe_item));
     sckt->out_data.status_pipe_item.type = PIPE_ITEM_TYPE_SOCKET_FIN;
-    red_channel_pipe_add(&channel->base, &sckt->out_data.status_pipe_item);
+    red_channel_client_pipe_add(channel->base.rcc, &sckt->out_data.status_pipe_item);
 }
 
 static inline void __tunnel_socket_add_close_to_pipe(TunnelChannel *channel, RedSocket *sckt)
@@ -1361,7 +1361,7 @@ static inline void __tunnel_socket_add_close_to_pipe(TunnelChannel *channel, Red
     }
     sckt->pushed_close = TRUE;
     sckt->out_data.status_pipe_item.type = PIPE_ITEM_TYPE_SOCKET_CLOSE;
-    red_channel_pipe_add(&channel->base, &sckt->out_data.status_pipe_item);
+    red_channel_client_pipe_add(channel->base.rcc, &sckt->out_data.status_pipe_item);
 }
 
 static inline void __tunnel_socket_add_close_ack_to_pipe(TunnelChannel *channel, RedSocket *sckt)
@@ -1375,7 +1375,7 @@ static inline void __tunnel_socket_add_close_ack_to_pipe(TunnelChannel *channel,
     }
 
     sckt->out_data.status_pipe_item.type = PIPE_ITEM_TYPE_SOCKET_CLOSED_ACK;
-    red_channel_pipe_add(&channel->base, &sckt->out_data.status_pipe_item);
+    red_channel_client_pipe_add(channel->base.rcc, &sckt->out_data.status_pipe_item);
 }
 
 /*
@@ -1639,7 +1639,7 @@ static int tunnel_channel_handle_socket_token(TunnelChannel *channel, RedSocket 
         !red_channel_pipe_item_is_linked(&channel->base, &sckt->out_data.data_pipe_item)) {
         // data is pending to be sent
         sckt->out_data.data_pipe_item.type = PIPE_ITEM_TYPE_SOCKET_DATA;
-        red_channel_pipe_add(&channel->base, &sckt->out_data.data_pipe_item);
+        red_channel_client_pipe_add(channel->base.rcc, &sckt->out_data.data_pipe_item);
     }
 
     return TRUE;
@@ -1809,7 +1809,7 @@ static int tunnel_channel_handle_migrate_mark(RedChannelClient *rcc)
         }
     }
 
-    red_channel_pipe_add((RedChannel *)channel, &migrate_item->base);
+    red_channel_client_pipe_add(channel->base.rcc, &migrate_item->base);
 
     return TRUE;
 error:
@@ -2113,7 +2113,7 @@ static void tunnel_channel_restore_socket_state(TunnelChannel *channel, RedSocke
         if (!red_channel_pipe_item_is_linked(
                 &channel->base, &sckt->out_data.data_pipe_item)) {
             sckt->out_data.data_pipe_item.type = PIPE_ITEM_TYPE_SOCKET_DATA;
-            red_channel_pipe_add(&channel->base, &sckt->out_data.data_pipe_item);
+            red_channel_client_pipe_add(channel->base.rcc, &sckt->out_data.data_pipe_item);
         }
     }
 
@@ -2795,7 +2795,7 @@ static void tunnel_worker_release_socket_out_data(TunnelWorker *worker, PipeItem
                 if (!red_channel_pipe_item_is_linked(
                         &worker->channel->base, &sckt_out_data->data_pipe_item)) {
                     sckt_out_data->data_pipe_item.type = PIPE_ITEM_TYPE_SOCKET_DATA;
-                    red_channel_pipe_add(&worker->channel->base, &sckt_out_data->data_pipe_item);
+                    red_channel_client_pipe_add(worker->channel->base.rcc, &sckt_out_data->data_pipe_item);
                 }
             } else if ((sckt->slirp_status == SLIRP_SCKT_STATUS_SHUTDOWN_SEND) ||
                        (sckt->slirp_status == SLIRP_SCKT_STATUS_WAIT_CLOSE)) {
@@ -2959,7 +2959,7 @@ static int tunnel_socket_connect(SlirpUsrNetworkInterface *usr_interface,
 #endif
     *o_usr_s = sckt;
     sckt->out_data.status_pipe_item.type = PIPE_ITEM_TYPE_SOCKET_OPEN;
-    red_channel_pipe_add(&worker->channel->base, &sckt->out_data.status_pipe_item);
+    red_channel_client_pipe_add(worker->channel->base.rcc, &sckt->out_data.status_pipe_item);
 
     errno = EINPROGRESS;
     return -1;
@@ -3048,7 +3048,7 @@ static int tunnel_socket_send(SlirpUsrNetworkInterface *usr_interface, UserSocke
             !red_channel_pipe_item_is_linked(&worker->channel->base,
                                              &sckt->out_data.data_pipe_item)) {
             sckt->out_data.data_pipe_item.type = PIPE_ITEM_TYPE_SOCKET_DATA;
-            red_channel_pipe_add(&worker->channel->base, &sckt->out_data.data_pipe_item);
+            red_channel_client_pipe_add(worker->channel->base.rcc, &sckt->out_data.data_pipe_item);
         }
     }
 
@@ -3426,7 +3426,7 @@ static void on_new_tunnel_channel(TunnelChannel *channel)
         channel->expect_migrate_data = TRUE;
     } else {
         red_channel_init_outgoing_messages_window(&channel->base);
-        red_channel_pipe_add_type(&channel->base, PIPE_ITEM_TYPE_TUNNEL_INIT);
+        red_channel_client_pipe_add_type(channel->base.rcc, PIPE_ITEM_TYPE_TUNNEL_INIT);
     }
 }
 
@@ -3484,6 +3484,6 @@ static void handle_tunnel_channel_migrate(struct Channel *channel)
     TunnelChannel *tunnel_channel = ((TunnelWorker *)channel->data)->channel;
     tunnel_channel->mig_inprogress = TRUE;
     net_slirp_freeze();
-    red_channel_pipe_add_type(&tunnel_channel->base, PIPE_ITEM_TYPE_MIGRATE);
+    red_channel_client_pipe_add_type(tunnel_channel->base.rcc, PIPE_ITEM_TYPE_MIGRATE);
 }
 
