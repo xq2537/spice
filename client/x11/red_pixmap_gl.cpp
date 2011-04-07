@@ -175,10 +175,7 @@ void RedPixmapGL::update_texture(const SpiceRect *bbox)
 {
     RenderType rendertype;
     GLuint tex;
-    int width_powed;
-    int height_powed;
     int height;
-    int width;
 
     rendertype = ((PixelsSource_p*)get_opaque())->gl.rendertype;
 
@@ -189,9 +186,6 @@ void RedPixmapGL::update_texture(const SpiceRect *bbox)
         int is_enabled;
         GLint prev_tex;
 
-        width_powed = ((PixelsSource_p*)get_opaque())->gl.width_powed;
-        height_powed = ((PixelsSource_p*)get_opaque())->gl.height_powed;
-        width = ((PixelsSource_p*)get_opaque())->gl.width;
         height = ((PixelsSource_p*)get_opaque())->gl.height;
 
         tex = ((PixelsSource_p*)get_opaque())->gl.tex;
