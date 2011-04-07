@@ -6,16 +6,16 @@ DIST_SUBDIRS = x11 windows gui
 spice_built_sources = generated_demarshallers.cpp generated_marshallers.cpp generated_demarshallers1.cpp generated_marshallers1.cpp
 
 generated_demarshallers.cpp: $(top_srcdir)/spice.proto
-	$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-demarshallers --client --include common.h --include messages.h $(top_srcdir)/spice.proto generated_demarshallers.cpp
+	$(AM_V_GEN)$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-demarshallers --client --include common.h --include messages.h $(top_srcdir)/spice.proto generated_demarshallers.cpp
 
 generated_demarshallers1.cpp: $(top_srcdir)/spice1.proto
-	$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-demarshallers --client --include common.h --include messages.h --prefix 1 --ptrsize 8 $(top_srcdir)/spice1.proto generated_demarshallers1.cpp
+	$(AM_V_GEN)$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-demarshallers --client --include common.h --include messages.h --prefix 1 --ptrsize 8 $(top_srcdir)/spice1.proto generated_demarshallers1.cpp
 
 generated_marshallers.cpp: $(top_srcdir)/spice.proto
-	$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-marshallers -P  --include "common.h" --include messages.h --include marshallers.h --client $(top_srcdir)/spice.proto generated_marshallers.cpp
+	$(AM_V_GEN)$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-marshallers -P  --include "common.h" --include messages.h --include marshallers.h --client $(top_srcdir)/spice.proto generated_marshallers.cpp
 
 generated_marshallers1.cpp: $(top_srcdir)/spice1.proto
-	$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-marshallers -P  --include "common.h" --include messages.h --include marshallers.h --client --prefix 1 --ptrsize 8 $(top_srcdir)/spice1.proto generated_marshallers1.cpp
+	$(AM_V_GEN)$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-marshallers -P  --include "common.h" --include messages.h --include marshallers.h --client --prefix 1 --ptrsize 8 $(top_srcdir)/spice1.proto generated_marshallers1.cpp
 
 if SUPPORT_GL
 GL_SRCS =				\
