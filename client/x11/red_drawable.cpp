@@ -353,7 +353,7 @@ static inline void copy_to_pixmap_from_gltexture(const RedDrawable_p* dest,
     while (height > 0) {
         glReadPixels(src_x, y - height, area.right - area.left, 1,
                      GL_BGRA, GL_UNSIGNED_BYTE,
-                     (uint8_t *)pixman_image_get_stride(dest->source.pixmap.pixman_image) +
+                     (uint8_t *)pixman_image_get_data(dest->source.pixmap.pixman_image) +
                      (area.left + offset.x) * 4 +
                      (area.top + offset.y + height - 1) *
                      pixman_image_get_stride(dest->source.pixmap.pixman_image));
