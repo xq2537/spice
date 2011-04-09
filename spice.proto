@@ -639,7 +639,7 @@ channel DisplayChannel : BaseChannel {
 	DisplayBase base;
 	struct Fill {
 	    Brush brush @outvar(brush);
-	    uint16 rop_descriptor;
+	    ropd rop_descriptor;
 	    QMask mask @outvar(mask);
 	} data;
     } draw_fill = 302;
