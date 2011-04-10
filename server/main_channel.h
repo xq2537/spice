@@ -76,6 +76,9 @@ void main_channel_push_multi_media_time(MainChannel *main_chan, int time);
 int main_channel_getsockname(MainChannel *main_chan, struct sockaddr *sa, socklen_t *salen);
 int main_channel_getpeername(MainChannel *main_chan, struct sockaddr *sa, socklen_t *salen);
 
+int main_channel_client_is_low_bandwidth(MainChannelClient *mcc);
+uint64_t main_channel_client_get_bitrate_per_sec(MainChannelClient *mcc);
+
 // TODO: Defines used to calculate receive buffer size, and also by reds.c
 // other options: is to make a reds_main_consts.h, to duplicate defines.
 #define REDS_AGENT_WINDOW_SIZE 10

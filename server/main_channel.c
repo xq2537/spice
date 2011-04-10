@@ -122,6 +122,8 @@ struct MainChannelClient {
     uint32_t ping_id;
     uint32_t net_test_id;
     int net_test_stage;
+    uint64_t latency;
+    uint64_t bitrate_per_sec;
 };
 
 struct MainChannel {
@@ -136,9 +138,6 @@ enum NetTestStage {
     NET_TEST_STAGE_RATE,
 };
 
-static uint64_t latency = 0;
-uint64_t bitrate_per_sec = ~0;
-
 static void main_channel_client_disconnect(RedChannelClient *rcc)
 {
     red_channel_client_disconnect(rcc);
@@ -147,9 +146,6 @@ static void main_channel_client_disconnect(RedChannelClient *rcc)
 static void main_disconnect(MainChannel *main_chan)
 {
     red_channel_destroy(&main_chan->base);
-
-    latency = 0;
-    bitrate_per_sec = ~0;
 }
 
 static int main_channel_client_push_ping(RedChannelClient *rcc, int size);
@@ -747,23 +743,23 @@ static int main_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint
             case NET_TEST_STAGE_LATENCY:
                 mcc->net_test_id++;
                 mcc->net_test_stage = NET_TEST_STAGE_RATE;
-                latency = roundtrip;
+                mcc->latency = roundtrip;
                 break;
             case NET_TEST_STAGE_RATE:
                 mcc->net_test_id = 0;
-                if (roundtrip <= latency) {
+                if (roundtrip <= mcc->latency) {
                     // probably high load on client or server result with incorrect values
-                    latency = 0;
+                    mcc->latency = 0;
                     red_printf("net test: invalid values, latency %lu roundtrip %lu. assuming high"
-                               "bandwidth", latency, roundtrip);
+                               "bandwidth", mcc->latency, roundtrip);
                     break;
                 }
-                bitrate_per_sec = (uint64_t)(NET_TEST_BYTES * 8) * 1000000 / (roundtrip - latency);
+                mcc->bitrate_per_sec = (uint64_t)(NET_TEST_BYTES * 8) * 1000000 / (roundtrip - mcc->latency);
                 red_printf("net test: latency %f ms, bitrate %lu bps (%f Mbps)%s",
-                           (double)latency / 1000,
-                           bitrate_per_sec,
-                           (double)bitrate_per_sec / 1024 / 1024,
-                           IS_LOW_BANDWIDTH() ? " LOW BANDWIDTH" : "");
+                           (double)mcc->latency / 1000,
+                           mcc->bitrate_per_sec,
+                           (double)mcc->bitrate_per_sec / 1024 / 1024,
+                           main_channel_client_is_low_bandwidth(mcc) ? " LOW BANDWIDTH" : "");
                 mcc->net_test_stage = NET_TEST_STAGE_INVALID;
                 break;
             default:
@@ -824,18 +820,27 @@ static int main_channel_handle_migrate_flush_mark(RedChannelClient *rcc)
     return TRUE;
 }
 
+MainChannelClient *main_channel_client_create(MainChannel *main_chan,
+    RedClient *client, RedsStream *stream)
+{
+    MainChannelClient *mcc = (MainChannelClient*)red_channel_client_create(
+        sizeof(MainChannelClient), &main_chan->base, client, stream);
+
+    mcc->bitrate_per_sec = ~0;
+    return mcc;
+}
+
 MainChannelClient *main_channel_link(Channel *channel, RedClient *client,
                         RedsStream *stream, int migration,
                         int num_common_caps, uint32_t *common_caps, int num_caps,
                         uint32_t *caps)
 {
-    MainChannel *main_chan;
     MainChannelClient *mcc;
 
     if (channel->data == NULL) {
         red_printf("create main channel");
         channel->data = red_channel_create_parser(
-            sizeof(*main_chan), core, migration, FALSE /* handle_acks */
+            sizeof(MainChannel), core, migration, FALSE /* handle_acks */
             ,main_channel_config_socket
             ,main_channel_client_disconnect
             ,spice_get_client_channel_parser(SPICE_CHANNEL_MAIN, NULL)
@@ -852,10 +857,8 @@ MainChannelClient *main_channel_link(Channel *channel, RedClient *client,
             ,main_channel_handle_migrate_data_get_serial);
         ASSERT(channel->data);
     }
-    main_chan = (MainChannel*)channel->data;
     red_printf("add main channel client");
-    mcc = (MainChannelClient*)
-            red_channel_client_create(sizeof(MainChannelClient), &main_chan->base, client, stream);
+    mcc = main_channel_client_create(channel->data, client, stream);
     return mcc;
 }
 
@@ -876,6 +879,17 @@ void main_channel_close(MainChannel *main_chan)
     if (main_chan && (socketfd = red_channel_get_first_socket(&main_chan->base)) != -1) {
         close(socketfd);
     }
+}
+
+int main_channel_client_is_low_bandwidth(MainChannelClient *mcc)
+{
+    // TODO: configurable?
+    return mcc->bitrate_per_sec < 10 * 1024 * 1024;
+}
+
+uint64_t main_channel_client_get_bitrate_per_sec(MainChannelClient *mcc)
+{
+    return mcc->bitrate_per_sec;
 }
 
 static void main_channel_shutdown(Channel *channel)

@@ -345,6 +345,7 @@ void red_channel_client_disconnect(RedChannelClient *rcc);
 /* Note: the valid times to call red_channel_get_marshaller are just during send_item callback. */
 SpiceMarshaller *red_channel_client_get_marshaller(RedChannelClient *rcc);
 RedsStream *red_channel_client_get_stream(RedChannelClient *rcc);
+RedClient *red_channel_client_get_client(RedChannelClient *rcc);
 
 /* this is a convenience function for sending messages, sometimes (migration only?)
  * the serial from the header needs to be available for sending. Note that the header

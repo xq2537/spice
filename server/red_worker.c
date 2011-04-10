@@ -62,6 +62,7 @@
 #include "zlib_encoder.h"
 #include "red_channel.h"
 #include "red_dispatcher.h"
+#include "main_channel.h"
 
 //#define COMPRESS_STAT
 //#define DUMP_BITMAP
@@ -100,7 +101,7 @@
 
 //best bit rate per pixel base on 13000000 bps for frame size 720x576 pixels and 25 fps
 #define BEST_BIT_RATE_PER_PIXEL 38
-#define WARST_BIT_RATE_PER_PIXEL 4
+#define WORST_BIT_RATE_PER_PIXEL 4
 
 #define RED_COMPRESS_BUF_SIZE (1024 * 64)
 
@@ -931,7 +932,7 @@ static void display_channel_push_release(DisplayChannel *channel, uint8_t type, 
 static void red_display_release_stream_clip(DisplayChannel* channel, StreamClipItem *item);
 static int red_display_free_some_independent_glz_drawables(DisplayChannel *channel);
 static void red_display_free_glz_drawable(DisplayChannel *channel, RedGlzDrawable *drawable);
-static void reset_rate(StreamAgent *stream_agent);
+static void reset_rate(RedWorker *worker, StreamAgent *stream_agent);
 static BitmapGradualType _get_bitmap_graduality_level(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_id);
 static inline int _stride_is_extra(SpiceBitmap *bitmap);
 static void red_disconnect_cursor(RedChannel *channel);
@@ -2389,12 +2390,21 @@ static inline Stream *red_alloc_stream(RedWorker *worker)
     return stream;
 }
 
-static int get_bit_rate(int width, int height)
+static int get_bit_rate(RedWorker *worker,
+    int width, int height)
 {
     uint64_t bit_rate = width * height * BEST_BIT_RATE_PER_PIXEL;
-    if (IS_LOW_BANDWIDTH()) {
-        bit_rate = MIN(bitrate_per_sec * 70 / 100, bit_rate);
-        bit_rate = MAX(bit_rate, width * height * WARST_BIT_RATE_PER_PIXEL);
+    MainChannelClient *mcc;
+    int is_low_bandwidth = 0;
+
+    if (display_is_connected(worker)) {
+        mcc = red_client_get_main(worker->display_channel->common.base.rcc->client);
+        is_low_bandwidth = main_channel_client_is_low_bandwidth(mcc);
+    }
+
+    if (is_low_bandwidth) {
+        bit_rate = MIN(main_channel_client_get_bitrate_per_sec(mcc) * 70 / 100, bit_rate);
+        bit_rate = MAX(bit_rate, width * height * WORST_BIT_RATE_PER_PIXEL);
     }
     return bit_rate;
 }
@@ -2412,7 +2422,7 @@ static void red_display_create_stream(DisplayChannel *display, Stream *stream)
     }
     agent->drops = 0;
     agent->fps = MAX_FPS;
-    reset_rate(agent);
+    reset_rate(display->common.worker, agent);
     red_channel_client_pipe_add(display->common.base.rcc, &agent->create_item);
 }
 
@@ -2443,7 +2453,7 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
     stream->height = src_rect->bottom - src_rect->top;
     stream->dest_area = drawable->red_drawable->bbox;
     stream->refs = 1;
-    stream->bit_rate = get_bit_rate(stream_width, stream_height);
+    stream->bit_rate = get_bit_rate(worker, stream_width, stream_height);
     SpiceBitmap *bitmap = &drawable->red_drawable->u.copy.src_bitmap->u.bitmap;
     stream->top_down = !!(bitmap->flags & SPICE_BITMAP_FLAGS_TOP_DOWN);
     drawable->stream = stream;
@@ -2552,12 +2562,12 @@ static inline int red_is_next_stream_frame(RedWorker *worker, const Drawable *ca
                                       prev->stream);
 }
 
-static void reset_rate(StreamAgent *stream_agent)
+static void reset_rate(RedWorker *worker, StreamAgent *stream_agent)
 {
     Stream *stream = stream_agent->stream;
     int rate;
 
-    rate = get_bit_rate(stream->width, stream->height);
+    rate = get_bit_rate(worker, stream->width, stream->height);
     if (rate == stream->bit_rate) {
         return;
     }
@@ -2565,11 +2575,22 @@ static void reset_rate(StreamAgent *stream_agent)
     /* MJpeg has no rate limiting anyway, so do nothing */
 }
 
+static int display_channel_is_low_bandwidth(DisplayChannel *display_channel)
+{
+    if (display_channel->common.base.rcc) {
+        if (main_channel_client_is_low_bandwidth(
+                red_client_get_main(display_channel->common.base.rcc->client))) {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
 static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream)
 {
     ASSERT(stream->current);
 
-    if (!display_is_connected(worker) || !IS_LOW_BANDWIDTH()) {
+    if (!display_is_connected(worker) || !display_channel_is_low_bandwidth(worker->display_channel)) {
         return;
     }
 
@@ -8820,9 +8841,11 @@ static int display_channel_handle_message(RedChannelClient *rcc, uint32_t size, 
 
 static int common_channel_config_socket(RedChannelClient *rcc)
 {
+    RedClient *client = red_channel_client_get_client(rcc);
+    MainChannelClient *mcc = red_client_get_main(client);
+    RedsStream *stream = red_channel_client_get_stream(rcc);
     int flags;
     int delay_val;
-    RedsStream *stream = red_channel_client_get_stream(rcc);
 
     if ((flags = fcntl(stream->socket, F_GETFL)) == -1) {
         red_printf("accept failed, %s", strerror(errno));
@@ -8835,7 +8858,7 @@ static int common_channel_config_socket(RedChannelClient *rcc)
     }
 
     // TODO - this should be dynamic, not one time at channel creation
-    delay_val = IS_LOW_BANDWIDTH() ? 0 : 1;
+    delay_val = main_channel_client_is_low_bandwidth(mcc) ? 0 : 1;
     if (setsockopt(stream->socket, IPPROTO_TCP, TCP_NODELAY, &delay_val, sizeof(delay_val)) == -1) {
         red_printf("setsockopt failed, %s", strerror(errno));
     }
@@ -8885,6 +8908,7 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
     struct epoll_event event;
     RedChannel *channel;
     CommonChannel *common;
+    MainChannelClient *mcc = red_client_get_main(client);
 
     channel = red_channel_create_parser(size, &worker_core, migrate,
                                         TRUE /* handle_acks */,
@@ -8915,7 +8939,8 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
     // TODO: Should this be distinctive for the Display/Cursor channels? doesn't
     // make sense, does it?
     red_channel_ack_set_client_window(channel,
-        IS_LOW_BANDWIDTH() ? WIDE_CLIENT_ACK_WINDOW : NARROW_CLIENT_ACK_WINDOW);
+        main_channel_client_is_low_bandwidth(mcc) ?
+        WIDE_CLIENT_ACK_WINDOW : NARROW_CLIENT_ACK_WINDOW);
 
     event.events = EPOLLIN | EPOLLOUT | EPOLLET;
     event.data.ptr = &common->listener;
@@ -9111,6 +9136,7 @@ static void handle_new_display_channel(RedWorker *worker, RedClient *client, Red
 {
     DisplayChannel *display_channel;
     size_t stream_buf_size;
+    int is_low_bandwidth = main_channel_client_is_low_bandwidth(red_client_get_main(client));
 
     red_disconnect_all_display_TODO_remove_me((RedChannel *)worker->display_channel);
 
@@ -9158,7 +9184,7 @@ static void handle_new_display_channel(RedWorker *worker, RedClient *client, Red
     display_channel->send_data.free_list.res_size = DISPLAY_FREE_LIST_DEFAULT_SIZE;
 
     if (worker->jpeg_state == SPICE_WAN_COMPRESSION_AUTO) {
-        display_channel->enable_jpeg = IS_LOW_BANDWIDTH();
+        display_channel->enable_jpeg = is_low_bandwidth;
     } else {
         display_channel->enable_jpeg = (worker->jpeg_state == SPICE_WAN_COMPRESSION_ALWAYS);
     }
@@ -9167,7 +9193,7 @@ static void handle_new_display_channel(RedWorker *worker, RedClient *client, Red
     display_channel->jpeg_quality = 85;
 
     if (worker->zlib_glz_state == SPICE_WAN_COMPRESSION_AUTO) {
-        display_channel->enable_zlib_glz_wrap = IS_LOW_BANDWIDTH();
+        display_channel->enable_zlib_glz_wrap = is_low_bandwidth;
     } else {
         display_channel->enable_zlib_glz_wrap = (worker->zlib_glz_state == 
                                                  SPICE_WAN_COMPRESSION_ALWAYS);

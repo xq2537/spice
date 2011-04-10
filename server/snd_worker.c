@@ -35,6 +35,12 @@
 #include "generated_marshallers.h"
 #include "demarshallers.h"
 
+/* main_channel.h inclusion drags red_channel.h which has conflicting types.
+ * until the channels here are defined in terms of red_channel.h we have some
+ * duplicate declarations */
+MainChannelClient *red_client_get_main(RedClient *client);
+int main_channel_client_is_low_bandwidth(MainChannelClient *mcc);
+
 #define MAX_SEND_VEC 100
 
 #define RECIVE_BUF_SIZE (16 * 1024 * 2)
@@ -855,6 +861,7 @@ static void snd_record_send(void* data)
 }
 
 static SndChannel *__new_channel(SndWorker *worker, int size, uint32_t channel_id,
+                                 RedClient *client,
                                  RedsStream *stream,
                                  int migrate, send_messages_proc send_messages,
                                  handle_message_proc handle_message,
@@ -867,6 +874,7 @@ static SndChannel *__new_channel(SndWorker *worker, int size, uint32_t channel_i
     int flags;
     int priority;
     int tos;
+    MainChannelClient *mcc = red_client_get_main(client);
 
     if ((flags = fcntl(stream->socket, F_GETFL)) == -1) {
         red_printf("accept failed, %s", strerror(errno));
@@ -884,7 +892,7 @@ static SndChannel *__new_channel(SndWorker *worker, int size, uint32_t channel_i
         red_printf("setsockopt failed, %s", strerror(errno));
     }
 
-    delay_val = IS_LOW_BANDWIDTH() ? 0 : 1;
+    delay_val = main_channel_client_is_low_bandwidth(mcc) ? 0 : 1;
     if (setsockopt(stream->socket, IPPROTO_TCP, TCP_NODELAY, &delay_val, sizeof(delay_val)) == -1) {
         red_printf("setsockopt failed, %s", strerror(errno));
     }
@@ -1116,6 +1124,7 @@ static void snd_set_playback_peer(Channel *channel, RedClient *client, RedsStrea
     if (!(playback_channel = (PlaybackChannel *)__new_channel(worker,
                                                               sizeof(*playback_channel),
                                                               SPICE_CHANNEL_PLAYBACK,
+                                                              client,
                                                               stream,
                                                               migration,
                                                               snd_playback_send,
@@ -1315,6 +1324,7 @@ static void snd_set_record_peer(Channel *channel, RedClient *client, RedsStream 
     if (!(record_channel = (RecordChannel *)__new_channel(worker,
                                                           sizeof(*record_channel),
                                                           SPICE_CHANNEL_RECORD,
+                                                          client,
                                                           stream,
                                                           migration,
                                                           snd_record_send,

@@ -135,9 +135,6 @@ int reds_has_vdagent(void); // used by inputs channel
 void reds_handle_agent_mouse_event(const VDAgentMouseState *mouse_state); // used by inputs_channel
 
 extern struct SpiceCoreInterface *core;
-extern uint64_t bitrate_per_sec;
-
-#define IS_LOW_BANDWIDTH() (bitrate_per_sec < 10 * 1024 * 1024)
 
 // Temporary measures to make splitting reds.c to inputs_channel.c easier
 void reds_client_disconnect(RedClient *client);

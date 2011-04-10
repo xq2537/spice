@@ -955,6 +955,11 @@ RedsStream *red_channel_client_get_stream(RedChannelClient *rcc)
     return rcc->stream;
 }
 
+RedClient *red_channel_client_get_client(RedChannelClient *rcc)
+{
+    return rcc->client;
+}
+
 SpiceDataHeader *red_channel_client_get_header(RedChannelClient *rcc)
 {
     return rcc->send_data.header;
