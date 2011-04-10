@@ -8983,6 +8983,9 @@ static void display_channel_release_item_after_push(DisplayChannel *display_chan
     case PIPE_ITEM_TYPE_IMAGE:
         release_image_item((ImageItem *)item);
         break;
+    case PIPE_ITEM_TYPE_VERB:
+        free(item);
+        break;
     default:
         PANIC("invalid item type");
     }
