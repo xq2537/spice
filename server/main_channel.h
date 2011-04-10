@@ -48,7 +48,7 @@ typedef struct MainChannel MainChannel;
 
 Channel *main_channel_init(void);
 /* This is a 'clone' from the reds.h Channel.link callback */
-RedChannelClient *main_channel_link(struct Channel *,
+MainChannelClient *main_channel_link(struct Channel *,
                  RedsStream *stream, int migration, int num_common_caps,
                  uint32_t *common_caps, int num_caps, uint32_t *caps);
 void main_channel_close(MainChannel *main_chan); // not destroy, just socket close
@@ -59,10 +59,10 @@ void main_channel_push_agent_disconnected(MainChannel *main_chan);
 void main_channel_push_tokens(MainChannel *main_chan, uint32_t num_tokens);
 void main_channel_push_agent_data(MainChannel *main_chan, uint8_t* data, size_t len,
            spice_marshaller_item_free_func free_data, void *opaque);
-void main_channel_start_net_test(RedChannelClient *rcc);
+void main_channel_start_net_test(MainChannelClient *mcc);
 // TODO: huge. Consider making a reds_* interface for these functions
 // and calling from main.
-void main_channel_push_init(RedChannelClient *rcc, int connection_id, int display_channels_hint,
+void main_channel_push_init(MainChannelClient *mcc, int connection_id, int display_channels_hint,
     int current_mouse_mode, int is_client_mouse_allowed, int multi_media_time,
     int ram_hint);
 void main_channel_push_notify(MainChannel *main_chan, uint8_t *mess, const int mess_len);

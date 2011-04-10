@@ -1503,7 +1503,7 @@ static void reds_handle_main_link(RedLinkInfo *link)
     SpiceLinkMess *link_mess;
     uint32_t *caps;
     uint32_t connection_id;
-    RedChannelClient *rcc;
+    MainChannelClient *mcc;
 
     red_printf("");
     link_mess = link->link_mess;
@@ -1541,12 +1541,13 @@ static void reds_handle_main_link(RedLinkInfo *link)
     if (!reds->main_channel_factory) {
         reds->main_channel_factory = main_channel_init();
     }
-    rcc = main_channel_link(reds->main_channel_factory,
+    mcc = main_channel_link(reds->main_channel_factory,
                   stream, reds->mig_target, link_mess->num_common_caps,
                   link_mess->num_common_caps ? caps : NULL, link_mess->num_channel_caps,
                   link_mess->num_channel_caps ? caps + link_mess->num_common_caps : NULL);
+    reds->main_channel = (MainChannel*)reds->main_channel_factory->data;
+    ASSERT(reds->main_channel);
     free(link_mess);
-    reds->main_channel = (MainChannel*)rcc->channel;
 
     if (vdagent) {
         reds->agent_state.read_filter.discard_all = FALSE;
@@ -1555,12 +1556,12 @@ static void reds_handle_main_link(RedLinkInfo *link)
 
     if (!reds->mig_target) {
         reds->agent_state.num_client_tokens = REDS_AGENT_WINDOW_SIZE;
-        main_channel_push_init(rcc, connection_id, red_dispatcher_count(),
+        main_channel_push_init(mcc, connection_id, red_dispatcher_count(),
             reds->mouse_mode, reds->is_client_mouse_allowed,
             reds_get_mm_time() - MM_TIME_DELTA,
             red_dispatcher_qxl_ram_size());
 
-        main_channel_start_net_test(rcc);
+        main_channel_start_net_test(mcc);
         /* Now that we have a client, forward any pending agent data */
         while (read_from_vdi_port());
     }

@@ -149,16 +149,14 @@ static void main_disconnect(MainChannel *main_chan)
 
 static int main_channel_client_push_ping(RedChannelClient *rcc, int size);
 
-void main_channel_start_net_test(RedChannelClient *rcc)
+void main_channel_start_net_test(MainChannelClient *mcc)
 {
-    MainChannelClient *mcc = SPICE_CONTAINEROF(rcc, MainChannelClient, base);
-
-    if (!rcc) {
+    if (!mcc) {
         return;
     }
-    if (main_channel_client_push_ping(rcc, NET_TEST_WARMUP_BYTES)
-        && main_channel_client_push_ping(rcc, 0)
-        && main_channel_client_push_ping(rcc, NET_TEST_BYTES)) {
+    if (main_channel_client_push_ping(&mcc->base, NET_TEST_WARMUP_BYTES)
+        && main_channel_client_push_ping(&mcc->base, 0)
+        && main_channel_client_push_ping(&mcc->base, NET_TEST_BYTES)) {
         mcc->net_test_id = mcc->ping_id - 2;
         mcc->net_test_stage = NET_TEST_STAGE_WARMUP;
     }
@@ -461,17 +459,17 @@ static uint64_t main_channel_handle_migrate_data(RedChannelClient *rcc,
     return TRUE;
 }
 
-void main_channel_push_init(RedChannelClient *rcc, int connection_id,
+void main_channel_push_init(MainChannelClient *mcc, int connection_id,
     int display_channels_hint, int current_mouse_mode,
     int is_client_mouse_allowed, int multi_media_time,
     int ram_hint)
 {
     InitPipeItem *item;
 
-    item = main_init_item_new(rcc,
+    item = main_init_item_new(&mcc->base,
              connection_id, display_channels_hint, current_mouse_mode,
              is_client_mouse_allowed, multi_media_time, ram_hint);
-    red_channel_client_pipe_add_push(rcc, &item->base);
+    red_channel_client_pipe_add_push(&mcc->base, &item->base);
 }
 
 static void main_channel_marshall_init(SpiceMarshaller *m,
@@ -821,12 +819,12 @@ static int main_channel_handle_migrate_flush_mark(RedChannelClient *rcc)
     return TRUE;
 }
 
-RedChannelClient *main_channel_link(Channel *channel, RedsStream *stream, int migration,
+MainChannelClient *main_channel_link(Channel *channel, RedsStream *stream, int migration,
                         int num_common_caps, uint32_t *common_caps, int num_caps,
                         uint32_t *caps)
 {
     MainChannel *main_chan;
-    RedChannelClient *rcc;
+    MainChannelClient *mcc;
 
     ASSERT(channel->data == NULL);
     if (channel->data == NULL) {
@@ -850,8 +848,9 @@ RedChannelClient *main_channel_link(Channel *channel, RedsStream *stream, int mi
     }
     main_chan = (MainChannel*)channel->data;
     red_printf("add main channel client");
-    rcc = red_channel_client_create(sizeof(MainChannelClient), &main_chan->base, stream);
-    return rcc;
+    mcc = (MainChannelClient*)
+            red_channel_client_create(sizeof(MainChannelClient), &main_chan->base, stream);
+    return mcc;
 }
 
 int main_channel_getsockname(MainChannel *main_chan, struct sockaddr *sa, socklen_t *salen)
