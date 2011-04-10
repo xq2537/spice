@@ -871,7 +871,7 @@ void red_channel_client_disconnect(RedChannelClient *rcc)
     if (rcc->send_data.item) {
         rcc->channel->release_item(rcc, rcc->send_data.item, FALSE);
     }
-    // TODO: clear our references from the pipe
+    red_channel_client_pipe_clear(rcc);
     reds_stream_free(rcc->stream);
     rcc->send_data.item = NULL;
     rcc->send_data.blocked = FALSE;
