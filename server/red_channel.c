@@ -581,6 +581,11 @@ void red_channel_client_push(RedChannelClient *rcc)
         red_channel_client_send(rcc);
     }
 
+    if (rcc->send_data.item && !rcc->send_data.blocked) {
+        rcc->send_data.blocked = TRUE;
+        red_printf("ERROR: an item waiting to be sent and not blocked");
+    }
+
     while ((pipe_item = red_channel_client_pipe_item_get(rcc))) {
         red_channel_client_send_item(rcc, pipe_item);
     }
