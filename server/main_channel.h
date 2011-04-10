@@ -21,6 +21,7 @@
 #include <stdint.h>
 #include <spice/vd_agent.h>
 #include "common/marshaller.h"
+#include "red_channel.h"
 
 /* This is a temporary measure for reds/main split - should not be in a header,
  * but private (although only reds.c includes main_channel.h) */
@@ -43,31 +44,37 @@ struct MainMigrateData {
     uint32_t write_queue_size;
 };
 
+typedef struct MainChannel MainChannel;
+
 Channel *main_channel_init(void);
-void main_channel_close(Channel *channel); // not destroy, just socket close
-int main_channel_push_ping(Channel *channel, int size);
-void main_channel_push_mouse_mode(Channel *channel, int current_mode, int is_client_mouse_allowed);
-void main_channel_push_agent_connected(Channel *channel);
-void main_channel_push_agent_disconnected(Channel *channel);
-void main_channel_push_tokens(Channel *channel, uint32_t num_tokens);
-void main_channel_push_agent_data(Channel *channel, uint8_t* data, size_t len,
+/* This is a 'clone' from the reds.h Channel.link callback */
+RedChannelClient *main_channel_link(struct Channel *,
+                 RedsStream *stream, int migration, int num_common_caps,
+                 uint32_t *common_caps, int num_caps, uint32_t *caps);
+void main_channel_close(MainChannel *main_chan); // not destroy, just socket close
+int main_channel_push_ping(MainChannel *main_chan, int size);
+void main_channel_push_mouse_mode(MainChannel *main_chan, int current_mode, int is_client_mouse_allowed);
+void main_channel_push_agent_connected(MainChannel *main_chan);
+void main_channel_push_agent_disconnected(MainChannel *main_chan);
+void main_channel_push_tokens(MainChannel *main_chan, uint32_t num_tokens);
+void main_channel_push_agent_data(MainChannel *main_chan, uint8_t* data, size_t len,
            spice_marshaller_item_free_func free_data, void *opaque);
-void main_channel_start_net_test(Channel *channel);
+void main_channel_start_net_test(RedChannelClient *rcc);
 // TODO: huge. Consider making a reds_* interface for these functions
 // and calling from main.
-void main_channel_push_init(Channel *channel, int connection_id, int display_channels_hint,
+void main_channel_push_init(RedChannelClient *rcc, int connection_id, int display_channels_hint,
     int current_mouse_mode, int is_client_mouse_allowed, int multi_media_time,
     int ram_hint);
-void main_channel_push_notify(Channel *channel, uint8_t *mess, const int mess_len);
+void main_channel_push_notify(MainChannel *main_chan, uint8_t *mess, const int mess_len);
 // TODO: consider exporting RedsMigSpice from reds.c
-void main_channel_push_migrate_begin(Channel *channel, int port, int sport, char *host,
+void main_channel_push_migrate_begin(MainChannel *main_chan, int port, int sport, char *host,
     uint16_t cert_pub_key_type, uint32_t cert_pub_key_len, uint8_t *cert_pub_key);
-void main_channel_push_migrate(Channel *channel);
-void main_channel_push_migrate_switch(Channel *channel);
-void main_channel_push_migrate_cancel(Channel *channel);
-void main_channel_push_multi_media_time(Channel *channel, int time);
-int main_channel_getsockname(Channel *channel, struct sockaddr *sa, socklen_t *salen);
-int main_channel_getpeername(Channel *channel, struct sockaddr *sa, socklen_t *salen);
+void main_channel_push_migrate(MainChannel *main_chan);
+void main_channel_push_migrate_switch(MainChannel *main_chan);
+void main_channel_push_migrate_cancel(MainChannel *main_chan);
+void main_channel_push_multi_media_time(MainChannel *main_chan, int time);
+int main_channel_getsockname(MainChannel *main_chan, struct sockaddr *sa, socklen_t *salen);
+int main_channel_getpeername(MainChannel *main_chan, struct sockaddr *sa, socklen_t *salen);
 
 // TODO: Defines used to calculate receive buffer size, and also by reds.c
 // other options: is to make a reds_main_consts.h, to duplicate defines.
@@ -75,4 +82,3 @@ int main_channel_getpeername(Channel *channel, struct sockaddr *sa, socklen_t *s
 #define REDS_NUM_INTERNAL_AGENT_MESSAGES 1
 
 #endif
-

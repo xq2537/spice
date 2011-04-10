@@ -354,7 +354,7 @@ static void red_channel_client_pipe_remove(RedChannelClient *rcc, PipeItem *item
 
 static void red_channel_add_client(RedChannel *channel, RedChannelClient *rcc)
 {
-    ASSERT(rcc);
+    ASSERT(rcc && !channel->rcc);
 	channel->rcc = rcc;
 }
 
@@ -363,7 +363,7 @@ RedChannelClient *red_channel_client_create(
     RedChannel *channel,
     RedsStream *stream)
 {
-    RedChannelClient *rcc = NULL;
+    RedChannelClient *rcc;
 
     ASSERT(stream && channel && size >= sizeof(RedChannelClient));
     rcc = spice_malloc0(size);

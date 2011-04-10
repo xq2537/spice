@@ -117,13 +117,17 @@ typedef struct MultiMediaTimePipeItem {
     int time;
 } MultiMediaTimePipeItem;
 
-typedef struct MainChannel {
-    RedChannel base;
-    uint8_t recv_buf[RECEIVE_BUF_SIZE];
+struct MainChannelClient {
+    RedChannelClient base;
     uint32_t ping_id;
     uint32_t net_test_id;
     int net_test_stage;
-} MainChannel;
+};
+
+struct MainChannel {
+    RedChannel base;
+    uint8_t recv_buf[RECEIVE_BUF_SIZE];
+};
 
 enum NetTestStage {
     NET_TEST_STAGE_INVALID,
@@ -137,9 +141,6 @@ uint64_t bitrate_per_sec = ~0;
 
 static void main_disconnect(MainChannel *main_chan)
 {
-    main_chan->ping_id = 0;
-    main_chan->net_test_id = 0;
-    main_chan->net_test_stage = NET_TEST_STAGE_INVALID;
     red_channel_destroy(&main_chan->base);
 
     latency = 0;
@@ -148,21 +149,18 @@ static void main_disconnect(MainChannel *main_chan)
 
 static int main_channel_client_push_ping(RedChannelClient *rcc, int size);
 
-void main_channel_start_net_test(Channel *channel)
+void main_channel_start_net_test(RedChannelClient *rcc)
 {
-    MainChannel *main_chan = channel->data;
-    RedChannelClient *rcc;
+    MainChannelClient *mcc = SPICE_CONTAINEROF(rcc, MainChannelClient, base);
 
-    if (!main_chan || !main_chan->base.rcc || main_chan->net_test_id) {
+    if (!rcc) {
         return;
     }
-    rcc = main_chan->base.rcc;
-
     if (main_channel_client_push_ping(rcc, NET_TEST_WARMUP_BYTES)
         && main_channel_client_push_ping(rcc, 0)
         && main_channel_client_push_ping(rcc, NET_TEST_BYTES)) {
-        main_chan->net_test_id = main_chan->ping_id - 2;
-        main_chan->net_test_stage = NET_TEST_STAGE_WARMUP;
+        mcc->net_test_id = mcc->ping_id - 2;
+        mcc->net_test_stage = NET_TEST_STAGE_WARMUP;
     }
 }
 
@@ -296,10 +294,8 @@ int main_channel_client_push_ping(RedChannelClient *rcc, int size)
     return TRUE;
 }
 
-int main_channel_push_ping(Channel *channel, int size)
+int main_channel_push_ping(MainChannel *main_chan, int size)
 {
-    MainChannel *main_chan = channel->data;
-
     if (main_chan->base.rcc == NULL) {
         return FALSE;
     }
@@ -326,11 +322,9 @@ static void main_channel_marshall_ping(SpiceMarshaller *m, int size, int ping_id
 static void main_channel_client_push_mouse_mode(RedChannelClient *rcc, int current_mode,
                                          int is_client_mouse_allowed);
 
-void main_channel_push_mouse_mode(Channel *channel, int current_mode,
+void main_channel_push_mouse_mode(MainChannel *main_chan, int current_mode,
                                   int is_client_mouse_allowed)
 {
-    MainChannel *main_chan = channel->data;
-
     if (main_chan && main_chan->base.rcc != NULL) {
         main_channel_client_push_mouse_mode(main_chan->base.rcc, current_mode,
                                             is_client_mouse_allowed);
@@ -358,16 +352,15 @@ static void main_channel_marshall_mouse_mode(SpiceMarshaller *m, int current_mod
     spice_marshall_msg_main_mouse_mode(m, &mouse_mode);
 }
 
-void main_channel_push_agent_connected(Channel *channel)
+void main_channel_push_agent_connected(MainChannel *main_chan)
 {
-    RedChannelClient *rcc = ((MainChannel*)channel->data)->base.rcc;
+    RedChannelClient *rcc = main_chan->base.rcc;
 
     red_channel_client_pipe_add_type(rcc, SPICE_MSG_MAIN_AGENT_CONNECTED);
 }
 
-void main_channel_push_agent_disconnected(Channel *channel)
+void main_channel_push_agent_disconnected(MainChannel *main_chan)
 {
-    MainChannel *main_chan = channel->data;
     RedChannelClient *rcc = main_chan->base.rcc;
 
     if (!rcc) {
@@ -384,10 +377,9 @@ static void main_channel_marshall_agent_disconnected(SpiceMarshaller *m)
     spice_marshall_msg_main_agent_disconnected(m, &disconnect);
 }
 
-void main_channel_push_tokens(Channel *channel, uint32_t num_tokens)
+void main_channel_push_tokens(MainChannel *main_chan, uint32_t num_tokens)
 {
     TokensPipeItem *item;
-    MainChannel *main_chan = channel->data;
     RedChannelClient *rcc = main_chan->base.rcc;
 
     if (!rcc) {
@@ -405,10 +397,9 @@ static void main_channel_marshall_tokens(SpiceMarshaller *m, uint32_t num_tokens
     spice_marshall_msg_main_agent_token(m, &tokens);
 }
 
-void main_channel_push_agent_data(Channel *channel, uint8_t* data, size_t len,
+void main_channel_push_agent_data(MainChannel *main_chan, uint8_t* data, size_t len,
            spice_marshaller_item_free_func free_data, void *opaque)
 {
-    MainChannel *main_chan = channel->data;
     RedChannelClient *rcc = main_chan->base.rcc;
     AgentDataPipeItem *item;
 
@@ -458,26 +449,24 @@ static uint64_t main_channel_handle_migrate_data_get_serial(
 static uint64_t main_channel_handle_migrate_data(RedChannelClient *rcc,
     uint32_t size, void *message)
 {
-    MainChannel *main_chan = SPICE_CONTAINEROF(rcc->channel, MainChannel, base);
+    MainChannelClient *mcc = SPICE_CONTAINEROF(rcc, MainChannelClient, base);
     MainMigrateData *data = message;
 
     if (size < sizeof(*data)) {
         red_printf("bad message size");
         return FALSE;
     }
-    main_chan->ping_id = data->ping_id;
+    mcc->ping_id = data->ping_id;
     reds_on_main_receive_migrate_data(data, ((uint8_t*)message) + size);
     return TRUE;
 }
 
-void main_channel_push_init(Channel *channel, int connection_id,
+void main_channel_push_init(RedChannelClient *rcc, int connection_id,
     int display_channels_hint, int current_mouse_mode,
     int is_client_mouse_allowed, int multi_media_time,
     int ram_hint)
 {
     InitPipeItem *item;
-    MainChannel *main_chan = channel->data;
-    RedChannelClient *rcc = main_chan->base.rcc;
 
     item = main_init_item_new(rcc,
              connection_id, display_channels_hint, current_mouse_mode,
@@ -504,9 +493,8 @@ static void main_channel_marshall_init(SpiceMarshaller *m,
     spice_marshall_msg_main_init(m, &init);
 }
 
-void main_channel_push_notify(Channel *channel, uint8_t *mess, const int mess_len)
+void main_channel_push_notify(MainChannel *main_chan, uint8_t *mess, const int mess_len)
 {
-    MainChannel *main_chan = channel->data;
     RedChannelClient *rcc = main_chan->base.rcc;
     NotifyPipeItem *item;
 
@@ -534,11 +522,10 @@ static void main_channel_marshall_notify(SpiceMarshaller *m, NotifyPipeItem *ite
     spice_marshaller_add(m, item->mess, item->mess_len + 1);
 }
 
-void main_channel_push_migrate_begin(Channel *channel, int port, int sport,
+void main_channel_push_migrate_begin(MainChannel *main_chan, int port, int sport,
     char *host, uint16_t cert_pub_key_type, uint32_t cert_pub_key_len,
     uint8_t *cert_pub_key)
 {
-    MainChannel *main_chan = channel->data;
     RedChannelClient *rcc = main_chan->base.rcc;
     MigrateBeginPipeItem *item;
 
@@ -562,9 +549,8 @@ static void main_channel_marshall_migrate_begin(SpiceMarshaller *m,
     spice_marshall_msg_main_migrate_begin(m, &migrate);
 }
 
-void main_channel_push_migrate(Channel *channel)
+void main_channel_push_migrate(MainChannel *main_chan)
 {
-    MainChannel *main_chan = channel->data;
     RedChannelClient *rcc = main_chan->base.rcc;
 
     if (!rcc) {
@@ -581,9 +567,8 @@ static void main_channel_marshall_migrate(SpiceMarshaller *m)
     spice_marshall_msg_migrate(m, &migrate);
 }
 
-void main_channel_push_migrate_cancel(Channel *channel)
+void main_channel_push_migrate_cancel(MainChannel *main_chan)
 {
-    MainChannel *main_chan = channel->data;
     RedChannelClient *rcc = main_chan->base.rcc;
 
     if (!rcc) {
@@ -592,9 +577,8 @@ void main_channel_push_migrate_cancel(Channel *channel)
     red_channel_client_pipe_add_type(rcc, SPICE_MSG_MAIN_MIGRATE_CANCEL);
 }
 
-void main_channel_push_multi_media_time(Channel *channel, int time)
+void main_channel_push_multi_media_time(MainChannel *main_chan, int time)
 {
-    MainChannel *main_chan = channel->data;
     RedChannelClient *rcc = main_chan->base.rcc;
     MultiMediaTimePipeItem *item;
 
@@ -611,9 +595,8 @@ static PipeItem *main_migrate_switch_item_new(MainChannel *main_chan)
     return item;
 }
 
-void main_channel_push_migrate_switch(Channel *channel)
+void main_channel_push_migrate_switch(MainChannel *main_chan)
 {
-    MainChannel *main_chan = channel->data;
     RedChannelClient *rcc = main_chan->base.rcc;
 
     red_channel_client_pipe_add_push(rcc,
@@ -643,7 +626,7 @@ static void main_channel_marshall_multi_media_time(SpiceMarshaller *m,
 
 static void main_channel_send_item(RedChannelClient *rcc, PipeItem *base)
 {
-    MainChannel *main_chan = SPICE_CONTAINEROF(rcc->channel, MainChannel, base);
+    MainChannelClient *mcc = SPICE_CONTAINEROF(rcc, MainChannelClient, base);
     SpiceMarshaller *m = red_channel_client_get_marshaller(rcc);
 
     red_channel_client_init_send_data(rcc, base->type, base);
@@ -653,7 +636,7 @@ static void main_channel_send_item(RedChannelClient *rcc, PipeItem *base)
             break;
         case SPICE_MSG_PING:
             main_channel_marshall_ping(m,
-                SPICE_CONTAINEROF(base, PingPipeItem, base)->size, ++main_chan->ping_id);
+                SPICE_CONTAINEROF(base, PingPipeItem, base)->size, ++(mcc->ping_id));
             break;
         case SPICE_MSG_MAIN_MOUSE_MODE:
             {
@@ -677,7 +660,7 @@ static void main_channel_send_item(RedChannelClient *rcc, PipeItem *base)
         case SPICE_MSG_MIGRATE_DATA:
             main_channel_marshall_migrate_data_item(m,
                 red_channel_client_get_message_serial(rcc),
-                main_chan->ping_id);
+                mcc->ping_id);
             break;
         case SPICE_MSG_MAIN_INIT:
             main_channel_marshall_init(m,
@@ -714,6 +697,7 @@ static void main_channel_release_pipe_item(RedChannelClient *rcc,
 static int main_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint16_t type, void *message)
 {
     MainChannel *main_chan = SPICE_CONTAINEROF(rcc->channel, MainChannel, base);
+    MainChannelClient *mcc = SPICE_CONTAINEROF(rcc, MainChannelClient, base);
 
     switch (type) {
     case SPICE_MSGC_MAIN_AGENT_START:
@@ -751,19 +735,19 @@ static int main_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint
         clock_gettime(CLOCK_MONOTONIC, &ts);
         roundtrip = ts.tv_sec * 1000000LL + ts.tv_nsec / 1000LL - ping->timestamp;
 
-        if (ping->id == main_chan->net_test_id) {
-            switch (main_chan->net_test_stage) {
+        if (ping->id == mcc->net_test_id) {
+            switch (mcc->net_test_stage) {
             case NET_TEST_STAGE_WARMUP:
-                main_chan->net_test_id++;
-                main_chan->net_test_stage = NET_TEST_STAGE_LATENCY;
+                mcc->net_test_id++;
+                mcc->net_test_stage = NET_TEST_STAGE_LATENCY;
                 break;
             case NET_TEST_STAGE_LATENCY:
-                main_chan->net_test_id++;
-                main_chan->net_test_stage = NET_TEST_STAGE_RATE;
+                mcc->net_test_id++;
+                mcc->net_test_stage = NET_TEST_STAGE_RATE;
                 latency = roundtrip;
                 break;
             case NET_TEST_STAGE_RATE:
-                main_chan->net_test_id = 0;
+                mcc->net_test_id = 0;
                 if (roundtrip <= latency) {
                     // probably high load on client or server result with incorrect values
                     latency = 0;
@@ -777,13 +761,13 @@ static int main_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint
                            bitrate_per_sec,
                            (double)bitrate_per_sec / 1024 / 1024,
                            IS_LOW_BANDWIDTH() ? " LOW BANDWIDTH" : "");
-                main_chan->net_test_stage = NET_TEST_STAGE_INVALID;
+                mcc->net_test_stage = NET_TEST_STAGE_INVALID;
                 break;
             default:
                 red_printf("invalid net test stage, ping id %d test id %d stage %d",
                            ping->id,
-                           main_chan->net_test_id,
-                           main_chan->net_test_stage);
+                           mcc->net_test_id,
+                           mcc->net_test_stage);
             }
             break;
         }
@@ -837,13 +821,14 @@ static int main_channel_handle_migrate_flush_mark(RedChannelClient *rcc)
     return TRUE;
 }
 
-static void main_channel_link(Channel *channel, RedsStream *stream, int migration,
+RedChannelClient *main_channel_link(Channel *channel, RedsStream *stream, int migration,
                         int num_common_caps, uint32_t *common_caps, int num_caps,
                         uint32_t *caps)
 {
     MainChannel *main_chan;
-    ASSERT(channel->data == NULL);
+    RedChannelClient *rcc;
 
+    ASSERT(channel->data == NULL);
     if (channel->data == NULL) {
         red_printf("create main channel");
         channel->data = red_channel_create_parser(
@@ -865,26 +850,22 @@ static void main_channel_link(Channel *channel, RedsStream *stream, int migratio
     }
     main_chan = (MainChannel*)channel->data;
     red_printf("add main channel client");
-    red_channel_client_create(sizeof(RedChannelClient), channel->data, stream);
+    rcc = red_channel_client_create(sizeof(MainChannelClient), &main_chan->base, stream);
+    return rcc;
 }
 
-int main_channel_getsockname(Channel *channel, struct sockaddr *sa, socklen_t *salen)
+int main_channel_getsockname(MainChannel *main_chan, struct sockaddr *sa, socklen_t *salen)
 {
-    MainChannel *main_chan = channel->data;
-
     return main_chan ? getsockname(red_channel_get_first_socket(&main_chan->base), sa, salen) : -1;
 }
 
-int main_channel_getpeername(Channel *channel, struct sockaddr *sa, socklen_t *salen)
+int main_channel_getpeername(MainChannel *main_chan, struct sockaddr *sa, socklen_t *salen)
 {
-    MainChannel *main_chan = channel->data;
-
     return main_chan ? getpeername(red_channel_get_first_socket(&main_chan->base), sa, salen) : -1;
 }
 
-void main_channel_close(Channel *channel)
+void main_channel_close(MainChannel *main_chan)
 {
-    MainChannel *main_chan = channel->data;
     int socketfd;
 
     if (main_chan && (socketfd = red_channel_get_first_socket(&main_chan->base)) != -1) {
@@ -911,9 +892,8 @@ Channel* main_channel_init(void)
 
     channel = spice_new0(Channel, 1);
     channel->type = SPICE_CHANNEL_MAIN;
-    channel->link = main_channel_link;
+    channel->link = NULL; /* the main channel client is created by reds.c explicitly */
     channel->shutdown = main_channel_shutdown;
     channel->migrate = main_channel_migrate;
     return channel;
 }
-

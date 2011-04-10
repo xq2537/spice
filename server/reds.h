@@ -35,6 +35,7 @@
 #define SPICE_GNUC_VISIBLE __attribute__ ((visibility ("default")))
 
 typedef struct RedsStream RedsStream;
+typedef struct MainChannelClient MainChannelClient;
 
 #if HAVE_SASL
 typedef struct RedsSASL {
