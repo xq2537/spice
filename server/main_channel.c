@@ -121,6 +121,7 @@ typedef struct MultiMediaTimePipeItem {
 
 struct MainChannelClient {
     RedChannelClient base;
+    uint32_t connection_id;
     uint32_t ping_id;
     uint32_t net_test_id;
     int net_test_stage;
@@ -152,6 +153,20 @@ static void main_channel_client_disconnect(RedChannelClient *rcc)
 static void main_disconnect(MainChannel *main_chan)
 {
     red_channel_destroy(&main_chan->base);
+}
+
+RedClient *main_channel_get_client_by_link_id(MainChannel *main_chan, uint32_t connection_id)
+{
+    MainChannelClient *mcc;
+
+    if (!main_chan || !main_chan->base.rcc) {
+        return NULL;
+    }
+    mcc = SPICE_CONTAINEROF(main_chan->base.rcc, MainChannelClient, base);
+    if (mcc->connection_id == connection_id) {
+        return mcc->base.client;
+    }
+    return NULL;
 }
 
 static int main_channel_client_push_ping(MainChannelClient *rcc, int size);
@@ -861,11 +876,12 @@ static void ping_timer_cb(void *opaque)
 #endif /* RED_STATISTICS */
 
 MainChannelClient *main_channel_client_create(MainChannel *main_chan,
-    RedClient *client, RedsStream *stream)
+    RedClient *client, RedsStream *stream, uint32_t connection_id)
 {
     MainChannelClient *mcc = (MainChannelClient*)red_channel_client_create(
         sizeof(MainChannelClient), &main_chan->base, client, stream);
 
+    mcc->connection_id = connection_id;
     mcc->bitrate_per_sec = ~0;
 #ifdef RED_STATISTICS
     if (!(mcc->ping_timer = core->timer_add(ping_timer_cb, NULL))) {
@@ -877,7 +893,7 @@ MainChannelClient *main_channel_client_create(MainChannel *main_chan,
 }
 
 MainChannelClient *main_channel_link(Channel *channel, RedClient *client,
-                        RedsStream *stream, int migration,
+                        RedsStream *stream, uint32_t connection_id, int migration,
                         int num_common_caps, uint32_t *common_caps, int num_caps,
                         uint32_t *caps)
 {
@@ -904,7 +920,7 @@ MainChannelClient *main_channel_link(Channel *channel, RedClient *client,
         ASSERT(channel->data);
     }
     red_printf("add main channel client");
-    mcc = main_channel_client_create(channel->data, client, stream);
+    mcc = main_channel_client_create(channel->data, client, stream, connection_id);
     return mcc;
 }
 

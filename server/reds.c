@@ -199,7 +199,6 @@ typedef struct RedsState {
     int pending_mouse_event;
     Ring clients;
     int num_clients;
-    uint32_t link_id;
     Channel *main_channel_factory;
     MainChannel *main_channel;
 
@@ -592,7 +591,6 @@ void reds_client_disconnect(RedClient *client)
 
     red_printf("");
     client->disconnecting = TRUE;
-    reds->link_id = 0;
 
     /* Reset write filter to start with clean state on client reconnect */
     agent_msg_filter_init(&reds->agent_state.write_filter, agent_copypaste,
@@ -1483,6 +1481,12 @@ static void reds_send_link_result(RedLinkInfo *link, uint32_t error)
     sync_write(link->stream, &error, sizeof(error));
 }
 
+int reds_expects_link_id()
+{
+    red_printf("TODO: keep a list of connection_id's from migration, compare to them");
+    return 1;
+}
+
 // TODO: now that main is a separate channel this should
 // actually be joined with reds_handle_other_links, become reds_handle_link
 static void reds_handle_main_link(RedLinkInfo *link)
@@ -1505,7 +1509,8 @@ static void reds_handle_main_link(RedLinkInfo *link)
         memcpy(&(reds->taTicket), &taTicket, sizeof(reds->taTicket));
         reds->mig_target = FALSE;
     } else {
-        if (link_mess->connection_id != reds->link_id) {
+        // migration - check if this is one of the expected connection_id's
+        if (!reds_expects_link_id(link_mess->connection_id)) {
             reds_send_link_result(link, SPICE_LINK_ERR_BAD_CONNECTION_ID);
             reds_link_free(link);
             return;
@@ -1515,7 +1520,6 @@ static void reds_handle_main_link(RedLinkInfo *link)
         reds->mig_target = TRUE;
     }
 
-    reds->link_id = connection_id;
     reds->mig_inprogress = FALSE;
     reds->mig_wait_connect = FALSE;
     reds->mig_wait_disconnect = FALSE;
@@ -1534,7 +1538,7 @@ static void reds_handle_main_link(RedLinkInfo *link)
     ring_add(&reds->clients, &client->link);
     reds->num_clients++;
     mcc = main_channel_link(reds->main_channel_factory, client,
-                  stream, reds->mig_target, link_mess->num_common_caps,
+                  stream, connection_id, reds->mig_target, link_mess->num_common_caps,
                   link_mess->num_common_caps ? caps : NULL, link_mess->num_channel_caps,
                   link_mess->num_channel_caps ? caps + link_mess->num_common_caps : NULL);
     reds->main_channel = (MainChannel*)reds->main_channel_factory->data;
@@ -1602,22 +1606,21 @@ static void reds_handle_other_links(RedLinkInfo *link)
     uint32_t *caps;
 
     link_mess = link->link_mess;
-    if (reds->num_clients == 1) {
-        client = SPICE_CONTAINEROF(ring_get_head(&reds->clients), RedClient, link);
+    if (reds->main_channel) {
+        client = main_channel_get_client_by_link_id(reds->main_channel,
+            link_mess->connection_id);
     }
 
+    // TODO: MC: broke migration (at least for the dont-drop-connection kind).
+    // On migration we should get a connection_id to expect (must be a security measure)
+    // where do we store it? on reds, but should be a list (MC).
     if (!client) {
         reds_send_link_result(link, SPICE_LINK_ERR_BAD_CONNECTION_ID);
         reds_link_free(link);
         return;
     }
 
-    if (!reds->link_id || reds->link_id != link_mess->connection_id) {
-        reds_send_link_result(link, SPICE_LINK_ERR_BAD_CONNECTION_ID);
-        reds_link_free(link);
-        return;
-    }
-
+    // TODO: MC: be less lenient. Tally connections from same connection_id (by same client).
     if (!(channel = reds_find_channel(link_mess->channel_type,
                                       link_mess->channel_id))) {
         reds_send_link_result(link, SPICE_LINK_ERR_CHANNEL_NOT_AVAILABLE);
@@ -1626,7 +1629,7 @@ static void reds_handle_other_links(RedLinkInfo *link)
     }
 
     reds_send_link_result(link, SPICE_LINK_ERR_OK);
-    reds_show_new_channel(link, reds->link_id);
+    reds_show_new_channel(link, link_mess->connection_id);
     if (link_mess->channel_type == SPICE_CHANNEL_INPUTS && !link->stream->ssl) {
         char *mess = "keyboard channel is insecure";
         const int mess_len = strlen(mess);
@@ -2982,7 +2985,7 @@ struct RedsMigSpice {
 };
 
 typedef struct RedsMigSpiceMessage {
-    uint32_t link_id;
+    uint32_t connection_id;
 } RedsMigSpiceMessage;
 
 typedef struct RedsMigCertPubKeyInfo {
