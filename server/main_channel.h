@@ -21,6 +21,7 @@
 #include <stdint.h>
 #include <spice/vd_agent.h>
 #include "common/marshaller.h"
+#include "reds.h"
 #include "red_channel.h"
 
 /* This is a temporary measure for reds/main split - should not be in a header,
@@ -48,19 +49,18 @@ typedef struct MainChannel MainChannel;
 
 Channel *main_channel_init(void);
 RedClient *main_channel_get_client_by_link_id(MainChannel *main_chan, uint32_t link_id);
-/* This is a 'clone' from the reds.h Channel.link callback */
+/* This is a 'clone' from the reds.h Channel.link callback to allow passing link_id */
 MainChannelClient *main_channel_link(struct Channel *, RedClient *client,
      RedsStream *stream, uint32_t link_id, int migration, int num_common_caps,
      uint32_t *common_caps, int num_caps, uint32_t *caps);
 void main_channel_close(MainChannel *main_chan); // not destroy, just socket close
-int main_channel_push_ping(MainChannel *main_chan, int size);
 void main_channel_push_mouse_mode(MainChannel *main_chan, int current_mode, int is_client_mouse_allowed);
 void main_channel_push_agent_connected(MainChannel *main_chan);
 void main_channel_push_agent_disconnected(MainChannel *main_chan);
 void main_channel_push_tokens(MainChannel *main_chan, uint32_t num_tokens);
 void main_channel_push_agent_data(MainChannel *main_chan, uint8_t* data, size_t len,
            spice_marshaller_item_free_func free_data, void *opaque);
-void main_channel_start_net_test(MainChannelClient *mcc);
+void main_channel_client_start_net_test(MainChannelClient *mcc);
 // TODO: huge. Consider making a reds_* interface for these functions
 // and calling from main.
 void main_channel_push_init(MainChannelClient *mcc, int connection_id, int display_channels_hint,
@@ -76,6 +76,7 @@ void main_channel_push_migrate_cancel(MainChannel *main_chan);
 void main_channel_push_multi_media_time(MainChannel *main_chan, int time);
 int main_channel_getsockname(MainChannel *main_chan, struct sockaddr *sa, socklen_t *salen);
 int main_channel_getpeername(MainChannel *main_chan, struct sockaddr *sa, socklen_t *salen);
+uint32_t main_channel_client_get_link_id(MainChannelClient *mcc);
 
 int main_channel_client_is_low_bandwidth(MainChannelClient *mcc);
 uint64_t main_channel_client_get_bitrate_per_sec(MainChannelClient *mcc);

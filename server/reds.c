@@ -986,8 +986,10 @@ void reds_on_main_agent_start(void)
     reds->agent_state.write_filter.discard_all = FALSE;
 }
 
-void reds_on_main_agent_data(void *message, size_t size)
+void reds_on_main_agent_data(MainChannelClient *mcc, void *message, size_t size)
 {
+    // TODO - use mcc (and start tracking agent data per channel. probably just move the whole
+    // tokens accounting to mainchannel.
     RingItem *ring_item;
     VDAgentExtBuf *buf;
     int res;
@@ -1558,7 +1560,7 @@ static void reds_handle_main_link(RedLinkInfo *link)
             reds_get_mm_time() - MM_TIME_DELTA,
             red_dispatcher_qxl_ram_size());
 
-        main_channel_start_net_test(mcc);
+        main_channel_client_start_net_test(mcc);
         /* Now that we have a client, forward any pending agent data */
         while (read_from_vdi_port());
     }
