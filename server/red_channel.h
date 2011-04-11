@@ -140,7 +140,9 @@ typedef uint64_t (*channel_handle_migrate_data_get_serial_proc)(RedChannelClient
 
 struct RedChannelClient {
     RingItem channel_link;
+    RingItem client_link;
     RedChannel *channel;
+    RedClient  *client;
     RedsStream *stream;
     struct {
         uint32_t generation;
@@ -172,6 +174,7 @@ struct RedChannel {
     int handle_acks;
 
     RedChannelClient *rcc;
+    uint32_t clients_num;
 
     OutgoingHandlerInterface outgoing_cb;
     IncomingHandlerInterface incoming_cb;
@@ -219,6 +222,7 @@ RedChannel *red_channel_create_parser(int size,
                                SpiceCoreInterface *core,
                                int migrate, int handle_acks,
                                channel_configure_socket_proc config_socket,
+                               channel_disconnect_proc disconnect,
                                spice_parse_channel_func_t parser,
                                channel_handle_parsed_proc handle_parsed,
                                channel_alloc_msg_recv_buf_proc alloc_recv_buf,
@@ -231,12 +235,18 @@ RedChannel *red_channel_create_parser(int size,
                                channel_handle_migrate_flush_mark_proc handle_migrate_flush_mark,
                                channel_handle_migrate_data_proc handle_migrate_data,
                                channel_handle_migrate_data_get_serial_proc handle_migrate_data_get_serial);
-RedChannelClient *red_channel_client_create(int size, RedChannel *channel,
+RedChannelClient *red_channel_client_create(int size, RedChannel *channel, RedClient *client,
                                             RedsStream *stream);
 int red_channel_is_connected(RedChannel *channel);
 
 void red_channel_client_destroy(RedChannelClient *rcc);
 void red_channel_destroy(RedChannel *channel);
+
+/* shutdown is the only safe thing to do out of the client/channel
+ * thread. It will not touch the rings, just shutdown the socket.
+ * It should be followed by some way to gurantee a disconnection. */
+void red_channel_client_shutdown(RedChannelClient *rcc);
+void red_channel_shutdown(RedChannel *channel);
 
 /* should be called when a new channel is ready to send messages */
 void red_channel_init_outgoing_messages_window(RedChannel *channel);
@@ -349,5 +359,18 @@ typedef void (*channel_client_visitor)(RedChannelClient *rcc);
 typedef void (*channel_client_visitor_data)(RedChannelClient *rcc, void *data);
 void red_channel_apply_clients(RedChannel *channel, channel_client_visitor v);
 void red_channel_apply_clients_data(RedChannel *channel, channel_client_visitor_data v, void *data);
+
+struct RedClient {
+    RingItem link;
+    Ring channels;
+    int channels_num;
+    int disconnecting;
+    MainChannelClient *mcc;
+};
+
+RedClient *red_client_new();
+void red_client_destroy(RedClient *client);
+void red_client_set_main(RedClient *client, MainChannelClient *mcc);
+MainChannelClient *red_client_get_main(RedClient *client);
 
 #endif

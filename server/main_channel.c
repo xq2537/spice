@@ -139,6 +139,11 @@ enum NetTestStage {
 static uint64_t latency = 0;
 uint64_t bitrate_per_sec = ~0;
 
+static void main_channel_client_disconnect(RedChannelClient *rcc)
+{
+    red_channel_client_disconnect(rcc);
+}
+
 static void main_disconnect(MainChannel *main_chan)
 {
     red_channel_destroy(&main_chan->base);
@@ -788,7 +793,7 @@ static int main_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint
 
 static void main_channel_on_error(RedChannelClient *rcc)
 {
-    reds_disconnect();
+    reds_client_disconnect(rcc->client);
 }
 
 static uint8_t *main_channel_alloc_msg_rcv_buf(RedChannelClient *rcc, SpiceDataHeader *msg_header)
@@ -819,19 +824,20 @@ static int main_channel_handle_migrate_flush_mark(RedChannelClient *rcc)
     return TRUE;
 }
 
-MainChannelClient *main_channel_link(Channel *channel, RedsStream *stream, int migration,
+MainChannelClient *main_channel_link(Channel *channel, RedClient *client,
+                        RedsStream *stream, int migration,
                         int num_common_caps, uint32_t *common_caps, int num_caps,
                         uint32_t *caps)
 {
     MainChannel *main_chan;
     MainChannelClient *mcc;
 
-    ASSERT(channel->data == NULL);
     if (channel->data == NULL) {
         red_printf("create main channel");
         channel->data = red_channel_create_parser(
             sizeof(*main_chan), core, migration, FALSE /* handle_acks */
             ,main_channel_config_socket
+            ,main_channel_client_disconnect
             ,spice_get_client_channel_parser(SPICE_CHANNEL_MAIN, NULL)
             ,main_channel_handle_parsed
             ,main_channel_alloc_msg_rcv_buf
@@ -849,7 +855,7 @@ MainChannelClient *main_channel_link(Channel *channel, RedsStream *stream, int m
     main_chan = (MainChannel*)channel->data;
     red_printf("add main channel client");
     mcc = (MainChannelClient*)
-            red_channel_client_create(sizeof(MainChannelClient), &main_chan->base, stream);
+            red_channel_client_create(sizeof(MainChannelClient), &main_chan->base, client, stream);
     return mcc;
 }
 

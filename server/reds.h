@@ -35,6 +35,7 @@
 #define SPICE_GNUC_VISIBLE __attribute__ ((visibility ("default")))
 
 typedef struct RedsStream RedsStream;
+typedef struct RedClient RedClient;
 typedef struct MainChannelClient MainChannelClient;
 
 #if HAVE_SASL
@@ -95,7 +96,8 @@ typedef struct Channel {
     uint32_t *common_caps;
     int num_caps;
     uint32_t *caps;
-    void (*link)(struct Channel *, RedsStream *stream, int migration, int num_common_caps,
+    void (*link)(struct Channel *, RedClient *client, RedsStream *stream,
+                 int migration, int num_common_caps,
                  uint32_t *common_caps, int num_caps, uint32_t *caps);
     void (*shutdown)(struct Channel *);
     void (*migrate)(struct Channel *);
@@ -138,7 +140,7 @@ extern uint64_t bitrate_per_sec;
 #define IS_LOW_BANDWIDTH() (bitrate_per_sec < 10 * 1024 * 1024)
 
 // Temporary measures to make splitting reds.c to inputs_channel.c easier
-void reds_disconnect(void);
+void reds_client_disconnect(RedClient *client);
 
 // Temporary (?) for splitting main channel
 typedef struct MainMigrateData MainMigrateData;

@@ -602,9 +602,9 @@ static void arm_timer(SlirpUsrNetworkInterface *usr_interface, UserTimer *timer,
 
 
 /* reds interface */
-static void handle_tunnel_channel_link(Channel *channel, RedsStream *stream, int migration,
-                                       int num_common_caps, uint32_t *common_caps, int num_caps,
-                                       uint32_t *caps);
+static void handle_tunnel_channel_link(Channel *channel, RedClient *client, RedsStream *stream,
+                                       int migration, int num_common_caps, uint32_t *common_caps,
+                                       int num_caps, uint32_t *caps);
 static void handle_tunnel_channel_shutdown(struct Channel *channel);
 static void handle_tunnel_channel_migrate(struct Channel *channel);
 
@@ -3434,9 +3434,9 @@ static void tunnel_channel_hold_pipe_item(RedChannelClient *rcc, PipeItem *item)
 {
 }
 
-static void handle_tunnel_channel_link(Channel *channel, RedsStream *stream, int migration,
-                                       int num_common_caps, uint32_t *common_caps, int num_caps,
-                                       uint32_t *caps)
+static void handle_tunnel_channel_link(Channel *channel, RedClient *client, RedsStream *stream,
+                                       int migration, int num_common_caps, uint32_t *common_caps,
+                                       int num_caps, uint32_t *caps)
 {
     TunnelChannel *tunnel_channel;
     TunnelWorker *worker = (TunnelWorker *)channel->data;
@@ -3462,7 +3462,7 @@ static void handle_tunnel_channel_link(Channel *channel, RedsStream *stream, int
     if (!tunnel_channel) {
         return;
     }
-    red_channel_client_create(sizeof(RedChannelClient), &tunnel_channel->base, stream);
+    red_channel_client_create(sizeof(RedChannelClient), &tunnel_channel->base, client, stream);
 
     tunnel_channel->worker = worker;
     tunnel_channel->worker->channel = tunnel_channel;

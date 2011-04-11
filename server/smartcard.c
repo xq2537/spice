@@ -477,7 +477,7 @@ static void smartcard_channel_hold_pipe_item(RedChannelClient *rcc, PipeItem *it
 {
 }
 
-static void smartcard_link(Channel *channel, RedsStream *stream,
+static void smartcard_link(Channel *channel, RedClient *client, RedsStream *stream,
                         int migration, int num_common_caps,
                         uint32_t *common_caps, int num_caps,
                         uint32_t *caps)
@@ -506,7 +506,7 @@ static void smartcard_link(Channel *channel, RedsStream *stream,
         red_printf("ERROR: smartcard channel creation failed");
         return;
     }
-    red_channel_client_create(sizeof(RedChannelClient), channel->data, stream);
+    red_channel_client_create(sizeof(RedChannelClient), channel->data, client, stream);
     red_channel_init_outgoing_messages_window((RedChannel*)channel->data);
 }
 

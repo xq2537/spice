@@ -34,6 +34,7 @@
 #include "generated_marshallers.h"
 
 static void red_channel_client_event(int fd, int event, void *data);
+static void red_client_add_channel(RedClient *client, RedChannelClient *rcc);
 
 /* return the number of bytes read. -1 in case of error */
 static int red_peer_receive(RedsStream *stream, uint8_t *buf, uint32_t size)
@@ -356,11 +357,13 @@ static void red_channel_add_client(RedChannel *channel, RedChannelClient *rcc)
 {
     ASSERT(rcc && !channel->rcc);
 	channel->rcc = rcc;
+    channel->clients_num++;
 }
 
 RedChannelClient *red_channel_client_create(
     int size,
     RedChannel *channel,
+    RedClient  *client,
     RedsStream *stream)
 {
     RedChannelClient *rcc;
@@ -369,6 +372,7 @@ RedChannelClient *red_channel_client_create(
     rcc = spice_malloc0(size);
     rcc->stream = stream;
     rcc->channel = channel;
+    rcc->client = client;
     rcc->ack_data.messages_window = ~0;  // blocks send message (maybe use send_data.blocked +
                                              // block flags)
     rcc->ack_data.client_generation = ~0;
@@ -392,8 +396,9 @@ RedChannelClient *red_channel_client_create(
     stream->watch = channel->core->watch_add(stream->socket,
                                            SPICE_WATCH_EVENT_READ,
                                            red_channel_client_event, rcc);
-    rcc->id = 0;
+    rcc->id = channel->clients_num;
     red_channel_add_client(channel, rcc);
+    red_client_add_channel(client, rcc);
     return rcc;
 error:
     free(rcc);
@@ -453,10 +458,6 @@ RedChannel *red_channel_create(int size,
     return channel;
 }
 
-static void do_nothing_disconnect(RedChannelClient *rcc)
-{
-}
-
 static int do_nothing_handle_message(RedChannelClient *rcc, SpiceDataHeader *header, uint8_t *msg)
 {
     return TRUE;
@@ -466,6 +467,7 @@ RedChannel *red_channel_create_parser(int size,
                                SpiceCoreInterface *core,
                                int migrate, int handle_acks,
                                channel_configure_socket_proc config_socket,
+                               channel_disconnect_proc disconnect,
                                spice_parse_channel_func_t parser,
                                channel_handle_parsed_proc handle_parsed,
                                channel_alloc_msg_recv_buf_proc alloc_recv_buf,
@@ -480,7 +482,7 @@ RedChannel *red_channel_create_parser(int size,
                                channel_handle_migrate_data_get_serial_proc handle_migrate_data_get_serial)
 {
     RedChannel *channel = red_channel_create(size,
-        core, migrate, handle_acks, config_socket, do_nothing_disconnect,
+        core, migrate, handle_acks, config_socket, disconnect,
         do_nothing_handle_message, alloc_recv_buf, release_recv_buf, hold_item,
         send_item, release_item, handle_migrate_flush_mark, handle_migrate_data,
         handle_migrate_data_get_serial);
@@ -516,7 +518,7 @@ void red_channel_destroy(RedChannel *channel)
     free(channel);
 }
 
-static void red_channel_client_shutdown(RedChannelClient *rcc)
+void red_channel_client_shutdown(RedChannelClient *rcc)
 {
     if (rcc->stream && !rcc->stream->shutdown) {
         rcc->channel->core->watch_remove(rcc->stream->watch);
@@ -864,6 +866,15 @@ void red_channel_ack_set_client_window(RedChannel* channel, int client_window)
     }
 }
 
+static void red_channel_client_remove(RedChannelClient *rcc)
+{
+    ring_remove(&rcc->client_link);
+    rcc->client->channels_num--;
+    ASSERT(rcc->channel->rcc == rcc);
+    rcc->channel->rcc = NULL;
+    rcc->channel->clients_num--;
+}
+
 void red_channel_client_disconnect(RedChannelClient *rcc)
 {
     red_printf("%p (channel %p)", rcc, rcc->channel);
@@ -876,7 +887,7 @@ void red_channel_client_disconnect(RedChannelClient *rcc)
     rcc->send_data.item = NULL;
     rcc->send_data.blocked = FALSE;
     rcc->send_data.size = 0;
-    rcc->channel->rcc = NULL;
+    red_channel_client_remove(rcc);
 }
 
 void red_channel_disconnect(RedChannel *channel)
@@ -983,4 +994,72 @@ void red_channel_client_pipe_remove_and_release(RedChannelClient *rcc,
 {
     red_channel_client_pipe_remove(rcc, item);
     red_channel_client_release_item(rcc, item, FALSE);
+}
+
+/*
+ * RedClient implementation - kept in red_channel.c because they are
+ * pretty tied together.
+ */
+
+RedClient *red_client_new()
+{
+    RedClient *client;
+
+    client = spice_malloc0(sizeof(RedClient));
+    ring_init(&client->channels);
+    return client;
+}
+
+void red_client_shutdown(RedClient *client)
+{
+    RingItem *link, *next;
+
+    red_printf("#channels %d", client->channels_num);
+    RING_FOREACH_SAFE(link, next, &client->channels) {
+        red_channel_client_shutdown(SPICE_CONTAINEROF(link, RedChannelClient, client_link));
+    }
+}
+
+void red_client_destroy(RedClient *client)
+{
+    RingItem *link, *next;
+    RedChannelClient *rcc;
+
+    red_printf("destroy client with #channels %d", client->channels_num);
+    RING_FOREACH_SAFE(link, next, &client->channels) {
+        // some channels may be in other threads, so disconnection
+        // is not synchronous.
+        rcc = SPICE_CONTAINEROF(link, RedChannelClient, client_link);
+        rcc->channel->disconnect(rcc); // this may call another thread. it also frees. (eventually - doesn't have to be in sync)
+    }
+    free(client);
+}
+
+void red_client_disconnect(RedClient *client)
+{
+    RingItem *link, *next;
+    RedChannelClient *rcc;
+
+    red_printf("#channels %d", client->channels_num);
+    RING_FOREACH_SAFE(link, next, &client->channels) {
+        // some channels may be in other threads, so disconnection
+        // is not synchronous.
+        rcc = SPICE_CONTAINEROF(link, RedChannelClient, client_link);
+        rcc->channel->disconnect(rcc);
+    }
+}
+
+static void red_client_add_channel(RedClient *client, RedChannelClient *rcc)
+{
+    ASSERT(rcc && client);
+    ring_add(&client->channels, &rcc->client_link);
+    client->channels_num++;
+}
+
+MainChannelClient *red_client_get_main(RedClient *client) {
+    return client->mcc;
+}
+
+void red_client_set_main(RedClient *client, MainChannelClient *mcc) {
+    client->mcc = mcc;
 }

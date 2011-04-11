@@ -18,6 +18,8 @@
 #ifndef _H_RED_DISPATCHER
 #define _H_RED_DISPATCHER
 
+struct RedChannelClient;
+
 struct RedDispatcher *red_dispatcher_init(QXLInstance *qxl);
 
 void red_dispatcher_set_mm_time(uint32_t);
@@ -30,5 +32,9 @@ uint32_t red_dispatcher_qxl_ram_size(void);
 int red_dispatcher_qxl_count(void);
 void red_dispatcher_async_complete(struct RedDispatcher*, uint64_t);
 
-#endif
+void red_dispatcher_disconnect_display_client(struct RedDispatcher *dispatcher,
+                                      struct RedChannelClient *rcc);
+void red_dispatcher_disconnect_cursor_client(struct RedDispatcher *dispatcher,
+                                      struct RedChannelClient *rcc);
 
+#endif

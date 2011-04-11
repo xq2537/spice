@@ -1088,9 +1088,9 @@ static void snd_playback_cleanup(SndChannel *channel)
     celt051_mode_destroy(playback_channel->celt_mode);
 }
 
-static void snd_set_playback_peer(Channel *channel, RedsStream *stream, int migration,
-                                  int num_common_caps, uint32_t *common_caps, int num_caps,
-                                  uint32_t *caps)
+static void snd_set_playback_peer(Channel *channel, RedClient *client, RedsStream *stream,
+                                  int migration, int num_common_caps, uint32_t *common_caps,
+                                  int num_caps, uint32_t *caps)
 {
     SndWorker *worker = (SndWorker *)channel;
     SpicePlaybackState *st = SPICE_CONTAINEROF(worker, SpicePlaybackState, worker);
@@ -1287,9 +1287,9 @@ static void snd_record_cleanup(SndChannel *channel)
     celt051_mode_destroy(record_channel->celt_mode);
 }
 
-static void snd_set_record_peer(Channel *channel, RedsStream *stream, int migration,
-                                int num_common_caps, uint32_t *common_caps, int num_caps,
-                                uint32_t *caps)
+static void snd_set_record_peer(Channel *channel, RedClient *client, RedsStream *stream,
+                                int migration, int num_common_caps, uint32_t *common_caps,
+                                int num_caps, uint32_t *caps)
 {
     SndWorker *worker = (SndWorker *)channel;
     SpiceRecordState *st = SPICE_CONTAINEROF(worker, SpiceRecordState, worker);

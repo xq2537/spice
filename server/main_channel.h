@@ -48,7 +48,7 @@ typedef struct MainChannel MainChannel;
 
 Channel *main_channel_init(void);
 /* This is a 'clone' from the reds.h Channel.link callback */
-MainChannelClient *main_channel_link(struct Channel *,
+MainChannelClient *main_channel_link(struct Channel *, RedClient *client,
                  RedsStream *stream, int migration, int num_common_caps,
                  uint32_t *common_caps, int num_caps, uint32_t *caps);
 void main_channel_close(MainChannel *main_chan); // not destroy, just socket close

@@ -76,7 +76,8 @@ extern spice_wan_compression_t zlib_glz_state;
 
 static RedDispatcher *dispatchers = NULL;
 
-static void red_dispatcher_set_peer(Channel *channel, RedsStream *stream, int migration,
+static void red_dispatcher_set_peer(Channel *channel, RedClient *client,
+                                    RedsStream *stream, int migration,
                                     int num_common_caps, uint32_t *common_caps, int num_caps,
                                     uint32_t *caps)
 {
@@ -86,6 +87,7 @@ static void red_dispatcher_set_peer(Channel *channel, RedsStream *stream, int mi
     dispatcher = (RedDispatcher *)channel->data;
     RedWorkerMessage message = RED_WORKER_MESSAGE_DISPLAY_CONNECT;
     write_message(dispatcher->channel, &message);
+    send_data(dispatcher->channel, &client, sizeof(RedClient *));
     send_data(dispatcher->channel, &stream, sizeof(RedsStream *));
     send_data(dispatcher->channel, &migration, sizeof(int));
 }
@@ -106,7 +108,7 @@ static void red_dispatcher_migrate(Channel *channel)
     write_message(dispatcher->channel, &message);
 }
 
-static void red_dispatcher_set_cursor_peer(Channel *channel, RedsStream *stream,
+static void red_dispatcher_set_cursor_peer(Channel *channel, RedClient *client, RedsStream *stream,
                                            int migration, int num_common_caps,
                                            uint32_t *common_caps, int num_caps,
                                            uint32_t *caps)
@@ -115,6 +117,7 @@ static void red_dispatcher_set_cursor_peer(Channel *channel, RedsStream *stream,
     red_printf("");
     RedWorkerMessage message = RED_WORKER_MESSAGE_CURSOR_CONNECT;
     write_message(dispatcher->channel, &message);
+    send_data(dispatcher->channel, &client, sizeof(RedClient *));
     send_data(dispatcher->channel, &stream, sizeof(RedsStream *));
     send_data(dispatcher->channel, &migration, sizeof(int));
 }
@@ -587,6 +590,36 @@ static void qxl_worker_loadvm_commands(QXLWorker *qxl_worker,
 {
     red_dispatcher_loadvm_commands((RedDispatcher*)qxl_worker, ext, count);
 }
+
+static void red_dispatcher_send_disconnect(RedDispatcher *dispatcher,
+                    struct RedChannelClient *rcc, RedWorkerMessage message)
+{
+    write_message(dispatcher->channel, &message);
+    send_data(dispatcher->channel, &rcc, sizeof(struct RedChannelClient *));
+}
+
+void red_dispatcher_disconnect_display_client(RedDispatcher *dispatcher,
+                                      struct RedChannelClient *rcc)
+{
+    RedWorkerMessage message = RED_WORKER_MESSAGE_STOP;
+
+    red_dispatcher_send_disconnect(dispatcher, rcc,
+            RED_WORKER_MESSAGE_DISPLAY_DISCONNECT_CLIENT);
+    read_message(dispatcher->channel, &message);
+    ASSERT(message == RED_WORKER_MESSAGE_READY);
+}
+
+void red_dispatcher_disconnect_cursor_client(RedDispatcher *dispatcher,
+                                      struct RedChannelClient *rcc)
+{
+    RedWorkerMessage message = RED_WORKER_MESSAGE_STOP;
+
+    red_dispatcher_send_disconnect(dispatcher, rcc,
+            RED_WORKER_MESSAGE_CURSOR_DISCONNECT_CLIENT);
+    read_message(dispatcher->channel, &message);
+    ASSERT(message == RED_WORKER_MESSAGE_READY);
+}
+
 
 void red_dispatcher_set_mm_time(uint32_t mm_time)
 {

@@ -177,7 +177,7 @@ static void usbredir_red_channel_release_pipe_item(RedChannelClient *rcc,
     free(item);
 }
 
-static void usbredir_link(Channel *channel, RedsStream *stream, int migration,
+static void usbredir_link(Channel *channel, RedClient *client, RedsStream *stream, int migration,
     int num_common_caps, uint32_t *common_caps, int num_caps, uint32_t *caps)
 {
     UsbRedirState *state;
@@ -216,7 +216,8 @@ static void usbredir_link(Channel *channel, RedsStream *stream, int migration,
     if (!state->red_channel) {
         return;
     }
-    state->rcc = red_channel_client_create(sizeof(RedChannelClient), state->red_channel, stream);
+    state->rcc = red_channel_client_create(sizeof(RedChannelClient), state->red_channel,
+                                           client, stream);
     if (!state->rcc) {
         red_printf("failed to create usbredir channel client\n");
         return;

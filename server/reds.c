@@ -198,6 +198,8 @@ typedef struct RedsState {
     int disconnecting;
     VDIPortState agent_state;
     int pending_mouse_event;
+    Ring clients;
+    int num_clients;
     uint32_t link_id;
     Channel *main_channel_factory;
     MainChannel *main_channel;
@@ -535,15 +537,6 @@ static Channel *reds_find_channel(uint32_t type, uint32_t id)
     return channel;
 }
 
-static void reds_shatdown_channels()
-{
-    Channel *channel = reds->channels;
-    while (channel) {
-        channel->shutdown(channel);
-        channel = channel->next;
-    }
-}
-
 static void reds_mig_cleanup()
 {
     if (reds->mig_inprogress) {
@@ -594,14 +587,14 @@ static int reds_main_channel_connected(void)
     return !!reds->main_channel;
 }
 
-void reds_disconnect()
+void reds_client_disconnect(RedClient *client)
 {
-    if (!reds_main_channel_connected() || reds->disconnecting) {
+    if (!reds_main_channel_connected() || client->disconnecting) {
         return;
     }
 
     red_printf("");
-    reds->disconnecting = TRUE;
+    client->disconnecting = TRUE;
     reds->link_id = 0;
 
     /* Reset write filter to start with clean state on client reconnect */
@@ -612,12 +605,24 @@ void reds_disconnect()
     reds->agent_state.read_filter.result = AGENT_MSG_FILTER_DISCARD;
     reds->agent_state.read_filter.discard_all = TRUE;
 
-    reds_shatdown_channels();
-    reds->main_channel_factory->shutdown(reds->main_channel_factory);
-    reds->main_channel_factory->data = NULL;
-    reds->main_channel = NULL;
+    ring_remove(&client->link);
+    reds->num_clients--;
+    red_client_destroy(client);
+
     reds_mig_cleanup();
     reds->disconnecting = FALSE;
+}
+
+// TODO: go over all usage of reds_disconnect, most/some of it should be converted to
+// reds_client_disconnect
+static void reds_disconnect(void)
+{
+    RingItem *link, *next;
+
+    red_printf("");
+    RING_FOREACH_SAFE(link, next, &reds->clients) {
+        reds_client_disconnect(SPICE_CONTAINEROF(link, RedClient, link));
+    }
 }
 
 static void reds_mig_disconnect()
@@ -1342,6 +1347,7 @@ void reds_on_main_receive_migrate_data(MainMigrateData *data, uint8_t *end)
 static int sync_write(RedsStream *stream, const void *in_buf, size_t n)
 {
     const uint8_t *buf = (uint8_t *)in_buf;
+
     while (n) {
         int now = reds_stream_write(stream, buf, n);
         if (now <= 0) {
@@ -1441,7 +1447,6 @@ static int reds_send_link_ack(RedLinkInfo *link)
     BIO_get_mem_ptr(bio, &bmBuf);
     memcpy(ack.pub_key, bmBuf->data, sizeof(ack.pub_key));
 
-
     if (!sync_write(link->stream, &header, sizeof(header)))
         goto end;
     if (!sync_write(link->stream, &ack, sizeof(ack)))
@@ -1499,6 +1504,7 @@ static void reds_send_link_result(RedLinkInfo *link, uint32_t error)
 // actually be joined with reds_handle_other_links, become reds_handle_link
 static void reds_handle_main_link(RedLinkInfo *link)
 {
+    RedClient *client;
     RedsStream *stream;
     SpiceLinkMess *link_mess;
     uint32_t *caps;
@@ -1541,13 +1547,17 @@ static void reds_handle_main_link(RedLinkInfo *link)
     if (!reds->main_channel_factory) {
         reds->main_channel_factory = main_channel_init();
     }
-    mcc = main_channel_link(reds->main_channel_factory,
+    client = red_client_new();
+    ring_add(&reds->clients, &client->link);
+    reds->num_clients++;
+    mcc = main_channel_link(reds->main_channel_factory, client,
                   stream, reds->mig_target, link_mess->num_common_caps,
                   link_mess->num_common_caps ? caps : NULL, link_mess->num_channel_caps,
                   link_mess->num_channel_caps ? caps + link_mess->num_common_caps : NULL);
     reds->main_channel = (MainChannel*)reds->main_channel_factory->data;
     ASSERT(reds->main_channel);
     free(link_mess);
+    red_client_set_main(client, mcc);
 
     if (vdagent) {
         reds->agent_state.read_filter.discard_all = FALSE;
@@ -1603,11 +1613,21 @@ static void openssl_init(RedLinkInfo *link)
 static void reds_handle_other_links(RedLinkInfo *link)
 {
     Channel *channel;
+    RedClient *client = NULL;
     RedsStream *stream;
     SpiceLinkMess *link_mess;
     uint32_t *caps;
 
     link_mess = link->link_mess;
+    if (reds->num_clients == 1) {
+        client = SPICE_CONTAINEROF(ring_get_head(&reds->clients), RedClient, link);
+    }
+
+    if (!client) {
+        reds_send_link_result(link, SPICE_LINK_ERR_BAD_CONNECTION_ID);
+        reds_link_free(link);
+        return;
+    }
 
     if (!reds->link_id || reds->link_id != link_mess->connection_id) {
         reds_send_link_result(link, SPICE_LINK_ERR_BAD_CONNECTION_ID);
@@ -1635,7 +1655,7 @@ static void reds_handle_other_links(RedLinkInfo *link)
     link->link_mess = NULL;
     reds_link_free(link);
     caps = (uint32_t *)((uint8_t *)link_mess + link_mess->caps_offset);
-    channel->link(channel, stream, reds->mig_target, link_mess->num_common_caps,
+    channel->link(channel, client, stream, reds->mig_target, link_mess->num_common_caps,
                   link_mess->num_common_caps ? caps : NULL, link_mess->num_channel_caps,
                   link_mess->num_channel_caps ? caps + link_mess->num_common_caps : NULL);
     free(link_mess);
@@ -3463,6 +3483,8 @@ static int do_spice_init(SpiceCoreInterface *core_interface)
     reds->listen_socket = -1;
     reds->secure_listen_socket = -1;
     init_vd_agent_resources();
+    ring_init(&reds->clients);
+    reds->num_clients = 0;
 
     if (!(reds->mig_timer = core->timer_add(migrate_timout, NULL))) {
         red_error("migration timer create failed");
