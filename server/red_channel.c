@@ -220,6 +220,9 @@ void red_channel_client_default_peer_on_error(RedChannelClient *rcc)
 
 static void red_channel_peer_on_incoming_error(RedChannelClient *rcc)
 {
+    if (rcc->stream->shutdown) {
+        return; // assume error has already been handled which caused the shutdown.
+    }
     rcc->channel->on_incoming_error(rcc);
 }
 
