@@ -283,7 +283,7 @@ void red_channel_pipes_new_add_tail(RedChannel *channel, new_pipe_item_t creator
 void red_channel_client_pipe_add_push(RedChannelClient *rcc, PipeItem *item);
 void red_channel_client_pipe_add(RedChannelClient *rcc, PipeItem *item);
 void red_channel_client_pipe_add_after(RedChannelClient *rcc, PipeItem *item, PipeItem *pos);
-int red_channel_pipe_item_is_linked(RedChannel *channel, PipeItem *item);
+int red_channel_client_pipe_item_is_linked(RedChannelClient *rcc, PipeItem *item);
 void red_channel_pipe_item_remove(RedChannel *channel, PipeItem *item);
 void red_channel_client_pipe_remove_and_release(RedChannelClient *rcc, PipeItem *item);
 void red_channel_client_pipe_add_tail(RedChannelClient *rcc, PipeItem *item);

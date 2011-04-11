@@ -343,7 +343,7 @@ static const ServiceCallback SERVICES_CALLBACKS[3][2] = {
 /****************************************************
 *   Migration data
 ****************************************************/
-typedef struct TunnelChannel TunnelChannel;
+typedef struct TunnelChannelClient TunnelChannelClient;
 
 #define TUNNEL_MIGRATE_DATA_MAGIC (*(uint32_t *)"TMDA")
 #define TUNNEL_MIGRATE_DATA_VERSION 1
@@ -471,7 +471,7 @@ typedef struct TunnelMigrateItem {
     TunnelMigrateSocketItem sockets_data[MAX_SOCKETS_NUM];
 } TunnelMigrateItem;
 
-static inline void tunnel_channel_activate_migrated_sockets(TunnelChannel *channel);
+static inline void tunnel_channel_activate_migrated_sockets(TunnelChannelClient *channel);
 
 /*******************************************************************************************/
 
@@ -485,8 +485,8 @@ static inline void tunnel_channel_activate_migrated_sockets(TunnelChannel *chann
 /* should be checked after each subroutine that may cause error or after calls to slirp routines */
 #define CHECK_TUNNEL_ERROR(channel) (channel->tunnel_error)
 
-struct TunnelChannel {
-    RedChannel base;
+struct TunnelChannelClient {
+    RedChannelClient base;
     TunnelWorker *worker;
     int mig_inprogress;
     int expect_migrate_mark;
@@ -538,7 +538,7 @@ typedef struct TunnelPrintService {
 
 struct TunnelWorker {
     Channel channel_interface; // for reds
-    TunnelChannel *channel;
+    TunnelChannelClient *channel;
 
     SpiceCoreInterface *core_interface;
     SpiceNetWireInstance *sin;
@@ -602,9 +602,11 @@ static void arm_timer(SlirpUsrNetworkInterface *usr_interface, UserTimer *timer,
 
 
 /* reds interface */
-static void handle_tunnel_channel_link(Channel *channel, RedClient *client, RedsStream *stream,
-                                       int migration, int num_common_caps, uint32_t *common_caps,
-                                       int num_caps, uint32_t *caps);
+static void handle_tunnel_channel_link(Channel *channel, RedClient *client,
+                                       RedsStream *stream, int migration,
+                                       int num_common_caps,
+                                       uint32_t *common_caps, int num_caps,
+                                       uint32_t *caps);
 static void handle_tunnel_channel_shutdown(struct Channel *channel);
 static void handle_tunnel_channel_migrate(struct Channel *channel);
 
@@ -615,7 +617,7 @@ static void tunnel_shutdown(TunnelWorker *worker)
     red_printf("");
     /* shutdown input from channel */
     if (worker->channel) {
-        red_channel_shutdown(&worker->channel->base);
+        red_channel_shutdown(worker->channel->base.channel);
     }
 
     /* shutdown socket pipe items */
@@ -724,9 +726,9 @@ static inline RedSocketRawRcvBuf *__tunnel_worker_alloc_socket_rcv_buf(TunnelWor
     return ret;
 }
 
-static inline void __process_rcv_buf_tokens(TunnelChannel *channel, RedSocket *sckt)
+static inline void __process_rcv_buf_tokens(TunnelChannelClient *channel, RedSocket *sckt)
 {
-    if ((sckt->client_status != CLIENT_SCKT_STATUS_OPEN) || red_channel_pipe_item_is_linked(
+    if ((sckt->client_status != CLIENT_SCKT_STATUS_OPEN) || red_channel_client_pipe_item_is_linked(
             &channel->base, &sckt->out_data.token_pipe_item) || channel->mig_inprogress) {
         return;
     }
@@ -734,7 +736,7 @@ static inline void __process_rcv_buf_tokens(TunnelChannel *channel, RedSocket *s
     if ((sckt->in_data.num_tokens >= SOCKET_TOKENS_TO_SEND) ||
         (!sckt->in_data.client_total_num_tokens && !sckt->in_data.ready_chunks_queue.head)) {
         sckt->out_data.token_pipe_item.type = PIPE_ITEM_TYPE_SOCKET_TOKEN;
-        red_channel_client_pipe_add(channel->base.rcc, &sckt->out_data.token_pipe_item);
+        red_channel_client_pipe_add(&channel->base, &sckt->out_data.token_pipe_item);
     }
 }
 
@@ -971,7 +973,7 @@ SPICE_GNUC_VISIBLE void spice_server_net_wire_recv_packet(SpiceNetWireInstance *
     TunnelWorker *worker = sin->st->worker;
     ASSERT(worker);
 
-    if (worker->channel && worker->channel->base.migrate) {
+    if (worker->channel && worker->channel->base.channel->migrate) {
         return; // during migration and the tunnel state hasn't been restored yet.
     }
 
@@ -1094,7 +1096,7 @@ static inline TunnelService *__tunnel_worker_add_service(TunnelWorker *worker, u
 #endif
     if (!virt_ip) {
         new_service->pipe_item.type = PIPE_ITEM_TYPE_SERVICE_IP_MAP;
-        red_channel_client_pipe_add(worker->channel->base.rcc, &new_service->pipe_item);
+        red_channel_client_pipe_add(&worker->channel->base, &new_service->pipe_item);
     }
 
     return new_service;
@@ -1152,7 +1154,7 @@ static TunnelPrintService *tunnel_worker_add_print_service(TunnelWorker *worker,
     return service;
 }
 
-static int tunnel_channel_handle_service_add(TunnelChannel *channel,
+static int tunnel_channel_handle_service_add(TunnelChannelClient *channel,
                                              SpiceMsgcTunnelAddGenericService *service_msg)
 {
     TunnelService *out_service = NULL;
@@ -1291,23 +1293,23 @@ static RedSocket *tunnel_worker_create_socket(TunnelWorker *worker, uint16_t loc
 static void tunnel_worker_free_socket(TunnelWorker *worker, RedSocket *sckt)
 {
     if (worker->channel) {
-        if (red_channel_pipe_item_is_linked(&worker->channel->base,
+        if (red_channel_client_pipe_item_is_linked(&worker->channel->base,
                                             &sckt->out_data.data_pipe_item)) {
-            red_channel_pipe_item_remove(&worker->channel->base,
+            red_channel_client_pipe_remove_and_release(&worker->channel->base,
                                          &sckt->out_data.data_pipe_item);
             return;
         }
 
-        if (red_channel_pipe_item_is_linked(&worker->channel->base,
+        if (red_channel_client_pipe_item_is_linked(&worker->channel->base,
                                             &sckt->out_data.status_pipe_item)) {
-            red_channel_pipe_item_remove(&worker->channel->base,
+            red_channel_client_pipe_remove_and_release(&worker->channel->base,
                                          &sckt->out_data.status_pipe_item);
             return;
         }
 
-        if (red_channel_pipe_item_is_linked(&worker->channel->base,
+        if (red_channel_client_pipe_item_is_linked(&worker->channel->base,
                                             &sckt->out_data.token_pipe_item)) {
-            red_channel_pipe_item_remove(&worker->channel->base,
+            red_channel_client_pipe_remove_and_release(&worker->channel->base,
                                          &sckt->out_data.token_pipe_item);
             return;
         }
@@ -1343,39 +1345,41 @@ static inline RedSocket *tunnel_worker_find_socket(TunnelWorker *worker,
     return NULL;
 }
 
-static inline void __tunnel_socket_add_fin_to_pipe(TunnelChannel *channel, RedSocket *sckt)
+static inline void __tunnel_socket_add_fin_to_pipe(TunnelChannelClient *channel, RedSocket *sckt)
 {
-    ASSERT(!red_channel_pipe_item_is_linked(&channel->base, &sckt->out_data.status_pipe_item));
+    ASSERT(!red_channel_client_pipe_item_is_linked(&channel->base, &sckt->out_data.status_pipe_item));
     sckt->out_data.status_pipe_item.type = PIPE_ITEM_TYPE_SOCKET_FIN;
-    red_channel_client_pipe_add(channel->base.rcc, &sckt->out_data.status_pipe_item);
+    red_channel_client_pipe_add(&channel->base, &sckt->out_data.status_pipe_item);
 }
 
-static inline void __tunnel_socket_add_close_to_pipe(TunnelChannel *channel, RedSocket *sckt)
+static inline void __tunnel_socket_add_close_to_pipe(TunnelChannelClient *channel, RedSocket *sckt)
 {
     ASSERT(!channel->mig_inprogress);
 
-    if (red_channel_pipe_item_is_linked(&channel->base, &sckt->out_data.status_pipe_item)) {
+    if (red_channel_client_pipe_item_is_linked(&channel->base, &sckt->out_data.status_pipe_item)) {
         ASSERT(sckt->out_data.status_pipe_item.type == PIPE_ITEM_TYPE_SOCKET_FIN);
         // close is stronger than FIN
-        red_channel_pipe_item_remove(&channel->base, &sckt->out_data.status_pipe_item);
+        red_channel_client_pipe_remove_and_release(&channel->base,
+                                        &sckt->out_data.status_pipe_item);
     }
     sckt->pushed_close = TRUE;
     sckt->out_data.status_pipe_item.type = PIPE_ITEM_TYPE_SOCKET_CLOSE;
-    red_channel_client_pipe_add(channel->base.rcc, &sckt->out_data.status_pipe_item);
+    red_channel_client_pipe_add(&channel->base, &sckt->out_data.status_pipe_item);
 }
 
-static inline void __tunnel_socket_add_close_ack_to_pipe(TunnelChannel *channel, RedSocket *sckt)
+static inline void __tunnel_socket_add_close_ack_to_pipe(TunnelChannelClient *channel, RedSocket *sckt)
 {
     ASSERT(!channel->mig_inprogress);
 
-    if (red_channel_pipe_item_is_linked(&channel->base, &sckt->out_data.status_pipe_item)) {
+    if (red_channel_client_pipe_item_is_linked(&channel->base, &sckt->out_data.status_pipe_item)) {
         ASSERT(sckt->out_data.status_pipe_item.type == PIPE_ITEM_TYPE_SOCKET_FIN);
         // close is stronger than FIN
-        red_channel_pipe_item_remove(&channel->base, &sckt->out_data.status_pipe_item);
+        red_channel_client_pipe_remove_and_release(&channel->base,
+                                    &sckt->out_data.status_pipe_item);
     }
 
     sckt->out_data.status_pipe_item.type = PIPE_ITEM_TYPE_SOCKET_CLOSED_ACK;
-    red_channel_client_pipe_add(channel->base.rcc, &sckt->out_data.status_pipe_item);
+    red_channel_client_pipe_add(&channel->base, &sckt->out_data.status_pipe_item);
 }
 
 /*
@@ -1383,14 +1387,14 @@ static inline void __tunnel_socket_add_close_ack_to_pipe(TunnelChannel *channel,
     If possible, notify slirp to recv data (which will return 0)
     When close ack is received from client, we notify slirp (maybe again) if needed.
 */
-static void tunnel_socket_force_close(TunnelChannel *channel, RedSocket *sckt)
+static void tunnel_socket_force_close(TunnelChannelClient *channel, RedSocket *sckt)
 {
-    if (red_channel_pipe_item_is_linked(&channel->base, &sckt->out_data.token_pipe_item)) {
-        red_channel_pipe_item_remove(&channel->base, &sckt->out_data.token_pipe_item);
+    if (red_channel_client_pipe_item_is_linked(&channel->base, &sckt->out_data.token_pipe_item)) {
+        red_channel_client_pipe_remove_and_release(&channel->base, &sckt->out_data.token_pipe_item);
     }
 
-    if (red_channel_pipe_item_is_linked(&channel->base, &sckt->out_data.data_pipe_item)) {
-        red_channel_pipe_item_remove(&channel->base, &sckt->out_data.data_pipe_item);
+    if (red_channel_client_pipe_item_is_linked(&channel->base, &sckt->out_data.data_pipe_item)) {
+        red_channel_client_pipe_remove_and_release(&channel->base, &sckt->out_data.data_pipe_item);
     }
 
 
@@ -1412,13 +1416,13 @@ static void tunnel_socket_force_close(TunnelChannel *channel, RedSocket *sckt)
     }
 }
 
-static int tunnel_channel_handle_socket_connect_ack(TunnelChannel *channel, RedSocket *sckt,
+static int tunnel_channel_handle_socket_connect_ack(TunnelChannelClient *channel, RedSocket *sckt,
                                                     uint32_t tokens)
 {
 #ifdef DEBUG_NETWORK
     red_printf("TUNNEL_DBG");
 #endif
-    if (channel->mig_inprogress || channel->base.migrate) {
+    if (channel->mig_inprogress || channel->base.channel->migrate) {
         sckt->mig_client_status_msg = SPICE_MSGC_TUNNEL_SOCKET_OPEN_ACK;
         sckt->mig_open_ack_tokens = tokens;
         return TRUE;
@@ -1446,12 +1450,12 @@ static int tunnel_channel_handle_socket_connect_ack(TunnelChannel *channel, RedS
     return (!CHECK_TUNNEL_ERROR(channel));
 }
 
-static int tunnel_channel_handle_socket_connect_nack(TunnelChannel *channel, RedSocket *sckt)
+static int tunnel_channel_handle_socket_connect_nack(TunnelChannelClient *channel, RedSocket *sckt)
 {
 #ifdef DEBUG_NETWORK
     PRINT_SCKT(sckt);
 #endif
-    if (channel->mig_inprogress || channel->base.migrate) {
+    if (channel->mig_inprogress || channel->base.channel->migrate) {
         sckt->mig_client_status_msg = SPICE_MSGC_TUNNEL_SOCKET_OPEN_NACK;
         return TRUE;
     }
@@ -1471,12 +1475,12 @@ static int tunnel_channel_handle_socket_connect_nack(TunnelChannel *channel, Red
     return (!CHECK_TUNNEL_ERROR(channel));
 }
 
-static int tunnel_channel_handle_socket_fin(TunnelChannel *channel, RedSocket *sckt)
+static int tunnel_channel_handle_socket_fin(TunnelChannelClient *channel, RedSocket *sckt)
 {
 #ifdef DEBUG_NETWORK
     PRINT_SCKT(sckt);
 #endif
-    if (channel->mig_inprogress || channel->base.migrate) {
+    if (channel->mig_inprogress || channel->base.channel->migrate) {
         sckt->mig_client_status_msg = SPICE_MSGC_TUNNEL_SOCKET_FIN;
         return TRUE;
     }
@@ -1506,7 +1510,7 @@ static int tunnel_channel_handle_socket_fin(TunnelChannel *channel, RedSocket *s
     return (!CHECK_TUNNEL_ERROR(channel));
 }
 
-static int tunnel_channel_handle_socket_closed(TunnelChannel *channel, RedSocket *sckt)
+static int tunnel_channel_handle_socket_closed(TunnelChannelClient *channel, RedSocket *sckt)
 {
     int prev_client_status = sckt->client_status;
 
@@ -1514,7 +1518,7 @@ static int tunnel_channel_handle_socket_closed(TunnelChannel *channel, RedSocket
     PRINT_SCKT(sckt);
 #endif
 
-    if (channel->mig_inprogress || channel->base.migrate) {
+    if (channel->mig_inprogress || channel->base.channel->migrate) {
         sckt->mig_client_status_msg = SPICE_MSGC_TUNNEL_SOCKET_CLOSED;
         return TRUE;
     }
@@ -1555,12 +1559,12 @@ static int tunnel_channel_handle_socket_closed(TunnelChannel *channel, RedSocket
     return (!CHECK_TUNNEL_ERROR(channel));
 }
 
-static int tunnel_channel_handle_socket_closed_ack(TunnelChannel *channel, RedSocket *sckt)
+static int tunnel_channel_handle_socket_closed_ack(TunnelChannelClient *channel, RedSocket *sckt)
 {
 #ifdef DEBUG_NETWORK
     PRINT_SCKT(sckt);
 #endif
-    if (channel->mig_inprogress || channel->base.migrate) {
+    if (channel->mig_inprogress || channel->base.channel->migrate) {
         sckt->mig_client_status_msg = SPICE_MSGC_TUNNEL_SOCKET_CLOSED_ACK;
         return TRUE;
     }
@@ -1582,7 +1586,7 @@ static int tunnel_channel_handle_socket_closed_ack(TunnelChannel *channel, RedSo
     return (!CHECK_TUNNEL_ERROR(channel));
 }
 
-static int tunnel_channel_handle_socket_receive_data(TunnelChannel *channel, RedSocket *sckt,
+static int tunnel_channel_handle_socket_receive_data(TunnelChannelClient *channel, RedSocket *sckt,
                                                      RedSocketRawRcvBuf *recv_data, int buf_size)
 {
     if ((sckt->client_status == CLIENT_SCKT_STATUS_SHUTDOWN_SEND) ||
@@ -1598,7 +1602,7 @@ static int tunnel_channel_handle_socket_receive_data(TunnelChannel *channel, Red
         __tunnel_worker_free_socket_rcv_buf(sckt->worker, recv_data);
         return (!CHECK_TUNNEL_ERROR(channel));
     } else if ((sckt->in_data.num_buffers == MAX_SOCKET_IN_BUFFERS) &&
-               !channel->mig_inprogress && !channel->base.migrate) {
+               !channel->mig_inprogress && !channel->base.channel->migrate) {
         red_printf("socket in buffers overflow, socket will be closed"
                    " (local_port=%d, service_id=%d)",
                    ntohs(sckt->local_port), sckt->far_service->id);
@@ -1630,16 +1634,16 @@ static inline int __client_socket_can_receive(RedSocket *sckt)
             !sckt->worker->channel->mig_inprogress);
 }
 
-static int tunnel_channel_handle_socket_token(TunnelChannel *channel, RedSocket *sckt,
+static int tunnel_channel_handle_socket_token(TunnelChannelClient *channel, RedSocket *sckt,
                                               SpiceMsgcTunnelSocketTokens *message)
 {
     sckt->out_data.num_tokens += message->num_tokens;
 
     if (__client_socket_can_receive(sckt) && sckt->out_data.ready_chunks_queue.head &&
-        !red_channel_pipe_item_is_linked(&channel->base, &sckt->out_data.data_pipe_item)) {
+        !red_channel_client_pipe_item_is_linked(&channel->base, &sckt->out_data.data_pipe_item)) {
         // data is pending to be sent
         sckt->out_data.data_pipe_item.type = PIPE_ITEM_TYPE_SOCKET_DATA;
-        red_channel_client_pipe_add(channel->base.rcc, &sckt->out_data.data_pipe_item);
+        red_channel_client_pipe_add(&channel->base, &sckt->out_data.data_pipe_item);
     }
 
     return TRUE;
@@ -1648,7 +1652,7 @@ static int tunnel_channel_handle_socket_token(TunnelChannel *channel, RedSocket 
 static uint8_t *tunnel_channel_alloc_msg_rcv_buf(RedChannelClient *rcc,
                                                  SpiceDataHeader *msg_header)
 {
-    TunnelChannel *tunnel_channel = (TunnelChannel *)rcc->channel;
+    TunnelChannelClient *tunnel_channel = (TunnelChannelClient *)rcc->channel;
 
     if (msg_header->type == SPICE_MSGC_TUNNEL_SOCKET_DATA) {
         return (__tunnel_worker_alloc_socket_rcv_buf(tunnel_channel->worker)->buf);
@@ -1664,7 +1668,7 @@ static uint8_t *tunnel_channel_alloc_msg_rcv_buf(RedChannelClient *rcc,
 static void tunnel_channel_release_msg_rcv_buf(RedChannelClient *rcc, SpiceDataHeader *msg_header,
                                                uint8_t *msg)
 {
-    TunnelChannel *tunnel_channel = (TunnelChannel *)rcc->channel;
+    TunnelChannelClient *tunnel_channel = (TunnelChannelClient *)rcc->channel;
 
     if (msg_header->type == SPICE_MSGC_TUNNEL_SOCKET_DATA) {
         ASSERT(!(SPICE_CONTAINEROF(msg, RedSocketRawRcvBuf, buf)->base.usr_opaque));
@@ -1673,7 +1677,7 @@ static void tunnel_channel_release_msg_rcv_buf(RedChannelClient *rcc, SpiceDataH
     }
 }
 
-static void __tunnel_channel_fill_service_migrate_item(TunnelChannel *channel,
+static void __tunnel_channel_fill_service_migrate_item(TunnelChannelClient *channel,
                                                        TunnelService *service,
                                                        TunnelMigrateServiceItem *migrate_item)
 {
@@ -1695,7 +1699,7 @@ static void __tunnel_channel_fill_service_migrate_item(TunnelChannel *channel,
     memcpy(general_data->virt_ip, &service->virt_ip.s_addr, 4);
 }
 
-static void __tunnel_channel_fill_socket_migrate_item(TunnelChannel *channel, RedSocket *sckt,
+static void __tunnel_channel_fill_socket_migrate_item(TunnelChannelClient *channel, RedSocket *sckt,
                                                       TunnelMigrateSocketItem *migrate_item)
 {
     TunnelMigrateSocket *mig_sckt = &migrate_item->mig_socket;
@@ -1747,9 +1751,9 @@ static void __tunnel_channel_fill_socket_migrate_item(TunnelChannel *channel, Re
 }
 
 static void release_migrate_item(TunnelMigrateItem *item);
-static int tunnel_channel_handle_migrate_mark(RedChannelClient *rcc)
+static int tunnel_channel_handle_migrate_mark(RedChannelClient *base)
 {
-    TunnelChannel *channel = SPICE_CONTAINEROF(rcc->channel, TunnelChannel, base);
+    TunnelChannelClient *channel = SPICE_CONTAINEROF(base->channel, TunnelChannelClient, base);
     TunnelMigrateItem *migrate_item = NULL;
     TunnelService *service;
     TunnelMigrateServiceItem *mig_service;
@@ -1809,7 +1813,7 @@ static int tunnel_channel_handle_migrate_mark(RedChannelClient *rcc)
         }
     }
 
-    red_channel_client_pipe_add(channel->base.rcc, &migrate_item->base);
+    red_channel_client_pipe_add(&channel->base, &migrate_item->base);
 
     return TRUE;
 error:
@@ -1939,7 +1943,7 @@ static void __restore_process_queue(RedSocket *sckt, TunneledBufferProcessQueue 
     }
 }
 
-static void tunnel_channel_restore_migrated_service(TunnelChannel *channel,
+static void tunnel_channel_restore_migrated_service(TunnelChannelClient *channel,
                                                     TunnelMigrateService *mig_service,
                                                     uint8_t *data_buf)
 {
@@ -1974,7 +1978,7 @@ static void tunnel_channel_restore_migrated_service(TunnelChannel *channel,
     }
 }
 
-static void tunnel_channel_restore_migrated_socket(TunnelChannel *channel,
+static void tunnel_channel_restore_migrated_socket(TunnelChannelClient *channel,
                                                    TunnelMigrateSocket *mig_socket,
                                                    uint8_t *data_buf)
 {
@@ -2060,7 +2064,7 @@ static void tunnel_channel_restore_migrated_socket(TunnelChannel *channel,
     }
 }
 
-static void tunnel_channel_restore_socket_state(TunnelChannel *channel, RedSocket *sckt)
+static void tunnel_channel_restore_socket_state(TunnelChannelClient *channel, RedSocket *sckt)
 {
     int ret = TRUE;
     red_printf("");
@@ -2110,10 +2114,10 @@ static void tunnel_channel_restore_socket_state(TunnelChannel *channel, RedSocke
 
     // handling data transfer
     if (__client_socket_can_receive(sckt) && sckt->out_data.ready_chunks_queue.head) {
-        if (!red_channel_pipe_item_is_linked(
+        if (!red_channel_client_pipe_item_is_linked(
                 &channel->base, &sckt->out_data.data_pipe_item)) {
             sckt->out_data.data_pipe_item.type = PIPE_ITEM_TYPE_SOCKET_DATA;
-            red_channel_client_pipe_add(channel->base.rcc, &sckt->out_data.data_pipe_item);
+            red_channel_client_pipe_add(&channel->base, &sckt->out_data.data_pipe_item);
         }
     }
 
@@ -2139,7 +2143,7 @@ static void tunnel_channel_restore_socket_state(TunnelChannel *channel, RedSocke
     __process_rcv_buf_tokens(channel, sckt);
 }
 
-static inline void tunnel_channel_activate_migrated_sockets(TunnelChannel *channel)
+static inline void tunnel_channel_activate_migrated_sockets(TunnelChannelClient *channel)
 {
     // if we are overgoing migration again, no need to restore the state, we will wait
     // for the next host.
@@ -2162,7 +2166,7 @@ static inline void tunnel_channel_activate_migrated_sockets(TunnelChannel *chann
     }
 }
 
-static uint64_t tunnel_channel_handle_migrate_data_get_serial(RedChannelClient *rcc,
+static uint64_t tunnel_channel_handle_migrate_data_get_serial(RedChannelClient *base,
                                               uint32_t size, void *msg)
 {
     TunnelMigrateData *migrate_data = msg;
@@ -2175,10 +2179,10 @@ static uint64_t tunnel_channel_handle_migrate_data_get_serial(RedChannelClient *
     return migrate_data->message_serial;
 }
 
-static uint64_t tunnel_channel_handle_migrate_data(RedChannelClient *rcc,
+static uint64_t tunnel_channel_handle_migrate_data(RedChannelClient *base,
                                               uint32_t size, void *msg)
 {
-    TunnelChannel *channel = SPICE_CONTAINEROF(rcc->channel, TunnelChannel, base);
+    TunnelChannelClient *channel = SPICE_CONTAINEROF(base->channel, TunnelChannelClient, base);
     TunnelMigrateSocketList *sockets_list;
     TunnelMigrateServicesList *services_list;
     TunnelMigrateData *migrate_data = msg;
@@ -2229,8 +2233,8 @@ static uint64_t tunnel_channel_handle_migrate_data(RedChannelClient *rcc,
     }
 
     // activate channel
-    channel->base.migrate = FALSE;
-    red_channel_init_outgoing_messages_window(&channel->base);
+    channel->base.channel->migrate = FALSE;
+    red_channel_init_outgoing_messages_window(channel->base.channel);
 
     tunnel_channel_activate_migrated_sockets(channel);
 
@@ -2247,7 +2251,7 @@ error:
 //  msg was allocated by tunnel_channel_alloc_msg_rcv_buf
 static int tunnel_channel_handle_message(RedChannelClient *rcc, SpiceDataHeader *header, uint8_t *msg)
 {
-    TunnelChannel *tunnel_channel = (TunnelChannel *)rcc->channel;
+    TunnelChannelClient *tunnel_channel = (TunnelChannelClient *)rcc->channel;
     RedSocket *sckt = NULL;
     // retrieve the sckt
     switch (header->type) {
@@ -2351,10 +2355,10 @@ static int tunnel_channel_handle_message(RedChannelClient *rcc, SpiceDataHeader 
 
 static void tunnel_channel_marshall_migrate(RedChannelClient *rcc, SpiceMarshaller *m, PipeItem *item)
 {
-    TunnelChannel *tunnel_channel;
+    TunnelChannelClient *tunnel_channel;
 
     ASSERT(rcc);
-    tunnel_channel = SPICE_CONTAINEROF(rcc->channel, TunnelChannel, base);
+    tunnel_channel = SPICE_CONTAINEROF(rcc->channel, TunnelChannelClient, base);
     tunnel_channel->send_data.u.migrate.flags =
         SPICE_MIGRATE_NEED_FLUSH | SPICE_MIGRATE_NEED_DATA_TRANSFER;
     tunnel_channel->expect_migrate_mark = TRUE;
@@ -2364,7 +2368,7 @@ static void tunnel_channel_marshall_migrate(RedChannelClient *rcc, SpiceMarshall
         sizeof(SpiceMsgMigrate));
 }
 
-static int __tunnel_channel_marshall_process_bufs_migrate_data(TunnelChannel *channel,
+static int __tunnel_channel_marshall_process_bufs_migrate_data(TunnelChannelClient *channel,
                                     SpiceMarshaller *m, TunneledBufferProcessQueue *queue)
 {
     int buf_offset = queue->head_offset;
@@ -2381,7 +2385,7 @@ static int __tunnel_channel_marshall_process_bufs_migrate_data(TunnelChannel *ch
     return size;
 }
 
-static int __tunnel_channel_marshall_ready_bufs_migrate_data(TunnelChannel *channel,
+static int __tunnel_channel_marshall_ready_bufs_migrate_data(TunnelChannelClient *channel,
                                     SpiceMarshaller *m, ReadyTunneledChunkQueue *queue)
 {
     int offset = queue->offset;
@@ -2398,7 +2402,7 @@ static int __tunnel_channel_marshall_ready_bufs_migrate_data(TunnelChannel *chan
 }
 
 // returns the size to send
-static int __tunnel_channel_marshall_service_migrate_data(TunnelChannel *channel,
+static int __tunnel_channel_marshall_service_migrate_data(TunnelChannelClient *channel,
                                                       SpiceMarshaller *m,
                                                       TunnelMigrateServiceItem *item,
                                                       int offset)
@@ -2433,7 +2437,7 @@ static int __tunnel_channel_marshall_service_migrate_data(TunnelChannel *channel
 }
 
 // returns the size to send
-static int __tunnel_channel_marshall_socket_migrate_data(TunnelChannel *channel,
+static int __tunnel_channel_marshall_socket_migrate_data(TunnelChannelClient *channel,
                                 SpiceMarshaller *m, TunnelMigrateSocketItem *item, int offset)
 {
     RedSocket *sckt = item->socket;
@@ -2501,14 +2505,14 @@ static int __tunnel_channel_marshall_socket_migrate_data(TunnelChannel *channel,
 static void tunnel_channel_marshall_migrate_data(RedChannelClient *rcc,
                                         SpiceMarshaller *m, PipeItem *item)
 {
-    TunnelChannel *tunnel_channel;
+    TunnelChannelClient *tunnel_channel;
     TunnelMigrateData *migrate_data;
     TunnelMigrateItem *migrate_item = (TunnelMigrateItem *)item;
     int i;
 
     uint32_t data_buf_offset = 0; // current location in data[0] field
     ASSERT(rcc);
-    tunnel_channel = SPICE_CONTAINEROF(rcc->channel, TunnelChannel, base);
+    tunnel_channel = SPICE_CONTAINEROF(rcc->channel, TunnelChannelClient, base);
     migrate_data = &tunnel_channel->send_data.u.migrate_data;
 
     migrate_data->magic = TUNNEL_MIGRATE_DATA_MAGIC;
@@ -2549,10 +2553,10 @@ static void tunnel_channel_marshall_migrate_data(RedChannelClient *rcc,
 
 static void tunnel_channel_marshall_init(RedChannelClient *rcc, SpiceMarshaller *m, PipeItem *item)
 {
-    TunnelChannel *channel;
+    TunnelChannelClient *channel;
 
     ASSERT(rcc);
-    channel = SPICE_CONTAINEROF(rcc->channel, TunnelChannel, base);
+    channel = SPICE_CONTAINEROF(rcc->channel, TunnelChannelClient, base);
     channel->send_data.u.init.max_socket_data_size = MAX_SOCKET_DATA_SIZE;
     channel->send_data.u.init.max_num_of_sockets = MAX_SOCKETS_NUM;
 
@@ -2562,10 +2566,10 @@ static void tunnel_channel_marshall_init(RedChannelClient *rcc, SpiceMarshaller 
 
 static void tunnel_channel_marshall_service_ip_map(RedChannelClient *rcc, SpiceMarshaller *m, PipeItem *item)
 {
-    TunnelChannel *tunnel_channel;
+    TunnelChannelClient *tunnel_channel;
     TunnelService *service = SPICE_CONTAINEROF(item, TunnelService, pipe_item);
 
-    tunnel_channel = SPICE_CONTAINEROF(rcc->channel, TunnelChannel, base);
+    tunnel_channel = SPICE_CONTAINEROF(rcc->channel, TunnelChannelClient, base);
     tunnel_channel->send_data.u.service_ip.service_id = service->id;
     tunnel_channel->send_data.u.service_ip.virtual_ip.type = SPICE_TUNNEL_IP_TYPE_IPv4;
 
@@ -2577,11 +2581,11 @@ static void tunnel_channel_marshall_service_ip_map(RedChannelClient *rcc, SpiceM
 
 static void tunnel_channel_marshall_socket_open(RedChannelClient *rcc, SpiceMarshaller *m, PipeItem *item)
 {
-    TunnelChannel *tunnel_channel;
+    TunnelChannelClient *tunnel_channel;
     RedSocketOutData *sckt_out_data = SPICE_CONTAINEROF(item, RedSocketOutData, status_pipe_item);
     RedSocket *sckt = SPICE_CONTAINEROF(sckt_out_data, RedSocket, out_data);
 
-    tunnel_channel = SPICE_CONTAINEROF(rcc->channel, TunnelChannel, base);
+    tunnel_channel = SPICE_CONTAINEROF(rcc->channel, TunnelChannelClient, base);
     tunnel_channel->send_data.u.socket_open.connection_id = sckt->connection_id;
     tunnel_channel->send_data.u.socket_open.service_id = sckt->far_service->id;
     tunnel_channel->send_data.u.socket_open.tokens = SOCKET_WINDOW_SIZE;
@@ -2598,13 +2602,13 @@ static void tunnel_channel_marshall_socket_open(RedChannelClient *rcc, SpiceMars
 
 static void tunnel_channel_marshall_socket_fin(RedChannelClient *rcc, SpiceMarshaller *m, PipeItem *item)
 {
-    TunnelChannel *tunnel_channel;
+    TunnelChannelClient *tunnel_channel;
     RedSocketOutData *sckt_out_data = SPICE_CONTAINEROF(item, RedSocketOutData, status_pipe_item);
     RedSocket *sckt = SPICE_CONTAINEROF(sckt_out_data, RedSocket, out_data);
 
     ASSERT(!sckt->out_data.ready_chunks_queue.head);
 
-    tunnel_channel = SPICE_CONTAINEROF(rcc->channel, TunnelChannel, base);
+    tunnel_channel = SPICE_CONTAINEROF(rcc->channel, TunnelChannelClient, base);
     if (sckt->out_data.process_queue->head) {
         red_printf("socket sent FIN but there are still buffers in outgoing process queue"
                    "(local_port=%d, service_id=%d)",
@@ -2623,11 +2627,11 @@ static void tunnel_channel_marshall_socket_fin(RedChannelClient *rcc, SpiceMarsh
 
 static void tunnel_channel_marshall_socket_close(RedChannelClient *rcc, SpiceMarshaller *m, PipeItem *item)
 {
-    TunnelChannel *tunnel_channel;
+    TunnelChannelClient *tunnel_channel;
     RedSocketOutData *sckt_out_data = SPICE_CONTAINEROF(item, RedSocketOutData, status_pipe_item);
     RedSocket *sckt = SPICE_CONTAINEROF(sckt_out_data, RedSocket, out_data);
 
-    tunnel_channel = SPICE_CONTAINEROF(rcc->channel, TunnelChannel, base);
+    tunnel_channel = SPICE_CONTAINEROF(rcc->channel, TunnelChannelClient, base);
     // can happen when it is a forced close
     if (sckt->out_data.ready_chunks_queue.head) {
         red_printf("socket closed but there are still buffers in outgoing ready queue"
@@ -2654,11 +2658,11 @@ static void tunnel_channel_marshall_socket_close(RedChannelClient *rcc, SpiceMar
 
 static void tunnel_channel_marshall_socket_closed_ack(RedChannelClient *rcc, SpiceMarshaller *m, PipeItem *item)
 {
-    TunnelChannel *tunnel_channel;
+    TunnelChannelClient *tunnel_channel;
     RedSocketOutData *sckt_out_data = SPICE_CONTAINEROF(item, RedSocketOutData, status_pipe_item);
     RedSocket *sckt = SPICE_CONTAINEROF(sckt_out_data, RedSocket, out_data);
 
-    tunnel_channel = SPICE_CONTAINEROF(rcc->channel, TunnelChannel, base);
+    tunnel_channel = SPICE_CONTAINEROF(rcc->channel, TunnelChannelClient, base);
     tunnel_channel->send_data.u.socket_close_ack.connection_id = sckt->connection_id;
 
     // pipe item is null because we free the sckt.
@@ -2678,14 +2682,14 @@ static void tunnel_channel_marshall_socket_closed_ack(RedChannelClient *rcc, Spi
 
 static void tunnel_channel_marshall_socket_token(RedChannelClient *rcc, SpiceMarshaller *m, PipeItem *item)
 {
-    TunnelChannel *tunnel_channel;
+    TunnelChannelClient *tunnel_channel;
     RedSocketOutData *sckt_out_data = SPICE_CONTAINEROF(item, RedSocketOutData, token_pipe_item);
     RedSocket *sckt = SPICE_CONTAINEROF(sckt_out_data, RedSocket, out_data);
 
     /* notice that the num of tokens sent can be > SOCKET_TOKENS_TO_SEND, since
        the sending is performed after the pipe item was pushed */
 
-    tunnel_channel = SPICE_CONTAINEROF(rcc->channel, TunnelChannel, base);
+    tunnel_channel = SPICE_CONTAINEROF(rcc->channel, TunnelChannelClient, base);
     tunnel_channel->send_data.u.socket_token.connection_id = sckt->connection_id;
 
     if (sckt->in_data.num_tokens > 0) {
@@ -2705,8 +2709,8 @@ static void tunnel_channel_marshall_socket_token(RedChannelClient *rcc, SpiceMar
 
 static void tunnel_channel_marshall_socket_out_data(RedChannelClient *rcc, SpiceMarshaller *m, PipeItem *item)
 {
-    TunnelChannel *tunnel_channel;
-    tunnel_channel = SPICE_CONTAINEROF(rcc->channel, TunnelChannel, base);
+    TunnelChannelClient *tunnel_channel;
+    tunnel_channel = SPICE_CONTAINEROF(rcc->channel, TunnelChannelClient, base);
     RedSocketOutData *sckt_out_data = SPICE_CONTAINEROF(item, RedSocketOutData, data_pipe_item);
     RedSocket *sckt = SPICE_CONTAINEROF(sckt_out_data, RedSocket, out_data);
     ReadyTunneledChunk *chunk;
@@ -2792,10 +2796,10 @@ static void tunnel_worker_release_socket_out_data(TunnelWorker *worker, PipeItem
             if (sckt_out_data->ready_chunks_queue.head) {
                 // the pipe item may already be linked, if for example the send was
                 // blocked and before it finished and called release, tunnel_socket_send was called
-                if (!red_channel_pipe_item_is_linked(
+                if (!red_channel_client_pipe_item_is_linked(
                         &worker->channel->base, &sckt_out_data->data_pipe_item)) {
                     sckt_out_data->data_pipe_item.type = PIPE_ITEM_TYPE_SOCKET_DATA;
-                    red_channel_client_pipe_add(worker->channel->base.rcc, &sckt_out_data->data_pipe_item);
+                    red_channel_client_pipe_add(&worker->channel->base, &sckt_out_data->data_pipe_item);
                 }
             } else if ((sckt->slirp_status == SLIRP_SCKT_STATUS_SHUTDOWN_SEND) ||
                        (sckt->slirp_status == SLIRP_SCKT_STATUS_WAIT_CLOSE)) {
@@ -2876,7 +2880,8 @@ static void tunnel_channel_release_pipe_item(RedChannelClient *rcc, PipeItem *it
         break;
     case PIPE_ITEM_TYPE_SOCKET_DATA:
         if (item_pushed) {
-            tunnel_worker_release_socket_out_data(((TunnelChannel *)rcc->channel)->worker, item);
+            tunnel_worker_release_socket_out_data(
+                SPICE_CONTAINEROF(rcc, TunnelChannelClient, base)->worker, item);
         }
         break;
     case PIPE_ITEM_TYPE_MIGRATE:
@@ -2959,7 +2964,7 @@ static int tunnel_socket_connect(SlirpUsrNetworkInterface *usr_interface,
 #endif
     *o_usr_s = sckt;
     sckt->out_data.status_pipe_item.type = PIPE_ITEM_TYPE_SOCKET_OPEN;
-    red_channel_client_pipe_add(worker->channel->base.rcc, &sckt->out_data.status_pipe_item);
+    red_channel_client_pipe_add(&worker->channel->base, &sckt->out_data.status_pipe_item);
 
     errno = EINPROGRESS;
     return -1;
@@ -3045,10 +3050,10 @@ static int tunnel_socket_send(SlirpUsrNetworkInterface *usr_interface, UserSocke
         sckt->out_data.data_size += size_to_send;
 
         if (sckt->out_data.ready_chunks_queue.head &&
-            !red_channel_pipe_item_is_linked(&worker->channel->base,
+            !red_channel_client_pipe_item_is_linked(&worker->channel->base,
                                              &sckt->out_data.data_pipe_item)) {
             sckt->out_data.data_pipe_item.type = PIPE_ITEM_TYPE_SOCKET_DATA;
-            red_channel_client_pipe_add(worker->channel->base.rcc, &sckt->out_data.data_pipe_item);
+            red_channel_client_pipe_add(&worker->channel->base, &sckt->out_data.data_pipe_item);
         }
     }
 
@@ -3395,7 +3400,7 @@ static void tunnel_worker_disconnect_slirp(TunnelWorker *worker)
    since it closes all its sockets and slirp is not aware of it */
 static void tunnel_channel_disconnect(RedChannel *channel)
 {
-    TunnelChannel *tunnel_channel = (TunnelChannel *)channel;
+    TunnelChannelClient *tunnel_channel = (TunnelChannelClient *)channel;
     TunnelWorker *worker;
     if (!channel) {
         return;
@@ -3418,15 +3423,15 @@ static void tunnel_channel_disconnect_client(RedChannelClient *rcc)
 
 /* interface for reds */
 
-static void on_new_tunnel_channel(TunnelChannel *channel)
+static void on_new_tunnel_channel(TunnelChannelClient *tcc)
 {
-    red_channel_push_set_ack(&channel->base);
+    red_channel_client_push_set_ack(&tcc->base);
 
-    if (channel->base.migrate) {
-        channel->expect_migrate_data = TRUE;
+    if (tcc->base.channel->migrate) {
+        tcc->expect_migrate_data = TRUE;
     } else {
-        red_channel_init_outgoing_messages_window(&channel->base);
-        red_channel_client_pipe_add_type(channel->base.rcc, PIPE_ITEM_TYPE_TUNNEL_INIT);
+        red_channel_init_outgoing_messages_window(tcc->base.channel);
+        red_channel_client_pipe_add_type(&tcc->base, PIPE_ITEM_TYPE_TUNNEL_INIT);
     }
 }
 
@@ -3434,18 +3439,22 @@ static void tunnel_channel_hold_pipe_item(RedChannelClient *rcc, PipeItem *item)
 {
 }
 
-static void handle_tunnel_channel_link(Channel *channel, RedClient *client, RedsStream *stream,
-                                       int migration, int num_common_caps, uint32_t *common_caps,
-                                       int num_caps, uint32_t *caps)
+static void handle_tunnel_channel_link(Channel *channel, RedClient *client,
+                                       RedsStream *stream, int migration,
+                                       int num_common_caps,
+                                       uint32_t *common_caps, int num_caps,
+                                       uint32_t *caps)
 {
-    TunnelChannel *tunnel_channel;
+    TunnelChannelClient *tcc;
     TunnelWorker *worker = (TunnelWorker *)channel->data;
+    RedChannel *tunnel_channel;
+
     if (worker->channel) {
-        tunnel_channel_disconnect(&worker->channel->base);
+        tunnel_channel_disconnect(worker->channel->base.channel);
     }
 
-    tunnel_channel =
-        (TunnelChannel *)red_channel_create(sizeof(*tunnel_channel), worker->core_interface,
+    tunnel_channel = red_channel_create(sizeof(RedChannel),
+                                            worker->core_interface,
                                             migration, TRUE,
                                             tunnel_channel_config_socket,
                                             tunnel_channel_disconnect_client,
@@ -3462,18 +3471,20 @@ static void handle_tunnel_channel_link(Channel *channel, RedClient *client, Reds
     if (!tunnel_channel) {
         return;
     }
-    red_channel_client_create(sizeof(RedChannelClient), &tunnel_channel->base, client, stream);
+    tcc = (TunnelChannelClient*)red_channel_client_create(
+                    sizeof(TunnelChannelClient),
+                    tunnel_channel, client, stream);
 
-    tunnel_channel->worker = worker;
-    tunnel_channel->worker->channel = tunnel_channel;
+    tcc->worker = worker;
+    tcc->worker->channel = tcc;
     net_slirp_set_net_interface(&worker->tunnel_interface.base);
 
-    on_new_tunnel_channel(tunnel_channel);
+    on_new_tunnel_channel(tcc);
 }
 
 static void handle_tunnel_channel_shutdown(struct Channel *channel)
 {
-    tunnel_channel_disconnect(&((TunnelWorker *)channel->data)->channel->base);
+    tunnel_channel_disconnect(((TunnelWorker *)channel->data)->channel->base.channel);
 }
 
 static void handle_tunnel_channel_migrate(struct Channel *channel)
@@ -3481,9 +3492,9 @@ static void handle_tunnel_channel_migrate(struct Channel *channel)
 #ifdef DEBUG_NETWORK
     red_printf("TUNNEL_DBG: MIGRATE STARTED");
 #endif
-    TunnelChannel *tunnel_channel = ((TunnelWorker *)channel->data)->channel;
+    TunnelChannelClient *tunnel_channel = ((TunnelWorker *)channel->data)->channel;
     tunnel_channel->mig_inprogress = TRUE;
     net_slirp_freeze();
-    red_channel_client_pipe_add_type(tunnel_channel->base.rcc, PIPE_ITEM_TYPE_MIGRATE);
+    red_channel_client_pipe_add_type(&tunnel_channel->base, PIPE_ITEM_TYPE_MIGRATE);
 }
 

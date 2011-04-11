@@ -763,11 +763,6 @@ int red_channel_client_pipe_item_is_linked(RedChannelClient *rcc,
     return ring_item_is_linked(&item->link);
 }
 
-int red_channel_pipe_item_is_linked(RedChannel *channel, PipeItem *item)
-{
-    return channel->rcc && red_channel_client_pipe_item_is_linked(channel->rcc, item);
-}
-
 void red_channel_client_pipe_add_tail_no_push(RedChannelClient *rcc,
                                               PipeItem *item)
 {
