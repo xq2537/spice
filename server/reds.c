@@ -110,7 +110,6 @@ int agent_copypaste = TRUE;
 static void openssl_init();
 
 #define MIGRATE_TIMEOUT (1000 * 10) /* 10sec */
-#define PING_INTERVAL (1000 * 10)
 #define MM_TIMER_GRANULARITY_MS (1000 / 30)
 #define MM_TIME_DELTA 400 /*ms*/
 #define VDI_PORT_WRITE_RETRY_TIMEOUT 100 /*ms*/
@@ -228,8 +227,6 @@ typedef struct RedsState {
     SpiceStat *stat;
     pthread_mutex_t stat_lock;
     RedsStatValue roundtrip_stat;
-    SpiceTimer *ping_timer;
-    int ping_interval;
 #endif
     int peer_minor_version;
 } RedsState;
@@ -633,42 +630,6 @@ static void reds_mig_disconnect()
         reds_mig_cleanup();
     }
 }
-
-#ifdef RED_STATISTICS
-
-static void do_ping_client(const char *opt, int has_interval, int interval)
-{
-    if (!reds_main_channel_connected()) {
-        red_printf("not connected to peer");
-        return;
-    }
-
-    if (!opt) {
-        main_channel_push_ping(reds->main_channel, 0);
-    } else if (!strcmp(opt, "on")) {
-        if (has_interval && interval > 0) {
-            reds->ping_interval = interval * 1000;
-        }
-        core->timer_start(reds->ping_timer, reds->ping_interval);
-    } else if (!strcmp(opt, "off")) {
-        core->timer_cancel(reds->ping_timer);
-    } else {
-        return;
-    }
-}
-
-static void ping_timer_cb()
-{
-    if (!reds_main_channel_connected()) {
-        red_printf("not connected to peer, ping off");
-        core->timer_cancel(reds->ping_timer);
-        return;
-    }
-    do_ping_client(NULL, 0, 0);
-    core->timer_start(reds->ping_timer, reds->ping_interval);
-}
-
-#endif
 
 int reds_get_mouse_mode(void)
 {
@@ -3540,10 +3501,6 @@ static int do_spice_init(SpiceCoreInterface *core_interface)
     if (pthread_mutex_init(&reds->stat_lock, NULL)) {
         red_error("mutex init failed");
     }
-    if (!(reds->ping_timer = core->timer_add(ping_timer_cb, NULL))) {
-        red_error("ping timer create failed");
-    }
-    reds->ping_interval = PING_INTERVAL;
 #endif
 
     if (!(reds->mm_timer = core->timer_add(mm_timer_proc, NULL))) {

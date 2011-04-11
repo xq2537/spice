@@ -237,7 +237,9 @@ RedChannel *red_channel_create_parser(int size,
                                channel_handle_migrate_data_get_serial_proc handle_migrate_data_get_serial);
 RedChannelClient *red_channel_client_create(int size, RedChannel *channel, RedClient *client,
                                             RedsStream *stream);
+
 int red_channel_is_connected(RedChannel *channel);
+int red_channel_client_is_connected(RedChannelClient *rcc);
 
 void red_channel_client_destroy(RedChannelClient *rcc);
 void red_channel_destroy(RedChannel *channel);

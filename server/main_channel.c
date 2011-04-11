@@ -55,6 +55,8 @@
 #define NET_TEST_WARMUP_BYTES 0
 #define NET_TEST_BYTES (1024 * 250)
 
+#define PING_INTERVAL (1000 * 10)
+
 static uint8_t zero_page[ZERO_BUF_SIZE] = {0};
 
 typedef struct RedsOutItem RedsOutItem;
@@ -124,6 +126,10 @@ struct MainChannelClient {
     int net_test_stage;
     uint64_t latency;
     uint64_t bitrate_per_sec;
+#ifdef RED_STATISTICS
+    SpiceTimer *ping_timer;
+    int ping_interval;
+#endif
 };
 
 struct MainChannel {
@@ -148,16 +154,16 @@ static void main_disconnect(MainChannel *main_chan)
     red_channel_destroy(&main_chan->base);
 }
 
-static int main_channel_client_push_ping(RedChannelClient *rcc, int size);
+static int main_channel_client_push_ping(MainChannelClient *rcc, int size);
 
 void main_channel_start_net_test(MainChannelClient *mcc)
 {
     if (!mcc) {
         return;
     }
-    if (main_channel_client_push_ping(&mcc->base, NET_TEST_WARMUP_BYTES)
-        && main_channel_client_push_ping(&mcc->base, 0)
-        && main_channel_client_push_ping(&mcc->base, NET_TEST_BYTES)) {
+    if (main_channel_client_push_ping(mcc, NET_TEST_WARMUP_BYTES)
+        && main_channel_client_push_ping(mcc, 0)
+        && main_channel_client_push_ping(mcc, NET_TEST_BYTES)) {
         mcc->net_test_id = mcc->ping_id - 2;
         mcc->net_test_stage = NET_TEST_STAGE_WARMUP;
     }
@@ -284,12 +290,12 @@ static void main_channel_marshall_channels(SpiceMarshaller *m)
     free(channels_info);
 }
 
-int main_channel_client_push_ping(RedChannelClient *rcc, int size)
+int main_channel_client_push_ping(MainChannelClient *mcc, int size)
 {
     PingPipeItem *item;
 
-    item = main_ping_item_new(rcc, size);
-    red_channel_client_pipe_add_push(rcc, &item->base);
+    item = main_ping_item_new(&mcc->base, size);
+    red_channel_client_pipe_add_push(&mcc->base, &item->base);
     return TRUE;
 }
 
@@ -298,7 +304,8 @@ int main_channel_push_ping(MainChannel *main_chan, int size)
     if (main_chan->base.rcc == NULL) {
         return FALSE;
     }
-    return main_channel_client_push_ping(main_chan->base.rcc, size);
+    return main_channel_client_push_ping(
+        SPICE_CONTAINEROF(main_chan->base.rcc, MainChannelClient, base), size);
 }
 
 static void main_channel_marshall_ping(SpiceMarshaller *m, int size, int ping_id)
@@ -820,6 +827,39 @@ static int main_channel_handle_migrate_flush_mark(RedChannelClient *rcc)
     return TRUE;
 }
 
+#ifdef RED_STATISTICS
+static void do_ping_client(MainChannelClient *mcc,
+    const char *opt, int has_interval, int interval)
+{
+    red_printf("");
+    if (!opt) {
+        main_channel_client_push_ping(mcc, 0);
+    } else if (!strcmp(opt, "on")) {
+        if (has_interval && interval > 0) {
+            mcc->ping_interval = interval * 1000;
+        }
+        core->timer_start(mcc->ping_timer, mcc->ping_interval);
+    } else if (!strcmp(opt, "off")) {
+        core->timer_cancel(mcc->ping_timer);
+    } else {
+        return;
+    }
+}
+
+static void ping_timer_cb(void *opaque)
+{
+    MainChannelClient *mcc = opaque;
+
+    if (!red_channel_client_is_connected(&mcc->base)) {
+        red_printf("not connected to peer, ping off");
+        core->timer_cancel(mcc->ping_timer);
+        return;
+    }
+    do_ping_client(mcc, NULL, 0, 0);
+    core->timer_start(mcc->ping_timer, mcc->ping_interval);
+}
+#endif /* RED_STATISTICS */
+
 MainChannelClient *main_channel_client_create(MainChannel *main_chan,
     RedClient *client, RedsStream *stream)
 {
@@ -827,6 +867,12 @@ MainChannelClient *main_channel_client_create(MainChannel *main_chan,
         sizeof(MainChannelClient), &main_chan->base, client, stream);
 
     mcc->bitrate_per_sec = ~0;
+#ifdef RED_STATISTICS
+    if (!(mcc->ping_timer = core->timer_add(ping_timer_cb, NULL))) {
+        red_error("ping timer create failed");
+    }
+    mcc->ping_interval = PING_INTERVAL;
+#endif
     return mcc;
 }
 
