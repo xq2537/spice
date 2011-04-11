@@ -906,17 +906,17 @@ int red_channel_all_clients_serials_are_zero(RedChannel *channel)
     return (!channel->rcc || channel->rcc->send_data.serial == 0);
 }
 
-void red_channel_apply_clients(RedChannel *channel, channel_client_visitor v)
+void red_channel_apply_clients(RedChannel *channel, channel_client_callback cb)
 {
     if (channel->rcc) {
-        v(channel->rcc);
+        cb(channel->rcc);
     }
 }
 
-void red_channel_apply_clients_data(RedChannel *channel, channel_client_visitor_data v, void *data)
+void red_channel_apply_clients_data(RedChannel *channel, channel_client_callback_data cb, void *data)
 {
     if (channel->rcc) {
-        v(channel->rcc, data);
+        cb(channel->rcc, data);
     }
 }
 
@@ -1070,4 +1070,55 @@ MainChannelClient *red_client_get_main(RedClient *client) {
 
 void red_client_set_main(RedClient *client, MainChannelClient *mcc) {
     client->mcc = mcc;
+}
+
+/*
+ * Functions to push the same item to multiple pipes.
+ */
+
+/*
+ * TODO: after convinced of correctness, add paths for single client
+ * that avoid the whole loop. perhaps even have a function pointer table
+ * later.
+ * TODO - inline? macro? right now this is the simplest from code amount
+ */
+
+typedef void (*rcc_item_t)(RedChannelClient *rcc, PipeItem *item);
+typedef int (*rcc_item_cond_t)(RedChannelClient *rcc, PipeItem *item);
+
+static void red_channel_pipes_create_batch(RedChannel *channel,
+                                new_pipe_item_t creator, void *data,
+                                rcc_item_t callback)
+{
+    RedChannelClient *rcc;
+    PipeItem *item;
+    int num = 0;
+
+    if (!(rcc = channel->rcc)) {
+        return;
+    }
+    item = (*creator)(rcc, data, num++);
+    if (callback) {
+        (*callback)(rcc, item);
+    }
+}
+
+void red_channel_pipes_new_add_push(RedChannel *channel,
+                              new_pipe_item_t creator, void *data)
+{
+    red_channel_pipes_create_batch(channel, creator, data,
+                                     red_channel_client_pipe_add);
+    red_channel_push(channel);
+}
+
+void red_channel_pipes_new_add(RedChannel *channel, new_pipe_item_t creator, void *data)
+{
+    red_channel_pipes_create_batch(channel, creator, data,
+                                     red_channel_client_pipe_add);
+}
+
+void red_channel_pipes_new_add_tail(RedChannel *channel, new_pipe_item_t creator, void *data)
+{
+    red_channel_pipes_create_batch(channel, creator, data,
+                                     red_channel_client_pipe_add_tail_no_push);
 }

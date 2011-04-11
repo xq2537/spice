@@ -270,6 +270,16 @@ void red_channel_client_set_message_serial(RedChannelClient *channel, uint64_t);
 void red_channel_client_begin_send_message(RedChannelClient *rcc);
 
 void red_channel_pipe_item_init(RedChannel *channel, PipeItem *item, int type);
+
+// TODO: add back the channel_pipe_add functionality - by adding reference counting
+// to the PipeItem.
+
+// helper to push a new item to all channels
+typedef PipeItem *(*new_pipe_item_t)(RedChannelClient *rcc, void *data, int num);
+void red_channel_pipes_new_add_push(RedChannel *channel, new_pipe_item_t creator, void *data);
+void red_channel_pipes_new_add(RedChannel *channel, new_pipe_item_t creator, void *data);
+void red_channel_pipes_new_add_tail(RedChannel *channel, new_pipe_item_t creator, void *data);
+
 void red_channel_client_pipe_add_push(RedChannelClient *rcc, PipeItem *item);
 void red_channel_client_pipe_add(RedChannelClient *rcc, PipeItem *item);
 void red_channel_client_pipe_add_after(RedChannelClient *rcc, PipeItem *item, PipeItem *pos);
@@ -358,10 +368,10 @@ RedClient *red_channel_client_get_client(RedChannelClient *rcc);
 SpiceDataHeader *red_channel_client_get_header(RedChannelClient *rcc);
 
 /* apply given function to all connected clients */
-typedef void (*channel_client_visitor)(RedChannelClient *rcc);
-typedef void (*channel_client_visitor_data)(RedChannelClient *rcc, void *data);
-void red_channel_apply_clients(RedChannel *channel, channel_client_visitor v);
-void red_channel_apply_clients_data(RedChannel *channel, channel_client_visitor_data v, void *data);
+typedef void (*channel_client_callback)(RedChannelClient *rcc);
+typedef void (*channel_client_callback_data)(RedChannelClient *rcc, void *data);
+void red_channel_apply_clients(RedChannel *channel, channel_client_callback v);
+void red_channel_apply_clients_data(RedChannel *channel, channel_client_callback_data v, void *data);
 
 struct RedClient {
     RingItem link;
