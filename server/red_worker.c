@@ -382,7 +382,7 @@ typedef struct StreamAgent {
     PipeItem create_item;
     PipeItem destroy_item;
     Stream *stream;
-    uint64_t lats_send_time;
+    uint64_t last_send_time;
 
     int frames;
     int drops;
@@ -7481,7 +7481,7 @@ static inline int red_send_stream_data(DisplayChannel *display_channel,
 
     StreamAgent *agent = &display_channel->stream_agents[stream - worker->streams_buf];
     uint64_t time_now = red_now();
-    if (time_now - agent->lats_send_time < (1000 * 1000 * 1000) / agent->fps) {
+    if (time_now - agent->last_send_time < (1000 * 1000 * 1000) / agent->fps) {
         agent->frames--;
         return TRUE;
     }
@@ -7542,7 +7542,7 @@ static inline int red_send_stream_data(DisplayChannel *display_channel,
     spice_marshall_msg_display_stream_data(base_marshaller, &stream_data);
     spice_marshaller_add_ref(base_marshaller,
                              display_channel->send_data.stream_outbuf, n);
-    agent->lats_send_time = time_now;
+    agent->last_send_time = time_now;
     return TRUE;
 }
 
@@ -7834,7 +7834,7 @@ static void red_display_marshall_stream_start(DisplayChannel *display_channel,
     RedChannel *channel = &display_channel->common.base;
     Stream *stream = agent->stream;
 
-    agent->lats_send_time = 0;
+    agent->last_send_time = 0;
     ASSERT(stream);
     red_channel_init_send_data(channel, SPICE_MSG_DISPLAY_STREAM_CREATE,
         stream->current ? &stream->current->pipe_item : NULL);
