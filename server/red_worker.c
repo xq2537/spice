@@ -118,9 +118,10 @@ static clockid_t clock_id;
 
 typedef unsigned long stat_time_t;
 
-inline stat_time_t stat_now()
+static stat_time_t stat_now(void)
 {
     struct timespec ts;
+
     clock_gettime(clock_id, &ts);
     return ts.tv_nsec + ts.tv_sec * 1000 * 1000 * 1000;
 }
