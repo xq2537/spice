@@ -1188,7 +1188,7 @@ static void red_pipe_add_verb(RedChannelClient* rcc, uint16_t verb)
 }
 
 static inline void red_create_surface_item(DisplayChannelClient *dcc, int surface_id);
-static void red_add_surface_image(RedWorker *worker, int surface_id);
+static void red_push_surface_image(DisplayChannelClient *dcc, int surface_id);
 static void red_pipes_add_verb(RedChannel *channel, uint16_t verb)
 {
     RedChannelClient *rcc = channel->rcc;
@@ -1229,7 +1229,7 @@ static inline void red_handle_drawable_surfaces_client_synced(
             }
             red_create_surface_item(dcc, surface_id);
             red_current_flush(worker, surface_id);
-            red_add_surface_image(worker, surface_id);
+            red_push_surface_image(dcc, surface_id);
         }
     }
 
@@ -1239,7 +1239,7 @@ static inline void red_handle_drawable_surfaces_client_synced(
 
     red_create_surface_item(dcc, drawable->surface_id);
     red_current_flush(worker, drawable->surface_id);
-    red_add_surface_image(worker, drawable->surface_id);
+    red_push_surface_image(dcc, drawable->surface_id);
 }
 
 static int display_is_connected(RedWorker *worker)
@@ -1312,23 +1312,23 @@ static inline void red_pipe_remove_drawable(DisplayChannelClient *dcc, Drawable 
     }
 }
 
-static inline void red_pipe_add_image_item(RedWorker *worker, ImageItem *item)
+static inline void red_pipe_add_image_item(DisplayChannelClient *dcc, ImageItem *item)
 {
-    if (!display_is_connected(worker)) {
+    if (!dcc) {
         return;
     }
     item->refs++;
-    red_channel_client_pipe_add(worker->display_channel->common.base.rcc, &item->link);
+    red_channel_client_pipe_add(&dcc->common.base, &item->link);
 }
 
-static inline void red_pipe_add_image_item_after(RedWorker *worker, ImageItem *item,
+static inline void red_pipe_add_image_item_after(DisplayChannelClient *dcc, ImageItem *item,
                                                  PipeItem *pos)
 {
-    if (!display_is_connected(worker)) {
+    if (!dcc) {
         return;
     }
     item->refs++;
-    red_channel_client_pipe_add_after(worker->display_channel->common.base.rcc, &item->link, pos);
+    red_channel_client_pipe_add_after(&dcc->common.base, &item->link, pos);
 }
 
 static void release_image_item(ImageItem *item)
@@ -2645,15 +2645,12 @@ static void reset_rate(DisplayChannelClient *dcc, StreamAgent *stream_agent)
     /* MJpeg has no rate limiting anyway, so do nothing */
 }
 
-static int display_channel_is_low_bandwidth(DisplayChannel *display_channel)
+static int display_channel_is_low_bandwidth(DisplayChannelClient *dcc)
 {
-    if (display_channel->common.base.rcc) {
-        if (main_channel_client_is_low_bandwidth(
-                red_client_get_main(display_channel->common.base.rcc->client))) {
-            return TRUE;
-        }
-    }
-    return FALSE;
+    RedChannelClient *rcc = &dcc->common.base;
+
+    return dcc && main_channel_client_is_low_bandwidth(
+                red_client_get_main(red_channel_client_get_client(rcc)));
 }
 
 static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream)
@@ -2664,7 +2661,7 @@ static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream)
 
     ASSERT(stream->current);
 
-    if (!dcc || !display_channel_is_low_bandwidth(worker->display_channel)) {
+    if (!dcc || !display_channel_is_low_bandwidth(dcc)) {
         return;
     }
 
@@ -4253,6 +4250,14 @@ static CursorItem *get_cursor_item(RedWorker *worker, RedCursorCmd *cmd, uint32_
     return cursor_item;
 }
 
+static PipeItem *ref_cursor_pipe_item(RedChannelClient *rcc, void *data, int num)
+{
+    CursorItem *cursor_item = data;
+
+    cursor_item->refs += (num != 0); /* we already reference the first use */
+    return &cursor_item->pipe_data;
+}
+
 static void qxl_process_cursor(RedWorker *worker, RedCursorCmd *cursor_cmd, uint32_t group_id)
 {
     CursorItem *item;
@@ -4281,9 +4286,10 @@ static void qxl_process_cursor(RedWorker *worker, RedCursorCmd *cursor_cmd, uint
         red_error("invalid cursor command %u", cursor_cmd->type);
     }
 
-    if (worker->cursor_channel && (worker->mouse_mode == SPICE_MOUSE_MODE_SERVER ||
+    if (cursor_is_connected(worker) && (worker->mouse_mode == SPICE_MOUSE_MODE_SERVER ||
                                    cursor_cmd->type != QXL_CURSOR_MOVE || cursor_show)) {
-        red_channel_client_pipe_add(worker->cursor_channel->common.base.rcc, &item->pipe_data);
+        red_channel_pipes_new_add(&worker->cursor_channel->common.base, ref_cursor_pipe_item,
+                                  (void*)item);
     } else {
         red_release_cursor(worker, item);
     }
@@ -4471,26 +4477,31 @@ static void red_current_flush(RedWorker *worker, int surface_id)
 static ImageItem *red_add_surface_area_image(RedWorker *worker, int surface_id, SpiceRect *area,
                                              PipeItem *pos, int can_lossy)
 {
+    DisplayChannelClient *dcc = WORKER_TO_DCC(worker);
+    DisplayChannel *display_channel = worker ? worker->display_channel : NULL;
+    RedChannel *channel = &display_channel->common.base;
+    RedSurface *surface = &worker->surfaces[surface_id];
+    SpiceCanvas *canvas = surface->context.canvas;
     ImageItem *item;
     int stride;
     int width;
     int height;
-    RedSurface *surface = &worker->surfaces[surface_id];
-    SpiceCanvas *canvas = surface->context.canvas;
     int bpp;
     int all_set;
 
     ASSERT(area);
 
+    if (!dcc) {
+        return NULL;
+    }
     width = area->right - area->left;
     height = area->bottom - area->top;
     bpp = SPICE_SURFACE_FMT_DEPTH(surface->context.format) / 8;
-    stride = SPICE_ALIGN(width * bpp, 4); 
-                                      
+    stride = SPICE_ALIGN(width * bpp, 4);
+
     item = (ImageItem *)spice_malloc_n_m(height, stride, sizeof(ImageItem));
 
-    red_channel_pipe_item_init(&worker->display_channel->common.base,
-                               &item->link, PIPE_ITEM_TYPE_IMAGE);
+    red_channel_pipe_item_init(channel, &item->link, PIPE_ITEM_TYPE_IMAGE);
 
     item->refs = 1;
     item->surface_id = surface_id;
@@ -4520,9 +4531,9 @@ static ImageItem *red_add_surface_area_image(RedWorker *worker, int surface_id, 
     }
 
     if (!pos) {
-        red_pipe_add_image_item(worker, item);
+        red_pipe_add_image_item(dcc, item);
     } else {
-        red_pipe_add_image_item_after(worker, item, pos);
+        red_pipe_add_image_item_after(dcc, item, pos);
     }
 
     release_image_item(item);
@@ -4530,17 +4541,20 @@ static ImageItem *red_add_surface_area_image(RedWorker *worker, int surface_id, 
     return item;
 }
 
-static void red_add_surface_image(RedWorker *worker, int surface_id)
+static void red_push_surface_image(DisplayChannelClient *dcc, int surface_id)
 {
     SpiceRect area;
     RedSurface *surface;
+    RedWorker *worker;
 
-    surface = &worker->surfaces[surface_id];
-
-    if (!display_is_connected(worker) || !surface->context.canvas) {
+    if (!dcc) {
         return;
     }
-
+    worker = DCC_TO_WORKER(dcc);
+    surface = &worker->surfaces[surface_id];
+    if (!surface->context.canvas) {
+        return;
+    }
     area.top = area.left = 0;
     area.right = surface->context.width;
     area.bottom = surface->context.height;
@@ -4548,7 +4562,7 @@ static void red_add_surface_image(RedWorker *worker, int surface_id)
     /* not allowing lossy compression because probably, especially if it is a primary surface,
        it combines both "picture-like" areas with areas that are more "artificial"*/
     red_add_surface_area_image(worker, surface_id, &area, NULL, FALSE);
-    red_channel_push(&worker->display_channel->common.base);
+    red_channel_client_push(&dcc->common.base);
 }
 
 typedef struct {
@@ -6348,6 +6362,7 @@ static void red_pipe_replace_rendered_drawables_with_images(RedWorker *worker,
                                                             int first_surface_id,
                                                             SpiceRect *first_area)
 {
+    /* TODO: can't have those statics with multiple clients */
     static int resent_surface_ids[MAX_PIPE_SIZE];
     static SpiceRect resent_areas[MAX_PIPE_SIZE]; // not pointers since drawbales may be released
     int num_resent;
@@ -8443,7 +8458,7 @@ static inline void red_create_surface(RedWorker *worker, uint32_t surface_id, ui
         if (send_client) {
             red_create_surface_item(dcc, surface_id);
             if (data_is_valid) {
-                red_add_surface_image(worker, surface_id);
+                red_push_surface_image(dcc, surface_id);
             }
         }
         return;
@@ -8458,7 +8473,7 @@ static inline void red_create_surface(RedWorker *worker, uint32_t surface_id, ui
             if (send_client) {
                 red_create_surface_item(dcc, surface_id);
                 if (data_is_valid) {
-                    red_add_surface_image(worker, surface_id);
+                    red_push_surface_image(dcc, surface_id);
                 }
             }
             return;
@@ -8621,7 +8636,7 @@ static void on_new_display_channel_client(DisplayChannelClient *dcc)
     if (worker->surfaces[0].context.canvas) {
         red_current_flush(worker, 0);
         push_new_primary_surface(dcc);
-        red_add_surface_image(worker, 0);
+        red_push_surface_image(dcc, 0);
         if (red_channel_is_connected(&display_channel->common.base)) {
             red_pipe_add_verb(rcc, SPICE_MSG_DISPLAY_MARK);
             red_disply_start_streams(dcc);
