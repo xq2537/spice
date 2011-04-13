@@ -4316,7 +4316,7 @@ static int red_process_cursor(RedWorker *worker, uint32_t max_pipe_size, int *ri
 
     *ring_is_empty = FALSE;
     while (!cursor_is_connected(worker) ||
-           worker->cursor_channel->common.base.rcc->pipe_size <= max_pipe_size) {
+           red_channel_min_pipe_size(&worker->cursor_channel->common.base) <= max_pipe_size) {
         if (!worker->qxl->st->qif->get_cursor_command(worker->qxl, &ext_cmd)) {
             *ring_is_empty = TRUE;
             if (worker->repoll_cursor_ring < CMD_RING_POLL_RETRIES) {
@@ -4361,8 +4361,8 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
     }
 
     *ring_is_empty = FALSE;
-    while (!display_is_connected(worker)
-           || worker->display_channel->common.base.rcc->pipe_size <= max_pipe_size) {
+    while (!display_is_connected(worker) ||
+           red_channel_min_pipe_size(&worker->display_channel->common.base) <= max_pipe_size) {
         if (!worker->qxl->st->qif->get_command(worker->qxl, &ext_cmd)) {
             *ring_is_empty = TRUE;;
             if (worker->repoll_cmd_ring < CMD_RING_POLL_RETRIES) {
@@ -8488,6 +8488,8 @@ static void red_wait_outgoing_items(RedChannel *channel);
 
 static inline void flush_display_commands(RedWorker *worker)
 {
+    RedChannel *display_red_channel = &worker->display_channel->common.base;
+
     for (;;) {
         uint64_t end_time;
         int ring_is_empty;
@@ -8509,7 +8511,7 @@ static inline void flush_display_commands(RedWorker *worker)
         for (;;) {
             red_channel_push(&worker->display_channel->common.base);
             if (!display_is_connected(worker) ||
-                 worker->display_channel->common.base.rcc->pipe_size <= MAX_PIPE_SIZE) {
+                red_channel_min_pipe_size(display_red_channel) <= MAX_PIPE_SIZE) {
                 break;
             }
             RedChannel *channel = (RedChannel *)worker->display_channel;
@@ -8530,6 +8532,8 @@ static inline void flush_display_commands(RedWorker *worker)
 
 static inline void flush_cursor_commands(RedWorker *worker)
 {
+    RedChannel *cursor_red_channel = &worker->cursor_channel->common.base;
+
     for (;;) {
         uint64_t end_time;
         int ring_is_empty = FALSE;
@@ -8551,7 +8555,7 @@ static inline void flush_cursor_commands(RedWorker *worker)
         for (;;) {
             red_channel_push(&worker->cursor_channel->common.base);
             if (!cursor_is_connected(worker)
-                || worker->cursor_channel->common.base.rcc->pipe_size <= MAX_PIPE_SIZE) {
+                || red_channel_min_pipe_size(cursor_red_channel) <= MAX_PIPE_SIZE) {
                 break;
             }
             RedChannel *channel = (RedChannel *)worker->cursor_channel;
@@ -10023,9 +10027,9 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
             red_channel_push(&worker->display_channel->common.base);
         }
         if (worker->qxl->st->qif->flush_resources(worker->qxl) == 0) {
-            red_printf("oom current %u pipe %u", worker->current_size,
+            red_printf("oom current %u pipes %u", worker->current_size,
                        worker->display_channel ?
-                       display_red_channel->rcc->pipe_size : 0);
+                       red_channel_sum_pipes_size(display_red_channel) : 0);
             red_free_some(worker);
             worker->qxl->st->qif->flush_resources(worker->qxl);
         }

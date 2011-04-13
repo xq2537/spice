@@ -1105,3 +1105,18 @@ void red_channel_pipes_new_add_tail(RedChannel *channel, new_pipe_item_t creator
     red_channel_pipes_create_batch(channel, creator, data,
                                      red_channel_client_pipe_add_tail_no_push);
 }
+
+uint32_t red_channel_max_pipe_size(RedChannel *channel)
+{
+    return channel->rcc ? channel->rcc->pipe_size : 0;
+}
+
+uint32_t red_channel_min_pipe_size(RedChannel *channel)
+{
+    return channel->rcc ? channel->rcc->pipe_size : 0;
+}
+
+uint32_t red_channel_sum_pipes_size(RedChannel *channel)
+{
+    return channel->rcc ? channel->rcc->pipe_size : 0;
+}

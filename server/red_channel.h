@@ -365,6 +365,13 @@ RedClient *red_channel_client_get_client(RedChannelClient *rcc);
  * not via the below accessor and direct header manipulation. */
 SpiceDataHeader *red_channel_client_get_header(RedChannelClient *rcc);
 
+/* return the sum of all the rcc pipe size */
+uint32_t red_channel_max_pipe_size(RedChannel *channel);
+/* return the min size of all the rcc pipe */
+uint32_t red_channel_min_pipe_size(RedChannel *channel);
+/* return the max size of all the rcc pipe */
+uint32_t red_channel_sum_pipes_size(RedChannel *channel);
+
 /* apply given function to all connected clients */
 typedef void (*channel_client_callback)(RedChannelClient *rcc);
 typedef void (*channel_client_callback_data)(RedChannelClient *rcc, void *data);
