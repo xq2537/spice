@@ -173,7 +173,7 @@ struct RedChannel {
     int migrate;
     int handle_acks;
 
-    RedChannelClient *rcc;
+    Ring clients;
     uint32_t clients_num;
 
     OutgoingHandlerInterface outgoing_cb;
@@ -200,7 +200,7 @@ struct RedChannel {
 };
 
 /* if one of the callbacks should cause disconnect, use red_channel_shutdown and don't
-   explicitly destroy the channel */
+ * explicitly destroy the channel */
 RedChannel *red_channel_create(int size,
                                SpiceCoreInterface *core,
                                int migrate, int handle_acks,
@@ -235,6 +235,7 @@ RedChannel *red_channel_create_parser(int size,
                                channel_handle_migrate_flush_mark_proc handle_migrate_flush_mark,
                                channel_handle_migrate_data_proc handle_migrate_data,
                                channel_handle_migrate_data_get_serial_proc handle_migrate_data_get_serial);
+
 RedChannelClient *red_channel_client_create(int size, RedChannel *channel, RedClient *client,
                                             RedsStream *stream);
 
@@ -314,8 +315,10 @@ int red_channel_client_send_message_pending(RedChannelClient *rcc);
 
 /* returns TRUE if item is being sent by one of the channel clients. This will
  * be true if someone called init_send_data but send has not completed (or perhaps
- * hasn't even begun, i.e. no one called begin_send_)
- * */
+ * hasn't even begun, i.e. no one called begin_send_).
+ * However, note that red_channel_client_init_send_data can also be called with
+ * item==NULL, thus not all pipe items can be tracked.
+ */
 int red_channel_item_being_sent(RedChannel *channel, PipeItem *item);
 int red_channel_client_item_being_sent(RedChannelClient *rcc, PipeItem *item);
 
@@ -387,8 +390,10 @@ struct RedClient {
 };
 
 RedClient *red_client_new();
-void red_client_destroy(RedClient *client);
-void red_client_set_main(RedClient *client, MainChannelClient *mcc);
 MainChannelClient *red_client_get_main(RedClient *client);
+void red_client_set_main(RedClient *client, MainChannelClient *mcc);
+void red_client_destroy(RedClient *client);
+void red_client_disconnect(RedClient *client);
+void red_client_remove_channel(RedClient *client, RedChannelClient *rcc);
 
 #endif

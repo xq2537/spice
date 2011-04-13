@@ -165,15 +165,13 @@ static void main_disconnect(MainChannel *main_chan)
     red_channel_destroy(&main_chan->base);
 }
 
-#define MAIN_FOREACH(_link, _main, _mcc) \
-    if ((_main) && ((_mcc) = \
-        SPICE_CONTAINEROF((_main)->base.rcc, MainChannelClient, base)))
-
 RedClient *main_channel_get_client_by_link_id(MainChannel *main_chan, uint32_t connection_id)
 {
+    RingItem *link;
     MainChannelClient *mcc;
 
-    MAIN_FOREACH(link, main_chan, mcc) {
+    RING_FOREACH(link, &main_chan->base.clients) {
+        mcc = SPICE_CONTAINEROF(link, MainChannelClient, base.channel_link);
         if (mcc->connection_id == connection_id) {
             return mcc->base.client;
         }
