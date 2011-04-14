@@ -2183,7 +2183,8 @@ bool Application::process_cmd_line(int argc, char** argv, bool &full_screen)
     DisplaySetting display_setting;
 
     enum {
-        SPICE_OPT_HOST = CmdLineParser::OPTION_FIRST_AVAILABLE,
+        SPICE_OPT_VERSION = CmdLineParser::OPTION_FIRST_AVAILABLE,
+        SPICE_OPT_HOST,
         SPICE_OPT_PORT,
         SPICE_OPT_SPORT,
         SPICE_OPT_PASSWORD,
@@ -2224,6 +2225,7 @@ bool Application::process_cmd_line(int argc, char** argv, bool &full_screen)
 
     CmdLineParser parser("Spice client", false);
 
+    parser.add(SPICE_OPT_VERSION, "version", "spice client version", false);
     parser.add(SPICE_OPT_HOST, "host", "spice server address", "host", true, 'h');
     parser.add(SPICE_OPT_PORT, "port", "spice server port", "port", true, 'p');
     parser.add(SPICE_OPT_SPORT, "secure-port", "spice server secure port", "port", true, 's');
@@ -2286,6 +2288,12 @@ bool Application::process_cmd_line(int argc, char** argv, bool &full_screen)
     int op;
     while ((op = parser.get_option(&val)) != CmdLineParser::OPTION_DONE) {
         switch (op) {
+        case SPICE_OPT_VERSION: {
+            std::ostringstream os;
+            os << argv[0] << " "<< PACKAGE_VERSION << std::endl;
+            Platform::term_printf(os.str().c_str());
+            return false;
+        }
         case SPICE_OPT_HOST:
             host = val;
             break;
