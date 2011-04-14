@@ -2183,7 +2183,7 @@ bool Application::process_cmd_line(int argc, char** argv, bool &full_screen)
     DisplaySetting display_setting;
 
     enum {
-        SPICE_OPT_HOST = CmdLineParser::OPTION_FIRST_AVILABLE,
+        SPICE_OPT_HOST = CmdLineParser::OPTION_FIRST_AVAILABLE,
         SPICE_OPT_PORT,
         SPICE_OPT_SPORT,
         SPICE_OPT_PASSWORD,

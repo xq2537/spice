@@ -414,7 +414,7 @@ bool ControllerConnection::create_menu(char* resource)
 bool ControllerConnection::set_multi_val(uint32_t op, char* multi_val)
 {
     CmdLineParser parser("", false);
-    int id = CmdLineParser::OPTION_FIRST_AVILABLE;
+    int id = CmdLineParser::OPTION_FIRST_AVAILABLE;
     char* argv[] = {NULL, (char*)"--set", multi_val};
     char* val;
 
