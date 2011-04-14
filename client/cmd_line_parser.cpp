@@ -119,7 +119,7 @@ void CmdLineParser::add(int id, const std::string& name, const std::string& help
 }
 
 void CmdLineParser::add(int id, const std::string& name, const std::string& help,
-                        const std::string& arg_name, bool reqired_arg, char short_name)
+                        const std::string& arg_name, bool required_arg, char short_name)
 {
     if (id < OPTION_FIRST_AVAILABLE) {
         THROW("invalid id");
@@ -129,7 +129,7 @@ void CmdLineParser::add(int id, const std::string& name, const std::string& help
         THROW("invalid arg name");
     }
 
-    add_private(id, name, short_name, reqired_arg ? REQUIRED_ARGUMENT : OPTIONAL_ARGUMENT, help,
+    add_private(id, name, short_name, required_arg ? REQUIRED_ARGUMENT : OPTIONAL_ARGUMENT, help,
                 arg_name);
 }
 
@@ -156,7 +156,7 @@ void CmdLineParser::set_multi(int id, char seperator)
     opt->seperator = seperator;
 }
 
-void CmdLineParser::set_reqired(int id)
+void CmdLineParser::set_required(int id)
 {
     if (_argv) {
         THROW("unexpected");
