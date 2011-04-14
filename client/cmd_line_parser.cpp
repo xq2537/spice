@@ -112,7 +112,7 @@ void CmdLineParser::add_private(int id, const std::string& name, char short_name
 
 void CmdLineParser::add(int id, const std::string& name, const std::string& help, char short_name)
 {
-    if (id < OPTION_FIRST_AVILABLE) {
+    if (id < OPTION_FIRST_AVAILABLE) {
         THROW("invalid id");
     }
     add_private(id, name, short_name, NO_ARGUMENT, help, "");
@@ -121,7 +121,7 @@ void CmdLineParser::add(int id, const std::string& name, const std::string& help
 void CmdLineParser::add(int id, const std::string& name, const std::string& help,
                         const std::string& arg_name, bool reqired_arg, char short_name)
 {
-    if (id < OPTION_FIRST_AVILABLE) {
+    if (id < OPTION_FIRST_AVAILABLE) {
         THROW("invalid id");
     }
 

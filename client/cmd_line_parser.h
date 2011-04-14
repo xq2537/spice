@@ -25,7 +25,7 @@ public:
         OPTION_ERROR = -1,
         OPTION_DONE = 0,
         OPTION_HELP = 256,
-        OPTION_FIRST_AVILABLE,
+        OPTION_FIRST_AVAILABLE,
     };
 
     CmdLineParser(std::string description, bool allow_positional_args);
