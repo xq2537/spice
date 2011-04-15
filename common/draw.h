@@ -39,7 +39,6 @@
 #define SPICE_SET_ADDRESS(addr, val) ((addr) = (unsigned long)(val))
 
 typedef int32_t SPICE_FIXED28_4;
-typedef uint64_t SPICE_ADDRESS;
 
 typedef struct SpicePointFix {
     SPICE_FIXED28_4 x;
