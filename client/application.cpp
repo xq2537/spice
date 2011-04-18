@@ -2001,7 +2001,14 @@ bool Application::set_host_cert_subject(const char* subject, const char* arg0)
                 _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
                 return false;
             }
-            entry_pair.first = entry.substr(0, value_pos);
+            size_t start_pos = entry.find_first_not_of(' ');
+            if ((start_pos == std::string::npos) || (start_pos == value_pos)) {
+                Platform::term_printf("%s: host_subject bad format: first part of assignment must be non empty in %s\n",
+                                      arg0, entry.c_str());
+                _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
+                return false;
+            }
+            entry_pair.first = entry.substr(start_pos, value_pos - start_pos);
             entry_pair.second = entry.substr(value_pos + 1);
             _host_auth_opt.host_subject.push_back(entry_pair);
             DBG(0, "subject entry: %s=%s", entry_pair.first.c_str(), entry_pair.second.c_str());
