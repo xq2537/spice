@@ -93,33 +93,33 @@ AM_CONDITIONAL(OS_LINUX, test "$os_linux" = "yes")
 
 dnl =========================================================================
 dnl Chek optional features
-have_tunnel=no
 AC_ARG_ENABLE(tunnel,
-[  --enable-tunnel         Enable network redirection],
-[  have_tunnel=yes])
-AM_CONDITIONAL(SUPPORT_TUNNEL, test "x$have_tunnel" = "xyes")
-if test "x$have_tunnel" = "xyes"; then
+[  --enable-tunnel         Enable network redirection],,
+[enable_tunnel="no"])
+AS_IF([test x"$enable_tunnel" != "xno"], [enable_tunnel="yes"])
+AM_CONDITIONAL(SUPPORT_TUNNEL, test "x$enable_tunnel" != "xno")
+if test "x$enable_tunnel" != "xno"; then
    AC_DEFINE(USE_TUNNEL, [1], [Define if supporting tunnel proxying])
 fi
 
-use_gui=no
 AC_ARG_ENABLE(gui,
-[  --enable-gui         Enable start dialog with CEGUI],
-[  use_gui=yes])
-AM_CONDITIONAL(SUPPORT_GUI, test "x$use_gui" = "xyes")
+[  --enable-gui         Enable start dialog with CEGUI],,
+[enable_gui="no"])
+AS_IF([test x"$enable_gui" != "xno"], [enable_gui="yes"])
+AM_CONDITIONAL(SUPPORT_GUI, test "x$enable_gui" != "xno")
 
-have_opengl=no
 AC_ARG_ENABLE(opengl,
-[  --enable-opengl         Enable opengl requirement / support (not recommended)],
-[  have_opengl=yes])
-AM_CONDITIONAL(SUPPORT_GL, test "x$have_opengl" = "xyes")
+[  --enable-opengl         Enable opengl requirement / support (not recommended)],,
+[enable_opengl="no"])
+AS_IF([test x"$enable_opengl" != "xno"], [enable_opengl="yes"])
+AM_CONDITIONAL(SUPPORT_GL, test "x$enable_opengl" = "xyes")
 
-have_smartcard=no
 AC_ARG_ENABLE(smartcard,
-[  --enable-smartcard         Enable network redirection],
-[  have_smartcard=yes])
-AM_CONDITIONAL(SUPPORT_SMARTCARD, test "x$have_smartcard" = "xyes")
-if test "x$have_smartcard" = "xyes"; then
+[  --enable-smartcard         Enable network redirection],,
+[enable_smartcard="no"])
+AS_IF([test x"$enable_smartcard" != "xno"], [enable_smartcard="yes"])
+AM_CONDITIONAL(SUPPORT_SMARTCARD, test "x$enable_smartcard" != "xno")
+if test "x$enable_smartcard" = "xyes"; then
    AC_DEFINE(USE_SMARTCARD, [1], [Define if supporting smartcard proxying])
 fi
 
@@ -162,7 +162,7 @@ AC_DEFINE_UNQUOTED(POSIX_YIELD_FUNC,$posix_yield_func,[The POSIX RT yield functi
 
 SPICE_REQUIRES=""
 
-if test "x$use_gui" = "xyes"; then
+if test "x$enable_gui" = "xyes"; then
     PKG_CHECK_MODULES(CEGUI06, CEGUI-0.6 >= 0.6.0 CEGUI-0.6 < 0.7.0,
     [
         AC_SUBST(CEGUI06_CFLAGS)
@@ -177,7 +177,7 @@ if test "x$use_gui" = "xyes"; then
     ])
 fi
 
-if test "x$have_tunnel" = "xyes"; then
+if test "x$enable_tunnel" = "xyes"; then
 	PKG_CHECK_MODULES(SLIRP, slirp)
 	AC_SUBST(SLIRP_CFLAGS)
 	AC_SUBST(SLIRP_LIBS)
@@ -185,7 +185,7 @@ if test "x$have_tunnel" = "xyes"; then
 	AC_DEFINE([HAVE_SLIRP], [], [Define if we have slirp])
 fi
 
-if test "x$have_smartcard" = "xyes"; then
+if test "x$enable_smartcard" = "xyes"; then
     PKG_CHECK_MODULES(CAC_CARD, libcacard >= 0.1.2)
     SMARTCARD_LIBS="$CAC_CARD_LIBS"
     SMARTCARD_CFLAGS="$CAC_CARD_CFLAGS"
@@ -224,12 +224,12 @@ SPICE_REQUIRES+=" openssl"
 # AC_SUBST(GL_LIBS)
 # SPICE_REQUIRES+=" gl glu"
 
-if test "x$have_opengl" = "xyes"; then
-   AC_CHECK_LIB(GL, glBlendFunc, GL_LIBS="$GL_LIBS -lGL", have_opengl=no)
-   AC_CHECK_LIB(GLU, gluSphere, GL_LIBS="$GL_LIBS -lGLU", have_opengl=no)
+if test "x$enable_opengl" = "xyes"; then
+   AC_CHECK_LIB(GL, glBlendFunc, GL_LIBS="$GL_LIBS -lGL", enable_opengl=no)
+   AC_CHECK_LIB(GLU, gluSphere, GL_LIBS="$GL_LIBS -lGLU", enable_opengl=no)
    GL_CFLAGS="-DGL_GLEXT_PROTOTYPES -DUSE_OGL"
 
-   if test "x$have_opengl" = "xno"; then
+   if test "x$enable_opengl" = "xno"; then
       AC_MSG_ERROR([GL libraries not available])
    fi
 fi
@@ -267,10 +267,12 @@ fi
 
 # Add parameter for (partial) static linkage of spice client.
 # this is used to achive single binary package for all (?) distros.
-AC_ARG_ENABLE(static-linkage, 
-	[  --enable-static-linkage will generate spice client binary with static linkage to external libraries ],
-	[SPICEC_STATIC_LINKAGE_BSTATIC=["-Wl,-Bstatic"];
-	SPICEC_STATIC_LINKAGE_BDYNAMIC=["-Wl,-Bdynamic"]])
+AC_ARG_ENABLE(static-linkage,
+[  --enable-static-linkage will generate spice client binary with static linkage to external libraries ],,
+[enable_static_linkage="no"])
+AS_IF([test x"$enable_static_linkage" != "xno"],
+[SPICEC_STATIC_LINKAGE_BSTATIC=["-Wl,-Bstatic"]],
+[SPICEC_STATIC_LINKAGE_BDYNAMIC=["-Wl,-Bdynamic"]])
 
 
 AS_IF([test "$_cflags_is_set" = "yes"], [], [
@@ -501,15 +503,15 @@ echo "
 
         Have XRANDR 1.2:          ${have_xrandr12}
 
-        Support tunneling:        ${have_tunnel}
+        Support tunneling:        ${enable_tunnel}
 
         Red target:               ${red_target}
 
-        OpenGL:                   ${have_opengl}
+        OpenGL:                   ${enable_opengl}
 
-        GUI:                      ${use_gui}
+        GUI:                      ${enable_gui}
 
-        Smartcard:                ${have_smartcard}
+        Smartcard:                ${enable_smartcard}
 
         SASL support:             ${enable_sasl}
 
