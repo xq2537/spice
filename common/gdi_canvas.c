@@ -1828,7 +1828,7 @@ SpiceCanvas *gdi_canvas_create(int width, int height,
     return (SpiceCanvas *)canvas;
 }
 
-void gdi_canvas_init() //unsafe global function
+void gdi_canvas_init(void) //unsafe global function
 {
     if (!need_init) {
         return;

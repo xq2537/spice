@@ -43,7 +43,7 @@ struct MainMigrateData {
     uint32_t write_queue_size;
 };
 
-Channel *main_channel_init();
+Channel *main_channel_init(void);
 void main_channel_close(Channel *channel); // not destroy, just socket close
 int main_channel_push_ping(Channel *channel, int size);
 void main_channel_push_mouse_mode(Channel *channel, int current_mode, int is_client_mouse_allowed);

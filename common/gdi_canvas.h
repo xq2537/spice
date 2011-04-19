@@ -38,7 +38,7 @@ SpiceCanvas *gdi_canvas_create(int width, int height,
                                SpiceJpegDecoder *jpeg_decoder,
                                SpiceZlibDecoder *zlib_decoder);
 
-void gdi_canvas_init();
+void gdi_canvas_init(void);
 
 #ifdef __cplusplus
 }

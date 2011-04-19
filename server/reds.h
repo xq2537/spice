@@ -118,10 +118,10 @@ ssize_t reds_stream_write(RedsStream *s, const void *buf, size_t nbyte);
 ssize_t reds_stream_writev(RedsStream *s, const struct iovec *iov, int iovcnt);
 void reds_stream_free(RedsStream *s);
 
-void reds_desable_mm_timer();
-void reds_enable_mm_timer();
+void reds_desable_mm_timer(void);
+void reds_enable_mm_timer(void);
 void reds_update_mm_timer(uint32_t mm_time);
-uint32_t reds_get_mm_time();
+uint32_t reds_get_mm_time(void);
 void reds_set_client_mouse_allowed(int is_client_mouse_allowed,
                                    int x_res, int y_res);
 void reds_register_channel(Channel *channel);
@@ -151,10 +151,10 @@ void reds_update_stat_value(uint32_t value);
 #endif
 
 // callbacks from main channel messages
-void reds_on_main_agent_start();
+void reds_on_main_agent_start(void);
 void reds_on_main_agent_data(void *message, size_t size);
-void reds_on_main_migrate_connected();
-void reds_on_main_migrate_connect_error();
+void reds_on_main_migrate_connected(void);
+void reds_on_main_migrate_connect_error(void);
 void reds_on_main_receive_migrate_data(MainMigrateData *data, uint8_t *end);
 void reds_on_main_mouse_mode_request(void *message, size_t size);
 

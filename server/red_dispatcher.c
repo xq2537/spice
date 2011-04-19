@@ -170,12 +170,12 @@ int red_dispatcher_add_renderer(const char *name)
     return TRUE;
 }
 
-int red_dispatcher_qxl_count()
+int red_dispatcher_qxl_count(void)
 {
     return num_active_workers;
 }
 
-static void update_client_mouse_allowed()
+static void update_client_mouse_allowed(void)
 {
     static int allowed = FALSE;
     int allow_now = FALSE;
@@ -408,7 +408,7 @@ void red_dispatcher_set_mm_time(uint32_t mm_time)
     }
 }
 
-static inline int calc_compression_level()
+static inline int calc_compression_level(void)
 {
     ASSERT(streaming_video != STREAM_VIDEO_INVALID);
     if ((streaming_video != STREAM_VIDEO_OFF) ||
@@ -419,7 +419,7 @@ static inline int calc_compression_level()
     }
 }
 
-void red_dispatcher_on_ic_change()
+void red_dispatcher_on_ic_change(void)
 {
     int compression_level = calc_compression_level();
     RedDispatcher *now = dispatchers;
@@ -432,7 +432,7 @@ void red_dispatcher_on_ic_change()
     }
 }
 
-void red_dispatcher_on_sv_change()
+void red_dispatcher_on_sv_change(void)
 {
     int compression_level = calc_compression_level();
     RedDispatcher *now = dispatchers;
@@ -456,7 +456,7 @@ void red_dispatcher_set_mouse_mode(uint32_t mode)
     }
 }
 
-int red_dispatcher_count()
+int red_dispatcher_count(void)
 {
     RedDispatcher *now = dispatchers;
     int ret = 0;
@@ -468,7 +468,7 @@ int red_dispatcher_count()
     return ret;
 }
 
-uint32_t red_dispatcher_qxl_ram_size()
+uint32_t red_dispatcher_qxl_ram_size(void)
 {
     QXLDevInitInfo qxl_info;
     if (!dispatchers) {

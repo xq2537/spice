@@ -60,7 +60,7 @@
     }                                                               \
 }
 
-static inline uint64_t get_time_stamp()
+static inline uint64_t get_time_stamp(void)
 {
     struct timespec time_space;
     clock_gettime(CLOCK_MONOTONIC, &time_space);

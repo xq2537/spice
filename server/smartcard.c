@@ -507,7 +507,7 @@ static void smartcard_migrate(Channel *channel)
 {
 }
 
-void smartcard_channel_init()
+void smartcard_channel_init(void)
 {
     Channel *channel;
 

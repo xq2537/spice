@@ -40,7 +40,7 @@ SpiceCanvas *gl_canvas_create(int width, int height, uint32_t format
                            , SpiceZlibDecoder *zlib_decoder
                            );
 void gl_canvas_set_textures_lost(SpiceCanvas *canvas, int textures_lost);
-void gl_canvas_init();
+void gl_canvas_init(void);
 
 #ifdef __cplusplus
 }

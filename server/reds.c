@@ -1008,7 +1008,7 @@ void reds_fill_channels(SpiceMsgChannels *channels_info)
     }
 }
 
-void reds_on_main_agent_start()
+void reds_on_main_agent_start(void)
 {
     if (!vdagent) {
         return;
@@ -1057,14 +1057,14 @@ void reds_on_main_agent_data(void *message, size_t size)
     write_to_vdi_port();
 }
 
-void reds_on_main_migrate_connected()
+void reds_on_main_migrate_connected(void)
 {
     if (reds->mig_wait_connect) {
         reds_mig_cleanup();
     }
 }
 
-void reds_on_main_migrate_connect_error()
+void reds_on_main_migrate_connect_error(void)
 {
     if (reds->mig_wait_connect) {
         reds_mig_cleanup();
@@ -3127,7 +3127,7 @@ static void migrate_timout(void *opaque)
     reds_mig_disconnect();
 }
 
-uint32_t reds_get_mm_time()
+uint32_t reds_get_mm_time(void)
 {
     struct timespec time_space;
     clock_gettime(CLOCK_MONOTONIC, &time_space);
@@ -3139,7 +3139,7 @@ void reds_update_mm_timer(uint32_t mm_time)
     red_dispatcher_set_mm_time(mm_time);
 }
 
-void reds_enable_mm_timer()
+void reds_enable_mm_timer(void)
 {
     core->timer_start(reds->mm_timer, MM_TIMER_GRANULARITY_MS);
     if (!reds_main_channel_connected()) {
@@ -3148,7 +3148,7 @@ void reds_enable_mm_timer()
     main_channel_push_multi_media_time(reds->main_channel, reds_get_mm_time() - MM_TIME_DELTA);
 }
 
-void reds_desable_mm_timer()
+void reds_desable_mm_timer(void)
 {
     core->timer_cancel(reds->mm_timer);
 }

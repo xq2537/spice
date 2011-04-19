@@ -381,7 +381,7 @@ ROP3_HANDLERS(DPSoo, *src | *pat | *dest, 0xfe);
     rop3_test_handlers_32[index] = rop3_test32_##op;             \
     rop3_test_handlers_16[index] = rop3_test16_##op;
 
-void rop3_init()
+void rop3_init(void)
 {
     static int need_init = 1;
     int i;

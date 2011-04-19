@@ -1690,7 +1690,7 @@ void quic_destroy(QuicContext *quic)
     encoder->usr->free(encoder->usr, encoder);
 }
 
-void quic_init()
+void quic_init(void)
 {
     if (!need_init) {
         return;
