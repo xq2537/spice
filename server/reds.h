@@ -118,7 +118,7 @@ ssize_t reds_stream_write(RedsStream *s, const void *buf, size_t nbyte);
 ssize_t reds_stream_writev(RedsStream *s, const struct iovec *iov, int iovcnt);
 void reds_stream_free(RedsStream *s);
 
-void reds_desable_mm_timer(void);
+void reds_disable_mm_timer(void);
 void reds_enable_mm_timer(void);
 void reds_update_mm_timer(uint32_t mm_time);
 uint32_t reds_get_mm_time(void);

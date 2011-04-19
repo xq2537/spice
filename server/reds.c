@@ -3148,7 +3148,7 @@ void reds_enable_mm_timer(void)
     main_channel_push_multi_media_time(reds->main_channel, reds_get_mm_time() - MM_TIME_DELTA);
 }
 
-void reds_desable_mm_timer(void)
+void reds_disable_mm_timer(void)
 {
     core->timer_cancel(reds->mm_timer);
 }

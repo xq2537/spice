@@ -829,7 +829,7 @@ __visible__ void spice_server_playback_start(SpicePlaybackInstance *sin)
     if (!channel)
         return;
     ASSERT(!playback_channel->base.active);
-    reds_desable_mm_timer();
+    reds_disable_mm_timer();
     playback_channel->base.active = TRUE;
     if (!playback_channel->base.client_active) {
         snd_set_command(&playback_channel->base, SND_PLAYBACK_CTRL_MASK);
@@ -917,7 +917,7 @@ static void on_new_playback_channel(SndWorker *worker)
         snd_set_command((SndChannel *)playback_channel, SND_PLAYBACK_CTRL_MASK);
     }
     if (playback_channel->base.active) {
-        reds_desable_mm_timer();
+        reds_disable_mm_timer();
     }
 }
 
