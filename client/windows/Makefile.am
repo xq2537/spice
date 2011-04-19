@@ -141,8 +141,7 @@ RED_OGL_SRCS =						\
 	$(CLIENT_DIR)/glc.cpp				\
 	$(CLIENT_DIR)/red_gl_canvas.cpp			\
 	$(CLIENT_DIR)/red_gl_canvas.h			\
-	$(CLIENT_DIR)/red_pixmap_gl.h			\
-	red_pixmap_gl.cpp
+	$(CLIENT_DIR)/red_pixmap_gl.h
 else
 RED_OGL_SRCS =
 endif
