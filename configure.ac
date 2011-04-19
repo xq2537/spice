@@ -271,8 +271,7 @@ AC_ARG_ENABLE(static-linkage,
 [  --enable-static-linkage will generate spice client binary with static linkage to external libraries ],,
 [enable_static_linkage="no"])
 AS_IF([test x"$enable_static_linkage" != "xno"],
-[SPICEC_STATIC_LINKAGE_BSTATIC=["-Wl,-Bstatic"]],
-[SPICEC_STATIC_LINKAGE_BDYNAMIC=["-Wl,-Bdynamic"]])
+[SPICEC_STATIC_LINKAGE_BSTATIC=["-Wl,-Bstatic"]])
 
 
 AS_IF([test "$_cflags_is_set" = "yes"], [], [
@@ -471,7 +470,6 @@ AC_SUBST(SPICE_NONPKGCONFIG_CFLAGS)
 AC_SUBST(SPICE_NONPKGCONFIG_LIBS)
 
 AC_SUBST([SPICEC_STATIC_LINKAGE_BSTATIC])
-AC_SUBST([SPICEC_STATIC_LINKAGE_BDYNAMIC])
 
 m4_ifdef([AM_SILENT_RULES],[AM_SILENT_RULES([yes])])
 
