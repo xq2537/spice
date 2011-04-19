@@ -870,7 +870,7 @@ static void gl_canvas_destroy(SpiceCanvas *spice_canvas)
     free(canvas);
 }
 
-void gl_canvas_init() //unsafe global function
+void gl_canvas_init(void) //unsafe global function
 {
     if (!need_init) {
         return;

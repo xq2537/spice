@@ -4100,7 +4100,7 @@ static void key_modifiers_sender(void *opaque)
     reds_send_keyboard_modifiers(kbd_get_leds(keyboard));
 }
 
-uint32_t reds_get_mm_time()
+uint32_t reds_get_mm_time(void)
 {
     struct timespec time_space;
     clock_gettime(CLOCK_MONOTONIC, &time_space);
@@ -4112,7 +4112,7 @@ void reds_update_mm_timer(uint32_t mm_time)
     red_dispatcher_set_mm_time(mm_time);
 }
 
-void reds_enable_mm_timer()
+void reds_enable_mm_timer(void)
 {
     SpiceMsgMainMultiMediaTime time_mes;
     RedsOutItem *item;
@@ -4128,7 +4128,7 @@ void reds_enable_mm_timer()
     reds_push_pipe_item(item);
 }
 
-void reds_desable_mm_timer()
+void reds_desable_mm_timer(void)
 {
     core->timer_cancel(reds->mm_timer);
 }
