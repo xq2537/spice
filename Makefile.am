@@ -1,4 +1,8 @@
-SUBDIRS = common server client python_modules
+SUBDIRS = common server python_modules
+
+if SUPPORT_CLIENT
+SUBDIRS += client
+endif
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = spice-server.pc

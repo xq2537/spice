@@ -123,6 +123,12 @@ if test "x$enable_smartcard" = "xyes"; then
    AC_DEFINE(USE_SMARTCARD, [1], [Define if supporting smartcard proxying])
 fi
 
+AC_ARG_ENABLE(client,
+[  --enable-client         Enable spice client],,
+[enable_client="yes"])
+AS_IF([test x"$enable_client" != "xno"], [enable_client="yes"])
+AM_CONDITIONAL(SUPPORT_CLIENT, test "x$enable_client" = "xyes")
+
 dnl =========================================================================
 dnl Check deps
 
@@ -516,6 +522,8 @@ echo "
         prefix:                   ${prefix}
         c compiler:               ${CC}
         c++ compiler:             ${CXX}
+
+        Build Spice client:       ${enable_client}
 
         Have XRANDR 1.2:          ${have_xrandr12}
 
