@@ -1368,7 +1368,7 @@ static inline void red_destroy_surface(RedWorker *worker, uint32_t surface_id)
 
     if (!--surface->refs) {
         // only primary surface streams are supported
-        if (surface_id == 0) {
+        if (is_primary_surface(worker, surface_id)) {
             red_reset_stream_trace(worker);
         }
         ASSERT(surface->context.canvas);
@@ -2284,8 +2284,7 @@ static void red_streams_update_clip(RedWorker *worker, Drawable *drawable)
         return;
     }
 
-    // only primary surface streams are supported
-    if (drawable->surface_id != 0) {
+    if (!is_primary_surface(worker, drawable->surface_id)) {
         return;
     }
 
@@ -2965,8 +2964,7 @@ static inline int red_current_add_with_shadow(RedWorker *worker, Ring *ring, Dra
     // item and his shadow must initially be placed in the same container.
     // for now putting them on root.
 
-    // only primary surface streams are supported
-    if (item->surface_id == 0) {
+    if (is_primary_surface(worker, item->surface_id)) {
         red_detach_streams_behind(worker, &shadow->base.rgn);
     }
     ring_add(ring, &shadow->base.siblings_link);
@@ -3000,8 +2998,7 @@ static inline void red_update_streamable(RedWorker *worker, Drawable *drawable,
         return;
     }
 
-    // only primary surface streams are supported
-    if (drawable->surface_id != 0) {
+    if (!is_primary_surface(worker, drawable->surface_id)) {
         return;
     }
 
