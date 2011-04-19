@@ -26,6 +26,10 @@
 
 #include "draw.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* This lists all possible 2 argument binary raster ops.
  * This enum has the same values as the X11 GXcopy type
  * and same as the GL constants (GL_AND etc) if you
@@ -124,5 +128,9 @@ void spice_pixman_copy_rect(pixman_image_t *image,
                             int src_x, int src_y,
                             int w, int h,
                             int dest_x, int dest_y);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _H__PIXMAN_UTILS */

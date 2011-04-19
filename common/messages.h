@@ -34,6 +34,10 @@
 #include <spice/protocol.h>
 #include "draw.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct SpiceMsgData {
     uint32_t data_size;
     uint8_t data[0];
@@ -494,6 +498,8 @@ typedef struct SpiceMsgcTunnelSocketTokens {
     uint32_t num_tokens;
 } SpiceMsgcTunnelSocketTokens;
 
+#ifdef __cplusplus
+}
+#endif
+
 #endif /* _H_SPICE_PROTOCOL */
-
-

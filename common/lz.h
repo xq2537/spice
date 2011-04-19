@@ -10,6 +10,10 @@
 #include "lz_config.h"
 #include "draw.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef void *LzContext;
 
 typedef struct LzUsrContext LzUsrContext;
@@ -71,5 +75,8 @@ LzContext *lz_create(LzUsrContext *usr);
 
 void lz_destroy(LzContext *lz);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif  // __LZ_H

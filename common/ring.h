@@ -19,6 +19,10 @@
 #ifndef _H_RING2
 #define _H_RING2
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct Ring RingItem;
 typedef struct Ring {
     RingItem *prev;
@@ -128,6 +132,10 @@ static inline RingItem *ring_prev(Ring *ring, RingItem *pos)
     ret = pos->prev;
     return (ret == ring) ? NULL : ret;
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

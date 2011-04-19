@@ -25,6 +25,10 @@
 #include "region.h"
 #include "draw.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef void (*spice_destroy_fn_t)(void *data);
 
 typedef struct _SpiceImageCache SpiceImageCache;
@@ -309,5 +313,9 @@ void *spice_canvas_get_usr_data(SpiceCanvas *canvas);
 struct _SpiceCanvas {
   SpiceCanvasOps *ops;
 };
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

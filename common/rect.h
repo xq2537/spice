@@ -22,6 +22,10 @@
 #include "draw.h"
 #include <spice/macros.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 static inline void rect_sect(SpiceRect* r, const SpiceRect* bounds)
 {
     r->left = MAX(r->left, bounds->left);
@@ -71,6 +75,10 @@ static inline int rect_is_same_size(const SpiceRect *r1, const SpiceRect *r2)
     return r1->right - r1->left == r2->right - r2->left &&
            r1->bottom - r1->top == r2->bottom - r2->top;
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #ifdef __cplusplus
 

@@ -35,6 +35,10 @@
 #include <spice/enums.h>
 #include "mem.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define SPICE_GET_ADDRESS(addr) ((void *)(unsigned long)(addr))
 #define SPICE_SET_ADDRESS(addr, val) ((addr) = (unsigned long)(val))
 
@@ -270,5 +274,9 @@ typedef struct SpiceCursorHeader {
     uint16_t hot_spot_x;
     uint16_t hot_spot_y;
 } SpiceCursorHeader;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _H_SPICE_DRAW */

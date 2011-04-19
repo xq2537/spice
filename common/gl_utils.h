@@ -21,6 +21,10 @@
 #ifndef GL_UTILS_H
 #define GL_UTILS_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef RED_DEBUG
 #define GLC_ERROR_TEST_FLUSH {                                        \
     GLenum gl_err;  glFlush();                                        \
@@ -101,5 +105,9 @@ static inline int gl_get_to_power_two(unsigned int val)
     }
     return 1 << find_msb(val);
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

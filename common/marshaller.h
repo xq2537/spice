@@ -25,6 +25,10 @@
 #include <sys/uio.h>
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct SpiceMarshaller SpiceMarshaller;
 typedef void (*spice_marshaller_item_free_func)(uint8_t *data, void *opaque);
 
@@ -62,5 +66,9 @@ void *spice_marshaller_add_uint8(SpiceMarshaller *m, uint8_t v);
 void *spice_marshaller_add_int8(SpiceMarshaller *m, int8_t v);
 
 void  spice_marshaller_set_uint32(SpiceMarshaller *m, void *ref, uint32_t v);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

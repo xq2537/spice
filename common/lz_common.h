@@ -23,6 +23,10 @@
 #ifndef _LZ_COMMON_H
 #define _LZ_COMMON_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 //#define DEBUG
 
 /* change the max window size will require change in the encoding format*/
@@ -58,5 +62,8 @@ static const int RGB_BYTES_PER_PIXEL[] = {0, 1, 1, 1, 1, 1, 2, 3, 4, 4, 4};
 #define LZ_VERSION_MINOR 1U
 #define LZ_VERSION ((LZ_VERSION_MAJOR << 16) | (LZ_VERSION_MINOR & 0xffff))
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif  // _LZ_COMMON_H

@@ -23,6 +23,10 @@
 #include "draw.h"
 #include <pixman_utils.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef pixman_region32_t QRegion;
 
 #define REGION_TEST_LEFT_EXCLUSIVE (1 << 0)
@@ -58,6 +62,10 @@ void region_remove(QRegion *rgn, const SpiceRect *r);
 void region_offset(QRegion *rgn, int32_t dx, int32_t dy);
 
 void region_dump(const QRegion *rgn, const char *prefix);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 
