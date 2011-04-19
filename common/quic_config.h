@@ -21,6 +21,10 @@
 
 #include <spice/types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef __GNUC__
 
 #include <string.h>
@@ -45,6 +49,10 @@
 #endif
 
 
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif

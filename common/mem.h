@@ -22,6 +22,10 @@
 #include <stdlib.h>
 #include <spice/macros.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct SpiceChunk {
     uint8_t *data;
     uint32_t len;
@@ -120,4 +124,7 @@ void spice_buffer_append(SpiceBuffer *buffer, const void *data, size_t len);
 size_t spice_buffer_copy(SpiceBuffer *buffer, void *dest, size_t len);
 size_t spice_buffer_remove(SpiceBuffer *buffer, size_t len);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

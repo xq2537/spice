@@ -26,6 +26,10 @@
 #include "canvas_base.h"
 #include "region.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 SpiceCanvas *canvas_create(int width, int height, uint32_t format
 #ifdef SW_CANVAS_CACHE
                            , SpiceImageCache *bits_cache
@@ -54,5 +58,9 @@ SpiceCanvas *canvas_create_for_data(int width, int height, uint32_t format, uint
 
 
 void sw_canvas_init();
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

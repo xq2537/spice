@@ -24,6 +24,10 @@
 #include "pixman_utils.h"
 #include "lz.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct PixmanData {
 #ifdef WIN32
     HBITMAP bitmap;
@@ -65,4 +69,8 @@ typedef struct LzDecodeUsrData {
 pixman_image_t *alloc_lz_image_surface(LzDecodeUsrData *canvas_data,
                                        pixman_format_code_t pixman_format, int width,
                                        int height, int gross_pixels, int top_down);
+#ifdef __cplusplus
+}
+#endif
+
 #endif

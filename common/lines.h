@@ -54,6 +54,10 @@ SOFTWARE.
 #include <string.h>
 #include "draw.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct lineGC lineGC;
 
 typedef struct {
@@ -126,5 +130,9 @@ extern int spice_canvas_clip_spans(pixman_region32_t *clip_region,
                                    SpicePoint *new_points,
                                    int *new_widths,
                                    int sorted);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* LINES_H */

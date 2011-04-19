@@ -18,6 +18,11 @@
 
 #ifndef _H_MUTEX
 #define _H_MUTEX
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef _WIN32
 #include <windows.h>
 typedef CRITICAL_SECTION mutex_t;
@@ -30,6 +35,10 @@ typedef pthread_mutex_t mutex_t;
 #define MUTEX_INIT(mutex) pthread_mutex_init(&mutex, NULL);
 #define MUTEX_LOCK(mutex) pthread_mutex_lock(&mutex)
 #define MUTEX_UNLOCK(mutex) pthread_mutex_unlock(&mutex)
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif // _H_MUTEX

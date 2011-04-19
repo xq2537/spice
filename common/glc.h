@@ -23,6 +23,10 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef void * GLCCtx;
 typedef void * GLCPattern;
 typedef void * GLCPath;
@@ -155,5 +159,9 @@ void glc_flush(GLCCtx glc);
 void glc_clear(GLCCtx glc);
 GLCCtx glc_create(int width, int height);
 void glc_destroy(GLCCtx glc, int textures_lost);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

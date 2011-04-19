@@ -19,6 +19,10 @@
 #ifndef _H_GLCTX
 #define _H_GLCTX
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct OGLCtx OGLCtx;
 
 const char *oglctx_type_str(OGLCtx *ctx);
@@ -26,6 +30,10 @@ void oglctx_make_current(OGLCtx *ctx);
 OGLCtx *pbuf_create(int width, int heigth);
 OGLCtx *pixmap_create(int width, int heigth);
 void oglctx_destroy(OGLCtx *ctx);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

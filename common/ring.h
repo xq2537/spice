@@ -21,6 +21,10 @@
 
 #include "spice_common.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct Ring RingItem;
 typedef struct Ring {
     RingItem *prev;
@@ -149,6 +153,10 @@ static inline RingItem *ring_prev(Ring *ring, RingItem *pos)
             (var);                              \
             (var) = ring_prev(ring, var))
 
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 
