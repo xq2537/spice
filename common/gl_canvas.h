@@ -20,6 +20,9 @@
 #include "canvas_base.h"
 #include "region.h"
 
+#ifndef _H__GL_CANVAS
+#define _H__GL_CANVAS
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -41,4 +44,6 @@ void gl_canvas_init();
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif
