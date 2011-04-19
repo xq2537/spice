@@ -34,15 +34,15 @@ RED_COMMON_SRCS =					\
 	$(CLIENT_DIR)/demarshallers.h			\
 	$(CLIENT_DIR)/generated_demarshallers.cpp	\
 	$(CLIENT_DIR)/generated_demarshallers1.cpp	\
-	$(CLIENT_DIR)/marshaller.cpp			\
+	$(COMMON_DIR)/marshaller.c			\
 	$(CLIENT_DIR)/marshallers.h			\
 	$(CLIENT_DIR)/generated_marshallers.cpp		\
 	$(CLIENT_DIR)/generated_marshallers1.cpp	\
-	$(CLIENT_DIR)/sw_canvas.cpp			\
+	$(COMMON_DIR)/sw_canvas.c			\
 	$(CLIENT_DIR)/canvas.cpp			\
-	$(CLIENT_DIR)/gdi_canvas.cpp			\
+	$(COMMON_DIR)/gdi_canvas.c			\
 	$(CLIENT_DIR)/canvas.h				\
-	$(CLIENT_DIR)/canvas_utils.cpp			\
+	$(COMMON_DIR)/canvas_utils.c			\
 	$(CLIENT_DIR)/red_sw_canvas.cpp			\
 	$(CLIENT_DIR)/red_sw_canvas.h			\
 	$(CLIENT_DIR)/cmd_line_parser.cpp		\
@@ -72,21 +72,21 @@ RED_COMMON_SRCS =					\
 	$(CLIENT_DIR)/inputs_handler.h			\
 	$(CLIENT_DIR)/jpeg_decoder.cpp			\
 	$(CLIENT_DIR)/jpeg_decoder.h			\
-	$(CLIENT_DIR)/lz.cpp				\
-	$(CLIENT_DIR)/lines.cpp				\
+	$(COMMON_DIR)/lz.c				\
+	$(COMMON_DIR)/lines.c				\
 	$(CLIENT_DIR)/monitor.cpp			\
 	$(CLIENT_DIR)/monitor.h				\
-	$(CLIENT_DIR)/mem.cpp				\
+	$(COMMON_DIR)/mem.c				\
 	$(CLIENT_DIR)/menu.cpp				\
 	$(CLIENT_DIR)/menu.h				\
 	$(CLIENT_DIR)/mjpeg_decoder.h			\
 	$(CLIENT_DIR)/mjpeg_decoder.cpp			\
 	$(CLIENT_DIR)/pixels_source.h			\
-	$(CLIENT_DIR)/pixman_utils.cpp			\
+	$(COMMON_DIR)/pixman_utils.c			\
 	$(CLIENT_DIR)/platform.h			\
 	$(CLIENT_DIR)/playback_channel.cpp		\
 	$(CLIENT_DIR)/process_loop.cpp			\
-	$(CLIENT_DIR)/quic.cpp				\
+	$(COMMON_DIR)/quic.c				\
 	$(CLIENT_DIR)/record_channel.cpp		\
 	$(CLIENT_DIR)/red_channel.cpp			\
 	$(CLIENT_DIR)/red_channel.h			\
@@ -101,8 +101,8 @@ RED_COMMON_SRCS =					\
 	$(CLIENT_DIR)/red_pixmap.h			\
 	$(CLIENT_DIR)/red_types.h			\
 	$(CLIENT_DIR)/red_window.h			\
-	$(CLIENT_DIR)/region.cpp			\
-	$(CLIENT_DIR)/rop3.cpp				\
+	$(COMMON_DIR)/region.c				\
+	$(COMMON_DIR)/rop3.c				\
 	$(CLIENT_DIR)/screen.cpp			\
 	$(CLIENT_DIR)/screen.h				\
 	$(CLIENT_DIR)/screen_layer.cpp			\
@@ -137,8 +137,8 @@ endif
 
 if SUPPORT_GL
 RED_OGL_SRCS =						\
-	$(CLIENT_DIR)/gl_canvas.cpp			\
-	$(CLIENT_DIR)/glc.cpp				\
+	$(COMMON_DIR)/gl_canvas.c			\
+	$(COMMON_DIR)/glc.c				\
 	$(CLIENT_DIR)/red_gl_canvas.cpp			\
 	$(CLIENT_DIR)/red_gl_canvas.h			\
 	$(CLIENT_DIR)/red_pixmap_gl.h

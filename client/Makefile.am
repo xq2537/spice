@@ -19,8 +19,6 @@ generated_marshallers1.cpp: $(top_srcdir)/spice1.proto
 
 if SUPPORT_GL
 GL_SRCS =				\
-	gl_canvas.cpp			\
-	glc.cpp				\
 	red_gl_canvas.cpp		\
 	red_gl_canvas.h			\
 	red_pixmap_gl.h
@@ -42,12 +40,8 @@ RED_COMMON_SRCS =			\
 	audio_channels.h		\
 	audio_devices.h			\
 	cache.hpp			\
-	sw_canvas.cpp			\
-	pixman_utils.cpp		\
-	lines.cpp			\
 	canvas.cpp			\
 	canvas.h			\
-	canvas_utils.cpp		\
 	red_sw_canvas.cpp		\
 	red_sw_canvas.h			\
 	client_net_socket.cpp		\
@@ -59,7 +53,6 @@ RED_COMMON_SRCS =			\
 	marshallers.h			\
 	generated_demarshallers.cpp	\
 	generated_demarshallers1.cpp	\
-	marshaller.cpp			\
 	generated_marshallers.cpp	\
 	generated_marshallers1.cpp	\
 	controller.cpp			\
@@ -85,7 +78,6 @@ RED_COMMON_SRCS =			\
 	inputs_handler.h		\
 	jpeg_decoder.cpp		\
 	jpeg_decoder.h			\
-	lz.cpp				\
 	monitor.cpp			\
 	monitor.h			\
 	mem.cpp				\
@@ -99,7 +91,6 @@ RED_COMMON_SRCS =			\
 	playback_channel.cpp		\
 	process_loop.cpp		\
 	process_loop.h			\
-	quic.cpp			\
 	read_write_mutex.h		\
 	record_channel.cpp		\
 	red_channel.cpp			\
@@ -114,8 +105,6 @@ RED_COMMON_SRCS =			\
 	red_pixmap.h			\
 	red_types.h			\
 	red_window.h			\
-	region.cpp			\
-	rop3.cpp			\
 	screen.cpp			\
 	screen.h			\
 	screen_layer.cpp		\
@@ -134,7 +123,6 @@ RED_COMMON_SRCS =			\
 	$(NULL)
 
 GDI_FILES =				\
-	gdi_canvas.cpp			\
 	red_gdi_canvas.cpp		\
 	red_gdi_canvas.h		\
 	red_pixmap_gdi.h		\

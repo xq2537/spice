@@ -377,7 +377,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\canvas_utils.cpp"
+				RelativePath="..\..\common\canvas_utils.c"
 				>
 			</File>
 			<File
@@ -413,7 +413,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\gdi_canvas.cpp"
+				RelativePath="..\..\common\gdi_canvas.c"
 				>
 			</File>
 			<File
@@ -457,11 +457,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\lines.cpp"
+				RelativePath="..\..\common\lines.c"
 				>
 			</File>
 			<File
-				RelativePath="..\lz.cpp"
+				RelativePath="..\..\common\lz.c"
 				>
 			</File>
 			<File
@@ -469,7 +469,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\mem.cpp"
+				RelativePath="..\..\common\mem.c"
 				>
 			</File>
 			<File
@@ -533,7 +533,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\pixman_utils.cpp"
+				RelativePath="..\..\common\pixman_utils.c"
 				>
 			</File>
 			<File
@@ -557,7 +557,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\quic.cpp"
+				RelativePath="..\..\common\quic.c"
 				>
 			</File>
 			<File
@@ -609,7 +609,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\region.cpp"
+				RelativePath="..\..\common\region.c"
 				>
 			</File>
 			<File
@@ -617,7 +617,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\rop3.cpp"
+				RelativePath="..\..\common\rop3.c"
 				>
 			</File>
 			<File
@@ -637,7 +637,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\sw_canvas.cpp"
+				RelativePath="..\..\common\sw_canvas.c"
 				>
 			</File>
 			<File
@@ -767,7 +767,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\marshaller.cpp"
+				RelativePath="..\..\common\marshaller.c"
 				>
 			</File>
 			<File
