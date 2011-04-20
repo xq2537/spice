@@ -497,7 +497,7 @@ echo "
 
         prefix:                   ${prefix}
         c compiler:               ${CC}
-        c++ compiler:	          ${CXX}
+        c++ compiler:             ${CXX}
 
         Have XRANDR 1.2:          ${have_xrandr12}
 
