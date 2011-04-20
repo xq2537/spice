@@ -677,7 +677,7 @@ static int main_channel_handle_parsed(RedChannel *channel, uint32_t size, uint16
         if (!main_chan) {
             return FALSE;
         }
-        reds_on_main_agent_start(main_chan);
+        reds_on_main_agent_start();
         break;
     case SPICE_MSGC_MAIN_AGENT_DATA: {
         reds_on_main_agent_data(message, size);
