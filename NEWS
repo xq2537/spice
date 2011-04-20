@@ -1,3 +1,12 @@
+Major changes in 0.8.1:
+=======================
+* client: Fix handling of --smartcard-db option
+* client: Add --version option
+* spicec-x11: Work around a bug in xsel
+* spicec-x11: Don't crash on apps sending bad atoms as TARGETS
+* server: Make copy paste support configurable
+* server: Various fixes to agent <-> client data handling
+
 Major changes in 0.8.0:
 =======================
 * client: exit nicely for --controller with no SPICE_XPI_SOCKET (rhbz#644292)
