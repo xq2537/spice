@@ -173,13 +173,13 @@ if test "x$enable_gui" = "xyes"; then
     [
         AC_SUBST(CEGUI06_CFLAGS)
         AC_SUBST(CEGUI06_LIBS)
-        CEGUI06_CFLAGS+="-DUSE_GUI"
+        AC_DEFINE([USE_GUI], [1], [Define to build with CEGUI support])
     ],
     [
         PKG_CHECK_MODULES(CEGUI, CEGUI >= 0.6.0 CEGUI < 0.7.0)
         AC_SUBST(CEGUI_CFLAGS)
         AC_SUBST(CEGUI_LIBS)
-        CEGUI_CFLAGS+="-DUSE_GUI"
+        AC_DEFINE([USE_GUI], [1], [Define to build with CEGUI support])
     ])
 fi
 
@@ -232,7 +232,8 @@ SPICE_REQUIRES+=" openssl"
 if test "x$enable_opengl" = "xyes"; then
    AC_CHECK_LIB(GL, glBlendFunc, GL_LIBS="$GL_LIBS -lGL", enable_opengl=no)
    AC_CHECK_LIB(GLU, gluSphere, GL_LIBS="$GL_LIBS -lGLU", enable_opengl=no)
-   GL_CFLAGS="-DGL_GLEXT_PROTOTYPES -DUSE_OGL"
+   AC_DEFINE([USE_OGL], [1], [Define to build with OpenGL support])
+   AC_DEFINE([GL_GLEXT_PROTOTYPES], [], [Enable GLExt prototypes])
 
    if test "x$enable_opengl" = "xno"; then
       AC_MSG_ERROR([GL libraries not available])
