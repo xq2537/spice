@@ -10,7 +10,7 @@ AC_CONFIG_MACRO_DIR([m4])
 AM_CONFIG_HEADER([config.h])
 AC_CONFIG_AUX_DIR(.)
 
-AM_INIT_AUTOMAKE([dist-bzip2])
+AM_INIT_AUTOMAKE([dist-bzip2 no-dist-gzip subdir-objects])
 AM_MAINTAINER_MODE
 
 # Define default SPICE_COMMON_SRCDIR
@@ -85,7 +85,6 @@ if test "$platform_win32" = yes; then
 else
   red_target=x11
 fi
-AC_SUBST(red_target)
 
 AM_CONDITIONAL(OS_WIN32, test "$os_win32" = "yes")
 AM_CONDITIONAL(OS_UNIX, test "$os_win32" != "yes")
@@ -507,10 +506,6 @@ python_modules/Makefile
 server/Makefile
 server/tests/Makefile
 client/Makefile
-client/x11/Makefile
-client/x11/images/Makefile
-client/gui/Makefile
-client/windows/Makefile
 ])
 
 dnl ==========================================================================

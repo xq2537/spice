@@ -1,35 +1,26 @@
 NULL =
 
-INCLUDES =                          \
-	-I..                            \
-	-I../../common                  \
+INCLUDES =                              \
+	-I$(top_srcdir)                 \
+	-I$(top_srcdir)/common          \
+	-I$(top_srcdir)/server          \
+	-I$(top_srcdir)/server/tests    \
 	$(PROTOCOL_CFLAGS)              \
 	$(SPICE_NONPKGCONFIG_CFLAGS)    \
 	$(NULL)
 
-AM_LDFLAGS = -L../.libs -lspice-server
+AM_LDFLAGS = $(top_builddir)/server/libspice-server.la
 
 noinst_PROGRAMS = test_just_sockets_no_ssl test_empty_success test_fail_on_null_core_interface test_display_no_ssl test_display_streaming test_playback
 
-test_display_streaming_SOURCES = test_display_streaming.c test_display_base.c basic_event_loop.c basic_event_loop.h test_util.h
+test_display_streaming_SOURCES = test_display_streaming.c test_display_base.c test_display_base.h basic_event_loop.c basic_event_loop.h test_util.h
 
-test_display_no_ssl_SOURCES = test_display_no_ssl.c test_display_base.c basic_event_loop.c basic_event_loop.h test_util.h
-
-test_display_no_ssl_LDFLAGS = $(AM_LDFLAGS) $(LDFLAGS)
+test_display_no_ssl_SOURCES = test_display_no_ssl.c test_display_base.c test_display_base.h basic_event_loop.c basic_event_loop.h test_util.h
 
 test_just_sockets_no_ssl_SOURCES = test_just_sockets_no_ssl.c basic_event_loop.c basic_event_loop.h test_util.h
 
-test_just_sockets_no_ssl_LDFLAGS = $(AM_LDFLAGS) $(LDFLAGS)
-
 test_empty_success_SOURCES = test_empty_success.c
-
-test_empty_success_LDFLAGS = $(AM_LDFLAGS) $(LDFLAGS)
 
 test_fail_on_null_core_interface_SOURCES = test_fail_on_null_core_interface.c
 
-test_fail_on_null_core_interface_LDFLAGS = $(AM_LDFLAGS) $(LDFLAGS)
-
 test_playback_SOURCES = test_playback.c basic_event_loop.c basic_event_loop.h test_util.h
-
-test_playback_LDFLAGS = $(AM_LDFLAGS) $(LDFLAGS)
-
