@@ -36,9 +36,9 @@
 #include "region.h"
 #include <spice/protocol.h>
 #include "red_worker.h"
-#include "sw_canvas.h"
+#include "reds_sw_canvas.h"
 #ifdef USE_OGL
-#include "gl_canvas.h"
+#include "reds_gl_canvas.h"
 #include "ogl_ctx.h"
 #endif /* USE_OGL */
 #include "quic.h"

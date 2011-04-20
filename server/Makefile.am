@@ -6,7 +6,6 @@ INCLUDES = \
 	-I$(top_srcdir)				\
 	-I$(top_srcdir)/common			\
 	-DRED_STATISTICS			\
-	-DSW_CANVAS_IMAGE_CACHE			\
 	$(Z_LIBS)				\
 	$(CELT051_CFLAGS)			\
 	$(PIXMAN_CFLAGS)			\
@@ -89,6 +88,8 @@ libspice_server_la_SOURCES =			\
 	red_worker.h				\
 	reds.c					\
 	reds.h					\
+	reds_sw_canvas.c			\
+	reds_sw_canvas.h			\
 	snd_worker.c				\
 	snd_worker.h				\
 	spice-experimental.h			\
@@ -102,6 +103,13 @@ if SUPPORT_TUNNEL
 libspice_server_la_SOURCES +=	\
 	red_tunnel_worker.c	\
 	red_tunnel_worker.h	\
+	$(NULL)
+endif
+
+if SUPPORT_GL
+libspice_server_la_SOURCES +=	\
+	reds_gl_canvas.c	\
+	reds_gl_canvas.h	\
 	$(NULL)
 endif
 

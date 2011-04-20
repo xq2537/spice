@@ -22,7 +22,7 @@
 #include "lz_common.h"
 #include "glz_decoder_config.h"
 #include "glz_decoder_window.h"
-#include "canvas_base.h"
+#include "red_canvas_base.h"
 
 class GlzDecodeHandler {
 public:

@@ -16,6 +16,10 @@
    License along with this library; if not, see <http://www.gnu.org/licenses/>.
 */
 
+#ifndef SPICE_CANVAS_INTERNAL
+#error "This file shouldn't be compiled directly"
+#endif
+
 #include <stdarg.h>
 #include <stdlib.h>
 #include <setjmp.h>

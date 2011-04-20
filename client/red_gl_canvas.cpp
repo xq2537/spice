@@ -24,6 +24,12 @@
 #include "red_pixmap_gl.h"
 #include <GL/glx.h>
 
+#define SPICE_CANVAS_INTERNAL
+#define SW_CANVAS_CACHE
+#include "gl_canvas.c"
+#undef SW_CANVAS_CACHE
+#undef SPICE_CANVAS_INTERNAL
+
 GCanvas::GCanvas(int width, int height, uint32_t format, RedWindow *win,
                  RenderType rendertype,
                  PixmapCache& pixmap_cache, PaletteCache& palette_cache,

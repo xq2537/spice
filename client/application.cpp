@@ -31,8 +31,10 @@
 #include "red_gdi_canvas.h"
 #endif
 #include "platform.h"
-#include "sw_canvas.h"
-#include "gl_canvas.h"
+#include "red_sw_canvas.h"
+#ifdef USE_OGL
+#include "red_gl_canvas.h"
+#endif
 #include "quic.h"
 #include "mutex.h"
 #include "cmd_line_parser.h"

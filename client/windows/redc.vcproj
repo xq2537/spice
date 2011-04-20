@@ -413,10 +413,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\common\gdi_canvas.c"
-				>
-			</File>
-			<File
 				RelativePath="..\generated_demarshallers.cpp"
 				>
 			</File>
@@ -634,10 +630,6 @@
 			</File>
 			<File
 				RelativePath="..\gui\softtexture.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\..\common\sw_canvas.c"
 				>
 			</File>
 			<File

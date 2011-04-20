@@ -20,7 +20,7 @@
 #define _H_JPEG_DECODER
 
 #include "common.h"
-#include "canvas_base.h"
+#include "red_canvas_base.h"
 
 #ifdef WIN32
 /* We need some hacks to avoid warnings from the jpeg headers */

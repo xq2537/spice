@@ -23,6 +23,12 @@
 #include "region.h"
 #include "red_pixmap_gdi.h"
 
+#define SPICE_CANVAS_INTERNAL
+#define SW_CANVAS_CACHE
+#include "gdi_canvas.c"
+#undef SW_CANVAS_CACHE
+#undef SPICE_CANVAS_INTERNAL
+
 GDICanvas::GDICanvas(int width, int height, uint32_t format,
 		     PixmapCache& pixmap_cache, PaletteCache& palette_cache,
                      GlzDecoderWindow &glz_decoder_window, CSurfaces &csurfaces)

@@ -1,6 +1,5 @@
-/* -*- Mode: C; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 /*
-   Copyright (C) 2010 Red Hat, Inc.
+   Copyright (C) 2011 Red Hat, Inc.
 
    This library is free software; you can redistribute it and/or
    modify it under the terms of the GNU Lesser General Public
@@ -15,29 +14,13 @@
    You should have received a copy of the GNU Lesser General Public
    License along with this library; if not, see <http://www.gnu.org/licenses/>.
 */
+#ifndef _H_RED_CANVAS_BASE
+#define _H_RED_CANVAS_BASE
 
-#ifndef _H_ZLIB_DECODER
-#define _H_ZLIB_DECODER
-
-#include "common.h"
-#include "red_canvas_base.h"
-
-#ifndef __GNUC__
-#define ZLIB_WINAPI
-#endif
-#include <zlib.h>
-
-
-class ZlibDecoder : public SpiceZlibDecoder {
-public:
-    ZlibDecoder();
-    ~ZlibDecoder();
-
-    void decode(uint8_t *data, int data_size, uint8_t *dest, int dest_size);
-
-private:
-    z_stream _z_strm;
-
-};
+#define SPICE_CANVAS_INTERNAL
+#define SW_CANVAS_CACHE
+#include "canvas_base.h"
+#undef SW_CANVAS_CACHE
+#undef SPICE_CANVAS_INTERNAL
 
 #endif

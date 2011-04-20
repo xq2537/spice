@@ -19,6 +19,10 @@
 #ifndef _H__CANVAS
 #define _H__CANVAS
 
+#ifndef SPICE_CANVAS_INTERNAL
+#error "This header shouldn't be included directly"
+#endif
+
 #include <stdint.h>
 
 #include "draw.h"

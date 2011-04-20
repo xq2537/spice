@@ -25,7 +25,6 @@
 #include "messages.h"
 #include "cache.hpp"
 #include "shared_cache.hpp"
-#include "canvas_base.h"
 #include "canvas_utils.h"
 #include "glz_decoded_image.h"
 #include "glz_decoder.h"

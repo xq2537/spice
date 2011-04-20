@@ -20,6 +20,10 @@
 #include "canvas_base.h"
 #include "region.h"
 
+#ifndef SPICE_CANVAS_INTERNAL
+#error "This header shouldn't be included directly"
+#endif
+
 #ifndef _H__GL_CANVAS
 #define _H__GL_CANVAS
 

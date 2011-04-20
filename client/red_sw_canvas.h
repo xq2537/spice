@@ -20,7 +20,11 @@
 #define _H_CCANVAS
 
 #include "canvas.h"
+#define SPICE_CANVAS_INTERNAL
+#define SW_CANVAS_CACHE
 #include "sw_canvas.h"
+#undef SW_CANVAS_CACHE
+#undef SPICE_CANVAS_INTERNAL
 
 class RedPixmap;
 

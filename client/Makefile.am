@@ -77,6 +77,7 @@ spicec_SOURCES =		\
 	process_loop.h		\
 	read_write_mutex.h	\
 	record_channel.cpp	\
+	red_canvas_base.h	\
 	red_channel.cpp		\
 	red_channel.h		\
 	red_client.cpp		\
@@ -208,7 +209,6 @@ endif
 
 
 INCLUDES = \
-	-DSW_CANVAS_CACHE				\
 	-D__STDC_LIMIT_MACROS				\
 	-I$(top_srcdir)/client/x11			\
 	-I$(top_srcdir)/common				\

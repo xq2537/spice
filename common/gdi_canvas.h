@@ -19,6 +19,10 @@
 #ifndef _H__GDI_CANVAS
 #define _H__GDI_CANVAS
 
+#ifndef SPICE_CANVAS_INTERNAL
+#error "This header shouldn't be included directly"
+#endif
+
 #include <stdint.h>
 
 #ifdef __cplusplus

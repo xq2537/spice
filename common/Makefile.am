@@ -6,7 +6,6 @@ NULL =
 
 noinst_LTLIBRARIES = libspice-common.la
 libspice_common_la_SOURCES =		\
-	canvas_base.h			\
 	canvas_utils.c			\
 	canvas_utils.h			\
 	draw.h				\
@@ -34,21 +33,10 @@ libspice_common_la_SOURCES =		\
 	rop3.c				\
 	rop3.h				\
 	spice_common.h			\
-	sw_canvas.c			\
-	sw_canvas.h			\
 	$(NULL)
-
-if OS_WIN32
-libspice_common_la_SOURCES +=		\
-	gdi_canvas.h			\
-	gdi_canvas.c			\
-	$(NULL)
-endif
 
 if SUPPORT_GL
 libspice_common_la_SOURCES +=		\
-	gl_canvas.h			\
-	gl_canvas.c			\
 	gl_utils.h			\
 	glc.h				\
 	glc.c				\
@@ -58,7 +46,6 @@ libspice_common_la_SOURCES +=		\
 endif
 
 INCLUDES = \
-	-DSW_CANVAS_IMAGE_CACHE		\
 	$(GL_CFLAGS)			\
 	$(PIXMAN_CFLAGS)		\
 	$(PROTOCOL_CFLAGS)		\
@@ -69,6 +56,13 @@ INCLUDES = \
 
 EXTRA_DIST =				\
 	canvas_base.c			\
+	canvas_base.h			\
+	gdi_canvas.c			\
+	gdi_canvas.h			\
+	gl_canvas.c			\
+	gl_canvas.h			\
+	sw_canvas.c			\
+	sw_canvas.h			\
 	lz_compress_tmpl.c		\
 	lz_decompress_tmpl.c		\
 	quic_family_tmpl.c		\

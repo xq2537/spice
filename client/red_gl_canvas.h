@@ -19,8 +19,13 @@
 #define _H_GCANVAS
 
 #include "canvas.h"
+#define SPICE_CANVAS_INTERNAL
+#define SW_CANVAS_CACHE
 #include "sw_canvas.h"
 #include "gl_canvas.h"
+#undef SW_CANVAS_CACHE
+#undef SPICE_CANVAS_INTERNAL
+
 #include "red_pixmap_gl.h"
 #include "red_window.h"
 

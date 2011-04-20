@@ -28,9 +28,9 @@
 #include "spice.h"
 #include "red_worker.h"
 #include "quic.h"
-#include "sw_canvas.h"
+#include "reds_sw_canvas.h"
 #ifdef USE_OGL
-#include "gl_canvas.h"
+#include "reds_gl_canvas.h"
 #endif // USE_OGL
 #include "reds.h"
 #include "red_dispatcher.h"
