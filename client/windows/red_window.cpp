@@ -814,7 +814,7 @@ void RedWindow::cleanup()
     UnhookWindowsHookEx(low_keyboard_hook);
 }
 
-#ifdef USE_OGL
+#ifdef USE_OPENGL
 
 void RedWindow::touch_context_draw()
 {

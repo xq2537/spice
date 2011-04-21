@@ -52,7 +52,7 @@ RedPixmapSw::RedPixmapSw(int width, int height, RedDrawable::Format format,
     bitmap_info.inf.bmiHeader.biWidth = _width;
     bitmap_info.inf.bmiHeader.biHeight = top_bottom ? -_height : _height;
 
-/*#ifdef USE_OGL
+/*#ifdef USE_OPENGL
     // -----------------------------------------------------------------------------
     // ensure valid access to additional stride.
     // apparently glReadPixels validate ((ptr of last line) + GL_PACK_ROW_LENGTH + 1).
@@ -98,7 +98,7 @@ RedPixmapSw::RedPixmapSw(int width, int height, RedDrawable::Format format,
     if (!bitmap.valid()) {
         THROW("create compatible bitmap failed");
     }
-/*#ifdef USE_OGL
+/*#ifdef USE_OPENGL
     SetWindowOrgEx(dc.get(), 0, -1, NULL); // compensate for one pad line
 #endif*/
     ((RedPixmap_p*)get_opaque())->prev_bitmap = (HBITMAP)SelectObject(dc.get(), bitmap.release());

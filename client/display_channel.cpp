@@ -22,7 +22,7 @@
 #include "common.h"
 #include "canvas.h"
 #include "red_pixmap.h"
-#ifdef USE_OGL
+#ifdef USE_OPENGL
 #include "red_pixmap_gl.h"
 #endif
 #include "debug.h"
@@ -31,7 +31,7 @@
 #include "display_channel.h"
 #include "application.h"
 #include "screen.h"
-#ifdef USE_OGL
+#ifdef USE_OPENGL
 #include "red_gl_canvas.h"
 #endif
 #include "red_sw_canvas.h"
@@ -485,7 +485,7 @@ void StreamsTrigger::on_event()
     _channel.on_streams_trigger();
 }
 
-#ifdef USE_OGL
+#ifdef USE_OPENGL
 
 GLInterruptRecreate::GLInterruptRecreate(DisplayChannel& channel)
     : _channel (channel)
@@ -604,7 +604,7 @@ DisplayChannel::DisplayChannel(RedClient& client, uint32_t id,
     , _inputs_channel (NULL)
     , _active_streams (NULL)
     , _streams_trigger (*this)
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     , _gl_interrupt_recreate (*this)
 #endif
     , _interrupt_update (*this)
@@ -641,7 +641,7 @@ DisplayChannel::DisplayChannel(RedClient& client, uint32_t id,
     handler->set_handler(SPICE_MSG_DISPLAY_SURFACE_DESTROY, &DisplayChannel::handle_surface_destroy);
 
     get_process_loop().add_trigger(_streams_trigger);
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     get_process_loop().add_trigger(_gl_interrupt_recreate);
 #endif
     get_process_loop().add_trigger(_interrupt_update);
@@ -725,7 +725,7 @@ void DisplayChannel::copy_pixels(const QRegion& dest_region,
     canvas->copy_pixels(dest_region, NULL, &dest_pixmap);
 }
 
-#ifdef USE_OGL
+#ifdef USE_OPENGL
 void DisplayChannel::recreate_ogl_context_interrupt()
 {
     Canvas* canvas;
@@ -883,7 +883,7 @@ void DisplayChannel::set_capture_mode(bool on)
 
 void DisplayChannel::update_interrupt()
 {
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     Canvas *canvas;
 #endif
 
@@ -891,7 +891,7 @@ void DisplayChannel::update_interrupt()
         return;
     }
 
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     canvas = surfaces_mngr.get_canvas(0);
     if (canvas->get_pixmap_type() == CANVAS_TYPE_GL) {
         ((GCanvas *)(canvas))->pre_gl_copy();
@@ -900,14 +900,14 @@ void DisplayChannel::update_interrupt()
 
     screen()->update();
 
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     if (canvas->get_pixmap_type() == CANVAS_TYPE_GL) {
         ((GCanvas *)(canvas))->post_gl_copy();
     }
 #endif
 }
 
-#ifdef USE_OGL
+#ifdef USE_OPENGL
 
 void DisplayChannel::pre_migrate()
 {
@@ -915,7 +915,7 @@ void DisplayChannel::pre_migrate()
 
 void DisplayChannel::post_migrate()
 {
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     if (surfaces_mngr.get_canvas(0)->get_pixmap_type() == CANVAS_TYPE_GL) {
         _gl_interrupt_recreate.trigger();
     }
@@ -1083,7 +1083,7 @@ bool DisplayChannel::create_sw_canvas(int surface_id, int width, int height, uin
     return true;
 }
 
-#ifdef USE_OGL
+#ifdef USE_OPENGL
 bool DisplayChannel::create_ogl_canvas(int surface_id, int width, int height, uint32_t format,
                                        bool recreate, RenderType rendertype)
 {
@@ -1143,7 +1143,7 @@ void DisplayChannel::destroy_canvas(int surface_id)
 
     canvas = surfaces_mngr.get_canvas(surface_id);
 
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     if (canvas->get_pixmap_type() == CANVAS_TYPE_GL) {
         ((GCanvas *)(canvas))->touch_context();
     }
@@ -1158,12 +1158,12 @@ void DisplayChannel::destroy_canvas(int surface_id)
 void DisplayChannel::create_canvas(int surface_id, const std::vector<int>& canvas_types, int width,
                                    int height, uint32_t format)
 {
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     bool recreate = true;
 #endif
     unsigned int i;
 
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     if (screen()->need_recreate_context_gl()) {
         recreate = false;
     }
@@ -1176,7 +1176,7 @@ void DisplayChannel::create_canvas(int surface_id, const std::vector<int>& canva
         if (canvas_types[i] == CANVAS_OPTION_SW && create_sw_canvas(surface_id, width, height, format)) {
             break;
         }
-#ifdef USE_OGL
+#ifdef USE_OPENGL
         if (canvas_types[i] == CANVAS_OPTION_OGL_FBO && create_ogl_canvas(surface_id, width, height, format,
                                                                           recreate,
                                                                           RENDER_TYPE_FBO)) {
@@ -1408,7 +1408,7 @@ void DisplayChannel::handle_stream_destroy_all(RedPeer::InMessage* message)
 
 void DisplayChannel::create_primary_surface(int width, int height, uint32_t format)
 {
-#ifdef USE_OGL
+#ifdef USE_OPENGL
    Canvas *canvas;
 #endif
    _mark = false;
@@ -1427,7 +1427,7 @@ void DisplayChannel::create_primary_surface(int width, int height, uint32_t form
     _y_res = height;
     _format = format;
 
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     canvas = surfaces_mngr.get_canvas(0);
 
     if (canvas->get_pixmap_type() == CANVAS_TYPE_GL) {
@@ -1448,7 +1448,7 @@ void DisplayChannel::create_surface(int surface_id, int width, int height, uint3
         THROW("Create surface failed");
     }
 
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     Canvas *canvas;
 
     canvas = surfaces_mngr.get_canvas(surface_id);
@@ -1462,7 +1462,7 @@ void DisplayChannel::create_surface(int surface_id, int width, int height, uint3
 void DisplayChannel::destroy_primary_surface()
 {
     if (screen()) {
-#ifdef USE_OGL
+#ifdef USE_OPENGL
         if (surfaces_mngr.is_present_canvas(0)) {
             Canvas *canvas;
 

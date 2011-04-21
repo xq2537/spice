@@ -26,7 +26,7 @@
 #include "cache.hpp"
 #include "screen_layer.h"
 #include "process_loop.h"
-#ifdef USE_OGL
+#ifdef USE_OPENGL
 #include "red_pixmap_gl.h"
 #endif
 #include "glz_decoder_window.h"
@@ -48,7 +48,7 @@ private:
     DisplayChannel& _channel;
 };
 
-#ifdef USE_OGL
+#ifdef USE_OPENGL
 class GLInterruptRecreate: public EventSources::Trigger {
 public:
     GLInterruptRecreate(DisplayChannel& channel);
@@ -103,7 +103,7 @@ public:
 
     virtual void copy_pixels(const QRegion& dest_region, RedDrawable& dest_dc);
     virtual void copy_pixels(const QRegion& dest_region, const PixmapHeader &dest);
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     virtual void recreate_ogl_context();
     virtual void recreate_ogl_context_interrupt();
     virtual void pre_migrate();
@@ -134,7 +134,7 @@ private:
     void set_draw_handlers();
     void clear_draw_handlers();
     bool create_sw_canvas(int surface_id, int width, int height, uint32_t format);
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     bool create_ogl_canvas(int surface_id, int width, int height, uint32_t format, bool recreate,
                            RenderType rendertype);
 #endif
@@ -200,7 +200,7 @@ private:
     int _x_res;
     int _y_res;
     uint32_t _format;
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     RenderType _rendertype;
 #endif
 
@@ -226,7 +226,7 @@ private:
     std::vector<VideoStream*> _streams;
     VideoStream* _active_streams;
     StreamsTrigger _streams_trigger;
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     GLInterruptRecreate _gl_interrupt_recreate;
 #endif
     InterruptUpdate _interrupt_update;

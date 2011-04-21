@@ -892,7 +892,7 @@ int RedScreen::get_screen_id()
     return _monitor ? _monitor->get_screen_id() : 0;
 }
 
-#ifdef USE_OGL
+#ifdef USE_OPENGL
 void RedScreen::untouch_context()
 {
     _window.untouch_context();
@@ -923,7 +923,7 @@ void RedScreen::interrupt_update()
     _update_interrupt_trigger->trigger();
 }
 
-#ifdef USE_OGL
+#ifdef USE_OPENGL
 void RedScreen::set_type_gl()
 {
     _window.set_type_gl();
@@ -933,5 +933,5 @@ void RedScreen::unset_type_gl()
 {
     _window.unset_type_gl();
 }
-#endif // USE_OGL
+#endif // USE_OPENGL
 

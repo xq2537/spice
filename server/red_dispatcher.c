@@ -32,9 +32,9 @@
 #include "red_worker.h"
 #include "quic.h"
 #include "reds_sw_canvas.h"
-#ifdef USE_OGL
+#ifdef USE_OPENGL
 #include "reds_gl_canvas.h"
-#endif // USE_OGL
+#endif // USE_OPENGL
 #include "reds.h"
 #include "red_dispatcher.h"
 #include "red_parse_qxl.h"
@@ -140,7 +140,7 @@ typedef struct RendererInfo {
 
 static RendererInfo renderers_info[] = {
     {RED_RENDERER_SW, "sw"},
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     {RED_RENDERER_OGL_PBUF, "oglpbuf"},
     {RED_RENDERER_OGL_PIXMAP, "oglpixmap"},
 #endif
@@ -496,9 +496,9 @@ RedDispatcher *red_dispatcher_init(QXLInstance *qxl)
 
     quic_init();
     sw_canvas_init();
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     gl_canvas_init();
-#endif // USE_OGL
+#endif // USE_OPENGL
 
     if (socketpair(AF_LOCAL, SOCK_STREAM, 0, channels) == -1) {
         red_error("socketpair failed %s", strerror(errno));

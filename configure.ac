@@ -232,7 +232,7 @@ SPICE_REQUIRES+=" openssl"
 if test "x$enable_opengl" = "xyes"; then
    AC_CHECK_LIB(GL, glBlendFunc, GL_LIBS="$GL_LIBS -lGL", enable_opengl=no)
    AC_CHECK_LIB(GLU, gluSphere, GL_LIBS="$GL_LIBS -lGLU", enable_opengl=no)
-   AC_DEFINE([USE_OGL], [1], [Define to build with OpenGL support])
+   AC_DEFINE([USE_OPENGL], [1], [Define to build with OpenGL support])
    AC_DEFINE([GL_GLEXT_PROTOTYPES], [], [Enable GLExt prototypes])
 
    if test "x$enable_opengl" = "xno"; then

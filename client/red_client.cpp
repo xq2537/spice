@@ -811,7 +811,7 @@ void RedClient::calc_pixmap_cach_and_glz_window_size(uint32_t display_channels_h
 
 void RedClient::on_display_mode_change()
 {
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     Lock lock(_channels_lock);
     Channels::iterator iter = _channels.begin();
     for (; iter != _channels.end(); ++iter) {

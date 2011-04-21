@@ -40,10 +40,10 @@
 #include <spice/protocol.h>
 #include "red_worker.h"
 #include "reds_sw_canvas.h"
-#ifdef USE_OGL
+#ifdef USE_OPENGL
 #include "reds_gl_canvas.h"
 #include "ogl_ctx.h"
-#endif /* USE_OGL */
+#endif /* USE_OPENGL */
 #include "quic.h"
 #include "lz.h"
 #include "glz_encoder_dictionary.h"
@@ -8305,7 +8305,7 @@ static void red_migrate_display(RedWorker *worker)
     }
 }
 
-#ifdef USE_OGL
+#ifdef USE_OPENGL
 static SpiceCanvas *create_ogl_context_common(RedWorker *worker, OGLCtx *ctx, uint32_t width,
                                               uint32_t height, int32_t stride, uint8_t depth)
 {
@@ -8375,7 +8375,7 @@ static inline void *create_canvas_for_surface(RedWorker *worker, RedSurface *sur
         surface->context.top_down = TRUE;
         surface->context.canvas_draws_on_surface = TRUE;
         return canvas;
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     case RED_RENDERER_OGL_PBUF:
         canvas = create_ogl_pbuf_context(worker, width, height, stride,
                                          SPICE_SURFACE_FMT_DEPTH(format));

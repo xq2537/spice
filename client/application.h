@@ -112,7 +112,7 @@ enum CanvasOption {
 #ifdef WIN32
     CANVAS_OPTION_GDI,
 #endif
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     CANVAS_OPTION_OGL_FBO,
     CANVAS_OPTION_OGL_PBUFF,
 #endif

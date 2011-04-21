@@ -21,9 +21,9 @@
 #include "common.h"
 #include "region.h"
 #include "red_key.h"
-#ifdef USE_OGL
+#ifdef USE_OPENGL
 #include "GL/gl.h"
-#endif // USE_OGL
+#endif // USE_OPENGL
 
 #include "red_window.h"
 #include "platform.h"
@@ -95,7 +95,7 @@ public:
     int get_id() { return _id;}
     int get_screen_id();
 
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     void untouch_context();
     bool need_recreate_context_gl();
     void set_type_gl();

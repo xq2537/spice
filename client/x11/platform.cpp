@@ -78,9 +78,9 @@ static Display* x_display = NULL;
 static bool x_shm_avail = false;
 static XVisualInfo **vinfo = NULL;
 static RedDrawable::Format *screen_format = NULL;
-#ifdef USE_OGL
+#ifdef USE_OPENGL
 static GLXFBConfig **fb_config = NULL;
-#endif // USE_OGL
+#endif // USE_OPENGL
 static XIM x_input_method = NULL;
 static XIC x_input_context = NULL;
 
@@ -510,12 +510,12 @@ RedDrawable::Format XPlatform::get_screen_format(int screen)
     return screen_format[screen];
 }
 
-#ifdef USE_OGL
+#ifdef USE_OPENGL
 GLXFBConfig** XPlatform::get_fbconfig()
 {
     return fb_config;
 }
-#endif // USE_OGL
+#endif // USE_OPENGL
 
 XIC XPlatform::get_input_context()
 {
@@ -2884,7 +2884,7 @@ static void cleanup(void)
         delete vinfo;
         vinfo = NULL;
     }
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     if (fb_config) {
         for (i = 0; i < ScreenCount(x_display); ++i) {
             if (fb_config[i]) {
@@ -2894,7 +2894,7 @@ static void cleanup(void)
         delete fb_config;
         fb_config = NULL;
     }
-#endif // USE_OGL
+#endif // USE_OPENGL
 }
 
 static void quit_handler(int sig)
@@ -3057,10 +3057,10 @@ static XVisualInfo* get_x_vis_info(int screen)
 
 void Platform::init()
 {
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     int err, ev;
     int threads_enable;
-#endif // USE_OGL
+#endif // USE_OPENGL
     int major, minor;
     Bool pixmaps;
 
@@ -3068,7 +3068,7 @@ void Platform::init()
 
     setlocale(LC_ALL, "");
 
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     threads_enable = XInitThreads();
 #else
     XInitThreads();
@@ -3087,7 +3087,7 @@ void Platform::init()
     memset(vinfo, 0, sizeof(XVisualInfo *) * ScreenCount(x_display));
     screen_format = new RedDrawable::Format[ScreenCount(x_display)];
     memset(screen_format, 0, sizeof(RedDrawable::Format) * ScreenCount(x_display));
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     fb_config = new GLXFBConfig *[ScreenCount(x_display)];
     memset(fb_config, 0, sizeof(GLXFBConfig *) * ScreenCount(x_display));
 
@@ -3122,13 +3122,13 @@ void Platform::init()
             }
         }
     } else
-#else // !USE_OGL
+#else // !USE_OPENGL
     {
         for (int i = 0; i < ScreenCount(x_display); ++i) {
             vinfo[i] = get_x_vis_info(i);
         }
     }
-#endif // USE_OGL
+#endif // USE_OPENGL
 
     for (int i = 0; i < ScreenCount(x_display); ++i) {
         if (vinfo[i] == NULL) {

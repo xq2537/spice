@@ -65,7 +65,7 @@
 #else
 #include <unistd.h>
 #include <X11/X.h>
-#ifdef USE_OGL
+#ifdef USE_OPENGL
 #include <GL/glx.h>
 #endif
 #endif

@@ -35,7 +35,7 @@
 #endif
 #include "platform.h"
 #include "red_sw_canvas.h"
-#ifdef USE_OGL
+#ifdef USE_OPENGL
 #include "red_gl_canvas.h"
 #endif
 #include "quic.h"
@@ -2051,7 +2051,7 @@ bool Application::set_canvas_option(CmdLineParser& parser, char *val, const char
 #ifdef WIN32
     canvas_types["gdi"] = CANVAS_OPTION_GDI;
 #endif
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     canvas_types["gl_fbo"] = CANVAS_OPTION_OGL_FBO;
     canvas_types["gl_pbuff"] = CANVAS_OPTION_OGL_PBUFF;
 #endif
@@ -2548,7 +2548,7 @@ void Application::init_globals()
     SSL_load_error_strings();
 
     sw_canvas_init();
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     gl_canvas_init();
 #endif
     quic_init();

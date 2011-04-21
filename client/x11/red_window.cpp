@@ -25,12 +25,12 @@
 #include <X11/Xatom.h>
 #include <X11/XKBlib.h>
 
-#ifdef USE_OGL
+#ifdef USE_OPENGL
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include <GL/glx.h>
 #include <GL/glext.h>
-#endif // USE_OGL
+#endif // USE_OPENGL
 #include <stdio.h>
 
 #include "red_window.h"
@@ -41,10 +41,10 @@
 #include "pixels_source_p.h"
 #include <spice/protocol.h>
 #include "region.h"
-#ifdef USE_OGL
+#ifdef USE_OPENGL
 #include "gl_utils.h"
 #include "red_pixmap_gl.h"
-#endif // USE_OGL
+#endif // USE_OPENGL
 #include "x_icon.h"
 
 
@@ -1066,7 +1066,7 @@ void RedWindow_p::wait_for_unmap()
     }
 }
 
-#ifdef USE_OGL
+#ifdef USE_OPENGL
 void RedWindow_p::set_glx(int width, int height)
 {
     if (_glcont_copy) {
@@ -1086,7 +1086,7 @@ void RedWindow_p::set_glx(int width, int height)
         GLC_ERROR_TEST_FINISH;
     }
 }
-#endif // USE_OGL
+#endif // USE_OPENGL
 
 void RedWindow_p::set_minmax(PixelsSource_p& pix_source)
 {
@@ -1127,9 +1127,9 @@ Cursor RedWindow_p::create_invisible_cursor(Window window)
 RedWindow_p::RedWindow_p()
     : _win (None)
     , _show_pos_valid (false)
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     , _glcont_copy (NULL)
-#endif // USE_OGL
+#endif // USE_OPENGL
     , _icon (NULL)
     , _focused (false)
     , _ignore_foucs (false)
@@ -1167,12 +1167,12 @@ void RedWindow_p::destroy(RedWindow& red_window, PixelsSource_p& pix_source)
     XFreeCursor(x_display, _invisible_cursor);
     _invisible_cursor = None;
     XDeleteContext(x_display, window, user_data_context);
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     if (_glcont_copy) {
         glXDestroyContext(x_display, _glcont_copy);
         _glcont_copy = NULL;
     }
-#endif // USE_OGL
+#endif // USE_OPENGL
     XDestroyWindow(x_display, window);
     XFreeColormap(x_display, _colormap);
     XFreeGC(x_display, pix_source.x_drawable.gc);
@@ -2075,7 +2075,7 @@ bool RedWindow::get_mouse_anchor_point(SpicePoint& pt)
     return true;
 }
 
-#ifdef USE_OGL
+#ifdef USE_OPENGL
 RedGlContext RedWindow::create_context_gl()
 {
     if (XPlatform::get_fbconfig()[_screen]) {
@@ -2148,7 +2148,7 @@ void RedWindow::set_render_fbo(GLuint fbo)
     pix_source->x_drawable.rendertype = RENDER_TYPE_FBO;
     pix_source->x_drawable.fbo = fbo;
 }
-#endif // USE_OGL
+#endif // USE_OPENGL
 
 int RedWindow::get_screen_num()
 {

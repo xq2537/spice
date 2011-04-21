@@ -29,9 +29,9 @@ public:
     static XVisualInfo** get_vinfo();
     static RedDrawable::Format get_screen_format(int screen);
     static XIC get_input_context();
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     static GLXFBConfig** get_fbconfig();
-#endif // USE_OGL
+#endif // USE_OPENGL
 
     typedef void (*win_proc_t)(XEvent& event);
     static void set_win_proc(Window win, win_proc_t proc);

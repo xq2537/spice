@@ -72,7 +72,7 @@ public:
     void stop_key_interception();
     void set_menu(Menu* menu);
 
-#ifdef USE_OGL
+#ifdef USE_OPENGL
     void untouch_context();
     RedGlContext create_context_gl();
     RedPbuffer create_pbuff(int width, int height);
