@@ -142,6 +142,10 @@ writer.set_option("source", os.path.basename(proto_file))
 
 writer.public_prefix = options.prefix
 
+writer.writeln("#ifdef HAVE_CONFIG_H")
+writer.writeln("#include <config.h>")
+writer.writeln("#endif")
+
 if options.assert_on_error:
     writer.set_option("assert_on_error")
 
