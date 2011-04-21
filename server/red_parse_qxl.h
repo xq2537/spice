@@ -24,6 +24,7 @@
 #include "red_memslots.h"
 
 typedef struct RedDrawable {
+    int refs;
     QXLReleaseInfo *release_info;
     uint32_t surface_id;
     uint8_t effect;

@@ -1655,7 +1655,14 @@ static inline void set_surface_release_info(RedWorker *worker, uint32_t surface_
     }
 }
 
-static inline void free_red_drawable(RedWorker *worker, RedDrawable *drawable, uint32_t group_id,
+static RedDrawable *ref_red_drawable(RedDrawable *drawable)
+{
+    drawable->refs++;
+    return drawable;
+}
+
+
+static inline void put_red_drawable(RedWorker *worker, RedDrawable *drawable, uint32_t group_id,
                                      SpiceImage *self_bitmap)
 {
     QXLReleaseInfoExt release_info_ext;
@@ -1663,6 +1670,10 @@ static inline void free_red_drawable(RedWorker *worker, RedDrawable *drawable, u
     if (self_bitmap) {
         red_put_image(self_bitmap);
     }
+    if (--drawable->refs) {
+        return;
+    }
+
     release_info_ext.group_id = group_id;
     release_info_ext.info = drawable->release_info;
     worker->qxl->st->qif->release_resource(worker->qxl, release_info_ext);
@@ -1707,7 +1718,6 @@ static void remove_drawable_dependencies(RedWorker *worker, Drawable *drawable)
 
 static inline void release_drawable(RedWorker *worker, Drawable *drawable)
 {
-    int glz_count = 0;
     RingItem *item, *next;
 
     if (!--drawable->refs) {
@@ -1723,12 +1733,9 @@ static inline void release_drawable(RedWorker *worker, Drawable *drawable)
         RING_FOREACH_SAFE(item, next, &drawable->glz_ring) {
             SPICE_CONTAINEROF(item, RedGlzDrawable, drawable_link)->drawable = NULL;
             ring_remove(item);
-            glz_count++;
         }
-        if (!glz_count) { // no reference to the qxl drawable left
-            free_red_drawable(worker, drawable->red_drawable,
-                              drawable->group_id, drawable->self_bitmap);
-        }
+        put_red_drawable(worker, drawable->red_drawable,
+                          drawable->group_id, drawable->self_bitmap);
         free_drawable(worker, drawable);
     }
 }
@@ -3638,7 +3645,7 @@ static Drawable *get_drawable(RedWorker *worker, uint8_t effect, RedDrawable *re
     drawable->tree_item.base.type = TREE_ITEM_TYPE_DRAWABLE;
     region_init(&drawable->tree_item.base.rgn);
     drawable->tree_item.effect = effect;
-    drawable->red_drawable = red_drawable;
+    drawable->red_drawable = ref_red_drawable(red_drawable);
     drawable->group_id = group_id;
 
     drawable->surface_id = red_drawable->surface_id;
@@ -4661,6 +4668,14 @@ static int red_process_cursor(RedWorker *worker, uint32_t max_pipe_size, int *ri
     return n;
 }
 
+static RedDrawable *red_drawable_new(void)
+{
+    RedDrawable * red = spice_new0(RedDrawable, 1);
+
+    red->refs = 1;
+    return red;
+}
+
 static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *ring_is_empty)
 {
     QXLCommandExt ext_cmd;
@@ -4693,11 +4708,13 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
         worker->repoll_cmd_ring = 0;
         switch (ext_cmd.cmd.type) {
         case QXL_CMD_DRAW: {
-            RedDrawable *drawable = spice_new0(RedDrawable, 1);
+            RedDrawable *drawable = red_drawable_new(); // returns with 1 ref
 
             red_get_drawable(&worker->mem_slots, ext_cmd.group_id,
                              drawable, ext_cmd.cmd.data, ext_cmd.flags);
             red_process_drawable(worker, drawable, ext_cmd.group_id);
+            // release the red_drawable
+            put_red_drawable(worker, drawable, ext_cmd.group_id, NULL);
             break;
         }
         case QXL_CMD_UPDATE: {
@@ -5037,7 +5054,7 @@ static RedGlzDrawable *red_display_get_glz_drawable(DisplayChannelClient *dcc, D
     ret = spice_new(RedGlzDrawable, 1);
 
     ret->dcc = dcc;
-    ret->red_drawable = drawable->red_drawable;
+    ret->red_drawable = ref_red_drawable(drawable->red_drawable);
     ret->drawable = drawable;
     ret->group_id = drawable->group_id;
     ret->self_bitmap = drawable->self_bitmap;
@@ -5105,10 +5122,9 @@ static void red_display_free_glz_drawable_instance(DisplayChannelClient *dcc,
 
         if (drawable) {
             ring_remove(&glz_drawable->drawable_link);
-        } else { // no reference to the qxl drawable left
-            free_red_drawable(worker, glz_drawable->red_drawable,
-                              glz_drawable->group_id, glz_drawable->self_bitmap);
         }
+        put_red_drawable(worker, glz_drawable->red_drawable,
+                          glz_drawable->group_id, glz_drawable->self_bitmap);
 
         if (ring_item_is_linked(&glz_drawable->link)) {
             ring_remove(&glz_drawable->link);
