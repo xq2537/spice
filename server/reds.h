@@ -18,8 +18,6 @@
 #ifndef _H_REDS
 #define _H_REDS
 
-#include "config.h"
-
 #include <stdint.h>
 #include <openssl/ssl.h>
 #include <sys/uio.h>

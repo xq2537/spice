@@ -19,6 +19,10 @@
 // Red Hat image compression based on SFALIC by Roman Starosolski
 // http://sun.iinf.polsl.gliwice.pl/~rstaros/sfalic/index.html
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include "quic.h"
 #include <spice/macros.h>
 

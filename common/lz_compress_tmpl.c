@@ -40,6 +40,9 @@
    SOFTWARE.
 
 */
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
 #define DJB2_START 5381;
 #define DJB2_HASH(hash, c) (hash = ((hash << 5) + hash) ^ (c)) //|{hash = ((hash << 5) + hash) + c;}

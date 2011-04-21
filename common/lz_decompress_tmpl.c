@@ -59,6 +59,10 @@
     COPY_COMP_PIXEL(encoder, out) - copies pixel from the compressed buffer to the decompressed
                                     buffer. Increases out.
 */
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #if !defined(LZ_RGB_ALPHA)
 #define COPY_PIXEL(p, out) (*out++ = p)
 #define COPY_REF_PIXEL(ref, out) (*out++ = *ref++)

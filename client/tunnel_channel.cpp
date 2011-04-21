@@ -18,6 +18,9 @@
     Author:
         yhalperi@redhat.com
 */
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
 #include "common.h"
 #include "tunnel_channel.h"

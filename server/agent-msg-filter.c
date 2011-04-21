@@ -17,6 +17,9 @@
    Red Hat Authors:
         hdegoede@redhat.com
 */
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
 #include <string.h>
 #include "red_common.h"
