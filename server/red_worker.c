@@ -2794,6 +2794,7 @@ static void red_display_client_init_streams(DisplayChannelClient *dcc)
 static void red_display_destroy_streams(DisplayChannelClient *dcc)
 {
     int i;
+
     for (i = 0; i < NUM_STREAMS; i++) {
         StreamAgent *agent = &dcc->stream_agents[i];
         region_destroy(&agent->vis_region);
@@ -6993,13 +6994,11 @@ static void red_lossy_marshall_qxl_draw_copy(RedWorker *worker,
                                    &drawable->u.copy.src_area, item, &src_bitmap_data);
 
     src_send_type = red_marshall_qxl_draw_copy(worker, rcc, base_marshaller, dpi, TRUE);
-
     if (src_send_type == FILL_BITS_TYPE_COMPRESS_LOSSY) {
         src_is_lossy = TRUE;
     } else if (src_send_type == FILL_BITS_TYPE_COMPRESS_LOSSLESS) {
         src_is_lossy = FALSE;
     }
-
     surface_lossy_region_update(worker, dcc, item, has_mask,
                                 src_is_lossy);
 }
