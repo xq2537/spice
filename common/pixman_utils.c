@@ -28,13 +28,6 @@
 #include <stdio.h>
 #include "mem.h"
 
-#ifndef PANIC
-#define PANIC(str) {                                \
-    printf("%s: panic: %s", __FUNCTION__, str);     \
-    abort();                                        \
-}
-#endif
-
 #define SOLID_RASTER_OP(_name, _size, _type, _equation)  \
 static void                                        \
 solid_rop_ ## _name ## _ ## _size (_type *ptr, int len, _type src)  \

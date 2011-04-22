@@ -54,13 +54,6 @@
 #define WARN(x) printf("warning: %s\n", x)
 #endif
 
-#ifndef PANIC
-#define PANIC(str) {                                \
-    printf("%s: panic: %s", __FUNCTION__, str);     \
-    abort();                                        \
-}
-#endif
-
 #ifndef DBG
 #define DBG(level, format, ...) printf("%s: debug: " format "\n", __FUNCTION__, ## __VA_ARGS__);
 #endif

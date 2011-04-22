@@ -26,12 +26,6 @@
 
 #include "ogl_ctx.h"
 
-
-#define PANIC(str) {                                \
-    printf("%s: panic: %s", __FUNCTION__, str);     \
-    abort();                                        \
-}
-
 enum {
     OGLCTX_TYPE_PBUF,
     OGLCTX_TYPE_PIXMAP,
