@@ -28,40 +28,40 @@
     abort();                                                \
 }
 
-#define PANIC(format, ...) {                              \
+#define PANIC(format, ...) do {                                         \
     printf("%s: panic: " format "\n", __FUNCTION__, ## __VA_ARGS__ );   \
-    abort();                                        \
-}
+    abort();                                                            \
+} while (0)
 
-#define PANIC_ON(x) if ((x)) {                             \
+#define PANIC_ON(x) if ((x)) {                              \
     printf("%s: panic %s\n", __FUNCTION__, #x);             \
     abort();                                                \
 }
 
-#define red_error(format, ...) {                                 \
+#define red_error(format, ...) do {                              \
     printf("%s: " format "\n", __FUNCTION__, ## __VA_ARGS__ );   \
     abort();                                                     \
-}
-
+} while (0)
 #define red_printf(format, ...) \
     printf("%s: " format "\n", __FUNCTION__, ## __VA_ARGS__ )
 
-#define red_printf_once(format, ...) {                              \
+#define red_printf_once(format, ...) do {                           \
     static int do_print = TRUE;                                     \
     if (do_print) {                                                 \
         do_print = FALSE;                                           \
         printf("%s: " format "\n", __FUNCTION__, ## __VA_ARGS__ );  \
     }                                                               \
-}
+} while (0)
+
 #define WARN(format, ...) red_printf("warning: "format"\n", ##__VA_ARGS__ );
 #define WARN_ONCE red_printf_once
 
-#define red_printf_some(every, format, ...) {                       \
+#define red_printf_some(every, format, ...) do {                    \
     static int count = 0;                                           \
     if (count++ % (every) == 0) {                                   \
         printf("%s: " format "\n", __FUNCTION__, ## __VA_ARGS__ );  \
     }                                                               \
-}
+} while (0)
 
 static inline uint64_t get_time_stamp(void)
 {
