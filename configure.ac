@@ -13,9 +13,7 @@ AC_CONFIG_AUX_DIR(.)
 AM_INIT_AUTOMAKE([dist-bzip2 no-dist-gzip subdir-objects])
 AM_MAINTAINER_MODE
 
-AS_IF([test "$CFLAGS" = ""], [], [_cflags_is_set=yes])
 AC_PROG_CC
-AS_IF([test "$CXXFLAGS" = ""], [], [_cxxflags_is_set=yes])
 AC_PROG_CXX
 AC_PROG_INSTALL
 AC_CANONICAL_HOST
@@ -276,16 +274,6 @@ AC_ARG_ENABLE(static-linkage,
 [enable_static_linkage="no"])
 AS_IF([test x"$enable_static_linkage" != "xno"],
 [SPICEC_STATIC_LINKAGE_BSTATIC=["-Wl,-Bstatic"]])
-
-
-AS_IF([test "$_cflags_is_set" = "yes"], [], [
-    CFLAGS="-g -O2"
-])
-
-
-AS_IF([test "$_cxxflags_is_set" = "yes"], [], [
-    CXXFLAGS="-g -O2"
-])
 
 AC_CHECK_LIB(jpeg, jpeg_destroy_decompress,
     AC_MSG_CHECKING([for jpeglib.h])
