@@ -25,6 +25,7 @@
 #include <GL/glx.h>
 
 #include "ogl_ctx.h"
+#include "spice_common.h"
 
 enum {
     OGLCTX_TYPE_PBUF,

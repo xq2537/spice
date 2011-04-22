@@ -24,10 +24,6 @@
 #include "rop3.h"
 #include "spice_common.h"
 
-#ifndef WARN
-#define WARN(x) printf("warning: %s\n", x)
-#endif
-
 typedef void (*rop3_with_pattern_handler_t)(pixman_image_t *d, pixman_image_t *s,
                                             SpicePoint *src_pos, pixman_image_t *p,
                                             SpicePoint *pat_pos);
@@ -51,13 +47,13 @@ static void default_rop3_with_pattern_handler(pixman_image_t *d, pixman_image_t 
                                               SpicePoint *src_pos, pixman_image_t *p,
                                               SpicePoint *pat_pos)
 {
-    WARN("not implemented 0x%x");
+    WARN("not implemented");
 }
 
 static void default_rop3_withe_color_handler(pixman_image_t *d, pixman_image_t *s, SpicePoint *src_pos,
                                              uint32_t rgb)
 {
-    WARN("not implemented 0x%x");
+    WARN("not implemented");
 }
 
 static void default_rop3_test_handler()
