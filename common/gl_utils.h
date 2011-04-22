@@ -49,62 +49,10 @@ extern "C" {
 #define GLC_ERROR_TEST_FINISH ;
 #endif
 
-#ifdef WIN32
-static inline int find_msb(uint32_t val)
-{
-    uint32_t r;
-    __asm {
-        bsr eax, val
-        jnz found
-        mov eax, -1
+#include "bitops.h"
 
-found:
-        mov r, eax
-    }
-    return r + 1;
-}
-
-#elif defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
-static inline int find_msb(unsigned int val)
-{
-    int ret;
-
-    asm ("bsrl %1,%0\n\t"
-         "jnz 1f\n\t"
-         "movl $-1,%0\n"
-         "1:"
-         : "=r"(ret) : "r"(val));
-    return ret + 1;
-}
-
-#else
-static inline int find_msb(unsigned int val)
-{
-    signed char index = 31;
-
-    if(val == 0) {
-        return 0;
-    }
-
-    do {
-        if(val & 0x80000000) {
-            break;
-        }
-        val <<= 1;
-    } while(--index >= 0);
-
-    return index+1;
-}
-
-#endif
-
-static inline int gl_get_to_power_two(unsigned int val)
-{
-    if ((val & (val - 1)) == 0) {
-        return val;
-    }
-    return 1 << find_msb(val);
-}
+#define find_msb spice_bit_find_msb
+#define gl_get_to_power_two spice_bit_next_pow2
 
 #ifdef __cplusplus
 }

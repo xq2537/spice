@@ -25,6 +25,7 @@
 
 #include "quic.h"
 #include <spice/macros.h>
+#include "bitops.h"
 
 //#define DEBUG
 
@@ -707,17 +708,6 @@ static int decode_channel_run(Encoder *encoder, Channel *channel)
 
 #else
 
-static INLINE int find_msb(int x)
-{
-    int r;
-
-    __asm__("bsrl %1,%0\n\t"
-            "jnz 1f\n\t"
-            "movl $-1,%0\n"
-            "1:" : "=r" (r) : "rm" (x));
-    return r + 1;
-}
-
 static INLINE void encode_run(Encoder *encoder, unsigned int len)
 {
     int odd = len & 1U;
@@ -725,7 +715,7 @@ static INLINE void encode_run(Encoder *encoder, unsigned int len)
 
     len &= ~1U;
 
-    while ((msb = find_msb(len))) {
+    while ((msb = spice_bit_find_msb(len))) {
         len &= ~(1 << (msb - 1));
         ASSERT(encoder->usr, msb < 32);
         encode(encoder, (1 << (msb)) - 1, msb);
