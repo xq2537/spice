@@ -63,11 +63,4 @@
     }                                                               \
 } while (0)
 
-static inline uint64_t get_time_stamp(void)
-{
-    struct timespec time_space;
-    clock_gettime(CLOCK_MONOTONIC, &time_space);
-    return time_space.tv_sec * 1000 * 1000 * 1000 + time_space.tv_nsec;
-}
-
 #endif

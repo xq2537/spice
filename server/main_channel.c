@@ -489,6 +489,13 @@ void main_channel_push_notify(Channel *channel, uint8_t *mess, const int mess_le
     red_channel_pipe_add_push(&main_chan->base, &item->base);
 }
 
+static uint64_t get_time_stamp(void)
+{
+    struct timespec time_space;
+    clock_gettime(CLOCK_MONOTONIC, &time_space);
+    return time_space.tv_sec * 1000 * 1000 * 1000 + time_space.tv_nsec;
+}
+
 static void main_channel_marshall_notify(SpiceMarshaller *m, NotifyPipeItem *item)
 {
     SpiceMsgNotify notify;
