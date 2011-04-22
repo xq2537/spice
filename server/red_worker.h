@@ -23,12 +23,14 @@
 
 static inline void set_bit(int index, uint32_t *addr)
 {
-    __asm__ __volatile__ ("lock btsl %1, %0": : "m" (*addr), "r" (index));
+    uint32_t mask = 1 << index;
+    __sync_or_and_fetch(addr, mask);
 }
 
 static inline void clear_bit(int index, uint32_t *addr)
 {
-    __asm__ __volatile__ ("lock btrl %1, %0": : "m" (*addr), "r" (index));
+    uint32_t mask = ~(1 << index);
+    __sync_and_and_fetch(addr, mask);
 }
 
 static inline int test_bit(int index, uint32_t val)
