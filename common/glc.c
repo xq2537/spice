@@ -40,8 +40,6 @@
 #include "glc.h"
 #include "gl_utils.h"
 
-#define ASSERT(x) if (!(x)) {printf("%s: assert failed %s\n", __FUNCTION__, #x); abort();}
-
 #define WARN_ONCE(x) {      \
     static int warn = TRUE; \
     if (warn) {             \

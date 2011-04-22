@@ -19,6 +19,7 @@
 #define H_SPICE_COMMON
 
 #include <stdio.h>
+#include <stdint.h>
 #include <time.h>
 #include <stdlib.h>
 

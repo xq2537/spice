@@ -22,13 +22,7 @@
 #include <stdio.h>
 
 #include "rop3.h"
-
-#ifndef ASSERT
-#define ASSERT(x) if (!(x)) {                               \
-    printf("%s: ASSERT %s failed\n", __FUNCTION__, #x);     \
-    abort();                                                \
-}
-#endif
+#include "spice_common.h"
 
 #ifndef WARN
 #define WARN(x) printf("warning: %s\n", x)

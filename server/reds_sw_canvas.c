@@ -18,6 +18,8 @@
 #include <config.h>
 #endif
 
+#include "spice_common.h"
+
 #include "reds_sw_canvas.h"
 #define SPICE_CANVAS_INTERNAL
 #define SW_CANVAS_IMAGE_CACHE

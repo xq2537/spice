@@ -28,11 +28,6 @@
 #include "rect.h"
 #include "mem.h"
 
-#define ASSERT(x) if (!(x)) {                               \
-    printf("%s: ASSERT %s failed\n", __FUNCTION__, #x);     \
-    abort();                                                \
-}
-
 /*  true iff two Boxes overlap */
 #define EXTENTCHECK(r1, r2)        \
     (!( ((r1)->x2 <= (r2)->x1)  || \

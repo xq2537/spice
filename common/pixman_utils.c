@@ -20,19 +20,13 @@
 #endif
 
 #include "pixman_utils.h"
+#include "spice_common.h"
 #include <spice/macros.h>
 
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include "mem.h"
-
-#ifndef ASSERT
-#define ASSERT(x) if (!(x)) {                               \
-    printf("%s: ASSERT %s failed\n", __FUNCTION__, #x);     \
-    abort();                                                \
-}
-#endif
 
 #ifndef PANIC
 #define PANIC(str) {                                \

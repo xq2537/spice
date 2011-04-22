@@ -33,14 +33,6 @@
 extern int gdi_handlers;
 #endif
 
-#ifndef ASSERT
-#define ASSERT(x) if (!(x)) {                               \
-    printf("%s: ASSERT %s failed\n", __FUNCTION__, #x);     \
-    abort();                                                \
-}
-#endif
-
-
 #ifndef CANVAS_ERROR
 #define CANVAS_ERROR(format, ...) {                             \
     printf("%s: " format "\n", __FUNCTION__, ## __VA_ARGS__);   \

@@ -50,13 +50,6 @@
 }
 #endif
 
-#ifndef ASSERT
-#define ASSERT(x) if (!(x)) {                               \
-    printf("%s: ASSERT %s failed\n", __FUNCTION__, #x);     \
-    abort();                                                \
-}
-#endif
-
 #ifndef WARN
 #define WARN(x) printf("warning: %s\n", x)
 #endif
