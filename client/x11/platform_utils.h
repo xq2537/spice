@@ -24,12 +24,6 @@
 #include <netinet/tcp.h>
 #include <netdb.h>
 
-#ifdef __i386__
-#define mb() __asm__ __volatile__ ("lock; addl $0,0(%%esp)" : : : "memory")
-#else
-#define mb() __asm__ __volatile__ ("lock; addl $0,0(%%rsp)" : : : "memory")
-#endif
-
 typedef int SOCKET;
 
 #define INVALID_SOCKET -1
