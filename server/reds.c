@@ -1766,7 +1766,7 @@ static ssize_t reds_stream_sasl_write(RedsStream *s, const void *buf, size_t nby
     return -1;
 }
 
-static ssize_t reds_stream_sasl_read(RedsStream *s, void *buf, size_t nbyte)
+static ssize_t reds_stream_sasl_read(RedsStream *s, uint8_t *buf, size_t nbyte)
 {
     uint8_t encoded[4096];
     const char *decoded;
