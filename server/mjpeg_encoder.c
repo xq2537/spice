@@ -74,16 +74,16 @@ size_t mjpeg_encoder_get_frame_stride(MJpegEncoder *encoder)
     return encoder->stride;
 }
 
-void init_destination(j_compress_ptr cinfo)
+static void init_destination(j_compress_ptr cinfo)
 {
 }
 
-boolean empty_output_buffer(j_compress_ptr cinfo)
+static boolean empty_output_buffer(j_compress_ptr cinfo)
 {
     return FALSE;
 }
 
-void term_destination(j_compress_ptr cinfo)
+static void term_destination(j_compress_ptr cinfo)
 {
 }
 

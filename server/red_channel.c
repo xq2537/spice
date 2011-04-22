@@ -201,7 +201,7 @@ static void red_peer_handle_outgoing(RedsStream *stream, OutgoingHandler *handle
     }
 }
 
-void red_channel_on_output(void *opaque, int n)
+static void red_channel_on_output(void *opaque, int n)
 {
     RedChannel *channel = opaque;
 
@@ -401,11 +401,11 @@ error:
     return NULL;
 }
 
-void do_nothing_disconnect(RedChannel *red_channel)
+static void do_nothing_disconnect(RedChannel *red_channel)
 {
 }
 
-int do_nothing_handle_message(RedChannel *red_channel, SpiceDataHeader *header, uint8_t *msg)
+static int do_nothing_handle_message(RedChannel *red_channel, SpiceDataHeader *header, uint8_t *msg)
 {
     return TRUE;
 }
@@ -475,14 +475,14 @@ void red_channel_init_outgoing_messages_window(RedChannel *channel)
     red_channel_push(channel);
 }
 
-void red_channel_handle_migrate_flush_mark(RedChannel *channel)
+static void red_channel_handle_migrate_flush_mark(RedChannel *channel)
 {
     if (channel->handle_migrate_flush_mark) {
         channel->handle_migrate_flush_mark(channel);
     }
 }
 
-void red_channel_handle_migrate_data(RedChannel *channel, uint32_t size, void *message)
+static void red_channel_handle_migrate_data(RedChannel *channel, uint32_t size, void *message)
 {
     if (!channel->handle_migrate_data) {
         return;

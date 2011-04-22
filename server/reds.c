@@ -388,7 +388,7 @@ static void reds_link_free(RedLinkInfo *link)
 
 #ifdef RED_STATISTICS
 
-void insert_stat_node(StatNodeRef parent, StatNodeRef ref)
+static void insert_stat_node(StatNodeRef parent, StatNodeRef ref)
 {
     SpiceStatNode *node = &reds->stat->nodes[ref];
     uint32_t pos = INVALID_STAT_REF;
@@ -457,7 +457,7 @@ StatNodeRef stat_add_node(StatNodeRef parent, const char *name, int visible)
     return ref;
 }
 
-void stat_remove(SpiceStatNode *node)
+static void stat_remove(SpiceStatNode *node)
 {
     pthread_mutex_lock(&reds->stat_lock);
     node->flags &= ~SPICE_STAT_NODE_FLAG_ENABLED;
@@ -583,7 +583,7 @@ static void reds_reset_vdp()
     state->write_filter.discard_all = TRUE;
 }
 
-int reds_main_channel_connected()
+static int reds_main_channel_connected(void)
 {
     return !!reds->main_channel;
 }
@@ -746,7 +746,7 @@ static void reds_push_tokens()
     reds->agent_state.num_tokens = 0;
 }
 
-static int write_to_vdi_port();
+static int write_to_vdi_port(void);
 
 static void vdi_port_write_timer_start()
 {
@@ -805,7 +805,7 @@ static int write_to_vdi_port()
 
 static int read_from_vdi_port(void);
 
-void vdi_read_buf_release(uint8_t *data, void *opaque)
+static void vdi_read_buf_release(uint8_t *data, void *opaque)
 {
     VDIReadBuf *buf = (VDIReadBuf *)opaque;
 
@@ -1390,7 +1390,7 @@ static void reds_channel_set_common_caps(Channel *channel, int cap, int active)
     }
 }
 
-void reds_channel_init_auth_caps(Channel *channel)
+static void reds_channel_init_auth_caps(Channel *channel)
 {
     if (sasl_enabled) {
         reds_channel_set_common_caps(channel, SPICE_COMMON_CAP_AUTH_SASL, TRUE);
@@ -1721,7 +1721,7 @@ static int sync_write_u32(RedsStream *s, uint32_t n)
     return sync_write(s, &n, sizeof(uint32_t));
 }
 
-ssize_t reds_stream_sasl_write(RedsStream *s, const void *buf, size_t nbyte)
+static ssize_t reds_stream_sasl_write(RedsStream *s, const void *buf, size_t nbyte)
 {
     ssize_t ret;
 
@@ -3100,7 +3100,7 @@ static void reds_mig_finished(int completed)
     }
 }
 
-void reds_mig_switch(void)
+static void reds_mig_switch(void)
 {
     main_channel_push_migrate_switch(reds->main_channel);
 }

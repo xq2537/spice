@@ -388,8 +388,9 @@ static void qxl_worker_stop(QXLWorker *qxl_worker)
     ASSERT(message == RED_WORKER_MESSAGE_READY);
 }
 
-void qxl_worker_loadvm_commands(QXLWorker *qxl_worker,
-                                struct QXLCommandExt *ext, uint32_t count)
+static void qxl_worker_loadvm_commands(QXLWorker *qxl_worker,
+                                       struct QXLCommandExt *ext,
+                                       uint32_t count)
 {
     RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
     RedWorkerMessage message = RED_WORKER_MESSAGE_LOADVM_COMMANDS;

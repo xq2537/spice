@@ -1043,7 +1043,7 @@ static inline void validate_surface(RedWorker *worker, uint32_t surface_id)
     PANIC_ON(!worker->surfaces[surface_id].context.canvas);
 }
 
-char *draw_type_to_str(uint8_t type)
+static char *draw_type_to_str(uint8_t type)
 {
     switch (type) {
     case QXL_DRAW_FILL:
@@ -4131,7 +4131,7 @@ static CursorItem *get_cursor_item(RedWorker *worker, RedCursorCmd *cmd, uint32_
     return cursor_item;
 }
 
-void qxl_process_cursor(RedWorker *worker, RedCursorCmd *cursor_cmd, uint32_t group_id)
+static void qxl_process_cursor(RedWorker *worker, RedCursorCmd *cursor_cmd, uint32_t group_id)
 {
     CursorItem *item = get_cursor_item(worker, cursor_cmd, group_id);
     int cursor_show = FALSE;
@@ -8975,7 +8975,7 @@ static int display_channel_handle_message(RedChannel *channel, uint32_t size, ui
     }
 }
 
-int common_channel_config_socket(RedChannel *channel)
+static int common_channel_config_socket(RedChannel *channel)
 {
     int flags;
     int delay_val;
@@ -9005,16 +9005,16 @@ static void free_common_channel_from_listener(EventListener *ctx)
 
     free(common);
 }
-void worker_watch_update_mask(SpiceWatch *watch, int event_mask)
+static void worker_watch_update_mask(SpiceWatch *watch, int event_mask)
 {
 }
 
-SpiceWatch *worker_watch_add(int fd, int event_mask, SpiceWatchFunc func, void *opaque)
+static SpiceWatch *worker_watch_add(int fd, int event_mask, SpiceWatchFunc func, void *opaque)
 {
     return NULL; // apparently allowed?
 }
 
-void worker_watch_remove(SpiceWatch *watch)
+static void worker_watch_remove(SpiceWatch *watch)
 {
 }
 

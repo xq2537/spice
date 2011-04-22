@@ -48,7 +48,7 @@ static void op_decode(SpiceJpegDecoder *decoder,
 
 extern "C" {
 
-    void jpeg_decoder_init_source(j_decompress_ptr cinfo)
+    static void jpeg_decoder_init_source(j_decompress_ptr cinfo)
     {
     }
 

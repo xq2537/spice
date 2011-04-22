@@ -45,7 +45,7 @@ RedChannelBase::~RedChannelBase()
 {
 }
 
-const char *spice_link_error_string(int err)
+static const char *spice_link_error_string(int err)
 {
     switch (err) {
         case SPICE_LINK_ERR_OK: return "no error";
