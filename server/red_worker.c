@@ -8991,14 +8991,13 @@ static void on_new_display_channel_client(DisplayChannelClient *dcc)
         return;
     }
     red_channel_client_ack_zero_messages_window(&dcc->common.base);
+    red_channel_client_push_set_ack(&dcc->common.base);
     if (worker->surfaces[0].context.canvas) {
         red_current_flush(worker, 0);
         push_new_primary_surface(dcc);
         red_push_surface_image(dcc, 0);
-        if (red_channel_is_connected(&display_channel->common.base)) {
-            red_pipe_add_verb(rcc, SPICE_MSG_DISPLAY_MARK);
-            red_disply_start_streams(dcc);
-        }
+        red_pipe_add_verb(rcc, SPICE_MSG_DISPLAY_MARK);
+        red_disply_start_streams(dcc);
     }
 }
 
