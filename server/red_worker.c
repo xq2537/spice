@@ -437,7 +437,9 @@ struct PixmapCache {
         uint8_t client;
         uint64_t message;
     } generation_initiator;
-    uint64_t sync[MAX_CACHE_CLIENTS];
+    uint64_t sync[MAX_CACHE_CLIENTS]; // here CLIENTS refer to different channel
+                                      // clients of the same client
+    RedClient *client;
 };
 
 #define NUM_STREAMS 50
@@ -557,6 +559,7 @@ typedef struct GlzSharedDictionary {
     uint8_t id;
     pthread_rwlock_t encode_lock;
     int migrate_freeze;
+    RedClient *client; // channel clients of the same client share the dict
 } GlzSharedDictionary;
 
 #define NUM_SURFACES 10000
@@ -8626,16 +8629,16 @@ static void on_new_display_channel_client(DisplayChannelClient *dcc)
     }
 }
 
-static GlzSharedDictionary *_red_find_glz_dictionary(uint8_t dict_id)
+static GlzSharedDictionary *_red_find_glz_dictionary(RedClient *client, uint8_t dict_id)
 {
     RingItem *now;
     GlzSharedDictionary *ret = NULL;
 
     now = &glz_dictionary_list;
-
     while ((now = ring_next(&glz_dictionary_list, now))) {
-        if (((GlzSharedDictionary *)now)->id == dict_id) {
-            ret = (GlzSharedDictionary *)now;
+        GlzSharedDictionary *dict = (GlzSharedDictionary *)now;
+        if ((dict->client == client) && (dict->id == dict_id)) {
+            ret = dict;
             break;
         }
     }
@@ -8643,15 +8646,15 @@ static GlzSharedDictionary *_red_find_glz_dictionary(uint8_t dict_id)
     return ret;
 }
 
-static GlzSharedDictionary *_red_create_glz_dictionary(uint8_t id,
+static GlzSharedDictionary *_red_create_glz_dictionary(RedClient *client, uint8_t id,
                                                        GlzEncDictContext *opaque_dict)
 {
     GlzSharedDictionary *shared_dict = spice_new0(GlzSharedDictionary, 1);
-
     shared_dict->dict = opaque_dict;
     shared_dict->id = id;
     shared_dict->refs = 1;
     shared_dict->migrate_freeze = FALSE;
+    shared_dict->client = client;
     ring_item_init(&shared_dict->base);
     pthread_rwlock_init(&shared_dict->encode_lock, NULL);
     return shared_dict;
@@ -8670,7 +8673,7 @@ static GlzSharedDictionary *red_create_glz_dictionary(DisplayChannelClient *dcc,
         PANIC("failed creating lz dictionary");
         return NULL;
     }
-    return _red_create_glz_dictionary(id, glz_dict);
+    return _red_create_glz_dictionary(dcc->common.base.client, id, glz_dict);
 }
 
 static GlzSharedDictionary *red_create_restored_glz_dictionary(DisplayChannelClient *dcc,
@@ -8683,7 +8686,7 @@ static GlzSharedDictionary *red_create_restored_glz_dictionary(DisplayChannelCli
         PANIC("failed creating lz dictionary");
         return NULL;
     }
-    return _red_create_glz_dictionary(id, glz_dict);
+    return _red_create_glz_dictionary(dcc->common.base.client, id, glz_dict);
 }
 
 static GlzSharedDictionary *red_get_glz_dictionary(DisplayChannelClient *dcc,
@@ -8693,7 +8696,7 @@ static GlzSharedDictionary *red_get_glz_dictionary(DisplayChannelClient *dcc,
 
     pthread_mutex_lock(&glz_dictionary_list_lock);
 
-    shared_dict = _red_find_glz_dictionary(id);
+    shared_dict = _red_find_glz_dictionary(dcc->common.base.client, id);
 
     if (!shared_dict) {
         shared_dict = red_create_glz_dictionary(dcc, id, window_size);
@@ -8713,7 +8716,7 @@ static GlzSharedDictionary *red_restore_glz_dictionary(DisplayChannelClient *dcc
 
     pthread_mutex_lock(&glz_dictionary_list_lock);
 
-    shared_dict = _red_find_glz_dictionary(id);
+    shared_dict = _red_find_glz_dictionary(dcc->common.base.client, id);
 
     if (!shared_dict) {
         shared_dict = red_create_restored_glz_dictionary(dcc, id, restore_data);
@@ -8760,7 +8763,7 @@ static void red_release_glz(DisplayChannelClient *dcc)
     free(shared_dict);
 }
 
-static PixmapCache *red_create_pixmap_cache(uint8_t id, int64_t size)
+static PixmapCache *red_create_pixmap_cache(RedClient *client, uint8_t id, int64_t size)
 {
     PixmapCache *cache = spice_new0(PixmapCache, 1);
     ring_item_init(&cache->base);
@@ -8770,29 +8773,31 @@ static PixmapCache *red_create_pixmap_cache(uint8_t id, int64_t size)
     ring_init(&cache->lru);
     cache->available = size;
     cache->size = size;
+    cache->client = client;
     return cache;
 }
 
-static PixmapCache *red_get_pixmap_cache(uint8_t id, int64_t size)
+static PixmapCache *red_get_pixmap_cache(RedClient *client, uint8_t id, int64_t size)
 {
-    PixmapCache *cache = NULL;
+    PixmapCache *ret = NULL;
     RingItem *now;
     pthread_mutex_lock(&cache_lock);
 
     now = &pixmap_cache_list;
     while ((now = ring_next(&pixmap_cache_list, now))) {
-        if (((PixmapCache *)now)->id == id) {
-            cache = (PixmapCache *)now;
-            cache->refs++;
+        PixmapCache *cache = (PixmapCache *)now;
+        if ((cache->client == client) && (cache->id == id)) {
+            ret = cache;
+            ret->refs++;
             break;
         }
     }
-    if (!cache) {
-        cache = red_create_pixmap_cache(id, size);
-        ring_add(&pixmap_cache_list, &cache->base);
+    if (!ret) {
+        ret = red_create_pixmap_cache(client, id, size);
+        ring_add(&pixmap_cache_list, &ret->base);
     }
     pthread_mutex_unlock(&cache_lock);
-    return cache;
+    return ret;
 }
 
 static void red_release_pixmap_cache(DisplayChannelClient *dcc)
@@ -8816,7 +8821,8 @@ static void red_release_pixmap_cache(DisplayChannelClient *dcc)
 static int display_channel_init_cache(DisplayChannelClient *dcc, SpiceMsgcDisplayInit *init_info)
 {
     ASSERT(!dcc->pixmap_cache);
-    return !!(dcc->pixmap_cache = red_get_pixmap_cache(init_info->pixmap_cache_id,
+    return !!(dcc->pixmap_cache = red_get_pixmap_cache(dcc->common.base.client,
+                                                       init_info->pixmap_cache_id,
                                                        init_info->pixmap_cache_size));
 }
 
@@ -8904,7 +8910,9 @@ static uint64_t display_channel_handle_migrate_data(RedChannelClient *rcc, uint3
         return FALSE;
     }
     display_channel->expect_migrate_data = FALSE;
-    if (!(dcc->pixmap_cache = red_get_pixmap_cache(migrate_data->pixmap_cache_id, -1))) {
+    dcc->pixmap_cache = red_get_pixmap_cache(dcc->common.base.client,
+                                            migrate_data->pixmap_cache_id, -1);
+    if (!dcc->pixmap_cache) {
         return FALSE;
     }
     pthread_mutex_lock(&dcc->pixmap_cache->lock);
