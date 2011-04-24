@@ -74,6 +74,10 @@
 SpiceCoreInterface *core = NULL;
 static SpiceCharDeviceInstance *vdagent = NULL;
 
+/* Debugging only variable: allow multiple client connections to the spice
+ * server */
+#define SPICE_DEBUG_ALLOW_MC_ENV "SPICE_DEBUG_ALLOW_MC"
+
 #define MIGRATION_NOTIFY_SPICE_KEY "spice_mig_ext"
 
 #define REDS_MIG_VERSION 3
@@ -228,6 +232,7 @@ typedef struct RedsState {
     RedsStatValue roundtrip_stat;
 #endif
     int peer_minor_version;
+    int allow_multiple_clients;
 } RedsState;
 
 static RedsState *reds = NULL;
@@ -1502,7 +1507,9 @@ static void reds_handle_main_link(RedLinkInfo *link)
 
     red_printf("");
     link_mess = link->link_mess;
-    reds_disconnect();
+    if (!reds->allow_multiple_clients) {
+        reds_disconnect();
+    }
 
     if (link_mess->connection_id == 0) {
         reds_send_link_result(link, SPICE_LINK_ERR_OK);
@@ -3533,6 +3540,10 @@ static int do_spice_init(SpiceCoreInterface *core_interface)
     inputs_init();
 
     reds->mouse_mode = SPICE_MOUSE_MODE_SERVER;
+    reds->allow_multiple_clients = getenv(SPICE_DEBUG_ALLOW_MC_ENV) != NULL;
+    if (reds->allow_multiple_clients) {
+        red_printf("spice: allowing multiple client connections");
+    }
     atexit(reds_exit);
     return 0;
 
