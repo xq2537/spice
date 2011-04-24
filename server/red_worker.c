@@ -9797,6 +9797,15 @@ error:
     red_channel_client_destroy(&dcc->common.base);
 }
 
+static void cursor_channel_client_disconnect(RedChannelClient *rcc)
+{
+    if (!red_channel_is_connected(rcc->channel)) {
+        return;
+    }
+    red_reset_cursor_cache(rcc);
+    red_channel_client_disconnect(rcc);
+}
+
 static void red_disconnect_cursor(RedChannel *channel)
 {
     CommonChannel *common;
@@ -10482,7 +10491,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
 
         red_printf("disconnect cursor client");
         receive_data(worker->channel, &rcc, sizeof(RedChannelClient *));
-        red_disconnect_cursor(rcc->channel); /* TODO - assumes a single client */
+        cursor_channel_client_disconnect(rcc);
         message = RED_WORKER_MESSAGE_READY;
         write_message(worker->channel, &message);
         break;
