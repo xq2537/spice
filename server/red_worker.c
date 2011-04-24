@@ -81,6 +81,7 @@
 //#define DRAW_ALL
 //#define COMPRESS_DEBUG
 //#define ACYCLIC_SURFACE_DEBUG
+//#define DEBUG_CURSORS
 
 //#define UPDATE_AREA_BY_TREE
 
@@ -4480,12 +4481,20 @@ static void red_set_cursor(RedWorker *worker, CursorItem *cursor)
     worker->cursor = cursor;
 }
 
+#ifdef DEBUG_CURSORS
+static int _cursor_count = 0;
+#endif
+
 static inline CursorItem *alloc_cursor_item(RedWorker *worker)
 {
     CursorItem *cursor;
+
     if (!worker->free_cursor_items) {
         return NULL;
     }
+#ifdef DEBUG_CURSORS
+    --_cursor_count;
+#endif
     cursor = &worker->free_cursor_items->u.cursor_item;
     worker->free_cursor_items = worker->free_cursor_items->u.next;
     return cursor;
@@ -4495,6 +4504,10 @@ static inline void free_cursor_item(RedWorker *worker, CursorItem *item)
 {
     ((_CursorItem *)item)->u.next = worker->free_cursor_items;
     worker->free_cursor_items = (_CursorItem *)item;
+#ifdef DEBUG_CURSORS
+    ++_cursor_count;
+    ASSERT(_cursor_count <= NUM_CURSORS);
+#endif
 }
 
 static void cursor_items_init(RedWorker *worker)
