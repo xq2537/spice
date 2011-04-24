@@ -9744,7 +9744,6 @@ static void handle_new_display_channel(RedWorker *worker, RedClient *client, Red
     size_t stream_buf_size;
     int is_low_bandwidth = main_channel_client_is_low_bandwidth(red_client_get_main(client));
 
-    red_disconnect_all_display_TODO_remove_me((RedChannel *)worker->display_channel);
     ensure_display_channel_created(worker, migrate);
     if (!worker->display_channel) {
         return;
@@ -9923,7 +9922,6 @@ static void red_connect_cursor(RedWorker *worker, RedClient *client, RedsStream 
     CursorChannel *channel;
     CursorChannelClient *ccc;
 
-    red_disconnect_cursor((RedChannel *)worker->cursor_channel);
     ensure_cursor_channel_created(worker, migrate);
     if (worker->cursor_channel == NULL) {
         red_printf("failed to create cursor channel");
