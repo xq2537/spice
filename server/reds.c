@@ -982,18 +982,40 @@ int reds_num_of_channels()
     return reds ? reds->num_of_channels : 0;
 }
 
+static int secondary_channels[] = {
+    SPICE_CHANNEL_MAIN, SPICE_CHANNEL_DISPLAY, SPICE_CHANNEL_CURSOR, SPICE_CHANNEL_INPUTS};
+
+static int channel_is_secondary(Channel *channel)
+{
+    int i;
+    for (i = 0 ; i < sizeof(secondary_channels)/sizeof(secondary_channels[0]); ++i) {
+        if (channel->type == secondary_channels[i]) {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
 void reds_fill_channels(SpiceMsgChannels *channels_info)
 {
     Channel *channel;
     int i;
+    int used_channels = 0;
 
     channels_info->num_of_channels = reds->num_of_channels;
     channel = reds->channels;
-    for (i = 0; i < reds->num_of_channels; i++) {
+    for (i = 0; i < reds->num_of_channels; i++, channel = channel->next) {
         ASSERT(channel);
-        channels_info->channels[i].type = channel->type;
-        channels_info->channels[i].id = channel->id;
-        channel = channel->next;
+        if (reds->num_clients > 1 && !channel_is_secondary(channel)) {
+            continue;
+        }
+        channels_info->channels[used_channels].type = channel->type;
+        channels_info->channels[used_channels].id = channel->id;
+        used_channels++;
+    }
+    channels_info->num_of_channels = used_channels;
+    if (used_channels != reds->num_of_channels) {
+        red_printf("sent %d out of %d", used_channels, reds->num_of_channels);
     }
 }
 
