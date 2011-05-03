@@ -274,7 +274,7 @@ void Migrate::start(const SpiceMsgMainMigrationBegin* migrate)
         _host.assign((char *)migrate->host_data);
         _port = migrate->port ? migrate->port : -1;
         _sport = migrate->sport ? migrate->sport : -1;
-        _auth_options.type_flags = RedPeer::HostAuthOptions::HOST_AUTH_OP_PUBKEY;
+        _auth_options.type_flags = SPICE_SSL_VERIFY_OP_PUBKEY;
         _auth_options.host_pubkey.assign(migrate->pub_key_data, migrate->pub_key_data + migrate->pub_key_size);
     }
 

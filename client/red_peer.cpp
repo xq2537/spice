@@ -27,12 +27,7 @@
 #include "utils.h"
 #include "debug.h"
 #include "platform_utils.h"
-
-typedef struct SslVerifyCbData {
-    RedPeer::HostAuthOptions info;
-    const char* host_name;
-    bool all_preverify_ok;
-} SslVerifyCbData;
+#include "ssl_verify.h"
 
 static void ssl_error()
 {
@@ -135,346 +130,11 @@ void RedPeer::connect_unsecure(const char* host, int portnr)
     }
 }
 
-bool RedPeer::verify_pubkey(X509* cert, const HostAuthOptions::PublicKey& key)
-{
-    EVP_PKEY* cert_pubkey = NULL;
-    EVP_PKEY* orig_pubkey = NULL;
-    BIO* bio = NULL;
-    uint8_t* c_key = NULL;
-    int ret = 0;
-
-    if (key.empty()) {
-        return false;
-    }
-
-    ASSERT(cert);
-
-    try {
-        cert_pubkey = X509_get_pubkey(cert);
-        if (!cert_pubkey) {
-            THROW("reading public key from certificate failed");
-        }
-
-        c_key = new uint8_t[key.size()];
-        memcpy(c_key, &key[0], key.size());
-
-        bio = BIO_new_mem_buf((void*)c_key, key.size());
-        if (!bio) {
-            THROW("creating BIO failed");
-        }
-
-        orig_pubkey = d2i_PUBKEY_bio(bio, NULL);
-        if (!orig_pubkey) {
-            THROW("reading pubkey from bio failed");
-        }
-
-        ret = EVP_PKEY_cmp(orig_pubkey, cert_pubkey);
-
-        BIO_free(bio);
-        EVP_PKEY_free(orig_pubkey);
-        EVP_PKEY_free(cert_pubkey);
-        delete []c_key;
-        if (ret == 1) {
-            DBG(0, "public keys match");
-            return true;
-        } else if (ret == 0) {
-            DBG(0, "public keys mismatch");
-            return false;
-        } else {
-            DBG(0, "public keys types mismatch");
-            return false;
-        }
-    } catch (Exception& e) {
-        LOG_WARN("%s", e.what());
-
-        if (bio) {
-            BIO_free(bio);
-        }
-
-        if (orig_pubkey) {
-            EVP_PKEY_free(orig_pubkey);
-        }
-
-        if (cert_pubkey) {
-            EVP_PKEY_free(cert_pubkey);
-        }
-        delete []c_key;
-        return false;
-    }
-}
-
-/* From gnutls: compare host_name against certificate, taking account of wildcards.
- * return true on success or false on error.
- *
- * note: cert_name_size is required as X509 certs can contain embedded NULs in
- * the strings such as CN or subjectAltName
- */
-bool RedPeer::x509_cert_host_name_compare(const char *cert_name, int cert_name_size,
-                                          const char *host_name)
-{
-    /* find the first different character */
-    for (; *cert_name && *host_name && (toupper(*cert_name) == toupper(*host_name));
-         cert_name++, host_name++, cert_name_size--);
-
-    /* the strings are the same */
-    if (cert_name_size == 0 && *host_name == '\0')
-        return true;
-
-    if (*cert_name == '*')
-    {
-        /* a wildcard certificate */
-        cert_name++;
-        cert_name_size--;
-
-        while (true)
-        {
-            /* Use a recursive call to allow multiple wildcards */
-            if (RedPeer::x509_cert_host_name_compare(cert_name, cert_name_size, host_name)) {
-                return true;
-            }
-
-            /* wildcards are only allowed to match a single domain
-               component or component fragment */
-            if (*host_name == '\0' || *host_name == '.')
-                break;
-            host_name++;
-        }
-
-        return false;
-    }
-
-  return false;
-}
-
-/*
- * From gnutls_x509_crt_check_hostname - compares the hostname with certificate's hostname
- *
- * This function will check if the given certificate's subject matches
- * the hostname.  This is a basic implementation of the matching
- * described in RFC2818 (HTTPS), which takes into account wildcards,
- * and the DNSName/IPAddress subject alternative name PKIX extension.
- *
- */
-bool RedPeer::verify_host_name(X509* cert, const char* host_name)
-{
-    GENERAL_NAMES* subject_alt_names;
-    bool found_dns_name = false;
-    struct in_addr addr;
-    int addr_len = 0;
-    bool cn_match = false;
-
-    ASSERT(cert);
-
-    // only IpV4 supported
-    if (inet_aton(host_name, &addr)) {
-        addr_len = sizeof(struct in_addr);
-    }
-
-    /* try matching against:
-    *  1) a DNS name or IP address as an alternative name (subjectAltName) extension
-    *     in the certificate
-    *  2) the common name (CN) in the certificate
-    *
-    *  either of these may be of the form: *.domain.tld
-    *
-    *  only try (2) if there is no subjectAltName extension of
-    *  type dNSName
-    */
-
-
-    subject_alt_names = (GENERAL_NAMES*)X509_get_ext_d2i(cert, NID_subject_alt_name, NULL, NULL);
-
-    if (subject_alt_names) {
-        int num_alts = sk_GENERAL_NAME_num(subject_alt_names);
-        for (int i = 0; i < num_alts; i++) {
-            const GENERAL_NAME* name = sk_GENERAL_NAME_value(subject_alt_names, i);
-            if (name->type == GEN_DNS) {
-                found_dns_name = true;
-                if (RedPeer::x509_cert_host_name_compare((char *)ASN1_STRING_data(name->d.dNSName),
-                                                         ASN1_STRING_length(name->d.dNSName),
-                                                         host_name)) {
-                    DBG(0, "alt name match=%s", ASN1_STRING_data(name->d.dNSName));
-                    GENERAL_NAMES_free(subject_alt_names);
-                    return true;
-                }
-            } else if (name->type == GEN_IPADD) {
-                int alt_ip_len = ASN1_STRING_length(name->d.iPAddress);
-                found_dns_name = true;
-                if ((addr_len == alt_ip_len)&&
-                    !memcmp(ASN1_STRING_data(name->d.iPAddress), &addr, addr_len)) {
-                         DBG(0, "alt name IP match=%s",
-                             inet_ntoa(*((struct in_addr*)ASN1_STRING_data(name->d.dNSName))));
-                    GENERAL_NAMES_free(subject_alt_names);
-                    return true;
-                }
-            }
-        }
-        GENERAL_NAMES_free(subject_alt_names);
-    }
-
-    if (found_dns_name)
-    {
-        DBG(0, "SubjectAltName mismatch");
-        return false;
-    }
-
-    /* extracting commonNames */
-    X509_NAME* subject = X509_get_subject_name(cert);
-    if (subject) {
-        int pos = -1;
-        X509_NAME_ENTRY* cn_entry;
-        ASN1_STRING* cn_asn1;
-
-        while ((pos = X509_NAME_get_index_by_NID(subject, NID_commonName, pos)) != -1) {
-            cn_entry = X509_NAME_get_entry(subject, pos);
-            if (!cn_entry) {
-                continue;
-            }
-            cn_asn1 = X509_NAME_ENTRY_get_data(cn_entry);
-            if (!cn_asn1) {
-                continue;
-            }
-
-            if (RedPeer::x509_cert_host_name_compare((char*)ASN1_STRING_data(cn_asn1),
-                                                     ASN1_STRING_length(cn_asn1),
-                                                     host_name)) {
-                DBG(0, "common name match=%s", (char*)ASN1_STRING_data(cn_asn1));
-                cn_match = true;
-                break;
-            }
-        }
-    }
-
-    if (!cn_match) {
-        DBG(0, "common name mismatch");
-    }
-    return cn_match;
-
-}
-
-bool RedPeer::verify_subject(X509* cert, const HostAuthOptions::CertFieldValueList& subject)
-{
-    X509_NAME* cert_subject = NULL;
-    HostAuthOptions::CertFieldValueList::const_iterator subject_iter;
-    X509_NAME* in_subject;
-    int ret;
-
-    ASSERT(cert);
-
-    cert_subject = X509_get_subject_name(cert);
-    if (!cert_subject) {
-        LOG_WARN("reading certificate subject failed");
-        return false;
-    }
-
-    if ((size_t)X509_NAME_entry_count(cert_subject) != subject.size()) {
-        LOG_ERROR("subject mismatch: #entries cert=%d, input=%d",
-            X509_NAME_entry_count(cert_subject), subject.size());
-        return false;
-    }
-
-    in_subject = X509_NAME_new();
-    if (!in_subject) {
-        LOG_WARN("failed to allocate X509_NAME");
-        return false;
-    }
-
-    for (subject_iter = subject.begin(); subject_iter != subject.end(); subject_iter++) {
-        if (!X509_NAME_add_entry_by_txt(in_subject,
-                                        subject_iter->first.c_str(),
-                                        MBSTRING_UTF8,
-                                        (const unsigned char*)subject_iter->second.c_str(),
-                                        subject_iter->second.length(), -1, 0)) {
-            LOG_WARN("failed to add entry %s=%s to X509_NAME",
-                     subject_iter->first.c_str(), subject_iter->second.c_str());
-             X509_NAME_free(in_subject);
-             return false;
-        }
-    }
-
-    ret = X509_NAME_cmp(cert_subject, in_subject);
-    X509_NAME_free(in_subject);
-
-    if (ret == 0) {
-         DBG(0, "subjects match");
-         return true;
-    } else {
-         LOG_ERROR("host-subject mismatch");
-         return false;
-    }
-}
-
-int RedPeer::ssl_verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
-{
-    int depth;
-    SSL *ssl;
-    X509* cert;
-    SslVerifyCbData* verify_data;
-    int auth_flags;
-
-    depth = X509_STORE_CTX_get_error_depth(ctx);
-
-    ssl = (SSL*)X509_STORE_CTX_get_ex_data(ctx, SSL_get_ex_data_X509_STORE_CTX_idx());
-    if (!ssl) {
-        LOG_WARN("failed to get ssl connection");
-        return 0;
-    }
-
-    verify_data = (SslVerifyCbData*)SSL_get_app_data(ssl);
-    auth_flags = verify_data->info.type_flags;
-
-    if (depth > 0) {
-        // if certificate verification failed, we can still authorize the server
-        // if its public key matches the one we hold in the peer_connect_options.
-        if (!preverify_ok) {
-            DBG(0, "openssl verify failed at depth=%d", depth);
-            verify_data->all_preverify_ok = false;
-            if (auth_flags & HostAuthOptions::HOST_AUTH_OP_PUBKEY) {
-                return 1;
-            } else {
-                return 0;
-            }
-        } else {
-            return preverify_ok;
-        }
-    }
-
-    /* depth == 0 */
-    cert = X509_STORE_CTX_get_current_cert(ctx);
-    if (!cert) {
-        LOG_WARN("failed to get server certificate");
-        return 0;
-    }
-
-    if (auth_flags & HostAuthOptions::HOST_AUTH_OP_PUBKEY) {
-        if (verify_pubkey(cert, verify_data->info.host_pubkey)) {
-            return 1;
-        }
-    }
-
-    if (!verify_data->all_preverify_ok || !preverify_ok) {
-        return 0;
-    }
-
-    if (auth_flags & HostAuthOptions::HOST_AUTH_OP_NAME) {
-        if (verify_host_name(cert, verify_data->host_name)) {
-            return 1;
-        }
-    }
-
-    if (auth_flags & HostAuthOptions::HOST_AUTH_OP_SUBJECT) {
-        if (verify_subject(cert, verify_data->info.host_subject)) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
 void RedPeer::connect_secure(const ConnectionOptions& options, const char* host)
 {
     int return_code;
-    int auth_flags;
-    SslVerifyCbData auth_data;
+    SPICE_SSL_VERIFY_OP auth_flags;
+    SpiceOpenSSLVerify* verify = NULL;
 
     connect_unsecure(host, options.secure_port);
     ASSERT(_ctx == NULL && _ssl == NULL && _peer != INVALID_SOCKET);
@@ -485,37 +145,29 @@ void RedPeer::connect_secure(const ConnectionOptions& options, const char* host)
 #else
         SSL_METHOD *ssl_method = TLSv1_method();
 #endif
-        auth_data.info = options.host_auth;
-        auth_data.host_name = host;
-        auth_data.all_preverify_ok = true;
-
         _ctx = SSL_CTX_new(ssl_method);
         if (_ctx == NULL) {
             ssl_error();
         }
 
-        auth_flags = auth_data.info.type_flags;
-        if ((auth_flags & RedPeer::HostAuthOptions::HOST_AUTH_OP_NAME) ||
-            (auth_flags & RedPeer::HostAuthOptions::HOST_AUTH_OP_SUBJECT)) {
-            std::string CA_file = auth_data.info.CA_file;
+        auth_flags = options.host_auth.type_flags;
+        if ((auth_flags & SPICE_SSL_VERIFY_OP_HOSTNAME) ||
+            (auth_flags & SPICE_SSL_VERIFY_OP_SUBJECT)) {
+            std::string CA_file = options.host_auth.CA_file;
             ASSERT(!CA_file.empty());
 
             return_code = SSL_CTX_load_verify_locations(_ctx, CA_file.c_str(), NULL);
             if (return_code != 1) {
-                if (auth_flags & RedPeer::HostAuthOptions::HOST_AUTH_OP_PUBKEY) {
+                if (auth_flags & SPICE_SSL_VERIFY_OP_PUBKEY) {
                     LOG_WARN("SSL_CTX_load_verify_locations failed, CA_file=%s. "
                              "only pubkey authentication is active", CA_file.c_str());
-                    auth_data.info.type_flags = RedPeer::HostAuthOptions::HOST_AUTH_OP_PUBKEY;
+                    auth_flags = SPICE_SSL_VERIFY_OP_PUBKEY;
                 }
                 else {
                     LOG_ERROR("SSL_CTX_load_verify_locations failed CA_file=%s", CA_file.c_str());
                     ssl_error();
                 }
             }
-        }
-
-        if (auth_flags) {
-            SSL_CTX_set_verify(_ctx, SSL_VERIFY_PEER, ssl_verify_callback);
         }
 
         return_code = SSL_CTX_set_cipher_list(_ctx, options.ciphers.c_str());
@@ -529,13 +181,19 @@ void RedPeer::connect_secure(const ConnectionOptions& options, const char* host)
             THROW("create ssl failed");
         }
 
+        verify = spice_openssl_verify_new(
+            _ssl, auth_flags,
+            host,
+            (char*)&options.host_auth.host_pubkey[0],
+            options.host_auth.host_pubkey.size(),
+            options.host_auth.host_subject.c_str());
+
         BIO* sbio = BIO_new_socket(_peer, BIO_NOCLOSE);
         if (!sbio) {
             THROW("alloc new socket bio failed");
         }
 
         SSL_set_bio(_ssl, sbio, sbio);
-        SSL_set_app_data(_ssl, &auth_data);
 
         return_code = SSL_connect(_ssl);
         if (return_code <= 0) {
@@ -546,9 +204,12 @@ void RedPeer::connect_secure(const ConnectionOptions& options, const char* host)
         }
     } catch (...) {
         Lock lock(_lock);
+        spice_openssl_verify_free(verify);
         cleanup();
         throw;
     }
+
+    spice_openssl_verify_free(verify);
 }
 
 void RedPeer::shutdown()

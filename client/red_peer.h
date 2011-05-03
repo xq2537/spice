@@ -27,6 +27,8 @@
 #include "threads.h"
 #include "platform_utils.h"
 #include "marshaller.h"
+#include "debug.h"
+#include "ssl_verify.h"
 
 class RedPeer: protected EventSources::Socket {
 public:
@@ -41,24 +43,18 @@ public:
     class HostAuthOptions {
     public:
 
-        enum Type {
-            HOST_AUTH_OP_PUBKEY = 1,
-            HOST_AUTH_OP_NAME = (1 << 1),
-            HOST_AUTH_OP_SUBJECT = (1 << 2),
-        };
-
         typedef std::vector<uint8_t> PublicKey;
         typedef std::pair<std::string, std::string> CertFieldValuePair;
         typedef std::list<CertFieldValuePair> CertFieldValueList;
 
-        HostAuthOptions() : type_flags(0) {}
+        HostAuthOptions() : type_flags(SPICE_SSL_VERIFY_OP_NONE) {}
 
     public:
 
-        int type_flags;
+        SPICE_SSL_VERIFY_OP type_flags;
 
         PublicKey host_pubkey;
-        CertFieldValueList host_subject;
+        std::string host_subject;
         std::string CA_file;
     };
 
@@ -124,15 +120,6 @@ public:
 protected:
     virtual void on_event() {}
     virtual int get_socket() { return _peer;}
-
-    static bool x509_cert_host_name_compare(const char *cert_name, int cert_name_size,
-                                            const char *host_name);
-
-    static bool verify_pubkey(X509* cert, const HostAuthOptions::PublicKey& key);
-    static bool verify_host_name(X509* cert, const char* host_name);
-    static bool verify_subject(X509* cert, const HostAuthOptions::CertFieldValueList& subject);
-
-    static int ssl_verify_callback(int preverify_ok, X509_STORE_CTX *ctx);
     void cleanup();
 
 private:

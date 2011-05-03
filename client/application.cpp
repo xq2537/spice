@@ -354,7 +354,7 @@ Application::Application()
     , _monitors (NULL)
     , _title ("SPICEc:%d")
     , _sys_key_intercept_mode (false)
-	, _enable_controller (false)
+    , _enable_controller (false)
 #ifdef USE_GUI
     , _gui_mode (GUI_MODE_FULL)
 #endif // USE_GUI
@@ -387,7 +387,7 @@ Application::Application()
     _canvas_types[0] = CANVAS_OPTION_SW;
 #endif
 
-    _host_auth_opt.type_flags = RedPeer::HostAuthOptions::HOST_AUTH_OP_NAME;
+    _host_auth_opt.type_flags = SPICE_SSL_VERIFY_OP_HOSTNAME;
 
     Platform::get_app_data_dir(_host_auth_opt.CA_file, app_name);
     Platform::path_append(_host_auth_opt.CA_file, CA_FILE_NAME);
@@ -1993,9 +1993,11 @@ bool Application::set_host_cert_subject(const char* subject, const char* arg0)
     std::string subject_str(subject);
     std::string::const_iterator iter = subject_str.begin();
     std::string entry;
-    _host_auth_opt.type_flags = RedPeer::HostAuthOptions::HOST_AUTH_OP_SUBJECT;
-    _host_auth_opt.host_subject.clear();
+    _host_auth_opt.type_flags = SPICE_SSL_VERIFY_OP_SUBJECT;
+    _host_auth_opt.host_subject = subject;
 
+    /* the follow is only checking code, subject is parsed later
+       ssl_verify.c.  We keep simply because of better error message... */
     while (true) {
         if ((iter == subject_str.end()) || (*iter == ',')) {
             RedPeer::HostAuthOptions::CertFieldValuePair entry_pair;
@@ -2015,7 +2017,6 @@ bool Application::set_host_cert_subject(const char* subject, const char* arg0)
             }
             entry_pair.first = entry.substr(start_pos, value_pos - start_pos);
             entry_pair.second = entry.substr(value_pos + 1);
-            _host_auth_opt.host_subject.push_back(entry_pair);
             DBG(0, "subject entry: %s=%s", entry_pair.first.c_str(), entry_pair.second.c_str());
             if (iter == subject_str.end()) {
                 break;
@@ -2039,6 +2040,7 @@ bool Application::set_host_cert_subject(const char* subject, const char* arg0)
         }
         iter++;
     }
+
     return true;
 }
 
@@ -2284,8 +2286,9 @@ bool Application::process_cmd_line(int argc, char** argv, bool &full_screen)
 #ifdef USE_SMARTCARD
     parser.add(SPICE_OPT_SMARTCARD, "smartcard", "enable smartcard channel");
     parser.add(SPICE_OPT_NOSMARTCARD, "nosmartcard", "disable smartcard channel");
-    parser.add(SPICE_OPT_SMARTCARD_CERT, "smartcard-cert", "Use virtual reader+card with given cert(s)",
-        "smartcard-cert", true);
+    parser.add(SPICE_OPT_SMARTCARD_CERT, "smartcard-cert",
+               "Use virtual reader+card with given cert(s)",
+               "smartcard-cert", true);
     parser.set_multi(SPICE_OPT_SMARTCARD_CERT, ',');
     parser.add(SPICE_OPT_SMARTCARD_DB, "smartcard-db", "Use given db for smartcard certs", "smartcard-db", true);
 #endif
@@ -2516,7 +2519,7 @@ void spice_log(unsigned int type, const char *function, const char *format, ...)
                 Platform::get_thread_id(),
                 function_to_func_name(function).c_str(),
                 formated_message.c_str());
-		fflush(log_file);
+        fflush(log_file);
     }
 
     if (type >= LOG_WARN) {
