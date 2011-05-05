@@ -933,7 +933,8 @@ static void red_display_release_stream_clip(DisplayChannel* channel, StreamClipI
 static int red_display_free_some_independent_glz_drawables(DisplayChannel *channel);
 static void red_display_free_glz_drawable(DisplayChannel *channel, RedGlzDrawable *drawable);
 static void reset_rate(RedWorker *worker, StreamAgent *stream_agent);
-static BitmapGradualType _get_bitmap_graduality_level(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_id);
+static BitmapGradualType _get_bitmap_graduality_level(RedWorker *worker, SpiceBitmap *bitmap,
+                                                      uint32_t group_id);
 static inline int _stride_is_extra(SpiceBitmap *bitmap);
 static void red_disconnect_cursor(RedChannel *channel);
 static void red_wait_pipe_item_sent(RedChannel *channel, PipeItem *item);
@@ -1214,7 +1215,8 @@ static inline void red_pipe_add_drawable_to_tail(RedWorker *worker, Drawable *dr
     }
     red_handle_drawable_surfaces_client_synced(worker, drawable);
     drawable->refs++;
-    red_channel_client_pipe_add_tail(worker->display_channel->common.base.rcc, &drawable->pipe_item);
+    red_channel_client_pipe_add_tail(worker->display_channel->common.base.rcc,
+                                     &drawable->pipe_item);
 }
 
 static inline void red_pipe_add_drawable_after(RedWorker *worker, Drawable *drawable,
@@ -1230,7 +1232,8 @@ static inline void red_pipe_add_drawable_after(RedWorker *worker, Drawable *draw
     }
     red_handle_drawable_surfaces_client_synced(worker, drawable);
     drawable->refs++;
-    red_channel_client_pipe_add_after(worker->display_channel->common.base.rcc, &drawable->pipe_item, &pos_after->pipe_item);
+    red_channel_client_pipe_add_after(worker->display_channel->common.base.rcc,
+                                      &drawable->pipe_item, &pos_after->pipe_item);
 }
 
 static inline PipeItem *red_pipe_get_tail(RedWorker *worker)
@@ -2260,7 +2263,8 @@ static inline void red_detach_stream_gracefully(RedWorker *worker, Stream *strea
         n_rects = pixman_region32_n_rects(&upgrade_item->drawable->tree_item.base.rgn);
         upgrade_item->rects = spice_malloc_n_m(n_rects, sizeof(SpiceRect), sizeof(SpiceClipRects));
         upgrade_item->rects->num_rects = n_rects;
-        region_ret_rects(&upgrade_item->drawable->tree_item.base.rgn, upgrade_item->rects->rects, n_rects);
+        region_ret_rects(&upgrade_item->drawable->tree_item.base.rgn,
+                         upgrade_item->rects->rects, n_rects);
         red_channel_client_pipe_add(channel->common.base.rcc, &upgrade_item->base);
     }
     red_detach_stream(worker, stream);
@@ -2641,7 +2645,8 @@ static inline void red_update_copy_graduality(RedWorker* worker, Drawable *drawa
         (bitmap->data->flags & SPICE_CHUNKS_FLAGS_UNSTABLE)) {
         drawable->copy_bitmap_graduality = BITMAP_GRADUAL_NOT_AVAIL;
     } else  {
-        drawable->copy_bitmap_graduality = _get_bitmap_graduality_level(worker, bitmap, drawable->group_id);
+        drawable->copy_bitmap_graduality =
+            _get_bitmap_graduality_level(worker, bitmap,drawable->group_id);
     }
 }
 
@@ -3197,8 +3202,10 @@ static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
 
     bpp = SPICE_SURFACE_FMT_DEPTH(surface->context.format) / 8;
 
-    width = drawable->red_drawable->self_bitmap_area.right - drawable->red_drawable->self_bitmap_area.left;
-    height = drawable->red_drawable->self_bitmap_area.bottom - drawable->red_drawable->self_bitmap_area.top;
+    width = drawable->red_drawable->self_bitmap_area.right
+            - drawable->red_drawable->self_bitmap_area.left;
+    height = drawable->red_drawable->self_bitmap_area.bottom
+            - drawable->red_drawable->self_bitmap_area.top;
     dest_stride = SPICE_ALIGN(width * bpp, 4);
 
     image = spice_new0(SpiceImage, 1);
@@ -3643,7 +3650,8 @@ static void image_cache_eaging(ImageCache *cache)
 #endif
 }
 
-static void localize_bitmap(RedWorker *worker, SpiceImage **image_ptr, SpiceImage *image_store, Drawable *drawable)
+static void localize_bitmap(RedWorker *worker, SpiceImage **image_ptr, SpiceImage *image_store,
+                            Drawable *drawable)
 {
     SpiceImage *image = *image_ptr;
 
@@ -4006,7 +4014,7 @@ static void red_update_area_till(RedWorker *worker, const SpiceRect *area, int s
     region_init(&rgn);
     region_add(&rgn, area);
 
-    // find the first older drawable that intersects with the area 
+    // find the first older drawable that intersects with the area
     do {
         now = SPICE_CONTAINEROF(ring_item, Drawable, surface_list_link);
         if (region_intersects(&rgn, &now->tree_item.base.rgn)) {
@@ -4016,7 +4024,7 @@ static void red_update_area_till(RedWorker *worker, const SpiceRect *area, int s
     } while ((ring_item = ring_next(ring, ring_item)));
 
     region_destroy(&rgn);
-    
+
     if (!surface_last) {
         return;
     }
@@ -4343,8 +4351,9 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
             red_error("bad command type");
         }
         n++;
-        if ((worker->display_channel && red_channel_all_blocked(&worker->display_channel->common.base)) ||
-            red_now() - start > 10 * 1000 * 1000) {
+        if ((worker->display_channel &&
+             red_channel_all_blocked(&worker->display_channel->common.base))
+            || red_now() - start > 10 * 1000 * 1000) {
             worker->epoll_timeout = 0;
             return n;
         }
@@ -5131,7 +5140,8 @@ typedef uint16_t rgb16_pixel_t;
 #define GRADUAL_MEDIUM_SCORE_TH 0.002
 
 // assumes that stride doesn't overflow
-static BitmapGradualType _get_bitmap_graduality_level(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_id)
+static BitmapGradualType _get_bitmap_graduality_level(RedWorker *worker, SpiceBitmap *bitmap,
+                                                      uint32_t group_id)
 {
     double score = 0.0;
     int num_samples = 0;
@@ -5938,7 +5948,8 @@ static void fill_attr(SpiceMarshaller *m, SpiceLineAttr *attr, uint32_t group_id
     }
 }
 
-static void fill_cursor(CursorChannel *cursor_channel, SpiceCursor *red_cursor, CursorItem *cursor, AddBufInfo *addbuf)
+static void fill_cursor(CursorChannel *cursor_channel, SpiceCursor *red_cursor,
+                        CursorItem *cursor, AddBufInfo *addbuf)
 {
     RedCursorCmd *cursor_cmd;
     addbuf->data = NULL;
@@ -7239,7 +7250,8 @@ static void display_channel_push_release(DisplayChannel *channel, uint8_t type, 
 
     if (free_list->res->count == free_list->res_size) {
         SpiceResourceList *new_list;
-        new_list = spice_malloc(sizeof(*new_list) + free_list->res_size * sizeof(SpiceResourceID) * 2);
+        new_list = spice_malloc(sizeof(*new_list) +
+                                free_list->res_size * sizeof(SpiceResourceID) * 2);
         new_list->count = free_list->res->count;
         memcpy(new_list->resources, free_list->res->resources,
                new_list->count * sizeof(SpiceResourceID));
@@ -7251,7 +7263,8 @@ static void display_channel_push_release(DisplayChannel *channel, uint8_t type, 
     free_list->res->resources[free_list->res->count++].id = id;
 }
 
-static inline void display_begin_send_message(RedChannelClient *rcc, SpiceMarshaller *base_marshaller)
+static inline void display_begin_send_message(RedChannelClient *rcc,
+                                              SpiceMarshaller *base_marshaller)
 {
     DisplayChannel *display_channel = SPICE_CONTAINEROF(rcc->channel, DisplayChannel, common.base);
     FreeList *free_list = &display_channel->send_data.free_list;
@@ -7268,8 +7281,8 @@ static inline void display_begin_send_message(RedChannelClient *rcc, SpiceMarsha
 
         /* type + size + submessage */
         spice_marshaller_add_uint16(inval_m, SPICE_MSG_DISPLAY_INVAL_LIST);
-        spice_marshaller_add_uint32(inval_m,
-                                    sizeof(*free_list->res) + free_list->res->count * sizeof(free_list->res->resources[0]));
+        spice_marshaller_add_uint32(inval_m, sizeof(*free_list->res) +
+                        free_list->res->count * sizeof(free_list->res->resources[0]));
         spice_marshall_msg_display_inval_list(inval_m, free_list->res);
 
         for (i = 0; i < MAX_CACHE_CLIENTS; i++) {
@@ -7286,8 +7299,8 @@ static inline void display_begin_send_message(RedChannelClient *rcc, SpiceMarsha
 
             /* type + size + submessage */
             spice_marshaller_add_uint16(wait_m, SPICE_MSG_WAIT_FOR_CHANNELS);
-            spice_marshaller_add_uint32(wait_m,
-                                        sizeof(free_list->wait.header) + sync_count * sizeof(free_list->wait.buf[0]));
+            spice_marshaller_add_uint32(wait_m, sizeof(free_list->wait.header) +
+                                                sync_count * sizeof(free_list->wait.buf[0]));
             spice_marshall_msg_wait_for_channels(wait_m, &free_list->wait.header);
             sub_list_len++;
         }
@@ -7487,7 +7500,8 @@ static void display_channel_marshall_migrate(RedChannelClient *rcc,
     display_channel->expect_migrate_mark = TRUE;
 }
 
-static void display_channel_marshall_migrate_data(RedChannelClient *rcc, SpiceMarshaller *base_marshaller)
+static void display_channel_marshall_migrate_data(RedChannelClient *rcc,
+                                                  SpiceMarshaller *base_marshaller)
 {
     DisplayChannel *display_channel = SPICE_CONTAINEROF(rcc->channel, DisplayChannel, common.base);
     DisplayChannelMigrateData display_data;
@@ -7518,7 +7532,8 @@ static void display_channel_marshall_migrate_data(RedChannelClient *rcc, SpiceMa
                              (uint8_t *)&display_data, sizeof(display_data));
 }
 
-static void display_channel_marshall_pixmap_sync(RedChannelClient *rcc, SpiceMarshaller *base_marshaller)
+static void display_channel_marshall_pixmap_sync(RedChannelClient *rcc,
+                                                 SpiceMarshaller *base_marshaller)
 {
     DisplayChannel *display_channel = SPICE_CONTAINEROF(rcc->channel, DisplayChannel, common.base);
     SpiceMsgWaitForChannels wait;
@@ -7541,7 +7556,8 @@ static void display_channel_marshall_pixmap_sync(RedChannelClient *rcc, SpiceMar
     spice_marshall_msg_wait_for_channels(base_marshaller, &wait);
 }
 
-static void display_channel_marshall_reset_cache(RedChannelClient *rcc, SpiceMarshaller *base_marshaller)
+static void display_channel_marshall_reset_cache(RedChannelClient *rcc,
+                                                 SpiceMarshaller *base_marshaller)
 {
     DisplayChannel *display_channel = SPICE_CONTAINEROF(rcc->channel, DisplayChannel, common.base);
     SpiceMsgWaitForChannels wait;
@@ -7686,7 +7702,8 @@ static void red_marshall_image( RedChannelClient *rcc, SpiceMarshaller *m, Image
     spice_chunks_destroy(chunks);
 }
 
-static void red_display_marshall_upgrade(RedChannelClient *rcc, SpiceMarshaller *m, UpgradeItem *item)
+static void red_display_marshall_upgrade(RedChannelClient *rcc, SpiceMarshaller *m,
+                                         UpgradeItem *item)
 {
     RedDrawable *red_drawable;
     SpiceMsgDisplayDrawCopy copy;
@@ -7810,7 +7827,8 @@ static void red_marshall_cursor_init(RedChannelClient *rcc, SpiceMarshaller *bas
     add_buf_from_info(base_marshaller, &info);
 }
 
-static void cursor_channel_marshall_migrate(RedChannelClient *rcc, SpiceMarshaller *base_marshaller)
+static void cursor_channel_marshall_migrate(RedChannelClient *rcc,
+                                            SpiceMarshaller *base_marshaller)
 {
     SpiceMsgMigrate migrate;
 
@@ -8456,7 +8474,8 @@ static void push_new_primary_surface(RedWorker *worker)
     DisplayChannel *display_channel;
 
     if ((display_channel = worker->display_channel)) {
-        red_channel_client_pipe_add_type(display_channel->common.base.rcc, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
+        red_channel_client_pipe_add_type(display_channel->common.base.rcc,
+                                         PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
         if (!display_channel->common.base.migrate) {
             red_create_surface_item(worker, 0);
         }
@@ -8739,8 +8758,8 @@ static int display_channel_handle_migrate_glz_dictionary(DisplayChannel *channel
     ring_init(&channel->glz_drawables_inst_to_free);
     pthread_mutex_init(&channel->glz_drawables_inst_to_free_lock, NULL);
     return !!(channel->glz_dict = red_restore_glz_dictionary(channel,
-                                                             migrate_info->glz_dict_id,
-                                                             &migrate_info->glz_dict_restore_data));
+                                                         migrate_info->glz_dict_id,
+                                                         &migrate_info->glz_dict_restore_data));
 }
 
 static int display_channel_handle_migrate_mark(RedChannelClient *rcc)
@@ -8833,7 +8852,8 @@ static int display_channel_handle_message(RedChannelClient *rcc, uint32_t size, 
             return FALSE;
         }
         ((DisplayChannel *)rcc->channel)->expect_init = FALSE;
-        return display_channel_init((DisplayChannel *)rcc->channel, (SpiceMsgcDisplayInit *)message);
+        return display_channel_init((DisplayChannel *)rcc->channel,
+                                    (SpiceMsgcDisplayInit *)message);
     default:
         return red_channel_client_handle_message(rcc, size, type, message);
     }
@@ -10275,4 +10295,3 @@ static void dump_bitmap(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_i
 }
 
 #endif
-
