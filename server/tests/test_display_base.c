@@ -559,10 +559,12 @@ void test_set_simple_command_list(int* commands, int num_commands)
 
 SpiceServer* test_init(SpiceCoreInterface *core)
 {
+    int port = 5912;
     SpiceServer* server = spice_server_new();
 
     // some common initialization for all display tests
-    spice_server_set_port(server, 5912);
+    printf("TESTER: listening on port %d (unsecure)\n", port);
+    spice_server_set_port(server, port);
     spice_server_set_noauth(server);
     spice_server_init(server, core);
 
