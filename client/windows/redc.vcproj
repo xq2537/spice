@@ -57,7 +57,7 @@
 				UsePrecompiledHeader="1"
 				PrecompiledHeaderThrough="common.h"
 				WarningLevel="3"
-				WarnAsError="true"
+				WarnAsError="false"
 				Detect64BitPortabilityProblems="false"
 				DebugInformationFormat="4"
 			/>
@@ -225,7 +225,7 @@
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
 				WarningLevel="3"
-				WarnAsError="true"
+				WarnAsError="false"
 				Detect64BitPortabilityProblems="false"
 				DebugInformationFormat="3"
 			/>
@@ -633,6 +633,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\common\ssl_verify.c"
+				>
+			</File>
+			<File
 				RelativePath="..\threads.cpp"
 				>
 			</File>
@@ -860,6 +864,10 @@
 			</File>
 			<File
 				RelativePath="..\gui\softtexture.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\common\ssl_verify.h"
 				>
 			</File>
 			<File
