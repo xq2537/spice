@@ -62,6 +62,8 @@
 
 #define strcasecmp stricmp
 
+extern const char* PACKAGE_VERSION;
+
 #else
 #include <unistd.h>
 #include <X11/X.h>

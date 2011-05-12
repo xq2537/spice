@@ -41,7 +41,7 @@ static void init_winsock()
     }
 }
 
-const char* version_string = "???";
+const char* PACKAGE_VERSION = "???";
 static char _version_string[40];
 
 static void init_version_string()
@@ -66,7 +66,7 @@ static void init_version_string()
         (int)(file_info->dwFileVersionMS & 0x0ffff),
         (int)(file_info->dwFileVersionLS >> 16),
         (int)(file_info->dwFileVersionLS & 0x0ffff));
-    version_string = _version_string;
+    PACKAGE_VERSION = _version_string;
 }
 
 int WINAPI WinMain(HINSTANCE hInstance,
@@ -82,7 +82,7 @@ int WINAPI WinMain(HINSTANCE hInstance,
         init_version_string();
         pthread_win32_process_attach_np();
         init_winsock();
-        exit_val = Application::main(__argc, __argv, version_string);
+        exit_val = Application::main(__argc, __argv, PACKAGE_VERSION);
         LOG_INFO("Spice client terminated (exitcode = %d)", exit_val);
     } catch (Exception& e) {
         LOG_ERROR("unhandle exception: %s", e.what());
