@@ -26,7 +26,7 @@
 extern "C" {
 #endif
 
-static inline void rect_sect(SpiceRect* r, const SpiceRect* bounds)
+static INLINE void rect_sect(SpiceRect* r, const SpiceRect* bounds)
 {
     r->left = MAX(r->left, bounds->left);
     r->right = MIN(r->right, bounds->right);
@@ -37,7 +37,7 @@ static inline void rect_sect(SpiceRect* r, const SpiceRect* bounds)
     r->bottom = MAX(r->top, r->bottom);
 }
 
-static inline void rect_offset(SpiceRect* r, int dx, int dy)
+static INLINE void rect_offset(SpiceRect* r, int dx, int dy)
 {
     r->left += dx;
     r->right += dx;
@@ -45,24 +45,24 @@ static inline void rect_offset(SpiceRect* r, int dx, int dy)
     r->bottom += dy;
 }
 
-static inline int rect_is_empty(const SpiceRect* r)
+static INLINE int rect_is_empty(const SpiceRect* r)
 {
     return r->top == r->bottom || r->left == r->right;
 }
 
-static inline int rect_intersects(const SpiceRect* r1, const SpiceRect* r2)
+static INLINE int rect_intersects(const SpiceRect* r1, const SpiceRect* r2)
 {
     return r1->left < r2->right && r1->right > r2->left &&
            r1->top < r2->bottom && r1->bottom > r2->top;
 }
 
-static inline int rect_is_equal(const SpiceRect *r1, const SpiceRect *r2)
+static INLINE int rect_is_equal(const SpiceRect *r1, const SpiceRect *r2)
 {
     return r1->top == r2->top && r1->left == r2->left &&
            r1->bottom == r2->bottom && r1->right == r2->right;
 }
 
-static inline void rect_union(SpiceRect *dest, const SpiceRect *r)
+static INLINE void rect_union(SpiceRect *dest, const SpiceRect *r)
 {
     dest->top = MIN(dest->top, r->top);
     dest->left = MIN(dest->left, r->left);
@@ -70,7 +70,7 @@ static inline void rect_union(SpiceRect *dest, const SpiceRect *r)
     dest->right = MAX(dest->right, r->right);
 }
 
-static inline int rect_is_same_size(const SpiceRect *r1, const SpiceRect *r2)
+static INLINE int rect_is_same_size(const SpiceRect *r1, const SpiceRect *r2)
 {
     return r1->right - r1->left == r2->right - r2->left &&
            r1->bottom - r1->top == r2->bottom - r2->top;

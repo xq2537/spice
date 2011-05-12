@@ -84,8 +84,7 @@ typedef struct lineGC *GCPtr;
 #define miWideDash spice_canvas_wide_dash_line
 #define miWideLine spice_canvas_wide_line
 
-static int inline
-ICEIL (double x)
+static INLINE int ICEIL (double x)
 {
     int _cTmp = (int)x;
     return ((x == _cTmp) || (x < 0.0)) ? _cTmp : _cTmp + 1;

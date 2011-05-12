@@ -20,36 +20,26 @@
 #define __QUIC_CONFIG_H
 
 #include <spice/types.h>
+#include <spice/macros.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #ifdef __GNUC__
-
 #include <string.h>
-
-#define INLINE inline
-
 #define MEMCLEAR(ptr, size) memset(ptr, 0, size)
-
 #else
-
 #ifdef QXLDD
 #include <windef.h>
 #include "os_dep.h"
-#define INLINE _inline
 #define MEMCLEAR(ptr, size) RtlZeroMemory(ptr, size)
 #else
 #include <stddef.h>
 #include <string.h>
-
-#define INLINE inline
 #define MEMCLEAR(ptr, size) memset(ptr, 0, size)
-#endif
-
-
-#endif
+#endif  // QXLDD
+#endif  //__GNUC__
 
 #ifdef __cplusplus
 }

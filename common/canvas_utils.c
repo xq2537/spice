@@ -100,7 +100,7 @@ spice_pixman_image_get_format(pixman_image_t *image)
     CANVAS_ERROR("Unknown pixman image type");
 }
 
-static inline pixman_image_t *__surface_create_stride(pixman_format_code_t format, int width, int height,
+static INLINE pixman_image_t *__surface_create_stride(pixman_format_code_t format, int width, int height,
                                                       int stride)
 {
     uint8_t *data;

@@ -21,12 +21,14 @@
 #ifndef BITOPS_H
 #define BITOPS_H
 
+#include <spice/macros.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #ifdef WIN32
-static inline int spice_bit_find_msb(uint32_t val)
+static INLINE int spice_bit_find_msb(uint32_t val)
 {
     uint32_t r;
     __asm {
@@ -74,7 +76,7 @@ static inline int spice_bit_find_msb(unsigned int val)
 
 #endif
 
-static inline int spice_bit_next_pow2(unsigned int val)
+static INLINE int spice_bit_next_pow2(unsigned int val)
 {
     if ((val & (val - 1)) == 0) {
         return val;
