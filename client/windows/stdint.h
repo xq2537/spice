@@ -293,7 +293,7 @@ typedef unsigned long long   uintmax_t;
 #define SIG_ATOMIC_MAX INT32_MAX
 
 
-
+#undef SIZE_MAX
 #define SIZE_MAX UINT32_MAX
 
 
