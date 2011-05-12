@@ -2429,6 +2429,7 @@ bool Application::process_cmd_line(int argc, char** argv, bool &full_screen)
 
     if (host.empty()) {
         Platform::term_printf("%s: missing --host\n", argv[0]);
+        _exit_code = SPICEC_ERROR_CODE_CMD_LINE_ERROR;
         return false;
     }
 
