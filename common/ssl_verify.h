@@ -19,6 +19,11 @@
 #ifndef SSL_VERIFY_H
 #define SSL_VERIFY_H
 
+#ifdef WIN32
+#include <windows.h>
+#include <wincrypt.h>
+#endif
+
 #include <openssl/rsa.h>
 #include <openssl/evp.h>
 #include <openssl/x509.h>

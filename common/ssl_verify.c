@@ -31,7 +31,7 @@
 #include <ctype.h>
 
 #ifndef SPICE_DEBUG
-# define SPICE_DEBUG(format, args...)
+# define SPICE_DEBUG(format, ...)
 #endif
 
 #ifdef WIN32
@@ -165,6 +165,7 @@ static int verify_hostname(X509* cert, const char *hostname)
     struct in_addr addr;
     int addr_len = 0;
     int cn_match = 0;
+    X509_NAME* subject;
 
     if (!cert) {
         SPICE_DEBUG("warning: no cert!");
@@ -227,7 +228,7 @@ static int verify_hostname(X509* cert, const char *hostname)
     }
 
     /* extracting commonNames */
-    X509_NAME* subject = X509_get_subject_name(cert);
+    subject = X509_get_subject_name(cert);
     if (subject) {
         int pos = -1;
         X509_NAME_ENTRY* cn_entry;
