@@ -217,7 +217,7 @@ public:
 #ifdef WIN32
 static int create_bitmap(HDC *dc, HBITMAP *prev_bitmap,
                          uint8_t **data, int *nstride,
-                         int width, int height)
+                         int width, int height, bool top_down)
 {
     HBITMAP bitmap;
     struct {
@@ -228,7 +228,7 @@ static int create_bitmap(HDC *dc, HBITMAP *prev_bitmap,
     memset(&bitmap_info, 0, sizeof(bitmap_info));
     bitmap_info.inf.bmiHeader.biSize = sizeof(bitmap_info.inf.bmiHeader);
     bitmap_info.inf.bmiHeader.biWidth = width;
-    bitmap_info.inf.bmiHeader.biHeight = height;
+    bitmap_info.inf.bmiHeader.biHeight = top_down ? -height : height;
 
     bitmap_info.inf.bmiHeader.biPlanes = 1;
     bitmap_info.inf.bmiHeader.biBitCount = 32;
@@ -284,7 +284,7 @@ VideoStream::VideoStream(RedClient& client, Canvas& canvas, DisplayChannel& chan
     try {
 #ifdef WIN32
         if (!create_bitmap(&_dc, &_prev_bitmap, &_uncompressed_data, &_stride,
-                           stream_width, stream_height)) {
+                           stream_width, stream_height, _top_down)) {
             THROW("create_bitmap failed");
         }
 #else
@@ -299,6 +299,8 @@ VideoStream::VideoStream(RedClient& client, Canvas& canvas, DisplayChannel& chan
         SetViewportOrgEx(_dc, 0, stream_height - src_height, NULL);
 #endif
 
+    // this doesn't have effect when using gdi_canvas. The sign of BITMAPINFO's biHeight
+    // determines the orientation (see create_bitmap).
 	if (_top_down) {
 	    _pixmap.data = _uncompressed_data;
 	    _pixmap.stride = _stride;
