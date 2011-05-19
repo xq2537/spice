@@ -205,6 +205,16 @@ AC_SUBST(CELT051_LIBS)
 AC_SUBST(CELT051_LIBDIR)
 SPICE_REQUIRES+=" celt051 >= 0.5.1.1"
 
+if test ! -e client/generated_marshallers.cpp; then
+AC_MSG_CHECKING([for pyparsing python module])
+echo "import pyparsing" | python - >/dev/null 2&>1
+if test $? -ne 0 ; then
+    AC_MSG_RESULT([not found])
+    AC_MSG_ERROR([pyparsing python module is required to compile this package])
+fi
+AC_MSG_RESULT([found])
+fi
+
 if test "$os_linux" = yes; then
 	PKG_CHECK_MODULES(ALSA, alsa)
 	AC_SUBST(ALSA_CFLAGS)
