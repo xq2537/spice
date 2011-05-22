@@ -27,7 +27,7 @@
 extern "C" {
 #endif
 
-#ifdef WIN32
+#if defined(WIN32) && !defined(_WIN64)
 static INLINE int spice_bit_find_msb(uint32_t val)
 {
     uint32_t r;
@@ -56,7 +56,7 @@ static inline int spice_bit_find_msb(unsigned int val)
 }
 
 #else
-static inline int spice_bit_find_msb(unsigned int val)
+static INLINE int spice_bit_find_msb(unsigned int val)
 {
     signed char index = 31;
 
