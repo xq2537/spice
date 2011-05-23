@@ -268,7 +268,7 @@ struct SpiceTabletInstance {
 
 #define SPICE_INTERFACE_PLAYBACK "playback"
 #define SPICE_INTERFACE_PLAYBACK_MAJOR 1
-#define SPICE_INTERFACE_PLAYBACK_MINOR 1
+#define SPICE_INTERFACE_PLAYBACK_MINOR 2
 typedef struct SpicePlaybackInterface SpicePlaybackInterface;
 typedef struct SpicePlaybackInstance SpicePlaybackInstance;
 typedef struct SpicePlaybackState SpicePlaybackState;
@@ -296,10 +296,13 @@ void spice_server_playback_get_buffer(SpicePlaybackInstance *sin,
                                       uint32_t **samples, uint32_t *nsamples);
 void spice_server_playback_put_samples(SpicePlaybackInstance *sin,
                                        uint32_t *samples);
+void spice_server_playback_set_volume(SpicePlaybackInstance *sin,
+                                      uint8_t nchannels, uint16_t *volume);
+void spice_server_playback_set_mute(SpicePlaybackInstance *sin, uint8_t mute);
 
 #define SPICE_INTERFACE_RECORD "record"
 #define SPICE_INTERFACE_RECORD_MAJOR 2
-#define SPICE_INTERFACE_RECORD_MINOR 1
+#define SPICE_INTERFACE_RECORD_MINOR 2
 typedef struct SpiceRecordInterface SpiceRecordInterface;
 typedef struct SpiceRecordInstance SpiceRecordInstance;
 typedef struct SpiceRecordState SpiceRecordState;
@@ -321,6 +324,9 @@ void spice_server_record_start(SpiceRecordInstance *sin);
 void spice_server_record_stop(SpiceRecordInstance *sin);
 uint32_t spice_server_record_get_samples(SpiceRecordInstance *sin,
                                          uint32_t *samples, uint32_t bufsize);
+void spice_server_record_set_volume(SpiceRecordInstance *sin,
+                                    uint8_t nchannels, uint16_t *volume);
+void spice_server_record_set_mute(SpiceRecordInstance *sin, uint8_t mute);
 
 /* char device interfaces */
 

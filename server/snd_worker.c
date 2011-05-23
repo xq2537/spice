@@ -52,20 +52,24 @@ enum PlaybackeCommand {
     SND_PLAYBACK_MODE,
     SND_PLAYBACK_CTRL,
     SND_PLAYBACK_PCM,
+    SND_PLAYBACK_VOLUME,
 };
 
 enum RecordCommand {
     SND_RECORD_MIGRATE,
     SND_RECORD_CTRL,
+    SND_RECORD_VOLUME,
 };
 
 #define SND_PLAYBACK_MIGRATE_MASK (1 << SND_PLAYBACK_MIGRATE)
 #define SND_PLAYBACK_MODE_MASK (1 << SND_PLAYBACK_MODE)
 #define SND_PLAYBACK_CTRL_MASK (1 << SND_PLAYBACK_CTRL)
 #define SND_PLAYBACK_PCM_MASK (1 << SND_PLAYBACK_PCM)
+#define SND_PLAYBACK_VOLUME_MASK (1 << SND_PLAYBACK_VOLUME)
 
 #define SND_RECORD_MIGRATE_MASK (1 << SND_RECORD_MIGRATE)
 #define SND_RECORD_CTRL_MASK (1 << SND_RECORD_CTRL)
+#define SND_RECORD_VOLUME_MASK (1 << SND_RECORD_VOLUME)
 
 typedef struct SndChannel SndChannel;
 typedef void (*send_messages_proc)(void *in_channel);
@@ -141,14 +145,22 @@ struct SndWorker {
     int active;
 };
 
+typedef struct SpiceVolumeState {
+    uint8_t volume_nchannels;
+    uint16_t *volume;
+    int mute;
+} SpiceVolumeState;
+
 struct SpicePlaybackState {
     struct SndWorker worker;
     SpicePlaybackInstance *sin;
+    SpiceVolumeState volume;
 };
 
 struct SpiceRecordState {
     struct SndWorker worker;
     SpiceRecordInstance *sin;
+    SpiceVolumeState volume;
 };
 
 #define RECORD_MIG_VERSION 1
@@ -508,6 +520,54 @@ static int snd_playback_send_migrate(PlaybackChannel *channel)
     return snd_begin_send_message((SndChannel *)channel);
 }
 
+static int snd_send_volume(SndChannel *channel, SpiceVolumeState *st, int msg)
+{
+    SpiceMsgAudioVolume *vol;
+    uint8_t c;
+
+    vol = alloca(sizeof (SpiceMsgAudioVolume) +
+                 st->volume_nchannels * sizeof (uint16_t));
+    if (!snd_reset_send_data(channel, msg)) {
+        return FALSE;
+    }
+    vol->nchannels = st->volume_nchannels;
+    for (c = 0; c < st->volume_nchannels; ++c) {
+        vol->volume[c] = st->volume[c];
+    }
+    spice_marshall_SpiceMsgAudioVolume(channel->send_data.marshaller, vol);
+
+    return snd_begin_send_message(channel);
+}
+
+static int snd_playback_send_volume(PlaybackChannel *playback_channel)
+{
+    SndChannel *channel = &playback_channel->base;
+    SpicePlaybackState *st = SPICE_CONTAINEROF(channel->worker, SpicePlaybackState, worker);
+
+    return snd_send_volume(channel, &st->volume, SPICE_MSG_PLAYBACK_VOLUME);
+}
+
+static int snd_send_mute(SndChannel *channel, SpiceVolumeState *st, int msg)
+{
+    SpiceMsgAudioMute mute;
+
+    if (!snd_reset_send_data(channel, msg)) {
+        return FALSE;
+    }
+    mute.mute = st->mute;
+    spice_marshall_SpiceMsgAudioMute(channel->send_data.marshaller, &mute);
+
+    return snd_begin_send_message(channel);
+}
+
+static int snd_playback_send_mute(PlaybackChannel *playback_channel)
+{
+    SndChannel *channel = &playback_channel->base;
+    SpicePlaybackState *st = SPICE_CONTAINEROF(channel->worker, SpicePlaybackState, worker);
+
+    return snd_send_mute(channel, &st->volume, SPICE_MSG_PLAYBACK_MUTE);
+}
+
 static int snd_playback_send_start(PlaybackChannel *playback_channel)
 {
     SndChannel *channel = (SndChannel *)playback_channel;
@@ -587,6 +647,22 @@ static int snd_record_send_ctl(RecordChannel *record_channel)
     } else {
         return snd_record_send_stop(record_channel);
     }
+}
+
+static int snd_record_send_volume(RecordChannel *record_channel)
+{
+    SndChannel *channel = &record_channel->base;
+    SpiceRecordState *st = SPICE_CONTAINEROF(channel->worker, SpiceRecordState, worker);
+
+    return snd_send_volume(channel, &st->volume, SPICE_MSG_RECORD_VOLUME);
+}
+
+static int snd_record_send_mute(RecordChannel *record_channel)
+{
+    SndChannel *channel = &record_channel->base;
+    SpiceRecordState *st = SPICE_CONTAINEROF(channel->worker, SpiceRecordState, worker);
+
+    return snd_send_mute(channel, &st->volume, SPICE_MSG_RECORD_MUTE);
 }
 
 static int snd_record_send_migrate(RecordChannel *record_channel)
@@ -704,6 +780,13 @@ static void snd_playback_send(void* data)
             }
             channel->command &= ~SND_PLAYBACK_CTRL_MASK;
         }
+        if (channel->command & SND_PLAYBACK_VOLUME_MASK) {
+            if (!snd_playback_send_volume(playback_channel) ||
+                !snd_playback_send_mute(playback_channel)) {
+                return;
+            }
+            channel->command &= ~SND_PLAYBACK_VOLUME_MASK;
+        }
         if (channel->command & SND_PLAYBACK_MIGRATE_MASK) {
             if (!snd_playback_send_migrate(playback_channel)) {
                 return;
@@ -728,6 +811,13 @@ static void snd_record_send(void* data)
                 return;
             }
             channel->command &= ~SND_RECORD_CTRL_MASK;
+        }
+        if (channel->command & SND_RECORD_VOLUME_MASK) {
+            if (!snd_record_send_volume(record_channel) ||
+                !snd_record_send_mute(record_channel)) {
+                return;
+            }
+            channel->command &= ~SND_RECORD_VOLUME_MASK;
         }
         if (channel->command & SND_RECORD_MIGRATE_MASK) {
             if (!snd_record_send_migrate(record_channel)) {
@@ -821,6 +911,38 @@ static void snd_set_command(SndChannel *channel, uint32_t command)
         return;
     }
     channel->command |= command;
+}
+
+__visible__ void spice_server_playback_set_volume(SpicePlaybackInstance *sin,
+                                                  uint8_t nchannels,
+                                                  uint16_t *volume)
+{
+    SpiceVolumeState *st = &sin->st->volume;
+    SndChannel *channel = sin->st->worker.connection;
+    PlaybackChannel *playback_channel = SPICE_CONTAINEROF(channel, PlaybackChannel, base);
+
+    st->volume_nchannels = nchannels;
+    free(st->volume);
+    st->volume = spice_memdup(volume, sizeof(uint16_t) * nchannels);
+
+    if (!channel)
+        return;
+
+    snd_playback_send_volume(playback_channel);
+}
+
+__visible__ void spice_server_playback_set_mute(SpicePlaybackInstance *sin, uint8_t mute)
+{
+    SpiceVolumeState *st = &sin->st->volume;
+    SndChannel *channel = sin->st->worker.connection;
+    PlaybackChannel *playback_channel = SPICE_CONTAINEROF(channel, PlaybackChannel, base);
+
+    st->mute = mute;
+
+    if (!channel)
+        return;
+
+    snd_playback_send_mute(playback_channel);
 }
 
 __visible__ void spice_server_playback_start(SpicePlaybackInstance *sin)
@@ -919,6 +1041,7 @@ static void on_new_playback_channel(SndWorker *worker)
     if (!playback_channel->base.migrate && playback_channel->base.active) {
         snd_set_command((SndChannel *)playback_channel, SND_PLAYBACK_CTRL_MASK);
     }
+    snd_set_command((SndChannel *)playback_channel, SND_PLAYBACK_VOLUME_MASK);
     if (playback_channel->base.active) {
         reds_disable_mm_timer();
     }
@@ -1006,6 +1129,38 @@ static void snd_record_migrate(Channel *channel)
     }
 }
 
+__visible__ void spice_server_record_set_volume(SpiceRecordInstance *sin,
+                                                uint8_t nchannels,
+                                                uint16_t *volume)
+{
+    SpiceVolumeState *st = &sin->st->volume;
+    SndChannel *channel = sin->st->worker.connection;
+    RecordChannel *record_channel = SPICE_CONTAINEROF(channel, RecordChannel, base);
+
+    st->volume_nchannels = nchannels;
+    free(st->volume);
+    st->volume = spice_memdup(volume, sizeof(uint16_t) * nchannels);
+
+    if (!channel)
+        return;
+
+    snd_record_send_volume(record_channel);
+}
+
+__visible__ void spice_server_record_set_mute(SpiceRecordInstance *sin, uint8_t mute)
+{
+    SpiceVolumeState *st = &sin->st->volume;
+    SndChannel *channel = sin->st->worker.connection;
+    RecordChannel *record_channel = SPICE_CONTAINEROF(channel, RecordChannel, base);
+
+    st->mute = mute;
+
+    if (!channel)
+        return;
+
+    snd_record_send_mute(record_channel);
+}
+
 __visible__ void spice_server_record_start(SpiceRecordInstance *sin)
 {
     SndChannel *channel = sin->st->worker.connection;
@@ -1087,6 +1242,7 @@ static void on_new_record_channel(SndWorker *worker)
     RecordChannel *record_channel = (RecordChannel *)worker->connection;
     ASSERT(record_channel);
 
+    snd_set_command((SndChannel *)record_channel, SND_RECORD_VOLUME_MASK);
     if (!record_channel->base.migrate) {
         if (record_channel->base.active) {
             snd_set_command((SndChannel *)record_channel, SND_RECORD_CTRL_MASK);
@@ -1242,16 +1398,28 @@ static void snd_detach_common(SndWorker *worker)
     reds_channel_dispose(&worker->base);
 }
 
+static void spice_playback_state_free(SpicePlaybackState *st)
+{
+    free(st->volume.volume);
+    free(st);
+}
+
 void snd_detach_playback(SpicePlaybackInstance *sin)
 {
     snd_detach_common(&sin->st->worker);
-    free(sin->st);
+    spice_playback_state_free(sin->st);
+}
+
+static void spice_record_state_free(SpiceRecordState *st)
+{
+    free(st->volume.volume);
+    free(st);
 }
 
 void snd_detach_record(SpiceRecordInstance *sin)
 {
     snd_detach_common(&sin->st->worker);
-    free(sin->st);
+    spice_record_state_free(sin->st);
 }
 
 void snd_set_playback_compression(int on)

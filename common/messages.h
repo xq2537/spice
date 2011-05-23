@@ -369,6 +369,15 @@ typedef struct SpiceMsgcMouseRelease {
     int32_t buttons_state;
 } SpiceMsgcMouseRelease;
 
+typedef struct SpiceMsgAudioVolume {
+    uint8_t nchannels;
+    uint16_t volume[0];
+} SpiceMsgAudioVolume;
+
+typedef struct SpiceMsgAudioMute {
+    uint8_t mute;
+} SpiceMsgAudioMute;
+
 typedef struct SpiceMsgPlaybackMode {
     uint32_t time;
     uint32_t mode; //SPICE_AUDIO_DATA_MODE_?
