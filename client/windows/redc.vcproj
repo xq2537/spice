@@ -108,8 +108,8 @@
 		</Configuration>
 		<Configuration
 			Name="Debug|x64"
-			OutputDirectory="$(REDC_BUILD_DIR)\$(PlatformName)\$(ConfigurationName)"
-			IntermediateDirectory="$(REDC_BUILD_DIR)\$(PlatformName)\$(ConfigurationName)"
+			OutputDirectory="$(REDC_BUILD_DIR)$(PlatformName)\$(ConfigurationName)"
+			IntermediateDirectory="$(REDC_BUILD_DIR)$(PlatformName)\$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="1"
 			>
@@ -277,8 +277,8 @@
 		</Configuration>
 		<Configuration
 			Name="Release|x64"
-			OutputDirectory="$(REDC_BUILD_DIR)\$(PlatformName)\$(ConfigurationName)"
-			IntermediateDirectory="$(REDC_BUILD_DIR)\$(PlatformName)\$(ConfigurationName)"
+			OutputDirectory="$(REDC_BUILD_DIR)$(PlatformName)\$(ConfigurationName)"
+			IntermediateDirectory="$(REDC_BUILD_DIR)$(PlatformName)\$(ConfigurationName)"
 			ConfigurationType="1"
 			UseOfMFC="0"
 			CharacterSet="1"
