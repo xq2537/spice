@@ -322,10 +322,10 @@ static void smartcard_channel_send_item(RedChannel *channel, PipeItem *item)
 
 static void smartcard_channel_release_pipe_item(RedChannel *channel, PipeItem *item, int item_pushed)
 {
-    free(item);
     if (item->type == PIPE_ITEM_TYPE_MSG) {
         free(((MsgItem*)item)->vheader);
     }
+    free(item);
 }
 
 static void smartcard_channel_disconnect(RedChannel *channel)
