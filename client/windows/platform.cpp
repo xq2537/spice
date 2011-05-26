@@ -680,21 +680,30 @@ void Platform::set_keyboard_lock_modifiers(uint32_t modifiers)
     }
 }
 
-#define KEY_BIT(keymap, key, bit) (keymap[key] & 0x80 ? bit : 0)
+typedef struct KeyboardModifier {
+    int vkey;
+    int bit;
+} KeyboardModifier;
+
+static const KeyboardModifier KEYBOARD_MODIFIERS[] = {
+    {VK_LSHIFT, Platform::L_SHIFT_MODIFIER},
+    {VK_RSHIFT, Platform::R_SHIFT_MODIFIER},
+    {VK_LCONTROL, Platform::L_CTRL_MODIFIER},
+    {VK_RCONTROL, Platform::R_CTRL_MODIFIER},
+    {VK_LMENU, Platform::L_ALT_MODIFIER},
+    {VK_RMENU, Platform::R_ALT_MODIFIER}};
 
 uint32_t Platform::get_keyboard_modifiers()
 {
-    BYTE keymap[256];
+    uint32_t modifiers_state = 0;
+    int num_modifiers = sizeof(KEYBOARD_MODIFIERS)/sizeof(KEYBOARD_MODIFIERS[0]);
 
-    if (!GetKeyboardState(keymap)) {
-        return 0;
+    for (int i = 0; i < num_modifiers; i++) {
+        short key_state = GetAsyncKeyState(KEYBOARD_MODIFIERS[i].vkey);
+        modifiers_state |= (key_state & 0x8000) ? KEYBOARD_MODIFIERS[i].bit : 0;
     }
-    return KEY_BIT(keymap, VK_LSHIFT, L_SHIFT_MODIFIER) |
-           KEY_BIT(keymap, VK_RSHIFT, R_SHIFT_MODIFIER) |
-           KEY_BIT(keymap, VK_LCONTROL, L_CTRL_MODIFIER) |
-           KEY_BIT(keymap, VK_RCONTROL, R_CTRL_MODIFIER) |
-           KEY_BIT(keymap, VK_LMENU, L_ALT_MODIFIER) |
-           KEY_BIT(keymap, VK_RMENU, R_ALT_MODIFIER);
+
+    return modifiers_state;
 }
 
 void Platform::reset_cursor_pos()
