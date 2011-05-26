@@ -1524,7 +1524,11 @@ void Application::enter_full_screen()
     _changing_screens = true;
     bool capture = release_capture();
     assign_monitors();
+#ifndef WIN32
+    /* performing hide during resolution changes resulted in
+       missing WM_KEYUP events */
     hide();
+#endif
     prepare_monitors();
     position_screens();
     show_full_screen();

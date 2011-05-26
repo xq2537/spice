@@ -830,7 +830,11 @@ void RedScreen::show_full_screen()
         return;
     }
     RecurciveLock lock(_update_lock);
+#ifndef WIN32
+    /* performing hide during resolution changes resulted in
+       missing WM_KEYUP events */
     hide();
+#endif
     save_position();
     _full_screen = true;
     __show_full_screen();
