@@ -249,7 +249,7 @@
 				SubSystem="2"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
-				RandomizedBaseAddress="1"
+				RandomizedBaseAddress="2"
 				DataExecutionPrevention="0"
 				TargetMachine="1"
 			/>
@@ -333,7 +333,7 @@
 				SubSystem="2"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
-				RandomizedBaseAddress="1"
+				RandomizedBaseAddress="2"
 				DataExecutionPrevention="0"
 				TargetMachine="17"
 			/>
