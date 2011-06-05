@@ -1185,7 +1185,10 @@ static inline void __validate_surface(RedWorker *worker, uint32_t surface_id)
 static inline void validate_surface(RedWorker *worker, uint32_t surface_id)
 {
     PANIC_ON(surface_id >= worker->n_surfaces);
-    PANIC_ON(!worker->surfaces[surface_id].context.canvas);
+    if (!worker->surfaces[surface_id].context.canvas) {
+        red_printf("failed on %d", surface_id);
+        PANIC_ON(!worker->surfaces[surface_id].context.canvas);
+    }
 }
 
 static char *draw_type_to_str(uint8_t type)
