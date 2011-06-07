@@ -45,6 +45,7 @@
 #endif
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 
 #ifdef USE_SMARTCARD
@@ -2597,6 +2598,12 @@ int Application::main(int argc, char** argv, const char* version_str)
 {
     int ret;
     bool full_screen;
+    char *log_level_str;
+
+    log_level_str = getenv("SPICEC_LOG_LEVEL");
+    if (log_level_str) {
+        log_level = atoi(log_level_str);
+    }
 
     init_globals();
     LOG_INFO("starting %s", version_str);
