@@ -1194,6 +1194,7 @@ static inline void red_pipe_add_drawable_to_tail(RedWorker *worker, Drawable *dr
     if (!worker->display_channel) {
         return;
     }
+    red_handle_drawable_surfaces_client_synced(worker, drawable);
     drawable->refs++;
     red_pipe_add_tail(&worker->display_channel->common.base, &drawable->pipe_item);
 }
@@ -1209,6 +1210,7 @@ static inline void red_pipe_add_drawable_after(RedWorker *worker, Drawable *draw
         red_pipe_add_drawable(worker, drawable);
         return;
     }
+    red_handle_drawable_surfaces_client_synced(worker, drawable);
     drawable->refs++;
     red_channel_pipe_add_after(&worker->display_channel->common.base, &drawable->pipe_item, &pos_after->pipe_item);
 }
