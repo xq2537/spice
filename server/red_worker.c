@@ -889,6 +889,7 @@ typedef struct RedWorker {
 
     uint32_t shadows_count;
     uint32_t containers_count;
+    uint32_t stream_count;
 
     uint32_t bits_unique;
 
@@ -2388,6 +2389,7 @@ static void red_release_stream(RedWorker *worker, Stream *stream)
             mjpeg_encoder_destroy(stream->mjpeg_encoder);
         }
         red_free_stream(worker, stream);
+        worker->stream_count--;
     }
 }
 
@@ -2770,6 +2772,7 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
     WORKER_FOREACH_DCC(worker, dcc_ring_item, dcc) {
         red_display_create_stream(dcc, stream);
     }
+    worker->stream_count++;
 
     return;
 }
