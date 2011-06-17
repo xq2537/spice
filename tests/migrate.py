@@ -37,33 +37,47 @@ except:
     except:
         print "can't find qmp"
         raise SystemExit
+import sys
 from subprocess import Popen, PIPE
 import os
 import time
 import socket
 import datetime
 import atexit
+import argparse
 
-QMP_1, QMP_2 = "/tmp/migrate_test.1.qmp", "/tmp/migrate_test.2.qmp"
-SPICE_PORT_1, SPICE_PORT_2 = 5911, 6911
-MIGRATE_PORT = 9000
-SPICEC_COUNT = 1
-QEMU = "qemu.upstream"
-LOG_FILENAME = "migrate_log.log"
-IMAGE = "/store/images/F14_CCID.testing.qcow2"
+def get_args():
+    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser.add_argument('--qmp1', dest='qmp1', default='/tmp/migrate_test.1.qmp')
+    parser.add_argument('--qmp2', dest='qmp2', default='/tmp/migrate_test.2.qmp')
+    parser.add_argument('--spice_port1', dest='spice_port1', type=int, default=5911)
+    parser.add_argument('--spice_port2', dest='spice_port2', type=int, default=6911)
+    parser.add_argument('--migrate_port', dest='migrate_port', type=int, default=8000)
+    parser.add_argument('--client_count', dest='client_count', type=int, default=1)
+    parser.add_argument('--qemu', dest='qemu', default='../../qemu/x86_64-softmmu/qemu-system-x86_64')
+    parser.add_argument('--log_filename', dest='log_filename', default='migrate.log')
+    parser.add_argument('--image', dest='image', default='')
+    parser.add_argument('--client', dest='client', default='spicy', choices=['spicec', 'spicy'])
+    args = parser.parse_args(sys.argv[1:])
+    if os.path.exists(args.qemu):
+        args.qemu_exec = args.qemu
+    else:
+        args.qemu_exec = os.popen("which %s" % args.qemu).read().strip()
+    if not os.path.exists(args.qemu_exec):
+        print "qemu not found (qemu = %r)" % args.qemu_exec
+        sys.exit(1)
+    return args
 
-qemu_exec = os.popen("which %s" % QEMU).read().strip()
-
-def start_qemu(spice_port, qmp_filename, incoming_port=None):
+def start_qemu(qemu_exec, image, spice_port, qmp_filename, incoming_port=None):
     incoming_args = []
     if incoming_port:
         incoming_args = ("-incoming tcp::%s" % incoming_port).split()
     args = ([qemu_exec, "-qmp", "unix:%s,server,nowait" % qmp_filename,
         "-spice", "disable-ticketing,port=%s" % spice_port]
         + incoming_args)
-    if os.path.exists(IMAGE):
+    if os.path.exists(image):
         args += ["-m", "512", "-drive",
-                 "file=%s,index=0,media=disk,cache=unsafe" % IMAGE, "-snapshot"]
+                 "file=%s,index=0,media=disk,cache=unsafe" % image, "-snapshot"]
     proc = Popen(args, executable=qemu_exec, stdin=PIPE, stdout=PIPE)
     while not os.path.exists(qmp_filename):
         time.sleep(0.1)
@@ -79,8 +93,9 @@ def start_qemu(spice_port, qmp_filename, incoming_port=None):
     proc.incoming_port = incoming_port
     return proc
 
-def start_spicec(spice_port):
-    return Popen(("spicec -h localhost -p %s" % spice_port).split(), executable="spicec")
+def start_client(client, spice_port):
+    return Popen(("%(client)s -h localhost -p %(port)d" % dict(port=spice_port,
+        client=client)).split(), executable=client)
 
 def wait_active(q, active):
     events = ["RESUME"] if active else ["STOP"]
@@ -114,17 +129,22 @@ class Migrator(object):
 
     migration_count = 0
 
-    def __init__(self, log, monitor_files, spicec_count, spice_ports, migration_port):
+    def __init__(self, log, client, qemu_exec, image, monitor_files, client_count,
+                 spice_ports, migration_port):
+        self.client = client
         self.log = log
+        self.qemu_exec = qemu_exec
+        self.image = image
         self.migration_port = migration_port
-        self.spicec_count = spicec_count
+        self.client_count = client_count
         self.monitor_files = monitor_files
         self.spice_ports = spice_ports
-        self.active = start_qemu(spice_port=SPICE_PORT_1, qmp_filename=QMP_1)
-        self.target = start_qemu(spice_port=SPICE_PORT_2, qmp_filename=QMP_2,
-                            incoming_port=MIGRATE_PORT)
+        self.active = start_qemu(qemu_exec=qemu_exec, image=image, spice_port=spice_ports[0],
+                                 qmp_filename=monitor_files[0])
+        self.target = start_qemu(qemu_exec=qemu_exec, image=image, spice_port=spice_ports[1],
+                                 qmp_filename=monitor_files[1], incoming_port=migration_port)
         self.remove_monitor_files()
-        self.spicec = []
+        self.clients = []
 
     def close(self):
         self.remove_monitor_files()
@@ -144,16 +164,17 @@ class Migrator(object):
     def iterate(self, wait_for_user_input=False):
         wait_active(self.active.qmp, True)
         wait_active(self.target.qmp, False)
-        if len(self.spicec) == 0:
-            for i in range(self.spicec_count):
-                self.spicec.append(start_spicec(spice_port=SPICE_PORT_1))
+        if len(self.clients) == 0:
+            for i in range(self.client_count):
+                self.clients.append(start_client(client=self.client,
+                    spice_port=self.spice_ports[0]))
                 wait_for_event(self.active.qmp, 'SPICE_INITIALIZED')
             if wait_for_user_input:
                 print "waiting for Enter to start migrations"
                 raw_input()
         self.active.qmp.cmd('client_migrate_info', {'protocol':'spice',
             'hostname':'localhost', 'port':self.target.spice_port})
-        self.active.qmp.cmd('migrate', {'uri': 'tcp:localhost:%s' % MIGRATE_PORT})
+        self.active.qmp.cmd('migrate', {'uri': 'tcp:localhost:%s' % self.migration_port})
         wait_active(self.active.qmp, False)
         wait_active(self.target.qmp, True)
         wait_for_event(self.target.qmp, 'SPICE_CONNECTED')
@@ -168,21 +189,24 @@ class Migrator(object):
         del dead
         self.active = self.target
         self.target = start_qemu(spice_port=new_spice_port,
+                            qemu_exec=self.qemu_exec, image=self.image,
                             qmp_filename=new_qmp_filename,
-                            incoming_port=MIGRATE_PORT)
+                            incoming_port=self.migration_port)
         print self.migration_count
         self.migration_count += 1
 
 def main():
-    log = open(LOG_FILENAME, "a+")
+    args = get_args()
+    print "log file %s" % args.log_filename
+    log = open(args.log_filename, "a+")
     log.write("# "+str(datetime.datetime.now())+"\n")
-
-    migrator = Migrator(log = log, monitor_files = [QMP_1, QMP_2], migration_port = MIGRATE_PORT,
-        spice_ports = [SPICE_PORT_1, SPICE_PORT_2], spicec_count = SPICEC_COUNT)
+    migrator = Migrator(client=args.client, qemu_exec=args.qemu_exec,
+        image=args.image, log=log, monitor_files=[args.qmp1, args.qmp2],
+        migration_port=args.migrate_port, spice_ports=[args.spice_port1,
+        args.spice_port2], client_count=args.client_count)
     atexit.register(cleanup, migrator)
     while True:
         migrator.iterate()
 
 if __name__ == '__main__':
     main()
-
