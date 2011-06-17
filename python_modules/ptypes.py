@@ -280,7 +280,7 @@ class EnumType(EnumBaseType):
         return "enum %s" % self.name
 
     def c_define(self, writer):
-        writer.write("enum ")
+        writer.write("typedef enum ")
         writer.write(self.c_name())
         writer.begin_block()
         values = self.names.keys()
@@ -296,7 +296,11 @@ class EnumType(EnumBaseType):
         writer.newline()
         writer.write(codegen.prefix_underscore_upper(self.name.upper(), "ENUM_END"))
         writer.newline()
-        writer.end_block(semicolon=True)
+        writer.end_block(newline=False)
+        writer.write(" ")
+        writer.write(self.c_name())
+        writer.write(";")
+        writer.newline()
         writer.newline()
 
 class FlagsType(EnumBaseType):
@@ -330,7 +334,7 @@ class FlagsType(EnumBaseType):
         return "flags %s" % self.name
 
     def c_define(self, writer):
-        writer.write("enum ")
+        writer.write("typedef enum ")
         writer.write(self.c_name())
         writer.begin_block()
         values = self.names.keys()
@@ -347,7 +351,11 @@ class FlagsType(EnumBaseType):
         writer.write(codegen.prefix_underscore_upper(self.name.upper(), "MASK"))
         writer.write(" = 0x%x" % (mask))
         writer.newline()
-        writer.end_block(semicolon=True)
+        writer.end_block(newline=False)
+        writer.write(" ")
+        writer.write(self.c_name())
+        writer.write(";")
+        writer.newline()
         writer.newline()
 
 class ArrayType(Type):
