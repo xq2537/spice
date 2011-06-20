@@ -3102,12 +3102,23 @@ static void reds_mig_finished(int completed)
 
 static void reds_mig_switch(void)
 {
+    if (!reds->mig_spice) {
+        red_printf("warning: reds_mig_switch called without migrate_info set");
+        return;
+    }
     main_channel_push_migrate_switch(reds->main_channel);
 }
 
 void reds_fill_mig_switch(SpiceMsgMainMigrationSwitchHost *migrate)
 {
     RedsMigSpice *s = reds->mig_spice;
+
+    if (s == NULL) {
+        red_printf(
+            "error: reds_fill_mig_switch called without migrate info set");
+        bzero(migrate, sizeof(*migrate));
+        return;
+    }
     migrate->port = s->port;
     migrate->sport = s->sport;
     migrate->host_size = strlen(s->host) + 1;
