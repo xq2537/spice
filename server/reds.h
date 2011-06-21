@@ -28,7 +28,7 @@
 #include <sasl/sasl.h>
 #endif
 
-#define __visible__ __attribute__ ((visibility ("default")))
+#define SPICE_GNUC_VISIBLE __attribute__ ((visibility ("default")))
 
 typedef struct RedsStream RedsStream;
 

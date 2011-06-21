@@ -820,7 +820,7 @@ static void snd_set_command(SndChannel *channel, uint32_t command)
     channel->command |= command;
 }
 
-__visible__ void spice_server_playback_start(SpicePlaybackInstance *sin)
+SPICE_GNUC_VISIBLE void spice_server_playback_start(SpicePlaybackInstance *sin)
 {
     SndChannel *channel = sin->st->worker.connection;
     PlaybackChannel *playback_channel = SPICE_CONTAINEROF(channel, PlaybackChannel, base);
@@ -839,7 +839,7 @@ __visible__ void spice_server_playback_start(SpicePlaybackInstance *sin)
     }
 }
 
-__visible__ void spice_server_playback_stop(SpicePlaybackInstance *sin)
+SPICE_GNUC_VISIBLE void spice_server_playback_stop(SpicePlaybackInstance *sin)
 {
     SndChannel *channel = sin->st->worker.connection;
     PlaybackChannel *playback_channel = SPICE_CONTAINEROF(channel, PlaybackChannel, base);
@@ -866,8 +866,8 @@ __visible__ void spice_server_playback_stop(SpicePlaybackInstance *sin)
     }
 }
 
-__visible__ void spice_server_playback_get_buffer(SpicePlaybackInstance *sin,
-                                                  uint32_t **frame, uint32_t *num_samples)
+SPICE_GNUC_VISIBLE void spice_server_playback_get_buffer(SpicePlaybackInstance *sin,
+                                                         uint32_t **frame, uint32_t *num_samples)
 {
     SndChannel *channel = sin->st->worker.connection;
     PlaybackChannel *playback_channel = SPICE_CONTAINEROF(channel, PlaybackChannel, base);
@@ -884,7 +884,7 @@ __visible__ void spice_server_playback_get_buffer(SpicePlaybackInstance *sin,
     *num_samples = FRAME_SIZE;
 }
 
-__visible__ void spice_server_playback_put_samples(SpicePlaybackInstance *sin, uint32_t *samples)
+SPICE_GNUC_VISIBLE void spice_server_playback_put_samples(SpicePlaybackInstance *sin, uint32_t *samples)
 {
     SndChannel *channel = sin->st->worker.connection;
     PlaybackChannel *playback_channel = SPICE_CONTAINEROF(channel, PlaybackChannel, base);
@@ -1003,7 +1003,7 @@ static void snd_record_migrate(Channel *channel)
     }
 }
 
-__visible__ void spice_server_record_start(SpiceRecordInstance *sin)
+SPICE_GNUC_VISIBLE void spice_server_record_start(SpiceRecordInstance *sin)
 {
     SndChannel *channel = sin->st->worker.connection;
     RecordChannel *record_channel = SPICE_CONTAINEROF(channel, RecordChannel, base);
@@ -1023,7 +1023,7 @@ __visible__ void spice_server_record_start(SpiceRecordInstance *sin)
     }
 }
 
-__visible__ void spice_server_record_stop(SpiceRecordInstance *sin)
+SPICE_GNUC_VISIBLE void spice_server_record_stop(SpiceRecordInstance *sin)
 {
     SndChannel *channel = sin->st->worker.connection;
     RecordChannel *record_channel = SPICE_CONTAINEROF(channel, RecordChannel, base);
@@ -1041,8 +1041,8 @@ __visible__ void spice_server_record_stop(SpiceRecordInstance *sin)
     }
 }
 
-__visible__ uint32_t spice_server_record_get_samples(SpiceRecordInstance *sin,
-                                                     uint32_t *samples, uint32_t bufsize)
+SPICE_GNUC_VISIBLE uint32_t spice_server_record_get_samples(SpiceRecordInstance *sin,
+                                                            uint32_t *samples, uint32_t bufsize)
 {
     SndChannel *channel = sin->st->worker.connection;
     RecordChannel *record_channel = SPICE_CONTAINEROF(channel, RecordChannel, base);
