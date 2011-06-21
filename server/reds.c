@@ -3185,7 +3185,7 @@ static void attach_to_red_agent(SpiceCharDeviceInstance *sin)
     main_channel_push_agent_connected(reds->main_channel);
 }
 
-__visible__ void spice_server_char_device_wakeup(SpiceCharDeviceInstance* sin)
+SPICE_GNUC_VISIBLE void spice_server_char_device_wakeup(SpiceCharDeviceInstance* sin)
 {
     (*sin->st->wakeup)(sin);
 }
@@ -3201,7 +3201,7 @@ const char *spice_server_char_device_recognized_subtypes_list[] = {
     NULL,
 };
 
-__visible__ const char** spice_server_char_device_recognized_subtypes()
+SPICE_GNUC_VISIBLE const char** spice_server_char_device_recognized_subtypes()
 {
     return spice_server_char_device_recognized_subtypes_list;
 }
@@ -3249,8 +3249,8 @@ static void spice_server_char_device_remove_interface(SpiceBaseInstance *sin)
 #endif
 }
 
-__visible__ int spice_server_add_interface(SpiceServer *s,
-                                           SpiceBaseInstance *sin)
+SPICE_GNUC_VISIBLE int spice_server_add_interface(SpiceServer *s,
+                                                  SpiceBaseInstance *sin)
 {
     const SpiceBaseInterface *interface = sin->sif;
 
@@ -3357,7 +3357,7 @@ __visible__ int spice_server_add_interface(SpiceServer *s,
     return 0;
 }
 
-__visible__ int spice_server_remove_interface(SpiceBaseInstance *sin)
+SPICE_GNUC_VISIBLE int spice_server_remove_interface(SpiceBaseInstance *sin)
 {
     const SpiceBaseInterface *interface = sin->sif;
 
@@ -3535,7 +3535,7 @@ err:
 }
 
 /* new interface */
-__visible__ SpiceServer *spice_server_new(void)
+SPICE_GNUC_VISIBLE SpiceServer *spice_server_new(void)
 {
     /* we can't handle multiple instances (yet) */
     ASSERT(reds == NULL);
@@ -3544,7 +3544,7 @@ __visible__ SpiceServer *spice_server_new(void)
     return reds;
 }
 
-__visible__ int spice_server_init(SpiceServer *s, SpiceCoreInterface *core)
+SPICE_GNUC_VISIBLE int spice_server_init(SpiceServer *s, SpiceCoreInterface *core)
 {
     int ret;
 
@@ -3556,19 +3556,19 @@ __visible__ int spice_server_init(SpiceServer *s, SpiceCoreInterface *core)
     return ret;
 }
 
-__visible__ void spice_server_destroy(SpiceServer *s)
+SPICE_GNUC_VISIBLE void spice_server_destroy(SpiceServer *s)
 {
     ASSERT(reds == s);
     reds_exit();
 }
 
-__visible__ spice_compat_version_t spice_get_current_compat_version(void)
+SPICE_GNUC_VISIBLE spice_compat_version_t spice_get_current_compat_version(void)
 {
     return SPICE_COMPAT_VERSION_CURRENT;
 }
 
-__visible__ int spice_server_set_compat_version(SpiceServer *s,
-                                                spice_compat_version_t version)
+SPICE_GNUC_VISIBLE int spice_server_set_compat_version(SpiceServer *s,
+                                                       spice_compat_version_t version)
 {
     if (version < SPICE_COMPAT_VERSION_0_6) {
         /* We don't support 0.4 compat mode atm */
@@ -3582,7 +3582,7 @@ __visible__ int spice_server_set_compat_version(SpiceServer *s,
     return 0;
 }
 
-__visible__ int spice_server_set_port(SpiceServer *s, int port)
+SPICE_GNUC_VISIBLE int spice_server_set_port(SpiceServer *s, int port)
 {
     ASSERT(reds == s);
     if (port < 0 || port > 0xffff) {
@@ -3592,7 +3592,7 @@ __visible__ int spice_server_set_port(SpiceServer *s, int port)
     return 0;
 }
 
-__visible__ void spice_server_set_addr(SpiceServer *s, const char *addr, int flags)
+SPICE_GNUC_VISIBLE void spice_server_set_addr(SpiceServer *s, const char *addr, int flags)
 {
     ASSERT(reds == s);
     strncpy(spice_addr, addr, sizeof(spice_addr));
@@ -3604,7 +3604,7 @@ __visible__ void spice_server_set_addr(SpiceServer *s, const char *addr, int fla
     }
 }
 
-__visible__ int spice_server_set_noauth(SpiceServer *s)
+SPICE_GNUC_VISIBLE int spice_server_set_noauth(SpiceServer *s)
 {
     ASSERT(reds == s);
     memset(taTicket.password, 0, sizeof(taTicket.password));
@@ -3612,7 +3612,7 @@ __visible__ int spice_server_set_noauth(SpiceServer *s)
     return 0;
 }
 
-__visible__ int spice_server_set_sasl(SpiceServer *s, int enabled)
+SPICE_GNUC_VISIBLE int spice_server_set_sasl(SpiceServer *s, int enabled)
 {
     ASSERT(reds == s);
 #if HAVE_SASL
@@ -3623,7 +3623,7 @@ __visible__ int spice_server_set_sasl(SpiceServer *s, int enabled)
 #endif
 }
 
-__visible__ int spice_server_set_sasl_appname(SpiceServer *s, const char *appname)
+SPICE_GNUC_VISIBLE int spice_server_set_sasl_appname(SpiceServer *s, const char *appname)
 {
     ASSERT(reds == s);
 #if HAVE_SASL
@@ -3635,10 +3635,10 @@ __visible__ int spice_server_set_sasl_appname(SpiceServer *s, const char *appnam
 #endif
 }
 
-__visible__ int spice_server_set_ticket(SpiceServer *s,
-                                        const char *passwd, int lifetime,
-                                        int fail_if_connected,
-                                        int disconnect_if_connected)
+SPICE_GNUC_VISIBLE int spice_server_set_ticket(SpiceServer *s,
+                                               const char *passwd, int lifetime,
+                                               int fail_if_connected,
+                                               int disconnect_if_connected)
 {
     ASSERT(reds == s);
 
@@ -3668,10 +3668,10 @@ __visible__ int spice_server_set_ticket(SpiceServer *s,
     return 0;
 }
 
-__visible__ int spice_server_set_tls(SpiceServer *s, int port,
-                                     const char *ca_cert_file, const char *certs_file,
-                                     const char *private_key_file, const char *key_passwd,
-                                     const char *dh_key_file, const char *ciphersuite)
+SPICE_GNUC_VISIBLE int spice_server_set_tls(SpiceServer *s, int port,
+                                            const char *ca_cert_file, const char *certs_file,
+                                            const char *private_key_file, const char *key_passwd,
+                                            const char *dh_key_file, const char *ciphersuite)
 {
     ASSERT(reds == s);
     if (port == 0 || ca_cert_file == NULL || certs_file == NULL ||
@@ -3706,21 +3706,21 @@ __visible__ int spice_server_set_tls(SpiceServer *s, int port,
     return 0;
 }
 
-__visible__ int spice_server_set_image_compression(SpiceServer *s,
-                                                   spice_image_compression_t comp)
+SPICE_GNUC_VISIBLE int spice_server_set_image_compression(SpiceServer *s,
+                                                          spice_image_compression_t comp)
 {
     ASSERT(reds == s);
     set_image_compression(comp);
     return 0;
 }
 
-__visible__ spice_image_compression_t spice_server_get_image_compression(SpiceServer *s)
+SPICE_GNUC_VISIBLE spice_image_compression_t spice_server_get_image_compression(SpiceServer *s)
 {
     ASSERT(reds == s);
     return image_compression;
 }
 
-__visible__ int spice_server_set_jpeg_compression(SpiceServer *s, spice_wan_compression_t comp)
+SPICE_GNUC_VISIBLE int spice_server_set_jpeg_compression(SpiceServer *s, spice_wan_compression_t comp)
 {
     ASSERT(reds == s);
     if (comp == SPICE_WAN_COMPRESSION_INVALID) {
@@ -3732,7 +3732,7 @@ __visible__ int spice_server_set_jpeg_compression(SpiceServer *s, spice_wan_comp
     return 0;
 }
 
-__visible__ int spice_server_set_zlib_glz_compression(SpiceServer *s, spice_wan_compression_t comp)
+SPICE_GNUC_VISIBLE int spice_server_set_zlib_glz_compression(SpiceServer *s, spice_wan_compression_t comp)
 {
     ASSERT(reds == s);
     if (comp == SPICE_WAN_COMPRESSION_INVALID) {
@@ -3744,7 +3744,7 @@ __visible__ int spice_server_set_zlib_glz_compression(SpiceServer *s, spice_wan_
     return 0;
 }
 
-__visible__ int spice_server_set_channel_security(SpiceServer *s, const char *channel, int security)
+SPICE_GNUC_VISIBLE int spice_server_set_channel_security(SpiceServer *s, const char *channel, int security)
 {
     static const char *names[] = {
         [ SPICE_CHANNEL_MAIN     ] = "main",
@@ -3777,7 +3777,7 @@ __visible__ int spice_server_set_channel_security(SpiceServer *s, const char *ch
     return -1;
 }
 
-__visible__ int spice_server_get_sock_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen)
+SPICE_GNUC_VISIBLE int spice_server_get_sock_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen)
 {
     ASSERT(reds == s);
     if (main_channel_getsockname(reds->main_channel, sa, salen) < 0) {
@@ -3786,7 +3786,7 @@ __visible__ int spice_server_get_sock_info(SpiceServer *s, struct sockaddr *sa, 
     return 0;
 }
 
-__visible__ int spice_server_get_peer_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen)
+SPICE_GNUC_VISIBLE int spice_server_get_peer_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen)
 {
     ASSERT(reds == s);
     if (main_channel_getpeername(reds->main_channel, sa, salen) < 0) {
@@ -3795,7 +3795,7 @@ __visible__ int spice_server_get_peer_info(SpiceServer *s, struct sockaddr *sa, 
     return 0;
 }
 
-__visible__ int spice_server_add_renderer(SpiceServer *s, const char *name)
+SPICE_GNUC_VISIBLE int spice_server_add_renderer(SpiceServer *s, const char *name)
 {
     ASSERT(reds == s);
     if (!red_dispatcher_add_renderer(name)) {
@@ -3805,13 +3805,13 @@ __visible__ int spice_server_add_renderer(SpiceServer *s, const char *name)
     return 0;
 }
 
-__visible__ int spice_server_kbd_leds(SpiceKbdInstance *sin, int leds)
+SPICE_GNUC_VISIBLE int spice_server_kbd_leds(SpiceKbdInstance *sin, int leds)
 {
     inputs_on_keyboard_leds_change(NULL, leds);
     return 0;
 }
 
-__visible__ int spice_server_set_streaming_video(SpiceServer *s, int value)
+SPICE_GNUC_VISIBLE int spice_server_set_streaming_video(SpiceServer *s, int value)
 {
     ASSERT(reds == s);
     if (value != SPICE_STREAM_VIDEO_OFF &&
@@ -3823,14 +3823,14 @@ __visible__ int spice_server_set_streaming_video(SpiceServer *s, int value)
     return 0;
 }
 
-__visible__ int spice_server_set_playback_compression(SpiceServer *s, int enable)
+SPICE_GNUC_VISIBLE int spice_server_set_playback_compression(SpiceServer *s, int enable)
 {
     ASSERT(reds == s);
     snd_set_playback_compression(enable);
     return 0;
 }
 
-__visible__ int spice_server_set_agent_mouse(SpiceServer *s, int enable)
+SPICE_GNUC_VISIBLE int spice_server_set_agent_mouse(SpiceServer *s, int enable)
 {
     ASSERT(reds == s);
     agent_mouse = enable;
@@ -3838,7 +3838,7 @@ __visible__ int spice_server_set_agent_mouse(SpiceServer *s, int enable)
     return 0;
 }
 
-__visible__ int spice_server_set_agent_copypaste(SpiceServer *s, int enable)
+SPICE_GNUC_VISIBLE int spice_server_set_agent_copypaste(SpiceServer *s, int enable)
 {
     ASSERT(reds == s);
     agent_copypaste = enable;
@@ -3847,7 +3847,7 @@ __visible__ int spice_server_set_agent_copypaste(SpiceServer *s, int enable)
     return 0;
 }
 
-__visible__ int spice_server_migrate_info(SpiceServer *s, const char* dest,
+SPICE_GNUC_VISIBLE int spice_server_migrate_info(SpiceServer *s, const char* dest,
                                           int port, int secure_port,
                                           const char* cert_subject)
 {
@@ -3872,7 +3872,7 @@ __visible__ int spice_server_migrate_info(SpiceServer *s, const char* dest,
 }
 
 /* interface for seamless migration */
-__visible__ int spice_server_migrate_start(SpiceServer *s)
+SPICE_GNUC_VISIBLE int spice_server_migrate_start(SpiceServer *s)
 {
     ASSERT(reds == s);
 
@@ -3888,7 +3888,7 @@ __visible__ int spice_server_migrate_start(SpiceServer *s)
     return 0;
 }
 
-__visible__ int spice_server_migrate_client_state(SpiceServer *s)
+SPICE_GNUC_VISIBLE int spice_server_migrate_client_state(SpiceServer *s)
 {
     ASSERT(reds == s);
 
@@ -3902,7 +3902,7 @@ __visible__ int spice_server_migrate_client_state(SpiceServer *s)
     return 0;
 }
 
-__visible__ int spice_server_migrate_end(SpiceServer *s, int completed)
+SPICE_GNUC_VISIBLE int spice_server_migrate_end(SpiceServer *s, int completed)
 {
     ASSERT(reds == s);
     reds_mig_finished(completed);
@@ -3910,7 +3910,7 @@ __visible__ int spice_server_migrate_end(SpiceServer *s, int completed)
 }
 
 /* interface for switch-host migration */
-__visible__ int spice_server_migrate_switch(SpiceServer *s)
+SPICE_GNUC_VISIBLE int spice_server_migrate_switch(SpiceServer *s)
 {
     ASSERT(reds == s);
     reds_mig_switch();

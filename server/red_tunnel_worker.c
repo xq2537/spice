@@ -965,8 +965,8 @@ static TunneledBufferProcessQueue *tunnel_socket_alloc_simple_print_reply_proces
                                                       PROCESS_DIRECTION_TYPE_REPLY);
 }
 
-__visible__ void spice_server_net_wire_recv_packet(SpiceNetWireInstance *sin,
-                                                   const uint8_t *pkt, int pkt_len)
+SPICE_GNUC_VISIBLE void spice_server_net_wire_recv_packet(SpiceNetWireInstance *sin,
+                                                          const uint8_t *pkt, int pkt_len)
 {
     TunnelWorker *worker = sin->st->worker;
     ASSERT(worker);
