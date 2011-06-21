@@ -16,7 +16,7 @@ def write_channel_enums(writer, channel, client):
     if len(messages) == 0:
         return
     writer.begin_block("enum")
-    i = 0;
+    i = 0
     if client:
         prefix = [ "MSGC" ]
     else:
@@ -53,7 +53,7 @@ def write_enums(writer):
         if isinstance(t, ptypes.EnumBaseType):
             t.c_define(writer)
 
-    i = 0;
+    i = 0
     writer.begin_block("enum")
     for c in proto.channels:
         enum = codegen.prefix_underscore_upper("CHANNEL", c.name.upper())

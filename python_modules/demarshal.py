@@ -74,7 +74,7 @@ def write_parser_helpers(writer):
 
     writer.newline()
     writer.statement("typedef struct PointerInfo PointerInfo")
-    writer.statement("typedef void (*message_destructor_t)(uint8_t *message)");
+    writer.statement("typedef void (*message_destructor_t)(uint8_t *message)")
     writer.statement("typedef uint8_t * (*parse_func_t)(uint8_t *message_start, uint8_t *message_end, uint8_t *struct_data, PointerInfo *ptr_info, int minor)")
     writer.statement("typedef uint8_t * (*parse_msg_func_t)(uint8_t *message_start, uint8_t *message_end, int minor, size_t *size_out, message_destructor_t *free_message)")
     writer.statement("typedef uint8_t * (*spice_parse_channel_func_t)(uint8_t *message_start, uint8_t *message_end, uint16_t message_type, int minor, size_t *size_out, message_destructor_t *free_message)")
@@ -198,11 +198,11 @@ def write_validate_struct_function(writer, struct):
     writer = writer.function_helper()
     scope = writer.function(validate_function, "static intptr_t", "uint8_t *message_start, uint8_t *message_end, uint64_t offset, int minor")
     scope.variable_def("uint8_t *", "start = message_start + offset")
-    scope.variable_def("SPICE_GNUC_UNUSED uint8_t *", "pos");
-    scope.variable_def("size_t", "mem_size", "nw_size");
+    scope.variable_def("SPICE_GNUC_UNUSED uint8_t *", "pos")
+    scope.variable_def("size_t", "mem_size", "nw_size")
     num_pointers = struct.get_num_pointers()
     if  num_pointers != 0:
-        scope.variable_def("SPICE_GNUC_UNUSED intptr_t", "ptr_size");
+        scope.variable_def("SPICE_GNUC_UNUSED intptr_t", "ptr_size")
 
     writer.newline()
     with writer.if_block("offset == 0"):
@@ -766,8 +766,8 @@ def write_parse_ptr_function(writer, target_type):
 
     num_pointers = target_type.get_num_pointers()
     if  num_pointers != 0:
-        scope.variable_def("SPICE_GNUC_UNUSED intptr_t", "ptr_size");
-        scope.variable_def("uint32_t", "n_ptr=0");
+        scope.variable_def("SPICE_GNUC_UNUSED intptr_t", "ptr_size")
+        scope.variable_def("uint32_t", "n_ptr=0")
         scope.variable_def("PointerInfo", "ptr_info[%s]" % num_pointers)
 
     writer.newline()
@@ -854,7 +854,7 @@ def write_parse_pointer_core(writer, target_type, offset, at_end, dest, member_n
     writer.assign("ptr_info[n_ptr].parse", write_parse_ptr_function(writer, target_type))
     if at_end:
         writer.assign("ptr_info[n_ptr].dest", "(void **)end")
-        writer.increment("end", "sizeof(void *)");
+        writer.increment("end", "sizeof(void *)")
     else:
         writer.assign("ptr_info[n_ptr].dest", "(void **)&%s" % dest.get_ref(member_name))
     if target_type.is_array():
@@ -890,7 +890,7 @@ def write_member_parser(writer, container, member, dest, scope):
             assert(t.target_type.is_array())
             nelements = read_array_len(writer, member.name, t.target_type, dest, scope, True)
             writer.comment("Reuse data from network message as chunk").newline()
-            scope.variable_def("SpiceChunks *", "chunks");
+            scope.variable_def("SpiceChunks *", "chunks")
             writer.assign("chunks", "(SpiceChunks *)end")
             writer.increment("end", "sizeof(SpiceChunks) + sizeof(SpiceChunk)")
             writer.assign(dest.get_ref(member.name), "chunks")
@@ -922,7 +922,7 @@ def write_member_parser(writer, container, member, dest, scope):
         if member.has_attr("chunk") and t.element_type.is_fixed_nw_size() and t.element_type.get_fixed_nw_size() == 1:
             writer.comment("use array as chunk").newline()
 
-            scope.variable_def("SpiceChunks *", "chunks");
+            scope.variable_def("SpiceChunks *", "chunks")
             writer.assign("chunks", "(SpiceChunks *)end")
             writer.increment("end", "sizeof(SpiceChunks) + sizeof(SpiceChunk)")
             writer.assign(dest.get_ref(member.name), "chunks")
@@ -1018,18 +1018,18 @@ def write_msg_parser(writer, message):
     parent_scope = writer.function(function_name,
                                    "uint8_t *",
                                    "uint8_t *message_start, uint8_t *message_end, int minor, size_t *size, message_destructor_t *free_message", True)
-    parent_scope.variable_def("SPICE_GNUC_UNUSED uint8_t *", "pos");
-    parent_scope.variable_def("uint8_t *", "start = message_start");
-    parent_scope.variable_def("uint8_t *", "data = NULL");
+    parent_scope.variable_def("SPICE_GNUC_UNUSED uint8_t *", "pos")
+    parent_scope.variable_def("uint8_t *", "start = message_start")
+    parent_scope.variable_def("uint8_t *", "data = NULL")
     parent_scope.variable_def("size_t", "nw_size")
     if want_mem_size:
         parent_scope.variable_def("size_t", "mem_size")
     if not message.has_attr("nocopy"):
-        parent_scope.variable_def("uint8_t *", "in", "end");
+        parent_scope.variable_def("uint8_t *", "in", "end")
     num_pointers = message.get_num_pointers()
     if  num_pointers != 0:
-        parent_scope.variable_def("SPICE_GNUC_UNUSED intptr_t", "ptr_size");
-        parent_scope.variable_def("uint32_t", "n_ptr=0");
+        parent_scope.variable_def("SPICE_GNUC_UNUSED intptr_t", "ptr_size")
+        parent_scope.variable_def("uint32_t", "n_ptr=0")
         parent_scope.variable_def("PointerInfo", "ptr_info[%s]" % num_pointers)
     writer.newline()
 
@@ -1121,7 +1121,7 @@ def write_channel_parser(writer, channel, server):
     d = 0
     for r in ranges:
         d = d + 1
-        writer.write("static parse_msg_func_t funcs%d[%d] = " % (d, r[1] - r[0]));
+        writer.write("static parse_msg_func_t funcs%d[%d] = " % (d, r[1] - r[0]))
         writer.begin_block()
         for i in range(r[0], r[1]):
             func = write_msg_parser(helpers, ids[i].message_type)

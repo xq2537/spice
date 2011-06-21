@@ -116,7 +116,7 @@ class CodeWriter:
         writer.options = self.options
         writer.public_prefix = self.public_prefix
 
-        return writer;
+        return writer
 
     def write(self, s):
         # Ensure its a string
@@ -184,10 +184,10 @@ class CodeWriter:
             self.statement("goto %s" % label)
 
     def indent(self):
-        self.indentation += 4;
+        self.indentation += 4
 
     def unindent(self):
-        self.indentation -= 4;
+        self.indentation -= 4
         if self.indentation < 0:
             self.indenttation = 0
 

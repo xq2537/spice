@@ -18,7 +18,7 @@ def parseVariableDef(toks):
         t = ptypes.ArrayType(t, array_size)
 
     if pointer != None:
-        t = ptypes.PointerType(t);
+        t = ptypes.PointerType(t)
 
     return ptypes.Member(name, t, attributes)
 
