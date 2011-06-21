@@ -114,6 +114,8 @@ struct SndChannel {
     handle_message_proc handle_message;
     on_message_done_proc on_message_done;
     cleanup_channel_proc cleanup;
+    int num_caps;
+    uint32_t *caps;
 };
 
 typedef struct AudioFrame AudioFrame;
@@ -131,7 +133,6 @@ typedef struct PlaybackChannel {
     AudioFrame *pending_frame;
     CELTMode *celt_mode;
     CELTEncoder *celt_encoder;
-    int celt_allowed;
     uint32_t mode;
     struct {
         uint8_t celt_buf[CELT_COMPRESSED_FRAME_BYTES];
@@ -191,6 +192,18 @@ static uint32_t playback_compression = SPICE_AUDIO_DATA_MODE_CELT_0_5_1;
 
 static void snd_receive(void* data);
 
+static int check_cap(uint32_t *caps, int num_caps, uint32_t cap)
+{
+    uint32_t i = cap / 32;
+
+    cap = 1 << (cap % 32);
+    if (i >= num_caps) {
+        return FALSE;
+    }
+
+    return caps[i] & cap;
+}
+
 static void snd_disconnect_channel(SndChannel *channel)
 {
     SndWorker *worker;
@@ -205,6 +218,7 @@ static void snd_disconnect_channel(SndChannel *channel)
     channel->stream->watch = NULL;
     reds_stream_free(channel->stream);
     spice_marshaller_destroy(channel->send_data.marshaller);
+    free(channel->caps);
     free(channel);
 }
 
@@ -544,6 +558,9 @@ static int snd_playback_send_volume(PlaybackChannel *playback_channel)
     SndChannel *channel = &playback_channel->base;
     SpicePlaybackState *st = SPICE_CONTAINEROF(channel->worker, SpicePlaybackState, worker);
 
+    if (!check_cap(channel->caps, channel->num_caps, SPICE_PLAYBACK_CAP_VOLUME))
+        return TRUE;
+
     return snd_send_volume(channel, &st->volume, SPICE_MSG_PLAYBACK_VOLUME);
 }
 
@@ -564,6 +581,9 @@ static int snd_playback_send_mute(PlaybackChannel *playback_channel)
 {
     SndChannel *channel = &playback_channel->base;
     SpicePlaybackState *st = SPICE_CONTAINEROF(channel->worker, SpicePlaybackState, worker);
+
+    if (!check_cap(channel->caps, channel->num_caps, SPICE_PLAYBACK_CAP_VOLUME))
+        return TRUE;
 
     return snd_send_mute(channel, &st->volume, SPICE_MSG_PLAYBACK_MUTE);
 }
@@ -654,6 +674,9 @@ static int snd_record_send_volume(RecordChannel *record_channel)
     SndChannel *channel = &record_channel->base;
     SpiceRecordState *st = SPICE_CONTAINEROF(channel->worker, SpiceRecordState, worker);
 
+    if (!check_cap(channel->caps, channel->num_caps, SPICE_RECORD_CAP_VOLUME))
+        return TRUE;
+
     return snd_send_volume(channel, &st->volume, SPICE_MSG_RECORD_VOLUME);
 }
 
@@ -661,6 +684,9 @@ static int snd_record_send_mute(RecordChannel *record_channel)
 {
     SndChannel *channel = &record_channel->base;
     SpiceRecordState *st = SPICE_CONTAINEROF(channel->worker, SpiceRecordState, worker);
+
+    if (!check_cap(channel->caps, channel->num_caps, SPICE_RECORD_CAP_VOLUME))
+        return TRUE;
 
     return snd_send_mute(channel, &st->volume, SPICE_MSG_RECORD_MUTE);
 }
@@ -833,7 +859,8 @@ static SndChannel *__new_channel(SndWorker *worker, int size, uint32_t channel_i
                                  int migrate, send_messages_proc send_messages,
                                  handle_message_proc handle_message,
                                  on_message_done_proc on_message_done,
-                                 cleanup_channel_proc cleanup)
+                                 cleanup_channel_proc cleanup,
+                                 uint32_t *caps, int num_caps)
 {
     SndChannel *channel;
     int delay_val;
@@ -889,6 +916,8 @@ static SndChannel *__new_channel(SndWorker *worker, int size, uint32_t channel_i
     channel->handle_message = handle_message;
     channel->on_message_done = on_message_done;
     channel->cleanup = cleanup;
+    channel->num_caps = num_caps;
+    channel->caps = spice_memdup(caps, num_caps * sizeof(uint32_t));
     return channel;
 
 error2:
@@ -1092,7 +1121,8 @@ static void snd_set_playback_peer(Channel *channel, RedsStream *stream, int migr
                                                               snd_playback_send,
                                                               snd_playback_handle_message,
                                                               snd_playback_on_message_done,
-                                                              snd_playback_cleanup))) {
+                                                              snd_playback_cleanup,
+                                                              caps, num_caps))) {
         goto error_2;
     }
     worker->connection = &playback_channel->base;
@@ -1102,9 +1132,8 @@ static void snd_set_playback_peer(Channel *channel, RedsStream *stream, int migr
 
     playback_channel->celt_mode = celt_mode;
     playback_channel->celt_encoder = celt_encoder;
-    playback_channel->celt_allowed = num_caps > 0 && (caps[0] & (1 << SPICE_PLAYBACK_CAP_CELT_0_5_1));
-    playback_channel->mode = playback_channel->celt_allowed ? playback_compression :
-                                                              SPICE_AUDIO_DATA_MODE_RAW;
+    playback_channel->mode = check_cap(caps, num_caps, SPICE_PLAYBACK_CAP_CELT_0_5_1) ?
+        playback_compression : SPICE_AUDIO_DATA_MODE_RAW;
 
     on_new_playback_channel(worker);
     if (worker->active) {
@@ -1291,7 +1320,8 @@ static void snd_set_record_peer(Channel *channel, RedsStream *stream, int migrat
                                                           snd_record_send,
                                                           snd_record_handle_message,
                                                           snd_record_on_message_done,
-                                                          snd_record_cleanup))) {
+                                                          snd_record_cleanup,
+                                                          caps, num_caps))) {
         goto error_2;
     }
 
@@ -1359,7 +1389,9 @@ void snd_attach_playback(SpicePlaybackInstance *sin)
 
     playback_worker->base.num_caps = 1;
     playback_worker->base.caps = spice_new(uint32_t, 1);
-    playback_worker->base.caps[0] = (1 << SPICE_PLAYBACK_CAP_CELT_0_5_1);
+    playback_worker->base.caps[0] =
+        (1 << SPICE_PLAYBACK_CAP_CELT_0_5_1) |
+        (1 << SPICE_PLAYBACK_CAP_VOLUME);
 
     add_worker(playback_worker);
     reds_register_channel(&playback_worker->base);
@@ -1381,7 +1413,9 @@ void snd_attach_record(SpiceRecordInstance *sin)
 
     record_worker->base.num_caps = 1;
     record_worker->base.caps = spice_new(uint32_t, 1);
-    record_worker->base.caps[0] = (1 << SPICE_RECORD_CAP_CELT_0_5_1);
+    record_worker->base.caps[0] =
+        (1 << SPICE_RECORD_CAP_CELT_0_5_1) |
+        (1 << SPICE_RECORD_CAP_VOLUME);
     add_worker(record_worker);
     reds_register_channel(&record_worker->base);
 }
@@ -1429,8 +1463,10 @@ void snd_set_playback_compression(int on)
     playback_compression = on ? SPICE_AUDIO_DATA_MODE_CELT_0_5_1 : SPICE_AUDIO_DATA_MODE_RAW;
     for (; now; now = now->next) {
         if (now->base.type == SPICE_CHANNEL_PLAYBACK && now->connection) {
+            SndChannel* sndchannel = now->connection;
             PlaybackChannel* playback = (PlaybackChannel*)now->connection;
-            if (!playback->celt_allowed) {
+            if (!check_cap(sndchannel->caps, sndchannel->num_caps,
+                           SPICE_PLAYBACK_CAP_CELT_0_5_1)) {
                 ASSERT(playback->mode == SPICE_AUDIO_DATA_MODE_RAW);
                 continue;
             }
