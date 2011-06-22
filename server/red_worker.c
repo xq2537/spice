@@ -10304,7 +10304,11 @@ static inline void handle_dev_destroy_primary_surface(RedWorker *worker)
     receive_data(worker->channel, &surface_id, sizeof(uint32_t));
 
     PANIC_ON(surface_id != 0);
-    PANIC_ON(!worker->surfaces[surface_id].context.canvas);
+
+    if (!worker->surfaces[surface_id].context.canvas) {
+        red_printf("double destroy of primary surface\n");
+        return;
+    }
 
     flush_all_qxl_commands(worker);
     destroy_surface_wait(worker, 0);
