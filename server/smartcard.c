@@ -454,6 +454,12 @@ static int smartcard_channel_handle_message(RedChannel *channel, SpiceDataHeader
     VSCMsgHeader* vheader = (VSCMsgHeader*)msg;
     SmartCardChannel* smartcard_channel = (SmartCardChannel*)channel;
 
+    if (header->type != SPICE_MSGC_SMARTCARD_DATA) {
+        /* handle ack's, spicy sends them while spicec does not */
+        return red_channel_handle_message(channel, header->size, header->type,
+                                          msg);
+    }
+
     ASSERT(header->size == vheader->length + sizeof(VSCMsgHeader));
     switch (vheader->type) {
         case VSC_ReaderAdd:
