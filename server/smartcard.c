@@ -538,6 +538,10 @@ void smartcard_channel_init(void)
 {
     Channel *channel;
 
+    /* don't register the channel if no hardware registered */
+    if (g_smartcard_readers.num == 0) {
+        return;
+    }
     channel = spice_new0(Channel, 1);
     channel->type = SPICE_CHANNEL_SMARTCARD;
     channel->link = smartcard_link;
@@ -545,4 +549,3 @@ void smartcard_channel_init(void)
     channel->migrate = smartcard_migrate;
     reds_register_channel(channel);
 }
-
