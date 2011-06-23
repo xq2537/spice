@@ -7311,57 +7311,34 @@ static inline uint8_t *red_get_image_line(RedWorker *worker, SpiceChunks *chunks
     return ret;
 }
 
-static int red_rgb32bpp_to_24 (RedWorker *worker, const SpiceRect *src,
-                               const SpiceBitmap *image,
-                               uint8_t *frame, size_t frame_stride,
-                               int id, Stream *stream)
+static void pixel_rgb24bpp_to_24(uint8_t *src, uint8_t *dest)
 {
-    SpiceChunks *chunks;
-    uint32_t image_stride;
-    uint8_t *frame_row;
-    size_t offset;
-    int i, x, chunk;
-
-    chunks = image->data;
-    offset = 0;
-    chunk = 0;
-    image_stride = image->stride;
-
-    const int skip_lines = stream->top_down ? src->top : image->y - (src->bottom - 0);
-    for (i = 0; i < skip_lines; i++) {
-        red_get_image_line(worker, chunks, &offset, &chunk, image_stride);
-    }
-
-    const int image_height = src->bottom - src->top;
-    const int image_width = src->right - src->left;
-    for (i = 0; i < image_height; i++) {
-        uint32_t *src_line =
-            (uint32_t *)red_get_image_line(worker, chunks, &offset, &chunk, image_stride);
-
-        if (!src_line) {
-            return FALSE;
-        }
-
-        src_line += src->left;
-
-        frame_row = frame;
-        for (x = 0; x < image_width; x++) {
-            uint32_t pixel = *src_line++;
-            *frame_row++ = (pixel >> 16) & 0xff;
-            *frame_row++ = (pixel >>  8) & 0xff;
-            *frame_row++ = (pixel >>  0) & 0xff;
-        }
-
-        frame += frame_stride;
-    }
-
-    return TRUE;
+    /* libjpegs stores rgb, spice/win32 stores bgr */
+    *dest++ = src[2]; /* red */
+    *dest++ = src[1]; /* green */
+    *dest++ = src[0]; /* blue */
 }
 
-static int red_rgb24bpp_to_24 (RedWorker *worker, const SpiceRect *src,
-                               const SpiceBitmap *image,
-                               uint8_t *frame, size_t frame_stride,
-                               int id, Stream *stream)
+static void pixel_rgb32bpp_to_24(uint8_t *src, uint8_t *dest)
+{
+    uint32_t pixel = *(uint32_t *)src;
+    *dest++ = (pixel >> 16) & 0xff;
+    *dest++ = (pixel >>  8) & 0xff;
+    *dest++ = (pixel >>  0) & 0xff;
+}
+
+static void pixel_rgb16bpp_to_24(uint8_t *src, uint8_t *dest)
+{
+    uint16_t pixel = *(uint16_t *)src;
+    *dest++ = ((pixel >> 7) & 0xf8) | ((pixel >> 12) & 0x7);
+    *dest++ = ((pixel >> 2) & 0xf8) | ((pixel >> 7) & 0x7);
+    *dest++ = ((pixel << 3) & 0xf8) | ((pixel >> 2) & 0x7);
+}
+
+static int red_rgb_to_24bpp (RedWorker *worker, const SpiceRect *src,
+                             const SpiceBitmap *image,
+                             uint8_t *frame, size_t frame_stride,
+                             int id, Stream *stream)
 {
     SpiceChunks *chunks;
     uint32_t image_stride;
@@ -7381,6 +7358,27 @@ static int red_rgb24bpp_to_24 (RedWorker *worker, const SpiceRect *src,
 
     const int image_height = src->bottom - src->top;
     const int image_width = src->right - src->left;
+    unsigned int bytes_per_pixel;
+    void (*pixel_converter)(uint8_t *src, uint8_t *dest);
+
+
+    switch (image->format) {
+    case SPICE_BITMAP_FMT_32BIT:
+        bytes_per_pixel = 4;
+        pixel_converter = pixel_rgb32bpp_to_24;
+        break;
+    case SPICE_BITMAP_FMT_16BIT:
+        bytes_per_pixel = 2;
+        pixel_converter = pixel_rgb16bpp_to_24;
+        break;
+    case SPICE_BITMAP_FMT_24BIT:
+        bytes_per_pixel = 3;
+        pixel_converter = pixel_rgb24bpp_to_24;
+        break;
+    default:
+        red_printf_some(1000, "unsupported format %d", image->format);
+        return FALSE;
+    }
     for (i = 0; i < image_height; i++) {
         uint8_t *src_line =
             (uint8_t *)red_get_image_line(worker, chunks, &offset, &chunk, image_stride);
@@ -7389,61 +7387,13 @@ static int red_rgb24bpp_to_24 (RedWorker *worker, const SpiceRect *src,
             return FALSE;
         }
 
-        src_line += src->left * 3;
+        src_line += src->left * bytes_per_pixel;
 
         frame_row = frame;
         for (x = 0; x < image_width; x++) {
-            /* libjpegs stores rgb, spice/win32 stores bgr */
-            *frame_row++ = src_line[2]; /* red */
-            *frame_row++ = src_line[1]; /* green */
-            *frame_row++ = src_line[0]; /* blue */
-            src_line += 3;
-        }
-        frame += frame_stride;
-    }
-
-    return TRUE;
-}
-
-static int red_rgb16bpp_to_24 (RedWorker *worker, const SpiceRect *src,
-                               const SpiceBitmap *image,
-                               uint8_t *frame, size_t frame_stride,
-                               int id, Stream *stream)
-{
-    SpiceChunks *chunks;
-    uint32_t image_stride;
-    uint8_t *frame_row;
-    size_t offset;
-    int i, x, chunk;
-
-    chunks = image->data;
-    offset = 0;
-    chunk = 0;
-    image_stride = image->stride;
-
-    const int skip_lines = stream->top_down ? src->top : image->y - (src->bottom - 0);
-    for (i = 0; i < skip_lines; i++) {
-        red_get_image_line(worker, chunks, &offset, &chunk, image_stride);
-    }
-
-    const int image_height = src->bottom - src->top;
-    const int image_width = src->right - src->left;
-    for (i = 0; i < image_height; i++) {
-        uint16_t *src_line =
-            (uint16_t *)red_get_image_line(worker, chunks, &offset, &chunk, image_stride);
-
-        if (!src_line) {
-            return FALSE;
-        }
-
-        src_line += src->left;
-
-        frame_row = frame;
-        for (x = 0; x < image_width; x++) {
-            uint16_t pixel = *src_line++;
-            *frame_row++ = ((pixel >> 7) & 0xf8) | ((pixel >> 12) & 0x7);
-            *frame_row++ = ((pixel >> 2) & 0xf8) | ((pixel >> 7) & 0x7);
-            *frame_row++ = ((pixel << 3) & 0xf8) | ((pixel >> 2) & 0x7);
+            pixel_converter(src_line, frame_row);
+            frame_row += 3;
+            src_line += bytes_per_pixel;
         }
 
         frame += frame_stride;
@@ -7484,30 +7434,9 @@ static inline int red_send_stream_data(DisplayChannel *display_channel,
     frame = mjpeg_encoder_get_frame(stream->mjpeg_encoder);
     frame_stride = mjpeg_encoder_get_frame_stride(stream->mjpeg_encoder);
 
-    switch (image->u.bitmap.format) {
-    case SPICE_BITMAP_FMT_32BIT:
-        if (!red_rgb32bpp_to_24(worker, &drawable->red_drawable->u.copy.src_area,
-                                &image->u.bitmap, frame, frame_stride,
-                                stream - worker->streams_buf, stream)) {
-            return FALSE;
-        }
-        break;
-    case SPICE_BITMAP_FMT_16BIT:
-        if (!red_rgb16bpp_to_24(worker, &drawable->red_drawable->u.copy.src_area,
-                                &image->u.bitmap, frame, frame_stride,
-                                stream - worker->streams_buf, stream)) {
-            return FALSE;
-        }
-        break;
-    case SPICE_BITMAP_FMT_24BIT:
-        if (!red_rgb24bpp_to_24(worker, &drawable->red_drawable->u.copy.src_area,
-                                &image->u.bitmap, frame, frame_stride,
-                                stream - worker->streams_buf, stream)) {
-            return FALSE;
-        }
-        break;
-    default:
-        red_printf_some(1000, "unsupported format %d", image->u.bitmap.format);
+    if (!red_rgb_to_24bpp(worker, &drawable->red_drawable->u.copy.src_area,
+                          &image->u.bitmap, frame, frame_stride,
+                          stream - worker->streams_buf, stream)) {
         return FALSE;
     }
 
