@@ -7311,47 +7311,18 @@ static inline uint8_t *red_get_image_line(RedWorker *worker, SpiceChunks *chunks
     return ret;
 }
 
-static void pixel_rgb24bpp_to_24(uint8_t *src, uint8_t *dest)
-{
-    /* libjpegs stores rgb, spice/win32 stores bgr */
-    *dest++ = src[2]; /* red */
-    *dest++ = src[1]; /* green */
-    *dest++ = src[0]; /* blue */
-}
-
-static void pixel_rgb32bpp_to_24(uint8_t *src, uint8_t *dest)
-{
-    uint32_t pixel = *(uint32_t *)src;
-    *dest++ = (pixel >> 16) & 0xff;
-    *dest++ = (pixel >>  8) & 0xff;
-    *dest++ = (pixel >>  0) & 0xff;
-}
-
-static void pixel_rgb16bpp_to_24(uint8_t *src, uint8_t *dest)
-{
-    uint16_t pixel = *(uint16_t *)src;
-    *dest++ = ((pixel >> 7) & 0xf8) | ((pixel >> 12) & 0x7);
-    *dest++ = ((pixel >> 2) & 0xf8) | ((pixel >> 7) & 0x7);
-    *dest++ = ((pixel << 3) & 0xf8) | ((pixel >> 2) & 0x7);
-}
-
-static int red_rgb_to_24bpp (RedWorker *worker, const SpiceRect *src,
-                             const SpiceBitmap *image, Stream *stream)
+static int encode_frame (RedWorker *worker, const SpiceRect *src,
+                         const SpiceBitmap *image, Stream *stream)
 {
     SpiceChunks *chunks;
     uint32_t image_stride;
-    uint8_t *frame_row;
     size_t offset;
-    int i, x, chunk;
-    uint8_t *frame;
-    size_t frame_stride;
+    int i, chunk;
 
     chunks = image->data;
     offset = 0;
     chunk = 0;
     image_stride = image->stride;
-    frame = mjpeg_encoder_get_frame(stream->mjpeg_encoder);
-    frame_stride = mjpeg_encoder_get_frame_stride(stream->mjpeg_encoder);
 
     const int skip_lines = stream->top_down ? src->top : image->y - (src->bottom - 0);
     for (i = 0; i < skip_lines; i++) {
@@ -7360,27 +7331,7 @@ static int red_rgb_to_24bpp (RedWorker *worker, const SpiceRect *src,
 
     const int image_height = src->bottom - src->top;
     const int image_width = src->right - src->left;
-    unsigned int bytes_per_pixel;
-    void (*pixel_converter)(uint8_t *src, uint8_t *dest);
 
-
-    switch (image->format) {
-    case SPICE_BITMAP_FMT_32BIT:
-        bytes_per_pixel = 4;
-        pixel_converter = pixel_rgb32bpp_to_24;
-        break;
-    case SPICE_BITMAP_FMT_16BIT:
-        bytes_per_pixel = 2;
-        pixel_converter = pixel_rgb16bpp_to_24;
-        break;
-    case SPICE_BITMAP_FMT_24BIT:
-        bytes_per_pixel = 3;
-        pixel_converter = pixel_rgb24bpp_to_24;
-        break;
-    default:
-        red_printf_some(1000, "unsupported format %d", image->format);
-        return FALSE;
-    }
     for (i = 0; i < image_height; i++) {
         uint8_t *src_line =
             (uint8_t *)red_get_image_line(worker, chunks, &offset, &chunk, image_stride);
@@ -7389,16 +7340,9 @@ static int red_rgb_to_24bpp (RedWorker *worker, const SpiceRect *src,
             return FALSE;
         }
 
-        src_line += src->left * bytes_per_pixel;
-
-        frame_row = frame;
-        for (x = 0; x < image_width; x++) {
-            pixel_converter(src_line, frame_row);
-            frame_row += 3;
-            src_line += bytes_per_pixel;
-        }
-
-        frame += frame_stride;
+        src_line += src->left * mjpeg_encoder_get_bytes_per_pixel(stream->mjpeg_encoder);
+        if (mjpeg_encoder_encode_scanline(stream->mjpeg_encoder, src_line, image_width) == 0)
+            return FALSE;
     }
 
     return TRUE;
@@ -7432,20 +7376,17 @@ static inline int red_send_stream_data(DisplayChannel *display_channel,
         return TRUE;
     }
 
-    if (!red_rgb_to_24bpp(worker, &drawable->red_drawable->u.copy.src_area,
-                          &image->u.bitmap, stream)) {
-        return FALSE;
-    }
-
-
     outbuf_size = display_channel->send_data.stream_outbuf_size;
-    n = mjpeg_encoder_encode_frame(stream->mjpeg_encoder,
+    if (!mjpeg_encoder_start_frame(stream->mjpeg_encoder, image->u.bitmap.format,
                                    &display_channel->send_data.stream_outbuf,
-                                   &outbuf_size);
-    if (n == 0) {
-        red_printf("failed to encode frame, out of memory?");
+                                   &outbuf_size)) {
         return FALSE;
     }
+    if (!encode_frame(worker, &drawable->red_drawable->u.copy.src_area,
+                      &image->u.bitmap, stream)) {
+        return FALSE;
+    }
+    n = mjpeg_encoder_end_frame(stream->mjpeg_encoder);
     display_channel->send_data.stream_outbuf_size = outbuf_size;
 
     red_channel_init_send_data(channel, SPICE_MSG_DISPLAY_STREAM_DATA, NULL);
