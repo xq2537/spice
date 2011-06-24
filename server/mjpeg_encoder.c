@@ -81,6 +81,11 @@ size_t mjpeg_encoder_get_frame_stride(MJpegEncoder *encoder)
     return encoder->stride;
 }
 
+uint8_t mjpeg_encoder_get_bytes_per_pixel(MJpegEncoder *encoder)
+{
+    return encoder->bytes_per_pixel;
+}
+
 
 /* Pixel conversion routines */
 static void pixel_rgb24bpp_to_24(uint8_t *src, uint8_t *dest)
