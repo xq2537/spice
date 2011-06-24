@@ -29,11 +29,15 @@ struct MJpegEncoder {
     int height;
     int stride;
     uint8_t *frame;
+    uint8_t *row;
     int first_frame;
     int quality;
 
     struct jpeg_compress_struct cinfo;
     struct jpeg_error_mgr jerr;
+
+    unsigned int bytes_per_pixel; /* bytes per pixel of the input buffer */
+    void (*pixel_converter)(uint8_t *src, uint8_t *dest);
 };
 
 MJpegEncoder *mjpeg_encoder_new(int width, int height)
@@ -51,6 +55,7 @@ MJpegEncoder *mjpeg_encoder_new(int width, int height)
         abort();
     }
     enc->frame = spice_malloc_n(enc->stride, height);
+    enc->row = spice_malloc(enc->stride);
 
     enc->cinfo.err = jpeg_std_error(&enc->jerr);
 
@@ -63,6 +68,7 @@ void mjpeg_encoder_destroy(MJpegEncoder *encoder)
 {
     jpeg_destroy_compress(&encoder->cinfo);
     free(encoder->frame);
+    free(encoder->row);
     free(encoder);
 }
 
@@ -73,6 +79,32 @@ uint8_t *mjpeg_encoder_get_frame(MJpegEncoder *encoder)
 size_t mjpeg_encoder_get_frame_stride(MJpegEncoder *encoder)
 {
     return encoder->stride;
+}
+
+
+/* Pixel conversion routines */
+static void pixel_rgb24bpp_to_24(uint8_t *src, uint8_t *dest)
+{
+    /* libjpegs stores rgb, spice/win32 stores bgr */
+    *dest++ = src[2]; /* red */
+    *dest++ = src[1]; /* green */
+    *dest++ = src[0]; /* blue */
+}
+
+static void pixel_rgb32bpp_to_24(uint8_t *src, uint8_t *dest)
+{
+    uint32_t pixel = *(uint32_t *)src;
+    *dest++ = (pixel >> 16) & 0xff;
+    *dest++ = (pixel >>  8) & 0xff;
+    *dest++ = (pixel >>  0) & 0xff;
+}
+
+static void pixel_rgb16bpp_to_24(uint8_t *src, uint8_t *dest)
+{
+    uint16_t pixel = *(uint16_t *)src;
+    *dest++ = ((pixel >> 7) & 0xf8) | ((pixel >> 12) & 0x7);
+    *dest++ = ((pixel >> 2) & 0xf8) | ((pixel >> 7) & 0x7);
+    *dest++ = ((pixel << 3) & 0xf8) | ((pixel >> 2) & 0x7);
 }
 
 
@@ -181,6 +213,76 @@ jpeg_mem_dest (j_compress_ptr cinfo,
   dest->pub.free_in_buffer = dest->bufsize = *outsize;
 }
 /* end of code from libjpeg */
+
+int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
+                              uint8_t **dest, size_t *dest_len)
+{
+    switch (format) {
+    case SPICE_BITMAP_FMT_32BIT:
+        encoder->bytes_per_pixel = 4;
+        encoder->pixel_converter = pixel_rgb32bpp_to_24;
+        break;
+    case SPICE_BITMAP_FMT_16BIT:
+        encoder->bytes_per_pixel = 2;
+        encoder->pixel_converter = pixel_rgb16bpp_to_24;
+        break;
+    case SPICE_BITMAP_FMT_24BIT:
+        encoder->bytes_per_pixel = 3;
+        encoder->pixel_converter = pixel_rgb24bpp_to_24;
+        break;
+    default:
+        red_printf_some(1000, "unsupported format %d", format);
+        return FALSE;
+    }
+
+    jpeg_mem_dest(&encoder->cinfo, dest, dest_len);
+
+    encoder->cinfo.image_width      = encoder->width;
+    encoder->cinfo.image_height     = encoder->height;
+    encoder->cinfo.input_components = 3;
+    encoder->cinfo.in_color_space   = JCS_RGB;
+
+    jpeg_set_defaults(&encoder->cinfo);
+    encoder->cinfo.dct_method       = JDCT_IFAST;
+    jpeg_set_quality(&encoder->cinfo, encoder->quality, TRUE);
+    jpeg_start_compress(&encoder->cinfo, encoder->first_frame);
+
+    return TRUE;
+}
+
+int mjpeg_encoder_encode_scanline(MJpegEncoder *encoder, uint8_t *src_pixels,
+                                  size_t image_width)
+{
+    unsigned int scanlines_written;
+    uint8_t *row;
+
+    row = encoder->row;
+    if (encoder->pixel_converter) {
+        unsigned int x;
+        for (x = 0; x < image_width; x++) {
+            encoder->pixel_converter(src_pixels, row);
+            row += 3;
+            src_pixels += encoder->bytes_per_pixel;
+        }
+    }
+    scanlines_written = jpeg_write_scanlines(&encoder->cinfo, &encoder->row, 1);
+    if (scanlines_written == 0) { /* Not enough space */
+        jpeg_abort_compress(&encoder->cinfo);
+        return 0;
+    }
+
+    return scanlines_written;
+}
+
+size_t mjpeg_encoder_end_frame(MJpegEncoder *encoder)
+{
+    mem_destination_mgr *dest = (mem_destination_mgr *) encoder->cinfo.dest;
+
+    jpeg_finish_compress(&encoder->cinfo);
+
+    encoder->first_frame = FALSE;
+    return dest->pub.next_output_byte - dest->buffer;
+}
 
 int mjpeg_encoder_encode_frame(MJpegEncoder *encoder,
                                uint8_t **buffer, size_t *buffer_len)
