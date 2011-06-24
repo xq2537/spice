@@ -29,7 +29,7 @@ void mjpeg_encoder_destroy(MJpegEncoder *encoder);
 uint8_t *mjpeg_encoder_get_frame(MJpegEncoder *encoder);
 size_t mjpeg_encoder_get_frame_stride(MJpegEncoder *encoder);
 int mjpeg_encoder_encode_frame(MJpegEncoder *encoder,
-                               uint8_t *buffer, size_t buffer_len);
+                               uint8_t **buffer, size_t *buffer_len);
 
 
 #endif

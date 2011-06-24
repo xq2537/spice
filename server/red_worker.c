@@ -7426,6 +7426,7 @@ static inline int red_send_stream_data(DisplayChannel *display_channel,
 
     StreamAgent *agent = &display_channel->stream_agents[stream - worker->streams_buf];
     uint64_t time_now = red_now();
+    size_t outbuf_size;
     if (time_now - agent->last_send_time < (1000 * 1000 * 1000) / agent->fps) {
         agent->frames--;
         return TRUE;
@@ -7440,19 +7441,16 @@ static inline int red_send_stream_data(DisplayChannel *display_channel,
         return FALSE;
     }
 
-    while ((n = mjpeg_encoder_encode_frame(stream->mjpeg_encoder,
-                                           display_channel->send_data.stream_outbuf,
-                                           display_channel->send_data.stream_outbuf_size)) == 0) {
-        uint8_t *new_buf;
-        size_t new_size;
 
-        new_size = display_channel->send_data.stream_outbuf_size * 2;
-        new_buf = spice_malloc(new_size);
-
-        free(display_channel->send_data.stream_outbuf);
-        display_channel->send_data.stream_outbuf = new_buf;
-        display_channel->send_data.stream_outbuf_size = new_size;
+    outbuf_size = display_channel->send_data.stream_outbuf_size;
+    n = mjpeg_encoder_encode_frame(stream->mjpeg_encoder,
+                                   &display_channel->send_data.stream_outbuf,
+                                   &outbuf_size);
+    if (n == 0) {
+        red_printf("failed to encode frame, out of memory?");
+        return FALSE;
     }
+    display_channel->send_data.stream_outbuf_size = outbuf_size;
 
     red_channel_init_send_data(channel, SPICE_MSG_DISPLAY_STREAM_DATA, NULL);
 
