@@ -7336,20 +7336,22 @@ static void pixel_rgb16bpp_to_24(uint8_t *src, uint8_t *dest)
 }
 
 static int red_rgb_to_24bpp (RedWorker *worker, const SpiceRect *src,
-                             const SpiceBitmap *image,
-                             uint8_t *frame, size_t frame_stride,
-                             int id, Stream *stream)
+                             const SpiceBitmap *image, Stream *stream)
 {
     SpiceChunks *chunks;
     uint32_t image_stride;
     uint8_t *frame_row;
     size_t offset;
     int i, x, chunk;
+    uint8_t *frame;
+    size_t frame_stride;
 
     chunks = image->data;
     offset = 0;
     chunk = 0;
     image_stride = image->stride;
+    frame = mjpeg_encoder_get_frame(stream->mjpeg_encoder);
+    frame_stride = mjpeg_encoder_get_frame_stride(stream->mjpeg_encoder);
 
     const int skip_lines = stream->top_down ? src->top : image->y - (src->bottom - 0);
     for (i = 0; i < skip_lines; i++) {
@@ -7409,8 +7411,6 @@ static inline int red_send_stream_data(DisplayChannel *display_channel,
     SpiceImage *image;
     RedChannel *channel;
     RedWorker* worker;
-    uint8_t *frame;
-    size_t frame_stride;
     int n;
 
     ASSERT(stream);
@@ -7432,12 +7432,8 @@ static inline int red_send_stream_data(DisplayChannel *display_channel,
         return TRUE;
     }
 
-    frame = mjpeg_encoder_get_frame(stream->mjpeg_encoder);
-    frame_stride = mjpeg_encoder_get_frame_stride(stream->mjpeg_encoder);
-
     if (!red_rgb_to_24bpp(worker, &drawable->red_drawable->u.copy.src_area,
-                          &image->u.bitmap, frame, frame_stride,
-                          stream - worker->streams_buf, stream)) {
+                          &image->u.bitmap, stream)) {
         return FALSE;
     }
 
