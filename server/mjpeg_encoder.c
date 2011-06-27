@@ -86,7 +86,7 @@ uint8_t mjpeg_encoder_get_bytes_per_pixel(MJpegEncoder *encoder)
     return encoder->bytes_per_pixel;
 }
 
-
+#ifndef JCS_EXTENSIONS
 /* Pixel conversion routines */
 static void pixel_rgb24bpp_to_24(uint8_t *src, uint8_t *dest)
 {
@@ -103,6 +103,7 @@ static void pixel_rgb32bpp_to_24(uint8_t *src, uint8_t *dest)
     *dest++ = (pixel >>  8) & 0xff;
     *dest++ = (pixel >>  0) & 0xff;
 }
+#endif
 
 static void pixel_rgb16bpp_to_24(uint8_t *src, uint8_t *dest)
 {
@@ -222,10 +223,17 @@ jpeg_mem_dest (j_compress_ptr cinfo,
 int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
                               uint8_t **dest, size_t *dest_len)
 {
+    encoder->cinfo.in_color_space   = JCS_RGB;
+    encoder->cinfo.input_components = 3;
     switch (format) {
     case SPICE_BITMAP_FMT_32BIT:
         encoder->bytes_per_pixel = 4;
+#ifdef JCS_EXTENSIONS
+        encoder->cinfo.in_color_space   = JCS_EXT_BGRX;
+        encoder->cinfo.input_components = 4;
+#else
         encoder->pixel_converter = pixel_rgb32bpp_to_24;
+#endif
         break;
     case SPICE_BITMAP_FMT_16BIT:
         encoder->bytes_per_pixel = 2;
@@ -233,7 +241,11 @@ int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
         break;
     case SPICE_BITMAP_FMT_24BIT:
         encoder->bytes_per_pixel = 3;
+#ifdef JCS_EXTENSIONS
+        encoder->cinfo.in_color_space = JCS_EXT_BGR;
+#else
         encoder->pixel_converter = pixel_rgb24bpp_to_24;
+#endif
         break;
     default:
         red_printf_some(1000, "unsupported format %d", format);
@@ -244,9 +256,6 @@ int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
 
     encoder->cinfo.image_width      = encoder->width;
     encoder->cinfo.image_height     = encoder->height;
-    encoder->cinfo.input_components = 3;
-    encoder->cinfo.in_color_space   = JCS_RGB;
-
     jpeg_set_defaults(&encoder->cinfo);
     encoder->cinfo.dct_method       = JDCT_IFAST;
     jpeg_set_quality(&encoder->cinfo, encoder->quality, TRUE);
@@ -269,8 +278,10 @@ int mjpeg_encoder_encode_scanline(MJpegEncoder *encoder, uint8_t *src_pixels,
             row += 3;
             src_pixels += encoder->bytes_per_pixel;
         }
+        scanlines_written = jpeg_write_scanlines(&encoder->cinfo, &encoder->row, 1);
+    } else {
+        scanlines_written = jpeg_write_scanlines(&encoder->cinfo, &src_pixels, 1);
     }
-    scanlines_written = jpeg_write_scanlines(&encoder->cinfo, &encoder->row, 1);
     if (scanlines_written == 0) { /* Not enough space */
         jpeg_abort_compress(&encoder->cinfo);
         return 0;
