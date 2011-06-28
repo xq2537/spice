@@ -27,7 +27,6 @@
 struct MJpegEncoder {
     int width;
     int height;
-    int stride;
     uint8_t *row;
     int first_frame;
     int quality;
@@ -48,15 +47,8 @@ MJpegEncoder *mjpeg_encoder_new(int width, int height)
     enc->first_frame = TRUE;
     enc->width = width;
     enc->height = height;
-    enc->stride = width * 3;
     enc->quality = 70;
-    if (enc->stride < width) {
-        abort();
-    }
-    enc->row = spice_malloc(enc->stride);
-
     enc->cinfo.err = jpeg_std_error(&enc->jerr);
-
     jpeg_create_compress(&enc->cinfo);
 
     return enc;
@@ -238,6 +230,15 @@ int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
     default:
         red_printf_some(1000, "unsupported format %d", format);
         return FALSE;
+    }
+
+    if ((encoder->pixel_converter != NULL) && (encoder->row == NULL)) {
+        unsigned int stride = encoder->width * 3;
+        /* check for integer overflow */
+        if (stride < encoder->width) {
+            return FALSE;
+        }
+        encoder->row = spice_malloc(stride);
     }
 
     jpeg_mem_dest(&encoder->cinfo, dest, dest_len);
