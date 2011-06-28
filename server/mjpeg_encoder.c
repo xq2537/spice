@@ -28,7 +28,6 @@ struct MJpegEncoder {
     int width;
     int height;
     int stride;
-    uint8_t *frame;
     uint8_t *row;
     int first_frame;
     int quality;
@@ -54,7 +53,6 @@ MJpegEncoder *mjpeg_encoder_new(int width, int height)
     if (enc->stride < width) {
         abort();
     }
-    enc->frame = spice_malloc_n(enc->stride, height);
     enc->row = spice_malloc(enc->stride);
 
     enc->cinfo.err = jpeg_std_error(&enc->jerr);
@@ -67,18 +65,8 @@ MJpegEncoder *mjpeg_encoder_new(int width, int height)
 void mjpeg_encoder_destroy(MJpegEncoder *encoder)
 {
     jpeg_destroy_compress(&encoder->cinfo);
-    free(encoder->frame);
     free(encoder->row);
     free(encoder);
-}
-
-uint8_t *mjpeg_encoder_get_frame(MJpegEncoder *encoder)
-{
-    return encoder->frame;
-}
-size_t mjpeg_encoder_get_frame_stride(MJpegEncoder *encoder)
-{
-    return encoder->stride;
 }
 
 uint8_t mjpeg_encoder_get_bytes_per_pixel(MJpegEncoder *encoder)
@@ -298,38 +286,4 @@ size_t mjpeg_encoder_end_frame(MJpegEncoder *encoder)
 
     encoder->first_frame = FALSE;
     return dest->pub.next_output_byte - dest->buffer;
-}
-
-int mjpeg_encoder_encode_frame(MJpegEncoder *encoder,
-                               uint8_t **buffer, size_t *buffer_len)
-{
-    uint8_t *frame;
-    int n;
-
-    jpeg_mem_dest(&encoder->cinfo, buffer, buffer_len);
-
-    encoder->cinfo.image_width      = encoder->width;
-    encoder->cinfo.image_height     = encoder->height;
-    encoder->cinfo.input_components = 3;
-    encoder->cinfo.in_color_space   = JCS_RGB;
-
-    jpeg_set_defaults(&encoder->cinfo);
-    encoder->cinfo.dct_method       = JDCT_IFAST;
-    jpeg_set_quality(&encoder->cinfo, encoder->quality, TRUE);
-    jpeg_start_compress(&encoder->cinfo, encoder->first_frame);
-
-    frame = encoder->frame;
-    while (encoder->cinfo.next_scanline < encoder->cinfo.image_height) {
-        n = jpeg_write_scanlines(&encoder->cinfo, &frame, 1);
-        if (n == 0) { /* Not enough space */
-            jpeg_abort_compress(&encoder->cinfo);
-            return 0;
-        }
-        frame += encoder->stride;
-    }
-
-    jpeg_finish_compress(&encoder->cinfo);
-
-    encoder->first_frame = FALSE;
-    return encoder->cinfo.dest->next_output_byte - *buffer;
 }

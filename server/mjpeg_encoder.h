@@ -26,11 +26,7 @@ typedef struct MJpegEncoder MJpegEncoder;
 MJpegEncoder *mjpeg_encoder_new(int width, int height);
 void mjpeg_encoder_destroy(MJpegEncoder *encoder);
 
-uint8_t *mjpeg_encoder_get_frame(MJpegEncoder *encoder);
-size_t mjpeg_encoder_get_frame_stride(MJpegEncoder *encoder);
 uint8_t mjpeg_encoder_get_bytes_per_pixel(MJpegEncoder *encoder);
-int mjpeg_encoder_encode_frame(MJpegEncoder *encoder,
-                               uint8_t **buffer, size_t *buffer_len);
 int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
                               uint8_t **dest, size_t *dest_len);
 int mjpeg_encoder_encode_scanline(MJpegEncoder *encoder, uint8_t *src_pixels,
