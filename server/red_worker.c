@@ -7309,14 +7309,6 @@ static inline uint8_t *red_get_image_line(RedWorker *worker, SpiceChunks *chunks
     return ret;
 }
 
-static void red_display_share_stream_buf(DisplayChannel *display_channel)
-{
-}
-
-static void red_display_unshare_stream_buf(DisplayChannel *display_channel)
-{
-}
-
 static int red_rgb32bpp_to_24 (RedWorker *worker, const SpiceRect *src,
                                const SpiceBitmap *image,
                                uint8_t *frame, size_t frame_stride,
@@ -7526,11 +7518,9 @@ static inline int red_send_stream_data(DisplayChannel *display_channel,
         new_size = display_channel->send_data.stream_outbuf_size * 2;
         new_buf = spice_malloc(new_size);
 
-        red_display_unshare_stream_buf(display_channel);
         free(display_channel->send_data.stream_outbuf);
         display_channel->send_data.stream_outbuf = new_buf;
         display_channel->send_data.stream_outbuf_size = new_size;
-        red_display_share_stream_buf(display_channel);
     }
 
     red_channel_init_send_data(channel, SPICE_MSG_DISPLAY_STREAM_DATA, NULL);
@@ -8282,7 +8272,6 @@ static void red_disconnect_display(RedChannel *channel)
     print_compress_stats(display_channel);
 #endif
     worker->display_channel = NULL;
-    red_display_unshare_stream_buf(display_channel);
     red_release_pixmap_cache(display_channel);
     red_release_glz(display_channel);
     red_reset_palette_cache(display_channel);
@@ -9185,7 +9174,6 @@ static void handle_new_display_channel(RedWorker *worker, RedsStream *stream, in
     stream_buf_size = 32*1024;
     display_channel->send_data.stream_outbuf = spice_malloc(stream_buf_size);
     display_channel->send_data.stream_outbuf_size = stream_buf_size;
-    red_display_share_stream_buf(display_channel);
     red_display_init_glz_data(display_channel);
     worker->display_channel = display_channel;
 
