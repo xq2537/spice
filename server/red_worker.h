@@ -18,6 +18,8 @@
 #ifndef _H_REDWORKER
 #define _H_REDWORKER
 
+#include <unistd.h>
+#include <errno.h>
 #include "red_common.h"
 
 
