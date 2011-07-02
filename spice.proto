@@ -339,6 +339,11 @@ flags16 ropd {
     INVERS_RES,
 };
 
+/* This *must* remain with values identical to api/winddi.h
+   LA_STYLED == 0x8 (log_2)=> 3
+   LA_STARTGAP == 0x4 (log_2)=> 2
+   This is used by the windows driver.
+ */
 flags8 line_flags {
     STYLED = 3,
     START_WITH_GAP = 2,
