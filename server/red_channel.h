@@ -294,8 +294,6 @@ void red_channel_pipes_add_type(RedChannel *channel, int pipe_item_type);
 void red_channel_client_ack_zero_messages_window(RedChannelClient *rcc);
 void red_channel_client_ack_set_client_window(RedChannelClient *rcc, int client_window);
 void red_channel_client_push_set_ack(RedChannelClient *rcc);
-void red_channel_ack_zero_messages_window(RedChannel *channel);
-void red_channel_ack_set_client_window(RedChannel *channel, int client_window);
 void red_channel_push_set_ack(RedChannel *channel);
 
 /* TODO: This sets all clients to shut state - probably we want to close per channel */

@@ -847,21 +847,9 @@ void red_channel_client_ack_zero_messages_window(RedChannelClient *rcc)
     rcc->ack_data.messages_window = 0;
 }
 
-void red_channel_ack_zero_messages_window(RedChannel *channel)
-{
-    red_channel_client_ack_zero_messages_window(channel->rcc);
-}
-
 void red_channel_client_ack_set_client_window(RedChannelClient *rcc, int client_window)
 {
     rcc->ack_data.client_window = client_window;
-}
-
-void red_channel_ack_set_client_window(RedChannel* channel, int client_window)
-{
-    if (channel->rcc) {
-        red_channel_client_ack_set_client_window(channel->rcc, client_window);
-    }
 }
 
 static void red_channel_client_remove(RedChannelClient *rcc)
