@@ -9429,6 +9429,27 @@ static inline void handle_dev_destroy_surface_wait(RedWorker *worker)
     write_message(worker->channel, &message);
 }
 
+static inline void red_cursor_reset(RedWorker *worker)
+{
+    if (worker->cursor) {
+        red_release_cursor(worker, worker->cursor);
+        worker->cursor = NULL;
+    }
+
+    worker->cursor_visible = TRUE;
+    worker->cursor_position.x = worker->cursor_position.y = 0;
+    worker->cursor_trail_length = worker->cursor_trail_frequency = 0;
+
+    if (worker->cursor_channel) {
+        red_channel_pipe_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
+        if (!worker->cursor_channel->common.base.migrate) {
+            red_pipe_add_verb(&worker->cursor_channel->common.base, SPICE_MSG_CURSOR_RESET);
+        }
+        red_wait_outgoing_item((RedChannel *)worker->cursor_channel);
+        ASSERT(red_channel_no_item_being_sent(&worker->cursor_channel->common.base));
+    }
+}
+
 /* called upon device reset */
 static inline void handle_dev_destroy_surfaces(RedWorker *worker)
 {
@@ -9448,15 +9469,6 @@ static inline void handle_dev_destroy_surfaces(RedWorker *worker)
     }
     ASSERT(ring_is_empty(&worker->streams));
 
-    red_wait_outgoing_item((RedChannel *)worker->cursor_channel);
-    if (worker->cursor_channel) {
-        red_channel_pipe_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
-        if (!worker->cursor_channel->common.base.migrate) {
-            red_pipe_add_verb(&worker->cursor_channel->common.base, SPICE_MSG_CURSOR_RESET);
-        }
-        ASSERT(red_channel_no_item_being_sent(&worker->cursor_channel->common.base));
-    }
-
     if (worker->display_channel) {
         red_channel_pipe_add_type(&worker->display_channel->common.base, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
         red_pipe_add_verb(&worker->display_channel->common.base, SPICE_MSG_DISPLAY_STREAM_DESTROY_ALL);
@@ -9464,9 +9476,7 @@ static inline void handle_dev_destroy_surfaces(RedWorker *worker)
 
     red_display_clear_glz_drawables(worker->display_channel);
 
-    worker->cursor_visible = TRUE;
-    worker->cursor_position.x = worker->cursor_position.y = 0;
-    worker->cursor_trail_length = worker->cursor_trail_frequency = 0;
+    red_cursor_reset(worker);
 
     message = RED_WORKER_MESSAGE_READY;
     write_message(worker->channel, &message);
@@ -9519,20 +9529,6 @@ static inline void handle_dev_destroy_primary_surface(RedWorker *worker)
     PANIC_ON(surface_id != 0);
     PANIC_ON(!worker->surfaces[surface_id].context.canvas);
 
-    if (worker->cursor) {
-        red_release_cursor(worker, worker->cursor);
-        worker->cursor = NULL;
-    }
-
-    red_wait_outgoing_item((RedChannel *)worker->cursor_channel);
-    if (worker->cursor_channel) {
-        red_channel_pipe_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
-        if (!worker->cursor_channel->common.base.migrate) {
-            red_pipe_add_verb(&worker->cursor_channel->common.base, SPICE_MSG_CURSOR_RESET);
-        }
-        ASSERT(red_channel_no_item_being_sent(&worker->cursor_channel->common.base));
-    }
-
     flush_all_qxl_commands(worker);
     destroy_surface_wait(worker, 0);
     red_destroy_surface(worker, 0);
@@ -9540,9 +9536,7 @@ static inline void handle_dev_destroy_primary_surface(RedWorker *worker)
 
     ASSERT(!worker->surfaces[surface_id].context.canvas);
 
-    worker->cursor_visible = TRUE;
-    worker->cursor_position.x = worker->cursor_position.y = 0;
-    worker->cursor_trail_length = worker->cursor_trail_frequency = 0;
+    red_cursor_reset(worker);
 
     message = RED_WORKER_MESSAGE_READY;
     write_message(worker->channel, &message);
@@ -9581,24 +9575,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         clear_bit(RED_WORKER_PENDING_OOM, worker->pending);
         break;
     case RED_WORKER_MESSAGE_RESET_CURSOR:
-        if (worker->cursor) {
-            red_release_cursor(worker, worker->cursor);
-            worker->cursor = NULL;
-        }
-
-        red_wait_outgoing_item((RedChannel *)worker->cursor_channel);
-        if (worker->cursor_channel) {
-            red_channel_pipe_add_type(cursor_red_channel, PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
-            if (!cursor_red_channel->migrate) {
-                red_pipe_add_verb(cursor_red_channel, SPICE_MSG_CURSOR_RESET);
-            }
-            ASSERT(red_channel_no_item_being_sent(cursor_red_channel));
-
-            worker->cursor_visible = TRUE;
-            worker->cursor_position.x = worker->cursor_position.y = 0;
-            worker->cursor_trail_length = worker->cursor_trail_frequency = 0;
-        }
-
+        red_cursor_reset(worker);
         message = RED_WORKER_MESSAGE_READY;
         write_message(worker->channel, &message);
         break;
