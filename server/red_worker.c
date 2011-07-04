@@ -232,7 +232,6 @@ enum {
     PIPE_ITEM_TYPE_INVAL_ONE,
     PIPE_ITEM_TYPE_CURSOR,
     PIPE_ITEM_TYPE_MIGRATE,
-    PIPE_ITEM_TYPE_LOCAL_CURSOR,
     PIPE_ITEM_TYPE_SET_ACK,
     PIPE_ITEM_TYPE_CURSOR_INIT,
     PIPE_ITEM_TYPE_IMAGE,
@@ -299,17 +298,10 @@ typedef struct SurfaceDestroyItem {
     PipeItem pipe_item;
 } SurfaceDestroyItem;
 
-enum {
-    CURSOR_TYPE_INVALID,
-    CURSOR_TYPE_DEV,
-    CURSOR_TYPE_LOCAL,
-};
-
 typedef struct CursorItem {
     PipeItem pipe_data;
     uint32_t group_id;
     int refs;
-    int type;
     RedCursorCmd *red_cursor;
 } CursorItem;
 
@@ -4182,11 +4174,6 @@ static void red_release_cursor(RedWorker *worker, CursorItem *cursor)
         QXLReleaseInfoExt release_info_ext;
         RedCursorCmd *cursor_cmd;
 
-        if (cursor->type == CURSOR_TYPE_LOCAL) {
-            free(cursor);
-            return;
-        }
-
         cursor_cmd = cursor->red_cursor;
         release_info_ext.group_id = cursor->group_id;
         release_info_ext.info = cursor_cmd->release_info;
@@ -4241,7 +4228,6 @@ static CursorItem *get_cursor_item(RedWorker *worker, RedCursorCmd *cmd, uint32_
 
     cursor_item->refs = 1;
     red_pipe_item_init(&cursor_item->pipe_data, PIPE_ITEM_TYPE_CURSOR);
-    cursor_item->type = CURSOR_TYPE_INVALID;
     cursor_item->group_id = group_id;
     cursor_item->red_cursor = cmd;
 
@@ -4256,7 +4242,6 @@ void qxl_process_cursor(RedWorker *worker, RedCursorCmd *cursor_cmd, uint32_t gr
     switch (cursor_cmd->type) {
     case QXL_CURSOR_SET:
         worker->cursor_visible = cursor_cmd->u.set.visible;
-        item->type = CURSOR_TYPE_DEV;
         red_set_cursor(worker, item);
         break;
     case QXL_CURSOR_MOVE:
@@ -6000,6 +5985,7 @@ static void fill_attr(DisplayChannel *display_channel, SpiceMarshaller *m, Spice
 
 static void fill_cursor(CursorChannel *cursor_channel, SpiceCursor *red_cursor, CursorItem *cursor, AddBufInfo *addbuf)
 {
+    RedCursorCmd *cursor_cmd;
     addbuf->data = NULL;
 
     if (!cursor) {
@@ -6007,35 +5993,23 @@ static void fill_cursor(CursorChannel *cursor_channel, SpiceCursor *red_cursor, 
         return;
     }
 
-    if (cursor->type == CURSOR_TYPE_DEV) {
-        RedCursorCmd *cursor_cmd;
+    cursor_cmd = cursor->red_cursor;
+    *red_cursor = cursor_cmd->u.set.shape;
 
-        cursor_cmd = cursor->red_cursor;
-        *red_cursor = cursor_cmd->u.set.shape;
-
-        if (red_cursor->header.unique) {
-            if (red_cursor_cache_find(cursor_channel, red_cursor->header.unique)) {
-                red_cursor->flags |= SPICE_CURSOR_FLAGS_FROM_CACHE;
-                return;
-            }
-            if (red_cursor_cache_add(cursor_channel, red_cursor->header.unique, 1)) {
-                red_cursor->flags |= SPICE_CURSOR_FLAGS_CACHE_ME;
-            }
+    if (red_cursor->header.unique) {
+        if (red_cursor_cache_find(cursor_channel, red_cursor->header.unique)) {
+            red_cursor->flags |= SPICE_CURSOR_FLAGS_FROM_CACHE;
+            return;
         }
-
-        if (red_cursor->data_size) {
-            addbuf->type = BUF_TYPE_RAW;
-            addbuf->data = red_cursor->data;
-            addbuf->size = red_cursor->data_size;
+        if (red_cursor_cache_add(cursor_channel, red_cursor->header.unique, 1)) {
+            red_cursor->flags |= SPICE_CURSOR_FLAGS_CACHE_ME;
         }
-    } else {
-        LocalCursor *local_cursor;
-        ASSERT(cursor->type == CURSOR_TYPE_LOCAL);
-        local_cursor = (LocalCursor *)cursor;
-        *red_cursor = local_cursor->red_cursor;
+    }
+
+    if (red_cursor->data_size) {
         addbuf->type = BUF_TYPE_RAW;
-        addbuf->data = local_cursor->red_cursor.data;
-        addbuf->size = local_cursor->data_size;
+        addbuf->data = red_cursor->data;
+        addbuf->size = red_cursor->data_size;
     }
 }
 
@@ -8144,28 +8118,6 @@ static void red_send_cursor_init(CursorChannel *channel)
     red_begin_send_message(&channel->base, worker->cursor);
 }
 
-static void red_send_local_cursor(CursorChannel *cursor_channel, LocalCursor *cursor)
-{
-    RedChannel *channel;
-    SpiceMsgCursorSet cursor_set;
-    AddBufInfo info;
-
-    ASSERT(cursor_channel);
-
-    channel = &cursor_channel->base;
-    channel->send_data.header->type = SPICE_MSG_CURSOR_SET;
-    cursor_set.position = cursor->position;
-    cursor_set.visible = channel->worker->cursor_visible;
-
-    fill_cursor(cursor_channel, &cursor_set.cursor, &cursor->base, &info);
-    spice_marshall_msg_cursor_set(channel->send_data.marshaller, &cursor_set);
-    add_buf_from_info(channel, channel->send_data.marshaller, &info);
-
-    red_begin_send_message(channel, cursor);
-
-    red_release_cursor(channel->worker, (CursorItem *)cursor);
-}
-
 static void cursor_channel_send_migrate(CursorChannel *cursor_channel)
 {
     SpiceMsgMigrate migrate;
@@ -8393,9 +8345,6 @@ static void cursor_channel_push(RedWorker *worker)
         switch (pipe_item->type) {
         case PIPE_ITEM_TYPE_CURSOR:
             red_send_cursor(cursor_channel, (CursorItem *)pipe_item);
-            break;
-        case PIPE_ITEM_TYPE_LOCAL_CURSOR:
-            red_send_local_cursor(cursor_channel, (LocalCursor *)pipe_item);
             break;
         case PIPE_ITEM_TYPE_INVAL_ONE:
             red_cursor_send_inval(cursor_channel, (CacheItem *)pipe_item);
@@ -9590,52 +9539,6 @@ typedef struct __attribute__ ((__packed__)) CursorData {
     SpiceCursor _cursor;
 } CursorData;
 
-static LocalCursor *_new_local_cursor(SpiceCursorHeader *header, int data_size, SpicePoint16 position)
-{
-    LocalCursor *local;
-
-    local = (LocalCursor *)spice_malloc0(sizeof(LocalCursor) + data_size);
-
-    red_pipe_item_init(&local->base.pipe_data, PIPE_ITEM_TYPE_LOCAL_CURSOR);
-    local->base.refs = 1;
-    local->base.type = CURSOR_TYPE_LOCAL;
-
-    local->red_cursor.header = *header;
-    local->red_cursor.header.unique = 0;
-
-    local->red_cursor.flags = 0;
-    local->red_cursor.data = (uint8_t*)(local+1);
-
-    local->position = position;
-    local->data_size = data_size;
-    return local;
-}
-
-static void red_cursor_flush(RedWorker *worker)
-{
-    RedCursorCmd *cursor_cmd;
-    SpiceCursor *cursor;
-    LocalCursor *local;
-
-    if (!worker->cursor || worker->cursor->type == CURSOR_TYPE_LOCAL) {
-        return;
-    }
-
-    ASSERT(worker->cursor->type == CURSOR_TYPE_DEV);
-
-    cursor_cmd = worker->cursor->red_cursor;
-    ASSERT(cursor_cmd->type == QXL_CURSOR_SET);
-    cursor = &cursor_cmd->u.set.shape;
-
-    local = _new_local_cursor(&cursor->header, cursor->data_size,
-                              worker->cursor_position);
-    ASSERT(local);
-    memcpy(local->red_cursor.data, cursor->data, local->data_size);
-
-    red_set_cursor(worker, &local->base);
-    red_release_cursor(worker, &local->base);
-}
-
 static void red_wait_outgoing_item(RedChannel *channel)
 {
     uint64_t end_time;
@@ -10017,7 +9920,6 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
                 red_current_flush(worker, x);
             }
         }
-        red_cursor_flush(worker);
         red_wait_outgoing_item((RedChannel *)worker->display_channel);
         red_wait_outgoing_item((RedChannel *)worker->cursor_channel);
         message = RED_WORKER_MESSAGE_READY;
