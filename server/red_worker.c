@@ -4296,6 +4296,11 @@ static int red_process_cursor(RedWorker *worker, uint32_t max_pipe_size, int *ri
     QXLCommandExt ext_cmd;
     int n = 0;
 
+    if (!worker->running) {
+        *ring_is_empty = TRUE;
+        return n;
+    }
+
     *ring_is_empty = FALSE;
     while (!worker->cursor_channel || worker->cursor_channel->base.pipe_size <= max_pipe_size) {
         if (!worker->qxl->st->qif->get_cursor_command(worker->qxl, &ext_cmd)) {
@@ -4335,7 +4340,12 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
     QXLCommandExt ext_cmd;
     int n = 0;
     uint64_t start = red_now();
-    
+
+    if (!worker->running) {
+        *ring_is_empty = TRUE;
+        return n;
+    }
+
     *ring_is_empty = FALSE;
     while (!worker->display_channel || worker->display_channel->base.pipe_size <= max_pipe_size) {
         if (!worker->qxl->st->qif->get_command(worker->qxl, &ext_cmd)) {
