@@ -3270,7 +3270,7 @@ SPICE_GNUC_VISIBLE int spice_server_add_interface(SpiceServer *s,
     if (strcmp(interface->type, SPICE_INTERFACE_KEYBOARD) == 0) {
         red_printf("SPICE_INTERFACE_KEYBOARD");
         if (interface->major_version != SPICE_INTERFACE_KEYBOARD_MAJOR ||
-            interface->minor_version < SPICE_INTERFACE_KEYBOARD_MINOR) {
+            interface->minor_version > SPICE_INTERFACE_KEYBOARD_MINOR) {
             red_printf("unsupported keyboard interface");
             return -1;
         }
@@ -3280,7 +3280,7 @@ SPICE_GNUC_VISIBLE int spice_server_add_interface(SpiceServer *s,
     } else if (strcmp(interface->type, SPICE_INTERFACE_MOUSE) == 0) {
         red_printf("SPICE_INTERFACE_MOUSE");
         if (interface->major_version != SPICE_INTERFACE_MOUSE_MAJOR ||
-            interface->minor_version < SPICE_INTERFACE_MOUSE_MINOR) {
+            interface->minor_version > SPICE_INTERFACE_MOUSE_MINOR) {
             red_printf("unsupported mouse interface");
             return -1;
         }
@@ -3292,7 +3292,7 @@ SPICE_GNUC_VISIBLE int spice_server_add_interface(SpiceServer *s,
 
         red_printf("SPICE_INTERFACE_QXL");
         if (interface->major_version != SPICE_INTERFACE_QXL_MAJOR ||
-            interface->minor_version < SPICE_INTERFACE_QXL_MINOR) {
+            interface->minor_version > SPICE_INTERFACE_QXL_MINOR) {
             red_printf("unsupported qxl interface");
             return -1;
         }
@@ -3305,7 +3305,7 @@ SPICE_GNUC_VISIBLE int spice_server_add_interface(SpiceServer *s,
     } else if (strcmp(interface->type, SPICE_INTERFACE_TABLET) == 0) {
         red_printf("SPICE_INTERFACE_TABLET");
         if (interface->major_version != SPICE_INTERFACE_TABLET_MAJOR ||
-            interface->minor_version < SPICE_INTERFACE_TABLET_MINOR) {
+            interface->minor_version > SPICE_INTERFACE_TABLET_MINOR) {
             red_printf("unsupported tablet interface");
             return -1;
         }
@@ -3320,7 +3320,7 @@ SPICE_GNUC_VISIBLE int spice_server_add_interface(SpiceServer *s,
     } else if (strcmp(interface->type, SPICE_INTERFACE_PLAYBACK) == 0) {
         red_printf("SPICE_INTERFACE_PLAYBACK");
         if (interface->major_version != SPICE_INTERFACE_PLAYBACK_MAJOR ||
-            interface->minor_version < SPICE_INTERFACE_PLAYBACK_MINOR) {
+            interface->minor_version > SPICE_INTERFACE_PLAYBACK_MINOR) {
             red_printf("unsupported playback interface");
             return -1;
         }
@@ -3329,7 +3329,7 @@ SPICE_GNUC_VISIBLE int spice_server_add_interface(SpiceServer *s,
     } else if (strcmp(interface->type, SPICE_INTERFACE_RECORD) == 0) {
         red_printf("SPICE_INTERFACE_RECORD");
         if (interface->major_version != SPICE_INTERFACE_RECORD_MAJOR ||
-            interface->minor_version < SPICE_INTERFACE_RECORD_MINOR) {
+            interface->minor_version > SPICE_INTERFACE_RECORD_MINOR) {
             red_printf("unsupported record interface");
             return -1;
         }
@@ -3337,7 +3337,7 @@ SPICE_GNUC_VISIBLE int spice_server_add_interface(SpiceServer *s,
 
     } else if (strcmp(interface->type, SPICE_INTERFACE_CHAR_DEVICE) == 0) {
         if (interface->major_version != SPICE_INTERFACE_CHAR_DEVICE_MAJOR ||
-            interface->minor_version < SPICE_INTERFACE_CHAR_DEVICE_MINOR) {
+            interface->minor_version > SPICE_INTERFACE_CHAR_DEVICE_MINOR) {
             red_printf("unsupported char device interface");
             return -1;
         }
@@ -3352,7 +3352,7 @@ SPICE_GNUC_VISIBLE int spice_server_add_interface(SpiceServer *s,
             return -1;
         }
         if (interface->major_version != SPICE_INTERFACE_NET_WIRE_MAJOR ||
-            interface->minor_version < SPICE_INTERFACE_NET_WIRE_MINOR) {
+            interface->minor_version > SPICE_INTERFACE_NET_WIRE_MINOR) {
             red_printf("unsupported net wire interface");
             return -1;
         }
