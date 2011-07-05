@@ -159,11 +159,11 @@ static void add_ms_to_timeval(struct timeval *tv, int ms)
 
 static void timer_start(SpiceTimer *timer, uint32_t ms)
 {
+    ASSERT(ms);
     gettimeofday(&timer->tv_start, NULL);
     timer->ms = ms;
     // already add ms to timer value
     add_ms_to_timeval(&timer->tv_start, ms);
-    ASSERT(timer->ms);
 }
 
 static void timer_cancel(SpiceTimer *timer)
