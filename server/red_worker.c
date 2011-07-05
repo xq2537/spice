@@ -934,6 +934,8 @@ static BitmapGradualType _get_bitmap_graduality_level(RedWorker *worker, SpiceBi
 static inline int _stride_is_extra(SpiceBitmap *bitmap);
 static void red_disconnect_cursor(RedChannel *channel);
 static void red_wait_pipe_item_sent(RedChannel *channel, PipeItem *item);
+static void display_channel_release_item_before_push(DisplayChannel *display_channel, PipeItem *item);
+static void display_channel_release_item_after_push(DisplayChannel *display_channel, PipeItem *item);
 
 #ifdef DUMP_BITMAP
 static void dump_bitmap(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_id);
@@ -8002,89 +8004,75 @@ static void display_channel_send_item(RedChannel *base, PipeItem *pipe_item)
 {
     SpiceMarshaller *m = red_channel_get_marshaller(base);
     DisplayChannel *display_channel = (DisplayChannel *)red_ref_channel(base);
-    RedWorker *worker = display_channel->common.worker;
 
     red_display_reset_send_data(display_channel);
     switch (pipe_item->type) {
     case PIPE_ITEM_TYPE_DRAW: {
         Drawable *drawable = SPICE_CONTAINEROF(pipe_item, Drawable, pipe_item);
         marshall_qxl_drawable(display_channel, m, drawable);
-        release_drawable(worker, drawable);
         break;
     }
     case PIPE_ITEM_TYPE_INVAL_ONE:
         red_display_marshall_inval(display_channel, m, (CacheItem *)pipe_item);
-        free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_STREAM_CREATE: {
         StreamAgent *agent = SPICE_CONTAINEROF(pipe_item, StreamAgent, create_item);
         red_display_marshall_stream_start(display_channel, m, agent);
-        red_display_release_stream(display_channel, agent);
         break;
     }
     case PIPE_ITEM_TYPE_STREAM_CLIP: {
-        StreamClipItem* clip_item = (StreamClipItem *)pipe_item;
-        red_display_marshall_stream_clip(display_channel, m, clip_item);
-        red_display_release_stream_clip(display_channel, clip_item);
+        red_display_marshall_stream_clip(display_channel, m, (StreamClipItem *)pipe_item);
         break;
     }
     case PIPE_ITEM_TYPE_STREAM_DESTROY: {
         StreamAgent *agent = SPICE_CONTAINEROF(pipe_item, StreamAgent, destroy_item);
         red_display_marshall_stream_end(display_channel, m, agent);
-        red_display_release_stream(display_channel, agent);
         break;
     }
     case PIPE_ITEM_TYPE_UPGRADE:
         red_display_marshall_upgrade(display_channel, m, (UpgradeItem *)pipe_item);
-        release_upgrade_item(worker, (UpgradeItem *)pipe_item);
         break;
     case PIPE_ITEM_TYPE_VERB:
         display_marshall_verb(display_channel, ((VerbItem*)pipe_item)->verb);
-        free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_MIGRATE:
         red_printf("PIPE_ITEM_TYPE_MIGRATE");
         display_channel_marshall_migrate(display_channel, m);
-        free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_MIGRATE_DATA:
         display_channel_marshall_migrate_data(display_channel, m);
-        free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_IMAGE:
         red_marshall_image(display_channel, m, (ImageItem *)pipe_item);
-        release_image_item((ImageItem *)pipe_item);
         break;
     case PIPE_ITEM_TYPE_PIXMAP_SYNC:
         display_channel_marshall_pixmap_sync(display_channel, m);
-        free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_PIXMAP_RESET:
         display_channel_marshall_reset_cache(display_channel, m);
-        free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_INVAL_PALLET_CACHE:
         red_reset_palette_cache(display_channel);
         red_marshall_verb((RedChannel *)display_channel, SPICE_MSG_DISPLAY_INVAL_ALL_PALETTES);
-        free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_CREATE_SURFACE: {
         SurfaceCreateItem *surface_create = SPICE_CONTAINEROF(pipe_item, SurfaceCreateItem,
                                                               pipe_item);
         red_marshall_surface_create(display_channel, m, &surface_create->surface_create);
-        free(surface_create);
         break;
     }
     case PIPE_ITEM_TYPE_DESTROY_SURFACE: {
         SurfaceDestroyItem *surface_destroy = SPICE_CONTAINEROF(pipe_item, SurfaceDestroyItem,
                                                                 pipe_item);
         red_marshall_surface_destroy(display_channel, m, surface_destroy->surface_destroy.surface_id);
-        free(surface_destroy);
         break;
     }
     default:
         red_error("invalid pipe item type");
     }
+
+    display_channel_release_item_before_push(display_channel, pipe_item);
+
     // a message is pending
     if (red_channel_send_message_pending(&display_channel->common.base)) {
         display_begin_send_message(display_channel, m);
@@ -9071,27 +9059,90 @@ static void display_channel_hold_pipe_item(RedChannel *channel, PipeItem *item)
     }
 }
 
-static void display_channel_release_item(RedChannel *channel, PipeItem *item, int item_pushed /* ignored */)
+static void display_channel_release_item_after_push(DisplayChannel *display_channel, PipeItem *item)
 {
-    CommonChannel *common = SPICE_CONTAINEROF(channel, CommonChannel, base);
+    RedWorker *worker = display_channel->common.worker;
 
-    ASSERT(item);
     switch (item->type) {
     case PIPE_ITEM_TYPE_DRAW:
     case PIPE_ITEM_TYPE_STREAM_CREATE:
-        release_drawable(common->worker, SPICE_CONTAINEROF(item, Drawable, pipe_item));
+        release_drawable(worker, SPICE_CONTAINEROF(item, Drawable, pipe_item));
         break;
     case PIPE_ITEM_TYPE_STREAM_CLIP:
-        red_display_release_stream_clip((DisplayChannel *)channel, (StreamClipItem *)item);
+        red_display_release_stream_clip(display_channel, (StreamClipItem *)item);
         break;
     case PIPE_ITEM_TYPE_UPGRADE:
-        release_upgrade_item(common->worker, (UpgradeItem *)item);
+        release_upgrade_item(worker, (UpgradeItem *)item);
         break;
     case PIPE_ITEM_TYPE_IMAGE:
         release_image_item((ImageItem *)item);
         break;
     default:
         PANIC("invalid item type");
+    }
+}
+
+static void display_channel_release_item_before_push(DisplayChannel *display_channel, PipeItem *item)
+{
+    RedWorker *worker = display_channel->common.worker;
+
+    switch (item->type) {
+    case PIPE_ITEM_TYPE_DRAW:
+        release_drawable(worker, SPICE_CONTAINEROF(item, Drawable, pipe_item));
+        break;
+    case PIPE_ITEM_TYPE_STREAM_CREATE: {
+        StreamAgent *agent = SPICE_CONTAINEROF(item, StreamAgent, create_item);
+        red_display_release_stream(display_channel, agent);
+        break;
+    }
+    case PIPE_ITEM_TYPE_STREAM_CLIP:
+        red_display_release_stream_clip(display_channel, (StreamClipItem *)item);
+        break;
+    case PIPE_ITEM_TYPE_STREAM_DESTROY: {
+        StreamAgent *agent = SPICE_CONTAINEROF(item, StreamAgent, destroy_item);
+        red_display_release_stream(display_channel, agent);
+        break;
+    }
+    case PIPE_ITEM_TYPE_UPGRADE:
+        release_upgrade_item(worker, (UpgradeItem *)item);
+        break;
+    case PIPE_ITEM_TYPE_IMAGE:
+        release_image_item((ImageItem *)item);
+        break;
+    case PIPE_ITEM_TYPE_CREATE_SURFACE: {
+        SurfaceCreateItem *surface_create = SPICE_CONTAINEROF(item, SurfaceCreateItem,
+                                                              pipe_item);
+        free(surface_create);
+        break;
+    }
+    case PIPE_ITEM_TYPE_DESTROY_SURFACE: {
+        SurfaceDestroyItem *surface_destroy = SPICE_CONTAINEROF(item, SurfaceDestroyItem,
+                                                                pipe_item);
+        free(surface_destroy);
+        break;
+    }
+    case PIPE_ITEM_TYPE_INVAL_ONE:
+    case PIPE_ITEM_TYPE_VERB:
+    case PIPE_ITEM_TYPE_MIGRATE:
+    case PIPE_ITEM_TYPE_MIGRATE_DATA:
+    case PIPE_ITEM_TYPE_PIXMAP_SYNC:
+    case PIPE_ITEM_TYPE_PIXMAP_RESET:
+    case PIPE_ITEM_TYPE_INVAL_PALLET_CACHE:
+        free(item);
+        break;
+    default:
+        PANIC("invalid item type");
+    }
+}
+
+static void display_channel_release_item(RedChannel *channel, PipeItem *item, int item_pushed)
+{
+    ASSERT(item);
+    if (item_pushed) {
+        display_channel_release_item_after_push((DisplayChannel *)channel, item);
+    } else {
+        red_printf("not pushed");
+        display_channel_release_item_before_push((DisplayChannel *)channel, item);
     }
 }
 
