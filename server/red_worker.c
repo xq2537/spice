@@ -936,6 +936,8 @@ static void red_disconnect_cursor(RedChannel *channel);
 static void red_wait_pipe_item_sent(RedChannel *channel, PipeItem *item);
 static void display_channel_release_item_before_push(DisplayChannel *display_channel, PipeItem *item);
 static void display_channel_release_item_after_push(DisplayChannel *display_channel, PipeItem *item);
+static void cursor_channel_release_item_before_push(CursorChannel *cursor_channel, PipeItem *item);
+static void cursor_channel_release_item_after_push(CursorChannel *cursor_channel, PipeItem *item);
 
 #ifdef DUMP_BITMAP
 static void dump_bitmap(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_id);
@@ -8092,30 +8094,27 @@ static void cursor_channel_send_item(RedChannel *channel, PipeItem *pipe_item)
         break;
     case PIPE_ITEM_TYPE_INVAL_ONE:
         red_cursor_marshall_inval(cursor_channel, m, (CacheItem *)pipe_item);
-        free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_VERB:
         red_marshall_verb(channel, ((VerbItem*)pipe_item)->verb);
-        free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_MIGRATE:
         red_printf("PIPE_ITEM_TYPE_MIGRATE");
         cursor_channel_marshall_migrate(cursor_channel, m);
-        free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_CURSOR_INIT:
         red_reset_cursor_cache(cursor_channel);
         red_marshall_cursor_init(cursor_channel, m);
-        free(pipe_item);
         break;
     case PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE:
         red_reset_cursor_cache(cursor_channel);
         red_marshall_verb(channel, SPICE_MSG_CURSOR_INVAL_ALL);
-        free(pipe_item);
         break;
     default:
         red_error("invalid pipe item type");
     }
+
+    cursor_channel_release_item_before_push(cursor_channel, pipe_item);
     red_channel_begin_send_message(channel);
     red_unref_channel(channel);
 }
@@ -9268,17 +9267,43 @@ static void cursor_channel_hold_pipe_item(RedChannel *channel, PipeItem *item)
     ((CursorItem *)item)->refs++;
 }
 
-static void cursor_channel_release_item(RedChannel *channel, PipeItem *item, int item_pushed)
+static void cursor_channel_release_item_before_push(CursorChannel *cursor_channel, PipeItem *item)
 {
-    CommonChannel *common = SPICE_CONTAINEROF(channel, CommonChannel, base);
+    switch (item->type) {
+    case PIPE_ITEM_TYPE_CURSOR:
+        break;
+    case PIPE_ITEM_TYPE_INVAL_ONE:
+    case PIPE_ITEM_TYPE_VERB:
+    case PIPE_ITEM_TYPE_MIGRATE:
+    case PIPE_ITEM_TYPE_CURSOR_INIT:
+    case PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE:
+        free(item);
+        break;
+    default:
+        red_error("invalid pipe item type");
+    }
+}
 
-    ASSERT(item);
+static void cursor_channel_release_item_after_push(CursorChannel *cursor_channel, PipeItem *item)
+{
     switch (item->type) {
         case PIPE_ITEM_TYPE_CURSOR:
-            red_release_cursor(common->worker, SPICE_CONTAINEROF(item, CursorItem, pipe_data));
+            red_release_cursor(cursor_channel->common.worker, SPICE_CONTAINEROF(item, CursorItem, pipe_data));
             break;
         default:
             PANIC("invalid item type");
+    }
+}
+
+static void cursor_channel_release_item(RedChannel *channel, PipeItem *item, int item_pushed)
+{
+    ASSERT(item);
+
+    if (item_pushed) {
+        cursor_channel_release_item_after_push((CursorChannel *)channel, item);
+    } else {
+        red_printf("not pushed");
+        cursor_channel_release_item_before_push((CursorChannel *)channel, item);
     }
 }
 
