@@ -9426,12 +9426,39 @@ static void red_wait_pipe_item_sent(RedChannel *channel, PipeItem *item)
     red_unref_channel(channel);
 }
 
+static void surface_dirty_region_to_rects(RedSurface *surface,
+                                          QXLRect *qxl_dirty_rects,
+                                          uint32_t num_dirty_rects,
+                                          int clear_dirty_region)
+{
+    QRegion *surface_dirty_region;
+    SpiceRect *dirty_rects;
+    int i;
+
+    surface_dirty_region = &surface->draw_dirty_region;
+    dirty_rects = spice_new0(SpiceRect, num_dirty_rects);
+    region_ret_rects(surface_dirty_region, dirty_rects, num_dirty_rects);
+    if (clear_dirty_region) {
+        region_clear(surface_dirty_region);
+    }
+    for (i = 0; i < num_dirty_rects; i++) {
+        qxl_dirty_rects[i].top    = dirty_rects[i].top;
+        qxl_dirty_rects[i].left   = dirty_rects[i].left;
+        qxl_dirty_rects[i].bottom = dirty_rects[i].bottom;
+        qxl_dirty_rects[i].right  = dirty_rects[i].right;
+    }
+    free(dirty_rects);
+}
+
 static inline void handle_dev_update_async(RedWorker *worker)
 {
     QXLRect qxl_rect;
     SpiceRect rect;
     uint32_t surface_id;
     uint32_t clear_dirty_region;
+    QXLRect *qxl_dirty_rects;
+    uint32_t num_dirty_rects;
+    RedSurface *surface;
 
     receive_data(worker->channel, &surface_id, sizeof(uint32_t));
     receive_data(worker->channel, &qxl_rect, sizeof(QXLRect));
@@ -9444,6 +9471,20 @@ static inline void handle_dev_update_async(RedWorker *worker)
 
     validate_surface(worker, surface_id);
     red_update_area(worker, &rect, surface_id);
+    if (!worker->qxl->st->qif->update_area_complete) {
+        return;
+    }
+    surface = &worker->surfaces[surface_id];
+    num_dirty_rects = pixman_region32_n_rects(&surface->draw_dirty_region);
+    if (num_dirty_rects == 0) {
+        return;
+    }
+    qxl_dirty_rects = spice_new0(QXLRect, num_dirty_rects);
+    surface_dirty_region_to_rects(surface, qxl_dirty_rects, num_dirty_rects,
+                                  clear_dirty_region);
+    worker->qxl->st->qif->update_area_complete(worker->qxl, surface_id,
+                                          qxl_dirty_rects, num_dirty_rects);
+    free(qxl_dirty_rects);
 }
 
 static inline void handle_dev_update(RedWorker *worker)
@@ -9451,12 +9492,10 @@ static inline void handle_dev_update(RedWorker *worker)
     const QXLRect *qxl_rect;
     SpiceRect *rect = spice_new0(SpiceRect, 1);
     QXLRect *qxl_dirty_rects;
-    SpiceRect *dirty_rects;
     RedSurface *surface;
     uint32_t num_dirty_rects;
     uint32_t surface_id;
     uint32_t clear_dirty_region;
-    int i;
 
     receive_data(worker->channel, &surface_id, sizeof(uint32_t));
     receive_data(worker->channel, &qxl_rect, sizeof(QXLRect *));
@@ -9464,7 +9503,7 @@ static inline void handle_dev_update(RedWorker *worker)
     receive_data(worker->channel, &num_dirty_rects, sizeof(uint32_t));
     receive_data(worker->channel, &clear_dirty_region, sizeof(uint32_t));
 
-    dirty_rects = spice_new0(SpiceRect, num_dirty_rects);
+    surface = &worker->surfaces[surface_id];
     red_get_rect_ptr(rect, qxl_rect);
     flush_display_commands(worker);
 
@@ -9474,19 +9513,8 @@ static inline void handle_dev_update(RedWorker *worker)
     red_update_area(worker, rect, surface_id);
     free(rect);
 
-    surface = &worker->surfaces[surface_id];
-    region_ret_rects(&surface->draw_dirty_region, dirty_rects, num_dirty_rects);
-
-    if (clear_dirty_region) {
-        region_clear(&surface->draw_dirty_region);
-    }
-    for (i = 0; i < num_dirty_rects; i++) {
-        qxl_dirty_rects[i].top    = dirty_rects[i].top;
-        qxl_dirty_rects[i].left   = dirty_rects[i].left;
-        qxl_dirty_rects[i].bottom = dirty_rects[i].bottom;
-        qxl_dirty_rects[i].right  = dirty_rects[i].right;
-    }
-    free(dirty_rects);
+    surface_dirty_region_to_rects(surface, qxl_dirty_rects, num_dirty_rects,
+                                  clear_dirty_region);
 }
 
 static inline void handle_dev_add_memslot(RedWorker *worker)
