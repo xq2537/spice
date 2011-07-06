@@ -110,7 +110,7 @@ typedef struct RedCursorCmd {
     uint8_t *device_data;
 } RedCursorCmd;
 
-void red_get_rect_ptr(SpiceRect *red, QXLRect *qxl);
+void red_get_rect_ptr(SpiceRect *red, const QXLRect *qxl);
 
 void red_get_drawable(RedMemSlotInfo *slots, int group_id,
                       RedDrawable *red, QXLPHYSICAL addr, uint32_t flags);

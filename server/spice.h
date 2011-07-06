@@ -20,6 +20,7 @@
 
 #include <stdint.h>
 #include <sys/socket.h>
+#include <spice/qxl_dev.h>
 
 #define SPICE_SERVER_VERSION 0x000801 /* release 0.8.1 */
 
@@ -143,6 +144,15 @@ void spice_qxl_reset_image_cache(QXLInstance *instance);
 void spice_qxl_reset_cursor(QXLInstance *instance);
 void spice_qxl_destroy_surface_wait(QXLInstance *instance, uint32_t surface_id);
 void spice_qxl_loadvm_commands(QXLInstance *instance, struct QXLCommandExt *ext, uint32_t count);
+/* async versions of commands. when complete spice calls async_complete */
+void spice_qxl_update_area_async(QXLInstance *instance, uint32_t surface_id, QXLRect *qxl_area,
+                                 uint32_t clear_dirty_region, uint64_t cookie);
+void spice_qxl_add_memslot_async(QXLInstance *instance, QXLDevMemSlot *slot, uint64_t cookie);
+void spice_qxl_destroy_surfaces_async(QXLInstance *instance, uint64_t cookie);
+void spice_qxl_destroy_primary_surface_async(QXLInstance *instance, uint32_t surface_id, uint64_t cookie);
+void spice_qxl_create_primary_surface_async(QXLInstance *instance, uint32_t surface_id,
+                                QXLDevSurfaceCreate *surface, uint64_t cookie);
+void spice_qxl_destroy_surface_async(QXLInstance *instance, uint32_t surface_id, uint64_t cookie);
 
 typedef struct QXLDrawArea {
     uint8_t *buf;
@@ -212,6 +222,7 @@ struct QXLInterface {
     int (*req_cursor_notification)(QXLInstance *qin);
     void (*notify_update)(QXLInstance *qin, uint32_t update_id);
     int (*flush_resources)(QXLInstance *qin);
+    void (*async_complete)(QXLInstance *qin, uint64_t cookie);
 };
 
 struct QXLInstance {

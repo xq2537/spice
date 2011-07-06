@@ -145,7 +145,7 @@ static void red_get_point16_ptr(SpicePoint16 *red, QXLPoint16 *qxl)
     red->y = qxl->y;
 }
 
-void red_get_rect_ptr(SpiceRect *red, QXLRect *qxl)
+void red_get_rect_ptr(SpiceRect *red, const QXLRect *qxl)
 {
     red->top    = qxl->top;
     red->left   = qxl->left;

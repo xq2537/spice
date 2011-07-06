@@ -57,6 +57,7 @@
 #include "demarshallers.h"
 #include "generated_marshallers.h"
 #include "zlib_encoder.h"
+#include "red_dispatcher.h"
 
 //#define COMPRESS_STAT
 //#define DUMP_BITMAP
@@ -843,6 +844,7 @@ typedef struct RedWorker {
     DisplayChannel *display_channel;
     CursorChannel *cursor_channel;
     QXLInstance *qxl;
+    RedDispatcher *dispatcher;
     int id;
     int channel;
     int running;
@@ -9616,28 +9618,53 @@ static void red_wait_pipe_item_sent(RedChannel *channel, PipeItem *item)
     red_unref_channel(channel);
 }
 
+static inline void handle_dev_update_async(RedWorker *worker)
+{
+    QXLRect qxl_rect;
+    SpiceRect rect;
+    uint32_t surface_id;
+    uint32_t clear_dirty_region;
+
+    receive_data(worker->channel, &surface_id, sizeof(uint32_t));
+    receive_data(worker->channel, &qxl_rect, sizeof(QXLRect));
+    receive_data(worker->channel, &clear_dirty_region, sizeof(uint32_t));
+
+    red_get_rect_ptr(&rect, &qxl_rect);
+    flush_display_commands(worker);
+
+    ASSERT(worker->running);
+
+    validate_surface(worker, surface_id);
+    red_update_area(worker, &rect, surface_id);
+}
+
 static inline void handle_dev_update(RedWorker *worker)
 {
-    RedWorkerMessage message;
-    const SpiceRect *rect;
+    const QXLRect *qxl_rect;
+    SpiceRect *rect = spice_new0(SpiceRect, 1);
+    QXLRect *qxl_dirty_rects;
     SpiceRect *dirty_rects;
     RedSurface *surface;
     uint32_t num_dirty_rects;
     uint32_t surface_id;
     uint32_t clear_dirty_region;
+    int i;
 
     receive_data(worker->channel, &surface_id, sizeof(uint32_t));
-    receive_data(worker->channel, &rect, sizeof(SpiceRect *));
-    receive_data(worker->channel, &dirty_rects, sizeof(SpiceRect *));
+    receive_data(worker->channel, &qxl_rect, sizeof(QXLRect *));
+    receive_data(worker->channel, &qxl_dirty_rects, sizeof(QXLRect *));
     receive_data(worker->channel, &num_dirty_rects, sizeof(uint32_t));
     receive_data(worker->channel, &clear_dirty_region, sizeof(uint32_t));
 
+    dirty_rects = spice_new0(SpiceRect, num_dirty_rects);
+    red_get_rect_ptr(rect, qxl_rect);
     flush_display_commands(worker);
 
     ASSERT(worker->running);
 
     validate_surface(worker, surface_id);
     red_update_area(worker, rect, surface_id);
+    free(rect);
 
     surface = &worker->surfaces[surface_id];
     region_ret_rects(&surface->draw_dirty_region, dirty_rects, num_dirty_rects);
@@ -9645,15 +9672,17 @@ static inline void handle_dev_update(RedWorker *worker)
     if (clear_dirty_region) {
         region_clear(&surface->draw_dirty_region);
     }
-
-    message = RED_WORKER_MESSAGE_READY;
-    write_message(worker->channel, &message);
+    for (i = 0; i < num_dirty_rects; i++) {
+        qxl_dirty_rects[i].top    = dirty_rects[i].top;
+        qxl_dirty_rects[i].left   = dirty_rects[i].left;
+        qxl_dirty_rects[i].bottom = dirty_rects[i].bottom;
+        qxl_dirty_rects[i].right  = dirty_rects[i].right;
+    }
+    free(dirty_rects);
 }
-
 
 static inline void handle_dev_add_memslot(RedWorker *worker)
 {
-    RedWorkerMessage message;
     QXLDevMemSlot dev_slot;
 
     receive_data(worker->channel, &dev_slot, sizeof(QXLDevMemSlot));
@@ -9661,9 +9690,6 @@ static inline void handle_dev_add_memslot(RedWorker *worker)
     red_memslot_info_add_slot(&worker->mem_slots, dev_slot.slot_group_id, dev_slot.slot_id,
                               dev_slot.addr_delta, dev_slot.virt_start, dev_slot.virt_end,
                               dev_slot.generation);
-
-    message = RED_WORKER_MESSAGE_READY;
-    write_message(worker->channel, &message);
 }
 
 static inline void handle_dev_del_memslot(RedWorker *worker)
@@ -9699,7 +9725,6 @@ static inline void destroy_surface_wait(RedWorker *worker, int surface_id)
 
 static inline void handle_dev_destroy_surface_wait(RedWorker *worker)
 {
-    RedWorkerMessage message;
     uint32_t surface_id;
 
     receive_data(worker->channel, &surface_id, sizeof(uint32_t));
@@ -9711,9 +9736,6 @@ static inline void handle_dev_destroy_surface_wait(RedWorker *worker)
     if (worker->surfaces[0].context.canvas) {
         destroy_surface_wait(worker, 0);
     }
-
-    message = RED_WORKER_MESSAGE_READY;
-    write_message(worker->channel, &message);
 }
 
 static inline void red_cursor_reset(RedWorker *worker)
@@ -9741,8 +9763,7 @@ static inline void red_cursor_reset(RedWorker *worker)
 static inline void handle_dev_destroy_surfaces(RedWorker *worker)
 {
     int i;
-    RedWorkerMessage message;
-    red_printf("");
+
     flush_all_qxl_commands(worker);
     //to handle better
     for (i = 0; i < NUM_SURFACES; ++i) {
@@ -9764,14 +9785,10 @@ static inline void handle_dev_destroy_surfaces(RedWorker *worker)
     red_display_clear_glz_drawables(worker->display_channel);
 
     red_cursor_reset(worker);
-
-    message = RED_WORKER_MESSAGE_READY;
-    write_message(worker->channel, &message);
 }
 
 static inline void handle_dev_create_primary_surface(RedWorker *worker)
 {
-    RedWorkerMessage message;
     uint32_t surface_id;
     QXLDevSurfaceCreate surface;
     uint8_t *line_0;
@@ -9801,14 +9818,10 @@ static inline void handle_dev_create_primary_surface(RedWorker *worker)
     if (worker->cursor_channel) {
         red_pipe_add_type(&worker->cursor_channel->base, PIPE_ITEM_TYPE_CURSOR_INIT);
     }
-
-    message = RED_WORKER_MESSAGE_READY;
-    write_message(worker->channel, &message);
 }
 
 static inline void handle_dev_destroy_primary_surface(RedWorker *worker)
 {
-    RedWorkerMessage message;
     uint32_t surface_id;
 
     receive_data(worker->channel, &surface_id, sizeof(uint32_t));
@@ -9824,20 +9837,78 @@ static inline void handle_dev_destroy_primary_surface(RedWorker *worker)
     ASSERT(!worker->surfaces[surface_id].context.canvas);
 
     red_cursor_reset(worker);
+}
 
-    message = RED_WORKER_MESSAGE_READY;
-    write_message(worker->channel, &message);
+static void handle_dev_stop(RedWorker *worker)
+{
+    int x;
+
+    ASSERT(worker->running);
+    worker->running = FALSE;
+    red_display_clear_glz_drawables(worker->display_channel);
+    for (x = 0; x < NUM_SURFACES; ++x) {
+        if (worker->surfaces[x].context.canvas) {
+            red_current_flush(worker, x);
+        }
+    }
+    red_wait_outgoing_item((RedChannel *)worker->display_channel);
+    red_wait_outgoing_item((RedChannel *)worker->cursor_channel);
+}
+
+static void handle_dev_start(RedWorker *worker)
+{
+    RedChannel *cursor_red_channel = &worker->cursor_channel->base;
+    RedChannel *display_red_channel = &worker->display_channel->base;
+
+    ASSERT(!worker->running);
+    if (worker->cursor_channel) {
+        cursor_red_channel->migrate = FALSE;
+    }
+    if (worker->display_channel) {
+        display_red_channel->migrate = FALSE;
+    }
+    worker->running = TRUE;
 }
 
 static void handle_dev_input(EventListener *listener, uint32_t events)
 {
     RedWorker *worker = SPICE_CONTAINEROF(listener, RedWorker, dev_listener);
     RedWorkerMessage message;
+
     int ring_is_empty;
+    int call_async_complete = 0;
+    int write_ready = 0;
+    uint64_t cookie;
 
     read_message(worker->channel, &message);
 
+    /* for async messages we do the common work in the handler, and
+     * send a ready or call async_complete from here, hence the added switch. */
     switch (message) {
+    case RED_WORKER_MESSAGE_UPDATE_ASYNC:
+    case RED_WORKER_MESSAGE_ADD_MEMSLOT_ASYNC:
+    case RED_WORKER_MESSAGE_DESTROY_SURFACES_ASYNC:
+    case RED_WORKER_MESSAGE_CREATE_PRIMARY_SURFACE_ASYNC:
+    case RED_WORKER_MESSAGE_DESTROY_PRIMARY_SURFACE_ASYNC:
+    case RED_WORKER_MESSAGE_DESTROY_SURFACE_WAIT_ASYNC:
+        call_async_complete = 1;
+        receive_data(worker->channel, &cookie, sizeof(cookie));
+        break;
+    case RED_WORKER_MESSAGE_UPDATE:
+    case RED_WORKER_MESSAGE_ADD_MEMSLOT:
+    case RED_WORKER_MESSAGE_DESTROY_SURFACES:
+    case RED_WORKER_MESSAGE_CREATE_PRIMARY_SURFACE:
+    case RED_WORKER_MESSAGE_DESTROY_PRIMARY_SURFACE:
+    case RED_WORKER_MESSAGE_DESTROY_SURFACE_WAIT:
+        write_ready = 1;
+    default:
+        break;
+    }
+
+    switch (message) {
+    case RED_WORKER_MESSAGE_UPDATE_ASYNC:
+        handle_dev_update_async(worker);
+        break;
     case RED_WORKER_MESSAGE_UPDATE:
         handle_dev_update(worker);
         break;
@@ -9868,15 +9939,19 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         message = RED_WORKER_MESSAGE_READY;
         write_message(worker->channel, &message);
         break;
+    case RED_WORKER_MESSAGE_DESTROY_SURFACE_WAIT_ASYNC:
     case RED_WORKER_MESSAGE_DESTROY_SURFACE_WAIT:
         handle_dev_destroy_surface_wait(worker);
         break;
+    case RED_WORKER_MESSAGE_DESTROY_SURFACES_ASYNC:
     case RED_WORKER_MESSAGE_DESTROY_SURFACES:
         handle_dev_destroy_surfaces(worker);
         break;
+    case RED_WORKER_MESSAGE_CREATE_PRIMARY_SURFACE_ASYNC:
     case RED_WORKER_MESSAGE_CREATE_PRIMARY_SURFACE:
         handle_dev_create_primary_surface(worker);
         break;
+    case RED_WORKER_MESSAGE_DESTROY_PRIMARY_SURFACE_ASYNC:
     case RED_WORKER_MESSAGE_DESTROY_PRIMARY_SURFACE:
         handle_dev_destroy_primary_surface(worker);
         break;
@@ -9895,33 +9970,15 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         red_disconnect_display((RedChannel *)worker->display_channel);
         break;
     case RED_WORKER_MESSAGE_STOP: {
-        int x;
-
         red_printf("stop");
-        ASSERT(worker->running);
-        worker->running = FALSE;
-        red_display_clear_glz_drawables(worker->display_channel);
-        for (x = 0; x < NUM_SURFACES; ++x) {
-            if (worker->surfaces[x].context.canvas) {
-                red_current_flush(worker, x);
-            }
-        }
-        red_wait_outgoing_item((RedChannel *)worker->display_channel);
-        red_wait_outgoing_item((RedChannel *)worker->cursor_channel);
+        handle_dev_stop(worker);
         message = RED_WORKER_MESSAGE_READY;
         write_message(worker->channel, &message);
         break;
     }
     case RED_WORKER_MESSAGE_START:
         red_printf("start");
-        ASSERT(!worker->running);
-        if (worker->cursor_channel) {
-            worker->cursor_channel->base.migrate = FALSE;
-        }
-        if (worker->display_channel) {
-            worker->display_channel->base.migrate = FALSE;
-        }
-        worker->running = TRUE;
+        handle_dev_start(worker);
         break;
     case RED_WORKER_MESSAGE_DISPLAY_MIGRATE:
         red_printf("migrate");
@@ -10003,6 +10060,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         receive_data(worker->channel, &worker->mouse_mode, sizeof(uint32_t));
         red_printf("mouse mode %u", worker->mouse_mode);
         break;
+    case RED_WORKER_MESSAGE_ADD_MEMSLOT_ASYNC:
     case RED_WORKER_MESSAGE_ADD_MEMSLOT:
         handle_dev_add_memslot(worker);
         break;
@@ -10048,6 +10106,13 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
     default:
         red_error("message error");
     }
+    if (call_async_complete) {
+        red_dispatcher_async_complete(worker->dispatcher, cookie);
+    }
+    if (write_ready) {
+        message = RED_WORKER_MESSAGE_READY;
+        write_message(worker->channel, &message);
+    }
 }
 
 static void red_init(RedWorker *worker, WorkerInitData *init_data)
@@ -10059,6 +10124,7 @@ static void red_init(RedWorker *worker, WorkerInitData *init_data)
     ASSERT(sizeof(CursorItem) <= QXL_CURSUR_DEVICE_DATA_SIZE);
 
     memset(worker, 0, sizeof(RedWorker));
+    worker->dispatcher = init_data->dispatcher;
     worker->qxl = init_data->qxl;
     worker->id = init_data->id;
     worker->channel = init_data->channel;

@@ -68,6 +68,13 @@ enum {
     RED_WORKER_MESSAGE_RESET_IMAGE_CACHE,
     RED_WORKER_MESSAGE_DESTROY_SURFACE_WAIT,
     RED_WORKER_MESSAGE_LOADVM_COMMANDS,
+    /* async commands */
+    RED_WORKER_MESSAGE_UPDATE_ASYNC,
+    RED_WORKER_MESSAGE_ADD_MEMSLOT_ASYNC,
+    RED_WORKER_MESSAGE_DESTROY_SURFACES_ASYNC,
+    RED_WORKER_MESSAGE_CREATE_PRIMARY_SURFACE_ASYNC,
+    RED_WORKER_MESSAGE_DESTROY_PRIMARY_SURFACE_ASYNC,
+    RED_WORKER_MESSAGE_DESTROY_SURFACE_WAIT_ASYNC,
 };
 
 typedef uint32_t RedWorkerMessage;
@@ -80,6 +87,8 @@ enum {
     RED_RENDERER_OGL_PBUF,
     RED_RENDERER_OGL_PIXMAP,
 };
+
+typedef struct RedDispatcher RedDispatcher;
 
 typedef struct WorkerInitData {
     struct QXLInstance *qxl;
@@ -98,6 +107,7 @@ typedef struct WorkerInitData {
     uint8_t memslot_id_bits;
     uint8_t internal_groupslot_id;
     uint32_t n_surfaces;
+    RedDispatcher *dispatcher;
 } WorkerInitData;
 
 void *red_worker_main(void *arg);
