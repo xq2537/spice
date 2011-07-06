@@ -966,19 +966,20 @@ void RedClient::handle_init(RedPeer::InMessage* message)
         agent_start.num_tokens = ~0;
         _marshallers->msgc_main_agent_start(msg->marshaller(), &agent_start);
         post_message(msg);
-    }
-
-    if (_agent_connected) {
         send_agent_announce_capabilities(true);
         if (_auto_display_res) {
            send_agent_monitors_config();
         }
-    }
-
-    if (!_auto_display_res && _display_setting.is_empty()) {
-        post_message(new Message(SPICE_MSGC_MAIN_ATTACH_CHANNELS));
+        if (_auto_display_res || !_display_setting.is_empty()) {
+            _application.activate_interval_timer(*_agent_timer, AGENT_TIMEOUT);
+        } else {
+            post_message(new Message(SPICE_MSGC_MAIN_ATTACH_CHANNELS));
+        }
     } else {
-        _application.activate_interval_timer(*_agent_timer, AGENT_TIMEOUT);
+        if (_auto_display_res || !_display_setting.is_empty()) {
+            LOG_WARN("no agent running, display options have been ignored");
+        }
+        post_message(new Message(SPICE_MSGC_MAIN_ATTACH_CHANNELS));
     }
 }
 
@@ -1046,6 +1047,17 @@ void RedClient::on_agent_announce_capabilities(
         // not sending the color depth through send_agent_monitors_config, since
         // it applies only for attached screens.
         send_agent_display_config();
+    } else if (!_auto_display_res) {
+        /* some agents don't support monitors/displays agent messages, so
+         * we'll never reach on_agent_reply which sends this
+         * ATTACH_CHANNELS message which is needed for client startup to go
+         * on.
+         */
+        if (!_display_setting.is_empty()) {
+            LOG_WARN("display options have been requested, but the agent doesn't support these options");
+        }
+        post_message(new Message(SPICE_MSGC_MAIN_ATTACH_CHANNELS));
+        _application.deactivate_interval_timer(*_agent_timer);
     }
 }
 
