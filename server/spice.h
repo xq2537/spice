@@ -223,6 +223,9 @@ struct QXLInterface {
     void (*notify_update)(QXLInstance *qin, uint32_t update_id);
     int (*flush_resources)(QXLInstance *qin);
     void (*async_complete)(QXLInstance *qin, uint64_t cookie);
+    void (*update_area_complete)(QXLInstance *qin, uint32_t surface_id,
+                                 struct QXLRect *updated_rects,
+                                 uint32_t num_updated_rects);
 };
 
 struct QXLInstance {
