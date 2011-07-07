@@ -2881,7 +2881,7 @@ static void cleanup(void)
         for (i = 0; i < ScreenCount(x_display); ++i) {
             XFree(vinfo[i]);
         }
-        delete vinfo;
+        delete[] vinfo;
         vinfo = NULL;
     }
 #ifdef USE_OPENGL
