@@ -9867,18 +9867,31 @@ static inline void handle_dev_destroy_primary_surface(RedWorker *worker)
     red_cursor_reset(worker);
 }
 
-static void handle_dev_stop(RedWorker *worker)
+static void flush_all_surfaces(RedWorker *worker)
 {
     int x;
 
-    ASSERT(worker->running);
-    worker->running = FALSE;
-    red_display_clear_glz_drawables(worker->display_channel);
     for (x = 0; x < NUM_SURFACES; ++x) {
         if (worker->surfaces[x].context.canvas) {
             red_current_flush(worker, x);
         }
     }
+}
+
+static void handle_dev_flush_surfaces(RedWorker *worker)
+{
+    flush_all_qxl_commands(worker);
+    flush_all_surfaces(worker);
+    red_wait_outgoing_item((RedChannel *)worker->display_channel);
+    red_wait_outgoing_item((RedChannel *)worker->cursor_channel);
+}
+
+static void handle_dev_stop(RedWorker *worker)
+{
+    ASSERT(worker->running);
+    worker->running = FALSE;
+    red_display_clear_glz_drawables(worker->display_channel);
+    flush_all_surfaces(worker);
     red_wait_outgoing_item((RedChannel *)worker->display_channel);
     red_wait_outgoing_item((RedChannel *)worker->cursor_channel);
 }
@@ -9919,6 +9932,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
     case RED_WORKER_MESSAGE_CREATE_PRIMARY_SURFACE_ASYNC:
     case RED_WORKER_MESSAGE_DESTROY_PRIMARY_SURFACE_ASYNC:
     case RED_WORKER_MESSAGE_DESTROY_SURFACE_WAIT_ASYNC:
+    case RED_WORKER_MESSAGE_FLUSH_SURFACES_ASYNC:
         call_async_complete = 1;
         receive_data(worker->channel, &cookie, sizeof(cookie));
         break;
@@ -10127,6 +10141,9 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         }
         break;
     }
+    case RED_WORKER_MESSAGE_FLUSH_SURFACES_ASYNC:
+        handle_dev_flush_surfaces(worker);
+        break;
     default:
         red_error("message error");
     }

@@ -153,6 +153,8 @@ void spice_qxl_destroy_primary_surface_async(QXLInstance *instance, uint32_t sur
 void spice_qxl_create_primary_surface_async(QXLInstance *instance, uint32_t surface_id,
                                 QXLDevSurfaceCreate *surface, uint64_t cookie);
 void spice_qxl_destroy_surface_async(QXLInstance *instance, uint32_t surface_id, uint64_t cookie);
+/* suspend and resolution change on windows drivers */
+void spice_qxl_flush_surfaces_async(QXLInstance *instance, uint64_t cookie);
 
 typedef struct QXLDrawArea {
     uint8_t *buf;

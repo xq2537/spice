@@ -79,4 +79,5 @@ global:
     spice_qxl_destroy_primary_surface_async;
     spice_qxl_create_primary_surface_async;
     spice_qxl_destroy_surface_async;
+    spice_qxl_flush_surfaces_async;
 } SPICE_SERVER_0.8.1;
