@@ -2572,8 +2572,12 @@ static int get_selection(XEvent &event, Atom type, Atom prop, int format,
         }
         len = clipboard_data_size;
         *data_ret = clipboard_data;
-    } else
-        *data_ret = data;
+    } else {
+        if (len > 0)
+            *data_ret = data;
+        else
+            *data_ret = NULL;
+    }
 
     if (len > 0)
         ret_val = len;
