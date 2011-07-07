@@ -9149,7 +9149,7 @@ static void display_channel_release_item(RedChannel *channel, PipeItem *item, in
     if (item_pushed) {
         display_channel_release_item_after_push((DisplayChannel *)channel, item);
     } else {
-        red_printf("not pushed");
+        red_printf_once("not pushed (%d)", item->type);
         display_channel_release_item_before_push((DisplayChannel *)channel, item);
     }
 }
@@ -9311,7 +9311,7 @@ static void cursor_channel_release_item(RedChannel *channel, PipeItem *item, int
     if (item_pushed) {
         cursor_channel_release_item_after_push((CursorChannel *)channel, item);
     } else {
-        red_printf("not pushed");
+        red_printf_once("not pushed (%d)", item->type);
         cursor_channel_release_item_before_push((CursorChannel *)channel, item);
     }
 }
