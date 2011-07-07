@@ -9550,7 +9550,7 @@ static inline void handle_dev_destroy_surfaces(RedWorker *worker)
 {
     int i;
     RedWorkerMessage message;
-    red_printf("");
+
     flush_all_qxl_commands(worker);
     //to handle better
     for (i = 0; i < NUM_SURFACES; ++i) {
