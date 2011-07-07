@@ -122,7 +122,7 @@ void RedChannelBase::link(uint32_t connection_id, const std::string& password,
     send(buffer, p - buffer);
     delete [] buffer;
 
-    recive((uint8_t*)&header, sizeof(header));
+    receive((uint8_t*)&header, sizeof(header));
 
     if (header.magic != SPICE_MAGIC) {
         THROW_ERR(SPICEC_ERROR_CODE_CONNECT_FAILED, "bad magic");
@@ -139,7 +139,7 @@ void RedChannelBase::link(uint32_t connection_id, const std::string& password,
     _remote_minor = header.minor_version;
 
     AutoArray<uint8_t> reply_buf(new uint8_t[header.size]);
-    recive(reply_buf.get(), header.size);
+    receive(reply_buf.get(), header.size);
 
     reply = (SpiceLinkReply *)reply_buf.get();
 
@@ -196,7 +196,7 @@ void RedChannelBase::link(uint32_t connection_id, const std::string& password,
 
     BIO_free(bioKey);
 
-    recive((uint8_t*)&link_res, sizeof(link_res));
+    receive((uint8_t*)&link_res, sizeof(link_res));
     if (link_res != SPICE_LINK_ERR_OK) {
         int error_code = (link_res == SPICE_LINK_ERR_PERMISSION_DENIED) ?
                                 SPICEC_ERROR_CODE_CONNECT_FAILED : SPICEC_ERROR_CODE_CONNECT_FAILED;
@@ -359,10 +359,10 @@ void RedChannel::post_message(RedChannel::OutMessage* message)
     _send_trigger.trigger();
 }
 
-RedPeer::CompoundInMessage *RedChannel::recive()
+RedPeer::CompoundInMessage *RedChannel::receive()
 {
-    CompoundInMessage *message = RedChannelBase::recive();
-    on_message_recived();
+    CompoundInMessage *message = RedChannelBase::receive();
+    on_message_received();
     return message;
 }
 
@@ -589,7 +589,7 @@ void RedChannel::on_send_trigger()
     send_messages();
 }
 
-void RedChannel::on_message_recived()
+void RedChannel::on_message_received()
 {
     if (_message_ack_count && !--_message_ack_count) {
         post_message(new Message(SPICE_MSGC_ACK));
@@ -604,10 +604,10 @@ void RedChannel::on_message_complition(uint64_t serial)
     _sync_info.condition->notify_all();
 }
 
-void RedChannel::recive_messages()
+void RedChannel::receive_messages()
 {
     for (;;) {
-        uint32_t n = RedPeer::recive((uint8_t*)&_incomming_header, sizeof(SpiceDataHeader));
+        uint32_t n = RedPeer::receive((uint8_t*)&_incomming_header, sizeof(SpiceDataHeader));
         if (n != sizeof(SpiceDataHeader)) {
             _incomming_header_pos = n;
             return;
@@ -616,13 +616,13 @@ void RedChannel::recive_messages()
                                                                  _incomming_header.type,
                                                                  _incomming_header.size,
                                                                  _incomming_header.sub_list));
-        n = RedPeer::recive((*message)->data(), (*message)->compound_size());
+        n = RedPeer::receive((*message)->data(), (*message)->compound_size());
         if (n != (*message)->compound_size()) {
             _incomming_message = message.release();
             _incomming_message_pos = n;
             return;
         }
-        on_message_recived();
+        on_message_received();
         _message_handler->handle_message(*(*message));
         on_message_complition((*message)->serial());
     }
@@ -642,7 +642,7 @@ void RedChannel::on_event()
     send_messages();
 
     if (_incomming_header_pos) {
-        _incomming_header_pos += RedPeer::recive(((uint8_t*)&_incomming_header) +
+        _incomming_header_pos += RedPeer::receive(((uint8_t*)&_incomming_header) +
                                                  _incomming_header_pos,
                                                  sizeof(SpiceDataHeader) - _incomming_header_pos);
         if (_incomming_header_pos != sizeof(SpiceDataHeader)) {
@@ -657,7 +657,7 @@ void RedChannel::on_event()
     }
 
     if (_incomming_message) {
-        _incomming_message_pos += RedPeer::recive(_incomming_message->data() +
+        _incomming_message_pos += RedPeer::receive(_incomming_message->data() +
                                                   _incomming_message_pos,
                                                   _incomming_message->compound_size() -
                                                   _incomming_message_pos);
@@ -666,11 +666,11 @@ void RedChannel::on_event()
         }
         AutoRef<CompoundInMessage> message(_incomming_message);
         _incomming_message = NULL;
-        on_message_recived();
+        on_message_received();
         _message_handler->handle_message(*(*message));
         on_message_complition((*message)->serial());
     }
-    recive_messages();
+    receive_messages();
 }
 
 void RedChannel::send_migrate_flush_mark()
@@ -705,7 +705,7 @@ void RedChannel::handle_migrate(RedPeer::InMessage* message)
     }
     AutoRef<CompoundInMessage> data_message;
     if (migrate->flags & SPICE_MIGRATE_NEED_DATA_TRANSFER) {
-        data_message.reset(recive());
+        data_message.reset(receive());
     }
     _client.migrate_channel(*this);
     if (migrate->flags & SPICE_MIGRATE_NEED_DATA_TRANSFER) {

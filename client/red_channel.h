@@ -126,7 +126,7 @@ public:
     virtual void disconnect();
     virtual bool abort();
 
-    virtual CompoundInMessage *recive();
+    virtual CompoundInMessage *receive();
 
     virtual void post_message(RedChannel::OutMessage* message);
     int get_connection_error() { return _error;}
@@ -154,10 +154,10 @@ private:
     void run();
     void send_migrate_flush_mark();
     void send_messages();
-    void recive_messages();
+    void receive_messages();
     void on_send_trigger();
     virtual void on_event();
-    void on_message_recived();
+    void on_message_received();
     void on_message_complition(uint64_t serial);
 
     static void* worker_main(void *);

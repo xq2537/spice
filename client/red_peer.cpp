@@ -268,7 +268,7 @@ void RedPeer::swap(RedPeer* other)
     }
 }
 
-uint32_t RedPeer::recive(uint8_t *buf, uint32_t size)
+uint32_t RedPeer::receive(uint8_t *buf, uint32_t size)
 {
     uint8_t *pos = buf;
     while (size) {
@@ -325,14 +325,14 @@ uint32_t RedPeer::recive(uint8_t *buf, uint32_t size)
     return pos - buf;
 }
 
-RedPeer::CompoundInMessage* RedPeer::recive()
+RedPeer::CompoundInMessage* RedPeer::receive()
 {
     SpiceDataHeader header;
     AutoRef<CompoundInMessage> message;
 
-    recive((uint8_t*)&header, sizeof(SpiceDataHeader));
+    receive((uint8_t*)&header, sizeof(SpiceDataHeader));
     message.reset(new CompoundInMessage(header.serial, header.type, header.size, header.sub_list));
-    recive((*message)->data(), (*message)->compound_size());
+    receive((*message)->data(), (*message)->compound_size());
     return message.release();
 }
 

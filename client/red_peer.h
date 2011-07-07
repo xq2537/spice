@@ -110,11 +110,11 @@ public:
     void close();
     void enable() { _shut = false;}
 
-    virtual CompoundInMessage* recive();
+    virtual CompoundInMessage* receive();
     uint32_t do_send(OutMessage& message, uint32_t skip_bytes);
     uint32_t send(OutMessage& message);
 
-    uint32_t recive(uint8_t* buf, uint32_t size);
+    uint32_t receive(uint8_t* buf, uint32_t size);
     uint32_t send(uint8_t* buf, uint32_t size);
 
 protected:
