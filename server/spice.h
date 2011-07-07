@@ -90,7 +90,7 @@ struct SpiceCoreInterface {
 
 #define SPICE_INTERFACE_QXL "qxl"
 #define SPICE_INTERFACE_QXL_MAJOR 3
-#define SPICE_INTERFACE_QXL_MINOR 0
+#define SPICE_INTERFACE_QXL_MINOR 1
 typedef struct QXLInterface QXLInterface;
 typedef struct QXLInstance QXLInstance;
 typedef struct QXLState QXLState;
