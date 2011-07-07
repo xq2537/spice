@@ -541,6 +541,18 @@ static void qxl_worker_start(QXLWorker *qxl_worker)
     red_dispatcher_start((RedDispatcher*)qxl_worker);
 }
 
+static void red_dispatcher_flush_surfaces_async(RedDispatcher *dispatcher, uint64_t cookie)
+{
+    RedWorkerMessage message = red_dispatcher_async_start(dispatcher,
+                                                          RED_WORKER_MESSAGE_FLUSH_SURFACES_ASYNC);
+
+    if (message == RED_WORKER_MESSAGE_NOP) {
+        return;
+    }
+    write_message(dispatcher->channel, &message);
+    send_data(dispatcher->channel, &cookie, sizeof(cookie));
+}
+
 static void red_dispatcher_stop(RedDispatcher *dispatcher)
 {
     RedWorkerMessage message = RED_WORKER_MESSAGE_STOP;
@@ -788,6 +800,12 @@ void spice_qxl_destroy_surface_async(QXLInstance *instance, uint32_t surface_id,
     red_dispatcher_destroy_surface_wait(instance->st->dispatcher, surface_id, 1, cookie);
 }
 
+SPICE_GNUC_VISIBLE
+void spice_qxl_flush_surfaces_async(QXLInstance *instance, uint64_t cookie)
+{
+    red_dispatcher_flush_surfaces_async(instance->st->dispatcher, cookie);
+}
+
 void red_dispatcher_async_complete(struct RedDispatcher *dispatcher, uint64_t cookie)
 {
     pthread_mutex_lock(&dispatcher->async_lock);
@@ -805,6 +823,8 @@ void red_dispatcher_async_complete(struct RedDispatcher *dispatcher, uint64_t co
         red_dispatcher_destroy_primary_surface_complete(dispatcher);
         break;
     case RED_WORKER_MESSAGE_DESTROY_SURFACE_WAIT_ASYNC:
+        break;
+    case RED_WORKER_MESSAGE_FLUSH_SURFACES_ASYNC:
         break;
     default:
         red_printf("unexpected message");
