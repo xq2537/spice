@@ -68,7 +68,7 @@ void RedPeer::cleanup()
     }
 }
 
-void RedPeer::connect_unsecure(const char* host, int portnr)
+void RedPeer::connect_to_peer(const char* host, int portnr)
 {
     struct addrinfo ai, *result = NULL, *e;
     char uaddr[INET6_ADDRSTRLEN+1];
@@ -104,7 +104,8 @@ void RedPeer::connect_unsecure(const char* host, int portnr)
             getnameinfo((struct sockaddr*)e->ai_addr, e->ai_addrlen,
                         uaddr,INET6_ADDRSTRLEN, uport,32,
                         NI_NUMERICHOST | NI_NUMERICSERV);
-            LOG_INFO("Trying %s %s", uaddr, uport);
+            DBG(0, "Trying %s %s", uaddr, uport);
+
             if (::connect(_peer, e->ai_addr, e->ai_addrlen) == SOCKET_ERROR) {
                 err = sock_error();
                 LOG_INFO("Connect failed: %s (%d)",
@@ -113,7 +114,7 @@ void RedPeer::connect_unsecure(const char* host, int portnr)
                 _peer = INVALID_SOCKET;
                 continue;
             }
-            LOG_INFO("Connected to %s %s", uaddr, uport);
+            DBG(0, "Connected to %s %s", uaddr, uport);
             break;
         }
         lock.unlock();
@@ -130,14 +131,23 @@ void RedPeer::connect_unsecure(const char* host, int portnr)
     }
 }
 
+void RedPeer::connect_unsecure(const char* host, int portnr)
+{
+    connect_to_peer(host, portnr);
+    ASSERT(_ctx == NULL && _ssl == NULL && _peer != INVALID_SOCKET);
+    LOG_INFO("Connected to %s %d", host, portnr);
+}
+
 void RedPeer::connect_secure(const ConnectionOptions& options, const char* host)
 {
     int return_code;
     SPICE_SSL_VERIFY_OP auth_flags;
     SpiceOpenSSLVerify* verify = NULL;
+    int portnr = options.secure_port;
 
-    connect_unsecure(host, options.secure_port);
+    connect_to_peer(host, portnr);
     ASSERT(_ctx == NULL && _ssl == NULL && _peer != INVALID_SOCKET);
+    LOG_INFO("Connected to %s %d", host, portnr);
 
     try {
 #if OPENSSL_VERSION_NUMBER >= 0x10000000L
