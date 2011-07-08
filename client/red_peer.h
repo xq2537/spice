@@ -136,6 +136,7 @@ protected:
     void cleanup();
 
 private:
+    void connect_to_peer(const char* host, int port);
     void shutdown();
 
 private:
