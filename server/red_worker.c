@@ -2703,22 +2703,29 @@ static inline int red_current_add_equal(RedWorker *worker, DrawItem *item, TreeI
         int add_after = !!other_drawable->stream && is_drawable_independent_from_surfaces(drawable);
         red_stream_maintenance(worker, drawable, other_drawable);
         __current_add_drawable(worker, drawable, &other->siblings_link);
+        other_drawable->refs++;
+        current_remove_drawable(worker, other_drawable);
         if (add_after) {
             red_pipe_add_drawable_after(worker, drawable, other_drawable);
         } else {
             red_pipe_add_drawable(worker, drawable);
         }
-        remove_drawable(worker, other_drawable);
+        red_pipe_remove_drawable(worker, other_drawable);
+        release_drawable(worker, other_drawable);
         return TRUE;
     }
 
     switch (item->effect) {
     case QXL_EFFECT_REVERT_ON_DUP:
         if (is_same_drawable(worker, drawable, other_drawable)) {
+            other_drawable->refs++;
+            current_remove_drawable(worker, other_drawable);
             if (!ring_item_is_linked(&other_drawable->pipe_item.link)) {
                 red_pipe_add_drawable(worker, drawable);
+            } else {
+                red_pipe_remove_drawable(worker, other_drawable);
             }
-            remove_drawable(worker, other_drawable);
+            release_drawable(worker, other_drawable);
             return TRUE;
         }
         break;
