@@ -3518,9 +3518,9 @@ static inline void red_process_drawable(RedWorker *worker, RedDrawable *drawable
 
 static inline void red_create_surface(RedWorker *worker, uint32_t surface_id,uint32_t width,
                                       uint32_t height, int32_t stride, uint32_t format,
-                                      void *line_0, int data_is_valid);
+                                      void *line_0, int data_is_valid, int send_client);
 
-static inline void red_process_surface(RedWorker *worker, RedSurfaceCmd *surface, uint32_t group_id, int data_is_valid)
+static inline void red_process_surface(RedWorker *worker, RedSurfaceCmd *surface, uint32_t group_id, int loadvm)
 {
     int surface_id;
     RedSurface *red_surface;
@@ -3535,6 +3535,7 @@ static inline void red_process_surface(RedWorker *worker, RedSurfaceCmd *surface
     case QXL_SURFACE_CMD_CREATE: {
         uint32_t height = surface->u.surface_create.height;
         int32_t stride = surface->u.surface_create.stride;
+        int reloaded_surface = loadvm || (surface->flags & QXL_SURF_FLAG_KEEP_DATA);
 
         data = surface->u.surface_create.data;
         if (stride < 0) {
@@ -3542,7 +3543,9 @@ static inline void red_process_surface(RedWorker *worker, RedSurfaceCmd *surface
         }
         red_create_surface(worker, surface_id, surface->u.surface_create.width,
                            height, stride, surface->u.surface_create.format, data,
-                           data_is_valid);
+                           reloaded_surface,
+                           // reloaded surfaces will be sent on demand
+                           !reloaded_surface);
         set_surface_release_info(worker, surface_id, 1, surface->release_info, group_id);
         break;
     }
@@ -4396,7 +4399,7 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
 
             red_get_surface_cmd(&worker->mem_slots, ext_cmd.group_id,
                                 surface, ext_cmd.cmd.data);
-            red_process_surface(worker, surface, ext_cmd.group_id, 0);
+            red_process_surface(worker, surface, ext_cmd.group_id, FALSE);
             break;
         }
         default:
@@ -8655,7 +8658,7 @@ static inline void red_create_surface_item(RedWorker *worker, int surface_id)
 
 static inline void red_create_surface(RedWorker *worker, uint32_t surface_id, uint32_t width,
                                       uint32_t height, int32_t stride, uint32_t format,
-                                      void *line_0, int data_is_valid)
+                                      void *line_0, int data_is_valid, int send_client)
 {
     uint32_t i;
     RedSurface *surface = &worker->surfaces[surface_id];
@@ -8688,7 +8691,12 @@ static inline void red_create_surface(RedWorker *worker, uint32_t surface_id, ui
             PANIC("drawing canvas creating failed - can`t create same type canvas");
         }
 
-        red_create_surface_item(worker, surface_id);
+        if (send_client) {
+            red_create_surface_item(worker, surface_id);
+            if (data_is_valid) {
+                red_add_surface_image(worker, surface_id);
+            }
+        }
         return;
     }
 
@@ -8698,7 +8706,12 @@ static inline void red_create_surface(RedWorker *worker, uint32_t surface_id, ui
                                                             surface->context.format, line_0);
         if (surface->context.canvas) { //no need canvas check
             worker->renderer = worker->renderers[i];
-            red_create_surface_item(worker, surface_id);
+            if (send_client) {
+                red_create_surface_item(worker, surface_id);
+                if (data_is_valid) {
+                    red_add_surface_image(worker, surface_id);
+                }
+            }
             return;
         }
     }
@@ -9836,7 +9849,7 @@ static inline void handle_dev_create_primary_surface(RedWorker *worker)
     }
 
     red_create_surface(worker, 0, surface.width, surface.height, surface.stride, surface.format,
-                       line_0, surface.flags & QXL_SURF_FLAG_KEEP_DATA);
+                       line_0, surface.flags & QXL_SURF_FLAG_KEEP_DATA, TRUE);
 
     if (worker->display_channel) {
         red_pipe_add_verb(&worker->display_channel->base, SPICE_MSG_DISPLAY_MARK);
@@ -10131,7 +10144,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
                 surface_cmd = spice_new0(RedSurfaceCmd, 1);
                 red_get_surface_cmd(&worker->mem_slots, ext.group_id,
                                     surface_cmd, ext.cmd.data);
-                red_process_surface(worker, surface_cmd, ext.group_id, 1);
+                red_process_surface(worker, surface_cmd, ext.group_id, TRUE);
                 break;
             default:
                 red_printf("unhandled loadvm command type (%d)", ext.cmd.type);
