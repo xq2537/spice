@@ -163,8 +163,8 @@ static void term_mem_destination(j_compress_ptr cinfo)
  */
 
 static void
-jpeg_mem_dest (j_compress_ptr cinfo,
-	       unsigned char ** outbuffer, unsigned long * outsize)
+spice_jpeg_mem_dest(j_compress_ptr cinfo,
+                    unsigned char ** outbuffer, unsigned long * outsize)
 {
   mem_destination_mgr *dest;
 #define OUTPUT_BUF_SIZE  4096	/* choose an efficiently fwrite'able size */
@@ -241,7 +241,7 @@ int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
         encoder->row = spice_malloc(stride);
     }
 
-    jpeg_mem_dest(&encoder->cinfo, dest, dest_len);
+    spice_jpeg_mem_dest(&encoder->cinfo, dest, dest_len);
 
     encoder->cinfo.image_width      = encoder->width;
     encoder->cinfo.image_height     = encoder->height;
