@@ -22,9 +22,11 @@
 #include <stdint.h>
 #include <time.h>
 #include <stdlib.h>
+#include "backtrace.h"
 
 #define ASSERT(x) if (!(x)) {                               \
     printf("%s: ASSERT %s failed\n", __FUNCTION__, #x);     \
+    spice_backtrace();                                      \
     abort();                                                \
 }
 

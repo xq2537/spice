@@ -36,6 +36,8 @@ libspice_common_la_SOURCES =		\
 	spice_common.h			\
 	ssl_verify.c			\
 	ssl_verify.h			\
+	backtrace.c			\
+	backtrace.h			\
 	$(NULL)
 
 if SUPPORT_GL
