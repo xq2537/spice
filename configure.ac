@@ -126,7 +126,7 @@ fi
 dnl =========================================================================
 dnl Check deps
 
-PKG_CHECK_MODULES(PROTOCOL, spice-protocol >= 0.7.0)
+PKG_CHECK_MODULES(PROTOCOL, spice-protocol >= 0.8.1)
 AC_SUBST(PROTOCOL_CFLAGS)
 
 AC_CHECK_LIBM
