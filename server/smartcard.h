@@ -29,7 +29,5 @@
 int smartcard_device_connect(SpiceCharDeviceInstance *char_device);
 void smartcard_device_disconnect(SpiceCharDeviceInstance *char_device);
 
-void smartcard_channel_init(void);
-
 #endif // __SMART_CARD_H__
 
