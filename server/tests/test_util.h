@@ -4,6 +4,9 @@
 #define TRUE 1
 #define FALSE 0
 
+#ifdef ASSERT
+#undef ASSERT
+#endif
 #define ASSERT(x) if (!(x)) {                               \
     printf("%s: ASSERT %s failed\n", __FUNCTION__, #x);     \
     abort();                                                \
