@@ -1,0 +1,66 @@
+SPICE_SERVER_0.6.0 {
+global:
+    spice_server_add_interface;
+    spice_server_add_renderer;
+    spice_server_char_device_recognized_subtypes;
+    spice_server_char_device_wakeup;
+    spice_server_destroy;
+    spice_server_get_image_compression;
+    spice_server_get_peer_info;
+    spice_server_get_sock_info;
+    spice_server_init;
+    spice_server_kbd_leds;
+    spice_server_migrate_client_state;
+    spice_server_migrate_end;
+    spice_server_migrate_info;
+    spice_server_migrate_start;
+    spice_server_new;
+    spice_server_playback_get_buffer;
+    spice_server_playback_put_samples;
+    spice_server_playback_start;
+    spice_server_playback_stop;
+    spice_server_record_get_samples;
+    spice_server_record_start;
+    spice_server_record_stop;
+    spice_server_remove_interface;
+    spice_server_set_addr;
+    spice_server_set_agent_mouse;
+    spice_server_set_channel_security;
+    spice_server_set_image_compression;
+    spice_server_set_jpeg_compression;
+    spice_server_set_noauth;
+    spice_server_set_playback_compression;
+    spice_server_set_port;
+    spice_server_set_streaming_video;
+    spice_server_set_ticket;
+    spice_server_set_tls;
+    spice_server_set_zlib_glz_compression;
+local: *;
+};
+
+SPICE_SERVER_0.6.1 {
+global:
+    spice_get_current_compat_version;
+    spice_server_set_compat_version;
+} SPICE_SERVER_0.6.0;
+
+SPICE_SERVER_0.8.0 {
+global:
+    spice_server_migrate_switch;
+} SPICE_SERVER_0.6.1;
+
+SPICE_SERVER_0.8.1 {
+global:
+    spice_server_set_agent_copypaste;
+} SPICE_SERVER_0.8.0;
+
+SPICE_SERVER_0.10.0 {
+global:
+    spice_server_playback_set_mute;
+    spice_server_playback_set_volume;
+    spice_server_record_set_mute;
+    spice_server_record_set_volume;
+    spice_server_set_sasl;
+    spice_server_set_sasl_appname;
+} SPICE_SERVER_0.8.1;
+

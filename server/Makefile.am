@@ -34,6 +34,7 @@ lib_LTLIBRARIES = libspice-server.la
 
 libspice_server_la_LDFLAGS =			\
 	-version-number $(SPICE_LT_VERSION)	\
+	-Wl,--version-script=spice-server.syms	\
 	-no-undefined				\
 	$(NULL)
 
