@@ -2276,7 +2276,7 @@ bool Application::process_cmd_line(int argc, char** argv, bool &full_screen)
     parser.add(SPICE_OPT_CANVAS_TYPE, "canvas-type", "set rendering canvas", "canvas_type", true);
     parser.set_multi(SPICE_OPT_CANVAS_TYPE, ',');
 
-    parser.add(SPICE_OPT_DISPLAY_COLOR_DEPTH, "color-depth", "guest display color depth (if supported by the guest vdagent)"
+    parser.add(SPICE_OPT_DISPLAY_COLOR_DEPTH, "color-depth", "guest display color depth (if supported by the guest vdagent)",
                "16/32", true);
 
     parser.add(SPICE_OPT_DISABLE_DISPLAY_EFFECTS, "disable-effects",
