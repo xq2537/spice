@@ -206,11 +206,10 @@ static void update_client_mouse_allowed()
     }
 }
 
-static void qxl_worker_update_area(QXLWorker *qxl_worker, uint32_t surface_id,
+static void red_dispatcher_update_area(RedDispatcher *dispatcher, uint32_t surface_id,
                                    QXLRect *qxl_area, QXLRect *qxl_dirty_rects,
                                    uint32_t num_dirty_rects, uint32_t clear_dirty_region)
 {
-    RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
     RedWorkerMessage message = RED_WORKER_MESSAGE_UPDATE;
     SpiceRect *dirty_rects = spice_new0(SpiceRect, num_dirty_rects);
     SpiceRect *area = spice_new0(SpiceRect, 1);
@@ -238,9 +237,16 @@ static void qxl_worker_update_area(QXLWorker *qxl_worker, uint32_t surface_id,
     free(area);
 }
 
-static void qxl_worker_add_memslot(QXLWorker *qxl_worker, QXLDevMemSlot *mem_slot)
+static void qxl_worker_update_area(QXLWorker *qxl_worker, uint32_t surface_id,
+                                   QXLRect *qxl_area, QXLRect *qxl_dirty_rects,
+                                   uint32_t num_dirty_rects, uint32_t clear_dirty_region)
 {
-    RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
+    red_dispatcher_update_area((RedDispatcher*)qxl_worker, surface_id, qxl_area,
+                               qxl_dirty_rects, num_dirty_rects, clear_dirty_region);
+}
+
+static void red_dispatcher_add_memslot(RedDispatcher *dispatcher, QXLDevMemSlot *mem_slot)
+{
     RedWorkerMessage message = RED_WORKER_MESSAGE_ADD_MEMSLOT;
 
     write_message(dispatcher->channel, &message);
@@ -249,9 +255,13 @@ static void qxl_worker_add_memslot(QXLWorker *qxl_worker, QXLDevMemSlot *mem_slo
     ASSERT(message == RED_WORKER_MESSAGE_READY);
 }
 
-static void qxl_worker_del_memslot(QXLWorker *qxl_worker, uint32_t slot_group_id, uint32_t slot_id)
+static void qxl_worker_add_memslot(QXLWorker *qxl_worker, QXLDevMemSlot *mem_slot)
 {
-    RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
+    red_dispatcher_add_memslot((RedDispatcher*)qxl_worker, mem_slot);
+}
+
+static void red_dispatcher_del_memslot(RedDispatcher *dispatcher, uint32_t slot_group_id, uint32_t slot_id)
+{
     RedWorkerMessage message = RED_WORKER_MESSAGE_DEL_MEMSLOT;
 
     write_message(dispatcher->channel, &message);
@@ -259,9 +269,13 @@ static void qxl_worker_del_memslot(QXLWorker *qxl_worker, uint32_t slot_group_id
     send_data(dispatcher->channel, &slot_id, sizeof(uint32_t));
 }
 
-static void qxl_worker_destroy_surfaces(QXLWorker *qxl_worker)
+static void qxl_worker_del_memslot(QXLWorker *qxl_worker, uint32_t slot_group_id, uint32_t slot_id)
 {
-    RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
+    red_dispatcher_del_memslot((RedDispatcher*)qxl_worker, slot_group_id, slot_id);
+}
+
+static void red_dispatcher_destroy_surfaces(RedDispatcher *dispatcher)
+{
     RedWorkerMessage message = RED_WORKER_MESSAGE_DESTROY_SURFACES;
 
     write_message(dispatcher->channel, &message);
@@ -269,9 +283,13 @@ static void qxl_worker_destroy_surfaces(QXLWorker *qxl_worker)
     ASSERT(message == RED_WORKER_MESSAGE_READY);
 }
 
-static void qxl_worker_destroy_primary(QXLWorker *qxl_worker, uint32_t surface_id)
+static void qxl_worker_destroy_surfaces(QXLWorker *qxl_worker)
 {
-    RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
+    red_dispatcher_destroy_surfaces((RedDispatcher*)qxl_worker);
+}
+
+static void red_dispatcher_destroy_primary(RedDispatcher *dispatcher, uint32_t surface_id)
+{
     RedWorkerMessage message = RED_WORKER_MESSAGE_DESTROY_PRIMARY_SURFACE;
 
     write_message(dispatcher->channel, &message);
@@ -287,10 +305,14 @@ static void qxl_worker_destroy_primary(QXLWorker *qxl_worker, uint32_t surface_i
     update_client_mouse_allowed();
 }
 
-static void qxl_worker_create_primary(QXLWorker *qxl_worker, uint32_t surface_id,
+static void qxl_worker_destroy_primary(QXLWorker *qxl_worker, uint32_t surface_id)
+{
+    red_dispatcher_destroy_primary((RedDispatcher*)qxl_worker, surface_id);
+}
+
+static void red_dispatcher_create_primary(RedDispatcher *dispatcher, uint32_t surface_id,
                                       QXLDevSurfaceCreate *surface)
 {
-    RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
     RedWorkerMessage message = RED_WORKER_MESSAGE_CREATE_PRIMARY_SURFACE;
 
     dispatcher->x_res = surface->width;
@@ -307,10 +329,29 @@ static void qxl_worker_create_primary(QXLWorker *qxl_worker, uint32_t surface_id
     update_client_mouse_allowed();
 }
 
+static void qxl_worker_create_primary(QXLWorker *qxl_worker, uint32_t surface_id,
+                                      QXLDevSurfaceCreate *surface)
+{
+    red_dispatcher_create_primary((RedDispatcher*)qxl_worker, surface_id, surface);
+}
+
+static void red_dispatcher_reset_image_cache(RedDispatcher *dispatcher)
+{
+    RedWorkerMessage message = RED_WORKER_MESSAGE_RESET_IMAGE_CACHE;
+
+    write_message(dispatcher->channel, &message);
+    read_message(dispatcher->channel, &message);
+    ASSERT(message == RED_WORKER_MESSAGE_READY);
+}
+
 static void qxl_worker_reset_image_cache(QXLWorker *qxl_worker)
 {
-    RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
-    RedWorkerMessage message = RED_WORKER_MESSAGE_RESET_IMAGE_CACHE;
+    red_dispatcher_reset_image_cache((RedDispatcher*)qxl_worker);
+}
+
+static void red_dispatcher_reset_cursor(RedDispatcher *dispatcher)
+{
+    RedWorkerMessage message = RED_WORKER_MESSAGE_RESET_CURSOR;
 
     write_message(dispatcher->channel, &message);
     read_message(dispatcher->channel, &message);
@@ -319,17 +360,11 @@ static void qxl_worker_reset_image_cache(QXLWorker *qxl_worker)
 
 static void qxl_worker_reset_cursor(QXLWorker *qxl_worker)
 {
-    RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
-    RedWorkerMessage message = RED_WORKER_MESSAGE_RESET_CURSOR;
-
-    write_message(dispatcher->channel, &message);
-    read_message(dispatcher->channel, &message);
-    ASSERT(message == RED_WORKER_MESSAGE_READY);
+    red_dispatcher_reset_cursor((RedDispatcher*)qxl_worker);
 }
 
-static void qxl_worker_destroy_surface_wait(QXLWorker *qxl_worker, uint32_t surface_id)
+static void red_dispatcher_destroy_surface_wait(RedDispatcher *dispatcher, uint32_t surface_id)
 {
-    RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
     RedWorkerMessage message = RED_WORKER_MESSAGE_DESTROY_SURFACE_WAIT;
 
     write_message(dispatcher->channel, &message);
@@ -338,18 +373,25 @@ static void qxl_worker_destroy_surface_wait(QXLWorker *qxl_worker, uint32_t surf
     ASSERT(message == RED_WORKER_MESSAGE_READY);
 }
 
-static void qxl_worker_reset_memslots(QXLWorker *qxl_worker)
+static void qxl_worker_destroy_surface_wait(QXLWorker *qxl_worker, uint32_t surface_id)
 {
-    RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
+    red_dispatcher_destroy_surface_wait((RedDispatcher*)qxl_worker, surface_id);
+}
+
+static void red_dispatcher_reset_memslots(RedDispatcher *dispatcher)
+{
     RedWorkerMessage message = RED_WORKER_MESSAGE_RESET_MEMSLOTS;
 
     write_message(dispatcher->channel, &message);
 }
 
-static void qxl_worker_wakeup(QXLWorker *qxl_worker)
+static void qxl_worker_reset_memslots(QXLWorker *qxl_worker)
 {
-    RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
+    red_dispatcher_reset_memslots((RedDispatcher*)qxl_worker);
+}
 
+static void red_dispatcher_wakeup(RedDispatcher *dispatcher)
+{
     if (!test_bit(RED_WORKER_PENDING_WAKEUP, dispatcher->pending)) {
         RedWorkerMessage message = RED_WORKER_MESSAGE_WAKEUP;
         set_bit(RED_WORKER_PENDING_WAKEUP, &dispatcher->pending);
@@ -357,9 +399,13 @@ static void qxl_worker_wakeup(QXLWorker *qxl_worker)
     }
 }
 
-static void qxl_worker_oom(QXLWorker *qxl_worker)
+static void qxl_worker_wakeup(QXLWorker *qxl_worker)
 {
-    RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
+    red_dispatcher_wakeup((RedDispatcher*)qxl_worker);
+}
+
+static void red_dispatcher_oom(RedDispatcher *dispatcher)
+{
     if (!test_bit(RED_WORKER_PENDING_OOM, dispatcher->pending)) {
         RedWorkerMessage message = RED_WORKER_MESSAGE_OOM;
         set_bit(RED_WORKER_PENDING_OOM, &dispatcher->pending);
@@ -367,17 +413,25 @@ static void qxl_worker_oom(QXLWorker *qxl_worker)
     }
 }
 
-static void qxl_worker_start(QXLWorker *qxl_worker)
+static void qxl_worker_oom(QXLWorker *qxl_worker)
 {
-    RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
+    red_dispatcher_oom((RedDispatcher*)qxl_worker);
+}
+
+static void red_dispatcher_start(RedDispatcher *dispatcher)
+{
     RedWorkerMessage message = RED_WORKER_MESSAGE_START;
 
     write_message(dispatcher->channel, &message);
 }
 
-static void qxl_worker_stop(QXLWorker *qxl_worker)
+static void qxl_worker_start(QXLWorker *qxl_worker)
 {
-    RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
+    red_dispatcher_start((RedDispatcher*)qxl_worker);
+}
+
+static void red_dispatcher_stop(RedDispatcher *dispatcher)
+{
     RedWorkerMessage message = RED_WORKER_MESSAGE_STOP;
 
     write_message(dispatcher->channel, &message);
@@ -385,10 +439,15 @@ static void qxl_worker_stop(QXLWorker *qxl_worker)
     ASSERT(message == RED_WORKER_MESSAGE_READY);
 }
 
-void qxl_worker_loadvm_commands(QXLWorker *qxl_worker,
-                                struct QXLCommandExt *ext, uint32_t count)
+static void qxl_worker_stop(QXLWorker *qxl_worker)
 {
-    RedDispatcher *dispatcher = (RedDispatcher *)qxl_worker;
+    red_dispatcher_stop((RedDispatcher*)qxl_worker);
+}
+
+static void red_dispatcher_loadvm_commands(RedDispatcher *dispatcher,
+                                           struct QXLCommandExt *ext,
+                                           uint32_t count)
+{
     RedWorkerMessage message = RED_WORKER_MESSAGE_LOADVM_COMMANDS;
 
     red_printf("");
@@ -397,6 +456,13 @@ void qxl_worker_loadvm_commands(QXLWorker *qxl_worker,
     send_data(dispatcher->channel, ext, sizeof(QXLCommandExt) * count);
     read_message(dispatcher->channel, &message);
     ASSERT(message == RED_WORKER_MESSAGE_READY);
+}
+
+static void qxl_worker_loadvm_commands(QXLWorker *qxl_worker,
+                                       struct QXLCommandExt *ext,
+                                       uint32_t count)
+{
+    red_dispatcher_loadvm_commands((RedDispatcher*)qxl_worker, ext, count);
 }
 
 void red_dispatcher_set_mm_time(uint32_t mm_time)
@@ -476,6 +542,100 @@ uint32_t red_dispatcher_qxl_ram_size()
     }
     dispatchers->qxl->st->qif->get_init_info(dispatchers->qxl, &qxl_info);
     return qxl_info.qxl_ram_size;
+}
+
+SPICE_GNUC_VISIBLE
+void spice_qxl_wakeup(QXLInstance *instance)
+{
+    red_dispatcher_wakeup(instance->st->dispatcher);
+}
+
+SPICE_GNUC_VISIBLE
+void spice_qxl_oom(QXLInstance *instance)
+{
+    red_dispatcher_oom(instance->st->dispatcher);
+}
+
+SPICE_GNUC_VISIBLE
+void spice_qxl_start(QXLInstance *instance)
+{
+    red_dispatcher_start(instance->st->dispatcher);
+}
+
+SPICE_GNUC_VISIBLE
+void spice_qxl_stop(QXLInstance *instance)
+{
+    red_dispatcher_stop(instance->st->dispatcher);
+}
+
+SPICE_GNUC_VISIBLE
+void spice_qxl_update_area(QXLInstance *instance, uint32_t surface_id,
+                    struct QXLRect *area, struct QXLRect *dirty_rects,
+                    uint32_t num_dirty_rects, uint32_t clear_dirty_region)
+{
+    red_dispatcher_update_area(instance->st->dispatcher, surface_id, area, dirty_rects,
+                               num_dirty_rects, clear_dirty_region);
+}
+
+SPICE_GNUC_VISIBLE
+void spice_qxl_add_memslot(QXLInstance *instance, QXLDevMemSlot *slot)
+{
+    red_dispatcher_add_memslot(instance->st->dispatcher, slot);
+}
+
+SPICE_GNUC_VISIBLE
+void spice_qxl_del_memslot(QXLInstance *instance, uint32_t slot_group_id, uint32_t slot_id)
+{
+    red_dispatcher_del_memslot(instance->st->dispatcher, slot_group_id, slot_id);
+}
+
+SPICE_GNUC_VISIBLE
+void spice_qxl_reset_memslots(QXLInstance *instance)
+{
+    red_dispatcher_reset_memslots(instance->st->dispatcher);
+}
+
+SPICE_GNUC_VISIBLE
+void spice_qxl_destroy_surfaces(QXLInstance *instance)
+{
+    red_dispatcher_destroy_surfaces(instance->st->dispatcher);
+}
+
+SPICE_GNUC_VISIBLE
+void spice_qxl_destroy_primary_surface(QXLInstance *instance, uint32_t surface_id)
+{
+    red_dispatcher_destroy_primary(instance->st->dispatcher, surface_id);
+}
+
+SPICE_GNUC_VISIBLE
+void spice_qxl_create_primary_surface(QXLInstance *instance, uint32_t surface_id,
+                                QXLDevSurfaceCreate *surface)
+{
+    red_dispatcher_create_primary(instance->st->dispatcher, surface_id, surface);
+}
+
+SPICE_GNUC_VISIBLE
+void spice_qxl_reset_image_cache(QXLInstance *instance)
+{
+    red_dispatcher_reset_image_cache(instance->st->dispatcher);
+}
+
+SPICE_GNUC_VISIBLE
+void spice_qxl_reset_cursor(QXLInstance *instance)
+{
+    red_dispatcher_reset_cursor(instance->st->dispatcher);
+}
+
+SPICE_GNUC_VISIBLE
+void spice_qxl_destroy_surface_wait(QXLInstance *instance, uint32_t surface_id)
+{
+    red_dispatcher_destroy_surface_wait(instance->st->dispatcher, surface_id);
+}
+
+SPICE_GNUC_VISIBLE
+void spice_qxl_loadvm_commands(QXLInstance *instance, struct QXLCommandExt *ext, uint32_t count)
+{
+    red_dispatcher_loadvm_commands(instance->st->dispatcher, ext, count);
 }
 
 RedDispatcher *red_dispatcher_init(QXLInstance *qxl)
