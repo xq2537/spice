@@ -216,7 +216,6 @@ public:
     void on_disconnecting();
     void on_visibility_start(int screen_id);
 
-    bool rearrange_monitors(RedScreen& screen);
     void enter_full_screen();
     void exit_full_screen();
     bool toggle_full_screen();
@@ -308,6 +307,9 @@ private:
     void assign_monitors();
     void restore_monitors();
     void prepare_monitors();
+    void rearrange_monitors(bool force_capture,
+                            bool enter_full_screen,
+                            RedScreen* screen = NULL);
     void position_screens();
     void show_full_screen();
     void send_key_down(RedKey key);

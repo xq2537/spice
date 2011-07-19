@@ -670,25 +670,9 @@ RedScreen* Application::get_screen(int id)
 
         if (id != 0) {
             if (_full_screen) {
-                bool capture;
-
                 mon = get_monitor(id);
-                capture = release_capture();
                 screen->set_monitor(mon);
-                prepare_monitors();
-                position_screens();
-                screen->show_full_screen();
-                if (screen->is_out_of_sync()) {
-                    _out_of_sync = true;
-                    /* If the client monitor cannot handle the guest resolution
-                       drop back to windowed mode */
-                    exit_full_screen();
-                }
-
-                if (capture) {
-                    _main_screen->activate();
-                    _main_screen->capture_mouse();
-                }
+                rearrange_monitors(false, true, screen);
             } else {
                 screen->show(false, _main_screen);
             }
@@ -776,13 +760,7 @@ void Application::on_screen_destroyed(int id, bool was_captured)
     }
     _screens[id] = NULL;
     if (reposition) {
-        bool capture = was_captured || release_capture();
-        prepare_monitors();
-        position_screens();
-        if (capture) {
-            _main_screen->activate();
-            _main_screen->capture_mouse();
-        }
+        rearrange_monitors(was_captured, false);
     }
 }
 
@@ -1393,20 +1371,51 @@ void Application::on_screen_unlocked(RedScreen& screen)
     screen.resize(SCREEN_INIT_WIDTH, SCREEN_INIT_HEIGHT);
 }
 
-bool Application::rearrange_monitors(RedScreen& screen)
+void Application::rearrange_monitors(bool force_capture,
+                                     bool enter_full_screen,
+                                     RedScreen* screen)
 {
-    if (!_full_screen) {
-        return false;
+    bool capture;
+    bool toggle_full_screen;
+
+    if (!_full_screen && !enter_full_screen) {
+        return;
     }
-    bool capture = release_capture();
+
+    toggle_full_screen = enter_full_screen && !screen;
+    capture = release_capture();
+#ifndef WIN32
+    if (toggle_full_screen) {
+        /* performing hide during resolution changes resulted in
+           missing WM_KEYUP events */
+        hide();
+    }
+#endif
     prepare_monitors();
     position_screens();
-    if (capture && _main_screen != &screen) {
-        capture = false;
-        _main_screen->activate();
+    if (enter_full_screen) {
+        // toggling to full screen
+        if (toggle_full_screen) {
+            show_full_screen();
+            _main_screen->activate();
+
+        } else { // already in full screen mode and a new screen is displayed
+            screen->show_full_screen();
+            if (screen->is_out_of_sync()) {
+                _out_of_sync = true;
+                /* If the client monitor cannot handle the guest resolution
+                    drop back to windowed mode */
+                exit_full_screen();
+            }
+        }
+    }
+
+    if (force_capture || capture) {
+        if (!toggle_full_screen) {
+            _main_screen->activate();
+        }
         _main_screen->capture_mouse();
     }
-    return capture;
 }
 
 Monitor* Application::find_monitor(int id)
@@ -1523,20 +1532,8 @@ void Application::enter_full_screen()
 {
     LOG_INFO("");
     _changing_screens = true;
-    bool capture = release_capture();
     assign_monitors();
-#ifndef WIN32
-    /* performing hide during resolution changes resulted in
-       missing WM_KEYUP events */
-    hide();
-#endif
-    prepare_monitors();
-    position_screens();
-    show_full_screen();
-    _main_screen->activate();
-    if (capture) {
-        _main_screen->capture_mouse();
-    }
+    rearrange_monitors(false, true);
     _changing_screens = false;
     _full_screen = true;
     /* If the client monitor cannot handle the guest resolution drop back
@@ -1598,7 +1595,15 @@ bool Application::toggle_full_screen()
 
 void Application::resize_screen(RedScreen *screen, int width, int height)
 {
+    Monitor* mon;
+
+    if (_full_screen) {
+        if ((mon = screen->get_monitor())) {
+            mon->set_mode(width, height);
+        }
+    }
     screen->resize(width, height);
+    rearrange_monitors(false, false);
     if (screen->is_out_of_sync()) {
         _out_of_sync = true;
         /* If the client monitor cannot handle the guest resolution
