@@ -58,6 +58,21 @@ SPICE_SERVER_0.8.2 {
 global:
     spice_server_set_sasl;
     spice_server_set_sasl_appname;
+    spice_qxl_wakeup;
+    spice_qxl_oom;
+    spice_qxl_start;
+    spice_qxl_stop;
+    spice_qxl_update_area;
+    spice_qxl_add_memslot;
+    spice_qxl_del_memslot;
+    spice_qxl_reset_memslots;
+    spice_qxl_destroy_surfaces;
+    spice_qxl_destroy_primary_surface;
+    spice_qxl_create_primary_surface;
+    spice_qxl_reset_image_cache;
+    spice_qxl_reset_cursor;
+    spice_qxl_destroy_surface_wait;
+    spice_qxl_loadvm_commands;
 } SPICE_SERVER_0.8.1;
 
 SPICE_SERVER_0.10.0 {

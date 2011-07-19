@@ -104,6 +104,7 @@ struct QXLRect;
 struct QXLWorker {
     uint32_t minor_version;
     uint32_t major_version;
+    /* These calls are deprecated. Pleaes use the spice_qxl_* calls instead */
     void (*wakeup)(QXLWorker *worker);
     void (*oom)(QXLWorker *worker);
     void (*start)(QXLWorker *worker);
@@ -123,6 +124,25 @@ struct QXLWorker {
     void (*destroy_surface_wait)(QXLWorker *worker, uint32_t surface_id);
     void (*loadvm_commands)(QXLWorker *worker, struct QXLCommandExt *ext, uint32_t count);
 };
+
+void spice_qxl_wakeup(QXLInstance *instance);
+void spice_qxl_oom(QXLInstance *instance);
+void spice_qxl_start(QXLInstance *instance);
+void spice_qxl_stop(QXLInstance *instance);
+void spice_qxl_update_area(QXLInstance *instance, uint32_t surface_id,
+                   struct QXLRect *area, struct QXLRect *dirty_rects,
+                   uint32_t num_dirty_rects, uint32_t clear_dirty_region);
+void spice_qxl_add_memslot(QXLInstance *instance, QXLDevMemSlot *slot);
+void spice_qxl_del_memslot(QXLInstance *instance, uint32_t slot_group_id, uint32_t slot_id);
+void spice_qxl_reset_memslots(QXLInstance *instance);
+void spice_qxl_destroy_surfaces(QXLInstance *instance);
+void spice_qxl_destroy_primary_surface(QXLInstance *instance, uint32_t surface_id);
+void spice_qxl_create_primary_surface(QXLInstance *instance, uint32_t surface_id,
+                               QXLDevSurfaceCreate *surface);
+void spice_qxl_reset_image_cache(QXLInstance *instance);
+void spice_qxl_reset_cursor(QXLInstance *instance);
+void spice_qxl_destroy_surface_wait(QXLInstance *instance, uint32_t surface_id);
+void spice_qxl_loadvm_commands(QXLInstance *instance, struct QXLCommandExt *ext, uint32_t count);
 
 typedef struct QXLDrawArea {
     uint8_t *buf;
