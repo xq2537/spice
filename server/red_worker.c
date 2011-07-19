@@ -9900,6 +9900,10 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
     case RED_WORKER_MESSAGE_CREATE_PRIMARY_SURFACE:
     case RED_WORKER_MESSAGE_DESTROY_PRIMARY_SURFACE:
     case RED_WORKER_MESSAGE_DESTROY_SURFACE_WAIT:
+    case RED_WORKER_MESSAGE_RESET_CURSOR:
+    case RED_WORKER_MESSAGE_RESET_IMAGE_CACHE:
+    case RED_WORKER_MESSAGE_STOP:
+    case RED_WORKER_MESSAGE_LOADVM_COMMANDS:
         write_ready = 1;
     default:
         break;
@@ -9931,13 +9935,9 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         break;
     case RED_WORKER_MESSAGE_RESET_CURSOR:
         red_cursor_reset(worker);
-        message = RED_WORKER_MESSAGE_READY;
-        write_message(worker->channel, &message);
         break;
     case RED_WORKER_MESSAGE_RESET_IMAGE_CACHE:
         image_cache_reset(&worker->image_cache);
-        message = RED_WORKER_MESSAGE_READY;
-        write_message(worker->channel, &message);
         break;
     case RED_WORKER_MESSAGE_DESTROY_SURFACE_WAIT_ASYNC:
     case RED_WORKER_MESSAGE_DESTROY_SURFACE_WAIT:
@@ -9972,8 +9972,6 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
     case RED_WORKER_MESSAGE_STOP: {
         red_printf("stop");
         handle_dev_stop(worker);
-        message = RED_WORKER_MESSAGE_READY;
-        write_message(worker->channel, &message);
         break;
     }
     case RED_WORKER_MESSAGE_START:
@@ -10099,8 +10097,6 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
             }
             count--;
         }
-        message = RED_WORKER_MESSAGE_READY;
-        write_message(worker->channel, &message);
         break;
     }
     default:
