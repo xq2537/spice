@@ -54,13 +54,17 @@ global:
     spice_server_set_agent_copypaste;
 } SPICE_SERVER_0.8.0;
 
+SPICE_SERVER_0.8.2 {
+global:
+    spice_server_set_sasl;
+    spice_server_set_sasl_appname;
+} SPICE_SERVER_0.8.1;
+
 SPICE_SERVER_0.10.0 {
 global:
     spice_server_playback_set_mute;
     spice_server_playback_set_volume;
     spice_server_record_set_mute;
     spice_server_record_set_volume;
-    spice_server_set_sasl;
-    spice_server_set_sasl_appname;
-} SPICE_SERVER_0.8.1;
+} SPICE_SERVER_0.8.2;
 
