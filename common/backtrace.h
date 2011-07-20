@@ -19,6 +19,10 @@
 #ifndef BACKTRACE_H
 #define BACKTRACE_H
 
+#ifdef WIN32
+#define spice_backtrace()
+#else
 void spice_backtrace(void);
+#endif
 
 #endif // BACKTRACE_H
