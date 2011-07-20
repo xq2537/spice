@@ -45,8 +45,8 @@ enum {
 
 typedef struct ErrorItem {
     PipeItem base;
-    uint32_t reader_id;
-    uint32_t error;
+    VSCMsgHeader vheader;
+    VSCMsgError  error;
 } ErrorItem;
 
 typedef struct MsgItem {
@@ -286,6 +286,7 @@ static void smartcard_channel_send_data(RedChannel *channel, SpiceMarshaller *m,
     ASSERT(channel);
     ASSERT(vheader);
     red_channel_init_send_data(channel, SPICE_MSG_SMARTCARD_DATA, item);
+
     spice_marshaller_add_ref(m, (uint8_t*)vheader, sizeof(VSCMsgHeader));
     if (vheader->length > 0) {
         spice_marshaller_add_ref(m, (uint8_t*)(vheader+1), vheader->length);
@@ -293,32 +294,12 @@ static void smartcard_channel_send_data(RedChannel *channel, SpiceMarshaller *m,
     red_channel_begin_send_message(channel);
 }
 
-static void smartcard_channel_send_message(RedChannel *channel, SpiceMarshaller *m,
-    PipeItem *item, uint32_t reader_id, VSCMsgType type, uint8_t* data, uint32_t len)
-{
-    VSCMsgHeader mhHeader;
-    //SpiceMarshaller* m = msg->marshaller();
-
-    mhHeader.type = type;
-    mhHeader.length = len;
-    mhHeader.reader_id = reader_id;
-    //_marshallers->msg_SpiceMsgData(m, &msgdata);
-    //spice_marshaller_add(m, (uint8_t*)&mhHeader, sizeof(mhHeader));
-    //spice_marshaller_add(m, data, len);
-    //marshaller_outgoing_write(msg);
-
-    smartcard_channel_send_data(channel, m, item, &mhHeader);
-}
-
 static void smartcard_channel_send_error(
     SmartCardChannel *smartcard_channel, SpiceMarshaller *m, PipeItem *item)
 {
     ErrorItem* error_item = (ErrorItem*)item;
-    VSCMsgError error;
 
-    error.code = error_item->error;
-    smartcard_channel_send_message(&smartcard_channel->base, m, item,
-        error_item->reader_id, VSC_Error, (uint8_t*)&error, sizeof(error));
+    smartcard_channel_send_data(&smartcard_channel->base, m, item, &error_item->vheader);
 }
 
 static void smartcard_channel_send_msg(
@@ -372,8 +353,10 @@ static void smartcard_push_error(SmartCardChannel* channel, uint32_t reader_id, 
     ErrorItem *error_item = spice_new0(ErrorItem, 1);
 
     error_item->base.type = PIPE_ITEM_TYPE_ERROR;
-    error_item->reader_id = reader_id;
-    error_item->error = error;
+    error_item->vheader.reader_id = reader_id;
+    error_item->vheader.type = VSC_Error;
+    error_item->vheader.length = sizeof(error_item->error);
+    error_item->error.code = error;
     smartcard_channel_pipe_add_push(channel, &error_item->base);
 }
 
