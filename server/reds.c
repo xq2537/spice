@@ -4527,10 +4527,6 @@ static int do_spice_init(SpiceCoreInterface *core_interface)
 
     inputs_init();
 
-#ifdef USE_SMARTCARD
-    smartcard_channel_init();
-#endif
-
     reds->mouse_mode = SPICE_MOUSE_MODE_SERVER;
     atexit(reds_exit);
     return 0;

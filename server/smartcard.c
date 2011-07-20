@@ -77,6 +77,7 @@ static void smartcard_on_message_from_device(
     SmartCardChannel *smartcard_channel, VSCMsgHeader *vheader);
 static SmartCardDeviceState* smartcard_device_state_new();
 static void smartcard_device_state_free(SmartCardDeviceState* st);
+static void smartcard_register_channel(void);
 
 void smartcard_char_device_wakeup(SpiceCharDeviceInstance *sin)
 {
@@ -162,6 +163,7 @@ static int smartcard_char_device_add_to_readers(SpiceCharDeviceInstance *char_de
     }
     state->reader_id = g_smartcard_readers.num;
     g_smartcard_readers.sin[g_smartcard_readers.num++] = char_device;
+    smartcard_register_channel();
     return 0;
 }
 
@@ -520,10 +522,16 @@ static void smartcard_migrate(Channel *channel)
 {
 }
 
-void smartcard_channel_init()
+static void smartcard_register_channel(void)
 {
     Channel *channel;
+    static int registered = 0;
 
+    if (registered) {
+        return;
+    }
+    red_printf("registering smartcard channel");
+    registered = 1;
     channel = spice_new0(Channel, 1);
     channel->type = SPICE_CHANNEL_SMARTCARD;
     channel->link = smartcard_link;
@@ -531,4 +539,3 @@ void smartcard_channel_init()
     channel->migrate = smartcard_migrate;
     reds_register_channel(channel);
 }
-
