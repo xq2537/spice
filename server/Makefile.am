@@ -60,7 +60,7 @@ lib_LTLIBRARIES = libspice-server.la
 
 libspice_server_la_LDFLAGS =			\
 	-version-number $(SPICE_LT_VERSION)	\
-	-Wl,--version-script=spice-server.syms	\
+	-Wl,--version-script=$(top_srcdir)/server/spice-server.syms	\
 	-no-undefined				\
 	$(NULL)
 
@@ -150,6 +150,7 @@ libspice_serverinclude_HEADERS =		\
 EXTRA_DIST =					\
 	glz_encode_match_tmpl.c			\
 	glz_encode_tmpl.c			\
+	spice-server.syms			\
 	$(NULL)
 
 BUILT_SOURCES = $(spice_built_sources)

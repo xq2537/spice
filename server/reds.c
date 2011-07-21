@@ -60,7 +60,7 @@
 #include "demarshallers.h"
 #include "marshaller.h"
 #include "generated_marshallers.h"
-#include "server/char_device.h"
+#include "char_device.h"
 #ifdef USE_TUNNEL
 #include "red_tunnel_worker.h"
 #endif

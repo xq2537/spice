@@ -1,8 +1,8 @@
 NULL =
 
-INCLUDES =                          \
-	-I..                            \
-	-I../../common                  \
+INCLUDES =                              \
+	-I$(top_srcdir)/server          \
+	-I$(top_srcdir)/common          \
 	$(PROTOCOL_CFLAGS)              \
 	$(SPICE_NONPKGCONFIG_CFLAGS)    \
 	$(NULL)

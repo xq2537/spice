@@ -17,9 +17,9 @@
 */
 #include <arpa/inet.h>
 
-#include "server/char_device.h"
-#include "server/red_channel.h"
-#include "server/smartcard.h"
+#include "char_device.h"
+#include "red_channel.h"
+#include "smartcard.h"
 #include "vscard_common.h"
 
 #define SMARTCARD_MAX_READERS 10

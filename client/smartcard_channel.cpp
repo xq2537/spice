@@ -16,7 +16,7 @@
 */
 #include <spice/enums.h>
 
-#include "client/red_client.h"
+#include "red_client.h"
 #include "mutex.h"
 
 extern "C" {
