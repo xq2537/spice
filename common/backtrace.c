@@ -28,7 +28,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include "common/spice_common.h"
+#include "spice_common.h"
 
 #define GSTACK_PATH "/usr/bin/gstack"
 
