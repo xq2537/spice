@@ -262,6 +262,7 @@ public:
 
     void set_mm_time(uint32_t time);
     uint32_t get_mm_time();
+    void send_main_attach_channels(void);
 
 protected:
     virtual void on_connecting();
@@ -321,6 +322,7 @@ private:
     int _agent_reply_wait_type;
 
     bool _aborting;
+    bool _msg_attach_channels_sent;
 
     bool _agent_connected;
     bool _agent_mon_config_sent;

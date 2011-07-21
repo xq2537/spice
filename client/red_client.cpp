@@ -357,6 +357,7 @@ RedClient::RedClient(Application& application)
     , _auto_display_res (false)
     , _agent_reply_wait_type (-1)
     , _aborting (false)
+    , _msg_attach_channels_sent(false)
     , _agent_connected (false)
     , _agent_mon_config_sent (false)
     , _agent_disp_config_sent (false)
@@ -967,16 +968,12 @@ void RedClient::handle_init(RedPeer::InMessage* message)
         if (_auto_display_res) {
            send_agent_monitors_config();
         }
-        if (_auto_display_res || !_display_setting.is_empty()) {
-            _application.activate_interval_timer(*_agent_timer, AGENT_TIMEOUT);
-        } else {
-            post_message(new Message(SPICE_MSGC_MAIN_ATTACH_CHANNELS));
-        }
+        _application.activate_interval_timer(*_agent_timer, AGENT_TIMEOUT);
     } else {
         if (_auto_display_res || !_display_setting.is_empty()) {
             LOG_WARN("no agent running, display options have been ignored");
         }
-        post_message(new Message(SPICE_MSGC_MAIN_ATTACH_CHANNELS));
+        send_main_attach_channels();
     }
 }
 
@@ -1023,6 +1020,15 @@ void RedClient::handle_agent_disconnected(RedPeer::InMessage* message)
     _agent_connected = false;
 }
 
+void RedClient::send_main_attach_channels(void)
+{
+    if (_msg_attach_channels_sent)
+        return;
+
+    post_message(new Message(SPICE_MSGC_MAIN_ATTACH_CHANNELS));
+    _msg_attach_channels_sent = true;
+}
+
 void RedClient::on_agent_announce_capabilities(
     VDAgentAnnounceCapabilities* caps, uint32_t msg_size)
 {
@@ -1053,7 +1059,7 @@ void RedClient::on_agent_announce_capabilities(
         if (!_display_setting.is_empty()) {
             LOG_WARN("display options have been requested, but the agent doesn't support these options");
         }
-        post_message(new Message(SPICE_MSGC_MAIN_ATTACH_CHANNELS));
+        send_main_attach_channels();
         _application.deactivate_interval_timer(*_agent_timer);
     }
 }
@@ -1073,7 +1079,7 @@ void RedClient::on_agent_reply(VDAgentReply* reply)
     case VD_AGENT_MONITORS_CONFIG:
     case VD_AGENT_DISPLAY_CONFIG:
         if (_agent_reply_wait_type == reply->type) {
-            post_message(new Message(SPICE_MSGC_MAIN_ATTACH_CHANNELS));
+            send_main_attach_channels();
             _application.deactivate_interval_timer(*_agent_timer);
             _agent_reply_wait_type = -1;
         }
