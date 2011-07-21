@@ -3249,7 +3249,7 @@ static void spice_server_char_device_remove_interface(SpiceBaseInstance *sin)
 
     red_printf("remove CHAR_DEVICE %s", char_device->subtype);
     if (strcmp(char_device->subtype, SUBTYPE_VDAGENT) == 0) {
-        if (vdagent && reds->agent_state.connected) {
+        if (vdagent) {
             reds_agent_remove();
         }
     }
