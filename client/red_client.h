@@ -114,8 +114,14 @@ public:
     }
 };
 
+class RedClient;
+
 class AgentTimer: public Timer {
+public:
     virtual void response(AbstractProcessLoop& events_loop);
+    AgentTimer(RedClient *client) : _client(client) {};
+private:
+    RedClient *_client;
 };
 
 typedef std::map< int, RedPeer::ConnectionOptions::Type> PeerConnectionOptMap;

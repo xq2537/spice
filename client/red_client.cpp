@@ -337,7 +337,9 @@ void AgentTimer::response(AbstractProcessLoop& events_loop)
 {
     Application* app = static_cast<Application*>(events_loop.get_owner());
     app->deactivate_interval_timer(this);
-    THROW_ERR(SPICEC_ERROR_CODE_AGENT_TIMEOUT, "vdagent timeout");
+
+    LOG_WARN("timeout while waiting for agent response");
+    _client->send_main_attach_channels();
 }
 
 class MainChannelLoop: public MessageHandlerImp<RedClient, SPICE_CHANNEL_MAIN> {
@@ -368,7 +370,7 @@ RedClient::RedClient(Application& application)
     , _agent_out_msg_size (0)
     , _agent_out_msg_pos (0)
     , _agent_tokens (0)
-    , _agent_timer (new AgentTimer())
+    , _agent_timer (new AgentTimer(this))
     , _agent_caps_size(0)
     , _agent_caps(NULL)
     , _migrate (*this)
