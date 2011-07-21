@@ -62,6 +62,8 @@ public:
     void attach_layer(ScreenLayer& layer);
     void detach_layer(ScreenLayer& layer);
     void on_layer_changed(ScreenLayer& layer);
+    /* When resizing on full screen mode, the monitor must be configured 
+     * correctly before calling resize*/
     void resize(int width, int height);
     void set_name(const std::string& name);
     uint64_t invalidate(const SpiceRect& rect, bool urgent);

@@ -186,11 +186,7 @@ void RedScreen::resize(int width, int height)
     _size.y = height;
     create_composit_area();
     if (_full_screen) {
-        bool cuptur = _owner.rearrange_monitors(*this);
         __show_full_screen();
-        if (cuptur) {
-            capture_mouse();
-        }
     } else {
         bool cuptur = is_mouse_captured();
         if (cuptur) {
