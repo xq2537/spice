@@ -1,3 +1,14 @@
+Major changes in 0.8.2:
+=======================
+* server: sasl support (fdo bz 34795)
+* server: support guest async io
+* server: support guest suspend and hibernate
+* server: add symbol versioning to libspice-server.so
+* server: prevent running an old spice-server with a newer qemu
+* server Bug fixes (RHBZ): 714801, 713474, 674532, 653545
+* client Bug fixes (RHBZ): 712938, 710461, 673973, 667689
+* require spice-protocol >= 0.8.1
+
 Major changes in 0.8.1:
 =======================
 * client: Fix handling of --smartcard-db option
