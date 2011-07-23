@@ -1,3 +1,65 @@
+Major changes in 0.9.0:
+* !Development Release!
+* volume synchronization between client and guest (client->guest only)
+* turbo-jpeg used to avoid expensive color conversion in mjpeg encoder.
+* Cleanups
+
+Major changes in 0.8.2:
+=======================
+* server: sasl support (fdo bz 34795)
+* server: support guest async io
+* server: support guest suspend and hibernate
+* server: add symbol versioning to libspice-server.so
+* server: prevent running an old spice-server with a newer qemu
+* server Bug fixes (RHBZ): 714801, 713474, 674532, 653545
+* client Bug fixes (RHBZ): 712938, 710461, 673973, 667689
+* require spice-protocol >= 0.8.1
+
+Major changes in 0.8.1:
+=======================
+* client: Fix handling of --smartcard-db option
+* client: Add --version option
+* spicec-x11: Work around a bug in xsel
+* spicec-x11: Don't crash on apps sending bad atoms as TARGETS
+* server: Make copy paste support configurable
+* server: Various fixes to agent <-> client data handling
+
+Major changes in 0.8.0:
+=======================
+* client: exit nicely for --controller with no SPICE_XPI_SOCKET (rhbz#644292)
+* client-x11: Use _exit rather then exit on X errors (rhbz#680763)
+* client-x11: Fix keyb modifiers not syncing from guest to client (rhbz#679467)
+* server: fix segfault on migration
+
+Major changes in 0.7.3:
+=======================
+* Suport building with (and requires) libcacard-0.1.2
+* Fixes for building with gcc-4.6
+* Server: Drop unnecessary X11 and alsa requires from spice-server.pc
+* Client: fix minor for old migration support
+* Client: Remove spice-client watermark (rhbz#662450)
+
+Major changes in 0.7.2:
+=======================
+* cmd-line-parser: fix wrong reporting of bad argument in --bla=val case
+* Server: do not depend on libcacard and CEGUI (when enabled for the client)
+* Server: send 1 instead of 4 as topdown flag "true" value
+* Client: accept 4 as top down flag value for compatibility with older servers
+* Client: stop blinking keyboard when out of focus
+* Client: log subject-host mismatch, and raise ssl warnings to errors
+
+Major changes in 0.7.1:
+=======================
+* Brown paper bag release
+* Update SPICE_SERVER_VERSION
+* Include server/tests/test_util.h in the make dist generated tarbals, so
+  that they actually compile
+
+Major changes in 0.7.0:
+=======================
+* Many small bugfixes to the spice client
+* Support for smartcards (CAC)
+
 Major changes in 0.6.3:
 =======================
 Major changes in this release:
