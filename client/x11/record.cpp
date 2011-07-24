@@ -182,7 +182,7 @@ bool WaveRecorder::init(uint32_t sampels_per_sec,
     }
 
     if ((err = snd_pcm_sw_params_set_start_threshold(_pcm, _sw_params, frame_size)) < 0) {
-        LOG_ERROR("cannot set start treshold %s", snd_strerror(err));
+        LOG_ERROR("cannot set start threshold %s", snd_strerror(err));
         return false;
     }
 
