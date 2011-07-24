@@ -41,7 +41,7 @@ CmdLineParser::Option::Option(int in_id, const std::string& in_name, char in_sho
     , help (in_help)
     , optional (true)
     , is_set (false)
-    , seperator (0)
+    , separator (0)
 {
 }
 
@@ -52,7 +52,7 @@ CmdLineParser::CmdLineParser(std::string description, bool allow_positional_args
     , _argv (NULL)
     , _multi_args (NULL)
     , _multi_next (NULL)
-    , _multi_seperator (0)
+    , _multi_separator (0)
     , _positional_args (allow_positional_args)
     , _done (false)
 {
@@ -136,14 +136,14 @@ void CmdLineParser::add(int id, const std::string& name, const std::string& help
                 arg_name);
 }
 
-void CmdLineParser::set_multi(int id, char seperator)
+void CmdLineParser::set_multi(int id, char separator)
 {
     if (_argv) {
         THROW("unexpected");
     }
 
-    if (!ispunct(seperator)) {
-        THROW("invalid seperator");
+    if (!ispunct(separator)) {
+        THROW("invalid separator");
     }
 
     Option* opt = find(id);
@@ -156,7 +156,7 @@ void CmdLineParser::set_multi(int id, char seperator)
         THROW("can't set multi for option without argument");
     }
 
-    opt->seperator = seperator;
+    opt->separator = separator;
 }
 
 void CmdLineParser::set_required(int id)
@@ -292,15 +292,15 @@ void CmdLineParser::begin(int argc, char** argv)
     build();
 }
 
-char* CmdLineParser::start_multi(char *optarg, char seperator)
+char* CmdLineParser::start_multi(char *optarg, char separator)
 {
     if (!optarg) {
         return NULL;
     }
     _multi_args = new char[strlen(optarg) + 1];
-    _multi_seperator = seperator;
+    _multi_separator = separator;
     strcpy(_multi_args, optarg);
-    if ((_multi_next = strchr(_multi_args, _multi_seperator))) {
+    if ((_multi_next = strchr(_multi_args, _multi_separator))) {
         *(_multi_next++) = 0;
     }
     return _multi_args;
@@ -309,13 +309,13 @@ char* CmdLineParser::start_multi(char *optarg, char seperator)
 char* CmdLineParser::next_multi()
 {
     if (!_multi_next) {
-        _multi_seperator = 0;
+        _multi_separator = 0;
         delete[] _multi_args;
         _multi_args = NULL;
         return NULL;
     }
     char* ret = _multi_next;
-    if ((_multi_next = strchr(_multi_next, _multi_seperator))) {
+    if ((_multi_next = strchr(_multi_next, _multi_separator))) {
         *(_multi_next++) = 0;
     }
 
@@ -360,8 +360,8 @@ int CmdLineParser::get_option(char** val)
         }
 #endif
 
-        if (opt_obj->seperator) {
-            *val = start_multi(optarg, opt_obj->seperator);
+        if (opt_obj->separator) {
+            *val = start_multi(optarg, opt_obj->separator);
         } else {
             *val = optarg;
         }
@@ -409,8 +409,8 @@ int CmdLineParser::get_option(char** val)
             *val = NULL;
             return OPTION_ERROR;
         }
-        if (opt_obj->seperator) {
-            *val = start_multi(optarg, opt_obj->seperator);
+        if (opt_obj->separator) {
+            *val = start_multi(optarg, opt_obj->separator);
         } else {
             *val = optarg;
         }
@@ -466,8 +466,8 @@ void CmdLineParser::show_help()
         }
 
         if (opt->type == OPTIONAL_ARGUMENT || opt->type == REQUIRED_ARGUMENT) {
-            if (opt->seperator) {
-                os << opt->arg_name << opt->seperator << opt->arg_name << "...";
+            if (opt->separator) {
+                os << opt->arg_name << opt->separator << opt->arg_name << "...";
             } else {
                 os << opt->arg_name;
             }

@@ -36,7 +36,7 @@ public:
 
     void add(int id, const std::string& name, const std::string& help,
              const std::string& arg_name, bool required_arg, char short_name = 0);
-    void set_multi(int id, char seperator);
+    void set_multi(int id, char separator);
     void set_required(int id);
 
     void begin(int argc, char** argv);
@@ -64,7 +64,7 @@ private:
 
     void build();
 
-    char* start_multi(char *optarg, char seperator);
+    char* start_multi(char *optarg, char separator);
     char* next_multi();
 
 private:
@@ -83,7 +83,7 @@ private:
         std::string help;
         bool optional;
         bool is_set;
-        char seperator;
+        char separator;
     };
 
     std::string _description;
@@ -96,7 +96,7 @@ private:
     char** _argv;
     char* _multi_args;
     char* _multi_next;
-    char _multi_seperator;
+    char _multi_separator;
     bool _positional_args;
     bool _done;
 };

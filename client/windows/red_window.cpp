@@ -899,7 +899,7 @@ void RedWindow::on_pointer_leave()
     }
 }
 
-static void insert_seperator(HMENU menu)
+static void insert_separator(HMENU menu)
 {
     MENUITEMINFO item_info;
     item_info.cbSize = sizeof(item_info);
@@ -1004,7 +1004,7 @@ static void insert_menu(Menu* menu, HMENU native, CommandMap& _commands_map)
             break;
         }
         case Menu::MENU_ITEM_TYPE_SEPARATOR:
-            insert_seperator(native);
+            insert_separator(native);
             break;
         case Menu::MENU_ITEM_TYPE_INVALID:
             return;
@@ -1036,7 +1036,7 @@ void RedWindow::set_menu(Menu* menu)
     }
     _menu = menu->ref();
     _sys_menu = GetSystemMenu(_win, FALSE);
-    insert_seperator(_sys_menu);
+    insert_separator(_sys_menu);
     insert_menu(_menu, _sys_menu, _commands_map);
 }
 
