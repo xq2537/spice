@@ -153,7 +153,6 @@ struct SpiceCharDeviceState vdagent_char_device_state = {
 };
 
 typedef struct VDIPortState {
-    int connected;
     uint32_t plug_generation;
 
     uint32_t num_tokens;
@@ -557,6 +556,7 @@ static void reds_mig_cleanup()
 static void reds_reset_vdp()
 {
     VDIPortState *state = &reds->agent_state;
+    SpiceCharDeviceInterface *sif;
 
     while (!ring_is_empty(&state->write_queue)) {
         VDIPortBuf *buf;
@@ -581,6 +581,11 @@ static void reds_reset_vdp()
        messages written by the client */
     state->write_filter.result = AGENT_MSG_FILTER_DISCARD;
     state->write_filter.discard_all = TRUE;
+
+    sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceCharDeviceInterface, base);
+    if (sif->state) {
+        sif->state(vdagent, 0);
+    }
 }
 
 static int reds_main_channel_connected(void)
@@ -605,15 +610,6 @@ void reds_disconnect()
        messages read from the agent */
     reds->agent_state.read_filter.result = AGENT_MSG_FILTER_DISCARD;
     reds->agent_state.read_filter.discard_all = TRUE;
-
-    if (reds->agent_state.connected) {
-        SpiceCharDeviceInterface *sif;
-        sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceCharDeviceInterface, base);
-        reds->agent_state.connected = 0;
-        if (sif->state) {
-            sif->state(vdagent, reds->agent_state.connected);
-        }
-    }
 
     reds_shatdown_channels();
     reds->main_channel->shutdown(reds->main_channel);
@@ -711,31 +707,16 @@ static void reds_update_mouse_mode()
 
 static void reds_agent_remove()
 {
-    SpiceCharDeviceInstance *sin = vdagent;
-    SpiceCharDeviceInterface *sif;
-
     if (!reds->mig_target) {
         reds_reset_vdp();
     }
 
-    reds->agent_state.connected = 0;
     vdagent = NULL;
     reds_update_mouse_mode();
 
-    if (!reds_main_channel_connected() || !sin) {
-        return;
+    if (reds_main_channel_connected() && !reds->mig_target) {
+        main_channel_push_agent_disconnected(reds->main_channel);
     }
-
-    sif = SPICE_CONTAINEROF(sin->base.sif, SpiceCharDeviceInterface, base);
-    if (sif->state) {
-        sif->state(sin, reds->agent_state.connected);
-    }
-
-    if (reds->mig_target) {
-        return;
-    }
-
-    main_channel_push_agent_disconnected(reds->main_channel);
 }
 
 static void reds_push_tokens()
@@ -1105,7 +1086,7 @@ void reds_marshall_migrate_data_item(SpiceMarshaller *m, MainMigrateData *data)
 
     data->version = MAIN_CHANNEL_MIG_DATA_VERSION;
 
-    data->agent_connected = !!state->connected;
+    data->agent_connected = !!vdagent;
     data->client_agent_started = !state->write_filter.discard_all;
     data->num_client_tokens = state->num_client_tokens;
     data->send_tokens = ~0;
@@ -1324,13 +1305,13 @@ void reds_on_main_receive_migrate_data(MainMigrateData *data, uint8_t *end)
     state->num_tokens = REDS_AGENT_WINDOW_SIZE - state->num_client_tokens;
 
     if (!data->agent_connected) {
-        if (state->connected) {
+        if (vdagent) {
             main_channel_push_agent_connected(reds->main_channel);
         }
         return;
     }
 
-    if (!state->connected) {
+    if (!vdagent) {
         main_channel_push_agent_disconnected(reds->main_channel);
         return;
     }
@@ -1561,13 +1542,7 @@ static void reds_handle_main_link(RedLinkInfo *link)
     free(link_mess);
 
     if (vdagent) {
-        SpiceCharDeviceInterface *sif;
-        sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceCharDeviceInterface, base);
-        reds->agent_state.connected = 1;
         reds->agent_state.read_filter.discard_all = FALSE;
-        if (sif->state) {
-            sif->state(vdagent, reds->agent_state.connected);
-        }
         reds->agent_state.plug_generation++;
     }
 
@@ -3178,22 +3153,22 @@ static void attach_to_red_agent(SpiceCharDeviceInstance *sin)
 
     vdagent = sin;
     reds_update_mouse_mode();
+
+    sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceCharDeviceInterface, base);
+    if (sif->state) {
+        sif->state(vdagent, 1);
+    }
+
     if (!reds_main_channel_connected()) {
         return;
     }
-    sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceCharDeviceInterface, base);
-    state->connected = 1;
+
     state->read_filter.discard_all = FALSE;
-    if (sif->state) {
-        sif->state(vdagent, state->connected);
-    }
     reds->agent_state.plug_generation++;
 
-    if (reds->mig_target) {
-        return;
+    if (!reds->mig_target) {
+        main_channel_push_agent_connected(reds->main_channel);
     }
-
-    main_channel_push_agent_connected(reds->main_channel);
 }
 
 SPICE_GNUC_VISIBLE void spice_server_char_device_wakeup(SpiceCharDeviceInstance* sin)
