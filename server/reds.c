@@ -3178,12 +3178,14 @@ SPICE_GNUC_VISIBLE void spice_server_char_device_wakeup(SpiceCharDeviceInstance*
 
 #define SUBTYPE_VDAGENT "vdagent"
 #define SUBTYPE_SMARTCARD "smartcard"
+#define SUBTYPE_USBREDIR "usbredir"
 
 const char *spice_server_char_device_recognized_subtypes_list[] = {
     SUBTYPE_VDAGENT,
 #ifdef USE_SMARTCARD
     SUBTYPE_SMARTCARD,
 #endif
+    SUBTYPE_USBREDIR,
     NULL,
 };
 
@@ -3214,6 +3216,11 @@ static int spice_server_char_device_add_interface(SpiceServer *s,
         }
     }
 #endif
+    else if (strcmp(char_device->subtype, SUBTYPE_USBREDIR) == 0) {
+        if (usbredir_device_connect(char_device) == -1) {
+            return -1;
+        }
+    }
     return 0;
 }
 
@@ -3233,6 +3240,9 @@ static void spice_server_char_device_remove_interface(SpiceBaseInstance *sin)
         smartcard_device_disconnect(char_device);
     }
 #endif
+    else if (strcmp(char_device->subtype, SUBTYPE_USBREDIR) == 0) {
+        usbredir_device_disconnect(char_device);
+    }
 }
 
 SPICE_GNUC_VISIBLE int spice_server_add_interface(SpiceServer *s,
