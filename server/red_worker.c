@@ -2417,8 +2417,8 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
 
     ASSERT(drawable->red_drawable->type == QXL_DRAW_COPY);
     src_rect = &drawable->red_drawable->u.copy.src_area;
-    stream_width = SPICE_ALIGN(src_rect->right - src_rect->left, 2);
-    stream_height = SPICE_ALIGN(src_rect->bottom - src_rect->top, 2);
+    stream_width = src_rect->right - src_rect->left;
+    stream_height = src_rect->bottom - src_rect->top;
 
     stream->mjpeg_encoder = mjpeg_encoder_new(stream_width, stream_height);
 
@@ -7329,10 +7329,10 @@ static int encode_frame (RedWorker *worker, const SpiceRect *src,
         red_get_image_line(worker, chunks, &offset, &chunk, image_stride);
     }
 
-    const int image_height = src->bottom - src->top;
-    const int image_width = src->right - src->left;
+    const unsigned int stream_height = src->bottom - src->top;
+    const unsigned int stream_width = src->right - src->left;
 
-    for (i = 0; i < image_height; i++) {
+    for (i = 0; i < stream_height; i++) {
         uint8_t *src_line =
             (uint8_t *)red_get_image_line(worker, chunks, &offset, &chunk, image_stride);
 
@@ -7341,7 +7341,7 @@ static int encode_frame (RedWorker *worker, const SpiceRect *src,
         }
 
         src_line += src->left * mjpeg_encoder_get_bytes_per_pixel(stream->mjpeg_encoder);
-        if (mjpeg_encoder_encode_scanline(stream->mjpeg_encoder, src_line, image_width) == 0)
+        if (mjpeg_encoder_encode_scanline(stream->mjpeg_encoder, src_line, stream_width) == 0)
             return FALSE;
     }
 
@@ -7705,8 +7705,8 @@ static void red_display_marshall_stream_start(DisplayChannel *display_channel,
 
     stream_create.src_width = stream->width;
     stream_create.src_height = stream->height;
-    stream_create.stream_width = SPICE_ALIGN(stream_create.src_width, 2);
-    stream_create.stream_height = SPICE_ALIGN(stream_create.src_height, 2);
+    stream_create.stream_width = stream_create.src_width;
+    stream_create.stream_height = stream_create.src_height;
     stream_create.dest = stream->dest_area;
 
     if (stream->current) {
