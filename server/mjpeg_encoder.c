@@ -207,6 +207,7 @@ int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
     encoder->cinfo.input_components = 3;
     switch (format) {
     case SPICE_BITMAP_FMT_32BIT:
+    case SPICE_BITMAP_FMT_RGBA:
         encoder->bytes_per_pixel = 4;
 #ifdef JCS_EXTENSIONS
         encoder->cinfo.in_color_space   = JCS_EXT_BGRX;
