@@ -968,9 +968,14 @@ void RedClient::handle_init(RedPeer::InMessage* message)
         post_message(msg);
         send_agent_announce_capabilities(true);
         if (_auto_display_res) {
-           send_agent_monitors_config();
+            send_agent_monitors_config();
         }
-        _application.activate_interval_timer(*_agent_timer, AGENT_TIMEOUT);
+
+        if (_auto_display_res || !_display_setting.is_empty()) {
+            _application.activate_interval_timer(*_agent_timer, AGENT_TIMEOUT);
+        } else {
+            send_main_attach_channels();
+        }
     } else {
         if (_auto_display_res || !_display_setting.is_empty()) {
             LOG_WARN("no agent running, display options have been ignored");
