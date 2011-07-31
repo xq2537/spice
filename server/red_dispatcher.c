@@ -53,7 +53,7 @@ struct RedDispatcher {
     RedDispatcher *next;
     RedWorkerMessage async_message;
     pthread_mutex_t  async_lock;
-    QXLDevSurfaceCreate *surface_create;
+    QXLDevSurfaceCreate surface_create;
 };
 
 typedef struct RedWorkeState {
@@ -379,7 +379,7 @@ static void qxl_worker_destroy_primary_surface(QXLWorker *qxl_worker, uint32_t s
 
 static void red_dispatcher_create_primary_surface_complete(RedDispatcher *dispatcher)
 {
-    QXLDevSurfaceCreate *surface = dispatcher->surface_create;
+    QXLDevSurfaceCreate *surface = &dispatcher->surface_create;
 
     dispatcher->x_res = surface->width;
     dispatcher->y_res = surface->height;
@@ -387,7 +387,7 @@ static void red_dispatcher_create_primary_surface_complete(RedDispatcher *dispat
     dispatcher->primary_active = TRUE;
 
     update_client_mouse_allowed();
-    dispatcher->surface_create = NULL;
+    memset(&dispatcher->surface_create, sizeof(QXLDevSurfaceCreate), 0);
 }
 
 static void
@@ -405,7 +405,7 @@ red_dispatcher_create_primary_surface(RedDispatcher *dispatcher, uint32_t surfac
     } else {
         message = RED_WORKER_MESSAGE_CREATE_PRIMARY_SURFACE;
     }
-    dispatcher->surface_create = surface;
+    dispatcher->surface_create = *surface;
 
     write_message(dispatcher->channel, &message);
     if (async) {
