@@ -320,6 +320,7 @@ typedef struct CursorItem {
 typedef struct CursorPipeItem {
     PipeItem base;
     CursorItem *cursor_item;
+    int refs;
 } CursorPipeItem;
 
 typedef struct LocalCursor {
@@ -4519,14 +4520,36 @@ static CursorItem *get_cursor_item(RedWorker *worker, RedCursorCmd *cmd, uint32_
     return cursor_item;
 }
 
+static CursorPipeItem *ref_cursor_pipe_item(CursorPipeItem *item)
+{
+    ASSERT(item);
+    item->refs++;
+    return item;
+}
+
 static PipeItem *new_cursor_pipe_item(RedChannelClient *rcc, void *data, int num)
 {
     CursorPipeItem *item = spice_malloc0(sizeof(CursorPipeItem));
 
     red_channel_pipe_item_init(rcc->channel, &item->base, PIPE_ITEM_TYPE_CURSOR);
+    item->refs = 1;
     item->cursor_item = data;
     item->cursor_item->refs++;
     return &item->base;
+}
+
+static void put_cursor_pipe_item(CursorChannelClient *ccc, CursorPipeItem *pipe_item)
+{
+    ASSERT(pipe_item);
+
+    if (--pipe_item->refs) {
+        return;
+    }
+
+    ASSERT(!pipe_item_is_linked(&pipe_item->base));
+
+    red_release_cursor(ccc->common.worker, pipe_item->cursor_item);
+    free(pipe_item);
 }
 
 static void qxl_process_cursor(RedWorker *worker, RedCursorCmd *cursor_cmd, uint32_t group_id)
@@ -9550,6 +9573,8 @@ static void display_channel_client_release_item_after_push(DisplayChannelClient 
     }
 }
 
+// TODO: share code between before/after_push since most of the items need the same
+// release
 static void display_channel_client_release_item_before_push(DisplayChannelClient *dcc,
                                                             PipeItem *item)
 {
@@ -9813,16 +9838,23 @@ static void on_new_cursor_channel(RedWorker *worker, RedChannelClient *rcc)
 
 static void cursor_channel_hold_pipe_item(RedChannelClient *rcc, PipeItem *item)
 {
+    CursorPipeItem *cursor_pipe_item;
     ASSERT(item);
-    ((CursorItem *)item)->refs++;
+    cursor_pipe_item = SPICE_CONTAINEROF(item, CursorPipeItem, base);
+    ref_cursor_pipe_item(cursor_pipe_item);
 }
 
+// TODO: share code between before/after_push since most of the items need the same
+// release
 static void cursor_channel_client_release_item_before_push(CursorChannelClient *ccc,
                                                            PipeItem *item)
 {
     switch (item->type) {
-    case PIPE_ITEM_TYPE_CURSOR:
+    case PIPE_ITEM_TYPE_CURSOR: {
+        CursorPipeItem *cursor_pipe_item = SPICE_CONTAINEROF(item, CursorPipeItem, base);
+        put_cursor_pipe_item(ccc, cursor_pipe_item);
         break;
+    }
     case PIPE_ITEM_TYPE_INVAL_ONE:
     case PIPE_ITEM_TYPE_VERB:
     case PIPE_ITEM_TYPE_MIGRATE:
@@ -9841,8 +9873,7 @@ static void cursor_channel_client_release_item_after_push(CursorChannelClient *c
     switch (item->type) {
         case PIPE_ITEM_TYPE_CURSOR: {
             CursorPipeItem *cursor_pipe_item = SPICE_CONTAINEROF(item, CursorPipeItem, base);
-            red_release_cursor(ccc->common.worker, cursor_pipe_item->cursor_item);
-            free(cursor_pipe_item);
+            put_cursor_pipe_item(ccc, cursor_pipe_item);
             break;
         }
         default:
