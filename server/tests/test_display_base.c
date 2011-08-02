@@ -235,7 +235,7 @@ static uint8_t primary_surface[HEIGHT * WIDTH * 4];
 
 static void create_test_primary_surface(QXLWorker *worker)
 {
-    QXLDevSurfaceCreate surface;
+    QXLDevSurfaceCreate surface = { 0, };
 
     surface.format     = SPICE_SURFACE_FMT_32_xRGB;
     surface.width      = WIDTH;
