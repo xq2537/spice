@@ -8255,6 +8255,8 @@ static void red_display_marshall_stream_start(RedChannelClient *rcc,
         stream_create.clip.rects = &clip_rects;
     }
 
+    stream_create.stamp = 0;
+
     spice_marshall_msg_display_stream_create(base_marshaller, &stream_create);
 }
 
