@@ -541,6 +541,7 @@ void RedClient::connect(bool wait_main_disconnect)
 void RedClient::disconnect()
 {
     _migrate.abort();
+    _msg_attach_channels_sent = false;
     RedChannel::disconnect();
 }
 
