@@ -32,9 +32,4 @@ uint32_t red_dispatcher_qxl_ram_size(void);
 int red_dispatcher_qxl_count(void);
 void red_dispatcher_async_complete(struct RedDispatcher*, uint64_t);
 
-void red_dispatcher_disconnect_display_client(struct RedDispatcher *dispatcher,
-                                      struct RedChannelClient *rcc);
-void red_dispatcher_disconnect_cursor_client(struct RedDispatcher *dispatcher,
-                                      struct RedChannelClient *rcc);
-
 #endif

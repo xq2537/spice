@@ -22,6 +22,7 @@
 #include <arpa/inet.h>
 
 #include <vscard_common.h>
+#include "server/reds.h"
 #include "server/char_device.h"
 #include "server/red_channel.h"
 #include "server/smartcard.h"
@@ -78,7 +79,7 @@ static void smartcard_on_message_from_device(
     RedChannelClient *rcc, VSCMsgHeader *vheader);
 static SmartCardDeviceState* smartcard_device_state_new();
 static void smartcard_device_state_free(SmartCardDeviceState* st);
-static void smartcard_register_channel(void);
+static void smartcard_init(void);
 
 void smartcard_char_device_wakeup(SpiceCharDeviceInstance *sin)
 {
@@ -169,7 +170,7 @@ static int smartcard_char_device_add_to_readers(SpiceCharDeviceInstance *char_de
     }
     state->reader_id = g_smartcard_readers.num;
     g_smartcard_readers.sin[g_smartcard_readers.num++] = char_device;
-    smartcard_register_channel();
+    smartcard_init();
     return 0;
 }
 
@@ -274,7 +275,6 @@ static int smartcard_channel_client_config_socket(RedChannelClient *rcc)
 static uint8_t *smartcard_channel_alloc_msg_rcv_buf(RedChannelClient *rcc,
                                                     SpiceDataHeader *msg_header)
 {
-    //red_printf("allocing %d bytes", msg_header->size);
     return spice_malloc(msg_header->size);
 }
 
@@ -337,10 +337,9 @@ static void smartcard_channel_release_pipe_item(RedChannelClient *rcc,
     free(item);
 }
 
-static void smartcard_channel_client_disconnect(RedChannelClient *rcc)
+static void smartcard_channel_on_disconnect(RedChannelClient *rcc)
 {
     smartcard_readers_detach_all(rcc);
-    red_channel_client_destroy(rcc);
 }
 
 /* this is called from both device input and client input. since the device is
@@ -487,63 +486,55 @@ static void smartcard_channel_hold_pipe_item(RedChannelClient *rcc, PipeItem *it
 {
 }
 
-static void smartcard_link(Channel *channel, RedClient *client,
+static void smartcard_connect(RedChannel *channel, RedClient *client,
                         RedsStream *stream, int migration,
                         int num_common_caps, uint32_t *common_caps,
                         int num_caps, uint32_t *caps)
 {
     RedChannelClient *rcc;
-    ChannelCbs channel_cbs;
 
-    if (!channel->data) {
-        memset(&channel_cbs, sizeof(channel_cbs), 0);
-        channel_cbs.config_socket = smartcard_channel_client_config_socket;
-        channel_cbs.disconnect = smartcard_channel_client_disconnect;
-        channel_cbs.send_item = smartcard_channel_send_item;
-        channel_cbs.hold_item = smartcard_channel_hold_pipe_item;
-        channel_cbs.release_item = smartcard_channel_release_pipe_item;
-        channel_cbs.alloc_recv_buf = smartcard_channel_alloc_msg_rcv_buf;
-        channel_cbs.release_recv_buf = smartcard_channel_release_msg_rcv_buf;
-        channel->data =
-            red_channel_create(sizeof(SmartCardChannel),
-                                        core, migration,
-                                        FALSE /* handle_acks */,
-                                        smartcard_channel_handle_message,
-                                        &channel_cbs);
-        if (channel->data) {
-            red_channel_init_outgoing_messages_window((RedChannel*)channel->data);
-        } else {
-            red_printf("ERROR: smartcard channel creation failed");
-            return;
-        }
-    }
-    rcc = red_channel_client_create(sizeof(RedChannelClient),
-                                    (RedChannel*)channel->data, client, stream);
+    rcc = red_channel_client_create(sizeof(RedChannelClient), channel, client, stream);
     red_channel_client_ack_zero_messages_window(rcc);
 }
 
-static void smartcard_shutdown(Channel *channel)
+static void smartcard_migrate(RedChannelClient *rcc)
 {
 }
 
-static void smartcard_migrate(Channel *channel)
-{
-}
+SmartCardChannel *g_smartcard_channel;
 
-static void smartcard_register_channel(void)
+static void smartcard_init(void)
 {
-    Channel *channel;
-    static int registered = 0;
+    ChannelCbs channel_cbs;
+    ClientCbs client_cbs = {0,};
 
-    if (registered) {
-        return;
+    ASSERT(!g_smartcard_channel);
+
+    memset(&channel_cbs, sizeof(channel_cbs), 0);
+    memset(&client_cbs, sizeof(client_cbs), 0);
+
+    channel_cbs.config_socket = smartcard_channel_client_config_socket;
+    channel_cbs.on_disconnect = smartcard_channel_on_disconnect;
+    channel_cbs.send_item = smartcard_channel_send_item;
+    channel_cbs.hold_item = smartcard_channel_hold_pipe_item;
+    channel_cbs.release_item = smartcard_channel_release_pipe_item;
+    channel_cbs.alloc_recv_buf = smartcard_channel_alloc_msg_rcv_buf;
+    channel_cbs.release_recv_buf = smartcard_channel_release_msg_rcv_buf;
+
+    g_smartcard_channel = (SmartCardChannel*)red_channel_create(sizeof(SmartCardChannel),
+                                             core, SPICE_CHANNEL_SMARTCARD, 0,
+                                             FALSE /* migration - TODO?*/,
+                                             FALSE /* handle_acks */,
+                                             smartcard_channel_handle_message,
+                                             &channel_cbs);
+
+    if (!g_smartcard_channel) {
+        red_error("failed to allocate Inputs Channel");
     }
-    red_printf("registering smartcard channel");
-    registered = 1;
-    channel = spice_new0(Channel, 1);
-    channel->type = SPICE_CHANNEL_SMARTCARD;
-    channel->link = smartcard_link;
-    channel->shutdown = smartcard_shutdown;
-    channel->migrate = smartcard_migrate;
-    reds_register_channel(channel);
+
+    client_cbs.connect = smartcard_connect;
+    client_cbs.migrate = smartcard_migrate;
+    red_channel_register_client_cbs(&g_smartcard_channel->base, &client_cbs);
+
+    reds_register_channel(&g_smartcard_channel->base);
 }

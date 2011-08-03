@@ -155,14 +155,13 @@ enum NetTestStage {
     NET_TEST_STAGE_RATE,
 };
 
-static void main_channel_client_disconnect(RedChannelClient *rcc)
+// when disconnection occurs, let reds shutdown all channels. This will trigger the
+// real disconnection of main channel
+static void main_channel_client_on_disconnect(RedChannelClient *rcc)
 {
-    red_channel_client_disconnect(rcc);
-}
-
-static void main_disconnect(MainChannel *main_chan)
-{
-    red_channel_destroy(&main_chan->base);
+    red_printf("rcc=%p", rcc);
+    reds_client_disconnect(rcc->client);
+//    red_channel_client_disconnect(rcc);
 }
 
 RedClient *main_channel_get_client_by_link_id(MainChannel *main_chan, uint32_t connection_id)
@@ -840,12 +839,6 @@ static int main_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint
     return TRUE;
 }
 
-static void main_channel_on_error(RedChannelClient *rcc)
-{
-    red_printf("");
-    reds_client_disconnect(rcc->client);
-}
-
 static uint8_t *main_channel_alloc_msg_rcv_buf(RedChannelClient *rcc, SpiceDataHeader *msg_header)
 {
     MainChannel *main_chan = SPICE_CONTAINEROF(rcc->channel, MainChannel, base);
@@ -912,11 +905,12 @@ uint32_t main_channel_client_get_link_id(MainChannelClient *mcc)
     return mcc->connection_id;
 }
 
-MainChannelClient *main_channel_client_create(MainChannel *main_chan,
-    RedClient *client, RedsStream *stream, uint32_t connection_id)
+MainChannelClient *main_channel_client_create(MainChannel *main_chan, RedClient *client,
+                                              RedsStream *stream, uint32_t connection_id)
 {
-    MainChannelClient *mcc = (MainChannelClient*)red_channel_client_create(
-        sizeof(MainChannelClient), &main_chan->base, client, stream);
+    MainChannelClient *mcc = (MainChannelClient*)red_channel_client_create(sizeof(MainChannelClient),
+                                                                           &main_chan->base,
+                                                                           client, stream);
 
     mcc->connection_id = connection_id;
     mcc->bitrate_per_sec = ~0;
@@ -929,42 +923,20 @@ MainChannelClient *main_channel_client_create(MainChannel *main_chan,
     return mcc;
 }
 
-MainChannelClient *main_channel_link(Channel *channel, RedClient *client,
-                        RedsStream *stream, uint32_t connection_id, int migration,
-                        int num_common_caps, uint32_t *common_caps, int num_caps,
-                        uint32_t *caps)
+MainChannelClient *main_channel_link(MainChannel *channel, RedClient *client,
+                                     RedsStream *stream, uint32_t connection_id, int migration,
+                                     int num_common_caps, uint32_t *common_caps, int num_caps,
+                                     uint32_t *caps)
 {
     MainChannelClient *mcc;
 
-    if (channel->data == NULL) {
-        ChannelCbs channel_cbs;
+    ASSERT(channel);
 
-        channel_cbs.config_socket = main_channel_config_socket;
-        channel_cbs.disconnect = main_channel_client_disconnect;
-        channel_cbs.send_item = main_channel_send_item;
-        channel_cbs.hold_item = main_channel_hold_pipe_item;
-        channel_cbs.release_item = main_channel_release_pipe_item;
-        channel_cbs.alloc_recv_buf = main_channel_alloc_msg_rcv_buf;
-        channel_cbs.release_recv_buf = main_channel_release_msg_rcv_buf;
-        channel_cbs.handle_migrate_flush_mark = main_channel_handle_migrate_flush_mark;
-        channel_cbs.handle_migrate_data = main_channel_handle_migrate_data;
-        channel_cbs.handle_migrate_data_get_serial = main_channel_handle_migrate_data_get_serial;
-
-        red_printf("create main channel");
-        channel->data = red_channel_create_parser(
-            sizeof(MainChannel), core, migration, FALSE /* handle_acks */
-            ,spice_get_client_channel_parser(SPICE_CHANNEL_MAIN, NULL)
-            ,main_channel_handle_parsed
-            ,main_channel_on_error
-            ,main_channel_on_error
-            ,&channel_cbs);
-        ASSERT(channel->data);
-    }
     // TODO - migration - I removed it from channel creation, now put it
     // into usage somewhere (not an issue until we return migration to it's
     // former glory)
     red_printf("add main channel client");
-    mcc = main_channel_client_create(channel->data, client, stream, connection_id);
+    mcc = main_channel_client_create(channel, client, stream, connection_id);
     return mcc;
 }
 
@@ -978,6 +950,7 @@ int main_channel_getpeername(MainChannel *main_chan, struct sockaddr *sa, sockle
     return main_chan ? getpeername(red_channel_get_first_socket(&main_chan->base), sa, salen) : -1;
 }
 
+// TODO: ? shouldn't it disonnect all clients? or shutdown all main_channels?
 void main_channel_close(MainChannel *main_chan)
 {
     int socketfd;
@@ -998,27 +971,31 @@ uint64_t main_channel_client_get_bitrate_per_sec(MainChannelClient *mcc)
     return mcc->bitrate_per_sec;
 }
 
-static void main_channel_shutdown(Channel *channel)
+MainChannel* main_channel_init(void)
 {
-    MainChannel *main_chan = channel->data;
+    RedChannel *channel;
+    ChannelCbs channel_cbs;
 
-    if (main_chan != NULL) {
-        main_disconnect(main_chan);
-    }
-}
 
-static void main_channel_migrate()
-{
-}
+    channel_cbs.config_socket = main_channel_config_socket;
+    channel_cbs.on_disconnect = main_channel_client_on_disconnect;
+    channel_cbs.send_item = main_channel_send_item;
+    channel_cbs.hold_item = main_channel_hold_pipe_item;
+    channel_cbs.release_item = main_channel_release_pipe_item;
+    channel_cbs.alloc_recv_buf = main_channel_alloc_msg_rcv_buf;
+    channel_cbs.release_recv_buf = main_channel_release_msg_rcv_buf;
+    channel_cbs.handle_migrate_flush_mark = main_channel_handle_migrate_flush_mark;
+    channel_cbs.handle_migrate_data = main_channel_handle_migrate_data;
+    channel_cbs.handle_migrate_data_get_serial = main_channel_handle_migrate_data_get_serial;
 
-Channel* main_channel_init(void)
-{
-    Channel *channel;
+    // TODO: set the migration flag of the channel
+    channel = red_channel_create_parser(sizeof(MainChannel), core,
+                                        SPICE_CHANNEL_MAIN, 0,
+                                        FALSE, FALSE, /* handle_acks */
+                                        spice_get_client_channel_parser(SPICE_CHANNEL_MAIN, NULL),
+                                        main_channel_handle_parsed,
+                                        &channel_cbs);
+    ASSERT(channel);
 
-    channel = spice_new0(Channel, 1);
-    channel->type = SPICE_CHANNEL_MAIN;
-    channel->link = NULL; /* the main channel client is created by reds.c explicitly */
-    channel->shutdown = main_channel_shutdown;
-    channel->migrate = main_channel_migrate;
-    return channel;
+    return (MainChannel *)channel;
 }

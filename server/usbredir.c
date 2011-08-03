@@ -24,6 +24,7 @@
 
 #include "server/char_device.h"
 #include "server/red_channel.h"
+#include "server/reds.h"
 
 /* 64K should be enough for all but the largest bulk xfers + 32 bytes hdr */
 #define BUF_SIZE (64 * 1024 + 32)
@@ -36,8 +37,7 @@ typedef struct UsbRedirPipeItem {
 } UsbRedirPipeItem;
 
 typedef struct UsbRedirState {
-    Channel channel;
-    RedChannel *red_channel;
+    RedChannel *channel;
     RedChannelClient *rcc;
     SpiceCharDeviceState chardev_st;
     SpiceCharDeviceInstance *chardev_sin;
@@ -60,14 +60,14 @@ static void usbredir_chardev_wakeup(SpiceCharDeviceInstance *sin)
     state = SPICE_CONTAINEROF(sin->st, UsbRedirState, chardev_st);
     sif = SPICE_CONTAINEROF(sin->base.sif, SpiceCharDeviceInterface, base);
 
-    if (!state->red_channel) {
+    if (!state->rcc) {
         return;
     }
 
     do {
         if (!state->pipe_item) {
             state->pipe_item = spice_malloc(sizeof(UsbRedirPipeItem));
-            red_channel_pipe_item_init(state->red_channel,
+            red_channel_pipe_item_init(state->rcc->channel,
                                        &state->pipe_item->base, 0);
         }
 
@@ -82,12 +82,12 @@ static void usbredir_chardev_wakeup(SpiceCharDeviceInstance *sin)
     } while (n > 0);
 }
 
-static int usbredir_red_channel_config_socket(RedChannelClient *rcc)
+static int usbredir_red_channel_client_config_socket(RedChannelClient *rcc)
 {
     return TRUE;
 }
 
-static void usbredir_red_channel_disconnect(RedChannelClient *rcc)
+static void usbredir_red_channel_client_on_disconnect(RedChannelClient *rcc)
 {
     UsbRedirState *state;
     SpiceCharDeviceInstance *sin;
@@ -177,16 +177,18 @@ static void usbredir_red_channel_release_pipe_item(RedChannelClient *rcc,
     free(item);
 }
 
-static void usbredir_link(Channel *channel, RedClient *client, RedsStream *stream, int migration,
-    int num_common_caps, uint32_t *common_caps, int num_caps, uint32_t *caps)
+static void usbredir_connect(RedChannel *channel, RedClient *client,
+    RedsStream *stream, int migration, int num_common_caps,
+    uint32_t *common_caps, int num_caps, uint32_t *caps)
 {
+    RedChannelClient *rcc;
     UsbRedirState *state;
     UsbRedirChannel *redir_chan;
     SpiceCharDeviceInstance *sin;
     SpiceCharDeviceInterface *sif;
-    ChannelCbs channel_cbs;
 
-    state = SPICE_CONTAINEROF(channel, UsbRedirState, channel);
+    redir_chan = SPICE_CONTAINEROF(channel, UsbRedirChannel, base);
+    state = redir_chan->state;
     sin = state->chardev_sin;
     sif = SPICE_CONTAINEROF(sin->base.sif, SpiceCharDeviceInterface, base);
 
@@ -199,86 +201,78 @@ static void usbredir_link(Channel *channel, RedClient *client, RedsStream *strea
         return;
     }
 
-    if (!state->red_channel) {
-        memset(&channel_cbs, sizeof(channel_cbs), 0);
-        channel_cbs.config_socket = usbredir_red_channel_config_socket;
-        channel_cbs.disconnect = usbredir_red_channel_disconnect;
-        channel_cbs.send_item = usbredir_red_channel_send_item;
-        channel_cbs.hold_item = usbredir_red_channel_hold_pipe_item;
-        channel_cbs.release_item = usbredir_red_channel_release_pipe_item;
-        channel_cbs.alloc_recv_buf = usbredir_red_channel_alloc_msg_rcv_buf;
-        channel_cbs.release_recv_buf = usbredir_red_channel_release_msg_rcv_buf;
-        state->red_channel = red_channel_create(sizeof(UsbRedirChannel),
-                                        core, migration, FALSE /* handle_acks */,
-                                        usbredir_red_channel_client_handle_message,
-                                        &channel_cbs);
-    }
-    if (!state->red_channel) {
+    rcc = red_channel_client_create(sizeof(RedChannelClient), channel, client, stream);
+    if (!rcc) {
         return;
     }
-    state->rcc = red_channel_client_create(sizeof(RedChannelClient), state->red_channel,
-                                           client, stream);
-    if (!state->rcc) {
-        red_printf("failed to create usbredir channel client\n");
-        return;
-    }
-    red_channel_init_outgoing_messages_window(state->red_channel);
-    redir_chan = SPICE_CONTAINEROF(state->red_channel, UsbRedirChannel, base);
-    redir_chan->state = state;
+    state->rcc = rcc;
+    red_channel_client_ack_zero_messages_window(rcc);
 
     if (sif->state) {
         sif->state(sin, 1);
     }
 }
 
-static void usbredir_shutdown(Channel *channel)
-{
-    UsbRedirState *state = SPICE_CONTAINEROF(channel, UsbRedirState, channel);
-
-    usbredir_red_channel_disconnect(state->rcc);
-    red_channel_destroy(state->red_channel);
-    state->red_channel = NULL;
-}
-
-static void usbredir_migrate(Channel *channel)
+static void usbredir_migrate(RedChannelClient *rcc)
 {
     /* NOOP */
 }
 
 int usbredir_device_connect(SpiceCharDeviceInstance *sin)
 {
-    UsbRedirState *state;
     static int id = 0;
+    UsbRedirState *state;
+    UsbRedirChannel *redir_chan;
+    ChannelCbs channel_cbs = {0,};
+    ClientCbs client_cbs = {0,};
 
+    channel_cbs.config_socket = usbredir_red_channel_client_config_socket;
+    channel_cbs.on_disconnect = usbredir_red_channel_client_on_disconnect;
+    channel_cbs.send_item = usbredir_red_channel_send_item;
+    channel_cbs.hold_item = usbredir_red_channel_hold_pipe_item;
+    channel_cbs.release_item = usbredir_red_channel_release_pipe_item;
+    channel_cbs.alloc_recv_buf = usbredir_red_channel_alloc_msg_rcv_buf;
+    channel_cbs.release_recv_buf = usbredir_red_channel_release_msg_rcv_buf;
+
+    redir_chan = (UsbRedirChannel*)red_channel_create(sizeof(UsbRedirChannel),
+                                             core, SPICE_CHANNEL_USBREDIR, id++,
+                                             FALSE /* migration - TODO?*/,
+                                             FALSE /* handle_acks */,
+                                             usbredir_red_channel_client_handle_message,
+                                             &channel_cbs);
+    red_channel_init_outgoing_messages_window(&redir_chan->base);
     state = spice_new0(UsbRedirState, 1);
-    state->channel.type = SPICE_CHANNEL_USBREDIR;
-    state->channel.id = id++;
-    state->channel.link = usbredir_link;
-    state->channel.shutdown = usbredir_shutdown;
-    state->channel.migrate = usbredir_migrate;
+    state->channel = &redir_chan->base;
     state->chardev_st.wakeup = usbredir_chardev_wakeup;
     state->chardev_sin = sin;
     state->rcv_buf = spice_malloc(BUF_SIZE);
     state->rcv_buf_size = BUF_SIZE;
 
+    client_cbs.connect = usbredir_connect;
+    client_cbs.migrate = usbredir_migrate;
+    red_channel_register_client_cbs(&redir_chan->base, &client_cbs);
+
     sin->st = &state->chardev_st;
 
-    reds_register_channel(&state->channel);
+    reds_register_channel(&redir_chan->base);
 
     return 0;
 }
 
+/* Must be called from RedClient handling thread. */
 void usbredir_device_disconnect(SpiceCharDeviceInstance *sin)
 {
     UsbRedirState *state;
 
     state = SPICE_CONTAINEROF(sin->st, UsbRedirState, chardev_st);
 
-    reds_unregister_channel(&state->channel);
+    reds_unregister_channel(state->channel);
 
-    usbredir_red_channel_disconnect(state->rcc);
+    red_channel_client_destroy(state->rcc);
+    red_channel_disconnect(state->channel);
 
     free(state->pipe_item);
     free(state->rcv_buf);
+    free(state->channel);
     free(state);
 }

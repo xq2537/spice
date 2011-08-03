@@ -47,10 +47,10 @@ struct MainMigrateData {
 
 typedef struct MainChannel MainChannel;
 
-Channel *main_channel_init(void);
+MainChannel *main_channel_init(void);
 RedClient *main_channel_get_client_by_link_id(MainChannel *main_chan, uint32_t link_id);
 /* This is a 'clone' from the reds.h Channel.link callback to allow passing link_id */
-MainChannelClient *main_channel_link(struct Channel *, RedClient *client,
+MainChannelClient *main_channel_link(MainChannel *, RedClient *client,
      RedsStream *stream, uint32_t link_id, int migration, int num_common_caps,
      uint32_t *common_caps, int num_caps, uint32_t *caps);
 void main_channel_close(MainChannel *main_chan); // not destroy, just socket close

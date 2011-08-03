@@ -193,17 +193,23 @@ typedef struct RedsStatValue {
 
 typedef struct RedsMigSpice RedsMigSpice;
 
+typedef struct RedsChannel {
+    struct RedsChannel *next;
+    RedChannel *base;
+
+    int num_common_caps;
+    uint32_t *common_caps;
+} RedsChannel;
+
 typedef struct RedsState {
     int listen_socket;
     int secure_listen_socket;
     SpiceWatch *listen_watch;
     SpiceWatch *secure_listen_watch;
-    int disconnecting;
     VDIPortState agent_state;
     int pending_mouse_event;
     Ring clients;
     int num_clients;
-    Channel *main_channel_factory;
     MainChannel *main_channel;
 
     int mig_wait_connect;
@@ -212,7 +218,7 @@ typedef struct RedsState {
     int mig_target;
     RedsMigSpice *mig_spice;
     int num_of_channels;
-    Channel *channels;
+    RedsChannel *channels;
     int mouse_mode;
     int is_client_mouse_allowed;
     int dispatcher_allows_client_mouse;
@@ -296,6 +302,8 @@ struct ChannelSecurityOptions {
     uint32_t options;
     ChannelSecurityOptions *next;
 };
+
+static void reds_dispose_channel(RedsChannel *channel);
 
 static ChannelSecurityOptions *channels_security = NULL;
 static int default_channel_security =
@@ -506,21 +514,29 @@ void reds_update_stat_value(uint32_t value)
 
 #endif
 
-void reds_register_channel(Channel *channel)
+void reds_register_channel(RedChannel *channel)
 {
+    RedsChannel *reds_channel;
+
     ASSERT(reds);
-    channel->next = reds->channels;
-    reds->channels = channel;
+    // TODO: should channels be released upon some destructor?
+    reds_channel = spice_malloc0(sizeof(RedsChannel));
+    reds_channel->base = channel;
+    reds_channel->next = reds->channels;
+    reds->channels = reds_channel;
     reds->num_of_channels++;
 }
 
-void reds_unregister_channel(Channel *channel)
+void reds_unregister_channel(RedChannel *channel)
 {
-    Channel **now = &reds->channels;
+    RedsChannel **now = &reds->channels;
 
     while (*now) {
-        if (*now == channel) {
-            *now = channel->next;
+        if ((*now)->base == channel) {
+            RedsChannel *free_channel = *now;
+            *now = free_channel->next;
+            reds_dispose_channel(free_channel);
+            free(free_channel);
             reds->num_of_channels--;
             return;
         }
@@ -529,10 +545,10 @@ void reds_unregister_channel(Channel *channel)
     red_printf("not found");
 }
 
-static Channel *reds_find_channel(uint32_t type, uint32_t id)
+static RedsChannel *reds_find_channel(uint32_t type, uint32_t id)
 {
-    Channel *channel = reds->channels;
-    while (channel && !(channel->type == type && channel->id == id)) {
+    RedsChannel *channel = reds->channels;
+    while (channel && !(channel->base->type == type && channel->base->id == id)) {
         channel = channel->next;
     }
     return channel;
@@ -590,27 +606,42 @@ static int reds_main_channel_connected(void)
 
 void reds_client_disconnect(RedClient *client)
 {
-    if (!reds_main_channel_connected() || client->disconnecting) {
+    // TODO: rename reds_main_channel_connected, or really set main_channel to NULL on disconnect,
+    // though still, it is not a reason not to disconnect the rest of the channels
+    if (!reds_main_channel_connected()  || client->disconnecting) { 
+        /* case of recursion (main_channel_client_on_disconnect->
+         *                    reds_client_disconnect->red_client_destroy-<main_channel...
+         */
         return;
     }
 
     red_printf("");
+    // why is "disconnecting" even needed? it is synchronic, even in the dispatcher we are now waiting for disconnection
+    // Are there recursive calls? Maybe from main_channel?
     client->disconnecting = TRUE;
 
-    /* Reset write filter to start with clean state on client reconnect */
-    agent_msg_filter_init(&reds->agent_state.write_filter, agent_copypaste,
-                          TRUE);
-    /* Throw away pending chunks from the current (if any) and future
-       messages read from the agent */
-    reds->agent_state.read_filter.result = AGENT_MSG_FILTER_DISCARD;
-    reds->agent_state.read_filter.discard_all = TRUE;
+    // TODO: we need to handle agent properly for all clients!!!! (e.g., cut and paste, how?)
+    // We shouldn't initialize the agent when there are still clients connected
 
     ring_remove(&client->link);
     reds->num_clients--;
     red_client_destroy(client);
 
-    reds_mig_cleanup();
-    reds->disconnecting = FALSE;
+   // TODO: we need to handle agent properly for all clients!!!! (e.g., cut and paste, how? Maybe throw away messages
+   // if we are in the middle of one from another client)
+   // We shouldn't initialize the agent when there are still clients connected
+    if (reds->num_clients == 0) {
+       /* Reset write filter to start with clean state on client reconnect */
+        agent_msg_filter_init(&reds->agent_state.write_filter, agent_copypaste,
+                              TRUE);
+
+        /* Throw away pending chunks from the current (if any) and future
+         *  messages read from the agent */
+        reds->agent_state.read_filter.result = AGENT_MSG_FILTER_DISCARD;
+        reds->agent_state.read_filter.discard_all = TRUE;
+
+        reds_mig_cleanup();
+    }
 }
 
 // TODO: go over all usage of reds_disconnect, most/some of it should be converted to
@@ -623,6 +654,7 @@ static void reds_disconnect(void)
     RING_FOREACH_SAFE(link, next, &reds->clients) {
         reds_client_disconnect(SPICE_CONTAINEROF(link, RedClient, link));
     }
+    reds_mig_cleanup();
 }
 
 static void reds_mig_disconnect()
@@ -949,11 +981,11 @@ int reds_num_of_channels()
 static int secondary_channels[] = {
     SPICE_CHANNEL_MAIN, SPICE_CHANNEL_DISPLAY, SPICE_CHANNEL_CURSOR, SPICE_CHANNEL_INPUTS};
 
-static int channel_is_secondary(Channel *channel)
+static int channel_is_secondary(RedsChannel *channel)
 {
     int i;
     for (i = 0 ; i < sizeof(secondary_channels)/sizeof(secondary_channels[0]); ++i) {
-        if (channel->type == secondary_channels[i]) {
+        if (channel->base->type == secondary_channels[i]) {
             return TRUE;
         }
     }
@@ -962,7 +994,7 @@ static int channel_is_secondary(Channel *channel)
 
 void reds_fill_channels(SpiceMsgChannels *channels_info)
 {
-    Channel *channel;
+    RedsChannel *channel;
     int i;
     int used_channels = 0;
 
@@ -973,8 +1005,8 @@ void reds_fill_channels(SpiceMsgChannels *channels_info)
         if (reds->num_clients > 1 && !channel_is_secondary(channel)) {
             continue;
         }
-        channels_info->channels[used_channels].type = channel->type;
-        channels_info->channels[used_channels].id = channel->id;
+        channels_info->channels[used_channels].type = channel->base->type;
+        channels_info->channels[used_channels].id = channel->base->id;
         used_channels++;
     }
     channels_info->num_of_channels = used_channels;
@@ -1350,7 +1382,7 @@ static int sync_write(RedsStream *stream, const void *in_buf, size_t n)
     return TRUE;
 }
 
-static void reds_channel_set_common_caps(Channel *channel, int cap, int active)
+static void reds_channel_set_common_caps(RedsChannel *channel, int cap, int active)
 {
     int nbefore, n;
 
@@ -1367,7 +1399,7 @@ static void reds_channel_set_common_caps(Channel *channel, int cap, int active)
     }
 }
 
-static void reds_channel_init_auth_caps(Channel *channel)
+static void reds_channel_init_auth_caps(RedsChannel *channel)
 {
     if (sasl_enabled) {
         reds_channel_set_common_caps(channel, SPICE_COMMON_CAP_AUTH_SASL, TRUE);
@@ -1377,12 +1409,8 @@ static void reds_channel_init_auth_caps(Channel *channel)
     reds_channel_set_common_caps(channel, SPICE_COMMON_CAP_PROTOCOL_AUTH_SELECTION, TRUE);
 }
 
-void reds_channel_dispose(Channel *channel)
+static void reds_dispose_channel(RedsChannel *channel)
 {
-    free(channel->caps);
-    channel->caps = NULL;
-    channel->num_caps = 0;
-
     free(channel->common_caps);
     channel->common_caps = NULL;
     channel->num_common_caps = 0;
@@ -1392,8 +1420,8 @@ static int reds_send_link_ack(RedLinkInfo *link)
 {
     SpiceLinkHeader header;
     SpiceLinkReply ack;
-    Channel caps = { 0, };
-    Channel *channel;
+    RedsChannel common_caps = { 0, };
+    RedsChannel *channel;
     BUF_MEM *bmBuf;
     BIO *bio;
     int ret = FALSE;
@@ -1407,13 +1435,13 @@ static int reds_send_link_ack(RedLinkInfo *link)
 
     channel = reds_find_channel(link->link_mess->channel_type, 0);
     if (!channel) {
-        channel = &caps;
+        channel = &common_caps;
     }
 
     reds_channel_init_auth_caps(channel); /* make sure common caps are set */
 
     ack.num_common_caps = channel->num_common_caps;
-    ack.num_channel_caps = channel->num_caps;
+    ack.num_channel_caps = channel->base ? channel->base->num_caps : 0;
     header.size += (ack.num_common_caps + ack.num_channel_caps) * sizeof(uint32_t);
     ack.caps_offset = sizeof(SpiceLinkReply);
 
@@ -1441,13 +1469,15 @@ static int reds_send_link_ack(RedLinkInfo *link)
         goto end;
     if (!sync_write(link->stream, channel->common_caps, channel->num_common_caps * sizeof(uint32_t)))
         goto end;
-    if (!sync_write(link->stream, channel->caps, channel->num_caps * sizeof(uint32_t)))
-        goto end;
+    if (channel->base) {
+        if (!sync_write(link->stream, channel->base->caps, channel->base->num_caps * sizeof(uint32_t)))
+            goto end;
+    }
 
     ret = TRUE;
 
 end:
-    reds_channel_dispose(&caps);
+    reds_dispose_channel(&common_caps);
     BIO_free(bio);
     return ret;
 }
@@ -1540,18 +1570,19 @@ static void reds_handle_main_link(RedLinkInfo *link)
     link->link_mess = NULL;
     reds_link_free(link);
     caps = (uint32_t *)((uint8_t *)link_mess + link_mess->caps_offset);
-    if (!reds->main_channel_factory) {
-        reds->main_channel_factory = main_channel_init();
+    if (!reds->main_channel) {
+        reds->main_channel = main_channel_init();
+        ASSERT(reds->main_channel);
     }
     client = red_client_new();
     ring_add(&reds->clients, &client->link);
     reds->num_clients++;
-    mcc = main_channel_link(reds->main_channel_factory, client,
-                  stream, connection_id, reds->mig_target, link_mess->num_common_caps,
-                  link_mess->num_common_caps ? caps : NULL, link_mess->num_channel_caps,
-                  link_mess->num_channel_caps ? caps + link_mess->num_common_caps : NULL);
-    reds->main_channel = (MainChannel*)reds->main_channel_factory->data;
-    ASSERT(reds->main_channel);
+    mcc = main_channel_link(reds->main_channel, client,
+                            stream, connection_id, reds->mig_target,
+                            link_mess->num_common_caps,
+                            link_mess->num_common_caps ? caps : NULL, link_mess->num_channel_caps,
+                            link_mess->num_channel_caps ? caps + link_mess->num_common_caps : NULL);
+    red_printf("NEW Client %p mcc %p connect-id %d", client, mcc, connection_id);
     free(link_mess);
     red_client_set_main(client, mcc);
 
@@ -1608,7 +1639,7 @@ static void openssl_init(RedLinkInfo *link)
 
 static void reds_handle_other_links(RedLinkInfo *link)
 {
-    Channel *channel;
+    RedsChannel *channel;
     RedClient *client = NULL;
     RedsStream *stream;
     SpiceLinkMess *link_mess;
@@ -1617,7 +1648,7 @@ static void reds_handle_other_links(RedLinkInfo *link)
     link_mess = link->link_mess;
     if (reds->main_channel) {
         client = main_channel_get_client_by_link_id(reds->main_channel,
-            link_mess->connection_id);
+                                                    link_mess->connection_id);
     }
 
     // TODO: MC: broke migration (at least for the dont-drop-connection kind).
@@ -1650,9 +1681,12 @@ static void reds_handle_other_links(RedLinkInfo *link)
     link->link_mess = NULL;
     reds_link_free(link);
     caps = (uint32_t *)((uint8_t *)link_mess + link_mess->caps_offset);
-    channel->link(channel, client, stream, reds->mig_target, link_mess->num_common_caps,
-                  link_mess->num_common_caps ? caps : NULL, link_mess->num_channel_caps,
-                  link_mess->num_channel_caps ? caps + link_mess->num_common_caps : NULL);
+    channel->base->client_cbs.connect(channel->base, client, stream, reds->mig_target,
+                                      link_mess->num_common_caps,
+                                      link_mess->num_common_caps ? caps : NULL,
+                                      link_mess->num_channel_caps,
+                                      link_mess->num_channel_caps ?
+                                          caps + link_mess->num_common_caps : NULL);
     free(link_mess);
 }
 
@@ -3077,7 +3111,7 @@ static void reds_mig_finished(int completed)
     reds->mig_inprogress = TRUE;
 
     if (completed) {
-        Channel *channel;
+        RingItem *link, *next;
 
         reds->mig_wait_disconnect = TRUE;
         core->timer_start(reds->mig_timer, MIGRATE_TIMEOUT);
@@ -3086,14 +3120,16 @@ static void reds_mig_finished(int completed)
         //  - it can have an empty migrate - that seems ok
         //  - I can try to fill it's migrate, then move stuff from reds.c there, but a lot of data
         //    is in reds state right now.
+        //    currently the migrate callback of main_channel does nothing
         main_channel_push_migrate(reds->main_channel);
-        channel = reds->channels;
-        while (channel) {
-            channel->migrate(channel);
-            channel = channel->next;
+
+        RING_FOREACH_SAFE(link, next, &reds->clients) {
+            red_client_migrate(SPICE_CONTAINEROF(link, RedClient, link));
         }
     } else {
         main_channel_push_migrate_cancel(reds->main_channel);
+        // TODO: all the seemless migration is broken. Before MC we waited for disconection of one client,
+        // no we need to wait to all the clients (see mig_timer)?
         reds_mig_cleanup();
     }
 }

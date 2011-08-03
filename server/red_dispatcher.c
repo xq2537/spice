@@ -76,10 +76,10 @@ extern spice_wan_compression_t zlib_glz_state;
 
 static RedDispatcher *dispatchers = NULL;
 
-static void red_dispatcher_set_peer(Channel *channel, RedClient *client,
-                                    RedsStream *stream, int migration,
-                                    int num_common_caps, uint32_t *common_caps, int num_caps,
-                                    uint32_t *caps)
+static void red_dispatcher_set_display_peer(RedChannel *channel, RedClient *client,
+                                            RedsStream *stream, int migration,
+                                            int num_common_caps, uint32_t *common_caps, int num_caps,
+                                            uint32_t *caps)
 {
     RedDispatcher *dispatcher;
 
@@ -92,23 +92,41 @@ static void red_dispatcher_set_peer(Channel *channel, RedClient *client,
     send_data(dispatcher->channel, &migration, sizeof(int));
 }
 
-static void red_dispatcher_shutdown_peer(Channel *channel)
+static void red_dispatcher_disconnect_display_peer(RedChannelClient *rcc)
 {
-    RedDispatcher *dispatcher = (RedDispatcher *)channel->data;
+    RedDispatcher *dispatcher;
+
+    if (!rcc->channel) {
+        return;
+    }
+
+    dispatcher = (RedDispatcher *)rcc->channel->data;
+
     red_printf("");
     RedWorkerMessage message = RED_WORKER_MESSAGE_DISPLAY_DISCONNECT;
     write_message(dispatcher->channel, &message);
+    send_data(dispatcher->channel, &rcc, sizeof(RedChannelClient *));
+
+    // TODO: we turned it to be sync, due to client_destroy . Should we support async? - for this we will need ref count
+    // for channels
+    read_message(dispatcher->channel, &message);
+    ASSERT(message == RED_WORKER_MESSAGE_READY);
 }
 
-static void red_dispatcher_migrate(Channel *channel)
+static void red_dispatcher_display_migrate(RedChannelClient *rcc)
 {
-    RedDispatcher *dispatcher = (RedDispatcher *)channel->data;
-    red_printf("channel type %u id %u", channel->type, channel->id);
+    RedDispatcher *dispatcher;
+    if (!rcc->channel) {
+        return;
+    }
+    dispatcher = (RedDispatcher *)rcc->channel->data;
+    red_printf("channel type %u id %u", rcc->channel->type, rcc->channel->id);
     RedWorkerMessage message = RED_WORKER_MESSAGE_DISPLAY_MIGRATE;
     write_message(dispatcher->channel, &message);
+    send_data(dispatcher->channel, &rcc, sizeof(RedChannelClient *));
 }
 
-static void red_dispatcher_set_cursor_peer(Channel *channel, RedClient *client, RedsStream *stream,
+static void red_dispatcher_set_cursor_peer(RedChannel *channel, RedClient *client, RedsStream *stream,
                                            int migration, int num_common_caps,
                                            uint32_t *common_caps, int num_caps,
                                            uint32_t *caps)
@@ -122,18 +140,33 @@ static void red_dispatcher_set_cursor_peer(Channel *channel, RedClient *client, 
     send_data(dispatcher->channel, &migration, sizeof(int));
 }
 
-static void red_dispatcher_shutdown_cursor_peer(Channel *channel)
+static void red_dispatcher_disconnect_cursor_peer(RedChannelClient *rcc)
 {
-    RedDispatcher *dispatcher = (RedDispatcher *)channel->data;
+    RedDispatcher *dispatcher;
+
+    if (!rcc->channel) {
+    return;
+    }
+
+    dispatcher = (RedDispatcher *)rcc->channel->data;
     red_printf("");
     RedWorkerMessage message = RED_WORKER_MESSAGE_CURSOR_DISCONNECT;
     write_message(dispatcher->channel, &message);
+    send_data(dispatcher->channel, &rcc, sizeof(RedChannelClient *));
+
+    read_message(dispatcher->channel, &message);
+    ASSERT(message == RED_WORKER_MESSAGE_READY);
 }
 
-static void red_dispatcher_cursor_migrate(Channel *channel)
+static void red_dispatcher_cursor_migrate(RedChannelClient *rcc)
 {
-    RedDispatcher *dispatcher = (RedDispatcher *)channel->data;
-    red_printf("channel type %u id %u", channel->type, channel->id);
+    RedDispatcher *dispatcher;
+
+    if (!rcc->channel) {
+        return;
+    }
+    dispatcher = (RedDispatcher *)rcc->channel->data;
+    red_printf("channel type %u id %u", rcc->channel->type, rcc->channel->id);
     RedWorkerMessage message = RED_WORKER_MESSAGE_CURSOR_MIGRATE;
     write_message(dispatcher->channel, &message);
 }
@@ -591,36 +624,6 @@ static void qxl_worker_loadvm_commands(QXLWorker *qxl_worker,
     red_dispatcher_loadvm_commands((RedDispatcher*)qxl_worker, ext, count);
 }
 
-static void red_dispatcher_send_disconnect(RedDispatcher *dispatcher,
-                    struct RedChannelClient *rcc, RedWorkerMessage message)
-{
-    write_message(dispatcher->channel, &message);
-    send_data(dispatcher->channel, &rcc, sizeof(struct RedChannelClient *));
-}
-
-void red_dispatcher_disconnect_display_client(RedDispatcher *dispatcher,
-                                      struct RedChannelClient *rcc)
-{
-    RedWorkerMessage message = RED_WORKER_MESSAGE_STOP;
-
-    red_dispatcher_send_disconnect(dispatcher, rcc,
-            RED_WORKER_MESSAGE_DISPLAY_DISCONNECT_CLIENT);
-    read_message(dispatcher->channel, &message);
-    ASSERT(message == RED_WORKER_MESSAGE_READY);
-}
-
-void red_dispatcher_disconnect_cursor_client(RedDispatcher *dispatcher,
-                                      struct RedChannelClient *rcc)
-{
-    RedWorkerMessage message = RED_WORKER_MESSAGE_STOP;
-
-    red_dispatcher_send_disconnect(dispatcher, rcc,
-            RED_WORKER_MESSAGE_CURSOR_DISCONNECT_CLIENT);
-    read_message(dispatcher->channel, &message);
-    ASSERT(message == RED_WORKER_MESSAGE_READY);
-}
-
-
 void red_dispatcher_set_mm_time(uint32_t mm_time)
 {
     RedDispatcher *now = dispatchers;
@@ -867,6 +870,32 @@ void red_dispatcher_async_complete(struct RedDispatcher *dispatcher, uint64_t co
     dispatcher->qxl->st->qif->async_complete(dispatcher->qxl, cookie);
 }
 
+static RedChannel *red_dispatcher_display_channel_create(RedDispatcher *dispatcher)
+{
+    RedWorkerMessage message = RED_WORKER_MESSAGE_DISPLAY_CHANNEL_CREATE;
+    RedChannel *display_channel;
+
+    write_message(dispatcher->channel, &message);
+
+    receive_data(dispatcher->channel, &display_channel, sizeof(RedChannel *));
+    read_message(dispatcher->channel, &message);
+    ASSERT(message == RED_WORKER_MESSAGE_READY);
+    return display_channel;
+}
+
+static RedChannel *red_dispatcher_cursor_channel_create(RedDispatcher *dispatcher)
+{
+    RedWorkerMessage message = RED_WORKER_MESSAGE_CURSOR_CHANNEL_CREATE;
+    RedChannel *cursor_channel;
+
+    write_message(dispatcher->channel, &message);
+
+    receive_data(dispatcher->channel, &cursor_channel, sizeof(RedChannel *));
+    read_message(dispatcher->channel, &message);
+    ASSERT(message == RED_WORKER_MESSAGE_READY);
+    return cursor_channel;
+}
+
 RedDispatcher *red_dispatcher_init(QXLInstance *qxl)
 {
     RedDispatcher *dispatcher;
@@ -875,10 +904,11 @@ RedDispatcher *red_dispatcher_init(QXLInstance *qxl)
     WorkerInitData init_data;
     QXLDevInitInfo init_info;
     int r;
-    Channel *reds_channel;
-    Channel *cursor_channel;
+    RedChannel *display_channel;
+    RedChannel *cursor_channel;
     sigset_t thread_sig_mask;
     sigset_t curr_sig_mask;
+    ClientCbs client_cbs = {0,};
 
     quic_init();
     sw_canvas_init();
@@ -950,23 +980,28 @@ RedDispatcher *red_dispatcher_init(QXLInstance *qxl)
     read_message(dispatcher->channel, &message);
     ASSERT(message == RED_WORKER_MESSAGE_READY);
 
-    reds_channel = spice_new0(Channel, 1);
-    reds_channel->type = SPICE_CHANNEL_DISPLAY;
-    reds_channel->id = qxl->id;
-    reds_channel->link = red_dispatcher_set_peer;
-    reds_channel->shutdown = red_dispatcher_shutdown_peer;
-    reds_channel->migrate = red_dispatcher_migrate;
-    reds_channel->data = dispatcher;
-    reds_register_channel(reds_channel);
+    display_channel = red_dispatcher_display_channel_create(dispatcher);
 
-    cursor_channel = spice_new0(Channel, 1);
-    cursor_channel->type = SPICE_CHANNEL_CURSOR;
-    cursor_channel->id = qxl->id;
-    cursor_channel->link = red_dispatcher_set_cursor_peer;
-    cursor_channel->shutdown = red_dispatcher_shutdown_cursor_peer;
-    cursor_channel->migrate = red_dispatcher_cursor_migrate;
-    cursor_channel->data = dispatcher;
-    reds_register_channel(cursor_channel);
+    if (display_channel) {
+        client_cbs.connect = red_dispatcher_set_display_peer;
+        client_cbs.disconnect = red_dispatcher_disconnect_display_peer;
+        client_cbs.migrate = red_dispatcher_display_migrate;
+        red_channel_register_client_cbs(display_channel, &client_cbs);
+        red_channel_set_data(display_channel, dispatcher);
+        reds_register_channel(display_channel);
+    }
+
+    cursor_channel = red_dispatcher_cursor_channel_create(dispatcher);
+
+    if (cursor_channel) {
+        client_cbs.connect = red_dispatcher_set_cursor_peer;
+        client_cbs.disconnect = red_dispatcher_disconnect_cursor_peer;
+        client_cbs.migrate = red_dispatcher_cursor_migrate;
+        red_channel_register_client_cbs(cursor_channel, &client_cbs);
+        red_channel_set_data(cursor_channel, dispatcher);
+        reds_register_channel(cursor_channel);
+    }
+
     qxl->st->qif->attache_worker(qxl, &dispatcher->base);
     qxl->st->qif->set_compression_level(qxl, calc_compression_level());
 

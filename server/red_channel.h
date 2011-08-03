@@ -24,9 +24,9 @@
 
 #include "red_common.h"
 #include <pthread.h>
-#include "reds.h"
 #include "spice.h"
 #include "ring.h"
+#include "common/marshaller.h"
 #include "server/demarshallers.h"
 
 #define MAX_SEND_BUFS 1000
@@ -62,7 +62,6 @@ typedef struct IncomingHandler {
     uint32_t header_pos;
     uint8_t *msg; // data of the msg following the header. allocated by alloc_msg_buf.
     uint32_t msg_pos;
-    int shut; // came here from inputs_channel. Not sure if it is really required or can be removed. XXX
 } IncomingHandler;
 
 typedef int (*get_outgoing_msg_size_proc)(void *opaque);
@@ -98,8 +97,11 @@ typedef struct BufDescriptor {
     uint8_t *data;
 } BufDescriptor;
 
+typedef struct RedsStream RedsStream;
 typedef struct RedChannel RedChannel;
 typedef struct RedChannelClient RedChannelClient;
+typedef struct RedClient RedClient;
+typedef struct MainChannelClient MainChannelClient;
 
 /* Messages handled by red_channel
  * SET_ACK - sent to client on channel connection
@@ -154,7 +156,7 @@ typedef void (*channel_client_migrate_proc)(RedChannelClient *base);
  */
 typedef struct {
     channel_configure_socket_proc config_socket;
-    channel_disconnect_proc disconnect;
+    channel_disconnect_proc on_disconnect;
     channel_send_pipe_item_proc send_item;
     channel_hold_pipe_item_proc hold_item;
     channel_release_pipe_item_proc release_item;
@@ -207,10 +209,20 @@ struct RedChannelClient {
 };
 
 struct RedChannel {
+    uint32_t type;
+    uint32_t id;
+
     SpiceCoreInterface *core;
     int migrate;
     int handle_acks;
 
+    // RedChannel will hold only connected channel clients (logic - when pushing pipe item to all channel clients, there
+    // is no need to go over disconnect clients)
+    // . While client will hold the channel clients till it is destroyed
+    // and then it will destroy them as well.
+    // However RCC still holds a reference to the Channel.
+    // Maybe replace these logic with ref count?
+    // TODO: rename to 'connected_clients'?
     Ring clients;
     uint32_t clients_num;
 
@@ -220,11 +232,10 @@ struct RedChannel {
     ChannelCbs channel_cbs;
     ClientCbs client_cbs;
 
-    /* Stuff below added for Main and Inputs channels switch to RedChannel
-     * (might be removed later) */
-    channel_on_incoming_error_proc on_incoming_error; /* alternative to disconnect */
-    channel_on_outgoing_error_proc on_outgoing_error;
-    int shut; /* signal channel is to be closed */
+    int num_caps;
+    uint32_t *caps;
+
+    void *data;
 
     // TODO: when different channel_clients are in different threads from Channel -> need to protect!
     pthread_t thread_id;
@@ -237,6 +248,7 @@ struct RedChannel {
  * explicitly destroy the channel */
 RedChannel *red_channel_create(int size,
                                SpiceCoreInterface *core,
+                               uint32_t type, uint32_t id,
                                int migrate, int handle_acks,
                                channel_handle_message_proc handle_message,
                                ChannelCbs *channel_cbs);
@@ -245,20 +257,38 @@ RedChannel *red_channel_create(int size,
  * will become default eventually */
 RedChannel *red_channel_create_parser(int size,
                                SpiceCoreInterface *core,
+                               uint32_t type, uint32_t id,
                                int migrate, int handle_acks,
                                spice_parse_channel_func_t parser,
                                channel_handle_parsed_proc handle_parsed,
-                               channel_on_incoming_error_proc incoming_error,
-                               channel_on_outgoing_error_proc outgoing_error,
                                ChannelCbs *channel_cbs);
 
 void red_channel_register_client_cbs(RedChannel *channel, ClientCbs *client_cbs);
+// caps are freed when the channel is destroyed
+void red_channel_set_caps(RedChannel *channel, int num_caps, uint32_t *caps);
+void red_channel_set_data(RedChannel *channel, void *data);
 
 RedChannelClient *red_channel_client_create(int size, RedChannel *channel, RedClient *client,
                                             RedsStream *stream);
 
+// TODO: tmp, for channels that don't use RedChannel yet (e.g., snd channel), but
+// do use the client callbacks. So the channel clients are not connected (the channel doesn't
+// have list of them, but they do have a link to the channel, and the client has a list of them)
+RedChannel *red_channel_create_dummy(int size, uint32_t type, uint32_t id);
+RedChannelClient *red_channel_client_create_dummy(int size,
+                                                  RedChannel *channel,
+                                                  RedClient  *client);
+
+
 int red_channel_is_connected(RedChannel *channel);
 int red_channel_client_is_connected(RedChannelClient *rcc);
+
+/*
+ * the disconnect callback is called from the channel's thread,
+ * i.e., for display channels - red worker thread, for all the other - from the main thread.
+ * RedClient is managed from the main thread. red_channel_client_destroy can be called only
+ * from red_client_destroy.
+ */
 
 void red_channel_client_destroy(RedChannelClient *rcc);
 void red_channel_destroy(RedChannel *channel);
@@ -267,7 +297,6 @@ void red_channel_destroy(RedChannel *channel);
  * thread. It will not touch the rings, just shutdown the socket.
  * It should be followed by some way to gurantee a disconnection. */
 void red_channel_client_shutdown(RedChannelClient *rcc);
-void red_channel_shutdown(RedChannel *channel);
 
 /* should be called when a new channel is ready to send messages */
 void red_channel_init_outgoing_messages_window(RedChannel *channel);
@@ -275,9 +304,6 @@ void red_channel_init_outgoing_messages_window(RedChannel *channel);
 /* handles general channel msgs from the client */
 int red_channel_client_handle_message(RedChannelClient *rcc, uint32_t size,
                                uint16_t type, void *message);
-
-/* default error handler that disconnects channel */
-void red_channel_client_default_peer_on_error(RedChannelClient *rcc);
 
 /* when preparing send_data: should call init and then use marshaller */
 void red_channel_client_init_send_data(RedChannelClient *rcc, uint16_t msg_type, PipeItem *item);
@@ -303,7 +329,6 @@ void red_channel_client_pipe_add_push(RedChannelClient *rcc, PipeItem *item);
 void red_channel_client_pipe_add(RedChannelClient *rcc, PipeItem *item);
 void red_channel_client_pipe_add_after(RedChannelClient *rcc, PipeItem *item, PipeItem *pos);
 int red_channel_client_pipe_item_is_linked(RedChannelClient *rcc, PipeItem *item);
-void red_channel_pipe_item_remove(RedChannel *channel, PipeItem *item);
 void red_channel_client_pipe_remove_and_release(RedChannelClient *rcc, PipeItem *item);
 void red_channel_client_pipe_add_tail(RedChannelClient *rcc, PipeItem *item);
 /* for types that use this routine -> the pipe item should be freed */
@@ -314,9 +339,6 @@ void red_channel_client_ack_zero_messages_window(RedChannelClient *rcc);
 void red_channel_client_ack_set_client_window(RedChannelClient *rcc, int client_window);
 void red_channel_client_push_set_ack(RedChannelClient *rcc);
 void red_channel_push_set_ack(RedChannel *channel);
-
-/* TODO: This sets all clients to shut state - probably we want to close per channel */
-void red_channel_shutdown(RedChannel *channel);
 
 int red_channel_get_first_socket(RedChannel *channel);
 
@@ -354,7 +376,6 @@ void red_channel_client_push(RedChannelClient *rcc);
 // TODO: again - what is the context exactly? this happens in channel disconnect. but our
 // current red_channel_shutdown also closes the socket - is there a socket to close?
 // are we reading from an fd here? arghh
-void red_channel_pipes_clear(RedChannel *channel);
 void red_channel_client_pipe_clear(RedChannelClient *rcc);
 // Again, used in various places outside of event handler context (or in other event handler
 // contexts):
@@ -403,17 +424,22 @@ struct RedClient {
     RingItem link;
     Ring channels;
     int channels_num;
-    int disconnecting;
     MainChannelClient *mcc;
+    pthread_mutex_t lock; // different channels can be in different threads
 
     pthread_t thread_id;
+
+    int disconnecting;
 };
 
 RedClient *red_client_new();
 MainChannelClient *red_client_get_main(RedClient *client);
+// main should be set once before all the other channels are created
 void red_client_set_main(RedClient *client, MainChannelClient *mcc);
+
+
+void red_client_migrate(RedClient *client);
+// disconnects all the client's channels (should be called from the client's thread)
 void red_client_destroy(RedClient *client);
-void red_client_disconnect(RedClient *client);
-void red_client_remove_channel(RedClient *client, RedChannelClient *rcc);
 
 #endif

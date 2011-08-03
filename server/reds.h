@@ -31,12 +31,9 @@
 #include "common/marshaller.h"
 #include "common/messages.h"
 #include "spice.h"
+#include "red_channel.h"
 
 #define SPICE_GNUC_VISIBLE __attribute__ ((visibility ("default")))
-
-typedef struct RedsStream RedsStream;
-typedef struct RedClient RedClient;
-typedef struct MainChannelClient MainChannelClient;
 
 #if HAVE_SASL
 typedef struct RedsSASL {
@@ -88,22 +85,6 @@ struct RedsStream {
     ssize_t (*writev)(RedsStream *s, const struct iovec *iov, int iovcnt);
 };
 
-typedef struct Channel {
-    struct Channel *next;
-    uint32_t type;
-    uint32_t id;
-    int num_common_caps;
-    uint32_t *common_caps;
-    int num_caps;
-    uint32_t *caps;
-    void (*link)(struct Channel *, RedClient *client, RedsStream *stream,
-                 int migration, int num_common_caps,
-                 uint32_t *common_caps, int num_caps, uint32_t *caps);
-    void (*shutdown)(struct Channel *);
-    void (*migrate)(struct Channel *);
-    void *data;
-} Channel;
-
 struct QXLState {
     QXLInterface          *qif;
     struct RedDispatcher  *dispatcher;
@@ -113,8 +94,6 @@ struct TunnelWorker;
 struct SpiceNetWireState {
     struct TunnelWorker *worker;
 };
-
-void reds_channel_dispose(Channel *channel);
 
 ssize_t reds_stream_read(RedsStream *s, void *buf, size_t nbyte);
 ssize_t reds_stream_write(RedsStream *s, const void *buf, size_t nbyte);
@@ -127,8 +106,8 @@ void reds_update_mm_timer(uint32_t mm_time);
 uint32_t reds_get_mm_time(void);
 void reds_set_client_mouse_allowed(int is_client_mouse_allowed,
                                    int x_res, int y_res);
-void reds_register_channel(Channel *channel);
-void reds_unregister_channel(Channel *channel);
+void reds_register_channel(RedChannel *channel);
+void reds_unregister_channel(RedChannel *channel);
 int reds_get_mouse_mode(void); // used by inputs_channel
 int reds_get_agent_mouse(void); // used by inputs_channel
 int reds_has_vdagent(void); // used by inputs channel

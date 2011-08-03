@@ -434,37 +434,18 @@ static void inputs_relase_keys(void)
     kbd_push_scan(keyboard, 0x38 | 0x80); //LALT
 }
 
-static void inputs_channel_disconnect(RedChannelClient *rcc)
+static void inputs_channel_on_disconnect(RedChannelClient *rcc)
 {
-    inputs_relase_keys();
-    red_channel_client_disconnect(rcc);
-}
-
-static void inputs_channel_on_error(RedChannelClient *rcc)
-{
-    red_printf("");
-    inputs_channel_disconnect(rcc);
-}
-
-static void inputs_shutdown(Channel *channel)
-{
-    InputsChannel *inputs_channel = (InputsChannel *)channel->data;
-    ASSERT(g_inputs_channel == inputs_channel);
-
-    if (inputs_channel) {
-        red_channel_shutdown(&inputs_channel->base);
-        red_channel_destroy(&inputs_channel->base);
-        channel->data = NULL;
-        g_inputs_channel = NULL;
+    if (!rcc) {
+        return;
     }
+    inputs_relase_keys();
 }
 
-static void inputs_migrate(Channel *channel)
+static void inputs_migrate(RedChannelClient *rcc)
 {
-    InputsChannel *inputs_channel = channel->data;
-
-    ASSERT(g_inputs_channel == (InputsChannel *)channel->data);
-    red_channel_pipes_add_type(&inputs_channel->base, PIPE_ITEM_MIGRATE);
+    ASSERT(g_inputs_channel == (InputsChannel *)rcc->channel);
+    red_channel_client_pipe_add_type(rcc, PIPE_ITEM_MIGRATE);
 }
 
 static void inputs_pipe_add_init(RedChannelClient *rcc)
@@ -501,40 +482,21 @@ static void inputs_channel_hold_pipe_item(RedChannelClient *rcc, PipeItem *item)
 {
 }
 
-static void inputs_link(Channel *channel, RedClient *client,
-                        RedsStream *stream, int migration,
-                        int num_common_caps, uint32_t *common_caps,
-                        int num_caps, uint32_t *caps)
+static void inputs_connect(RedChannel *channel, RedClient *client,
+                           RedsStream *stream, int migration,
+                           int num_common_caps, uint32_t *common_caps,
+                           int num_caps, uint32_t *caps)
 {
     InputsChannelClient *icc;
 
-    ASSERT(channel->data == g_inputs_channel);
-    if (channel->data == NULL) {
-        ChannelCbs channel_cbs;
+    ASSERT(g_inputs_channel);
+    ASSERT(channel == &g_inputs_channel->base);
 
-        memset(&channel_cbs, sizeof(channel_cbs), 0);
-
-        channel_cbs.config_socket = inputs_channel_config_socket;
-        channel_cbs.disconnect = inputs_channel_disconnect;
-        channel_cbs.send_item = inputs_channel_send_item;
-        channel_cbs.hold_item = inputs_channel_hold_pipe_item;
-        channel_cbs.release_item = inputs_channel_release_pipe_item;
-        channel_cbs.alloc_recv_buf = inputs_channel_alloc_msg_rcv_buf;
-        channel_cbs.release_recv_buf = inputs_channel_release_msg_rcv_buf;
-
-        red_printf("inputs channel create");
-        channel->data = g_inputs_channel = (InputsChannel*)red_channel_create_parser(
-            sizeof(InputsChannel), core, migration, FALSE /* handle_acks */
-            ,spice_get_client_channel_parser(SPICE_CHANNEL_INPUTS, NULL)
-            ,inputs_channel_handle_parsed
-            ,inputs_channel_on_error
-            ,inputs_channel_on_error
-            ,&channel_cbs);
-        ASSERT(channel->data);
-    }
     red_printf("inputs channel client create");
     icc = (InputsChannelClient*)red_channel_client_create(sizeof(InputsChannelClient),
-                              channel->data, client, stream);
+                                                          channel,
+                                                          client,
+                                                          stream);
     icc->motion_count = 0;
     inputs_pipe_add_init(&icc->base);
 }
@@ -560,14 +522,41 @@ static void key_modifiers_sender(void *opaque)
 
 void inputs_init(void)
 {
-    Channel *channel;
+    ChannelCbs channel_cbs;
+    ClientCbs client_cbs = {0,};
 
-    channel = spice_new0(Channel, 1);
-    channel->type = SPICE_CHANNEL_INPUTS;
-    channel->link = inputs_link;
-    channel->shutdown = inputs_shutdown;
-    channel->migrate = inputs_migrate;
-    reds_register_channel(channel);
+    ASSERT(!g_inputs_channel);
+
+    memset(&channel_cbs, sizeof(channel_cbs), 0);
+    memset(&client_cbs, sizeof(client_cbs), 0);
+
+    channel_cbs.config_socket = inputs_channel_config_socket;
+    channel_cbs.on_disconnect = inputs_channel_on_disconnect;
+    channel_cbs.send_item = inputs_channel_send_item;
+    channel_cbs.hold_item = inputs_channel_hold_pipe_item;
+    channel_cbs.release_item = inputs_channel_release_pipe_item;
+    channel_cbs.alloc_recv_buf = inputs_channel_alloc_msg_rcv_buf;
+    channel_cbs.release_recv_buf = inputs_channel_release_msg_rcv_buf;
+
+    g_inputs_channel = (InputsChannel *)red_channel_create_parser(
+                                    sizeof(InputsChannel),
+                                    core,
+                                    SPICE_CHANNEL_INPUTS, 0,
+                                    FALSE, // TODO: set migration?
+                                    FALSE, /* handle_acks */
+                                    spice_get_client_channel_parser(SPICE_CHANNEL_INPUTS, NULL),
+                                    inputs_channel_handle_parsed,
+                                    &channel_cbs);
+
+    if (!g_inputs_channel) {
+        red_error("failed to allocate Inputs Channel");
+    }
+
+    client_cbs.connect = inputs_connect;
+    client_cbs.migrate = inputs_migrate;
+    red_channel_register_client_cbs(&g_inputs_channel->base, &client_cbs);
+
+    reds_register_channel(&g_inputs_channel->base);
 
     if (!(key_modifiers_timer = core->timer_add(key_modifiers_sender, NULL))) {
         red_error("key modifiers timer create failed");
