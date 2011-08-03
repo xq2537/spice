@@ -138,6 +138,23 @@ typedef uint64_t (*channel_handle_migrate_data_proc)(RedChannelClient *base,
 typedef uint64_t (*channel_handle_migrate_data_get_serial_proc)(RedChannelClient *base,
                                             uint32_t size, void *message);
 
+/*
+ * callbacks that are triggered from channel client stream events.
+ * They are called from the thread that listen to the stream events.
+ */
+typedef struct {
+    channel_configure_socket_proc config_socket;
+    channel_disconnect_proc disconnect;
+    channel_send_pipe_item_proc send_item;
+    channel_hold_pipe_item_proc hold_item;
+    channel_release_pipe_item_proc release_item;
+    channel_alloc_msg_recv_buf_proc alloc_recv_buf;
+    channel_release_msg_recv_buf_proc release_recv_buf;
+    channel_handle_migrate_flush_mark_proc handle_migrate_flush_mark;
+    channel_handle_migrate_data_proc handle_migrate_data;
+    channel_handle_migrate_data_get_serial_proc handle_migrate_data_get_serial;
+} ChannelCbs;
+
 struct RedChannelClient {
     RingItem channel_link;
     RingItem client_link;
@@ -179,11 +196,7 @@ struct RedChannel {
     OutgoingHandlerInterface outgoing_cb;
     IncomingHandlerInterface incoming_cb;
 
-    channel_configure_socket_proc config_socket;
-    channel_disconnect_proc disconnect;
-    channel_send_pipe_item_proc send_item;
-    channel_hold_pipe_item_proc hold_item;
-    channel_release_pipe_item_proc release_item;
+    ChannelCbs channel_cbs;
 
     /* Stuff below added for Main and Inputs channels switch to RedChannel
      * (might be removed later) */
@@ -191,9 +204,6 @@ struct RedChannel {
     channel_on_outgoing_error_proc on_outgoing_error;
     int shut; /* signal channel is to be closed */
 
-    channel_handle_migrate_flush_mark_proc handle_migrate_flush_mark;
-    channel_handle_migrate_data_proc handle_migrate_data;
-    channel_handle_migrate_data_get_serial_proc handle_migrate_data_get_serial;
 #ifdef RED_STATISTICS
     uint64_t *out_bytes_counter;
 #endif
@@ -204,37 +214,19 @@ struct RedChannel {
 RedChannel *red_channel_create(int size,
                                SpiceCoreInterface *core,
                                int migrate, int handle_acks,
-                               channel_configure_socket_proc config_socket,
-                               channel_disconnect_proc disconnect,
                                channel_handle_message_proc handle_message,
-                               channel_alloc_msg_recv_buf_proc alloc_recv_buf,
-                               channel_release_msg_recv_buf_proc release_recv_buf,
-                               channel_hold_pipe_item_proc hold_item,
-                               channel_send_pipe_item_proc send_item,
-                               channel_release_pipe_item_proc release_item,
-                               channel_handle_migrate_flush_mark_proc handle_migrate_flush_mark,
-                               channel_handle_migrate_data_proc handle_migrate_data,
-                               channel_handle_migrate_data_get_serial_proc handle_migrate_data_get_serial);
+                               ChannelCbs *channel_cbs);
 
 /* alternative constructor, meant for marshaller based (inputs,main) channels,
  * will become default eventually */
 RedChannel *red_channel_create_parser(int size,
                                SpiceCoreInterface *core,
                                int migrate, int handle_acks,
-                               channel_configure_socket_proc config_socket,
-                               channel_disconnect_proc disconnect,
                                spice_parse_channel_func_t parser,
                                channel_handle_parsed_proc handle_parsed,
-                               channel_alloc_msg_recv_buf_proc alloc_recv_buf,
-                               channel_release_msg_recv_buf_proc release_recv_buf,
-                               channel_hold_pipe_item_proc hold_item,
-                               channel_send_pipe_item_proc send_item,
-                               channel_release_pipe_item_proc release_item,
                                channel_on_incoming_error_proc incoming_error,
                                channel_on_outgoing_error_proc outgoing_error,
-                               channel_handle_migrate_flush_mark_proc handle_migrate_flush_mark,
-                               channel_handle_migrate_data_proc handle_migrate_data,
-                               channel_handle_migrate_data_get_serial_proc handle_migrate_data_get_serial);
+                               ChannelCbs *channel_cbs);
 
 RedChannelClient *red_channel_client_create(int size, RedChannel *channel, RedClient *client,
                                             RedsStream *stream);

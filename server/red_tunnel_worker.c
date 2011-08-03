@@ -3448,25 +3448,28 @@ static void handle_tunnel_channel_link(Channel *channel, RedClient *client,
     TunnelChannelClient *tcc;
     TunnelWorker *worker = (TunnelWorker *)channel->data;
     RedChannel *tunnel_channel;
+    ChannelCbs channel_cbs = {0,};
 
     if (worker->channel) {
         tunnel_channel_disconnect(worker->channel->base.channel);
     }
 
+    channel_cbs.config_socket = tunnel_channel_config_socket;
+    channel_cbs.disconnect = tunnel_channel_disconnect_client;
+    channel_cbs.alloc_recv_buf = tunnel_channel_alloc_msg_rcv_buf;
+    channel_cbs.release_recv_buf = tunnel_channel_release_msg_rcv_buf;
+    channel_cbs.hold_item = tunnel_channel_hold_pipe_item;
+    channel_cbs.send_item = tunnel_channel_send_item;
+    channel_cbs.release_item = tunnel_channel_release_pipe_item;
+    channel_cbs.handle_migrate_flush_mark = tunnel_channel_handle_migrate_mark;
+    channel_cbs.handle_migrate_data = tunnel_channel_handle_migrate_data;
+    channel_cbs.handle_migrate_data_get_serial = tunnel_channel_handle_migrate_data_get_serial;
+
     tunnel_channel = red_channel_create(sizeof(RedChannel),
                                             worker->core_interface,
                                             migration, TRUE,
-                                            tunnel_channel_config_socket,
-                                            tunnel_channel_disconnect_client,
                                             tunnel_channel_handle_message,
-                                            tunnel_channel_alloc_msg_rcv_buf,
-                                            tunnel_channel_release_msg_rcv_buf,
-                                            tunnel_channel_hold_pipe_item,
-                                            tunnel_channel_send_item,
-                                            tunnel_channel_release_pipe_item,
-                                            tunnel_channel_handle_migrate_mark,
-                                            tunnel_channel_handle_migrate_data,
-                                            tunnel_channel_handle_migrate_data_get_serial);
+                                            &channel_cbs);
 
     if (!tunnel_channel) {
         return;

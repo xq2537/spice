@@ -493,23 +493,23 @@ static void smartcard_link(Channel *channel, RedClient *client,
                         int num_caps, uint32_t *caps)
 {
     RedChannelClient *rcc;
+    ChannelCbs channel_cbs;
 
     if (!channel->data) {
+        memset(&channel_cbs, sizeof(channel_cbs), 0);
+        channel_cbs.config_socket = smartcard_channel_client_config_socket;
+        channel_cbs.disconnect = smartcard_channel_client_disconnect;
+        channel_cbs.send_item = smartcard_channel_send_item;
+        channel_cbs.hold_item = smartcard_channel_hold_pipe_item;
+        channel_cbs.release_item = smartcard_channel_release_pipe_item;
+        channel_cbs.alloc_recv_buf = smartcard_channel_alloc_msg_rcv_buf;
+        channel_cbs.release_recv_buf = smartcard_channel_release_msg_rcv_buf;
         channel->data =
             red_channel_create(sizeof(SmartCardChannel),
                                         core, migration,
                                         FALSE /* handle_acks */,
-                                        smartcard_channel_client_config_socket,
-                                        smartcard_channel_client_disconnect,
                                         smartcard_channel_handle_message,
-                                        smartcard_channel_alloc_msg_rcv_buf,
-                                        smartcard_channel_release_msg_rcv_buf,
-                                        smartcard_channel_hold_pipe_item,
-                                        smartcard_channel_send_item,
-                                        smartcard_channel_release_pipe_item,
-                                        NULL,
-                                        NULL,
-                                        NULL);
+                                        &channel_cbs);
         if (channel->data) {
             red_channel_init_outgoing_messages_window((RedChannel*)channel->data);
         } else {

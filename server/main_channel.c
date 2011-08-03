@@ -937,23 +937,27 @@ MainChannelClient *main_channel_link(Channel *channel, RedClient *client,
     MainChannelClient *mcc;
 
     if (channel->data == NULL) {
+        ChannelCbs channel_cbs;
+
+        channel_cbs.config_socket = main_channel_config_socket;
+        channel_cbs.disconnect = main_channel_client_disconnect;
+        channel_cbs.send_item = main_channel_send_item;
+        channel_cbs.hold_item = main_channel_hold_pipe_item;
+        channel_cbs.release_item = main_channel_release_pipe_item;
+        channel_cbs.alloc_recv_buf = main_channel_alloc_msg_rcv_buf;
+        channel_cbs.release_recv_buf = main_channel_release_msg_rcv_buf;
+        channel_cbs.handle_migrate_flush_mark = main_channel_handle_migrate_flush_mark;
+        channel_cbs.handle_migrate_data = main_channel_handle_migrate_data;
+        channel_cbs.handle_migrate_data_get_serial = main_channel_handle_migrate_data_get_serial;
+
         red_printf("create main channel");
         channel->data = red_channel_create_parser(
             sizeof(MainChannel), core, migration, FALSE /* handle_acks */
-            ,main_channel_config_socket
-            ,main_channel_client_disconnect
             ,spice_get_client_channel_parser(SPICE_CHANNEL_MAIN, NULL)
             ,main_channel_handle_parsed
-            ,main_channel_alloc_msg_rcv_buf
-            ,main_channel_release_msg_rcv_buf
-            ,main_channel_hold_pipe_item
-            ,main_channel_send_item
-            ,main_channel_release_pipe_item
             ,main_channel_on_error
             ,main_channel_on_error
-            ,main_channel_handle_migrate_flush_mark
-            ,main_channel_handle_migrate_data
-            ,main_channel_handle_migrate_data_get_serial);
+            ,&channel_cbs);
         ASSERT(channel->data);
     }
     // TODO - migration - I removed it from channel creation, now put it

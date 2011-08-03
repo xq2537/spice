@@ -223,7 +223,7 @@ static void red_channel_client_on_output(void *opaque, int n)
 
 void red_channel_client_default_peer_on_error(RedChannelClient *rcc)
 {
-    rcc->channel->disconnect(rcc);
+    rcc->channel->channel_cbs.disconnect(rcc);
 }
 
 static void red_channel_peer_on_incoming_error(RedChannelClient *rcc)
@@ -316,7 +316,7 @@ static void red_channel_client_send_item(RedChannelClient *rcc, PipeItem *item)
             handled = FALSE;
     }
     if (!handled) {
-        rcc->channel->send_item(rcc, item);
+        rcc->channel->channel_cbs.send_item(rcc, item);
     }
 }
 
@@ -332,7 +332,7 @@ static void red_channel_client_release_item(RedChannelClient *rcc, PipeItem *ite
             handled = FALSE;
     }
     if (!handled) {
-        rcc->channel->release_item(rcc, item, item_pushed);
+        rcc->channel->channel_cbs.release_item(rcc, item, item_pushed);
     }
 }
 
@@ -397,7 +397,7 @@ RedChannelClient *red_channel_client_create(
     rcc->outgoing.cb = &channel->outgoing_cb;
     rcc->outgoing.pos = 0;
     rcc->outgoing.size = 0;
-    if (!channel->config_socket(rcc)) {
+    if (!channel->channel_cbs.config_socket(rcc)) {
         goto error;
     }
 
@@ -420,40 +420,32 @@ error:
 RedChannel *red_channel_create(int size,
                                SpiceCoreInterface *core,
                                int migrate, int handle_acks,
-                               channel_configure_socket_proc config_socket,
-                               channel_disconnect_proc disconnect,
                                channel_handle_message_proc handle_message,
-                               channel_alloc_msg_recv_buf_proc alloc_recv_buf,
-                               channel_release_msg_recv_buf_proc release_recv_buf,
-                               channel_hold_pipe_item_proc hold_item,
-                               channel_send_pipe_item_proc send_item,
-                               channel_release_pipe_item_proc release_item,
-                               channel_handle_migrate_flush_mark_proc handle_migrate_flush_mark,
-                               channel_handle_migrate_data_proc handle_migrate_data,
-                               channel_handle_migrate_data_get_serial_proc handle_migrate_data_get_serial)
+                               ChannelCbs *channel_cbs)
 {
     RedChannel *channel;
 
     ASSERT(size >= sizeof(*channel));
-    ASSERT(config_socket && disconnect && handle_message && alloc_recv_buf &&
-           release_item);
+    ASSERT(channel_cbs->config_socket && channel_cbs->disconnect && handle_message &&
+           channel_cbs->alloc_recv_buf && channel_cbs->release_item);
     channel = spice_malloc0(size);
     channel->handle_acks = handle_acks;
-    channel->disconnect = disconnect;
-    channel->send_item = send_item;
-    channel->release_item = release_item;
-    channel->hold_item = hold_item;
-    channel->handle_migrate_flush_mark = handle_migrate_flush_mark;
-    channel->handle_migrate_data = handle_migrate_data;
-    channel->handle_migrate_data_get_serial = handle_migrate_data_get_serial;
-    channel->config_socket = config_socket;
+    channel->channel_cbs.disconnect = channel_cbs->disconnect;
+    channel->channel_cbs.send_item = channel_cbs->send_item;
+    channel->channel_cbs.release_item = channel_cbs->release_item;
+    channel->channel_cbs.hold_item = channel_cbs->hold_item;
+    channel->channel_cbs.handle_migrate_flush_mark = channel_cbs->handle_migrate_flush_mark;
+    channel->channel_cbs.handle_migrate_data = channel_cbs->handle_migrate_data;
+    channel->channel_cbs.handle_migrate_data_get_serial = channel_cbs->handle_migrate_data_get_serial;
+    channel->channel_cbs.config_socket = channel_cbs->config_socket;
 
     channel->core = core;
     channel->migrate = migrate;
     ring_init(&channel->clients);
 
-    channel->incoming_cb.alloc_msg_buf = (alloc_msg_recv_buf_proc)alloc_recv_buf;
-    channel->incoming_cb.release_msg_buf = (release_msg_recv_buf_proc)release_recv_buf;
+    // TODO: send incoming_cb as parameters instead of duplicating?
+    channel->incoming_cb.alloc_msg_buf = (alloc_msg_recv_buf_proc)channel_cbs->alloc_recv_buf;
+    channel->incoming_cb.release_msg_buf = (release_msg_recv_buf_proc)channel_cbs->release_recv_buf;
     channel->incoming_cb.handle_message = (handle_message_proc)handle_message;
     channel->incoming_cb.on_error =
         (on_incoming_error_proc)red_channel_client_default_peer_on_error;
@@ -478,26 +470,15 @@ static int do_nothing_handle_message(RedChannelClient *rcc, SpiceDataHeader *hea
 RedChannel *red_channel_create_parser(int size,
                                SpiceCoreInterface *core,
                                int migrate, int handle_acks,
-                               channel_configure_socket_proc config_socket,
-                               channel_disconnect_proc disconnect,
                                spice_parse_channel_func_t parser,
-                               channel_handle_parsed_proc handle_parsed,
-                               channel_alloc_msg_recv_buf_proc alloc_recv_buf,
-                               channel_release_msg_recv_buf_proc release_recv_buf,
-                               channel_hold_pipe_item_proc hold_item,
-                               channel_send_pipe_item_proc send_item,
-                               channel_release_pipe_item_proc release_item,
+                               channel_handle_parsed_proc handle_parsed, 
                                channel_on_incoming_error_proc incoming_error,
                                channel_on_outgoing_error_proc outgoing_error,
-                               channel_handle_migrate_flush_mark_proc handle_migrate_flush_mark,
-                               channel_handle_migrate_data_proc handle_migrate_data,
-                               channel_handle_migrate_data_get_serial_proc handle_migrate_data_get_serial)
+                               ChannelCbs *channel_cbs)
 {
     RedChannel *channel = red_channel_create(size,
-        core, migrate, handle_acks, config_socket, disconnect,
-        do_nothing_handle_message, alloc_recv_buf, release_recv_buf, hold_item,
-        send_item, release_item, handle_migrate_flush_mark, handle_migrate_data,
-        handle_migrate_data_get_serial);
+        core, migrate, handle_acks, do_nothing_handle_message,
+        channel_cbs);
 
     if (channel == NULL) {
         return NULL;
@@ -629,7 +610,7 @@ void red_channel_push(RedChannel *channel)
     RING_FOREACH_SAFE(link, next, &channel->clients) {
         rcc = SPICE_CONTAINEROF(link, RedChannelClient, channel_link);
         if (rcc->stream == NULL) {
-            rcc->channel->disconnect(rcc);
+            rcc->channel->channel_cbs.disconnect(rcc);
         } else {
             red_channel_client_push(rcc);
         }
@@ -657,8 +638,8 @@ void red_channel_init_outgoing_messages_window(RedChannel *channel)
 
 static void red_channel_handle_migrate_flush_mark(RedChannelClient *rcc)
 {
-    if (rcc->channel->handle_migrate_flush_mark) {
-        rcc->channel->handle_migrate_flush_mark(rcc);
+    if (rcc->channel->channel_cbs.handle_migrate_flush_mark) {
+        rcc->channel->channel_cbs.handle_migrate_flush_mark(rcc);
     }
 }
 
@@ -671,13 +652,13 @@ static void red_channel_handle_migrate_flush_mark(RedChannelClient *rcc)
 // So need to make all the handlers work with per channel/client data (what data exactly?)
 static void red_channel_handle_migrate_data(RedChannelClient *rcc, uint32_t size, void *message)
 {
-    if (!rcc->channel->handle_migrate_data) {
+    if (!rcc->channel->channel_cbs.handle_migrate_data) {
         return;
     }
     ASSERT(red_channel_client_get_message_serial(rcc) == 0);
     red_channel_client_set_message_serial(rcc,
-        rcc->channel->handle_migrate_data_get_serial(rcc, size, message));
-    rcc->channel->handle_migrate_data(rcc, size, message);
+        rcc->channel->channel_cbs.handle_migrate_data_get_serial(rcc, size, message));
+    rcc->channel->channel_cbs.handle_migrate_data(rcc, size, message);
 }
 
 int red_channel_client_handle_message(RedChannelClient *rcc, uint32_t size,
@@ -731,7 +712,7 @@ void red_channel_client_init_send_data(RedChannelClient *rcc, uint16_t msg_type,
     rcc->send_data.header->type = msg_type;
     rcc->send_data.item = item;
     if (item) {
-        rcc->channel->hold_item(rcc, item);
+        rcc->channel->channel_cbs.hold_item(rcc, item);
     }
 }
 
@@ -922,7 +903,7 @@ void red_channel_client_disconnect(RedChannelClient *rcc)
     red_printf("%p (channel %p)", rcc, rcc->channel);
 
     if (rcc->send_data.item) {
-        rcc->channel->release_item(rcc, rcc->send_data.item, FALSE);
+        rcc->channel->channel_cbs.release_item(rcc, rcc->send_data.item, FALSE);
     }
     red_channel_client_pipe_clear(rcc);
     reds_stream_free(rcc->stream);
@@ -1144,7 +1125,7 @@ void red_client_destroy(RedClient *client)
         // some channels may be in other threads, so disconnection
         // is not synchronous.
         rcc = SPICE_CONTAINEROF(link, RedChannelClient, client_link);
-        rcc->channel->disconnect(rcc); // this may call another thread. it also frees. (eventually - doesn't have to be in sync)
+        rcc->channel->channel_cbs.disconnect(rcc); // this may call another thread. it also frees. (eventually - doesn't have to be in sync)
     }
     free(client);
 }
@@ -1159,7 +1140,7 @@ void red_client_disconnect(RedClient *client)
         // some channels may be in other threads, so disconnection
         // is not synchronous.
         rcc = SPICE_CONTAINEROF(link, RedChannelClient, client_link);
-        rcc->channel->disconnect(rcc);
+        rcc->channel->channel_cbs.disconnect(rcc);
     }
 }
 

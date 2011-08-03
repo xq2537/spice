@@ -184,6 +184,7 @@ static void usbredir_link(Channel *channel, RedClient *client, RedsStream *strea
     UsbRedirChannel *redir_chan;
     SpiceCharDeviceInstance *sin;
     SpiceCharDeviceInterface *sif;
+    ChannelCbs channel_cbs;
 
     state = SPICE_CONTAINEROF(channel, UsbRedirState, channel);
     sin = state->chardev_sin;
@@ -199,19 +200,18 @@ static void usbredir_link(Channel *channel, RedClient *client, RedsStream *strea
     }
 
     if (!state->red_channel) {
+        memset(&channel_cbs, sizeof(channel_cbs), 0);
+        channel_cbs.config_socket = usbredir_red_channel_config_socket;
+        channel_cbs.disconnect = usbredir_red_channel_disconnect;
+        channel_cbs.send_item = usbredir_red_channel_send_item;
+        channel_cbs.hold_item = usbredir_red_channel_hold_pipe_item;
+        channel_cbs.release_item = usbredir_red_channel_release_pipe_item;
+        channel_cbs.alloc_recv_buf = usbredir_red_channel_alloc_msg_rcv_buf;
+        channel_cbs.release_recv_buf = usbredir_red_channel_release_msg_rcv_buf;
         state->red_channel = red_channel_create(sizeof(UsbRedirChannel),
                                         core, migration, FALSE /* handle_acks */,
-                                        usbredir_red_channel_config_socket,
-                                        usbredir_red_channel_disconnect,
                                         usbredir_red_channel_client_handle_message,
-                                        usbredir_red_channel_alloc_msg_rcv_buf,
-                                        usbredir_red_channel_release_msg_rcv_buf,
-                                        usbredir_red_channel_hold_pipe_item,
-                                        usbredir_red_channel_send_item,
-                                        usbredir_red_channel_release_pipe_item,
-                                        NULL,
-                                        NULL,
-                                        NULL);
+                                        &channel_cbs);
     }
     if (!state->red_channel) {
         return;

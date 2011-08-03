@@ -9502,23 +9502,26 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_i
 {
     RedChannel *channel = NULL;
     CommonChannel *common;
+    ChannelCbs channel_cbs;
+
+    channel_cbs.config_socket = common_channel_config_socket;
+    channel_cbs.disconnect = disconnect;
+    channel_cbs.send_item = send_item;
+    channel_cbs.hold_item = hold_item;
+    channel_cbs.release_item = release_item;
+    channel_cbs.alloc_recv_buf = common_alloc_recv_buf;
+    channel_cbs.release_recv_buf = common_release_recv_buf;
+    channel_cbs.handle_migrate_flush_mark = handle_migrate_flush_mark;
+    channel_cbs.handle_migrate_data = handle_migrate_data;
+    channel_cbs.handle_migrate_data_get_serial = handle_migrate_data_get_serial;
 
     channel = red_channel_create_parser(size, &worker_core, migrate,
                                         TRUE /* handle_acks */,
-                                        common_channel_config_socket,
-                                        disconnect,
                                         spice_get_client_channel_parser(channel_id, NULL),
                                         handle_parsed,
-                                        common_alloc_recv_buf,
-                                        common_release_recv_buf,
-                                        hold_item,
-                                        send_item,
-                                        release_item,
                                         on_incoming_error,
                                         on_outgoing_error,
-                                        handle_migrate_flush_mark,
-                                        handle_migrate_data,
-                                        handle_migrate_data_get_serial);
+                                        &channel_cbs);
     common = (CommonChannel *)channel;
     if (!channel) {
         goto error;
@@ -10061,7 +10064,7 @@ static void red_wait_pipe_item_sent(RedChannelClient *rcc, PipeItem *item)
     }
 
     red_printf("");
-    channel->hold_item(rcc, item);
+    channel->channel_cbs.hold_item(rcc, item);
 
     end_time = red_now() + CHANNEL_PUSH_TIMEOUT;
 
@@ -10086,7 +10089,7 @@ static void red_wait_pipe_item_sent(RedChannelClient *rcc, PipeItem *item)
             red_wait_outgoing_item(rcc);
         }
     }
-    channel->release_item(rcc, item, FALSE);
+    channel->channel_cbs.release_item(rcc, item, FALSE);
 }
 
 static void surface_dirty_region_to_rects(RedSurface *surface,
