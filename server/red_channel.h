@@ -23,6 +23,7 @@
 #define _H_RED_CHANNEL
 
 #include "red_common.h"
+#include <pthread.h>
 #include "reds.h"
 #include "spice.h"
 #include "ring.h"
@@ -138,6 +139,15 @@ typedef uint64_t (*channel_handle_migrate_data_proc)(RedChannelClient *base,
 typedef uint64_t (*channel_handle_migrate_data_get_serial_proc)(RedChannelClient *base,
                                             uint32_t size, void *message);
 
+
+typedef void (*channel_client_connect_proc)(RedChannel *channel, RedClient *client, RedsStream *stream,
+                                            int migration, int num_common_caps, uint32_t *common_caps,
+                                            int num_caps, uint32_t *caps);
+typedef void (*channel_client_disconnect_proc)(RedChannelClient *base);
+typedef void (*channel_client_migrate_proc)(RedChannelClient *base);
+
+// TODO: add ASSERTS for thread_id  in client and channel calls
+//
 /*
  * callbacks that are triggered from channel client stream events.
  * They are called from the thread that listen to the stream events.
@@ -154,6 +164,17 @@ typedef struct {
     channel_handle_migrate_data_proc handle_migrate_data;
     channel_handle_migrate_data_get_serial_proc handle_migrate_data_get_serial;
 } ChannelCbs;
+
+
+/*
+ * callbacks that are triggered from client events.
+ * They should be called from the thread that handles the RedClient
+ */
+typedef struct {
+    channel_client_connect_proc connect;
+    channel_client_disconnect_proc disconnect;
+    channel_client_migrate_proc migrate;
+} ClientCbs;
 
 struct RedChannelClient {
     RingItem channel_link;
@@ -197,6 +218,7 @@ struct RedChannel {
     IncomingHandlerInterface incoming_cb;
 
     ChannelCbs channel_cbs;
+    ClientCbs client_cbs;
 
     /* Stuff below added for Main and Inputs channels switch to RedChannel
      * (might be removed later) */
@@ -204,6 +226,8 @@ struct RedChannel {
     channel_on_outgoing_error_proc on_outgoing_error;
     int shut; /* signal channel is to be closed */
 
+    // TODO: when different channel_clients are in different threads from Channel -> need to protect!
+    pthread_t thread_id;
 #ifdef RED_STATISTICS
     uint64_t *out_bytes_counter;
 #endif
@@ -227,6 +251,8 @@ RedChannel *red_channel_create_parser(int size,
                                channel_on_incoming_error_proc incoming_error,
                                channel_on_outgoing_error_proc outgoing_error,
                                ChannelCbs *channel_cbs);
+
+void red_channel_register_client_cbs(RedChannel *channel, ClientCbs *client_cbs);
 
 RedChannelClient *red_channel_client_create(int size, RedChannel *channel, RedClient *client,
                                             RedsStream *stream);
@@ -379,6 +405,8 @@ struct RedClient {
     int channels_num;
     int disconnecting;
     MainChannelClient *mcc;
+
+    pthread_t thread_id;
 };
 
 RedClient *red_client_new();

@@ -417,6 +417,24 @@ error:
     return NULL;
 }
 
+static void red_channel_client_default_connect(RedChannel *channel, RedClient *client,
+                                               RedsStream *stream,
+                                               int migration,
+                                               int num_common_caps, uint32_t *common_caps,
+                                               int num_caps, uint32_t *caps)
+{
+    red_error("not implemented");
+}
+
+static void red_channel_client_default_disconnect(RedChannelClient *base)
+{
+    red_channel_client_disconnect(base);
+}
+
+static void red_channel_client_default_migrate(RedChannelClient *base)
+{
+}
+
 RedChannel *red_channel_create(int size,
                                SpiceCoreInterface *core,
                                int migrate, int handle_acks,
@@ -424,6 +442,7 @@ RedChannel *red_channel_create(int size,
                                ChannelCbs *channel_cbs)
 {
     RedChannel *channel;
+    ClientCbs client_cbs;
 
     ASSERT(size >= sizeof(*channel));
     ASSERT(channel_cbs->config_socket && channel_cbs->disconnect && handle_message &&
@@ -456,6 +475,14 @@ RedChannel *red_channel_create(int size,
         (on_outgoing_error_proc)red_channel_client_default_peer_on_error;
     channel->outgoing_cb.on_msg_done = red_channel_peer_on_out_msg_done;
     channel->outgoing_cb.on_output = red_channel_client_on_output;
+
+    client_cbs.connect = red_channel_client_default_connect;
+    client_cbs.disconnect = red_channel_client_default_disconnect;
+    client_cbs.migrate = red_channel_client_default_migrate;
+
+    red_channel_register_client_cbs(channel, &client_cbs);
+
+    channel->thread_id = pthread_self();
 
     channel->shut = 0; // came here from inputs, perhaps can be removed? XXX
     channel->out_bytes_counter = 0;
@@ -490,6 +517,20 @@ RedChannel *red_channel_create_parser(int size,
     channel->on_incoming_error = incoming_error;
     channel->on_outgoing_error = outgoing_error;
     return channel;
+}
+
+void red_channel_register_client_cbs(RedChannel *channel, ClientCbs *client_cbs)
+{
+    ASSERT(client_cbs->connect);
+    channel->client_cbs.connect = client_cbs->connect;
+
+    if (client_cbs->disconnect) {
+        channel->client_cbs.disconnect = client_cbs->disconnect;
+    }
+
+    if (client_cbs->migrate) {
+        channel->client_cbs.migrate = client_cbs->migrate;
+    }
 }
 
 void red_channel_client_destroy(RedChannelClient *rcc)
@@ -1102,6 +1143,8 @@ RedClient *red_client_new()
 
     client = spice_malloc0(sizeof(RedClient));
     ring_init(&client->channels);
+    client->thread_id = pthread_self();
+
     return client;
 }
 
@@ -1121,11 +1164,17 @@ void red_client_destroy(RedClient *client)
     RedChannelClient *rcc;
 
     red_printf("destroy client with #channels %d", client->channels_num);
+    ASSERT(pthread_equal(pthread_self(), client->thread_id));
     RING_FOREACH_SAFE(link, next, &client->channels) {
         // some channels may be in other threads, so disconnection
         // is not synchronous.
         rcc = SPICE_CONTAINEROF(link, RedChannelClient, client_link);
-        rcc->channel->channel_cbs.disconnect(rcc); // this may call another thread. it also frees. (eventually - doesn't have to be in sync)
+        // some channels may be in other threads. However we currently
+        // assume disconnect is synchronous (we changed the dispatcher
+        // to wait for disconnection)
+        // TODO: should we go back to async. For this we need to use
+        // ref count for channel clients.
+        rcc->channel->client_cbs.disconnect(rcc);
     }
     free(client);
 }
@@ -1140,7 +1189,7 @@ void red_client_disconnect(RedClient *client)
         // some channels may be in other threads, so disconnection
         // is not synchronous.
         rcc = SPICE_CONTAINEROF(link, RedChannelClient, client_link);
-        rcc->channel->channel_cbs.disconnect(rcc);
+        rcc->channel->client_cbs.disconnect(rcc);
     }
 }
 
