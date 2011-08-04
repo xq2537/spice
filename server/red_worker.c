@@ -8604,13 +8604,13 @@ static void red_release_glz(DisplayChannel *channel)
     }
 
     channel->glz_dict = NULL;
-    pthread_mutex_lock(&cache_lock);
+    pthread_mutex_lock(&glz_dictionary_list_lock);
     if (--shared_dict->refs) {
-        pthread_mutex_unlock(&cache_lock);
+        pthread_mutex_unlock(&glz_dictionary_list_lock);
         return;
     }
     ring_remove(&shared_dict->base);
-    pthread_mutex_unlock(&cache_lock);
+    pthread_mutex_unlock(&glz_dictionary_list_lock);
     glz_enc_dictionary_destroy(shared_dict->dict, &channel->glz_data.usr);
     free(shared_dict);
 }
