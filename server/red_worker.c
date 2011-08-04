@@ -885,6 +885,8 @@ typedef struct RedWorker {
     Ring current_list;
     uint32_t current_size;
     uint32_t drawable_count;
+    uint32_t red_drawable_count;
+    uint32_t glz_drawable_count;
     uint32_t transparent_count;
 
     uint32_t shadows_count;
@@ -1674,6 +1676,7 @@ static inline void put_red_drawable(RedWorker *worker, RedDrawable *drawable, ui
         return;
     }
 
+    worker->red_drawable_count--;
     release_info_ext.group_id = group_id;
     release_info_ext.info = drawable->release_info;
     worker->qxl->st->qif->release_resource(worker->qxl, release_info_ext);
@@ -1737,6 +1740,7 @@ static inline void release_drawable(RedWorker *worker, Drawable *drawable)
         put_red_drawable(worker, drawable->red_drawable,
                           drawable->group_id, drawable->self_bitmap);
         free_drawable(worker, drawable);
+        worker->drawable_count--;
     }
 }
 
@@ -1820,8 +1824,6 @@ static void red_flush_source_surfaces(RedWorker *worker, Drawable *drawable)
 
 static inline void current_remove_drawable(RedWorker *worker, Drawable *item)
 {
-    worker->drawable_count--;
-
     if (item->tree_item.effect != QXL_EFFECT_OPAQUE) {
         worker->transparent_count--;
     }
@@ -2300,8 +2302,8 @@ static inline void __current_add_drawable(RedWorker *worker, Drawable *drawable,
     surface = &worker->surfaces[surface_id];
     ring_add_after(&drawable->tree_item.base.siblings_link, pos);
     ring_add(&worker->current_list, &drawable->list_link);
-    worker->drawable_count++;
     ring_add(&surface->current_list, &drawable->surface_list_link);
+    worker->current_size++;
     drawable->refs++;
 }
 
@@ -3220,7 +3222,6 @@ static inline int red_current_add(RedWorker *worker, Ring *ring, Drawable *drawa
 
     print_base_item("ADD", &item->base);
     ASSERT(!region_is_empty(&item->base.rgn));
-    worker->current_size++;
     region_init(&exclude_rgn);
     now = ring_next(ring, ring);
 
@@ -3365,7 +3366,6 @@ static inline int red_current_add_with_shadow(RedWorker *worker, Ring *ring, Dra
         return FALSE;
     }
     print_base_item("ADDSHADOW", &item->tree_item.base);
-    worker->current_size++;
     // item and his shadow must initially be placed in the same container.
     // for now putting them on root.
 
@@ -3629,6 +3629,8 @@ static Drawable *get_drawable(RedWorker *worker, uint8_t effect, RedDrawable *re
     while (!(drawable = alloc_drawable(worker))) {
         free_one_drawable(worker, FALSE);
     }
+    worker->drawable_count++;
+    worker->red_drawable_count++;
     memset(drawable, 0, sizeof(Drawable));
     drawable->refs = 1;
     clock_gettime(CLOCK_MONOTONIC, &time);
@@ -4689,6 +4691,7 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
 
     *ring_is_empty = FALSE;
     while (!display_is_connected(worker) ||
+           // TODO: change to average pipe size?
            red_channel_min_pipe_size(&worker->display_channel->common.base) <= max_pipe_size) {
         if (!worker->qxl->st->qif->get_command(worker->qxl, &ext_cmd)) {
             *ring_is_empty = TRUE;;
@@ -4778,6 +4781,9 @@ static void red_free_some(RedWorker *worker)
     DisplayChannelClient *dcc;
     RingItem *item;
 
+    red_printf_debug(3, "#draw=%d, #red_draw=%d, #glz_draw=%d", worker->drawable_count,
+                                                                worker->red_drawable_count,
+                                                                worker->glz_drawable_count);
     WORKER_FOREACH_DCC(worker, item, dcc) {
         GlzSharedDictionary *glz_dict = dcc ? dcc->glz_dict : NULL;
 
@@ -5065,7 +5071,7 @@ static RedGlzDrawable *red_display_get_glz_drawable(DisplayChannelClient *dcc, D
     ring_item_init(&ret->drawable_link);
     ring_add_before(&ret->link, &dcc->glz_drawables);
     ring_add(&drawable->glz_ring, &ret->drawable_link);
-
+    dcc->common.worker->glz_drawable_count++;
     return ret;
 }
 
@@ -5125,7 +5131,7 @@ static void red_display_free_glz_drawable_instance(DisplayChannelClient *dcc,
         }
         put_red_drawable(worker, glz_drawable->red_drawable,
                           glz_drawable->group_id, glz_drawable->self_bitmap);
-
+        worker->glz_drawable_count--;
         if (ring_item_is_linked(&glz_drawable->link)) {
             ring_remove(&glz_drawable->link);
         }
@@ -5476,6 +5482,7 @@ static void glz_usr_free_image(GlzEncoderUsrContext *usr, GlzUsrImageContext *im
     if (this_cc == drawable_cc) {
         red_display_free_glz_drawable_instance(drawable_cc, glz_drawable_instance);
     } else {
+        red_printf("error");
         pthread_mutex_lock(&drawable_cc->glz_drawables_inst_to_free_lock);
         ring_add_before(&glz_drawable_instance->free_link,
                         &drawable_cc->glz_drawables_inst_to_free);
@@ -8639,6 +8646,9 @@ static void display_channel_client_on_disconnect(RedChannelClient *rcc)
     if (!red_channel_is_connected(rcc->channel)) {
         red_display_destroy_compress_bufs(display_channel);
     }
+    red_printf_debug(3, "#draw=%d, #red_draw=%d, #glz_draw=%d", worker->drawable_count,
+                                                                worker->red_drawable_count,
+                                                                worker->glz_drawable_count);
 }
 
 void red_disconnect_all_display_TODO_remove_me(RedChannel *channel)
@@ -10411,16 +10421,28 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         break;
     case RED_WORKER_MESSAGE_OOM:
         ASSERT(worker->running);
+        // streams? but without streams also leak
+        red_printf_debug(1, "OOM1 #draw=%u, #red_draw=%u, #glz_draw=%u current %u pipes %u",
+                         worker->drawable_count,
+                         worker->red_drawable_count,
+                         worker->glz_drawable_count,
+                         worker->current_size,
+                         worker->display_channel ?
+                         red_channel_sum_pipes_size(display_red_channel) : 0);
         while (red_process_commands(worker, MAX_PIPE_SIZE, &ring_is_empty)) {
             red_channel_push(&worker->display_channel->common.base);
         }
         if (worker->qxl->st->qif->flush_resources(worker->qxl) == 0) {
-            red_printf("oom current %u pipes %u", worker->current_size,
-                       worker->display_channel ?
-                       red_channel_sum_pipes_size(display_red_channel) : 0);
             red_free_some(worker);
             worker->qxl->st->qif->flush_resources(worker->qxl);
         }
+        red_printf_debug(1, "OOM2 #draw=%u, #red_draw=%u, #glz_draw=%u current %u pipes %u",
+                         worker->drawable_count,
+                         worker->red_drawable_count,
+                         worker->glz_drawable_count,
+                         worker->current_size,
+                         worker->display_channel ?
+                         red_channel_sum_pipes_size(display_red_channel) : 0);
         clear_bit(RED_WORKER_PENDING_OOM, worker->pending);
         break;
     case RED_WORKER_MESSAGE_RESET_CURSOR:
