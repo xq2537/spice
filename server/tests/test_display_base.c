@@ -402,10 +402,11 @@ static void produce_command()
 
 SpiceTimer *wakeup_timer;
 int wakeup_ms = 50;
+SpiceCoreInterface *g_core;
 
 static int req_cmd_notification(QXLInstance *qin)
 {
-    core->timer_start(wakeup_timer, wakeup_ms);
+    g_core->timer_start(wakeup_timer, wakeup_ms);
     return TRUE;
 }
 
@@ -418,7 +419,7 @@ static void do_wakeup()
         produce_command();
     }
 
-    core->timer_start(wakeup_timer, wakeup_ms);
+    g_core->timer_start(wakeup_timer, wakeup_ms);
     qxl_worker->wakeup(qxl_worker);
 }
 
@@ -561,6 +562,7 @@ SpiceServer* test_init(SpiceCoreInterface *core)
 {
     int port = 5912;
     SpiceServer* server = spice_server_new();
+    g_core = core;
 
     // some common initialization for all display tests
     printf("TESTER: listening on port %d (unsecure)\n", port);
