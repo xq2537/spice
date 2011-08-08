@@ -19,10 +19,16 @@
 #ifndef BACKTRACE_H
 #define BACKTRACE_H
 
+#include <spice/macros.h>
+
+SPICE_BEGIN_DECLS
+
 #ifdef WIN32
 #define spice_backtrace()
 #else
 void spice_backtrace(void);
 #endif
+
+SPICE_END_DECLS
 
 #endif // BACKTRACE_H
