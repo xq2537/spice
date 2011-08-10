@@ -81,7 +81,7 @@ static GLXFBConfig **fb_config = NULL;
 static XIM x_input_method = NULL;
 static XIC x_input_context = NULL;
 
-static Window platform_win;
+static Window platform_win = 0;
 static XContext win_proc_context;
 static ProcessLoop* main_loop = NULL;
 static int focus_count = 0;
@@ -922,6 +922,9 @@ DynamicScreen::DynamicScreen(Display* display, int screen, int& next_mon_id)
     , _saved_height (get_height())
     , _out_of_sync (false)
 {
+    if (platform_win != 0)
+        return;
+
     X_DEBUG_SYNC(display);
     //FIXME: replace RootWindow() in other refs as well?
     XLockDisplay(display);
@@ -1225,6 +1228,9 @@ MultyMonScreen::MultyMonScreen(Display* display, int screen, int& next_mon_id)
         monitors_cleanup();
         throw;
     }
+
+    if (platform_win != 0)
+        return;
 
     XLockDisplay(display);
     platform_win = XCreateSimpleWindow(display, RootWindow(display, screen), 0, 0, 1, 1, 0, 0, 0);
