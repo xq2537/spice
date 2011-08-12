@@ -2961,6 +2961,7 @@ static unsigned int get_modifier_mask(KeySym modifier)
     XModifierKeymap* map = XGetModifierMapping(x_display);
     KeyCode keycode = XKeysymToKeycode(x_display, modifier);
     if (keycode == NoSymbol) {
+        XFreeModifiermap(map);
         return 0;
     }
 
