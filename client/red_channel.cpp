@@ -68,10 +68,7 @@ void RedChannelBase::link(uint32_t connection_id, const std::string& password,
     uint32_t link_res;
     uint32_t i;
 
-    EVP_PKEY *pubkey;
-    int nRSASize;
     BIO *bioKey;
-    RSA *rsa;
     uint8_t *buffer, *p;
     uint32_t expected_major;
 
@@ -168,6 +165,10 @@ void RedChannelBase::link(uint32_t connection_id, const std::string& password,
 
     bioKey = BIO_new(BIO_s_mem());
     if (bioKey != NULL) {
+        EVP_PKEY *pubkey;
+        int nRSASize;
+        RSA *rsa;
+
         BIO_write(bioKey, reply->pub_key, SPICE_TICKET_PUBKEY_BYTES);
         pubkey = d2i_PUBKEY_bio(bioKey, NULL);
         rsa = pubkey->pkey.rsa;
@@ -183,10 +184,13 @@ void RedChannelBase::link(uint32_t connection_id, const std::string& password,
                                rsa, RSA_PKCS1_OAEP_PADDING) > 0) {
             send((uint8_t*)bufEncrypted.get(), nRSASize);
         } else {
+            EVP_PKEY_free(pubkey);
+            BIO_free(bioKey);
             THROW("could not encrypt password");
         }
 
         memset(bufEncrypted.get(), 0, nRSASize);
+        EVP_PKEY_free(pubkey);
     } else {
         THROW("Could not initiate BIO");
     }
