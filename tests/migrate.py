@@ -59,6 +59,7 @@ def get_args():
     parser.add_argument('--log_filename', dest='log_filename', default='migrate.log')
     parser.add_argument('--image', dest='image', default='')
     parser.add_argument('--client', dest='client', default='spicy', choices=['spicec', 'spicy'])
+    parser.add_argument('--vdagent', choices=['on', 'off'], default='on')
     args = parser.parse_args(sys.argv[1:])
     if os.path.exists(args.qemu):
         args.qemu_exec = args.qemu
@@ -69,13 +70,13 @@ def get_args():
         sys.exit(1)
     return args
 
-def start_qemu(qemu_exec, image, spice_port, qmp_filename, incoming_port=None):
+def start_qemu(qemu_exec, image, spice_port, qmp_filename, incoming_port=None, extra_args=[]):
     incoming_args = []
     if incoming_port:
         incoming_args = ("-incoming tcp::%s" % incoming_port).split()
     args = ([qemu_exec, "-qmp", "unix:%s,server,nowait" % qmp_filename,
         "-spice", "disable-ticketing,port=%s" % spice_port]
-        + incoming_args)
+        + incoming_args + extra_args)
     if os.path.exists(image):
         args += ["-m", "512", "-drive",
                  "file=%s,index=0,media=disk,cache=unsafe" % image, "-snapshot"]
@@ -131,7 +132,7 @@ class Migrator(object):
     migration_count = 0
 
     def __init__(self, log, client, qemu_exec, image, monitor_files, client_count,
-                 spice_ports, migration_port):
+                 spice_ports, migration_port, vdagent):
         self.client = client
         self.log = log
         self.qemu_exec = qemu_exec
@@ -140,8 +141,12 @@ class Migrator(object):
         self.client_count = client_count
         self.monitor_files = monitor_files
         self.spice_ports = spice_ports
+        self.vdagent = vdagent
+        extra_args = []
+        if self.vdagent:
+            extra_args = ['-device', 'virtio-serial', '-chardev', 'spicevmc,name=vdagent,id=vdagent', '-device', 'virtserialport,chardev=vdagent,name=com.redhat.spice.0']
         self.active = start_qemu(qemu_exec=qemu_exec, image=image, spice_port=spice_ports[0],
-                                 qmp_filename=monitor_files[0])
+                                 qmp_filename=monitor_files[0], extra_args=extra_args)
         self.target = start_qemu(qemu_exec=qemu_exec, image=image, spice_port=spice_ports[1],
                                  qmp_filename=monitor_files[1], incoming_port=migration_port)
         self.remove_monitor_files()
@@ -204,7 +209,7 @@ def main():
     migrator = Migrator(client=args.client, qemu_exec=args.qemu_exec,
         image=args.image, log=log, monitor_files=[args.qmp1, args.qmp2],
         migration_port=args.migrate_port, spice_ports=[args.spice_port1,
-        args.spice_port2], client_count=args.client_count)
+        args.spice_port2], client_count=args.client_count, vdagent=(args.vdagent=='on'))
     atexit.register(cleanup, migrator)
     while True:
         migrator.iterate()
