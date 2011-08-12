@@ -740,6 +740,7 @@ void RedClient::send_agent_display_config()
         spice_marshaller_reserve_space(message->marshaller(), sizeof(VDAgentDisplayConfig));
 
     disp_config->flags = 0;
+    disp_config->depth = 0;
     if (_display_setting._disable_wallpaper) {
         disp_config->flags |= VD_AGENT_DISPLAY_CONFIG_FLAG_DISABLE_WALLPAPER;
     }
