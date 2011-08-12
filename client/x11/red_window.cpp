@@ -1306,16 +1306,19 @@ void RedWindow_p::move_to_current_desktop()
     unsigned long nitems_return;
     unsigned char *prop_return;
     long desktop = ~long(0);
+    int status;
 
     XLockDisplay(x_display);
-    if (XGetWindowProperty(x_display, root, wm_current_desktop, 0, 1, False, AnyPropertyType,
-                           &actual_type_return, &actual_format_return, &nitems_return,
-                           &bytes_after_return, &prop_return) == Success &&
-                                         actual_type_return != None && actual_format_return == 32) {
+    status = XGetWindowProperty(x_display, root, wm_current_desktop, 0, 1, False, AnyPropertyType,
+                                &actual_type_return, &actual_format_return, &nitems_return,
+                                &bytes_after_return, &prop_return);
+    if ((status  == Success) && (actual_type_return != None) && (actual_format_return == 32)) {
         desktop = *(uint32_t *)prop_return;
     } else {
         DBG(0, "get current desktop failed");
     }
+    if (status == Success)
+        XFree(prop_return);
     XUnlockDisplay(x_display);
 
     XEvent xevent;
