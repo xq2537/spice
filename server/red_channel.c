@@ -141,6 +141,7 @@ static void red_peer_handle_incoming(RedsStream *stream, IncomingHandler *handle
                                                  handler->msg);
         }
         handler->msg_pos = 0;
+        handler->cb->release_msg_buf(handler->opaque, &handler->header, handler->msg);
         handler->msg = NULL;
         handler->header_pos = 0;
 
