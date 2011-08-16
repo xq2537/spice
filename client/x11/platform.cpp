@@ -2953,27 +2953,6 @@ static void init_xfixes()
         XFixesQueryVersion(x_display, &major, &minor) && major >= 1;
 }
 
-static unsigned int get_modifier_mask(KeySym modifier)
-{
-    int mask = 0;
-    int i;
-
-    XModifierKeymap* map = XGetModifierMapping(x_display);
-    KeyCode keycode = XKeysymToKeycode(x_display, modifier);
-    if (keycode == NoSymbol) {
-        XFreeModifiermap(map);
-        return 0;
-    }
-
-    for (i = 0; i < 8; i++) {
-        if (map->modifiermap[map->max_keypermod * i] == keycode) {
-            mask = 1 << i;
-        }
-    }
-    XFreeModifiermap(map);
-    return mask;
-}
-
 static void init_kbd()
 {
     int xkb_major = XkbMajorVersion;
@@ -2986,8 +2965,8 @@ static void init_kbd()
         !XkbQueryExtension(x_display, &opcode, &event, &error, &xkb_major, &xkb_minor)) {
         return;
     }
-    caps_lock_mask = get_modifier_mask(XK_Caps_Lock);
-    num_lock_mask = get_modifier_mask(XK_Num_Lock);
+    caps_lock_mask = XkbKeysymToModifiers(x_display, XK_Caps_Lock);
+    num_lock_mask = XkbKeysymToModifiers(x_display, XK_Num_Lock);
 }
 
 static void init_XIM()
