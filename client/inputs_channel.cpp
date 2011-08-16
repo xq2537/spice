@@ -402,7 +402,7 @@ void InputsChannel::set_local_modifiers()
         modifiers |= Platform::CAPS_LOCK_MODIFIER;
     }
 
-    Platform::set_keyboard_lock_modifiers(_modifiers);
+    Platform::set_keyboard_lock_modifiers(modifiers);
 }
 
 void InputsChannel::on_focus_in()
