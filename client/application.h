@@ -306,10 +306,11 @@ private:
     void destroy_monitors();
     void assign_monitors();
     void restore_monitors();
-    void prepare_monitors();
+    void prepare_monitors(std::vector<SpicePoint> *sizes);
     void rearrange_monitors(bool force_capture,
                             bool enter_full_screen,
-                            RedScreen* screen = NULL);
+                            RedScreen* screen = NULL,
+                            std::vector<SpicePoint> *sizes = NULL);
     void position_screens();
     void show_full_screen();
     void send_key_down(RedKey key);

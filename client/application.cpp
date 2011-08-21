@@ -1373,7 +1373,8 @@ void Application::on_screen_unlocked(RedScreen& screen)
 
 void Application::rearrange_monitors(bool force_capture,
                                      bool enter_full_screen,
-                                     RedScreen* screen)
+                                     RedScreen* screen,
+                                     std::vector<SpicePoint> *sizes)
 {
     bool capture;
     bool toggle_full_screen;
@@ -1391,7 +1392,7 @@ void Application::rearrange_monitors(bool force_capture,
         hide();
     }
 #endif
-    prepare_monitors();
+    prepare_monitors(sizes);
     position_screens();
     if (enter_full_screen) {
         // toggling to full screen
@@ -1450,16 +1451,19 @@ void Application::assign_monitors()
     }
 }
 
-void Application::prepare_monitors()
+void Application::prepare_monitors(std::vector<SpicePoint> *sizes)
 {
     //todo: test match of monitors size/position against real world size/position
     for (int i = 0; i < (int)_screens.size(); i++) {
         Monitor* mon;
         if (_screens[i] && (mon = _screens[i]->get_monitor())) {
-
             if (_screens[i]->is_size_locked()) {
-                SpicePoint size = _screens[i]->get_size();
-                mon->set_mode(size.x, size.y);
+                if (sizes) {
+                    mon->set_mode((*sizes)[i].x, (*sizes)[i].y);
+                } else {
+                    SpicePoint size = _screens[i]->get_size();
+                    mon->set_mode(size.x, size.y);
+                }
             } else {
                 SpicePoint size = mon->get_size();
                 _screens[i]->resize(size.x, size.y);
@@ -1595,15 +1599,31 @@ bool Application::toggle_full_screen()
 
 void Application::resize_screen(RedScreen *screen, int width, int height)
 {
-    Monitor* mon;
+    std::vector<SpicePoint> sizes;
+    std::vector<SpicePoint> *p_sizes = NULL;
+    bool capture = false;
 
     if (_full_screen) {
-        if ((mon = screen->get_monitor())) {
-            mon->set_mode(width, height);
+        capture = (_main_screen == screen) && _active_screen &&
+                                              _active_screen->is_mouse_captured();
+        sizes.resize(_screens.size());
+        for (int i = 0; i < (int)_screens.size(); i++) {
+            if (_screens[i]) {
+                if (_screens[i] == screen) {
+                    sizes[i].x = width;
+                    sizes[i].y = height;
+                } else {
+                    sizes[i] = _screens[i]->get_size();
+                }
+            }
         }
+        p_sizes = &sizes;
     }
+    rearrange_monitors(false, false, NULL, p_sizes);
     screen->resize(width, height);
-    rearrange_monitors(false, false);
+    if (capture) {
+        screen->capture_mouse();
+    }
     if (screen->is_out_of_sync()) {
         _out_of_sync = true;
         /* If the client monitor cannot handle the guest resolution
