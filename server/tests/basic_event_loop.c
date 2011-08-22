@@ -2,7 +2,11 @@
 #include <stdio.h>
 #include <sys/time.h>
 #include <strings.h>
+#include <signal.h>
+#include <string.h>
 
+#include "spice/macros.h"
+#include "common/ring.h"
 #include "test_util.h"
 #include "basic_event_loop.h"
 
@@ -13,116 +17,6 @@ int debug = 0;
         printf("%s: " format "\n" , __FUNCTION__, ## __VA_ARGS__); \
     } \
 }
-
-/* From ring.h */
-typedef struct Ring RingItem;
-typedef struct Ring {
-    RingItem *prev;
-    RingItem *next;
-} Ring;
-
-static inline void ring_init(Ring *ring)
-{
-    ring->next = ring->prev = ring;
-}
-
-static inline void ring_item_init(RingItem *item)
-{
-    item->next = item->prev = NULL;
-}
-
-static inline int ring_item_is_linked(RingItem *item)
-{
-    return !!item->next;
-}
-
-static inline int ring_is_empty(Ring *ring)
-{
-    ASSERT(ring->next != NULL && ring->prev != NULL);
-    return ring == ring->next;
-}
-
-static inline void ring_add(Ring *ring, RingItem *item)
-{
-    ASSERT(ring->next != NULL && ring->prev != NULL);
-    ASSERT(item->next == NULL && item->prev == NULL);
-
-    item->next = ring->next;
-    item->prev = ring;
-    ring->next = item->next->prev = item;
-}
-
-static inline void __ring_remove(RingItem *item)
-{
-    item->next->prev = item->prev;
-    item->prev->next = item->next;
-    item->prev = item->next = 0;
-}
-
-static inline void ring_remove(RingItem *item)
-{
-    ASSERT(item->next != NULL && item->prev != NULL);
-    ASSERT(item->next != item);
-
-    __ring_remove(item);
-}
-
-static inline RingItem *ring_get_head(Ring *ring)
-{
-    RingItem *ret;
-
-    ASSERT(ring->next != NULL && ring->prev != NULL);
-
-    if (ring_is_empty(ring)) {
-        return NULL;
-    }
-    ret = ring->next;
-    return ret;
-}
-
-static inline RingItem *ring_get_tail(Ring *ring)
-{
-    RingItem *ret;
-
-    ASSERT(ring->next != NULL && ring->prev != NULL);
-
-    if (ring_is_empty(ring)) {
-        return NULL;
-    }
-    ret = ring->prev;
-    return ret;
-}
-
-static inline RingItem *ring_next(Ring *ring, RingItem *pos)
-{
-    RingItem *ret;
-
-    ASSERT(ring->next != NULL && ring->prev != NULL);
-    ASSERT(pos);
-    ASSERT(pos->next != NULL && pos->prev != NULL);
-    ret = pos->next;
-    return (ret == ring) ? NULL : ret;
-}
-
-static inline RingItem *ring_prev(Ring *ring, RingItem *pos)
-{
-    RingItem *ret;
-
-    ASSERT(ring->next != NULL && ring->prev != NULL);
-    ASSERT(pos);
-    ASSERT(pos->next != NULL && pos->prev != NULL);
-    ret = pos->prev;
-    return (ret == ring) ? NULL : ret;
-}
-
-#define RING_FOREACH_SAFE(var, next, ring)                    \
-    for ((var) = ring_get_head(ring),                         \
-         (next) = (var) ? ring_next(ring, (var)) : NULL;      \
-            (var);                                            \
-            (var) = (next),                                   \
-            (next) = (var) ? ring_next(ring, (var)) : NULL)
-
-/**/
 
 #define NOT_IMPLEMENTED printf("%s not implemented\n", __func__);
 
@@ -181,8 +75,8 @@ struct SpiceWatch {
     int fd;
     int event_mask;
     SpiceWatchFunc func;
+    int removed;
     void *opaque;
-    int remove;
 };
 
 Ring watches;
@@ -199,7 +93,7 @@ static SpiceWatch *watch_add(int fd, int event_mask, SpiceWatchFunc func, void *
     watch->event_mask = event_mask;
     watch->func = func;
     watch->opaque = opaque;
-    watch->remove = FALSE;
+    watch->removed = FALSE;
     ring_item_init(&watch->link);
     ring_add(&watches, &watch->link);
     watch_count++;
@@ -215,9 +109,8 @@ static void watch_update_mask(SpiceWatch *watch, int event_mask)
 static void watch_remove(SpiceWatch *watch)
 {
     DPRINTF(0, "remove %p (fd %d)", watch, watch->fd);
-    ring_remove(&watch->link);
-    watch->remove = TRUE;
     watch_count--;
+    watch->removed = TRUE;
 }
 
 static void channel_event(int event, SpiceChannelEventInfo *info)
@@ -277,13 +170,13 @@ void timeout_timers()
         tv_b_minus_a_return_le_zero(&now, &next->tv_start, &left);
         if (next->ms && left.tv_usec == 0 && left.tv_sec == 0) {
             count++;
-            DPRINTF(1, "calling timer");
+            DPRINTF(2, "calling timer");
             next->ms = 0;
             next->func(next->opaque);
         }
         next = (SpiceTimer*)ring_next(&timers, &next->link);
     }
-    DPRINTF(1, "called %d timers", count);
+    DPRINTF(2, "called %d timers", count);
 }
 
 void basic_event_loop_mainloop(void)
@@ -305,6 +198,9 @@ void basic_event_loop_mainloop(void)
         i = 0;
         RING_FOREACH_SAFE(link, next, &watches) {
             watch = (SpiceWatch*)link;
+            if (watch->removed) {
+                continue;
+            }
             if (watch->event_mask & SPICE_WATCH_EVENT_READ) {
                 FD_SET(watch->fd, &rfds);
                 max_fd = watch->fd > max_fd ? watch->fd : max_fd;
@@ -318,7 +214,7 @@ void basic_event_loop_mainloop(void)
         if ((next_timer = get_next_timer()) != NULL) {
             calc_next_timeout(next_timer, &next_timer_timeout);
             timeout = &next_timer_timeout;
-            DPRINTF(1, "timeout of %zd.%06zd",
+            DPRINTF(2, "timeout of %zd.%06zd",
                     timeout->tv_sec, timeout->tv_usec);
         } else {
             timeout = NULL;
@@ -338,21 +234,33 @@ void basic_event_loop_mainloop(void)
         }
         if (retval) {
             RING_FOREACH_SAFE(link, next, &watches) {
-                watch = (SpiceWatch*)link;
-                if ((watch->event_mask & SPICE_WATCH_EVENT_READ)
+                watch = SPICE_CONTAINEROF(link, SpiceWatch, link);
+                if (!watch->removed && (watch->event_mask & SPICE_WATCH_EVENT_READ)
                      && FD_ISSET(watch->fd, &rfds)) {
                     watch->func(watch->fd, SPICE_WATCH_EVENT_READ, watch->opaque);
                 }
-                if (!watch->remove && (watch->event_mask & SPICE_WATCH_EVENT_WRITE)
+                if (!watch->removed && (watch->event_mask & SPICE_WATCH_EVENT_WRITE)
                      && FD_ISSET(watch->fd, &wfds)) {
                     watch->func(watch->fd, SPICE_WATCH_EVENT_WRITE, watch->opaque);
                 }
-                if (watch->remove) {
+                if (watch->removed) {
+                    printf("freeing watch %p\n", watch);
+                    ring_remove(&watch->link);
                     free(watch);
                 }
             }
         }
     }
+}
+
+static void ignore_sigpipe(void)
+{
+    struct sigaction act;
+
+    memset(&act, 0, sizeof(act));
+    sigfillset(&act.sa_mask);
+    act.sa_handler = SIG_IGN;
+    sigaction(SIGPIPE, &act, NULL);
 }
 
 SpiceCoreInterface *basic_event_loop_init(void)
@@ -370,6 +278,7 @@ SpiceCoreInterface *basic_event_loop_init(void)
     core.watch_update_mask = watch_update_mask;
     core.watch_remove = watch_remove;
     core.channel_event = channel_event;
+    ignore_sigpipe();
     return &core;
 }
 

@@ -1,9 +1,6 @@
 #ifndef __TEST_UTIL_H__
 #define __TEST_UTIL_H__
 
-#define TRUE 1
-#define FALSE 0
-
 #ifdef ASSERT
 #undef ASSERT
 #endif
