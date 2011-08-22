@@ -278,6 +278,7 @@ RedChannel *red_channel_create_dummy(int size, uint32_t type, uint32_t id);
 RedChannelClient *red_channel_client_create_dummy(int size,
                                                   RedChannel *channel,
                                                   RedClient  *client);
+void red_channel_client_destroy_dummy(RedChannelClient *rcc);
 
 
 int red_channel_is_connected(RedChannel *channel);

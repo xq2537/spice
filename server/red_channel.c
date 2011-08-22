@@ -403,21 +403,6 @@ error:
     return NULL;
 }
 
-
-RedChannelClient *red_channel_client_create_dummy(int size,
-                                                  RedChannel *channel,
-                                                  RedClient  *client)
-{
-    RedChannelClient *rcc;
-
-    ASSERT(size >= sizeof(RedChannelClient));
-    rcc = spice_malloc0(size);
-    rcc->client = client;
-    rcc->channel = channel;
-    red_channel_add_client(channel, rcc);
-    return rcc;
-}
-
 static void red_channel_client_default_connect(RedChannel *channel, RedClient *client,
                                                RedsStream *stream,
                                                int migration,
@@ -951,6 +936,7 @@ static void red_channel_remove_client(RedChannelClient *rcc)
 {
     ASSERT(pthread_equal(pthread_self(), rcc->channel->thread_id));
     ring_remove(&rcc->channel_link);
+    ASSERT(rcc->channel->clients_num > 0);
     rcc->channel->clients_num--;
     // TODO: should we set rcc->channel to NULL???
 }
@@ -988,6 +974,26 @@ void red_channel_disconnect(RedChannel *channel)
         red_channel_client_disconnect(
             SPICE_CONTAINEROF(link, RedChannelClient, channel_link));
     }
+}
+
+RedChannelClient *red_channel_client_create_dummy(int size,
+                                                  RedChannel *channel,
+                                                  RedClient  *client)
+{
+    RedChannelClient *rcc;
+
+    ASSERT(size >= sizeof(RedChannelClient));
+    rcc = spice_malloc0(size);
+    rcc->client = client;
+    rcc->channel = channel;
+    red_channel_add_client(channel, rcc);
+    return rcc;
+}
+
+void red_channel_client_destroy_dummy(RedChannelClient *rcc)
+{
+    red_channel_remove_client(rcc);
+    free(rcc);
 }
 
 void red_channel_apply_clients(RedChannel *channel, channel_client_callback cb)
