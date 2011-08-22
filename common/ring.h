@@ -136,11 +136,9 @@ static inline RingItem *ring_prev(Ring *ring, RingItem *pos)
 }
 
 #define RING_FOREACH_SAFE(var, next, ring)                    \
-    for ((var) = ring_get_head(ring),                         \
-         (next) = (var) ? ring_next(ring, (var)) : NULL;      \
-            (var);                                            \
-            (var) = (next),                                   \
-            (next) = (var) ? ring_next(ring, (var)) : NULL)
+    for ((var) = ring_get_head(ring);                         \
+            (var) && ((next) = ring_next(ring, (var)), 1);    \
+            (var) = (next))
 
 
 #define RING_FOREACH(var, ring)                 \
