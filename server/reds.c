@@ -606,18 +606,15 @@ static int reds_main_channel_connected(void)
 
 void reds_client_disconnect(RedClient *client)
 {
-    // TODO: rename reds_main_channel_connected, or really set main_channel to NULL on disconnect,
-    // though still, it is not a reason not to disconnect the rest of the channels
-    if (!reds_main_channel_connected()  || client->disconnecting) { 
-        /* case of recursion (main_channel_client_on_disconnect->
-         *                    reds_client_disconnect->red_client_destroy-<main_channel...
-         */
+    if (!client || client->disconnecting) {
         return;
     }
 
     red_printf("");
-    // why is "disconnecting" even needed? it is synchronic, even in the dispatcher we are now waiting for disconnection
-    // Are there recursive calls? Maybe from main_channel?
+    /* disconnecting is set to prevent recursion because of the following:
+     * main_channel_client_on_disconnect->
+     *  reds_client_disconnect->red_client_destroy->main_channel...
+     */
     client->disconnecting = TRUE;
 
     // TODO: we need to handle agent properly for all clients!!!! (e.g., cut and paste, how?)
@@ -629,7 +626,6 @@ void reds_client_disconnect(RedClient *client)
 
    // TODO: we need to handle agent properly for all clients!!!! (e.g., cut and paste, how? Maybe throw away messages
    // if we are in the middle of one from another client)
-   // We shouldn't initialize the agent when there are still clients connected
     if (reds->num_clients == 0) {
        /* Reset write filter to start with clean state on client reconnect */
         agent_msg_filter_init(&reds->agent_state.write_filter, agent_copypaste,
