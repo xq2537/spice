@@ -482,4 +482,7 @@ int spice_server_migrate_info(SpiceServer *s, const char* dest,
                               const char* cert_subject);
 int spice_server_migrate_switch(SpiceServer *s);
 
+/* server status */
+int spice_server_get_num_clients(SpiceServer *s);
+
 #endif

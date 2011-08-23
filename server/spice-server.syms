@@ -88,5 +88,6 @@ global:
     spice_server_playback_set_volume;
     spice_server_record_set_mute;
     spice_server_record_set_volume;
+    spice_server_get_num_clients;
 } SPICE_SERVER_0.8.2;
 

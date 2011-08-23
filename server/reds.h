@@ -125,6 +125,7 @@ void reds_fill_channels(SpiceMsgChannels *channels_info);
 void reds_fill_mig_switch(SpiceMsgMainMigrationSwitchHost *migrate);
 void reds_mig_release(void);
 int reds_num_of_channels(void);
+int reds_num_of_clients(void);
 #ifdef RED_STATISTICS
 void reds_update_stat_value(uint32_t value);
 #endif

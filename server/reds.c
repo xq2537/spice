@@ -978,6 +978,17 @@ int reds_num_of_channels()
     return reds ? reds->num_of_channels : 0;
 }
 
+int reds_num_of_clients(void)
+{
+    return reds ? reds->num_clients : 0;
+}
+
+SPICE_GNUC_VISIBLE int spice_server_get_num_clients(SpiceServer *s)
+{
+    ASSERT(reds == s);
+    return reds_num_of_clients();
+}
+
 static int secondary_channels[] = {
     SPICE_CHANNEL_MAIN, SPICE_CHANNEL_DISPLAY, SPICE_CHANNEL_CURSOR, SPICE_CHANNEL_INPUTS};
 
