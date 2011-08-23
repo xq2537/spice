@@ -601,7 +601,7 @@ static void reds_reset_vdp()
 
 static int reds_main_channel_connected(void)
 {
-    return !!reds->main_channel;
+    return main_channel_is_connected(reds->main_channel);
 }
 
 void reds_client_disconnect(RedClient *client)

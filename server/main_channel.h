@@ -80,6 +80,7 @@ uint32_t main_channel_client_get_link_id(MainChannelClient *mcc);
 
 int main_channel_client_is_low_bandwidth(MainChannelClient *mcc);
 uint64_t main_channel_client_get_bitrate_per_sec(MainChannelClient *mcc);
+int main_channel_is_connected(MainChannel *main_chan);
 
 // TODO: Defines used to calculate receive buffer size, and also by reds.c
 // other options: is to make a reds_main_consts.h, to duplicate defines.

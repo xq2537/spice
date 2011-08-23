@@ -155,6 +155,11 @@ enum NetTestStage {
     NET_TEST_STAGE_RATE,
 };
 
+int main_channel_is_connected(MainChannel *main_chan)
+{
+    return red_channel_is_connected(&main_chan->base);
+}
+
 // when disconnection occurs, let reds shutdown all channels. This will trigger the
 // real disconnection of main channel
 static void main_channel_client_on_disconnect(RedChannelClient *rcc)
