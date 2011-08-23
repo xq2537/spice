@@ -5,6 +5,7 @@
 #include <math.h>
 
 #include <spice.h>
+#include "reds.h"
 #include "test_util.h"
 #include "basic_event_loop.h"
 
@@ -33,6 +34,17 @@ SpiceTimer *playback_timer;
 int playback_timer_ms;
 SpiceCoreInterface *core;
 
+static void get_frame(void)
+{
+    if (frame) {
+        return;
+    }
+    spice_server_playback_get_buffer(&playback_instance, &frame, &num_samples);
+    playback_timer_ms = num_samples
+                        ? 1000 * num_samples / SPICE_INTERFACE_PLAYBACK_FREQ
+                        : 100;
+}
+
 void playback_timer_cb(void *opaque)
 {
     static int t = 0;
@@ -41,18 +53,16 @@ void playback_timer_cb(void *opaque)
     int i;
     struct timeval cur;
     uint64_t cur_usec;
-    uint32_t batches;
+    uint32_t *test_frame;
+    uint32_t test_num_samples;
 
+    get_frame();
     if (!frame) {
-        spice_server_playback_get_buffer(&playback_instance, &frame, &num_samples);
-        if (frame) {
-            playback_timer_ms = num_samples ? 1000*num_samples/SPICE_INTERFACE_PLAYBACK_FREQ : 100;
-        } else {
-            /* continue waiting until there is a channel */
-            core->timer_start(playback_timer, playback_timer_ms);
-            return;
-        }
+        /* continue waiting until there is a channel */
+        core->timer_start(playback_timer, 100);
+        return;
     }
+
     /* we have a channel */
     gettimeofday(&cur, NULL);
     cur_usec = cur.tv_usec + cur.tv_sec * 1e6;
@@ -62,17 +72,20 @@ void playback_timer_cb(void *opaque)
         samples_to_send += (cur_usec - last_sent_usec) * SPICE_INTERFACE_PLAYBACK_FREQ / 1e6;
     }
     last_sent_usec = cur_usec;
-    batches = samples_to_send / num_samples;
+    while (samples_to_send > num_samples && frame) {
 #if 0
-    printf("samples_to_send = %d, batches = %d\n", samples_to_send, batches);
+    printf("samples_to_send = %d\n", samples_to_send);
 #endif
-    samples_to_send -= num_samples * batches;
-    for (;batches > 0 ; --batches) {
+        samples_to_send -= num_samples;
         for (i = 0 ; i < num_samples; ++i) {
             frame[i] = (((uint16_t)((1<<14)*sin((t+i)/10))) << 16) + (((uint16_t)((1<<14)*sin((t+i)/10))));
         }
         t += num_samples;
-        spice_server_playback_put_samples(&playback_instance, frame);
+        if (frame) {
+            spice_server_playback_put_samples(&playback_instance, frame);
+            frame = NULL;
+        }
+        get_frame();
     }
     core->timer_start(playback_timer, playback_timer_ms);
 }
