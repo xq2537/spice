@@ -22,6 +22,8 @@
 #include <openssl/ssl.h>
 #include <sys/uio.h>
 #include <spice/vd_agent.h>
+#include <config.h>
+
 #if HAVE_SASL
 #include <sasl/sasl.h>
 #endif
