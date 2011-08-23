@@ -1,0 +1,16 @@
+Real secondary clients:
+ currently the "main" is the client that connects when there are no clients. Main
+ should be one of the clients, determined by any means - seniority is fine.
+
+SPICE_MSG_MAIN_CHANNEL_IN_USE
+SPICE_MSG_MAIN_CHANNEL_AVAILABLE
+SPICE_MSG_MAIN_CHANNEL_NEW
+ - allow channels to become available or not. Useful for USB redirection
+ and later chardev remoting in the case where there chardev/usbredir channel is
+ single user only, so only one of the clients can use it.
+
+Chardev channel: allow adding a chardev channel without any server changes:
+ qemu -spicevmc name=generic,channelname=bla,id=bla -mon chardev=bla 
+ Note: client will still need to decide what to do with it of course. So the channelname
+ will have to have a predefined meaning.
+
