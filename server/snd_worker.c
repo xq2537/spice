@@ -84,6 +84,7 @@ struct SndChannel {
     RedsStream *stream;
     SndWorker *worker;
     spice_parse_channel_func_t parser;
+    int refs;
 
     RedChannelClient *channel_client;
 
@@ -207,6 +208,23 @@ static int check_cap(uint32_t *caps, int num_caps, uint32_t cap)
     return caps[i] & cap;
 }
 
+static SndChannel *snd_channel_get(SndChannel *channel)
+{
+    channel->refs++;
+    return channel;
+}
+
+static SndChannel *snd_channel_put(SndChannel *channel)
+{
+    if (!--channel->refs) {
+        channel->worker->connection = NULL;
+        free(channel);
+        red_printf("sound channel freed\n");
+        return NULL;
+    }
+    return channel;
+}
+
 static void snd_disconnect_channel(SndChannel *channel)
 {
     SndWorker *worker;
@@ -217,13 +235,12 @@ static void snd_disconnect_channel(SndChannel *channel)
     channel->cleanup(channel);
     worker = channel->worker;
     red_channel_client_destroy_dummy(worker->connection->channel_client);
-    worker->connection = NULL;
     core->watch_remove(channel->stream->watch);
     channel->stream->watch = NULL;
     reds_stream_free(channel->stream);
     spice_marshaller_destroy(channel->send_data.marshaller);
     free(channel->caps);
-    free(channel);
+    snd_channel_put(channel);
 }
 
 static void snd_playback_free_frame(PlaybackChannel *playback_channel, AudioFrame *frame)
@@ -903,6 +920,7 @@ static SndChannel *__new_channel(SndWorker *worker, int size, uint32_t channel_i
 
     ASSERT(size >= sizeof(*channel));
     channel = spice_malloc0(size);
+    channel->refs = 1;
     channel->parser = spice_get_client_channel_parser(channel_id, NULL);
     channel->stream = stream;
     channel->worker = worker;
@@ -949,6 +967,7 @@ static void snd_disconnect_channel_client(RedChannelClient *rcc)
 
     ASSERT(worker->connection->channel_client == rcc);
     snd_disconnect_channel(worker->connection);
+    ASSERT(worker->connection == NULL);
 }
 
 static void snd_set_command(SndChannel *channel, uint32_t command)
@@ -1049,6 +1068,7 @@ SPICE_GNUC_VISIBLE void spice_server_playback_get_buffer(SpicePlaybackInstance *
         return;
     }
     ASSERT(playback_channel->base.active);
+    snd_channel_get(channel);
 
     *frame = playback_channel->free_frames->samples;
     playback_channel->free_frames = playback_channel->free_frames->next;
@@ -1061,8 +1081,13 @@ SPICE_GNUC_VISIBLE void spice_server_playback_put_samples(SpicePlaybackInstance 
     PlaybackChannel *playback_channel = SPICE_CONTAINEROF(channel, PlaybackChannel, base);
     AudioFrame *frame;
 
-    if (!channel)
+    if (!channel) {
         return;
+    }
+    if (!snd_channel_put(channel)) {
+        /* lost last reference, channel has been destroyed previously */
+        return;
+    }
     ASSERT(playback_channel->base.active);
 
     if (playback_channel->pending_frame) {
