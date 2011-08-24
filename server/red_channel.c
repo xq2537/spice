@@ -130,6 +130,7 @@ static void red_peer_handle_incoming(RedsStream *stream, IncomingHandler *handle
                 SPICE_VERSION_MINOR, &parsed_size, &parsed_free);
             if (parsed == NULL) {
                 red_printf("failed to parse message type %d", handler->header.type);
+                handler->cb->release_msg_buf(handler->opaque, &handler->header, handler->msg);
                 handler->cb->on_error(handler->opaque);
                 return;
             }
