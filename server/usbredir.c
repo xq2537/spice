@@ -259,6 +259,7 @@ int usbredir_device_connect(SpiceCharDeviceInstance *sin)
     state->chardev_sin = sin;
     state->rcv_buf = spice_malloc(BUF_SIZE);
     state->rcv_buf_size = BUF_SIZE;
+    redir_chan->state = state;
 
     client_cbs.connect = usbredir_connect;
     client_cbs.migrate = usbredir_migrate;
