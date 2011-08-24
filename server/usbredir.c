@@ -22,6 +22,8 @@
 #include <config.h>
 #endif
 
+#include <assert.h>
+
 #include "server/char_device.h"
 #include "server/red_channel.h"
 #include "server/reds.h"
@@ -44,6 +46,7 @@ typedef struct UsbRedirState {
     UsbRedirPipeItem *pipe_item;
     uint8_t *rcv_buf;
     uint32_t rcv_buf_size;
+    int rcv_buf_in_use;
 } UsbRedirState;
 
 typedef struct UsbRedirChannel {
@@ -140,10 +143,14 @@ static uint8_t *usbredir_red_channel_alloc_msg_rcv_buf(RedChannelClient *rcc,
 
     state = SPICE_CONTAINEROF(rcc->channel, UsbRedirChannel, base)->state;
 
+    assert(!state->rcv_buf_in_use);
+
     if (msg_header->size > state->rcv_buf_size) {
         state->rcv_buf = spice_realloc(state->rcv_buf, msg_header->size);
         state->rcv_buf_size = msg_header->size;
     }
+
+    state->rcv_buf_in_use = 1;
 
     return state->rcv_buf;
 }
@@ -151,7 +158,12 @@ static uint8_t *usbredir_red_channel_alloc_msg_rcv_buf(RedChannelClient *rcc,
 static void usbredir_red_channel_release_msg_rcv_buf(RedChannelClient *rcc,
     SpiceDataHeader *msg_header, uint8_t *msg)
 {
+    UsbRedirState *state;
+
+    state = SPICE_CONTAINEROF(rcc->channel, UsbRedirChannel, base)->state;
+
     /* NOOP, we re-use the buffer every time and only free it on destruction */
+    state->rcv_buf_in_use = 0;
 }
 
 static void usbredir_red_channel_hold_pipe_item(RedChannelClient *rcc,
