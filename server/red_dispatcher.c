@@ -426,7 +426,7 @@ static void red_dispatcher_create_primary_surface_complete(RedDispatcher *dispat
     dispatcher->primary_active = TRUE;
 
     update_client_mouse_allowed();
-    memset(&dispatcher->surface_create, sizeof(QXLDevSurfaceCreate), 0);
+    memset(&dispatcher->surface_create, 0, sizeof(QXLDevSurfaceCreate));
 }
 
 static void
