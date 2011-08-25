@@ -1,4 +1,4 @@
-/* spice-server usbredir code
+/* spice-server spicevmc passthrough channel code
 
    Copyright (C) 2011 Red Hat, Inc.
 
@@ -28,34 +28,34 @@
 #include "server/red_channel.h"
 #include "server/reds.h"
 
-/* 64K should be enough for all but the largest bulk xfers + 32 bytes hdr */
+/* 64K should be enough for all but the largest writes + 32 bytes hdr */
 #define BUF_SIZE (64 * 1024 + 32)
 
-typedef struct UsbRedirPipeItem {
+typedef struct SpiceVmcPipeItem {
     PipeItem base;
-    /* packets which don't fit this will get split, this is not a problem */
+    /* writes which don't fit this will get split, this is not a problem */
     uint8_t buf[BUF_SIZE];
     uint32_t buf_used;
-} UsbRedirPipeItem;
+} SpiceVmcPipeItem;
 
-typedef struct UsbRedirState {
+typedef struct SpiceVmcState {
     RedChannel channel; /* Must be the first item */
     RedChannelClient *rcc;
     SpiceCharDeviceState chardev_st;
     SpiceCharDeviceInstance *chardev_sin;
-    UsbRedirPipeItem *pipe_item;
+    SpiceVmcPipeItem *pipe_item;
     uint8_t *rcv_buf;
     uint32_t rcv_buf_size;
     int rcv_buf_in_use;
-} UsbRedirState;
+} SpiceVmcState;
 
-static void usbredir_chardev_wakeup(SpiceCharDeviceInstance *sin)
+static void spicevmc_chardev_wakeup(SpiceCharDeviceInstance *sin)
 {
-    UsbRedirState *state;
+    SpiceVmcState *state;
     SpiceCharDeviceInterface *sif;
     int n;
 
-    state = SPICE_CONTAINEROF(sin->st, UsbRedirState, chardev_st);
+    state = SPICE_CONTAINEROF(sin->st, SpiceVmcState, chardev_st);
     sif = SPICE_CONTAINEROF(sin->base.sif, SpiceCharDeviceInterface, base);
 
     if (!state->rcc) {
@@ -64,7 +64,7 @@ static void usbredir_chardev_wakeup(SpiceCharDeviceInstance *sin)
 
     do {
         if (!state->pipe_item) {
-            state->pipe_item = spice_malloc(sizeof(UsbRedirPipeItem));
+            state->pipe_item = spice_malloc(sizeof(SpiceVmcPipeItem));
             red_channel_pipe_item_init(&state->channel,
                                        &state->pipe_item->base, 0);
         }
@@ -80,14 +80,14 @@ static void usbredir_chardev_wakeup(SpiceCharDeviceInstance *sin)
     } while (n > 0);
 }
 
-static int usbredir_red_channel_client_config_socket(RedChannelClient *rcc)
+static int spicevmc_red_channel_client_config_socket(RedChannelClient *rcc)
 {
     return TRUE;
 }
 
-static void usbredir_red_channel_client_on_disconnect(RedChannelClient *rcc)
+static void spicevmc_red_channel_client_on_disconnect(RedChannelClient *rcc)
 {
-    UsbRedirState *state;
+    SpiceVmcState *state;
     SpiceCharDeviceInstance *sin;
     SpiceCharDeviceInterface *sif;
 
@@ -95,7 +95,7 @@ static void usbredir_red_channel_client_on_disconnect(RedChannelClient *rcc)
         return;
     }
 
-    state = SPICE_CONTAINEROF(rcc->channel, UsbRedirState, channel);
+    state = SPICE_CONTAINEROF(rcc->channel, SpiceVmcState, channel);
     sin = state->chardev_sin;
     sif = SPICE_CONTAINEROF(sin->base.sif, SpiceCharDeviceInterface, base);
 
@@ -106,24 +106,24 @@ static void usbredir_red_channel_client_on_disconnect(RedChannelClient *rcc)
     }
 }
 
-static int usbredir_red_channel_client_handle_message(RedChannelClient *rcc,
+static int spicevmc_red_channel_client_handle_message(RedChannelClient *rcc,
     SpiceDataHeader *header, uint8_t *msg)
 {
-    UsbRedirState *state;
+    SpiceVmcState *state;
     SpiceCharDeviceInstance *sin;
     SpiceCharDeviceInterface *sif;
 
-    state = SPICE_CONTAINEROF(rcc->channel, UsbRedirState, channel);
+    state = SPICE_CONTAINEROF(rcc->channel, SpiceVmcState, channel);
     sin = state->chardev_sin;
     sif = SPICE_CONTAINEROF(sin->base.sif, SpiceCharDeviceInterface, base);
 
-    if (header->type != SPICE_MSGC_USBREDIR_DATA) {
+    if (header->type != SPICE_MSGC_SPICEVMC_DATA) {
         return red_channel_client_handle_message(rcc, header->size,
                                                  header->type, msg);
     }
 
     /*
-     * qemu usbredir will consume everything we give it, no need for
+     * qemu spicevmc will consume everything we give it, no need for
      * flow control checks (or to use a pipe).
      */
     sif->write(sin, msg, header->size);
@@ -131,12 +131,12 @@ static int usbredir_red_channel_client_handle_message(RedChannelClient *rcc,
     return TRUE;
 }
 
-static uint8_t *usbredir_red_channel_alloc_msg_rcv_buf(RedChannelClient *rcc,
+static uint8_t *spicevmc_red_channel_alloc_msg_rcv_buf(RedChannelClient *rcc,
     SpiceDataHeader *msg_header)
 {
-    UsbRedirState *state;
+    SpiceVmcState *state;
 
-    state = SPICE_CONTAINEROF(rcc->channel, UsbRedirState, channel);
+    state = SPICE_CONTAINEROF(rcc->channel, SpiceVmcState, channel);
 
     assert(!state->rcv_buf_in_use);
 
@@ -150,50 +150,50 @@ static uint8_t *usbredir_red_channel_alloc_msg_rcv_buf(RedChannelClient *rcc,
     return state->rcv_buf;
 }
 
-static void usbredir_red_channel_release_msg_rcv_buf(RedChannelClient *rcc,
+static void spicevmc_red_channel_release_msg_rcv_buf(RedChannelClient *rcc,
     SpiceDataHeader *msg_header, uint8_t *msg)
 {
-    UsbRedirState *state;
+    SpiceVmcState *state;
 
-    state = SPICE_CONTAINEROF(rcc->channel, UsbRedirState, channel);
+    state = SPICE_CONTAINEROF(rcc->channel, SpiceVmcState, channel);
 
     /* NOOP, we re-use the buffer every time and only free it on destruction */
     state->rcv_buf_in_use = 0;
 }
 
-static void usbredir_red_channel_hold_pipe_item(RedChannelClient *rcc,
+static void spicevmc_red_channel_hold_pipe_item(RedChannelClient *rcc,
     PipeItem *item)
 {
     /* NOOP */
 }
 
-static void usbredir_red_channel_send_item(RedChannelClient *rcc,
+static void spicevmc_red_channel_send_item(RedChannelClient *rcc,
     PipeItem *item)
 {
-    UsbRedirPipeItem *i = SPICE_CONTAINEROF(item, UsbRedirPipeItem, base);
+    SpiceVmcPipeItem *i = SPICE_CONTAINEROF(item, SpiceVmcPipeItem, base);
     SpiceMarshaller *m = red_channel_client_get_marshaller(rcc);
 
-    red_channel_client_init_send_data(rcc, SPICE_MSG_USBREDIR_DATA, item);
+    red_channel_client_init_send_data(rcc, SPICE_MSG_SPICEVMC_DATA, item);
     spice_marshaller_add_ref(m, i->buf, i->buf_used);
     red_channel_client_begin_send_message(rcc);
 }
 
-static void usbredir_red_channel_release_pipe_item(RedChannelClient *rcc,
+static void spicevmc_red_channel_release_pipe_item(RedChannelClient *rcc,
     PipeItem *item, int item_pushed)
 {
     free(item);
 }
 
-static void usbredir_connect(RedChannel *channel, RedClient *client,
+static void spicevmc_connect(RedChannel *channel, RedClient *client,
     RedsStream *stream, int migration, int num_common_caps,
     uint32_t *common_caps, int num_caps, uint32_t *caps)
 {
     RedChannelClient *rcc;
-    UsbRedirState *state;
+    SpiceVmcState *state;
     SpiceCharDeviceInstance *sin;
     SpiceCharDeviceInterface *sif;
 
-    state = SPICE_CONTAINEROF(channel, UsbRedirState, channel);
+    state = SPICE_CONTAINEROF(channel, SpiceVmcState, channel);
     sin = state->chardev_sin;
     sif = SPICE_CONTAINEROF(sin->base.sif, SpiceCharDeviceInterface, base);
 
@@ -218,55 +218,54 @@ static void usbredir_connect(RedChannel *channel, RedClient *client,
     }
 }
 
-static void usbredir_migrate(RedChannelClient *rcc)
+static void spicevmc_migrate(RedChannelClient *rcc)
 {
     /* NOOP */
 }
 
-int usbredir_device_connect(SpiceCharDeviceInstance *sin)
+void spicevmc_device_connect(SpiceCharDeviceInstance *sin,
+    uint8_t channel_type)
 {
-    static int id = 0;
-    UsbRedirState *state;
+    static uint8_t id[256] = { 0, };
+    SpiceVmcState *state;
     ChannelCbs channel_cbs = {0,};
     ClientCbs client_cbs = {0,};
 
-    channel_cbs.config_socket = usbredir_red_channel_client_config_socket;
-    channel_cbs.on_disconnect = usbredir_red_channel_client_on_disconnect;
-    channel_cbs.send_item = usbredir_red_channel_send_item;
-    channel_cbs.hold_item = usbredir_red_channel_hold_pipe_item;
-    channel_cbs.release_item = usbredir_red_channel_release_pipe_item;
-    channel_cbs.alloc_recv_buf = usbredir_red_channel_alloc_msg_rcv_buf;
-    channel_cbs.release_recv_buf = usbredir_red_channel_release_msg_rcv_buf;
+    channel_cbs.config_socket = spicevmc_red_channel_client_config_socket;
+    channel_cbs.on_disconnect = spicevmc_red_channel_client_on_disconnect;
+    channel_cbs.send_item = spicevmc_red_channel_send_item;
+    channel_cbs.hold_item = spicevmc_red_channel_hold_pipe_item;
+    channel_cbs.release_item = spicevmc_red_channel_release_pipe_item;
+    channel_cbs.alloc_recv_buf = spicevmc_red_channel_alloc_msg_rcv_buf;
+    channel_cbs.release_recv_buf = spicevmc_red_channel_release_msg_rcv_buf;
 
-    state = (UsbRedirState*)red_channel_create(sizeof(UsbRedirState),
-                                   core, SPICE_CHANNEL_USBREDIR, id++,
+    state = (SpiceVmcState*)red_channel_create(sizeof(SpiceVmcState),
+                                   core, channel_type, id[channel_type]++,
                                    FALSE /* migration - TODO? */,
                                    FALSE /* handle_acks */,
-                                   usbredir_red_channel_client_handle_message,
+                                   spicevmc_red_channel_client_handle_message,
                                    &channel_cbs);
     red_channel_init_outgoing_messages_window(&state->channel);
-    state->chardev_st.wakeup = usbredir_chardev_wakeup;
+    state->chardev_st.wakeup = spicevmc_chardev_wakeup;
     state->chardev_sin = sin;
     state->rcv_buf = spice_malloc(BUF_SIZE);
     state->rcv_buf_size = BUF_SIZE;
 
-    client_cbs.connect = usbredir_connect;
-    client_cbs.migrate = usbredir_migrate;
+    client_cbs.connect = spicevmc_connect;
+    client_cbs.migrate = spicevmc_migrate;
     red_channel_register_client_cbs(&state->channel, &client_cbs);
 
     sin->st = &state->chardev_st;
 
     reds_register_channel(&state->channel);
-
-    return 0;
 }
 
 /* Must be called from RedClient handling thread. */
-void usbredir_device_disconnect(SpiceCharDeviceInstance *sin)
+void spicevmc_device_disconnect(SpiceCharDeviceInstance *sin)
 {
-    UsbRedirState *state;
+    SpiceVmcState *state;
 
-    state = SPICE_CONTAINEROF(sin->st, UsbRedirState, chardev_st);
+    state = SPICE_CONTAINEROF(sin->st, SpiceVmcState, chardev_st);
 
     reds_unregister_channel(&state->channel);
 

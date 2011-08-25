@@ -95,7 +95,7 @@ libspice_server_la_SOURCES =			\
 	spice-experimental.h			\
 	spice.h					\
 	stat.h					\
-	usbredir.c				\
+	spicevmc.c				\
 	zlib_encoder.c				\
 	zlib_encoder.h				\
 	$(NULL)

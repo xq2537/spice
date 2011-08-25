@@ -3283,9 +3283,7 @@ static int spice_server_char_device_add_interface(SpiceServer *s,
     }
 #endif
     else if (strcmp(char_device->subtype, SUBTYPE_USBREDIR) == 0) {
-        if (usbredir_device_connect(char_device) == -1) {
-            return -1;
-        }
+        spicevmc_device_connect(char_device, SPICE_CHANNEL_USBREDIR);
     }
     return 0;
 }
@@ -3307,7 +3305,7 @@ static void spice_server_char_device_remove_interface(SpiceBaseInstance *sin)
     }
 #endif
     else if (strcmp(char_device->subtype, SUBTYPE_USBREDIR) == 0) {
-        usbredir_device_disconnect(char_device);
+        spicevmc_device_disconnect(char_device);
     }
 }
 

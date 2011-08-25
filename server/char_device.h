@@ -7,8 +7,8 @@ struct SpiceCharDeviceState {
     void (*wakeup)(SpiceCharDeviceInstance *sin);
 };
 
-int usbredir_device_connect(SpiceCharDeviceInstance *char_device);
-void usbredir_device_disconnect(SpiceCharDeviceInstance *char_device);
+void spicevmc_device_connect(SpiceCharDeviceInstance *sin,
+                             uint8_t channel_type);
+void spicevmc_device_disconnect(SpiceCharDeviceInstance *char_device);
 
 #endif // __CHAR_DEVICE_H__
-
