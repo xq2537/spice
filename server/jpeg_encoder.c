@@ -194,6 +194,10 @@ static void do_jpeg_encode(JpegEncoder *jpeg, uint8_t *lines, unsigned int num_l
         row_pointer[0] = RGB24_line;
         jpeg_write_scanlines(&jpeg->cinfo, row_pointer, 1);
     }
+
+    if (jpeg->cur_image.type != JPEG_IMAGE_TYPE_RGB24) {
+        free(RGB24_line);
+    }
 }
 
 int jpeg_encode(JpegEncoderContext *jpeg, int quality, JpegEncoderImageType type,
