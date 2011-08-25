@@ -1,4 +1,14 @@
+Major changes in 0.9.1:
+=======================
+* !Development Release!
+* Multi-client support, disabled by default (experimental!) set the
+  environment variable PICE_DEBUG_ALLOW_MC before starting qemu to enable
+* Add support for adding generic spicevmc chardev passthrough channels
+* Add USB redirection channel (using generic spicevmc chardev passthrough)
+* Various bugfixes / cleanups
+
 Major changes in 0.9.0:
+=======================
 * !Development Release!
 * volume synchronization between client and guest (client->guest only)
 * turbo-jpeg used to avoid expensive color conversion in mjpeg encoder.

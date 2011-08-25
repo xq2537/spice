@@ -2,7 +2,7 @@ AC_PREREQ([2.57])
 
 m4_define([SPICE_MAJOR], 0)
 m4_define([SPICE_MINOR], 9)
-m4_define([SPICE_MICRO], 0)
+m4_define([SPICE_MICRO], 1)
 
 AC_INIT(spice, [SPICE_MAJOR.SPICE_MINOR.SPICE_MICRO], [], spice)
 
@@ -132,7 +132,7 @@ AM_CONDITIONAL(SUPPORT_CLIENT, test "x$enable_client" = "xyes")
 dnl =========================================================================
 dnl Check deps
 
-PKG_CHECK_MODULES(PROTOCOL, spice-protocol >= 0.8.1)
+PKG_CHECK_MODULES(PROTOCOL, spice-protocol >= 0.9.0)
 AC_SUBST(PROTOCOL_CFLAGS)
 
 AC_CHECK_LIBM
