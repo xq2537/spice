@@ -1512,7 +1512,7 @@ miZeroLine (GCPtr pGC, int mode,        /* Origin or Previous */
     pspanInit = (DDXPointRec *)xalloc (list_len * sizeof (DDXPointRec));
     pwidthInit = (int *)xalloc (list_len * sizeof (int));
     if (!pspanInit || !pwidthInit)
-        return;
+        goto out;
 
     Nspans = 0;
     new_span = TRUE;
@@ -1686,6 +1686,7 @@ miZeroLine (GCPtr pGC, int mode,        /* Origin or Previous */
     if (Nspans > 0)
         (*pGC->ops->FillSpans) (pGC, Nspans, pspanInit, pwidthInit, FALSE, TRUE);
 
+out:
     xfree (pwidthInit);
     xfree (pspanInit);
 }
