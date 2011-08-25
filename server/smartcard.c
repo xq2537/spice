@@ -506,12 +506,12 @@ SmartCardChannel *g_smartcard_channel;
 static void smartcard_init(void)
 {
     ChannelCbs channel_cbs;
-    ClientCbs client_cbs = {0,};
+    ClientCbs client_cbs;
 
     ASSERT(!g_smartcard_channel);
 
-    memset(&channel_cbs, sizeof(channel_cbs), 0);
-    memset(&client_cbs, sizeof(client_cbs), 0);
+    memset(&channel_cbs, 0, sizeof(channel_cbs));
+    memset(&client_cbs, 0, sizeof(client_cbs));
 
     channel_cbs.config_socket = smartcard_channel_client_config_socket;
     channel_cbs.on_disconnect = smartcard_channel_on_disconnect;

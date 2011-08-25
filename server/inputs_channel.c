@@ -523,12 +523,12 @@ static void key_modifiers_sender(void *opaque)
 void inputs_init(void)
 {
     ChannelCbs channel_cbs;
-    ClientCbs client_cbs = {0,};
+    ClientCbs client_cbs;
 
     ASSERT(!g_inputs_channel);
 
-    memset(&channel_cbs, sizeof(channel_cbs), 0);
-    memset(&client_cbs, sizeof(client_cbs), 0);
+    memset(&channel_cbs, 0, sizeof(channel_cbs));
+    memset(&client_cbs, 0, sizeof(client_cbs));
 
     channel_cbs.config_socket = inputs_channel_config_socket;
     channel_cbs.on_disconnect = inputs_channel_on_disconnect;
