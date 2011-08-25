@@ -2,7 +2,7 @@ Major changes in 0.9.1:
 =======================
 * !Development Release!
 * Multi-client support, disabled by default (experimental!) set the
-  environment variable PICE_DEBUG_ALLOW_MC before starting qemu to enable
+  environment variable SPICE_DEBUG_ALLOW_MC before starting qemu to enable
 * Add support for adding generic spicevmc chardev passthrough channels
 * Add USB redirection channel (using generic spicevmc chardev passthrough)
 * Various bugfixes / cleanups
