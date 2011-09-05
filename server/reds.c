@@ -111,8 +111,6 @@ void *red_tunnel = NULL;
 int agent_mouse = TRUE;
 int agent_copypaste = TRUE;
 
-static void openssl_init();
-
 #define MIGRATE_TIMEOUT (1000 * 10) /* 10sec */
 #define MM_TIMER_GRANULARITY_MS (1000 / 30)
 #define MM_TIME_DELTA 400 /*ms*/
@@ -554,7 +552,7 @@ static RedsChannel *reds_find_channel(uint32_t type, uint32_t id)
     return channel;
 }
 
-static void reds_mig_cleanup()
+static void reds_mig_cleanup(void)
 {
     if (reds->mig_inprogress) {
         reds->mig_inprogress = FALSE;
@@ -564,7 +562,7 @@ static void reds_mig_cleanup()
     }
 }
 
-static void reds_reset_vdp()
+static void reds_reset_vdp(void)
 {
     VDIPortState *state = &reds->agent_state;
     SpiceCharDeviceInterface *sif;
@@ -653,7 +651,7 @@ static void reds_disconnect(void)
     reds_mig_cleanup();
 }
 
-static void reds_mig_disconnect()
+static void reds_mig_disconnect(void)
 {
     if (reds_main_channel_connected()) {
         reds_disconnect();
@@ -682,7 +680,7 @@ int reds_get_agent_mouse(void)
     return agent_mouse;
 }
 
-static void reds_update_mouse_mode()
+static void reds_update_mouse_mode(void)
 {
     int allowed = 0;
     int qxl_count = red_dispatcher_qxl_count();
@@ -704,7 +702,7 @@ static void reds_update_mouse_mode()
     }
 }
 
-static void reds_agent_remove()
+static void reds_agent_remove(void)
 {
     if (!reds->mig_target) {
         reds_reset_vdp();
@@ -718,7 +716,7 @@ static void reds_agent_remove()
     }
 }
 
-static void reds_push_tokens()
+static void reds_push_tokens(void)
 {
     reds->agent_state.num_client_tokens += reds->agent_state.num_tokens;
     ASSERT(reds->agent_state.num_client_tokens <= REDS_AGENT_WINDOW_SIZE);
@@ -728,7 +726,7 @@ static void reds_push_tokens()
 
 static int write_to_vdi_port(void);
 
-static void vdi_port_write_timer_start()
+static void vdi_port_write_timer_start(void)
 {
     if (reds->vdi_port_write_timer_started) {
         return;
@@ -738,13 +736,13 @@ static void vdi_port_write_timer_start()
                       VDI_PORT_WRITE_RETRY_TIMEOUT);
 }
 
-static void vdi_port_write_retry()
+static void vdi_port_write_retry(void *opaque)
 {
     reds->vdi_port_write_timer_started = FALSE;
     write_to_vdi_port();
 }
 
-static int write_to_vdi_port()
+static int write_to_vdi_port(void)
 {
     VDIPortState *state = &reds->agent_state;
     SpiceCharDeviceInterface *sif;
@@ -960,7 +958,7 @@ void reds_handle_agent_mouse_event(const VDAgentMouseState *mouse_state)
     write_to_vdi_port();
 }
 
-static void add_token()
+static void add_token(void)
 {
     VDIPortState *state = &reds->agent_state;
 
@@ -969,7 +967,7 @@ static void add_token()
     }
 }
 
-int reds_num_of_channels()
+int reds_num_of_channels(void)
 {
     return reds ? reds->num_of_channels : 0;
 }
@@ -1525,7 +1523,7 @@ static void reds_send_link_result(RedLinkInfo *link, uint32_t error)
     sync_write(link->stream, &error, sizeof(error));
 }
 
-int reds_expects_link_id()
+int reds_expects_link_id(uint32_t connection_id)
 {
     red_printf("TODO: keep a list of connection_id's from migration, compare to them");
     return 1;
@@ -2850,7 +2848,7 @@ static unsigned long pthreads_thread_id(void)
     return (ret);
 }
 
-static void pthreads_locking_callback(int mode, int type, char *file, int line)
+static void pthreads_locking_callback(int mode, int type, const char *file, int line)
 {
     if (mode & CRYPTO_LOCK) {
         pthread_mutex_lock(&(lock_cs[type]));
@@ -2860,7 +2858,7 @@ static void pthreads_locking_callback(int mode, int type, char *file, int line)
     }
 }
 
-static void openssl_thread_setup()
+static void openssl_thread_setup(void)
 {
     int i;
 
@@ -2872,11 +2870,11 @@ static void openssl_thread_setup()
         pthread_mutex_init(&(lock_cs[i]), NULL);
     }
 
-    CRYPTO_set_id_callback((unsigned long (*)())pthreads_thread_id);
-    CRYPTO_set_locking_callback((void (*)())pthreads_locking_callback);
+    CRYPTO_set_id_callback(pthreads_thread_id);
+    CRYPTO_set_locking_callback(pthreads_locking_callback);
 }
 
-static void reds_init_ssl()
+static void reds_init_ssl(void)
 {
 #if OPENSSL_VERSION_NUMBER >= 0x10000000L
     const SSL_METHOD *ssl_method;
@@ -2944,7 +2942,7 @@ static void reds_init_ssl()
 #endif
 }
 
-static void reds_exit()
+static void reds_exit(void)
 {
     if (reds->main_channel) {
         main_channel_close(reds->main_channel);
@@ -2988,7 +2986,7 @@ enum {
     SPICE_TICKET_OPTION_CONNECTED,
 };
 
-static inline void on_activating_ticketing()
+static inline void on_activating_ticketing(void)
 {
     if (!ticketing_enabled && reds_main_channel_connected()) {
         red_printf("disconnecting");
@@ -3255,7 +3253,7 @@ const char *spice_server_char_device_recognized_subtypes_list[] = {
     NULL,
 };
 
-SPICE_GNUC_VISIBLE const char** spice_server_char_device_recognized_subtypes()
+SPICE_GNUC_VISIBLE const char** spice_server_char_device_recognized_subtypes(void)
 {
     return spice_server_char_device_recognized_subtypes_list;
 }
@@ -3461,7 +3459,7 @@ static void free_internal_agent_buff(VDIPortBuf *in_buf)
     }
 }
 
-static void init_vd_agent_resources()
+static void init_vd_agent_resources(void)
 {
     VDIPortState *state = &reds->agent_state;
     int i;

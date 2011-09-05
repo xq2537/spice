@@ -433,7 +433,7 @@ struct RedClient {
     int disconnecting;
 };
 
-RedClient *red_client_new();
+RedClient *red_client_new(void);
 MainChannelClient *red_client_get_main(RedClient *client);
 // main should be set once before all the other channels are created
 void red_client_set_main(RedClient *client, MainChannelClient *mcc);

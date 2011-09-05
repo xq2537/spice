@@ -159,7 +159,7 @@ void calc_next_timeout(SpiceTimer *next, struct timeval *timeout)
     tv_b_minus_a_return_le_zero(&now, &next->tv_start, timeout);
 }
 
-void timeout_timers()
+void timeout_timers(void)
 {
     SpiceTimer *next;
     struct timeval left;

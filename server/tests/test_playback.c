@@ -90,7 +90,7 @@ void playback_timer_cb(void *opaque)
     core->timer_start(playback_timer, playback_timer_ms);
 }
 
-int main()
+int main(void)
 {
     SpiceServer *server = spice_server_new();
     core = basic_event_loop_init();

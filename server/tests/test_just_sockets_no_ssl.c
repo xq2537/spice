@@ -3,7 +3,7 @@
 #include <spice.h>
 #include "basic_event_loop.h"
 
-int main()
+int main(void)
 {
     SpiceServer *server = spice_server_new();
     SpiceCoreInterface *core = basic_event_loop_init();

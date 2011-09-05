@@ -324,7 +324,7 @@ static void push_command(QXLCommandExt *ext)
     commands_end++;
 }
 
-static struct QXLCommandExt *get_simple_command()
+static struct QXLCommandExt *get_simple_command(void)
 {
     struct QXLCommandExt *ret = commands[commands_start%COMMANDS_SIZE];
     ASSERT(commands_start < commands_end);
@@ -332,7 +332,7 @@ static struct QXLCommandExt *get_simple_command()
     return ret;
 }
 
-static int num_commands()
+static int num_commands(void)
 {
     return commands_end - commands_start;
 }
@@ -350,7 +350,7 @@ static int get_command(QXLInstance *qin, struct QXLCommandExt *ext)
 static int *simple_commands = NULL;
 static int num_simple_commands = 0;
 
-static void produce_command()
+static void produce_command(void)
 {
     static int target_surface = 0;
     static int cmd_index = 0;
@@ -410,7 +410,7 @@ static int req_cmd_notification(QXLInstance *qin)
     return TRUE;
 }
 
-static void do_wakeup()
+static void do_wakeup(void *opaque)
 {
     int notify;
     cursor_notify = NOTIFY_CURSOR_BATCH;

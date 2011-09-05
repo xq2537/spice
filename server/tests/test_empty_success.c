@@ -36,7 +36,7 @@ void channel_event(int event, SpiceChannelEventInfo *info)
 {
 }
 
-int main()
+int main(void)
 {
     SpiceServer *server = spice_server_new();
     SpiceCoreInterface core;

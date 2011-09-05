@@ -35,7 +35,7 @@ int simple_commands[] = {
     SIMPLE_UPDATE,
 };
 
-int main()
+int main(void)
 {
     core = basic_event_loop_init();
     server = test_init(core);

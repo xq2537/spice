@@ -198,7 +198,7 @@ static void inputs_channel_release_msg_rcv_buf(RedChannelClient *rcc, SpiceDataH
      ((state & SPICE_MOUSE_BUTTON_MASK_MIDDLE) ? VD_AGENT_MBUTTON_MASK : 0) |    \
      ((state & SPICE_MOUSE_BUTTON_MASK_RIGHT) ? VD_AGENT_RBUTTON_MASK : 0))
 
-static void activate_modifiers_watch()
+static void activate_modifiers_watch(void)
 {
     core->timer_start(key_modifiers_timer, KEY_MODIFIERS_TTL);
 }

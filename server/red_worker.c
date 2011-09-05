@@ -4616,7 +4616,7 @@ static void qxl_process_cursor(RedWorker *worker, RedCursorCmd *cursor_cmd, uint
     red_release_cursor(worker, cursor_item);
 }
 
-static inline uint64_t red_now()
+static inline uint64_t red_now(void)
 {
     struct timespec time;
 

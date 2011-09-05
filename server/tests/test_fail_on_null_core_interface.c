@@ -1,6 +1,6 @@
 #include <spice.h>
 
-int main()
+int main(void)
 {
     SpiceServer *server = spice_server_new();
     SpiceCoreInterface core;
