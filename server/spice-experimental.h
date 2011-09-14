@@ -29,16 +29,13 @@ void spice_server_net_wire_recv_packet(SpiceNetWireInstance *sin,
                                        const uint8_t *pkt, int len);
 
 /* spice seamless client migration (broken) */
-
 enum {
     SPICE_MIGRATE_CLIENT_NONE = 1,
     SPICE_MIGRATE_CLIENT_WAITING,
     SPICE_MIGRATE_CLIENT_READY,
 };
 
-int spice_server_migrate_start(SpiceServer *s);
 int spice_server_migrate_client_state(SpiceServer *s);
-int spice_server_migrate_end(SpiceServer *s, int completed);
 
 #endif // __SPICE_EXPERIMENTAL_H__
 

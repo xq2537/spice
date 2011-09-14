@@ -4854,6 +4854,15 @@ SPICE_GNUC_VISIBLE int spice_server_set_agent_copypaste(SpiceServer *s, int enab
     return 0;
 }
 
+/* semi-seamless client migration */
+SPICE_GNUC_VISIBLE int spice_server_migrate_connect(SpiceServer *s, const char* dest,
+                                                    int port, int secure_port,
+                                                    const char* cert_subject)
+{
+    red_printf("not implemented yet");
+    return 0;
+}
+
 SPICE_GNUC_VISIBLE int spice_server_migrate_info(SpiceServer *s, const char* dest,
                                           int port, int secure_port,
                                           const char* cert_subject)
