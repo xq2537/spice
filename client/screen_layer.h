@@ -29,8 +29,8 @@ public:
     ScreenLayer(int z_order, bool opaque);
     virtual ~ScreenLayer();
 
-    void attach_to_screen(Application& applicaion, int screen_id);
-    void detach_from_screen(Application& applicaion);
+    void attach_to_screen(Application& application, int screen_id);
+    void detach_from_screen(Application& application);
 
     void set_screen(RedScreen* screen) { _screen = screen;}
     RedScreen* screen() { return _screen; }

@@ -167,7 +167,7 @@ private:
     AtomicCount _refs;
     std::string _name;
     RedWindow _window;
-    std::vector<ScreenLayer*> _layes;
+    std::vector<ScreenLayer*> _layers;
     QRegion _dirty_region;
     RecurciveMutex _update_lock;
     bool _active;
