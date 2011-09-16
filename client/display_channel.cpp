@@ -1165,13 +1165,15 @@ void DisplayChannel::create_canvas(int surface_id, const std::vector<int>& canva
 #endif
     unsigned int i;
 
+    if (screen()) {
 #ifdef USE_OPENGL
-    if (screen()->need_recreate_context_gl()) {
-        recreate = false;
-    }
+        if (screen()->need_recreate_context_gl()) {
+            recreate = false;
+        }
 #endif
 
-    screen()->set_update_interrupt_trigger(NULL);
+        screen()->set_update_interrupt_trigger(NULL);
+    }
 
     for (i = 0; i < canvas_types.size(); i++) {
 
