@@ -87,6 +87,28 @@ private:
     DisplayChannel& _channel;
 };
 
+class DestroyAllSurfacesEvent: public SyncEvent {
+public:
+    DestroyAllSurfacesEvent(DisplayChannel& channel, bool include_primary = true)
+        : _channel(channel)
+        , _include_primary(include_primary)
+    {
+    }
+
+    virtual void do_response(AbstractProcessLoop& events_loop)
+    {
+        if (_include_primary) {
+            _channel.do_destroy_all_surfaces();
+        } else {
+            _channel.do_destroy_off_screen_surfaces();
+        }
+    }
+
+private:
+    DisplayChannel& _channel;
+    bool _include_primary;
+};
+
 class CreateSurfaceEvent: public SyncEvent {
 public:
    CreateSurfaceEvent(DisplayChannel& channel, int surface_id, int width, int height,
@@ -547,6 +569,21 @@ void ResetTimer::response(AbstractProcessLoop& events_loop)
     _client.deactivate_interval_timer(this);
 }
 
+#define MIGRATION_PRIMARY_SURFACE_TIMEOUT (1000 * 5)
+
+class MigPrimarySurfaceTimer: public Timer {
+public:
+    virtual void response(AbstractProcessLoop& events_loop)
+    {
+        DisplayChannel *channel =  static_cast<DisplayChannel*>(events_loop.get_owner());
+        if (channel->_mig_wait_primary) {
+            channel->destroy_primary_surface();
+            channel->_mig_wait_primary = false;
+        }
+        channel->get_process_loop().deactivate_interval_timer(this);
+    }
+};
+
 class DisplayHandler: public MessageHandlerImp<DisplayChannel, SPICE_CHANNEL_DISPLAY> {
 public:
     DisplayHandler(DisplayChannel& channel)
@@ -574,6 +611,7 @@ DisplayChannel::DisplayChannel(RedClient& client, uint32_t id,
     , _gl_interrupt_recreate (*this)
 #endif
     , _interrupt_update (*this)
+    , _mig_wait_primary (false)
 {
     DisplayHandler* handler = static_cast<DisplayHandler*>(get_message_handler());
 
@@ -621,11 +659,11 @@ DisplayChannel::~DisplayChannel()
         screen()->set_update_interrupt_trigger(NULL);
     }
 
-    //destroy_canvas(); fixme destroy all
-    destroy_strams();
+    destroy_streams();
+    do_destroy_all_surfaces();
 }
 
-void DisplayChannel::destroy_strams()
+void DisplayChannel::destroy_streams()
 {
     Lock lock(_streams_lock);
     for (unsigned int i = 0; i < _streams.size(); i++) {
@@ -1024,6 +1062,75 @@ void DisplayChannel::on_disconnect()
     (*sync_event)->wait();
 }
 
+void DisplayChannel::do_destroy_all_surfaces()
+{
+   SurfacesCache::iterator s_iter;
+
+    for (s_iter = _surfaces_cache.begin(); s_iter != _surfaces_cache.end(); s_iter++) {
+       delete (*s_iter).second;
+    }
+    _surfaces_cache.clear();
+}
+
+void DisplayChannel::do_destroy_off_screen_surfaces()
+{
+    SurfacesCache::iterator s_iter;
+    Canvas *primary_canvas = NULL;
+
+    for (s_iter = _surfaces_cache.begin(); s_iter != _surfaces_cache.end(); s_iter++) {
+        if (s_iter->first == 0) {
+            primary_canvas = s_iter->second;
+        } else {
+            delete s_iter->second;
+        }
+    }
+    _surfaces_cache.clear();
+    if (primary_canvas) {
+        _surfaces_cache[0] = primary_canvas;
+    }
+}
+
+void DisplayChannel::destroy_all_surfaces()
+{
+    AutoRef<DestroyAllSurfacesEvent> destroy_event(new DestroyAllSurfacesEvent(*this));
+
+    get_client().push_event(*destroy_event);
+    (*destroy_event)->wait();
+    if (!(*destroy_event)->success()) {
+        THROW("destroy all surfaces failed");
+    }
+}
+
+void DisplayChannel::destroy_off_screen_surfaces()
+{
+    AutoRef<DestroyAllSurfacesEvent> destroy_event(new DestroyAllSurfacesEvent(*this, false));
+
+    get_client().push_event(*destroy_event);
+    (*destroy_event)->wait();
+    if (!(*destroy_event)->success()) {
+        THROW("destroy all surfaces failed");
+    }
+}
+
+void DisplayChannel::on_disconnect_mig_src()
+{
+    _palette_cache.clear();
+    destroy_streams();
+    if (screen()) {
+        screen()->set_update_interrupt_trigger(NULL);
+    }
+    _update_mark = 0;
+    _next_timer_time = 0;
+    get_client().deactivate_interval_timer(*_streams_timer);
+    destroy_off_screen_surfaces();
+    // Not clrearing the primary surface till we receive a new one (or a timeout).
+    if (_surfaces_cache.exist(0)) {
+        AutoRef<MigPrimarySurfaceTimer> mig_timer(new MigPrimarySurfaceTimer());
+        get_process_loop().activate_interval_timer(*mig_timer, MIGRATION_PRIMARY_SURFACE_TIMEOUT);
+        _mig_wait_primary = true;
+    }
+}
+
 bool DisplayChannel::create_sw_canvas(int surface_id, int width, int height, uint32_t format)
 {
     try {
@@ -1365,25 +1472,49 @@ void DisplayChannel::handle_stream_destroy(RedPeer::InMessage* message)
 
 void DisplayChannel::handle_stream_destroy_all(RedPeer::InMessage* message)
 {
-    destroy_strams();
+    destroy_streams();
 }
 
 void DisplayChannel::create_primary_surface(int width, int height, uint32_t format)
 {
+    bool do_create_primary = true;
 #ifdef USE_OPENGL
-   Canvas *canvas;
+    Canvas *canvas;
 #endif
-   _mark = false;
-    attach_to_screen(get_client().get_application(), get_id());
-    clear_area();
+    _mark = false;
 
-    AutoRef<CreatePrimarySurfaceEvent> event(new CreatePrimarySurfaceEvent(*this, width, height,
-                                                                           format));
-    get_client().push_event(*event);
-    (*event)->wait();
-    if (!(*event)->success()) {
-        THROW("Create primary surface failed");
+    /*
+     * trying to avoid artifacts when the display hasn't changed much
+     * between the disconnection from the migration src and the
+     * connection to the target.
+     */
+    if (_mig_wait_primary) {
+        ASSERT(_surfaces_cache.exist(0));
+        if (_x_res != width || _y_res != height || format != format) {
+            LOG_INFO("destroy the primary surface of the mig src session");
+            destroy_primary_surface();
+        } else {
+            LOG_INFO("keep the primary surface of the mig src session");
+            _surfaces_cache[0]->clear();
+            clear_area();
+            do_create_primary = false;
+        }
     }
+
+    if (do_create_primary) {
+        LOG_INFO("");
+        attach_to_screen(get_client().get_application(), get_id());
+        clear_area();
+        AutoRef<CreatePrimarySurfaceEvent> event(new CreatePrimarySurfaceEvent(*this, width, height,
+                                                                           format));
+        get_client().push_event(*event);
+        (*event)->wait();
+        if (!(*event)->success()) {
+            THROW("Create primary surface failed");
+        }
+    }
+
+    _mig_wait_primary = false;
 
     _x_res = width;
     _y_res = height;

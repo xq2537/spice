@@ -114,6 +114,7 @@ public:
 protected:
     virtual void on_connect();
     virtual void on_disconnect();
+    virtual void on_disconnect_mig_src();
 
 private:
     void set_draw_handlers();
@@ -129,13 +130,17 @@ private:
     void destroy_canvas(int surface_id);
     void create_canvas(int surface_id, const std::vector<int>& canvas_type, int width, int height,
                        uint32_t format);
-    void destroy_strams();
+    void destroy_streams();
     void update_cursor();
 
     void create_primary_surface(int width, int height, uint32_t format);
     void create_surface(int surface_id, int width, int height, uint32_t format);
     void destroy_primary_surface();
     void destroy_surface(int surface_id);
+    void destroy_all_surfaces();
+    void do_destroy_all_surfaces();
+    void destroy_off_screen_surfaces();
+    void do_destroy_off_screen_surfaces();
 
     void handle_mode(RedPeer::InMessage* message);
     void handle_mark(RedPeer::InMessage* message);
@@ -217,11 +222,13 @@ private:
 #endif
     InterruptUpdate _interrupt_update;
 
+    bool _mig_wait_primary;
     friend class SetModeEvent;
     friend class CreatePrimarySurfaceEvent;
     friend class DestroyPrimarySurfaceEvent;
     friend class CreateSurfaceEvent;
     friend class DestroySurfaceEvent;
+    friend class DestroyAllSurfacesEvent;
     friend class ActivateTimerEvent;
     friend class VideoStream;
     friend class StreamsTrigger;
@@ -229,6 +236,7 @@ private:
     friend class StreamsTimer;
     friend class AttachChannelsEvent;
     friend class DetachChannelsEvent;
+    friend class MigPrimarySurfaceTimer;
 };
 
 #endif
