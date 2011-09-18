@@ -28,7 +28,7 @@
 SCanvas::SCanvas(bool onscreen,
                  int width, int height, uint32_t format, RedWindow *win,
                  PixmapCache& pixmap_cache, PaletteCache& palette_cache,
-                 GlzDecoderWindow &glz_decoder_window, CSurfaces& csurfaces)
+                 GlzDecoderWindow &glz_decoder_window, SurfacesCache& csurfaces)
     : Canvas (pixmap_cache, palette_cache, glz_decoder_window, csurfaces)
     , _pixmap (0)
 {
@@ -41,7 +41,7 @@ SCanvas::SCanvas(bool onscreen,
                                          _pixmap->get_stride(),
                                          &pixmap_cache.base,
                                          &palette_cache.base,
-                                         &csurfaces.base,
+                                         &csurfaces,
                                          &glz_decoder(),
                                          &jpeg_decoder(),
                                          &zlib_decoder());
@@ -49,7 +49,7 @@ SCanvas::SCanvas(bool onscreen,
         _canvas = canvas_create(width, height, format,
                                 &pixmap_cache.base,
                                 &palette_cache.base,
-                                &csurfaces.base,
+                                &csurfaces,
                                 &glz_decoder(),
                                 &jpeg_decoder(),
                                 &zlib_decoder());

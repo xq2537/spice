@@ -80,21 +80,6 @@ private:
     DisplayChannel& _channel;
 };
 
-class DisplaySurfacesManger {
-public:
-    void add_surface(int surface_id, SpiceCanvas *surface);
-    void del_surface(int surface_id);
-    void add_canvas(int surface_id, Canvas *canvas);
-    void del_canvas(int surface_id);
-
-    CSurfaces& get_surfaces();
-    bool is_present_canvas(int surface_id);
-    Canvas* get_canvas(int surface_id);
-private:
-    CSurfaces surfaces;
-    CCanvases canvases;
-};
-
 class DisplayChannel: public RedChannel, public ScreenLayer {
 public:
     DisplayChannel(RedClient& client, uint32_t id,
@@ -191,8 +176,9 @@ private:
     void reset_screen();
 
     static void set_clip_rects(const SpiceClip& clip, uint32_t& num_clip_rects, SpiceRect*& clip_rects);
+
 private:
-    DisplaySurfacesManger surfaces_mngr;
+    SurfacesCache _surfaces_cache;
     PixmapCache& _pixmap_cache;
     PaletteCache _palette_cache;
     GlzDecoderWindow& _glz_window;

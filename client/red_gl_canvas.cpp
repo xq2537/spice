@@ -27,7 +27,7 @@
 GCanvas::GCanvas(int width, int height, uint32_t format, RedWindow *win,
                  RenderType rendertype,
                  PixmapCache& pixmap_cache, PaletteCache& palette_cache,
-                 GlzDecoderWindow &glz_decoder_window, CSurfaces &csurfaces)
+                 GlzDecoderWindow &glz_decoder_window, SurfacesCache &csurfaces)
     : Canvas(pixmap_cache, palette_cache, glz_decoder_window, csurfaces)
     , _pixmap (0)
     , _textures_lost (false)
@@ -39,7 +39,7 @@ GCanvas::GCanvas(int width, int height, uint32_t format, RedWindow *win,
                                      SPICE_SURFACE_FMT_DEPTH(format),
                                      &pixmap_cache.base,
                                      &palette_cache.base,
-                                     &csurfaces.base,
+                                     &csurfaces,
                                      &glz_decoder(),
                                      &jpeg_decoder(),
                                      &zlib_decoder()))) {

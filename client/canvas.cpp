@@ -21,14 +21,35 @@
 #include "utils.h"
 #include "debug.h"
 
+static SpiceCanvas* surfaces_cache_op_get(SpiceImageSurfaces *surfaces, uint32_t surface_id)
+{
+    SurfacesCache* surfaces_cache = static_cast<SurfacesCache*>(surfaces);
+    if (!surfaces_cache->exist(surface_id)) {
+        return NULL;
+    }
+    return (*surfaces_cache)[surface_id]->get_internal_canvas();
+}
+
+SurfacesCache::SurfacesCache()
+{
+    static SpiceImageSurfacesOps surfaces_ops = {
+        surfaces_cache_op_get,
+    };
+    ops = &surfaces_ops;
+}
+
+bool SurfacesCache::exist(uint32_t surface_id)
+{
+    return (this->count(surface_id) != 0);
+}
 
 Canvas::Canvas(PixmapCache& pixmap_cache, PaletteCache& palette_cache,
-               GlzDecoderWindow &glz_decoder_window, CSurfaces &csurfaces)
+               GlzDecoderWindow &glz_decoder_window, SurfacesCache &csurfaces)
     : _canvas (NULL)
     , _pixmap_cache (pixmap_cache)
     , _palette_cache (palette_cache)
     , _glz_decoder(glz_decoder_window, _glz_handler, _glz_debug)
-    , _csurfaces(csurfaces)
+    , _surfaces_cache(csurfaces)
 {
 }
 

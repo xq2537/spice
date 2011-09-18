@@ -31,7 +31,7 @@ public:
     GCanvas(int width, int height, uint32_t format, RedWindow *win,
             RenderType rendertype,
             PixmapCache& pixmap_cache, PaletteCache& palette_cache,
-            GlzDecoderWindow &glz_decoder_window, CSurfaces &csurfaces);
+            GlzDecoderWindow &glz_decoder_window, SurfacesCache &csurfaces);
     virtual ~GCanvas();
 
     void set_mode();

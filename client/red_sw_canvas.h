@@ -29,7 +29,7 @@ public:
     SCanvas(bool onscreen,
             int width, int height, uint32_t format, RedWindow *win,
             PixmapCache& pixmap_cache, PaletteCache& palette_cache,
-            GlzDecoderWindow &glz_decoder_window, CSurfaces &csurfaces);
+            GlzDecoderWindow &glz_decoder_window, SurfacesCache &csurfaces);
     virtual ~SCanvas();
 
     virtual void thread_touch() {}
