@@ -4019,16 +4019,10 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_info(SpiceServer *s, const char* des
 SPICE_GNUC_VISIBLE int spice_server_migrate_start(SpiceServer *s)
 {
     ASSERT(reds == s);
-
-    if (1) {
-        /* seamless doesn't work, fixing needs protocol change. */
-        return -1;
-    }
-
+    red_printf("");
     if (!reds->mig_spice) {
         return -1;
     }
-    reds_mig_started();
     return 0;
 }
 
