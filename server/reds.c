@@ -258,6 +258,13 @@ typedef struct RedsStatValue {
 #endif
 
 typedef struct RedsMigSpice RedsMigSpice;
+typedef struct RedsMigPendingLink RedsMigPendingLink;
+
+struct RedsMigPendingLink {
+    RedsMigPendingLink *next;
+    SpiceLinkMess *link_msg;
+    RedsStream *stream;
+};
 
 typedef struct RedsState {
     int listen_socket;
@@ -274,10 +281,13 @@ typedef struct RedsState {
     int client_semi_mig_cap;
     int mig_wait_connect;
     int mig_wait_disconnect;
+    int mig_wait_prev_complete;
     int mig_inprogress;
     int expect_migrate;
     int mig_target;
     RedsMigSpice *mig_spice;
+    RedsMigPendingLink *mig_pending_links;
+    int num_mig_links;
     int num_of_channels;
     IncomingHandler in_handler;
     RedsOutgoingData outgoing;
@@ -293,7 +303,6 @@ typedef struct RedsState {
     SpiceTimer *vdi_port_write_timer;
     int vdi_port_write_timer_started;
 
-    TicketAuthentication taTicket;
     SSL_CTX *ctx;
 
 #ifdef RED_STATISTICS
@@ -382,6 +391,9 @@ static uint8_t zero_page[ZERO_BUF_SIZE] = {0};
 static void reds_push();
 static void reds_out_item_free(RedsOutItem *item);
 static void migrate_timeout(void *opaque);
+static void reds_mig_pending_links_free(void);
+static void reds_handle_client_migrate_complete(void);
+static void reds_mig_started(void);
 
 static ChannelSecurityOptions *channels_security = NULL;
 static int default_channel_security =
@@ -648,7 +660,7 @@ static void reds_shatdown_channels()
 static void reds_mig_cleanup()
 {
     if (reds->mig_inprogress) {
-        if (reds->mig_wait_connect) {
+        if (reds->mig_wait_connect || reds->mig_wait_prev_complete) {
             SpiceMigrateInterface *sif;
             ASSERT(migration_interface);
             sif = SPICE_CONTAINEROF(migration_interface->base.sif, SpiceMigrateInterface, base);
@@ -657,7 +669,12 @@ static void reds_mig_cleanup()
         reds->mig_inprogress = FALSE;
         reds->mig_wait_connect = FALSE;
         reds->mig_wait_disconnect = FALSE;
+        reds->mig_wait_prev_complete = FALSE;
         core->timer_cancel(reds->mig_timer);
+    }
+    if (reds->num_mig_links) {
+        ASSERT(reds->mig_target);
+        reds_mig_pending_links_free();
     }
 }
 
@@ -925,6 +942,11 @@ static void reds_send_channels()
     Channel *channel;
     int i;
 
+    if (reds->mig_target) {
+        red_printf("warning: unexpected SPICE_MSGC_MAIN_ATTACH_CHANNELS during migration");
+        return;
+    }
+
     item = new_out_item(SPICE_MSG_MAIN_CHANNELS_LIST);
     channels_info = (SpiceMsgChannels *)spice_malloc(sizeof(SpiceMsgChannels) + reds->num_of_channels * sizeof(SpiceChannelId));
     channels_info->num_of_channels = reds->num_of_channels;
@@ -1008,7 +1030,7 @@ static void reds_send_mouse_mode()
     SpiceMsgMainMouseMode mouse_mode;
     RedsOutItem *item;
 
-    if (!reds->stream) {
+    if (!reds->stream || reds->mig_target) {
         return;
     }
 
@@ -1077,6 +1099,7 @@ static void reds_agent_remove()
     SpiceCharDeviceInstance *sin = vdagent;
     SpiceCharDeviceInterface *sif;
 
+    // TODO: is this cond needed
     if (!reds->mig_target) {
         reds_reset_vdp();
     }
@@ -1103,7 +1126,7 @@ static void reds_send_tokens()
     SpiceMsgMainAgentTokens tokens;
     RedsOutItem *item;
 
-    if (!reds->stream) {
+    if (!reds->stream || reds->mig_target) {
         return;
     }
 
@@ -1798,6 +1821,18 @@ static void reds_main_handle_message(void *opaque, size_t size, uint32_t type, v
         break;
     case SPICE_MSGC_DISCONNECTING:
         break;
+    case SPICE_MSGC_MAIN_MIGRATE_END:
+        if (!reds->mig_target) {
+            red_printf("unexpected SPICE_MSGC_MIGRATE_END, not target");
+            return;
+        }
+        if (!reds->client_semi_mig_cap) {
+            red_printf("unexpected SPICE_MSGC_MIGRATE_END"
+                       ",client does not support semi-seamless migration");
+            return;
+        }
+        reds_handle_client_migrate_complete();
+        break;
     default:
         red_printf("unexpected type %d", type);
     }
@@ -2122,14 +2157,10 @@ static void reds_handle_main_link(RedLinkInfo *link)
         reds_send_link_result(link, SPICE_LINK_ERR_OK);
         while((connection_id = rand()) == 0);
         reds->agent_state.num_tokens = 0;
-        memcpy(&(reds->taTicket), &taTicket, sizeof(reds->taTicket));
         reds->mig_target = FALSE;
     } else {
-        if (link_mess->connection_id != reds->link_id) {
-            reds_send_link_result(link, SPICE_LINK_ERR_BAD_CONNECTION_ID);
-            reds_link_free(link);
-            return;
-        }
+        // TODO: make sure link_mess->connection_id is the same
+        // connection id the migration src had (use vmstate to store the connection id)
         reds_send_link_result(link, SPICE_LINK_ERR_OK);
         connection_id = link_mess->connection_id;
         reds->mig_target = TRUE;
@@ -2158,6 +2189,7 @@ static void reds_handle_main_link(RedLinkInfo *link)
     link->stream = NULL;
     link->link_mess = NULL;
     reds_link_free(link);
+    // TODO: should this be moved to be done only after mig completed (reds_main_channel_init)?
     if (vdagent) {
         SpiceCharDeviceInterface *sif;
         sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceCharDeviceInterface, base);
@@ -2612,6 +2644,32 @@ static void inputs_init()
     reds_register_channel(channel);
 }
 
+static void reds_mig_pending_link_add(SpiceLinkMess *link_msg, RedsStream *stream)
+{
+    RedsMigPendingLink *mig_link;
+
+    ASSERT(reds);
+    mig_link = spice_malloc0(sizeof(RedsMigPendingLink));
+    mig_link->link_msg = link_msg;
+    mig_link->stream = stream;
+
+    mig_link->next = reds->mig_pending_links;
+    reds->mig_pending_links = mig_link;
+    reds->num_mig_links++;
+}
+
+static void reds_mig_pending_links_free(void)
+{
+    red_printf("");
+    while(reds->mig_pending_links) {
+        RedsMigPendingLink *tmp = reds->mig_pending_links;
+        reds->mig_pending_links = tmp->next;
+        free(tmp->link_msg);
+        free(tmp);
+    }
+
+    reds->num_mig_links = 0;
+}
 static void reds_send_input_channel_insecure_warn()
 {
     RedsOutItem *item;
@@ -2650,6 +2708,35 @@ static void reds_channel_do_link(Channel *channel, SpiceLinkMess *link_msg, Reds
                   link_msg->num_channel_caps ? caps + link_msg->num_common_caps : NULL);
 }
 
+static void reds_handle_client_migrate_complete(void)
+{
+    RedsMigPendingLink *cur_link;
+
+    red_printf("");
+    // TODO: not doing net test. consider doing it on client_migrate_info
+    reds_main_channel_init(FALSE);
+
+    for (cur_link = reds->mig_pending_links; cur_link; cur_link = cur_link->next) {
+        Channel *channel = reds_find_channel(cur_link->link_msg->channel_type,
+                                             cur_link->link_msg->channel_id);
+        if (!channel) {
+            red_printf("warning: channel (%d, %d) (type,id) wasn't found",
+                       cur_link->link_msg->channel_type, cur_link->link_msg->channel_id);
+            continue;
+       }
+       reds_channel_do_link(channel, cur_link->link_msg, cur_link->stream);
+    }
+
+    reds_mig_pending_links_free();
+    reds->mig_target = FALSE;
+    if (reds->mig_wait_prev_complete) {
+        reds->mig_wait_prev_complete = FALSE;
+        core->timer_cancel(reds->mig_timer);
+        // starting a pending migrate info command
+        reds_mig_started();
+    }
+}
+
 static void reds_handle_other_links(RedLinkInfo *link)
 {
     Channel *channel;
@@ -2674,8 +2761,12 @@ static void reds_handle_other_links(RedLinkInfo *link)
     reds_show_new_channel(link, reds->link_id);
     reds_stream_remove_watch(link->stream);
 
-    reds_channel_do_link(channel, link_mess, link->stream);
-    free(link_mess);
+    if (reds->mig_target) {
+        reds_mig_pending_link_add(link_mess, link->stream);
+    } else {
+        reds_channel_do_link(channel, link_mess, link->stream);
+        free(link_mess);
+    }
 
     link->stream = NULL;
     link->link_mess = NULL;
@@ -2704,10 +2795,9 @@ static void reds_handle_ticket(void *opaque)
                         (unsigned char *)password, link->tiTicketing.rsa, RSA_PKCS1_OAEP_PADDING);
 
     if (ticketing_enabled) {
-        int expired = !link->link_mess->connection_id && taTicket.expiration_time < ltime;
-        char *actual_sever_pass = link->link_mess->connection_id ? reds->taTicket.password :
-                                                                   taTicket.password;
-        if (strlen(actual_sever_pass) == 0) {
+        int expired =  taTicket.expiration_time < ltime;
+
+        if (strlen(taTicket.password) == 0) {
             reds_send_link_result(link, SPICE_LINK_ERR_PERMISSION_DENIED);
             red_printf("Ticketing is enabled, but no password is set. "
                        "please set a ticket first");
@@ -2715,7 +2805,7 @@ static void reds_handle_ticket(void *opaque)
             return;
         }
 
-        if (expired || strncmp(password, actual_sever_pass, SPICE_MAX_PASSWORD_LENGTH) != 0) {
+        if (expired || strncmp(password, taTicket.password, SPICE_MAX_PASSWORD_LENGTH) != 0) {
             reds_send_link_result(link, SPICE_LINK_ERR_PERMISSION_DENIED);
             reds_link_free(link);
             return;
@@ -4183,7 +4273,7 @@ static void reds_mig_switch(void)
 static void migrate_timeout(void *opaque)
 {
     red_printf("");
-    ASSERT(reds->mig_wait_connect || reds->mig_wait_disconnect);
+    ASSERT(reds->mig_wait_connect || reds->mig_wait_disconnect || reds->mig_wait_prev_complete);
     reds_mig_disconnect();
 }
 
@@ -4210,7 +4300,7 @@ void reds_enable_mm_timer(void)
     RedsOutItem *item;
 
     core->timer_start(reds->mm_timer, MM_TIMER_GRANULARITY_MS);
-    if (!reds->stream) {
+    if (!reds->stream || reds->mig_target) {
         return;
     }
 
@@ -5012,7 +5102,13 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_connect(SpiceServer *s, const char* 
     reds_listen_stop();
 
     if (reds->client_semi_mig_cap) {
-        reds_mig_started();
+        if (!reds->mig_target) {
+            reds_mig_started();
+        } else {
+            red_printf("previous spice migration hasn't completed yet. Waiting for client");
+            reds->mig_wait_prev_complete = TRUE;
+            core->timer_start(reds->mig_timer, MIGRATE_TIMEOUT);
+        }
     } else {
         sif->migrate_connect_complete(migration_interface);
     }
