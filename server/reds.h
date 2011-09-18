@@ -99,6 +99,13 @@ struct SpiceMigrateState {
     int dummy;
 };
 
+typedef struct RedsMigSpice {
+    char *host;
+    char *cert_subject;
+    int port;
+    int sport;
+} RedsMigSpice;
+
 ssize_t reds_stream_read(RedsStream *s, void *buf, size_t nbyte);
 ssize_t reds_stream_write(RedsStream *s, const void *buf, size_t nbyte);
 ssize_t reds_stream_writev(RedsStream *s, const struct iovec *iov, int iovcnt);
@@ -134,11 +141,12 @@ int reds_num_of_clients(void);
 void reds_update_stat_value(uint32_t value);
 #endif
 
-// callbacks from main channel messages
+/* callbacks from main channel messages */
+
 void reds_on_main_agent_start(void);
 void reds_on_main_agent_data(MainChannelClient *mcc, void *message, size_t size);
-void reds_on_main_migrate_connected(void);
-void reds_on_main_migrate_connect_error(void);
+void reds_on_main_migrate_connected(void); //should be called when all the clients
+                                           // are connected to the target
 void reds_on_main_receive_migrate_data(MainMigrateData *data, uint8_t *end);
 void reds_on_main_mouse_mode_request(void *message, size_t size);
 

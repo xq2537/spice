@@ -110,16 +110,6 @@ typedef struct NotifyPipeItem {
     int mess_len;
 } NotifyPipeItem;
 
-typedef struct MigrateBeginPipeItem {
-    PipeItem base;
-    int port;
-    int sport;
-    char *host;
-    uint16_t cert_pub_key_type;
-    uint32_t cert_pub_key_len;
-    uint8_t *cert_pub_key;
-} MigrateBeginPipeItem;
-
 typedef struct MultiMediaTimePipeItem {
     PipeItem base;
     int time;
@@ -137,6 +127,8 @@ struct MainChannelClient {
     SpiceTimer *ping_timer;
     int ping_interval;
 #endif
+    int mig_wait_connect;
+    int mig_connect_ok;
 };
 
 enum NetTestStage {
@@ -280,33 +272,6 @@ static PipeItem *main_notify_item_new(RedChannelClient *rcc, void *data, int num
                                SPICE_MSG_NOTIFY);
     item->mess = info->mess;
     item->mess_len = info->mess_len;
-    return &item->base;
-}
-
-typedef struct MigrateBeginItemInfo {
-    int port;
-    int sport;
-    char *host;
-    uint16_t cert_pub_key_type;
-    uint32_t cert_pub_key_len;
-    uint8_t *cert_pub_key;
-} MigrateBeginItemInfo;
-
-// TODO: MC: migration is not tested at all with multiclient.
-static PipeItem *main_migrate_begin_item_new(
-    RedChannelClient *rcc, void *data, int num)
-{
-    MigrateBeginPipeItem *item = spice_malloc(sizeof(MigrateBeginPipeItem));
-    MigrateBeginItemInfo *info = data;
-
-    red_channel_pipe_item_init(rcc->channel, &item->base,
-                               SPICE_MSG_MAIN_MIGRATE_BEGIN);
-    item->port = info->port;
-    item->sport = info->sport;
-    item->host = info->host;
-    item->cert_pub_key_type = info->cert_pub_key_type;
-    item->cert_pub_key_len = info->cert_pub_key_len;
-    item->cert_pub_key = info->cert_pub_key;
     return &item->base;
 }
 
@@ -550,35 +515,23 @@ static void main_channel_marshall_notify(SpiceMarshaller *m, NotifyPipeItem *ite
     spice_marshaller_add(m, item->mess, item->mess_len + 1);
 }
 
-void main_channel_push_migrate_begin(MainChannel *main_chan, int port, int sport,
-    char *host, uint16_t cert_pub_key_type, uint32_t cert_pub_key_len,
-    uint8_t *cert_pub_key)
-{
-    MigrateBeginItemInfo info = {
-        .port =port,
-        .sport = sport,
-        .host = host,
-        .cert_pub_key_type = cert_pub_key_type,
-        .cert_pub_key_len = cert_pub_key_len,
-        .cert_pub_key = cert_pub_key,
-    };
-
-    red_channel_pipes_new_add_push(&main_chan->base,
-        main_migrate_begin_item_new, &info);
-}
-
-static void main_channel_marshall_migrate_begin(SpiceMarshaller *m,
-    MigrateBeginPipeItem *item)
+static void main_channel_marshall_migrate_begin(SpiceMarshaller *m, RedChannelClient *rcc)
 {
     SpiceMsgMainMigrationBegin migrate;
+    MainChannel *main_ch;
 
-    migrate.port = item->port;
-    migrate.sport = item->sport;
-    migrate.host_size = strlen(item->host) + 1;
-    migrate.host_data = (uint8_t *)item->host;
-    migrate.pub_key_type = item->cert_pub_key_type;
-    migrate.pub_key_size = item->cert_pub_key_len;
-    migrate.pub_key_data = item->cert_pub_key;
+    main_ch = SPICE_CONTAINEROF(rcc->channel, MainChannel, base);
+    migrate.port = main_ch->mig_target.port;
+    migrate.sport = main_ch->mig_target.sport;
+    migrate.host_size = strlen(main_ch->mig_target.host) + 1;
+    migrate.host_data = (uint8_t *)main_ch->mig_target.host;
+    if (main_ch->mig_target.cert_subject) {
+        migrate.cert_subject_size = strlen(main_ch->mig_target.cert_subject) + 1;
+        migrate.cert_subject_data = (uint8_t *)main_ch->mig_target.cert_subject;
+    } else {
+        migrate.cert_subject_size = 0;
+        migrate.cert_subject_data = NULL;
+    }
     spice_marshall_msg_main_migrate_begin(m, &migrate);
 }
 
@@ -699,8 +652,7 @@ static void main_channel_send_item(RedChannelClient *rcc, PipeItem *base)
             main_channel_marshall_migrate(m);
             break;
         case SPICE_MSG_MAIN_MIGRATE_BEGIN:
-            main_channel_marshall_migrate_begin(m,
-                SPICE_CONTAINEROF(base, MigrateBeginPipeItem, base));
+            main_channel_marshall_migrate_begin(m, rcc);
             break;
         case SPICE_MSG_MAIN_MULTI_MEDIA_TIME:
             main_channel_marshall_multi_media_time(m,
@@ -741,6 +693,26 @@ static void main_channel_release_pipe_item(RedChannelClient *rcc,
     free(base);
 }
 
+void main_channel_client_handle_migrate_connected(MainChannelClient *mcc, int success)
+{
+    red_printf("client %p connected: %d", mcc->base.client, success);
+    if (mcc->mig_wait_connect) {
+        MainChannel *main_channel = SPICE_CONTAINEROF(mcc->base.channel, MainChannel, base);
+
+        mcc->mig_wait_connect = FALSE;
+        mcc->mig_connect_ok = success;
+        ASSERT(main_channel->num_clients_mig_wait);
+        if (!--main_channel->num_clients_mig_wait) {
+            reds_on_main_migrate_connected();
+        }
+    } else {
+        if (success) {
+            red_printf("client %p MIGRATE_CANCEL", mcc->base.client);
+            red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_CANCEL);
+        }
+    }
+}
+
 static int main_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint16_t type, void *message)
 {
     MainChannel *main_chan = SPICE_CONTAINEROF(rcc->channel, MainChannel, base);
@@ -764,12 +736,10 @@ static int main_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint
         main_channel_push_channels(mcc);
         break;
     case SPICE_MSGC_MAIN_MIGRATE_CONNECTED:
-        red_printf("connected");
-        reds_on_main_migrate_connected();
+        main_channel_client_handle_migrate_connected(mcc, TRUE);
         break;
     case SPICE_MSGC_MAIN_MIGRATE_CONNECT_ERROR:
-        red_printf("mig connect error");
-        reds_on_main_migrate_connect_error();
+        main_channel_client_handle_migrate_connected(mcc, FALSE);
         break;
     case SPICE_MSGC_MAIN_MOUSE_MODE_REQUEST:
         reds_on_main_mouse_mode_request(message, size);
@@ -1001,6 +971,58 @@ MainChannel* main_channel_init(void)
                                         main_channel_handle_parsed,
                                         &channel_cbs);
     ASSERT(channel);
-
+    red_channel_set_cap(channel, SPICE_MAIN_CAP_SEMI_SEAMLESS_MIGRATE);
     return (MainChannel *)channel;
+}
+
+RedChannelClient* main_channel_client_get_base(MainChannelClient* mcc)
+{
+    ASSERT(mcc);
+    return &mcc->base;
+}
+
+int main_channel_migrate_connect(MainChannel *main_channel, RedsMigSpice *mig_target)
+{
+    RingItem *client_link;
+
+    ASSERT(mig_target);
+    free(main_channel->mig_target.host);
+    main_channel->mig_target.host = strdup(mig_target->host);
+    free(main_channel->mig_target.cert_subject);
+    if (mig_target->cert_subject) {
+        main_channel->mig_target.cert_subject = strdup(mig_target->cert_subject);
+    }
+    main_channel->mig_target.port = mig_target->port;
+    main_channel->mig_target.sport = mig_target->sport;
+
+    main_channel->num_clients_mig_wait = 0;
+
+    RING_FOREACH(client_link, &main_channel->base.clients) {
+        MainChannelClient * mcc = SPICE_CONTAINEROF(client_link, MainChannelClient, base.channel_link);
+        if (red_channel_client_test_remote_cap(&mcc->base,
+                                               SPICE_MAIN_CAP_SEMI_SEAMLESS_MIGRATE)) {
+            red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_BEGIN);
+            mcc->mig_wait_connect = TRUE;
+            mcc->mig_connect_ok = FALSE;
+            main_channel->num_clients_mig_wait++;
+        }
+    }
+    return main_channel->num_clients_mig_wait;
+}
+
+void main_channel_migrate_cancel_wait(MainChannel *main_chan)
+{
+    RingItem *client_link;
+
+    RING_FOREACH(client_link, &main_chan->base.clients) {
+        MainChannelClient *mcc;
+
+        mcc = SPICE_CONTAINEROF(client_link, MainChannelClient, base.channel_link);
+        if (mcc->mig_wait_connect) {
+            red_printf("client %p cancel wait connect", mcc->base.client);
+            mcc->mig_wait_connect = FALSE;
+            mcc->mig_connect_ok = FALSE;
+        }
+    }
+    main_chan->num_clients_mig_wait = 0;
 }

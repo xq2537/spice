@@ -191,8 +191,6 @@ typedef struct RedsStatValue {
 
 #endif
 
-typedef struct RedsMigSpice RedsMigSpice;
-
 typedef struct RedsState {
     int listen_socket;
     int secure_listen_socket;
@@ -295,6 +293,7 @@ struct ChannelSecurityOptions {
     ChannelSecurityOptions *next;
 };
 
+static void migrate_timeout(void *opaque);
 
 static ChannelSecurityOptions *channels_security = NULL;
 static int default_channel_security =
@@ -538,6 +537,12 @@ static RedChannel *reds_find_channel(uint32_t type, uint32_t id)
 static void reds_mig_cleanup(void)
 {
     if (reds->mig_inprogress) {
+        if (reds->mig_wait_connect) {
+            SpiceMigrateInterface *sif;
+            ASSERT(migration_interface);
+            sif = SPICE_CONTAINEROF(migration_interface->base.sif, SpiceMigrateInterface, base);
+            sif->migrate_connect_complete(migration_interface);
+        }
         reds->mig_inprogress = FALSE;
         reds->mig_wait_connect = FALSE;
         reds->mig_wait_disconnect = FALSE;
@@ -1054,13 +1059,6 @@ void reds_on_main_agent_data(MainChannelClient *mcc, void *message, size_t size)
 }
 
 void reds_on_main_migrate_connected(void)
-{
-    if (reds->mig_wait_connect) {
-        reds_mig_cleanup();
-    }
-}
-
-void reds_on_main_migrate_connect_error(void)
 {
     if (reds->mig_wait_connect) {
         reds_mig_cleanup();
@@ -2976,18 +2974,6 @@ static void set_one_channel_security(int id, uint32_t security)
 
 #define REDS_SAVE_VERSION 1
 
-struct RedsMigSpice {
-    char pub_key[SPICE_TICKET_PUBKEY_BYTES];
-    uint32_t mig_key;
-    char *host;
-    char *cert_subject;
-    int port;
-    int sport;
-    uint16_t cert_pub_key_type;
-    uint32_t cert_pub_key_len;
-    uint8_t* cert_pub_key;
-};
-
 typedef struct RedsMigSpiceMessage {
     uint32_t connection_id;
 } RedsMigSpiceMessage;
@@ -3007,24 +2993,12 @@ void reds_mig_release(void)
     }
 }
 
-static void reds_mig_continue(void)
-{
-    RedsMigSpice *s = reds->mig_spice;
-
-    red_printf("");
-    main_channel_push_migrate_begin(reds->main_channel, s->port, s->sport,
-        s->host, s->cert_pub_key_type, s->cert_pub_key_len, s->cert_pub_key);
-
-    reds_mig_release();
-
-    reds->mig_wait_connect = TRUE;
-    core->timer_start(reds->mig_timer, MIGRATE_TIMEOUT);
-}
-
 static void reds_mig_started(void)
 {
     red_printf("");
+    ASSERT(reds->mig_spice);
 
+    reds->mig_wait_connect = TRUE;
     reds->mig_inprogress = TRUE;
 
     if (reds->listen_watch != NULL) {
@@ -3034,24 +3008,7 @@ static void reds_mig_started(void)
     if (reds->secure_listen_watch != NULL) {
         core->watch_update_mask(reds->secure_listen_watch, 0);
     }
-
-    if (!reds_main_channel_connected()) {
-        red_printf("not connected to peer");
-        goto error;
-    }
-
-    if ((SPICE_VERSION_MAJOR == 1) && (reds->peer_minor_version < 2)) {
-        red_printf("minor version mismatch client %u server %u",
-                   reds->peer_minor_version, SPICE_VERSION_MINOR);
-        goto error;
-    }
-
-    reds_mig_continue();
-    return;
-
-error:
-    reds_mig_release();
-    reds_mig_disconnect();
+    core->timer_start(reds->mig_timer, MIGRATE_TIMEOUT);
 }
 
 static void reds_mig_finished(int completed)
@@ -3127,11 +3084,16 @@ void reds_fill_mig_switch(SpiceMsgMainMigrationSwitchHost *migrate)
     }
 }
 
-static void migrate_timout(void *opaque)
+static void migrate_timeout(void *opaque)
 {
     red_printf("");
     ASSERT(reds->mig_wait_connect || reds->mig_wait_disconnect);
-    reds_mig_disconnect();
+    if (reds->mig_wait_connect) {
+        main_channel_migrate_cancel_wait(reds->main_channel);
+        reds_mig_cleanup();
+    } else {
+        reds_mig_disconnect();
+    }
 }
 
 uint32_t reds_get_mm_time(void)
@@ -3492,7 +3454,7 @@ static int do_spice_init(SpiceCoreInterface *core_interface)
     main_dispatcher_init(core);
     ring_init(&reds->channels);
 
-    if (!(reds->mig_timer = core->timer_add(migrate_timout, NULL))) {
+    if (!(reds->mig_timer = core->timer_add(migrate_timeout, NULL))) {
         red_error("migration timer create failed");
     }
     if (!(reds->vdi_port_write_timer = core->timer_add(vdi_port_write_retry, NULL)))
@@ -3875,33 +3837,17 @@ SPICE_GNUC_VISIBLE int spice_server_set_agent_copypaste(SpiceServer *s, int enab
     return 0;
 }
 
-/* semi-seamless client migration */
-SPICE_GNUC_VISIBLE int spice_server_migrate_connect(SpiceServer *s, const char* dest,
-                                                    int port, int secure_port,
-                                                    const char* cert_subject)
-{
-    SpiceMigrateInterface *sif;
-    red_printf("");
-    ASSERT(migration_interface);
-    ASSERT(reds == s);
-
-    red_printf("not implemented yet");
-    sif = SPICE_CONTAINEROF(migration_interface->base.sif, SpiceMigrateInterface, base);
-    sif->migrate_connect_complete(migration_interface);
-
-    return 0;
-}
-
-SPICE_GNUC_VISIBLE int spice_server_migrate_info(SpiceServer *s, const char* dest,
-                                          int port, int secure_port,
-                                          const char* cert_subject)
+/* returns FALSE if info is invalid */
+static int reds_set_migration_dest_info(const char* dest,
+                                        int port, int secure_port,
+                                        const char* cert_subject)
 {
     RedsMigSpice *spice_migration = NULL;
 
-    ASSERT(reds == s);
-
-    if ((port == -1 && secure_port == -1) || !dest)
-        return -1;
+    reds_mig_release();
+    if ((port == -1 && secure_port == -1) || !dest) {
+        return FALSE;
+    }
 
     spice_migration = spice_new0(RedsMigSpice, 1);
     spice_migration->port = port;
@@ -3911,12 +3857,53 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_info(SpiceServer *s, const char* des
         spice_migration->cert_subject = strdup(cert_subject);
     }
 
-    reds_mig_release();
     reds->mig_spice = spice_migration;
+
+    return TRUE;
+}
+
+/* semi-seamless client migration */
+SPICE_GNUC_VISIBLE int spice_server_migrate_connect(SpiceServer *s, const char* dest,
+                                                    int port, int secure_port,
+                                                    const char* cert_subject)
+{
+    SpiceMigrateInterface *sif;
+
+    red_printf("");
+    ASSERT(migration_interface);
+    ASSERT(reds == s);
+
+    sif = SPICE_CONTAINEROF(migration_interface->base.sif, SpiceMigrateInterface, base);
+
+    if (!reds_set_migration_dest_info(dest, port, secure_port, cert_subject)) {
+        sif->migrate_connect_complete(migration_interface);
+        return -1;
+    }
+
+    if (main_channel_migrate_connect(reds->main_channel, reds->mig_spice)) {
+        reds->mig_wait_connect = TRUE;
+        reds_mig_started();
+    } else {
+        sif->migrate_connect_complete(migration_interface);
+    }
+
     return 0;
 }
 
-/* interface for seamless migration */
+SPICE_GNUC_VISIBLE int spice_server_migrate_info(SpiceServer *s, const char* dest,
+                                          int port, int secure_port,
+                                          const char* cert_subject)
+{
+    ASSERT(!migration_interface);
+    ASSERT(reds == s);
+
+    if (!reds_set_migration_dest_info(dest, port, secure_port, cert_subject)) {
+        return -1;
+    }
+
+    return 0;
+}
+
 SPICE_GNUC_VISIBLE int spice_server_migrate_start(SpiceServer *s)
 {
     ASSERT(reds == s);

@@ -57,6 +57,8 @@ struct MainMigrateData {
 typedef struct MainChannel {
     RedChannel base;
     uint8_t recv_buf[RECEIVE_BUF_SIZE];
+    RedsMigSpice mig_target; // TODO: add refs and release (afrer all clients completed migration in one way or the other?)
+    int num_clients_mig_wait;
 } MainChannel;
 
 
@@ -80,9 +82,6 @@ void main_channel_push_init(MainChannelClient *mcc, int connection_id, int displ
     int current_mouse_mode, int is_client_mouse_allowed, int multi_media_time,
     int ram_hint);
 void main_channel_push_notify(MainChannel *main_chan, uint8_t *mess, const int mess_len);
-// TODO: consider exporting RedsMigSpice from reds.c
-void main_channel_push_migrate_begin(MainChannel *main_chan, int port, int sport, char *host,
-    uint16_t cert_pub_key_type, uint32_t cert_pub_key_len, uint8_t *cert_pub_key);
 void main_channel_push_migrate(MainChannel *main_chan);
 void main_channel_push_migrate_switch(MainChannel *main_chan);
 void main_channel_push_migrate_cancel(MainChannel *main_chan);
@@ -94,5 +93,12 @@ uint32_t main_channel_client_get_link_id(MainChannelClient *mcc);
 int main_channel_client_is_low_bandwidth(MainChannelClient *mcc);
 uint64_t main_channel_client_get_bitrate_per_sec(MainChannelClient *mcc);
 int main_channel_is_connected(MainChannel *main_chan);
+RedChannelClient* main_channel_client_get_base(MainChannelClient* mcc);
 
+/* semi seamless migration */
+
+/* returns the number of clients that we are waiting for their connection */
+int main_channel_migrate_connect(MainChannel *main_channel, RedsMigSpice *mig_target);
+void main_channel_migrate_cancel_wait(MainChannel *main_chan);
+void main_channel_migrate_complete(MainChannel *main_chan, int success);
 #endif
