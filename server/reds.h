@@ -119,6 +119,10 @@ struct SpiceNetWireState {
     struct TunnelWorker *worker;
 };
 
+struct SpiceMigrateState {
+    int dummy;
+};
+
 void reds_channel_dispose(Channel *channel);
 
 ssize_t reds_stream_read(RedsStream *s, void *buf, size_t nbyte);
