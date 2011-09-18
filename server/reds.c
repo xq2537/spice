@@ -2612,12 +2612,48 @@ static void inputs_init()
     reds_register_channel(channel);
 }
 
+static void reds_send_input_channel_insecure_warn()
+{
+    RedsOutItem *item;
+    SpiceMsgNotify notify;
+    char *mess = "keyboard channel is insecure";
+    const int mess_len = strlen(mess);
+
+    item = new_out_item(SPICE_MSG_NOTIFY);
+
+    notify.time_stamp = get_time_stamp();
+    notify.severity = SPICE_NOTIFY_SEVERITY_WARN;
+    notify.visibilty = SPICE_NOTIFY_VISIBILITY_HIGH;
+    notify.what = SPICE_WARN_GENERAL;
+    notify.message_len = mess_len;
+
+    spice_marshall_msg_notify(item->m, &notify);
+    spice_marshaller_add(item->m, (uint8_t *)mess, mess_len + 1);
+
+    reds_push_pipe_item(item);
+}
+
+static void reds_channel_do_link(Channel *channel, SpiceLinkMess *link_msg, RedsStream *stream)
+{
+    uint32_t *caps;
+
+    ASSERT(channel);
+    ASSERT(link_msg);
+    ASSERT(stream);
+
+    if (link_msg->channel_type == SPICE_CHANNEL_INPUTS && !stream->ssl) {
+        reds_send_input_channel_insecure_warn();
+    }
+    caps = (uint32_t *)((uint8_t *)link_msg + link_msg->caps_offset);
+    channel->link(channel, stream, FALSE, link_msg->num_common_caps,
+                  link_msg->num_common_caps ? caps : NULL, link_msg->num_channel_caps,
+                  link_msg->num_channel_caps ? caps + link_msg->num_common_caps : NULL);
+}
+
 static void reds_handle_other_links(RedLinkInfo *link)
 {
     Channel *channel;
-    RedsStream *stream;
     SpiceLinkMess *link_mess;
-    uint32_t *caps;
 
     link_mess = link->link_mess;
 
@@ -2636,35 +2672,14 @@ static void reds_handle_other_links(RedLinkInfo *link)
 
     reds_send_link_result(link, SPICE_LINK_ERR_OK);
     reds_show_new_channel(link, reds->link_id);
-    if (link_mess->channel_type == SPICE_CHANNEL_INPUTS && !link->stream->ssl) {
-        RedsOutItem *item;
-        SpiceMsgNotify notify;
-        char *mess = "keyboard channel is insecure";
-        const int mess_len = strlen(mess);
+    reds_stream_remove_watch(link->stream);
 
-        item = new_out_item(SPICE_MSG_NOTIFY);
+    reds_channel_do_link(channel, link_mess, link->stream);
+    free(link_mess);
 
-        notify.time_stamp = get_time_stamp();
-        notify.severity = SPICE_NOTIFY_SEVERITY_WARN;
-        notify.visibilty = SPICE_NOTIFY_VISIBILITY_HIGH;
-        notify.what = SPICE_WARN_GENERAL;
-        notify.message_len = mess_len;
-
-        spice_marshall_msg_notify(item->m, &notify);
-        spice_marshaller_add(item->m, (uint8_t *)mess, mess_len + 1);
-
-        reds_push_pipe_item(item);
-    }
-    stream = link->stream;
-    reds_stream_remove_watch(stream);
     link->stream = NULL;
     link->link_mess = NULL;
     reds_link_free(link);
-    caps = (uint32_t *)((uint8_t *)link_mess + link_mess->caps_offset);
-    channel->link(channel, stream, reds->mig_target, link_mess->num_common_caps,
-                  link_mess->num_common_caps ? caps : NULL, link_mess->num_channel_caps,
-                  link_mess->num_channel_caps ? caps + link_mess->num_common_caps : NULL);
-    free(link_mess);
 }
 
 static void reds_handle_link(RedLinkInfo *link)
