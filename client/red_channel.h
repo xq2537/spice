@@ -106,6 +106,16 @@ public:
     virtual void on_event();
 };
 
+class MigrationDisconnectSrcEvent: public Event {
+public:
+    virtual void response(AbstractProcessLoop& events_loop);
+};
+
+class MigrationConnectTargetEvent: public Event {
+public:
+    virtual void response(AbstractProcessLoop& events_loop);
+};
+
 struct SyncInfo {
     Mutex* lock;
     Condition* condition;
@@ -126,6 +136,9 @@ public:
     virtual void disconnect();
     virtual bool abort();
 
+    virtual void disconnect_migration_src();
+    virtual void connect_migration_target();
+
     virtual CompoundInMessage *receive();
 
     virtual void post_message(RedChannel::OutMessage* message);
@@ -140,6 +153,8 @@ protected:
     virtual void on_connect() {}
     virtual void on_disconnect() {}
     virtual void on_migrate() {}
+    virtual void on_disconnect_mig_src() { on_disconnect();}
+    virtual void on_connect_mig_target() { on_connect();}
     void handle_migrate(RedPeer::InMessage* message);
     void handle_set_ack(RedPeer::InMessage* message);
     void handle_ping(RedPeer::InMessage* message);
@@ -159,6 +174,8 @@ private:
     virtual void on_event();
     void on_message_received();
     void on_message_complition(uint64_t serial);
+    void do_migration_disconnect_src();
+    void do_migration_connect_target();
 
     static void* worker_main(void *);
 
@@ -203,6 +220,8 @@ private:
     uint64_t _disconnect_reason;
 
     friend class SendTrigger;
+    friend class MigrationDisconnectSrcEvent;
+    friend class MigrationConnectTargetEvent;
 };
 
 
