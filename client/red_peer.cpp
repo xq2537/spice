@@ -39,6 +39,57 @@ static void ssl_error()
     THROW_ERR(SPICEC_ERROR_CODE_SSL_ERROR, "SSL Error:", ERR_error_string(last_error, NULL));
 }
 
+bool RedPeer::HostAuthOptions::set_cert_subject(const char* subject)
+{
+    std::string subject_str(subject);
+    std::string::const_iterator iter = subject_str.begin();
+    std::string entry;
+    this->type_flags = RedPeer::HostAuthOptions::HOST_AUTH_OP_SUBJECT;
+    this->host_subject.clear();
+
+    while (true) {
+        if ((iter == subject_str.end()) || (*iter == ',')) {
+            RedPeer::HostAuthOptions::CertFieldValuePair entry_pair;
+            int value_pos = entry.find_first_of('=');
+            if ((value_pos == std::string::npos) || (value_pos == (entry.length() - 1))) {
+                LOG_ERROR("host_subject bad format: assignment for %s is missing\n", entry.c_str());
+                return false;
+            }
+            size_t start_pos = entry.find_first_not_of(' ');
+            if ((start_pos == std::string::npos) || (start_pos == value_pos)) {
+                LOG_ERROR("host_subject bad format: first part of assignment"
+                         " must be non empty in %s\n", entry.c_str());
+                return false;
+            }
+            entry_pair.first = entry.substr(start_pos, value_pos - start_pos);
+            entry_pair.second = entry.substr(value_pos + 1);
+            this->host_subject.push_back(entry_pair);
+            DBG(0, "subject entry: %s=%s", entry_pair.first.c_str(), entry_pair.second.c_str());
+            if (iter == subject_str.end()) {
+                break;
+            }
+            entry.clear();
+        } else if (*iter == '\\') {
+            iter++;
+            if (iter == subject_str.end()) {
+                LOG_WARN("single \\ in host subject");
+                entry.append(1, '\\');
+                continue;
+            } else if ((*iter == '\\') || (*iter == ',')) {
+                entry.append(1, *iter);
+            } else {
+                LOG_WARN("single \\ in host subject");
+                entry.append(1, '\\');
+                continue;
+            }
+        } else {
+            entry.append(1, *iter);
+        }
+        iter++;
+    }
+    return true;
+}
+
 RedPeer::RedPeer()
     : _peer (INVALID_SOCKET)
     , _shut (false)

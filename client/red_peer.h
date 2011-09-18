@@ -52,7 +52,7 @@ public:
         typedef std::list<CertFieldValuePair> CertFieldValueList;
 
         HostAuthOptions() : type_flags(0) {}
-
+        bool set_cert_subject(const char* subject);
     public:
 
         int type_flags;

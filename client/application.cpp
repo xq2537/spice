@@ -2015,56 +2015,13 @@ bool Application::set_ca_file(const char* ca_file, const char* arg0)
 
 bool Application::set_host_cert_subject(const char* subject, const char* arg0)
 {
-    std::string subject_str(subject);
-    std::string::const_iterator iter = subject_str.begin();
-    std::string entry;
-    _host_auth_opt.type_flags = RedPeer::HostAuthOptions::HOST_AUTH_OP_SUBJECT;
-    _host_auth_opt.host_subject.clear();
+     if (!_host_auth_opt.set_cert_subject(subject)) {
+        Platform::term_printf("%s: bad cert subject %s", arg0, subject);
+        _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
+        return false;
+     }
 
-    while (true) {
-        if ((iter == subject_str.end()) || (*iter == ',')) {
-            RedPeer::HostAuthOptions::CertFieldValuePair entry_pair;
-            int value_pos = entry.find_first_of('=');
-            if ((value_pos == std::string::npos) || (value_pos == (entry.length() - 1))) {
-                Platform::term_printf("%s: host_subject bad format: assignment for %s is missing\n",
-                                      arg0, entry.c_str());
-                _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
-                return false;
-            }
-            size_t start_pos = entry.find_first_not_of(' ');
-            if ((start_pos == std::string::npos) || (start_pos == value_pos)) {
-                Platform::term_printf("%s: host_subject bad format: first part of assignment must be non empty in %s\n",
-                                      arg0, entry.c_str());
-                _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
-                return false;
-            }
-            entry_pair.first = entry.substr(start_pos, value_pos - start_pos);
-            entry_pair.second = entry.substr(value_pos + 1);
-            _host_auth_opt.host_subject.push_back(entry_pair);
-            DBG(0, "subject entry: %s=%s", entry_pair.first.c_str(), entry_pair.second.c_str());
-            if (iter == subject_str.end()) {
-                break;
-            }
-            entry.clear();
-        } else if (*iter == '\\') {
-            iter++;
-            if (iter == subject_str.end()) {
-                LOG_WARN("single \\ in host subject");
-                entry.append(1, '\\');
-                continue;
-            } else if ((*iter == '\\') || (*iter == ',')) {
-                entry.append(1, *iter);
-            } else {
-                LOG_WARN("single \\ in host subject");
-                entry.append(1, '\\');
-                continue;
-            }
-        } else {
-            entry.append(1, *iter);
-        }
-        iter++;
-    }
-    return true;
+     return true;
 }
 
 bool Application::set_canvas_option(CmdLineParser& parser, char *val, const char* arg0)
