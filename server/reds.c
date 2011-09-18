@@ -2078,6 +2078,35 @@ static int test_capability(uint32_t *caps, uint32_t num_caps, uint32_t cap)
     return (caps[index] & (1 << (cap % 32))) != 0;
 }
 
+static void reds_main_channel_init(int do_net_test)
+{
+    RedsOutItem *item;
+    SpiceMsgMainInit init;
+
+    item = new_out_item(SPICE_MSG_MAIN_INIT);
+    init.session_id = reds->link_id;
+    init.display_channels_hint = red_dispatcher_count();
+    init.current_mouse_mode = reds->mouse_mode;
+    init.supported_mouse_modes = SPICE_MOUSE_MODE_SERVER;
+    if (reds->is_client_mouse_allowed) {
+        init.supported_mouse_modes |= SPICE_MOUSE_MODE_CLIENT;
+    }
+    init.agent_connected = !!vdagent;
+    init.agent_tokens = REDS_AGENT_WINDOW_SIZE;
+    reds->agent_state.num_client_tokens = REDS_AGENT_WINDOW_SIZE;
+    init.multi_media_time = reds_get_mm_time() - MM_TIME_DELTA;
+    init.ram_hint = red_dispatcher_qxl_ram_size();
+
+    spice_marshall_msg_main_init(item->m, &init);
+
+    reds_push_pipe_item(item);
+    if (do_net_test) {
+        reds_start_net_test();
+    }
+    /* Now that we have a client, forward any pending agent data */
+    while (read_from_vdi_port());
+}
+
 static void reds_handle_main_link(RedLinkInfo *link)
 {
     SpiceLinkMess *link_mess = link->link_mess;
@@ -2144,29 +2173,10 @@ static void reds_handle_main_link(RedLinkInfo *link)
                                         reds_main_event, NULL);
 
     if (!reds->mig_target) {
-        RedsOutItem *item;
-        SpiceMsgMainInit init;
-
-        item = new_out_item(SPICE_MSG_MAIN_INIT);
-        init.session_id = connection_id;
-        init.display_channels_hint = red_dispatcher_count();
-        init.current_mouse_mode = reds->mouse_mode;
-        init.supported_mouse_modes = SPICE_MOUSE_MODE_SERVER;
-        if (reds->is_client_mouse_allowed) {
-            init.supported_mouse_modes |= SPICE_MOUSE_MODE_CLIENT;
-        }
-        init.agent_connected = !!vdagent;
-        init.agent_tokens = REDS_AGENT_WINDOW_SIZE;
-        reds->agent_state.num_client_tokens = REDS_AGENT_WINDOW_SIZE;
-        init.multi_media_time = reds_get_mm_time() - MM_TIME_DELTA;
-        init.ram_hint = red_dispatcher_qxl_ram_size();
-
-        spice_marshall_msg_main_init(item->m, &init);
-
-        reds_push_pipe_item(item);
-        reds_start_net_test();
-        /* Now that we have a client, forward any pending agent data */
-        while (read_from_vdi_port());
+        reds_main_channel_init(TRUE);
+    }
+    else {
+        ASSERT(reds->client_semi_mig_cap);
     }
 }
 
