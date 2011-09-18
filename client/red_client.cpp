@@ -257,9 +257,15 @@ void* Migrate::worker_main(void *data)
 
 void Migrate::start(const SpiceMsgMainMigrationBegin* migrate)
 {
+    std::string cert_subject;
+    uint32_t peer_major;
+    uint32_t peer_minor;
+
     DBG(0, "");
     abort();
-    if ((_client.get_peer_major() == 1) && (_client.get_peer_minor() < 1)) {
+    peer_major = _client.get_peer_major();
+    peer_minor = _client.get_peer_minor();
+    if ((peer_major == 1) && (peer_minor < 1)) {
         LOG_INFO("server minor version incompatible for destination authentication"
                  "(missing dest pubkey in SpiceMsgMainMigrationBegin)");
         OldRedMigrationBegin* old_migrate = (OldRedMigrationBegin*)migrate;
@@ -271,8 +277,17 @@ void Migrate::start(const SpiceMsgMainMigrationBegin* migrate)
         _host.assign((char *)migrate->host_data);
         _port = migrate->port ? migrate->port : -1;
         _sport = migrate->sport ? migrate->sport : -1;
-        _auth_options.type_flags = RedPeer::HostAuthOptions::HOST_AUTH_OP_PUBKEY;
-        _auth_options.host_pubkey.assign(migrate->pub_key_data, migrate->pub_key_data + migrate->pub_key_size);
+        if ((peer_major == 1) || (peer_major == 2 && peer_minor < 1)) {
+            _auth_options.type_flags = RedPeer::HostAuthOptions::HOST_AUTH_OP_PUBKEY;
+            _auth_options.host_pubkey.assign(migrate->pub_key_data, migrate->pub_key_data +
+                                             migrate->pub_key_size);
+        } else {
+            _auth_options.type_flags = RedPeer::HostAuthOptions::HOST_AUTH_OP_SUBJECT;
+            _auth_options.CA_file =  _client.get_host_auth_options().CA_file;
+            if (migrate->cert_subject_size != 0) {
+                _auth_options.set_cert_subject((char *)migrate->cert_subject_data);
+            }
+        }
     }
 
     _con_ciphers = _client.get_connection_ciphers();
