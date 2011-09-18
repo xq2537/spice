@@ -98,14 +98,7 @@ RecordChannel::~RecordChannel(void)
         _messages.pop_front();
         delete mes;
     }
-    delete _wave_recorder;
-
-    if (_celt_encoder) {
-        celt051_encoder_destroy(_celt_encoder);
-    }
-    if (_celt_mode) {
-        celt051_mode_destroy(_celt_mode);
-    }
+    clear();
 }
 
 bool RecordChannel::abort(void)
@@ -123,6 +116,11 @@ void RecordChannel::on_connect()
                                                                       SPICE_AUDIO_DATA_MODE_RAW;
     _marshallers->msgc_record_mode(message->marshaller(), &mode);
     post_message(message);
+}
+
+void RecordChannel::on_disconnect()
+{
+    clear();
 }
 
 void RecordChannel::send_start_mark()
@@ -174,6 +172,23 @@ void RecordChannel::handle_start(RedPeer::InMessage* message)
     _wave_recorder->start();
 }
 
+void RecordChannel::clear()
+{
+    if (_wave_recorder) {
+        _wave_recorder->stop();
+        delete _wave_recorder;
+        _wave_recorder = NULL;
+    }
+    if (_celt_encoder) {
+        celt051_encoder_destroy(_celt_encoder);
+        _celt_encoder = NULL;
+    }
+    if (_celt_mode) {
+        celt051_mode_destroy(_celt_mode);
+        _celt_mode = NULL;
+    }
+}
+
 void RecordChannel::handle_stop(RedPeer::InMessage* message)
 {
     RecordHandler* handler = static_cast<RecordHandler*>(get_message_handler());
@@ -183,13 +198,7 @@ void RecordChannel::handle_stop(RedPeer::InMessage* message)
         return;
     }
     ASSERT(_celt_mode && _celt_encoder);
-    _wave_recorder->stop();
-    celt051_encoder_destroy(_celt_encoder);
-    _celt_encoder = NULL;
-    celt051_mode_destroy(_celt_mode);
-    _celt_mode = NULL;
-    delete _wave_recorder;
-    _wave_recorder = NULL;
+    clear();
 }
 
 RecordSamplesMessage* RecordChannel::get_message()

@@ -169,17 +169,35 @@ PlaybackChannel::PlaybackChannel(RedClient& client, uint32_t id)
     set_capability(SPICE_PLAYBACK_CAP_CELT_0_5_1);
 }
 
-PlaybackChannel::~PlaybackChannel(void)
+void PlaybackChannel::clear()
 {
-    delete _wave_player;
+    if (_wave_player) {
+        _playing = false;
+        _wave_player->stop();
+        delete _wave_player;
+        _wave_player = NULL;
+    }
+    _mode = SPICE_AUDIO_DATA_MODE_INVALID;
 
     if (_celt_decoder) {
         celt051_decoder_destroy(_celt_decoder);
+        _celt_decoder = NULL;
     }
 
     if (_celt_mode) {
         celt051_mode_destroy(_celt_mode);
+        _celt_mode = NULL;
     }
+}
+
+void PlaybackChannel::on_disconnect()
+{
+    clear();
+}
+
+PlaybackChannel::~PlaybackChannel(void)
+{
+    clear();
 }
 
 bool PlaybackChannel::abort(void)
