@@ -548,11 +548,6 @@ static void main_channel_marshall_migrate(SpiceMarshaller *m)
     spice_marshall_msg_migrate(m, &migrate);
 }
 
-void main_channel_push_migrate_cancel(MainChannel *main_chan)
-{
-    red_channel_pipes_add_type(&main_chan->base, SPICE_MSG_MAIN_MIGRATE_CANCEL);
-}
-
 void main_channel_push_multi_media_time(MainChannel *main_chan, int time)
 {
     MultiMediaTimePipeItem info = {
@@ -563,33 +558,43 @@ void main_channel_push_multi_media_time(MainChannel *main_chan, int time)
         main_multi_media_time_item_new, &info);
 }
 
-static PipeItem *main_migrate_switch_item_new(RedChannelClient *rcc,
-                                              void *data, int num)
+static void main_channel_fill_mig_target(MainChannel *main_channel, RedsMigSpice *mig_target)
 {
-    RefsPipeItem *item = spice_malloc(sizeof(*item));
-
-    item->refs = data;
-    red_channel_pipe_item_init(rcc->channel, &item->base,
-                               SPICE_MSG_MAIN_MIGRATE_SWITCH_HOST);
-    return &item->base;
+    ASSERT(mig_target);
+    free(main_channel->mig_target.host);
+    main_channel->mig_target.host = strdup(mig_target->host);
+    free(main_channel->mig_target.cert_subject);
+    if (mig_target->cert_subject) {
+        main_channel->mig_target.cert_subject = strdup(mig_target->cert_subject);
+    }
+    main_channel->mig_target.port = mig_target->port;
+    main_channel->mig_target.sport = mig_target->sport;
 }
 
-void main_channel_push_migrate_switch(MainChannel *main_chan)
+void main_channel_migrate_switch(MainChannel *main_chan, RedsMigSpice *mig_target)
 {
-    int *refs = spice_malloc0(sizeof(int));
-
-    *refs = main_chan->base.clients_num;
-    red_channel_pipes_new_add_push(&main_chan->base,
-        main_migrate_switch_item_new, (void*)refs);
+    main_channel_fill_mig_target(main_chan, mig_target);
+    red_channel_pipes_add_type(&main_chan->base, SPICE_MSG_MAIN_MIGRATE_SWITCH_HOST);
 }
 
-static void main_channel_marshall_migrate_switch(SpiceMarshaller *m)
+static void main_channel_marshall_migrate_switch(SpiceMarshaller *m, RedChannelClient *rcc)
 {
     SpiceMsgMainMigrationSwitchHost migrate;
+    MainChannel *main_ch;
 
     red_printf("");
-
-    reds_fill_mig_switch(&migrate);
+    main_ch = SPICE_CONTAINEROF(rcc->channel, MainChannel, base);
+    migrate.port = main_ch->mig_target.port;
+    migrate.sport = main_ch->mig_target.sport;
+    migrate.host_size = strlen(main_ch->mig_target.host) + 1;
+    migrate.host_data = (uint8_t *)main_ch->mig_target.host;
+    if (main_ch->mig_target.cert_subject) {
+        migrate.cert_subject_size = strlen(main_ch->mig_target.cert_subject) + 1;
+        migrate.cert_subject_data = (uint8_t *)main_ch->mig_target.cert_subject;
+    } else {
+        migrate.cert_subject_size = 0;
+        migrate.cert_subject_data = NULL;
+    }
     spice_marshall_msg_main_migrate_switch_host(m, &migrate);
 }
 
@@ -659,7 +664,7 @@ static void main_channel_send_item(RedChannelClient *rcc, PipeItem *base)
                 SPICE_CONTAINEROF(base, MultiMediaTimePipeItem, base));
             break;
         case SPICE_MSG_MAIN_MIGRATE_SWITCH_HOST:
-            main_channel_marshall_migrate_switch(m);
+            main_channel_marshall_migrate_switch(m, rcc);
             break;
     };
     red_channel_client_begin_send_message(rcc);
@@ -676,14 +681,6 @@ static void main_channel_release_pipe_item(RedChannelClient *rcc,
                                  data, data->refs, data->refs->refs);
                 free(data->refs);
                 data->free_data(data->data, data->opaque);
-            }
-            break;
-        }
-        case SPICE_MSG_MAIN_MIGRATE_SWITCH_HOST: {
-            RefsPipeItem *data = (RefsPipeItem*)base;
-            if (!--*(data->refs)) {
-                free(data->refs);
-                reds_mig_release();
             }
             break;
         }
@@ -985,16 +982,7 @@ int main_channel_migrate_connect(MainChannel *main_channel, RedsMigSpice *mig_ta
 {
     RingItem *client_link;
 
-    ASSERT(mig_target);
-    free(main_channel->mig_target.host);
-    main_channel->mig_target.host = strdup(mig_target->host);
-    free(main_channel->mig_target.cert_subject);
-    if (mig_target->cert_subject) {
-        main_channel->mig_target.cert_subject = strdup(mig_target->cert_subject);
-    }
-    main_channel->mig_target.port = mig_target->port;
-    main_channel->mig_target.sport = mig_target->sport;
-
+    main_channel_fill_mig_target(main_channel, mig_target);
     main_channel->num_clients_mig_wait = 0;
 
     RING_FOREACH(client_link, &main_channel->base.clients) {
@@ -1026,3 +1014,44 @@ void main_channel_migrate_cancel_wait(MainChannel *main_chan)
     }
     main_chan->num_clients_mig_wait = 0;
 }
+
+int main_channel_migrate_complete(MainChannel *main_chan, int success)
+{
+    RingItem *client_link;
+    int semi_seamless_count = 0;
+
+    red_printf("");
+
+    if (ring_is_empty(&main_chan->base.clients)) {
+        red_printf("no peer connected");
+        return 0;
+    }
+
+    RING_FOREACH(client_link, &main_chan->base.clients) {
+        MainChannelClient *mcc;
+        int semi_seamless_support;
+
+        mcc = SPICE_CONTAINEROF(client_link, MainChannelClient, base.channel_link);
+        semi_seamless_support = red_channel_client_test_remote_cap(&mcc->base,
+                                                   SPICE_MAIN_CAP_SEMI_SEAMLESS_MIGRATE);
+        if (semi_seamless_support && mcc->mig_connect_ok) {
+            if (success) {
+                red_printf("client %p MIGRATE_END", mcc->base.client);
+                red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_END);
+                semi_seamless_count++;
+            } else {
+                red_printf("client %p MIGRATE_CANCEL", mcc->base.client);
+                red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_CANCEL);
+            }
+        } else {
+            if (success) {
+                red_printf("client %p SWITCH_HOST", mcc->base.client);
+                red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_SWITCH_HOST);
+            }
+        }
+        mcc->mig_connect_ok = FALSE;
+        mcc->mig_wait_connect = FALSE;
+   }
+   return semi_seamless_count;
+}
+

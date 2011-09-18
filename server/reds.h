@@ -133,8 +133,6 @@ void reds_client_disconnect(RedClient *client);
 typedef struct MainMigrateData MainMigrateData;
 void reds_marshall_migrate_data_item(SpiceMarshaller *m, MainMigrateData *data);
 void reds_fill_channels(SpiceMsgChannels *channels_info);
-void reds_fill_mig_switch(SpiceMsgMainMigrationSwitchHost *migrate);
-void reds_mig_release(void);
 int reds_num_of_channels(void);
 int reds_num_of_clients(void);
 #ifdef RED_STATISTICS

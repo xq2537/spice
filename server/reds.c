@@ -205,6 +205,7 @@ typedef struct RedsState {
     int mig_wait_connect;
     int mig_wait_disconnect;
     int mig_inprogress;
+    int expect_migrate;
     int mig_target;
     RedsMigSpice *mig_spice;
     int num_of_channels;
@@ -2983,7 +2984,7 @@ typedef struct RedsMigCertPubKeyInfo {
     uint32_t len;
 } RedsMigCertPubKeyInfo;
 
-void reds_mig_release(void)
+static void reds_mig_release(void)
 {
     if (reds->mig_spice) {
         free(reds->mig_spice->cert_subject);
@@ -2998,29 +2999,14 @@ static void reds_mig_started(void)
     red_printf("");
     ASSERT(reds->mig_spice);
 
-    reds->mig_wait_connect = TRUE;
     reds->mig_inprogress = TRUE;
-
-    if (reds->listen_watch != NULL) {
-        core->watch_update_mask(reds->listen_watch, 0);
-    }
-
-    if (reds->secure_listen_watch != NULL) {
-        core->watch_update_mask(reds->secure_listen_watch, 0);
-    }
+    reds->mig_wait_connect = TRUE;
     core->timer_start(reds->mig_timer, MIGRATE_TIMEOUT);
 }
 
 static void reds_mig_finished(int completed)
 {
     red_printf("");
-    if (reds->listen_watch != NULL) {
-        core->watch_update_mask(reds->listen_watch, SPICE_WATCH_EVENT_READ);
-    }
-
-    if (reds->secure_listen_watch != NULL) {
-        core->watch_update_mask(reds->secure_listen_watch, SPICE_WATCH_EVENT_READ);
-    }
 
     if (!reds_main_channel_connected()) {
         red_printf("no peer connected");
@@ -3028,28 +3014,13 @@ static void reds_mig_finished(int completed)
     }
     reds->mig_inprogress = TRUE;
 
-    if (completed) {
-        RingItem *link, *next;
-
+    if (main_channel_migrate_complete(reds->main_channel, completed)) {
         reds->mig_wait_disconnect = TRUE;
         core->timer_start(reds->mig_timer, MIGRATE_TIMEOUT);
-
-        // TODO: so now that main channel is separate, how exactly does migration of it work?
-        //  - it can have an empty migrate - that seems ok
-        //  - I can try to fill it's migrate, then move stuff from reds.c there, but a lot of data
-        //    is in reds state right now.
-        //    currently the migrate callback of main_channel does nothing
-        main_channel_push_migrate(reds->main_channel);
-
-        RING_FOREACH_SAFE(link, next, &reds->clients) {
-            red_client_migrate(SPICE_CONTAINEROF(link, RedClient, link));
-        }
     } else {
-        main_channel_push_migrate_cancel(reds->main_channel);
-        // TODO: all the seemless migration is broken. Before MC we waited for disconection of one client,
-        // no we need to wait to all the clients (see mig_timer)?
         reds_mig_cleanup();
     }
+    reds_mig_release();
 }
 
 static void reds_mig_switch(void)
@@ -3058,30 +3029,8 @@ static void reds_mig_switch(void)
         red_printf("warning: reds_mig_switch called without migrate_info set");
         return;
     }
-    main_channel_push_migrate_switch(reds->main_channel);
-}
-
-void reds_fill_mig_switch(SpiceMsgMainMigrationSwitchHost *migrate)
-{
-    RedsMigSpice *s = reds->mig_spice;
-
-    if (s == NULL) {
-        red_printf(
-            "error: reds_fill_mig_switch called without migrate info set");
-        bzero(migrate, sizeof(*migrate));
-        return;
-    }
-    migrate->port = s->port;
-    migrate->sport = s->sport;
-    migrate->host_size = strlen(s->host) + 1;
-    migrate->host_data = (uint8_t *)s->host;
-    if (s->cert_subject) {
-        migrate->cert_subject_size = strlen(s->cert_subject) + 1;
-        migrate->cert_subject_data = (uint8_t *)s->cert_subject;
-    } else {
-        migrate->cert_subject_size = 0;
-        migrate->cert_subject_data = NULL;
-    }
+    main_channel_migrate_switch(reds->main_channel, reds->mig_spice);
+    reds_mig_release();
 }
 
 static void migrate_timeout(void *opaque)
@@ -3873,6 +3822,11 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_connect(SpiceServer *s, const char* 
     ASSERT(migration_interface);
     ASSERT(reds == s);
 
+    if (reds->expect_migrate) {
+        red_printf("warning: consecutive calls without migration. Canceling previous call");
+        main_channel_migrate_complete(reds->main_channel, FALSE);
+    }
+
     sif = SPICE_CONTAINEROF(migration_interface->base.sif, SpiceMigrateInterface, base);
 
     if (!reds_set_migration_dest_info(dest, port, secure_port, cert_subject)) {
@@ -3880,10 +3834,16 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_connect(SpiceServer *s, const char* 
         return -1;
     }
 
+    reds->expect_migrate = TRUE;
+
+
     if (main_channel_migrate_connect(reds->main_channel, reds->mig_spice)) {
-        reds->mig_wait_connect = TRUE;
         reds_mig_started();
     } else {
+        if (reds->num_clients == 0) {
+            reds_mig_release();
+            red_printf("no client connected");
+        }
         sif->migrate_connect_complete(migration_interface);
     }
 
@@ -3894,13 +3854,13 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_info(SpiceServer *s, const char* des
                                           int port, int secure_port,
                                           const char* cert_subject)
 {
+    red_printf("");
     ASSERT(!migration_interface);
     ASSERT(reds == s);
 
     if (!reds_set_migration_dest_info(dest, port, secure_port, cert_subject)) {
         return -1;
     }
-
     return 0;
 }
 
@@ -3937,20 +3897,40 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_client_state(SpiceServer *s)
 SPICE_GNUC_VISIBLE int spice_server_migrate_end(SpiceServer *s, int completed)
 {
     SpiceMigrateInterface *sif;
+    int ret = 0;
+
+    red_printf("");
+
     ASSERT(migration_interface);
     ASSERT(reds == s);
-    reds_mig_finished(completed);
+
     sif = SPICE_CONTAINEROF(migration_interface->base.sif, SpiceMigrateInterface, base);
+    if (!reds->expect_migrate && reds->num_clients) {
+        red_printf("spice_server_migrate_info was not called, disconnecting clients");
+        reds_disconnect();
+        ret = -1;
+        goto complete;
+    }
+
+    reds->expect_migrate = FALSE;
+    reds_mig_finished(completed);
+    ret = 0;
+complete:
     if (sif->migrate_end_complete) {
         sif->migrate_end_complete(migration_interface);
     }
-    return 0;
+    return ret;
 }
 
 /* interface for switch-host migration */
 SPICE_GNUC_VISIBLE int spice_server_migrate_switch(SpiceServer *s)
 {
     ASSERT(reds == s);
+    red_printf("");
+    if (!reds->num_clients) {
+       return 0;
+    }
+    reds->expect_migrate = FALSE;
     reds_mig_switch();
     return 0;
 }
