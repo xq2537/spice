@@ -547,42 +547,6 @@ void ResetTimer::response(AbstractProcessLoop& events_loop)
     _client.deactivate_interval_timer(this);
 }
 
-void DisplaySurfacesManger::add_surface(int surface_id, SpiceCanvas *surface)
-{
-     surfaces.add(surface_id, surface);
-}
-
-void DisplaySurfacesManger::del_surface(int surface_id)
-{
-    surfaces.remove(surface_id);
-}
-
-void DisplaySurfacesManger::add_canvas(int surface_id, Canvas *canvas)
-{
-    canvases.add(surface_id, canvas);
-}
-
-void DisplaySurfacesManger::del_canvas(int surface_id)
-{
-    canvases.remove(surface_id);
-}
-
-CSurfaces& DisplaySurfacesManger::get_surfaces()
-{
-    return surfaces;
-}
-
-bool DisplaySurfacesManger::is_present_canvas(int surface_id)
-{
-
-    return canvases.is_present(surface_id);
-}
-
-Canvas* DisplaySurfacesManger::get_canvas(int surface_id)
-{
-    return canvases.get(surface_id);
-}
-
 class DisplayHandler: public MessageHandlerImp<DisplayChannel, SPICE_CHANNEL_DISPLAY> {
 public:
     DisplayHandler(DisplayChannel& channel)
@@ -719,11 +683,11 @@ void DisplayChannel::copy_pixels(const QRegion& dest_region,
 {
     Canvas *canvas;
 
-    if (!surfaces_mngr.is_present_canvas(0)) {
+    if (!_surfaces_cache.exist(0)) {
         return;
     }
 
-    canvas = surfaces_mngr.get_canvas(0);
+    canvas = _surfaces_cache[0];
     canvas->copy_pixels(dest_region, NULL, &dest_pixmap);
 }
 
@@ -732,8 +696,8 @@ void DisplayChannel::recreate_ogl_context_interrupt()
 {
     Canvas* canvas;
 
-    if (surfaces_mngr.is_present_canvas(0)) { //fix me to all surfaces
-        canvas = surfaces_mngr.get_canvas(0);
+    if (_surfaces_cache.exist(0)) { //fix me to all surfaces
+        canvas = _surfaces_cache[0];
         ((GCanvas *)(canvas))->touch_context();
         ((GCanvas *)canvas)->textures_lost();
         delete canvas;
@@ -743,13 +707,13 @@ void DisplayChannel::recreate_ogl_context_interrupt()
         THROW("create_ogl_canvas failed");
     }
 
-    canvas = surfaces_mngr.get_canvas(0);
+    canvas = _surfaces_cache[0];
     ((GCanvas *)(canvas))->touch_context();
 }
 
 void DisplayChannel::recreate_ogl_context()
 {
-    if (surfaces_mngr.is_present_canvas(0) && surfaces_mngr.get_canvas(0)->get_pixmap_type() ==
+    if (_surfaces_cache.exist(0) && _surfaces_cache[0]->get_pixmap_type() ==
         CANVAS_TYPE_GL) {
         if (!screen()->need_recreate_context_gl()) {
             _gl_interrupt_recreate.trigger();
@@ -889,12 +853,12 @@ void DisplayChannel::update_interrupt()
     Canvas *canvas;
 #endif
 
-    if (!surfaces_mngr.is_present_canvas(0) || !screen()) {
+    if (!_surfaces_cache.exist(0) || !screen()) {
         return;
     }
 
 #ifdef USE_OPENGL
-    canvas = surfaces_mngr.get_canvas(0);
+    canvas = _surfaces_cache[0];
     if (canvas->get_pixmap_type() == CANVAS_TYPE_GL) {
         ((GCanvas *)(canvas))->pre_gl_copy();
     }
@@ -918,7 +882,7 @@ void DisplayChannel::pre_migrate()
 void DisplayChannel::post_migrate()
 {
 #ifdef USE_OPENGL
-    if (surfaces_mngr.get_canvas(0)->get_pixmap_type() == CANVAS_TYPE_GL) {
+    if (_surfaces_cache.exist(0) && _surfaces_cache[0]->get_pixmap_type() == CANVAS_TYPE_GL) {
         _gl_interrupt_recreate.trigger();
     }
 #endif
@@ -929,15 +893,11 @@ void DisplayChannel::post_migrate()
 void DisplayChannel::copy_pixels(const QRegion& dest_region,
                                  RedDrawable& dest_dc)
 {
-    Canvas *canvas;
-
-    if (!surfaces_mngr.is_present_canvas(0)) {
+    if (!_surfaces_cache.exist(0)) {
         return;
     }
 
-    canvas = surfaces_mngr.get_canvas(0);
-
-    canvas->copy_pixels(dest_region, dest_dc);
+    _surfaces_cache[0]->copy_pixels(dest_region, dest_dc);
 }
 
 class ActivateTimerEvent: public Event {
@@ -1043,11 +1003,8 @@ void DisplayChannel::on_connect()
 
 void DisplayChannel::on_disconnect()
 {
-    if (surfaces_mngr.is_present_canvas(0)) {
-        Canvas *canvas;
-
-        canvas = surfaces_mngr.get_canvas(0);
-        canvas->clear();
+    if (_surfaces_cache.exist(0)) {
+        _surfaces_cache[0]->clear();
     }
 
     if (screen()) {
@@ -1073,9 +1030,8 @@ bool DisplayChannel::create_sw_canvas(int surface_id, int width, int height, uin
         SCanvas *canvas = new SCanvas(surface_id == 0, width, height, format,
                                       screen()->get_window(),
                                       _pixmap_cache, _palette_cache, _glz_window,
-                                      surfaces_mngr.get_surfaces());
-        surfaces_mngr.add_canvas(surface_id, canvas);
-        surfaces_mngr.add_surface(surface_id, canvas->get_internal_canvas());
+                                      _surfaces_cache);
+        _surfaces_cache[surface_id] = canvas;
         if (surface_id == 0) {
             LOG_INFO("display %d: using sw", get_id());
         }
@@ -1097,12 +1053,11 @@ bool DisplayChannel::create_ogl_canvas(int surface_id, int width, int height, ui
                                       _pixmap_cache,
                                       _palette_cache,
                                       _glz_window,
-                                      surfaces_mngr.get_surfaces());
+                                      _surfaces_cache);
 
         screen()->untouch_context();
 
-        surfaces_mngr.add_canvas(surface_id, canvas);
-        surfaces_mngr.add_surface(surface_id, canvas->get_internal_canvas());
+        _surfaces_cache[surface_id] = canvas;
         _rendertype = rendertype;
         if (surface_id == 0) {
             LOG_INFO("display %d: using ogl", get_id());
@@ -1121,9 +1076,8 @@ bool DisplayChannel::create_gdi_canvas(int surface_id, int width, int height, ui
     try {
         GDICanvas *canvas = new GDICanvas(width, height, format,
                                           _pixmap_cache, _palette_cache, _glz_window,
-                                          surfaces_mngr.get_surfaces());
-        surfaces_mngr.add_canvas(surface_id, canvas);
-        surfaces_mngr.add_surface(surface_id, canvas->get_internal_canvas());
+                                          _surfaces_cache);
+        _surfaces_cache[surface_id] = canvas;
         if (surface_id == 0) {
             LOG_INFO("display %d: using gdi", get_id());
         }
@@ -1139,20 +1093,19 @@ void DisplayChannel::destroy_canvas(int surface_id)
 {
     Canvas *canvas;
 
-    if (!surfaces_mngr.is_present_canvas(surface_id)) {
+    if (!_surfaces_cache.exist(surface_id)) {
+        LOG_INFO("surface does not exist: %d", surface_id);
         return;
     }
 
-    canvas = surfaces_mngr.get_canvas(surface_id);
+    canvas = _surfaces_cache[surface_id];
+    _surfaces_cache.erase(surface_id);
 
 #ifdef USE_OPENGL
     if (canvas->get_pixmap_type() == CANVAS_TYPE_GL) {
         ((GCanvas *)(canvas))->touch_context();
     }
 #endif
-
-    surfaces_mngr.del_canvas(surface_id);
-    surfaces_mngr.del_surface(surface_id);
 
     delete canvas;
 }
@@ -1171,8 +1124,11 @@ void DisplayChannel::create_canvas(int surface_id, const std::vector<int>& canva
             recreate = false;
         }
 #endif
-
         screen()->set_update_interrupt_trigger(NULL);
+    }
+
+    if (_surfaces_cache.exist(surface_id)) {
+        LOG_WARN("surface already exists: %d", surface_id);
     }
 
     for (i = 0; i < canvas_types.size(); i++) {
@@ -1208,7 +1164,7 @@ void DisplayChannel::handle_mode(RedPeer::InMessage* message)
 {
     SpiceMsgDisplayMode *mode = (SpiceMsgDisplayMode *)message->data();
 
-    if (surfaces_mngr.is_present_canvas(0)) {
+    if (_surfaces_cache.exist(0)) {
         destroy_primary_surface();
     }
     create_primary_surface(mode->x_res, mode->y_res,
@@ -1244,10 +1200,8 @@ void DisplayChannel::reset_screen()
 
 void DisplayChannel::handle_reset(RedPeer::InMessage *message)
 {
-    if (surfaces_mngr.is_present_canvas(0)) {
-        Canvas *canvas;
-        canvas = surfaces_mngr.get_canvas(0);
-        canvas->clear();
+    if (_surfaces_cache.exist(0)) {
+        _surfaces_cache[0]->clear();
     }
 
     _palette_cache.clear();
@@ -1326,10 +1280,14 @@ void DisplayChannel::handle_stream_create(RedPeer::InMessage* message)
         THROW("stream exist");
     }
 
+    if (!_surfaces_cache.exist(surface_id)) {
+        THROW("surface does not exist: %d", surface_id);
+    }
+
     uint32_t num_clip_rects;
     SpiceRect* clip_rects;
     set_clip_rects(stream_create->clip, num_clip_rects, clip_rects);
-    _streams[stream_create->id] = new VideoStream(get_client(), *surfaces_mngr.get_canvas(surface_id),
+    _streams[stream_create->id] = new VideoStream(get_client(), *_surfaces_cache[surface_id],
                                                   *this, stream_create->codec_type,
                                                   !!(stream_create->flags & SPICE_STREAM_FLAGS_TOP_DOWN),
                                                   stream_create->stream_width,
@@ -1432,7 +1390,7 @@ void DisplayChannel::create_primary_surface(int width, int height, uint32_t form
     _format = format;
 
 #ifdef USE_OPENGL
-    canvas = surfaces_mngr.get_canvas(0);
+    canvas = _surfaces_cache[0];
 
     if (canvas->get_pixmap_type() == CANVAS_TYPE_GL) {
         ((GCanvas *)(canvas))->touch_context();
@@ -1455,7 +1413,7 @@ void DisplayChannel::create_surface(int surface_id, int width, int height, uint3
 #ifdef USE_OPENGL
     Canvas *canvas;
 
-    canvas = surfaces_mngr.get_canvas(surface_id);
+    canvas = _surfaces_cache[surface_id];
 
     if (canvas->get_pixmap_type() == CANVAS_TYPE_GL) {
         ((GCanvas *)(canvas))->touch_context();
@@ -1467,11 +1425,8 @@ void DisplayChannel::destroy_primary_surface()
 {
     if (screen()) {
 #ifdef USE_OPENGL
-        if (surfaces_mngr.is_present_canvas(0)) {
-            Canvas *canvas;
-
-            canvas = surfaces_mngr.get_canvas(0);
-            if (canvas->get_pixmap_type() == CANVAS_TYPE_GL) {
+        if (_surfaces_cache.exist(0)) {
+            if (_surfaces_cache[0]->get_pixmap_type() == CANVAS_TYPE_GL) {
                 screen()->unset_type_gl();
                 screen()->untouch_context();
             }
@@ -1538,7 +1493,7 @@ void DisplayChannel::handle_copy_bits(RedPeer::InMessage* message)
     Canvas *canvas;
     SpiceMsgDisplayCopyBits* copy_bits = (SpiceMsgDisplayCopyBits*)message->data();
     PRE_DRAW;
-    canvas = surfaces_mngr.get_canvas(copy_bits->base.surface_id);
+    canvas = _surfaces_cache[copy_bits->base.surface_id];
     canvas->copy_bits(*copy_bits, message->size());
     POST_DRAW;
     if (copy_bits->base.surface_id == 0) {
@@ -1550,7 +1505,7 @@ void DisplayChannel::handle_draw_fill(RedPeer::InMessage* message)
 {
     Canvas *canvas;
     SpiceMsgDisplayDrawFill* fill = (SpiceMsgDisplayDrawFill*)message->data();
-    canvas = surfaces_mngr.get_canvas(fill->base.surface_id);
+    canvas = _surfaces_cache[fill->base.surface_id];
     DRAW(fill);
 }
 
@@ -1558,7 +1513,7 @@ void DisplayChannel::handle_draw_opaque(RedPeer::InMessage* message)
 {
     Canvas *canvas;
     SpiceMsgDisplayDrawOpaque* opaque = (SpiceMsgDisplayDrawOpaque*)message->data();
-    canvas = surfaces_mngr.get_canvas(opaque->base.surface_id);
+    canvas = _surfaces_cache[opaque->base.surface_id];
     DRAW(opaque);
 }
 
@@ -1566,7 +1521,7 @@ void DisplayChannel::handle_draw_copy(RedPeer::InMessage* message)
 {
     Canvas *canvas;
     SpiceMsgDisplayDrawCopy* copy = (SpiceMsgDisplayDrawCopy*)message->data();
-    canvas = surfaces_mngr.get_canvas(copy->base.surface_id);
+    canvas = _surfaces_cache[copy->base.surface_id];
     DRAW(copy);
 }
 
@@ -1574,7 +1529,7 @@ void DisplayChannel::handle_draw_blend(RedPeer::InMessage* message)
 {
     Canvas *canvas;
     SpiceMsgDisplayDrawBlend* blend = (SpiceMsgDisplayDrawBlend*)message->data();
-    canvas = surfaces_mngr.get_canvas(blend->base.surface_id);
+    canvas = _surfaces_cache[blend->base.surface_id];
     DRAW(blend);
 }
 
@@ -1582,7 +1537,7 @@ void DisplayChannel::handle_draw_blackness(RedPeer::InMessage* message)
 {
     Canvas *canvas;
     SpiceMsgDisplayDrawBlackness* blackness = (SpiceMsgDisplayDrawBlackness*)message->data();
-    canvas = surfaces_mngr.get_canvas(blackness->base.surface_id);
+    canvas = _surfaces_cache[blackness->base.surface_id];
     DRAW(blackness);
 }
 
@@ -1590,7 +1545,7 @@ void DisplayChannel::handle_draw_whiteness(RedPeer::InMessage* message)
 {
     Canvas *canvas;
     SpiceMsgDisplayDrawWhiteness* whiteness = (SpiceMsgDisplayDrawWhiteness*)message->data();
-    canvas = surfaces_mngr.get_canvas(whiteness->base.surface_id);
+    canvas = _surfaces_cache[whiteness->base.surface_id];
     DRAW(whiteness);
 }
 
@@ -1598,7 +1553,7 @@ void DisplayChannel::handle_draw_invers(RedPeer::InMessage* message)
 {
     Canvas *canvas;
     SpiceMsgDisplayDrawInvers* invers = (SpiceMsgDisplayDrawInvers*)message->data();
-    canvas = surfaces_mngr.get_canvas(invers->base.surface_id);
+    canvas = _surfaces_cache[invers->base.surface_id];
     DRAW(invers);
 }
 
@@ -1606,7 +1561,7 @@ void DisplayChannel::handle_draw_rop3(RedPeer::InMessage* message)
 {
     Canvas *canvas;
     SpiceMsgDisplayDrawRop3* rop3 = (SpiceMsgDisplayDrawRop3*)message->data();
-    canvas = surfaces_mngr.get_canvas(rop3->base.surface_id);
+    canvas = _surfaces_cache[rop3->base.surface_id];
     DRAW(rop3);
 }
 
@@ -1614,7 +1569,7 @@ void DisplayChannel::handle_draw_stroke(RedPeer::InMessage* message)
 {
     Canvas *canvas;
     SpiceMsgDisplayDrawStroke* stroke = (SpiceMsgDisplayDrawStroke*)message->data();
-    canvas = surfaces_mngr.get_canvas(stroke->base.surface_id);
+    canvas = _surfaces_cache[stroke->base.surface_id];
     DRAW(stroke);
 }
 
@@ -1622,7 +1577,7 @@ void DisplayChannel::handle_draw_text(RedPeer::InMessage* message)
 {
     Canvas *canvas;
     SpiceMsgDisplayDrawText* text = (SpiceMsgDisplayDrawText*)message->data();
-    canvas = surfaces_mngr.get_canvas(text->base.surface_id);
+    canvas = _surfaces_cache[text->base.surface_id];
     DRAW(text);
 }
 
@@ -1630,7 +1585,7 @@ void DisplayChannel::handle_draw_transparent(RedPeer::InMessage* message)
 {
     Canvas *canvas;
     SpiceMsgDisplayDrawTransparent* transparent = (SpiceMsgDisplayDrawTransparent*)message->data();
-    canvas = surfaces_mngr.get_canvas(transparent->base.surface_id);
+    canvas = _surfaces_cache[transparent->base.surface_id];
     DRAW(transparent);
 }
 
@@ -1638,7 +1593,7 @@ void DisplayChannel::handle_draw_alpha_blend(RedPeer::InMessage* message)
 {
     Canvas *canvas;
     SpiceMsgDisplayDrawAlphaBlend* alpha_blend = (SpiceMsgDisplayDrawAlphaBlend*)message->data();
-    canvas = surfaces_mngr.get_canvas(alpha_blend->base.surface_id);
+    canvas = _surfaces_cache[alpha_blend->base.surface_id];
     DRAW(alpha_blend);
 }
 
