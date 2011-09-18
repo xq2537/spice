@@ -37,6 +37,9 @@ public:
 
     static ChannelFactory& Factory();
 
+protected:
+    virtual void on_disconnect();
+
 private:
     void handle_mode(RedPeer::InMessage* message);
     void handle_start(RedPeer::InMessage* message);
@@ -47,6 +50,8 @@ private:
     void disable();
 
     void set_data_handler();
+
+    void clear();
 
 private:
     WavePlaybackAbstract* _wave_player;
@@ -67,11 +72,13 @@ public:
 
     static ChannelFactory& Factory();
 
+protected:
+    virtual void on_connect();
+    virtual void on_disconnect();
+
 private:
     void handle_start(RedPeer::InMessage* message);
     void handle_stop(RedPeer::InMessage* message);
-
-    virtual void on_connect();
 
     virtual void add_event_source(EventSources::File& event_source);
     virtual void remove_event_source(EventSources::File& event_source);
@@ -82,6 +89,7 @@ private:
     void send_start_mark();
     void release_message(RecordSamplesMessage *message);
     RecordSamplesMessage * get_message();
+    void clear();
 
 private:
     WaveRecordAbstract* _wave_recorder;
