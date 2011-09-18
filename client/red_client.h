@@ -279,6 +279,8 @@ protected:
     virtual void on_connecting();
     virtual void on_connect();
     virtual void on_disconnect();
+    virtual void on_connect_mig_target() {}
+    virtual void on_disconnect_mig_src();
 
 private:
     void on_channel_disconnected(RedChannel& channel);

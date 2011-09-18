@@ -498,6 +498,15 @@ void RedClient::on_disconnect()
     (*sync_event)->wait();
 }
 
+void RedClient::on_disconnect_mig_src()
+{
+    _application.deactivate_interval_timer(*_agent_timer);
+    delete[] _agent_msg_data;
+    _agent_msg_data = NULL;
+    _agent_msg_pos = 0;
+    _agent_tokens = 0;
+}
+
 void RedClient::delete_channels()
 {
     Lock lock(_channels_lock);
