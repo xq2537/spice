@@ -27,6 +27,15 @@
 #include "openssl/evp.h"
 #include "openssl/x509.h"
 
+void MigrationDisconnectSrcEvent::response(AbstractProcessLoop& events_loop)
+{
+    static_cast<RedChannel*>(events_loop.get_owner())->do_migration_disconnect_src();
+}
+
+void MigrationConnectTargetEvent::response(AbstractProcessLoop& events_loop)
+{
+    static_cast<RedChannel*>(events_loop.get_owner())->do_migration_connect_target();
+}
 
 RedChannelBase::RedChannelBase(uint8_t type, uint8_t id, const ChannelCaps& common_caps,
                                const ChannelCaps& caps)
@@ -435,6 +444,57 @@ void RedChannel::disconnect()
     _action = DISCONNECT_ACTION;
     RedPeer::disconnect();
     _action_cond.notify_one();
+}
+
+void RedChannel::disconnect_migration_src()
+{
+    clear_outgoing_messages();
+
+    Lock lock(_action_lock);
+    if (_state == CONNECTING_STATE || _state == CONNECTED_STATE) {
+        AutoRef<MigrationDisconnectSrcEvent> migrate_event(new MigrationDisconnectSrcEvent());
+        _loop.push_event(*migrate_event);
+    }
+}
+
+void RedChannel::connect_migration_target()
+{
+    LOG_INFO("");
+    AutoRef<MigrationConnectTargetEvent> migrate_event(new MigrationConnectTargetEvent());
+    _loop.push_event(*migrate_event);
+}
+
+void RedChannel::do_migration_disconnect_src()
+{
+    if (_socket_in_loop) {
+        _socket_in_loop = false;
+        _loop.remove_socket(*this);
+    }
+
+    clear_outgoing_messages();
+    if (_outgoing_message) {
+        _outgoing_message->release();
+        _outgoing_message = NULL;
+    }
+    _incomming_header_pos = 0;
+    if (_incomming_message) {
+        _incomming_message->unref();
+        _incomming_message = NULL;
+    }
+
+    on_disconnect_mig_src();
+    get_client().migrate_channel(*this);
+    get_client().on_channel_disconnect_mig_src_completed(*this);
+}
+
+void RedChannel::do_migration_connect_target()
+{
+    LOG_INFO("");
+    _loop.add_socket(*this);
+    _socket_in_loop = true;
+    on_connect_mig_target();
+    set_state(CONNECTED_STATE);
+    on_event();
 }
 
 void RedChannel::clear_outgoing_messages()

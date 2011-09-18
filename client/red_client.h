@@ -207,6 +207,10 @@ public:
     virtual void response(AbstractProcessLoop& events_loop);
 };
 
+class MigrateEndEvent: public Event {
+public:
+    virtual void response(AbstractProcessLoop& events_loop);
+};
 
 class RedClient: public RedChannel,
                  public Platform::ClipboardListener {
@@ -217,6 +221,7 @@ public:
     friend class ClipboardRequestEvent;
     friend class ClipboardNotifyEvent;
     friend class ClipboardReleaseEvent;
+    friend class MigrateEndEvent;
 
     RedClient(Application& application);
     ~RedClient();
@@ -277,6 +282,8 @@ protected:
 
 private:
     void on_channel_disconnected(RedChannel& channel);
+    void on_channel_disconnect_mig_src_completed(RedChannel& channel);
+    void send_migrate_end();
     void migrate_channel(RedChannel& channel);
     void send_agent_announce_capabilities(bool request);
     void send_agent_monitors_config();
@@ -287,6 +294,7 @@ private:
 
     void handle_migrate_begin(RedPeer::InMessage* message);
     void handle_migrate_cancel(RedPeer::InMessage* message);
+    void handle_migrate_end(RedPeer::InMessage* message);
     void handle_init(RedPeer::InMessage* message);
     void handle_channels(RedPeer::InMessage* message);
     void handle_mouse_mode(RedPeer::InMessage* message);
@@ -298,6 +306,7 @@ private:
     void handle_migrate_switch_host(RedPeer::InMessage* message);
     void dispatch_agent_message(VDAgentMessage* msg, void* data);
 
+    bool init_guest_display();
     void on_agent_reply(VDAgentReply* reply);
     void on_agent_announce_capabilities(VDAgentAnnounceCapabilities* caps,
                                         uint32_t msg_size);
@@ -354,6 +363,7 @@ private:
     Factorys _factorys;
     typedef std::list<RedChannel*> Channels;
     Channels _channels;
+    Channels _pending_mig_disconnect_channels;
     PixmapCache _pixmap_cache;
     uint64_t _pixmap_cache_size;
     Mutex _sync_lock;
@@ -367,6 +377,8 @@ private:
     Mutex _mm_clock_lock;
     uint64_t _mm_clock_last_update;
     uint32_t _mm_time;
+
+    bool _during_migration;
 };
 
 #endif
