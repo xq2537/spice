@@ -1042,9 +1042,7 @@ void DisplayChannel::on_disconnect()
         _surfaces_cache[0]->clear();
     }
 
-    if (screen()) {
-        screen()->set_update_interrupt_trigger(NULL);
-    }
+    clear();
 
     AutoRef<DetachChannelsEvent> detach_channels(new DetachChannelsEvent(*this));
     get_client().push_event(*detach_channels);
@@ -1053,7 +1051,6 @@ void DisplayChannel::on_disconnect()
         get_client().push_event(*unlock_event);
         detach_from_screen(get_client().get_application());
     }
-    get_client().deactivate_interval_timer(*_streams_timer);
     AutoRef<SyncEvent> sync_event(new SyncEvent());
     get_client().push_event(*sync_event);
     (*sync_event)->wait();
@@ -1109,7 +1106,7 @@ void DisplayChannel::destroy_off_screen_surfaces()
     }
 }
 
-void DisplayChannel::on_disconnect_mig_src()
+void DisplayChannel::clear(bool destroy_primary)
 {
     _palette_cache.clear();
     destroy_streams();
@@ -1119,7 +1116,16 @@ void DisplayChannel::on_disconnect_mig_src()
     _update_mark = 0;
     _next_timer_time = 0;
     get_client().deactivate_interval_timer(*_streams_timer);
-    destroy_off_screen_surfaces();
+    if (destroy_primary) {
+        destroy_all_surfaces();
+    } else {
+        destroy_off_screen_surfaces();
+    }
+}
+
+void DisplayChannel::on_disconnect_mig_src()
+{
+    clear(false);
     // Not clrearing the primary surface till we receive a new one (or a timeout).
     if (_surfaces_cache.exist(0)) {
         AutoRef<MigPrimarySurfaceTimer> mig_timer(new MigPrimarySurfaceTimer());
