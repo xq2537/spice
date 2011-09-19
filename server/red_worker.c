@@ -5482,7 +5482,13 @@ static void glz_usr_free_image(GlzEncoderUsrContext *usr, GlzUsrImageContext *im
     if (this_cc == drawable_cc) {
         red_display_free_glz_drawable_instance(drawable_cc, glz_drawable_instance);
     } else {
-        red_printf("error");
+        /* The glz dictionary is shared between all DisplayChannelClient
+         * instances that belong to the same client, and glz_usr_free_image
+         * can be called by the dictionary code
+         * (glz_dictionary_window_remove_head). Thus this function can be
+         * called from any DisplayChannelClient thread, hence the need for
+         * this check.
+         */
         pthread_mutex_lock(&drawable_cc->glz_drawables_inst_to_free_lock);
         ring_add_before(&glz_drawable_instance->free_link,
                         &drawable_cc->glz_drawables_inst_to_free);
