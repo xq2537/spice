@@ -136,6 +136,7 @@ Migrate::Migrate(RedClient& client)
     , _connected (false)
     , _thread (NULL)
     , _pending_con (0)
+    , _protocol (0)
 {
 }
 
@@ -192,7 +193,7 @@ void Migrate::swap_peer(RedChannelBase& other)
                 curr->set_valid(false);
                 if (!--_pending_con) {
                     lock.unlock();
-                    _client.set_target(_host.c_str(), _port, _sport);
+                    _client.set_target(_host.c_str(), _port, _sport, _protocol);
                     abort();
                 }
                 return;
@@ -215,6 +216,13 @@ void Migrate::connect_one(MigChannel& channel, const RedPeer::ConnectionOptions&
     channel.connect(options, connection_id, _host.c_str(), _password);
     ++_pending_con;
     channel.set_valid(true);
+    if (_protocol == 0) {
+        if (channel.get_peer_major() == 1) {
+            _protocol = 1;
+        } else {
+            _protocol = 2;
+        }
+    }
 }
 
 void Migrate::run()
@@ -235,7 +243,7 @@ void Migrate::run()
         for (++iter; iter != _channels.end(); ++iter) {
             conn_type = _client.get_connection_options((*iter)->get_type());
             con_opt = RedPeer::ConnectionOptions(conn_type, _port, _sport,
-						 _client.get_protocol(),
+                                                 _protocol,
                                                  _auth_options, _con_ciphers);
             connect_one(**iter, con_opt, connection_id);
         }
@@ -445,11 +453,16 @@ RedClient::~RedClient()
     delete[] _agent_caps;
 }
 
-void RedClient::set_target(const std::string& host, int port, int sport)
+void RedClient::set_target(const std::string& host, int port, int sport, int protocol)
 {
+    if (protocol != get_protocol()) {
+        LOG_INFO("old protocol %d, new protocol %d", get_protocol(), protocol);
+    }
+
     _port = port;
     _sport = sport;
     _host.assign(host);
+    set_protocol(protocol);
 }
 
 void RedClient::push_event(Event* event)
@@ -684,10 +697,8 @@ void RedClient::on_channel_disconnect_mig_src_completed(RedChannel& channel)
         _pixmap_cache.clear();
         _glz_window.clear();
         memset(_sync_info, 0, sizeof(_sync_info));
-
         LOG_INFO("calling main to connect and wait for handle_init to tell all the other channels to connect");
         RedChannel::connect_migration_target();
-
         AutoRef<MigrateEndEvent> mig_end_event(new MigrateEndEvent());
         get_process_loop().push_event(*mig_end_event);
     }

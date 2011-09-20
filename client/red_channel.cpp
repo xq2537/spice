@@ -298,6 +298,20 @@ bool RedChannelBase::test_capability(uint32_t cap)
     return test_capability(_remote_caps, cap);
 }
 
+void RedChannelBase::swap(RedChannelBase* other)
+{
+    int tmp_ver;
+
+    RedPeer::swap(other);
+    tmp_ver = _remote_major;
+    _remote_major = other->_remote_major;
+    other->_remote_major = tmp_ver;
+
+    tmp_ver = _remote_minor;
+    _remote_minor = other->_remote_minor;
+    other->_remote_minor = tmp_ver;
+}
+
 SendTrigger::SendTrigger(RedChannel& channel)
     : _channel (channel)
 {
@@ -493,6 +507,12 @@ void RedChannel::do_migration_disconnect_src()
 void RedChannel::do_migration_connect_target()
 {
     LOG_INFO("");
+    ASSERT(get_client().get_protocol() != 0);
+    if (get_client().get_protocol() == 1) {
+        _marshallers = spice_message_marshallers_get1();
+    } else {
+        _marshallers = spice_message_marshallers_get();
+    }
     _loop.add_socket(*this);
     _socket_in_loop = true;
     on_connect_mig_target();

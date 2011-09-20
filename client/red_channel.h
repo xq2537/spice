@@ -66,6 +66,8 @@ public:
      uint32_t get_peer_major() { return _remote_major;}
      uint32_t get_peer_minor() { return _remote_minor;}
 
+     virtual void swap(RedChannelBase* other);
+
 protected:
     void set_common_capability(uint32_t cap);
     void set_capability(uint32_t cap);
