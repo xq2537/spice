@@ -761,6 +761,7 @@ static void reds_disconnect()
     reds->net_test_id = 0;
     reds->net_test_stage = NET_TEST_STAGE_INVALID;
     reds->in_handler.end_pos = 0;
+    reds->expect_migrate = FALSE;
 
     bitrate_per_sec = ~0;
     latency = 0;
@@ -1739,6 +1740,7 @@ static void reds_main_handle_message(void *opaque, size_t size, uint32_t type, v
         }
         break;
     case SPICE_MSGC_MAIN_MIGRATE_CONNECT_ERROR:
+        // TODO: fall into switch host in case of connect error or timeout
         red_printf("mig connect error");
         if (reds->mig_wait_connect) {
             reds_mig_cleanup();
@@ -4123,7 +4125,7 @@ static void reds_mig_release(void)
     }
 }
 
-static void reds_mig_continue(void)
+static void reds_mig_connect(void)
 {
     RedsMigSpice *s = reds->mig_spice;
     SpiceMsgMainMigrationBegin migrate;
@@ -4180,22 +4182,43 @@ static void reds_listen_stop(void)
 
 static void reds_mig_started(void)
 {
+    SpiceMigrateInterface *sif = NULL;
+
     red_printf("");
     ASSERT(reds->mig_spice);
 
-    reds->mig_inprogress = TRUE;
+    if (!migration_interface) {
+        return;
+    }
+
+    reds_listen_stop();
+    sif = SPICE_CONTAINEROF(migration_interface->base.sif, SpiceMigrateInterface, base);
 
     if (reds->stream == NULL) {
         red_printf("not connected to stream");
-        goto error;
+        reds_mig_release();
+        sif->migrate_connect_complete(migration_interface);
+        return;
     }
 
-    reds_mig_continue();
-    return;
+    reds->expect_migrate = TRUE;
+    if (reds->client_semi_mig_cap) {
+        if (reds->mig_target) {
+            red_printf("previous spice migration hasn't completed yet. Waiting for client");
+            reds->mig_wait_prev_complete = TRUE;
+            core->timer_start(reds->mig_timer, MIGRATE_TIMEOUT);
+            return;
+        }
+    } else if (sif) {
+        // switch host msg will be sent after migration completes
+        sif->migrate_connect_complete(migration_interface);
+        return;
+    }
 
-error:
-    reds_mig_release();
-    reds_mig_disconnect();
+    reds->mig_inprogress = TRUE;
+
+    reds_mig_connect();
+    return;
 }
 
 static void reds_mig_finished(int completed)
@@ -5059,6 +5082,7 @@ static int reds_set_migration_dest_info(const char* dest,
     RedsMigSpice *spice_migration = NULL;
 
     reds_mig_release();
+
     if ((port == -1 && secure_port == -1) || !dest) {
         return FALSE;
     }
@@ -5081,7 +5105,6 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_connect(SpiceServer *s, const char* 
                                                     int port, int secure_port,
                                                     const char* cert_subject)
 {
-    SpiceMigrateInterface *sif;
     red_printf("");
     ASSERT(migration_interface);
     ASSERT(reds == s);
@@ -5091,27 +5114,14 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_connect(SpiceServer *s, const char* 
         reds_mig_finished(FALSE);
     }
 
-    sif = SPICE_CONTAINEROF(migration_interface->base.sif, SpiceMigrateInterface, base);
-
     if (!reds_set_migration_dest_info(dest, port, secure_port, cert_subject)) {
+        SpiceMigrateInterface *sif;
+        sif = SPICE_CONTAINEROF(migration_interface->base.sif, SpiceMigrateInterface, base);
         sif->migrate_connect_complete(migration_interface);
         return -1;
     }
+    reds_mig_started();
 
-    reds->expect_migrate = TRUE;
-    reds_listen_stop();
-
-    if (reds->client_semi_mig_cap) {
-        if (!reds->mig_target) {
-            reds_mig_started();
-        } else {
-            red_printf("previous spice migration hasn't completed yet. Waiting for client");
-            reds->mig_wait_prev_complete = TRUE;
-            core->timer_start(reds->mig_timer, MIGRATE_TIMEOUT);
-        }
-    } else {
-        sif->migrate_connect_complete(migration_interface);
-    }
     return 0;
 }
 
@@ -5165,20 +5175,24 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_end(SpiceServer *s, int completed)
     int ret = 0;
 
     red_printf("");
-
     ASSERT(migration_interface);
     ASSERT(reds == s);
 
     reds_listen_start();
     sif = SPICE_CONTAINEROF(migration_interface->base.sif, SpiceMigrateInterface, base);
-    if (!reds->expect_migrate && reds->stream) {
-        red_printf("spice_server_migrate_info was not called, disconnecting client");
+
+    if (!reds->stream) {
+        ret = 0;
+        goto complete;
+    }
+
+    if (!reds->expect_migrate) {
+        red_printf("spice_server_migrate_info failed or was not called, disconnecting client");
         reds_disconnect("");
         ret = -1;
         goto complete;
     }
 
-    reds->expect_migrate = FALSE;
     if (reds->client_semi_mig_cap) {
         reds_mig_finished(completed);
     } else {
