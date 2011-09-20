@@ -1232,7 +1232,7 @@ void Application::on_key_down(RedKey key)
     }
 
     if (!_sticky_info.sticky_mode) {
-        int command = get_hotkeys_commnad();
+        int command = get_hotkeys_command();
         if (command != APP_CMD_INVALID) {
             do_command(command);
             return;
@@ -1703,7 +1703,7 @@ bool Application::is_key_set_pressed(const HotkeySet& key_set)
     return iter == key_set.end();
 }
 
-int Application::get_hotkeys_commnad()
+int Application::get_hotkeys_command()
 {
     HotKeys::const_iterator iter = _hot_keys.begin();
 
