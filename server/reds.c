@@ -283,6 +283,7 @@ typedef struct RedsState {
     int mig_wait_disconnect;
     int mig_wait_prev_complete;
     int mig_inprogress;
+    int mig_connect_ok;
     int expect_migrate;
     int mig_target;
     RedsMigSpice *mig_spice;
@@ -1736,13 +1737,14 @@ static void reds_main_handle_message(void *opaque, size_t size, uint32_t type, v
     case SPICE_MSGC_MAIN_MIGRATE_CONNECTED:
         red_printf("client connected to migration target");
         if (reds->mig_wait_connect) {
+            reds->mig_connect_ok = TRUE;
             reds_mig_cleanup();
         }
         break;
     case SPICE_MSGC_MAIN_MIGRATE_CONNECT_ERROR:
-        // TODO: fall into switch host in case of connect error or timeout
         red_printf("mig connect error");
         if (reds->mig_wait_connect) {
+            reds->mig_connect_ok = FALSE;
             reds_mig_cleanup();
         }
         break;
@@ -2172,6 +2174,7 @@ static void reds_handle_main_link(RedLinkInfo *link)
     reds->mig_inprogress = FALSE;
     reds->mig_wait_connect = FALSE;
     reds->mig_wait_disconnect = FALSE;
+    reds->mig_connect_ok = FALSE;
     reds->stream = link->stream;
     reds->in_handler.shut = FALSE;
 
@@ -4150,8 +4153,6 @@ static void reds_mig_connect(void)
 
     reds_push_pipe_item(item);
 
-    reds_mig_release();
-
     reds->mig_wait_connect = TRUE;
     core->timer_start(reds->mig_timer, MIGRATE_TIMEOUT);
 }
@@ -4193,6 +4194,7 @@ static void reds_mig_started(void)
 
     reds_listen_stop();
     sif = SPICE_CONTAINEROF(migration_interface->base.sif, SpiceMigrateInterface, base);
+    reds->mig_connect_ok = FALSE;
 
     if (reds->stream == NULL) {
         red_printf("not connected to stream");
@@ -4226,7 +4228,7 @@ static void reds_mig_finished(int completed)
     RedsOutItem *item;
 
     red_printf("");
-
+    reds_mig_release();
     if (reds->stream == NULL) {
         red_printf("no stream connected");
         return;
@@ -4297,7 +4299,12 @@ static void migrate_timeout(void *opaque)
 {
     red_printf("");
     ASSERT(reds->mig_wait_connect || reds->mig_wait_disconnect || reds->mig_wait_prev_complete);
-    reds_mig_disconnect();
+    if (reds->mig_wait_connect) {
+        reds->mig_connect_ok = FALSE;
+        reds_mig_cleanup();
+    } else {
+        reds_mig_disconnect();
+    }
 }
 
 static void key_modifiers_sender(void *opaque)
@@ -5168,7 +5175,7 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_end(SpiceServer *s, int completed)
     SpiceMigrateInterface *sif;
     int ret = 0;
 
-    red_printf("");
+    red_printf("completed=%d", completed);
     ASSERT(migration_interface);
     ASSERT(reds == s);
 
@@ -5187,11 +5194,12 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_end(SpiceServer *s, int completed)
         goto complete;
     }
 
-    if (reds->client_semi_mig_cap) {
+    if (reds->client_semi_mig_cap && reds->mig_connect_ok) {
         reds_mig_finished(completed);
     } else {
-        ret = spice_server_migrate_switch(s);
-        goto complete;
+        if (completed) {
+            ret = spice_server_migrate_switch(s);
+        }
     }
     ret = 0;
 complete:
