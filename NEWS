@@ -1,3 +1,11 @@
+Major changes in 0.8.3:
+=======================
+* server Bug fixes (RHBZ): 718713
+* client Bug fixes (RHBZ): 726441, 727969, 728252
+* server: semi-seamless migration support (RHBZ 738266)
+* client: semi-seamless migration support (RHBZ 725009, 738270)
+* require spice-protocol >= 0.8.2
+
 Major changes in 0.8.2:
 =======================
 * server: sasl support (fdo bz 34795)

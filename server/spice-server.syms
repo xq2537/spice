@@ -81,3 +81,7 @@ global:
     spice_qxl_destroy_surface_async;
     spice_qxl_flush_surfaces_async;
 } SPICE_SERVER_0.8.1;
+
+SPICE_SERVER_0.8.3 {
+    spice_server_migrate_connect;
+} SPICE_SERVER_0.8.2;
