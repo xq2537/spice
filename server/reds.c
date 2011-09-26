@@ -4205,22 +4205,20 @@ static void reds_mig_started(void)
 
     reds->expect_migrate = TRUE;
     if (reds->client_semi_mig_cap) {
+        reds->mig_inprogress = TRUE;
         if (reds->mig_target) {
             red_printf("previous spice migration hasn't completed yet. Waiting for client");
             reds->mig_wait_prev_complete = TRUE;
             core->timer_start(reds->mig_timer, MIGRATE_TIMEOUT);
-            return;
+        } else {
+            reds_mig_connect();
         }
-    } else if (sif) {
-        // switch host msg will be sent after migration completes
-        sif->migrate_connect_complete(migration_interface);
-        return;
+    } else {
+        if (sif) {
+            // switch host msg will be sent after migration completes
+            sif->migrate_connect_complete(migration_interface);
+         }
     }
-
-    reds->mig_inprogress = TRUE;
-
-    reds_mig_connect();
-    return;
 }
 
 static void reds_mig_finished(int completed)
