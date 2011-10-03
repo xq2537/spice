@@ -475,8 +475,26 @@ int spice_server_set_agent_copypaste(SpiceServer *s, int enable);
 int spice_server_get_sock_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen);
 int spice_server_get_peer_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen);
 
-/* spice switch-host client migration */
+/* migration interface */
+#define SPICE_INTERFACE_MIGRATION "migration"
+#define SPICE_INTERFACE_MIGRATION_MAJOR 1
+#define SPICE_INTERFACE_MIGRATION_MINOR 1
+typedef struct SpiceMigrateInterface SpiceMigrateInterface;
+typedef struct SpiceMigrateInstance SpiceMigrateInstance;
+typedef struct SpiceMigrateState SpiceMigrateState;
 
+struct SpiceMigrateInterface {
+    SpiceBaseInterface base;
+    void (*migrate_connect_complete)(SpiceMigrateInstance *sin);
+    void (*migrate_end_complete)(SpiceMigrateInstance *sin);
+};
+
+struct SpiceMigrateInstance {
+    SpiceBaseInstance base;
+    SpiceMigrateState *st;
+};
+
+/* spice switch-host client migration */
 int spice_server_migrate_info(SpiceServer *s, const char* dest,
                               int port, int secure_port,
                               const char* cert_subject);
@@ -484,5 +502,12 @@ int spice_server_migrate_switch(SpiceServer *s);
 
 /* server status */
 int spice_server_get_num_clients(SpiceServer *s);
+
+/* spice (semi-)seamless client migration */
+int spice_server_migrate_connect(SpiceServer *s, const char* dest,
+                                 int port, int secure_port,
+                                 const char* cert_subject);
+int spice_server_migrate_start(SpiceServer *s);
+int spice_server_migrate_end(SpiceServer *s, int completed);
 
 #endif
