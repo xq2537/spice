@@ -74,6 +74,7 @@
 
 SpiceCoreInterface *core = NULL;
 static SpiceCharDeviceInstance *vdagent = NULL;
+static SpiceMigrateInstance *migration_interface = NULL;
 
 /* Debugging only variable: allow multiple client connections to the spice
  * server */
@@ -3365,6 +3366,20 @@ SPICE_GNUC_VISIBLE int spice_server_add_interface(SpiceServer *s,
         red_printf("unsupported net wire interface");
         return -1;
 #endif
+    } else if (strcmp(interface->type, SPICE_INTERFACE_MIGRATION) == 0) {
+        red_printf("SPICE_INTERFACE_MIGRATION");
+        if (migration_interface) {
+            red_printf("already have migration");
+            return -1;
+        }
+
+        if (interface->major_version != SPICE_INTERFACE_MIGRATION_MAJOR ||
+            interface->minor_version > SPICE_INTERFACE_MIGRATION_MINOR) {
+            red_printf("unsupported migration interface");
+            return -1;
+        }
+        migration_interface = SPICE_CONTAINEROF(sin, SpiceMigrateInstance, base);
+        migration_interface->st = spice_new0(SpiceMigrateState, 1);
     }
 
     return 0;
@@ -3865,7 +3880,15 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_connect(SpiceServer *s, const char* 
                                                     int port, int secure_port,
                                                     const char* cert_subject)
 {
+    SpiceMigrateInterface *sif;
+    red_printf("");
+    ASSERT(migration_interface);
+    ASSERT(reds == s);
+
     red_printf("not implemented yet");
+    sif = SPICE_CONTAINEROF(migration_interface->base.sif, SpiceMigrateInterface, base);
+    sif->migrate_connect_complete(migration_interface);
+
     return 0;
 }
 
@@ -3926,8 +3949,14 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_client_state(SpiceServer *s)
 
 SPICE_GNUC_VISIBLE int spice_server_migrate_end(SpiceServer *s, int completed)
 {
+    SpiceMigrateInterface *sif;
+    ASSERT(migration_interface);
     ASSERT(reds == s);
     reds_mig_finished(completed);
+    sif = SPICE_CONTAINEROF(migration_interface->base.sif, SpiceMigrateInterface, base);
+    if (sif->migrate_end_complete) {
+        sif->migrate_end_complete(migration_interface);
+    }
     return 0;
 }
 
