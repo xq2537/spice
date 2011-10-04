@@ -1080,6 +1080,7 @@ public:
 
     void disable();
     void enable();
+    void restore();
 
     bool set_monitor_mode(XMonitor& monitor, const XRRModeInfo& mode_info);
 
@@ -1092,7 +1093,6 @@ private:
 
     XMonitor* crtc_overlap_test(int x, int y, int width, int height);
     void monitors_cleanup();
-    void restore();
 
 private:
     int _min_width;
@@ -2232,7 +2232,7 @@ void XMonitor::do_restore()
     if (!mode_changed()) {
         return;
     }
-    do_set_mode(_saved_size.x, _saved_size.y);
+    _container.restore();
 }
 
 int XMonitor::get_depth()
