@@ -1147,8 +1147,8 @@ protected:
 
 private:
     void update_position();
-    bool finde_mode_in_outputs(RRMode mode, int start_index, XRRScreenResources* res);
-    bool finde_mode_in_clones(RRMode mode, XRRScreenResources* res);
+    bool find_mode_in_outputs(RRMode mode, int start_index, XRRScreenResources* res);
+    bool find_mode_in_clones(RRMode mode, XRRScreenResources* res);
     XRRModeInfo* find_mode(int width, int height, XRRScreenResources* res);
 
 private:
@@ -2041,7 +2041,7 @@ void XMonitor::update_position()
     X_DEBUG_SYNC(display);
 }
 
-bool XMonitor::finde_mode_in_outputs(RRMode mode, int start_index, XRRScreenResources* res)
+bool XMonitor::find_mode_in_outputs(RRMode mode, int start_index, XRRScreenResources* res)
 {
     int i, j;
     bool retval = true;
@@ -2065,11 +2065,11 @@ bool XMonitor::finde_mode_in_outputs(RRMode mode, int start_index, XRRScreenReso
     return retval;
 }
 
-bool XMonitor::finde_mode_in_clones(RRMode mode, XRRScreenResources* res)
+bool XMonitor::find_mode_in_clones(RRMode mode, XRRScreenResources* res)
 {
     XMonitorsList::iterator iter = _clones.begin();
     for (; iter != _clones.end(); iter++) {
-        if (!(*iter)->finde_mode_in_outputs(mode, 0, res)) {
+        if (!(*iter)->find_mode_in_outputs(mode, 0, res)) {
             return false;
         }
     }
@@ -2114,12 +2114,12 @@ XRRModeInfo* XMonitor::find_mode(int width, int height, XRRScreenResources* res)
     while (!modes_set.empty()) {
         ModesSet::iterator iter = modes_set.begin();
 
-        if (!finde_mode_in_outputs((*iter).info->id, 1, res)) {
+        if (!find_mode_in_outputs((*iter).info->id, 1, res)) {
             modes_set.erase(iter);
             continue;
         }
 
-        if (!finde_mode_in_clones((*iter).info->id, res)) {
+        if (!find_mode_in_clones((*iter).info->id, res)) {
             modes_set.erase(iter);
             continue;
         }
