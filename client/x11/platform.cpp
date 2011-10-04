@@ -1356,13 +1356,7 @@ void MultyMonScreen::restore()
     X_DEBUG_SYNC(get_display());
     XMonitor::inc_change_ref();
     disable();
-    Window root_window = RootWindow(get_display(), get_screen());
-
-    XLockDisplay(get_display());
-    XRRSetScreenSize(get_display(), root_window, _saved_width,
-                     _saved_height,
-                     _saved_width_mm, _saved_height_mm);
-    XUnlockDisplay(get_display());
+    set_size(_saved_width, _saved_height);
     XMonitorsList::iterator iter = _monitors.begin();
     for (; iter != _monitors.end(); iter++) {
         (*iter)->revert();
