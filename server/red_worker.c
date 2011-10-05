@@ -9449,7 +9449,8 @@ static CommonChannelClient *common_channel_client_create(int size,
 {
     MainChannelClient *mcc = red_client_get_main(client);
     RedChannelClient *rcc =
-        red_channel_client_create(size, &common->base, client, stream);
+        red_channel_client_create(size, &common->base, client, stream,
+                                  0, NULL, 0, NULL);
     CommonChannelClient *common_cc = (CommonChannelClient*)rcc;
     common_cc->worker = common->worker;
 

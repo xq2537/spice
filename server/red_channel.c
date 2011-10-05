@@ -358,11 +358,43 @@ static void red_channel_add_client(RedChannel *channel, RedChannelClient *rcc)
     channel->clients_num++;
 }
 
-RedChannelClient *red_channel_client_create(
-    int size,
-    RedChannel *channel,
-    RedClient  *client,
-    RedsStream *stream)
+static void red_channel_client_set_remote_caps(RedChannelClient* rcc,
+                                               int num_common_caps, uint32_t *common_caps,
+                                               int num_caps, uint32_t *caps)
+{
+    rcc->remote_caps.num_common_caps = num_common_caps;
+    rcc->remote_caps.common_caps = spice_memdup(common_caps, num_common_caps * sizeof(uint32_t));
+
+    rcc->remote_caps.num_caps = num_caps;
+    rcc->remote_caps.caps = spice_memdup(caps, num_caps * sizeof(uint32_t));
+}
+
+static void red_channel_client_destroy_remote_caps(RedChannelClient* rcc)
+{
+    rcc->remote_caps.num_common_caps = 0;
+    free(rcc->remote_caps.common_caps);
+    rcc->remote_caps.num_caps = 0;
+    free(rcc->remote_caps.caps);
+}
+
+int red_channel_client_test_remote_common_cap(RedChannelClient *rcc, uint32_t cap)
+{
+    return test_capabilty(rcc->remote_caps.common_caps,
+                          rcc->remote_caps.num_common_caps,
+                          cap);
+}
+
+int red_channel_client_test_remote_cap(RedChannelClient *rcc, uint32_t cap)
+{
+    return test_capabilty(rcc->remote_caps.caps,
+                          rcc->remote_caps.num_caps,
+                          cap);
+}
+
+RedChannelClient *red_channel_client_create(int size, RedChannel *channel, RedClient  *client,
+                                            RedsStream *stream,
+                                            int num_common_caps, uint32_t *common_caps,
+                                            int num_caps, uint32_t *caps)
 {
     RedChannelClient *rcc;
 
@@ -384,6 +416,9 @@ RedChannelClient *red_channel_client_create(
     rcc->outgoing.cb = &channel->outgoing_cb;
     rcc->outgoing.pos = 0;
     rcc->outgoing.size = 0;
+
+    red_channel_client_set_remote_caps(rcc, num_common_caps, common_caps, num_caps, caps);
+
     if (!channel->channel_cbs.config_socket(rcc)) {
         goto error;
     }
@@ -564,10 +599,36 @@ void red_channel_register_client_cbs(RedChannel *channel, ClientCbs *client_cbs)
     }
 }
 
-void red_channel_set_caps(RedChannel *channel, int num_caps, uint32_t *caps)
+int test_capabilty(uint32_t *caps, int num_caps, uint32_t cap)
 {
-    channel->num_caps = num_caps;
-    channel->caps = caps;
+    uint32_t index = cap / 32;
+    if (num_caps < index + 1) {
+        return FALSE;
+    }
+
+    return (caps[index] & (1 << (cap % 32))) != 0;
+}
+
+static void add_capability(uint32_t **caps, int *num_caps, uint32_t cap)
+{
+    int nbefore, n;
+
+    nbefore = *num_caps;
+    n = cap / 32;
+    *num_caps = MAX(*num_caps, n + 1);
+    *caps = spice_renew(uint32_t, *caps, *num_caps);
+    memset(*caps + nbefore, 0, (*num_caps - nbefore) * sizeof(uint32_t));
+    (*caps)[n] |= (1 << (cap % 32));
+}
+
+void red_channel_set_common_cap(RedChannel *channel, uint32_t cap)
+{
+    add_capability(&channel->local_caps.common_caps, &channel->local_caps.num_common_caps, cap);
+}
+
+void red_channel_set_cap(RedChannel *channel, uint32_t cap)
+{
+    add_capability(&channel->local_caps.caps, &channel->local_caps.num_caps, cap);
 }
 
 void red_channel_set_data(RedChannel *channel, void *data)
@@ -585,6 +646,7 @@ void red_channel_client_destroy(RedChannelClient *rcc)
     if (rcc->send_data.marshaller) {
         spice_marshaller_destroy(rcc->send_data.marshaller);
     }
+    red_channel_client_destroy_remote_caps(rcc);
     free(rcc);
 }
 
@@ -600,9 +662,15 @@ void red_channel_destroy(RedChannel *channel)
         red_channel_client_destroy(
             SPICE_CONTAINEROF(link, RedChannelClient, channel_link));
     }
-    if (channel->caps) {
-        free(channel->caps);
+
+    if (channel->local_caps.num_common_caps) {
+        free(channel->local_caps.common_caps);
     }
+
+    if (channel->local_caps.num_caps) {
+        free(channel->local_caps.caps);
+    }
+
     free(channel);
 }
 
@@ -979,7 +1047,9 @@ void red_channel_disconnect(RedChannel *channel)
 
 RedChannelClient *red_channel_client_create_dummy(int size,
                                                   RedChannel *channel,
-                                                  RedClient  *client)
+                                                  RedClient  *client,
+                                                  int num_common_caps, uint32_t *common_caps,
+                                                  int num_caps, uint32_t *caps)
 {
     RedChannelClient *rcc;
 
@@ -987,6 +1057,7 @@ RedChannelClient *red_channel_client_create_dummy(int size,
     rcc = spice_malloc0(size);
     rcc->client = client;
     rcc->channel = channel;
+    red_channel_client_set_remote_caps(rcc, num_common_caps, common_caps, num_caps, caps);
     red_channel_add_client(channel, rcc);
     return rcc;
 }
@@ -994,6 +1065,7 @@ RedChannelClient *red_channel_client_create_dummy(int size,
 void red_channel_client_destroy_dummy(RedChannelClient *rcc)
 {
     red_channel_remove_client(rcc);
+    red_channel_client_destroy_remote_caps(rcc);
     free(rcc);
 }
 

@@ -206,7 +206,9 @@ static void spicevmc_connect(RedChannel *channel, RedClient *client,
         return;
     }
 
-    rcc = red_channel_client_create(sizeof(RedChannelClient), channel, client, stream);
+    rcc = red_channel_client_create(sizeof(RedChannelClient), channel, client, stream,
+                                    num_common_caps, common_caps,
+                                    num_caps, caps);
     if (!rcc) {
         return;
     }

@@ -496,7 +496,9 @@ static void inputs_connect(RedChannel *channel, RedClient *client,
     icc = (InputsChannelClient*)red_channel_client_create(sizeof(InputsChannelClient),
                                                           channel,
                                                           client,
-                                                          stream);
+                                                          stream,
+                                                          num_common_caps, common_caps,
+                                                          num_caps, caps);
     icc->motion_count = 0;
     inputs_pipe_add_init(&icc->base);
 }

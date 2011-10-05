@@ -39,16 +39,12 @@
 #include "server/demarshallers.h"
 #include "common/ring.h"
 #include "common/messages.h"
-#include "reds.h"
 #include "main_channel.h"
+#include "reds.h"
 #include "red_channel.h"
 #include "generated_marshallers.h"
 
 #define ZERO_BUF_SIZE 4096
-
-// approximate max receive message size for main channel
-#define RECEIVE_BUF_SIZE \
-    (4096 + (REDS_AGENT_WINDOW_SIZE + REDS_NUM_INTERNAL_AGENT_MESSAGES) * SPICE_AGENT_MAX_DATA_SIZE)
 
 #define REDS_MAX_SEND_IOVEC 100
 
@@ -141,11 +137,6 @@ struct MainChannelClient {
     SpiceTimer *ping_timer;
     int ping_interval;
 #endif
-};
-
-struct MainChannel {
-    RedChannel base;
-    uint8_t recv_buf[RECEIVE_BUF_SIZE];
 };
 
 enum NetTestStage {
@@ -911,12 +902,18 @@ uint32_t main_channel_client_get_link_id(MainChannelClient *mcc)
     return mcc->connection_id;
 }
 
-MainChannelClient *main_channel_client_create(MainChannel *main_chan, RedClient *client,
-                                              RedsStream *stream, uint32_t connection_id)
+static MainChannelClient *main_channel_client_create(MainChannel *main_chan, RedClient *client,
+                                                     RedsStream *stream, uint32_t connection_id,
+                                                     int num_common_caps, uint32_t *common_caps,
+                                                     int num_caps, uint32_t *caps)
 {
     MainChannelClient *mcc = (MainChannelClient*)red_channel_client_create(sizeof(MainChannelClient),
                                                                            &main_chan->base,
-                                                                           client, stream);
+                                                                           client, stream,
+                                                                           num_common_caps,
+                                                                           common_caps,
+                                                                           num_caps,
+                                                                           caps);
 
     mcc->connection_id = connection_id;
     mcc->bitrate_per_sec = ~0;
@@ -942,7 +939,9 @@ MainChannelClient *main_channel_link(MainChannel *channel, RedClient *client,
     // into usage somewhere (not an issue until we return migration to it's
     // former glory)
     red_printf("add main channel client");
-    mcc = main_channel_client_create(channel, client, stream, connection_id);
+    mcc = main_channel_client_create(channel, client, stream, connection_id,
+                                     num_common_caps, common_caps,
+                                     num_caps, caps);
     return mcc;
 }
 

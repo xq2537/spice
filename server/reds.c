@@ -192,14 +192,6 @@ typedef struct RedsStatValue {
 
 typedef struct RedsMigSpice RedsMigSpice;
 
-typedef struct RedsChannel {
-    struct RedsChannel *next;
-    RedChannel *base;
-
-    int num_common_caps;
-    uint32_t *common_caps;
-} RedsChannel;
-
 typedef struct RedsState {
     int listen_socket;
     int secure_listen_socket;
@@ -217,7 +209,7 @@ typedef struct RedsState {
     int mig_target;
     RedsMigSpice *mig_spice;
     int num_of_channels;
-    RedsChannel *channels;
+    Ring channels;
     int mouse_mode;
     int is_client_mouse_allowed;
     int dispatcher_allows_client_mouse;
@@ -302,7 +294,6 @@ struct ChannelSecurityOptions {
     ChannelSecurityOptions *next;
 };
 
-static void reds_dispose_channel(RedsChannel *channel);
 
 static ChannelSecurityOptions *channels_security = NULL;
 static int default_channel_security =
@@ -515,42 +506,32 @@ void reds_update_stat_value(uint32_t value)
 
 void reds_register_channel(RedChannel *channel)
 {
-    RedsChannel *reds_channel;
-
     ASSERT(reds);
-    // TODO: should channels be released upon some destructor?
-    reds_channel = spice_malloc0(sizeof(RedsChannel));
-    reds_channel->base = channel;
-    reds_channel->next = reds->channels;
-    reds->channels = reds_channel;
+    ring_add(&reds->channels, &channel->link);
     reds->num_of_channels++;
 }
 
 void reds_unregister_channel(RedChannel *channel)
 {
-    RedsChannel **now = &reds->channels;
-
-    while (*now) {
-        if ((*now)->base == channel) {
-            RedsChannel *free_channel = *now;
-            *now = free_channel->next;
-            reds_dispose_channel(free_channel);
-            free(free_channel);
-            reds->num_of_channels--;
-            return;
-        }
-        now = &(*now)->next;
+    if (ring_item_is_linked(&channel->link)) {
+        ring_remove(&channel->link);
+        reds->num_of_channels--;
+    } else {
+        red_printf("not found");
     }
-    red_printf("not found");
 }
 
-static RedsChannel *reds_find_channel(uint32_t type, uint32_t id)
+static RedChannel *reds_find_channel(uint32_t type, uint32_t id)
 {
-    RedsChannel *channel = reds->channels;
-    while (channel && !(channel->base->type == type && channel->base->id == id)) {
-        channel = channel->next;
+    RingItem *now;
+
+    RING_FOREACH(now, &reds->channels) {
+        RedChannel *channel = SPICE_CONTAINEROF(now, RedChannel, link);
+        if (channel->type == type && channel->id == id) {
+            return channel;
+        }
     }
-    return channel;
+    return NULL;
 }
 
 static void reds_mig_cleanup(void)
@@ -987,11 +968,11 @@ SPICE_GNUC_VISIBLE int spice_server_get_num_clients(SpiceServer *s)
 static int secondary_channels[] = {
     SPICE_CHANNEL_MAIN, SPICE_CHANNEL_DISPLAY, SPICE_CHANNEL_CURSOR, SPICE_CHANNEL_INPUTS};
 
-static int channel_is_secondary(RedsChannel *channel)
+static int channel_is_secondary(RedChannel *channel)
 {
     int i;
     for (i = 0 ; i < sizeof(secondary_channels)/sizeof(secondary_channels[0]); ++i) {
-        if (channel->base->type == secondary_channels[i]) {
+        if (channel->type == secondary_channels[i]) {
             return TRUE;
         }
     }
@@ -1000,21 +981,20 @@ static int channel_is_secondary(RedsChannel *channel)
 
 void reds_fill_channels(SpiceMsgChannels *channels_info)
 {
-    RedsChannel *channel;
-    int i;
+    RingItem *now;
     int used_channels = 0;
 
     channels_info->num_of_channels = reds->num_of_channels;
-    channel = reds->channels;
-    for (i = 0; i < reds->num_of_channels; i++, channel = channel->next) {
-        ASSERT(channel);
+    RING_FOREACH(now, &reds->channels) {
+        RedChannel *channel = SPICE_CONTAINEROF(now, RedChannel, link);
         if (reds->num_clients > 1 && !channel_is_secondary(channel)) {
             continue;
         }
-        channels_info->channels[used_channels].type = channel->base->type;
-        channels_info->channels[used_channels].id = channel->base->id;
+        channels_info->channels[used_channels].type = channel->type;
+        channels_info->channels[used_channels].id = channel->id;
         used_channels++;
     }
+
     channels_info->num_of_channels = used_channels;
     if (used_channels != reds->num_of_channels) {
         red_printf("sent %d out of %d", used_channels, reds->num_of_channels);
@@ -1388,46 +1368,22 @@ static int sync_write(RedsStream *stream, const void *in_buf, size_t n)
     return TRUE;
 }
 
-static void reds_channel_set_common_caps(RedsChannel *channel, int cap, int active)
-{
-    int nbefore, n;
-
-    nbefore = channel->num_common_caps;
-    n = cap / 32;
-    channel->num_common_caps = MAX(channel->num_common_caps, n + 1);
-    channel->common_caps = spice_renew(uint32_t, channel->common_caps, channel->num_common_caps);
-    memset(channel->common_caps + nbefore, 0,
-           (channel->num_common_caps - nbefore) * sizeof(uint32_t));
-    if (active) {
-        channel->common_caps[n] |= (1 << cap);
-    } else {
-        channel->common_caps[n] &= ~(1 << cap);
-    }
-}
-
-static void reds_channel_init_auth_caps(RedsChannel *channel)
+static void reds_channel_init_auth_caps(RedChannel *channel)
 {
     if (sasl_enabled) {
-        reds_channel_set_common_caps(channel, SPICE_COMMON_CAP_AUTH_SASL, TRUE);
+        red_channel_set_common_cap(channel, SPICE_COMMON_CAP_AUTH_SASL);
     } else {
-        reds_channel_set_common_caps(channel, SPICE_COMMON_CAP_AUTH_SPICE, TRUE);
+        red_channel_set_common_cap(channel, SPICE_COMMON_CAP_AUTH_SPICE);
     }
-    reds_channel_set_common_caps(channel, SPICE_COMMON_CAP_PROTOCOL_AUTH_SELECTION, TRUE);
-}
-
-static void reds_dispose_channel(RedsChannel *channel)
-{
-    free(channel->common_caps);
-    channel->common_caps = NULL;
-    channel->num_common_caps = 0;
+    red_channel_set_common_cap(channel, SPICE_COMMON_CAP_PROTOCOL_AUTH_SELECTION);
 }
 
 static int reds_send_link_ack(RedLinkInfo *link)
 {
     SpiceLinkHeader header;
     SpiceLinkReply ack;
-    RedsChannel common_caps = { 0, };
-    RedsChannel *channel;
+    RedChannel *channel;
+    RedChannelCapabilities *channel_caps;
     BUF_MEM *bmBuf;
     BIO *bio;
     int ret = FALSE;
@@ -1441,13 +1397,16 @@ static int reds_send_link_ack(RedLinkInfo *link)
 
     channel = reds_find_channel(link->link_mess->channel_type, 0);
     if (!channel) {
-        channel = &common_caps;
+        ASSERT(link->link_mess->channel_type == SPICE_CHANNEL_MAIN);
+        ASSERT(reds->main_channel);
+        channel = &reds->main_channel->base;
     }
 
     reds_channel_init_auth_caps(channel); /* make sure common caps are set */
 
-    ack.num_common_caps = channel->num_common_caps;
-    ack.num_channel_caps = channel->base ? channel->base->num_caps : 0;
+    channel_caps = &channel->local_caps;
+    ack.num_common_caps = channel_caps->num_common_caps;
+    ack.num_channel_caps = channel_caps->num_caps;
     header.size += (ack.num_common_caps + ack.num_channel_caps) * sizeof(uint32_t);
     ack.caps_offset = sizeof(SpiceLinkReply);
 
@@ -1473,17 +1432,14 @@ static int reds_send_link_ack(RedLinkInfo *link)
         goto end;
     if (!sync_write(link->stream, &ack, sizeof(ack)))
         goto end;
-    if (!sync_write(link->stream, channel->common_caps, channel->num_common_caps * sizeof(uint32_t)))
+    if (!sync_write(link->stream, channel_caps->common_caps, channel_caps->num_common_caps * sizeof(uint32_t)))
         goto end;
-    if (channel->base) {
-        if (!sync_write(link->stream, channel->base->caps, channel->base->num_caps * sizeof(uint32_t)))
-            goto end;
-    }
+    if (!sync_write(link->stream, channel_caps->caps, channel_caps->num_caps * sizeof(uint32_t)))
+        goto end;
 
     ret = TRUE;
 
 end:
-    reds_dispose_channel(&common_caps);
     BIO_free(bio);
     return ret;
 }
@@ -1542,6 +1498,8 @@ static void reds_handle_main_link(RedLinkInfo *link)
     MainChannelClient *mcc;
 
     red_printf("");
+    ASSERT(reds->main_channel);
+
     link_mess = link->link_mess;
     if (!reds->allow_multiple_clients) {
         reds_disconnect();
@@ -1576,10 +1534,6 @@ static void reds_handle_main_link(RedLinkInfo *link)
     link->link_mess = NULL;
     reds_link_free(link);
     caps = (uint32_t *)((uint8_t *)link_mess + link_mess->caps_offset);
-    if (!reds->main_channel) {
-        reds->main_channel = main_channel_init();
-        ASSERT(reds->main_channel);
-    }
     client = red_client_new();
     ring_add(&reds->clients, &client->link);
     reds->num_clients++;
@@ -1645,7 +1599,7 @@ static void openssl_init(RedLinkInfo *link)
 
 static void reds_handle_other_links(RedLinkInfo *link)
 {
-    RedsChannel *channel;
+    RedChannel *channel;
     RedClient *client = NULL;
     RedsStream *stream;
     SpiceLinkMess *link_mess;
@@ -1687,12 +1641,12 @@ static void reds_handle_other_links(RedLinkInfo *link)
     link->link_mess = NULL;
     reds_link_free(link);
     caps = (uint32_t *)((uint8_t *)link_mess + link_mess->caps_offset);
-    channel->base->client_cbs.connect(channel->base, client, stream, reds->mig_target,
-                                      link_mess->num_common_caps,
-                                      link_mess->num_common_caps ? caps : NULL,
-                                      link_mess->num_channel_caps,
-                                      link_mess->num_channel_caps ?
-                                          caps + link_mess->num_common_caps : NULL);
+    channel->client_cbs.connect(channel, client, stream, reds->mig_target,
+                                link_mess->num_common_caps,
+                                link_mess->num_common_caps ? caps : NULL,
+                                link_mess->num_channel_caps,
+                                link_mess->num_channel_caps ?
+                                caps + link_mess->num_common_caps : NULL);
     free(link_mess);
 }
 
@@ -2459,8 +2413,8 @@ static void reds_handle_read_link_done(void *opaque)
         return;
     }
 
-    auth_selection = link_mess->num_common_caps > 0 &&
-        (caps[0] & (1 << SPICE_COMMON_CAP_PROTOCOL_AUTH_SELECTION));;
+    auth_selection = test_capabilty(caps, link_mess->num_common_caps,
+                                    SPICE_COMMON_CAP_PROTOCOL_AUTH_SELECTION);
 
     if (!reds_security_check(link)) {
         if (link->stream->ssl) {
@@ -3521,6 +3475,7 @@ static int do_spice_init(SpiceCoreInterface *core_interface)
     ring_init(&reds->clients);
     reds->num_clients = 0;
     main_dispatcher_init(core);
+    ring_init(&reds->channels);
 
     if (!(reds->mig_timer = core->timer_add(migrate_timout, NULL))) {
         red_error("migration timer create failed");
@@ -3577,7 +3532,7 @@ static int do_spice_init(SpiceCoreInterface *core_interface)
     }
 #endif
 
-    reds->main_channel = NULL;
+    reds->main_channel = main_channel_init();
     inputs_init();
 
     reds->mouse_mode = SPICE_MOUSE_MODE_SERVER;

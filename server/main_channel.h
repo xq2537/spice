@@ -45,7 +45,20 @@ struct MainMigrateData {
     uint32_t write_queue_size;
 };
 
-typedef struct MainChannel MainChannel;
+// TODO: Defines used to calculate receive buffer size, and also by reds.c
+// other options: is to make a reds_main_consts.h, to duplicate defines.
+#define REDS_AGENT_WINDOW_SIZE 10
+#define REDS_NUM_INTERNAL_AGENT_MESSAGES 1
+
+// approximate max receive message size for main channel
+#define RECEIVE_BUF_SIZE \
+    (4096 + (REDS_AGENT_WINDOW_SIZE + REDS_NUM_INTERNAL_AGENT_MESSAGES) * SPICE_AGENT_MAX_DATA_SIZE)
+
+typedef struct MainChannel {
+    RedChannel base;
+    uint8_t recv_buf[RECEIVE_BUF_SIZE];
+} MainChannel;
+
 
 MainChannel *main_channel_init(void);
 RedClient *main_channel_get_client_by_link_id(MainChannel *main_chan, uint32_t link_id);
@@ -81,10 +94,5 @@ uint32_t main_channel_client_get_link_id(MainChannelClient *mcc);
 int main_channel_client_is_low_bandwidth(MainChannelClient *mcc);
 uint64_t main_channel_client_get_bitrate_per_sec(MainChannelClient *mcc);
 int main_channel_is_connected(MainChannel *main_chan);
-
-// TODO: Defines used to calculate receive buffer size, and also by reds.c
-// other options: is to make a reds_main_consts.h, to duplicate defines.
-#define REDS_AGENT_WINDOW_SIZE 10
-#define REDS_NUM_INTERNAL_AGENT_MESSAGES 1
 
 #endif

@@ -143,7 +143,7 @@ typedef uint64_t (*channel_handle_migrate_data_get_serial_proc)(RedChannelClient
 
 
 typedef void (*channel_client_connect_proc)(RedChannel *channel, RedClient *client, RedsStream *stream,
-                                            int migration, int num_common_caps, uint32_t *common_caps,
+                                            int migration, int num_common_cap, uint32_t *common_caps,
                                             int num_caps, uint32_t *caps);
 typedef void (*channel_client_disconnect_proc)(RedChannelClient *base);
 typedef void (*channel_client_migrate_proc)(RedChannelClient *base);
@@ -178,6 +178,15 @@ typedef struct {
     channel_client_migrate_proc migrate;
 } ClientCbs;
 
+typedef struct RedChannelCapabilities {
+    int num_common_caps;
+    uint32_t *common_caps;
+    int num_caps;
+    uint32_t *caps;
+} RedChannelCapabilities;
+
+int test_capabilty(uint32_t *caps, int num_caps, uint32_t cap);
+
 struct RedChannelClient {
     RingItem channel_link;
     RingItem client_link;
@@ -206,11 +215,15 @@ struct RedChannelClient {
     int id; // debugging purposes
     Ring pipe;
     uint32_t pipe_size;
+
+    RedChannelCapabilities remote_caps;
 };
 
 struct RedChannel {
     uint32_t type;
     uint32_t id;
+
+    RingItem link; // channels link for reds
 
     SpiceCoreInterface *core;
     int migrate;
@@ -232,8 +245,7 @@ struct RedChannel {
     ChannelCbs channel_cbs;
     ClientCbs client_cbs;
 
-    int num_caps;
-    uint32_t *caps;
+    RedChannelCapabilities local_caps;
 
     void *data;
 
@@ -265,19 +277,23 @@ RedChannel *red_channel_create_parser(int size,
 
 void red_channel_register_client_cbs(RedChannel *channel, ClientCbs *client_cbs);
 // caps are freed when the channel is destroyed
-void red_channel_set_caps(RedChannel *channel, int num_caps, uint32_t *caps);
+void red_channel_set_common_cap(RedChannel *channel, uint32_t cap);
+void red_channel_set_cap(RedChannel *channel, uint32_t cap);
 void red_channel_set_data(RedChannel *channel, void *data);
 
 RedChannelClient *red_channel_client_create(int size, RedChannel *channel, RedClient *client,
-                                            RedsStream *stream);
-
+                                            RedsStream *stream,
+                                            int num_common_caps, uint32_t *common_caps,
+                                            int num_caps, uint32_t *caps);
 // TODO: tmp, for channels that don't use RedChannel yet (e.g., snd channel), but
 // do use the client callbacks. So the channel clients are not connected (the channel doesn't
 // have list of them, but they do have a link to the channel, and the client has a list of them)
 RedChannel *red_channel_create_dummy(int size, uint32_t type, uint32_t id);
 RedChannelClient *red_channel_client_create_dummy(int size,
                                                   RedChannel *channel,
-                                                  RedClient  *client);
+                                                  RedClient  *client,
+                                                  int num_common_caps, uint32_t *common_caps,
+                                                  int num_caps, uint32_t *caps);
 void red_channel_client_destroy_dummy(RedChannelClient *rcc);
 
 
@@ -293,6 +309,9 @@ int red_channel_client_is_connected(RedChannelClient *rcc);
 
 void red_channel_client_destroy(RedChannelClient *rcc);
 void red_channel_destroy(RedChannel *channel);
+
+int red_channel_client_test_remote_common_cap(RedChannelClient *rcc, uint32_t cap);
+int red_channel_client_test_remote_cap(RedChannelClient *rcc, uint32_t cap);
 
 /* shutdown is the only safe thing to do out of the client/channel
  * thread. It will not touch the rings, just shutdown the socket.
