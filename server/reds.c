@@ -1597,13 +1597,36 @@ static void openssl_init(RedLinkInfo *link)
     BN_set_word(link->tiTicketing.bn, f4);
 }
 
+static void reds_channel_do_link(RedChannel *channel, RedClient *client,
+                                 SpiceLinkMess *link_msg,
+                                 RedsStream *stream)
+{
+    uint32_t *caps;
+
+    ASSERT(channel);
+    ASSERT(link_msg);
+    ASSERT(stream);
+
+    if (link_msg->channel_type == SPICE_CHANNEL_INPUTS && !stream->ssl) {
+        char *mess = "keyboard channel is insecure";
+        const int mess_len = strlen(mess);
+        main_channel_push_notify(reds->main_channel, (uint8_t*)mess, mess_len);
+    }
+
+    caps = (uint32_t *)((uint8_t *)link_msg + link_msg->caps_offset);
+    channel->client_cbs.connect(channel, client, stream, reds->mig_target,
+                                link_msg->num_common_caps,
+                                link_msg->num_common_caps ? caps : NULL,
+                                link_msg->num_channel_caps,
+                                link_msg->num_channel_caps ?
+                                caps + link_msg->num_common_caps : NULL);
+}
+
 static void reds_handle_other_links(RedLinkInfo *link)
 {
     RedChannel *channel;
     RedClient *client = NULL;
-    RedsStream *stream;
     SpiceLinkMess *link_mess;
-    uint32_t *caps;
 
     link_mess = link->link_mess;
     if (reds->main_channel) {
@@ -1630,24 +1653,12 @@ static void reds_handle_other_links(RedLinkInfo *link)
 
     reds_send_link_result(link, SPICE_LINK_ERR_OK);
     reds_show_new_channel(link, link_mess->connection_id);
-    if (link_mess->channel_type == SPICE_CHANNEL_INPUTS && !link->stream->ssl) {
-        char *mess = "keyboard channel is insecure";
-        const int mess_len = strlen(mess);
-        main_channel_push_notify(reds->main_channel, (uint8_t*)mess, mess_len);
-    }
-    stream = link->stream;
-    reds_stream_remove_watch(stream);
+    reds_stream_remove_watch(link->stream);
+    reds_channel_do_link(channel, client, link_mess, link->stream);
+    free(link_mess);
     link->stream = NULL;
     link->link_mess = NULL;
     reds_link_free(link);
-    caps = (uint32_t *)((uint8_t *)link_mess + link_mess->caps_offset);
-    channel->client_cbs.connect(channel, client, stream, reds->mig_target,
-                                link_mess->num_common_caps,
-                                link_mess->num_common_caps ? caps : NULL,
-                                link_mess->num_channel_caps,
-                                link_mess->num_channel_caps ?
-                                caps + link_mess->num_common_caps : NULL);
-    free(link_mess);
 }
 
 static void reds_handle_link(RedLinkInfo *link)
