@@ -10383,7 +10383,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
     int ring_is_empty;
     int call_async_complete = 0;
     int write_ready = 0;
-    uint64_t cookie;
+    AsyncCommand *cmd;
 
     read_message(worker->channel, &message);
 
@@ -10398,7 +10398,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
     case RED_WORKER_MESSAGE_DESTROY_SURFACE_WAIT_ASYNC:
     case RED_WORKER_MESSAGE_FLUSH_SURFACES_ASYNC:
         call_async_complete = 1;
-        receive_data(worker->channel, &cookie, sizeof(cookie));
+        receive_data(worker->channel, &cmd, sizeof(cmd));
         break;
     case RED_WORKER_MESSAGE_UPDATE:
     case RED_WORKER_MESSAGE_ADD_MEMSLOT:
@@ -10667,7 +10667,7 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
         red_error("message error");
     }
     if (call_async_complete) {
-        red_dispatcher_async_complete(worker->dispatcher, cookie);
+        red_dispatcher_async_complete(worker->dispatcher, cmd);
     }
     if (write_ready) {
         message = RED_WORKER_MESSAGE_READY;

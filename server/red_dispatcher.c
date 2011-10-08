@@ -26,6 +26,7 @@
 #include <pthread.h>
 #include <sys/socket.h>
 #include <signal.h>
+#include <inttypes.h>
 
 #include <spice/qxl_dev.h>
 #include "spice.h"
@@ -43,6 +44,12 @@ static int num_active_workers = 0;
 
 //volatile
 
+struct AsyncCommand {
+    RingItem link;
+    RedWorkerMessage message;
+    uint64_t cookie;
+};
+
 struct RedDispatcher {
     QXLWorker base;
     QXLInstance *qxl;
@@ -54,7 +61,7 @@ struct RedDispatcher {
     int y_res;
     int use_hardware_cursor;
     RedDispatcher *next;
-    RedWorkerMessage async_message;
+    Ring async_commands;
     pthread_mutex_t  async_lock;
     QXLDevSurfaceCreate surface_create;
 };
@@ -145,7 +152,7 @@ static void red_dispatcher_disconnect_cursor_peer(RedChannelClient *rcc)
     RedDispatcher *dispatcher;
 
     if (!rcc->channel) {
-    return;
+        return;
     }
 
     dispatcher = (RedDispatcher *)rcc->channel->data;
@@ -263,18 +270,18 @@ static void red_dispatcher_update_area(RedDispatcher *dispatcher, uint32_t surfa
     ASSERT(message == RED_WORKER_MESSAGE_READY);
 }
 
-static RedWorkerMessage red_dispatcher_async_start(RedDispatcher *dispatcher,
-                                                   RedWorkerMessage message)
+static AsyncCommand *async_command_alloc(RedDispatcher *dispatcher,
+                                         RedWorkerMessage message,
+                                         uint64_t cookie)
 {
+    AsyncCommand *async_command = spice_new0(AsyncCommand, 1);
+
     pthread_mutex_lock(&dispatcher->async_lock);
-    if (dispatcher->async_message != RED_WORKER_MESSAGE_NOP) {
-        red_printf("error: async clash. second async ignored");
-        pthread_mutex_unlock(&dispatcher->async_lock);
-        return RED_WORKER_MESSAGE_NOP;
-    }
-    dispatcher->async_message = message;
+    async_command->cookie = cookie;
+    async_command->message = message;
+    ring_add(&dispatcher->async_commands, &async_command->link);
     pthread_mutex_unlock(&dispatcher->async_lock);
-    return message;
+    return async_command;
 }
 
 static void red_dispatcher_update_area_async(RedDispatcher *dispatcher,
@@ -283,15 +290,11 @@ static void red_dispatcher_update_area_async(RedDispatcher *dispatcher,
                                          uint32_t clear_dirty_region,
                                          uint64_t cookie)
 {
-    RedWorkerMessage message = red_dispatcher_async_start(dispatcher,
-                                                          RED_WORKER_MESSAGE_UPDATE_ASYNC);
-
-    if (message == RED_WORKER_MESSAGE_NOP) {
-        return;
-    }
+    RedWorkerMessage message = RED_WORKER_MESSAGE_UPDATE_ASYNC;
+    AsyncCommand *cmd = async_command_alloc(dispatcher, message, cookie);
 
     write_message(dispatcher->channel, &message);
-    send_data(dispatcher->channel, &cookie, sizeof(cookie));
+    send_data(dispatcher->channel, &cmd, sizeof(cmd));
     send_data(dispatcher->channel, &surface_id, sizeof(uint32_t));
     send_data(dispatcher->channel, qxl_area, sizeof(QXLRect));
     send_data(dispatcher->channel, &clear_dirty_region, sizeof(uint32_t));
@@ -322,14 +325,11 @@ static void qxl_worker_add_memslot(QXLWorker *qxl_worker, QXLDevMemSlot *mem_slo
 
 static void red_dispatcher_add_memslot_async(RedDispatcher *dispatcher, QXLDevMemSlot *mem_slot, uint64_t cookie)
 {
-    RedWorkerMessage message = red_dispatcher_async_start(dispatcher,
-                                                          RED_WORKER_MESSAGE_ADD_MEMSLOT_ASYNC);
+    RedWorkerMessage message = RED_WORKER_MESSAGE_ADD_MEMSLOT_ASYNC;
+    AsyncCommand *cmd = async_command_alloc(dispatcher, message, cookie);
 
-    if (message == RED_WORKER_MESSAGE_NOP) {
-        return;
-    }
     write_message(dispatcher->channel, &message);
-    send_data(dispatcher->channel, &cookie, sizeof(cookie));
+    send_data(dispatcher->channel, &cmd, sizeof(cmd));
     send_data(dispatcher->channel, mem_slot, sizeof(QXLDevMemSlot));
 }
 
@@ -363,14 +363,11 @@ static void qxl_worker_destroy_surfaces(QXLWorker *qxl_worker)
 
 static void red_dispatcher_destroy_surfaces_async(RedDispatcher *dispatcher, uint64_t cookie)
 {
-    RedWorkerMessage message = red_dispatcher_async_start(dispatcher,
-                                                      RED_WORKER_MESSAGE_DESTROY_SURFACES_ASYNC);
+    RedWorkerMessage message = RED_WORKER_MESSAGE_DESTROY_SURFACES_ASYNC;
+    AsyncCommand *cmd = async_command_alloc(dispatcher, message, cookie);
 
-    if (message == RED_WORKER_MESSAGE_NOP) {
-        return;
-    }
     write_message(dispatcher->channel, &message);
-    send_data(dispatcher->channel, &cookie, sizeof(cookie));
+    send_data(dispatcher->channel, &cmd, sizeof(cmd));
 }
 
 static void red_dispatcher_destroy_primary_surface_complete(RedDispatcher *dispatcher)
@@ -388,20 +385,18 @@ red_dispatcher_destroy_primary_surface(RedDispatcher *dispatcher,
                                        uint32_t surface_id, int async, uint64_t cookie)
 {
     RedWorkerMessage message;
+    AsyncCommand *cmd;
 
     if (async) {
-        message = red_dispatcher_async_start(dispatcher,
-                                             RED_WORKER_MESSAGE_DESTROY_PRIMARY_SURFACE_ASYNC);
-        if (message == RED_WORKER_MESSAGE_NOP) {
-            return;
-        }
+        message = RED_WORKER_MESSAGE_DESTROY_PRIMARY_SURFACE_ASYNC;
+        cmd = async_command_alloc(dispatcher, message, cookie);
     } else {
         message = RED_WORKER_MESSAGE_DESTROY_PRIMARY_SURFACE;
     }
 
     write_message(dispatcher->channel, &message);
     if (async) {
-        send_data(dispatcher->channel, &cookie, sizeof(cookie));
+        send_data(dispatcher->channel, &cmd, sizeof(cmd));
     }
     send_data(dispatcher->channel, &surface_id, sizeof(uint32_t));
     if (!async) {
@@ -434,13 +429,11 @@ red_dispatcher_create_primary_surface(RedDispatcher *dispatcher, uint32_t surfac
                                       QXLDevSurfaceCreate *surface, int async, uint64_t cookie)
 {
     RedWorkerMessage message;
+    AsyncCommand *cmd;
 
     if (async) {
-        message = red_dispatcher_async_start(dispatcher,
-                                             RED_WORKER_MESSAGE_CREATE_PRIMARY_SURFACE_ASYNC);
-        if (message == RED_WORKER_MESSAGE_NOP) {
-            return;
-        }
+        message = RED_WORKER_MESSAGE_CREATE_PRIMARY_SURFACE_ASYNC;
+        cmd = async_command_alloc(dispatcher, message, cookie);
     } else {
         message = RED_WORKER_MESSAGE_CREATE_PRIMARY_SURFACE;
     }
@@ -448,7 +441,7 @@ red_dispatcher_create_primary_surface(RedDispatcher *dispatcher, uint32_t surfac
 
     write_message(dispatcher->channel, &message);
     if (async) {
-        send_data(dispatcher->channel, &cookie, sizeof(cookie));
+        send_data(dispatcher->channel, &cmd, sizeof(cmd));
     }
     send_data(dispatcher->channel, &surface_id, sizeof(uint32_t));
     send_data(dispatcher->channel, surface, sizeof(QXLDevSurfaceCreate));
@@ -497,20 +490,18 @@ static void red_dispatcher_destroy_surface_wait(RedDispatcher *dispatcher, uint3
                                                 int async, uint64_t cookie)
 {
     RedWorkerMessage message;
+    AsyncCommand *cmd;
 
     if (async ) {
-        message = red_dispatcher_async_start(dispatcher,
-                                             RED_WORKER_MESSAGE_DESTROY_SURFACE_WAIT_ASYNC);
-        if (message == RED_WORKER_MESSAGE_NOP) {
-            return;
-        }
+        message = RED_WORKER_MESSAGE_DESTROY_SURFACE_WAIT_ASYNC;
+        cmd = async_command_alloc(dispatcher, message, cookie);
     } else {
         message = RED_WORKER_MESSAGE_DESTROY_SURFACE_WAIT;
     }
 
     write_message(dispatcher->channel, &message);
     if (async) {
-        send_data(dispatcher->channel, &cookie, sizeof(cookie));
+        send_data(dispatcher->channel, &cmd, sizeof(cmd));
     }
     send_data(dispatcher->channel, &surface_id, sizeof(uint32_t));
     if (async) {
@@ -579,14 +570,11 @@ static void qxl_worker_start(QXLWorker *qxl_worker)
 
 static void red_dispatcher_flush_surfaces_async(RedDispatcher *dispatcher, uint64_t cookie)
 {
-    RedWorkerMessage message = red_dispatcher_async_start(dispatcher,
-                                                          RED_WORKER_MESSAGE_FLUSH_SURFACES_ASYNC);
+    RedWorkerMessage message = RED_WORKER_MESSAGE_FLUSH_SURFACES_ASYNC;
+    AsyncCommand *cmd = async_command_alloc(dispatcher, message, cookie);
 
-    if (message == RED_WORKER_MESSAGE_NOP) {
-        return;
-    }
     write_message(dispatcher->channel, &message);
-    send_data(dispatcher->channel, &cookie, sizeof(cookie));
+    send_data(dispatcher->channel, &cmd, sizeof(cmd));
 }
 
 static void red_dispatcher_stop(RedDispatcher *dispatcher)
@@ -842,10 +830,17 @@ void spice_qxl_flush_surfaces_async(QXLInstance *instance, uint64_t cookie)
     red_dispatcher_flush_surfaces_async(instance->st->dispatcher, cookie);
 }
 
-void red_dispatcher_async_complete(struct RedDispatcher *dispatcher, uint64_t cookie)
+void red_dispatcher_async_complete(struct RedDispatcher *dispatcher,
+                                   AsyncCommand *async_command)
 {
     pthread_mutex_lock(&dispatcher->async_lock);
-    switch (dispatcher->async_message) {
+    ring_remove(&async_command->link);
+    red_printf_debug(2, "%p: cookie %" PRId64, async_command, async_command->cookie);
+    if (ring_is_empty(&dispatcher->async_commands)) {
+        red_printf_debug(2, "%s: no more async commands", __func__);
+    }
+    pthread_mutex_unlock(&dispatcher->async_lock);
+    switch (async_command->message) {
     case RED_WORKER_MESSAGE_UPDATE_ASYNC:
         break;
     case RED_WORKER_MESSAGE_ADD_MEMSLOT_ASYNC:
@@ -863,11 +858,11 @@ void red_dispatcher_async_complete(struct RedDispatcher *dispatcher, uint64_t co
     case RED_WORKER_MESSAGE_FLUSH_SURFACES_ASYNC:
         break;
     default:
-        red_printf("unexpected message");
+        WARN("unexpected message");
     }
-    dispatcher->async_message = RED_WORKER_MESSAGE_NOP;
-    pthread_mutex_unlock(&dispatcher->async_lock);
-    dispatcher->qxl->st->qif->async_complete(dispatcher->qxl, cookie);
+    dispatcher->qxl->st->qif->async_complete(dispatcher->qxl,
+                                             async_command->cookie);
+    free(async_command);
 }
 
 static RedChannel *red_dispatcher_display_channel_create(RedDispatcher *dispatcher)
@@ -922,6 +917,7 @@ RedDispatcher *red_dispatcher_init(QXLInstance *qxl)
 
     dispatcher = spice_new0(RedDispatcher, 1);
     dispatcher->channel = channels[0];
+    ring_init(&dispatcher->async_commands);
     init_data.qxl = dispatcher->qxl = qxl;
     init_data.id = qxl->id;
     init_data.channel = channels[1];
@@ -929,7 +925,6 @@ RedDispatcher *red_dispatcher_init(QXLInstance *qxl)
     init_data.num_renderers = num_renderers;
     memcpy(init_data.renderers, renderers, sizeof(init_data.renderers));
 
-    dispatcher->async_message = RED_WORKER_MESSAGE_NOP;
     pthread_mutex_init(&dispatcher->async_lock, NULL);
     init_data.image_compression = image_compression;
     init_data.jpeg_state = jpeg_state;

@@ -19,6 +19,7 @@
 #define _H_RED_DISPATCHER
 
 struct RedChannelClient;
+typedef struct AsyncCommand AsyncCommand;
 
 struct RedDispatcher *red_dispatcher_init(QXLInstance *qxl);
 
@@ -30,6 +31,6 @@ int red_dispatcher_count(void);
 int red_dispatcher_add_renderer(const char *name);
 uint32_t red_dispatcher_qxl_ram_size(void);
 int red_dispatcher_qxl_count(void);
-void red_dispatcher_async_complete(struct RedDispatcher*, uint64_t);
+void red_dispatcher_async_complete(struct RedDispatcher *, AsyncCommand *);
 
 #endif
