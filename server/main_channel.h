@@ -78,7 +78,7 @@ void main_channel_push_agent_data(MainChannel *main_chan, uint8_t* data, size_t 
 void main_channel_client_start_net_test(MainChannelClient *mcc);
 // TODO: huge. Consider making a reds_* interface for these functions
 // and calling from main.
-void main_channel_push_init(MainChannelClient *mcc, int connection_id, int display_channels_hint,
+void main_channel_push_init(MainChannelClient *mcc, int display_channels_hint,
     int current_mouse_mode, int is_client_mouse_allowed, int multi_media_time,
     int ram_hint);
 void main_channel_push_notify(MainChannel *main_chan, uint8_t *mess, const int mess_len);

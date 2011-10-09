@@ -129,6 +129,8 @@ struct MainChannelClient {
 #endif
     int mig_wait_connect;
     int mig_connect_ok;
+    int mig_wait_prev_complete;
+    int init_sent;
 };
 
 enum NetTestStage {
@@ -137,6 +139,9 @@ enum NetTestStage {
     NET_TEST_STAGE_LATENCY,
     NET_TEST_STAGE_RATE,
 };
+
+static void main_channel_release_pipe_item(RedChannelClient *rcc,
+                                           PipeItem *base, int item_pushed);
 
 int main_channel_is_connected(MainChannel *main_chan)
 {
@@ -289,6 +294,11 @@ static PipeItem *main_multi_media_time_item_new(
 
 static void main_channel_push_channels(MainChannelClient *mcc)
 {
+    if (red_client_during_migrate_at_target(mcc->base.client)) {
+        red_printf("warning: ignoring unexpected SPICE_MSGC_MAIN_ATTACH_CHANNELS"
+                   "during migration");
+        return;
+    }
     red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_CHANNELS_LIST);
 }
 
@@ -451,7 +461,7 @@ static uint64_t main_channel_handle_migrate_data(RedChannelClient *base,
     return TRUE;
 }
 
-void main_channel_push_init(MainChannelClient *mcc, int connection_id,
+void main_channel_push_init(MainChannelClient *mcc,
     int display_channels_hint, int current_mouse_mode,
     int is_client_mouse_allowed, int multi_media_time,
     int ram_hint)
@@ -459,7 +469,7 @@ void main_channel_push_init(MainChannelClient *mcc, int connection_id,
     PipeItem *item;
 
     item = main_init_item_new(mcc,
-             connection_id, display_channels_hint, current_mouse_mode,
+             mcc->connection_id, display_channels_hint, current_mouse_mode,
              is_client_mouse_allowed, multi_media_time, ram_hint);
     red_channel_client_pipe_add_push(&mcc->base, item);
 }
@@ -612,6 +622,13 @@ static void main_channel_send_item(RedChannelClient *rcc, PipeItem *base)
     MainChannelClient *mcc = SPICE_CONTAINEROF(rcc, MainChannelClient, base);
     SpiceMarshaller *m = red_channel_client_get_marshaller(rcc);
 
+    if (!mcc->init_sent && base->type != SPICE_MSG_MAIN_INIT) {
+        red_printf("Init msg for client %p was not sent yet "
+                   "(client is probably during migration). Ignoring msg type %d",
+                   rcc->client, base->type);
+        main_channel_release_pipe_item(rcc, base, FALSE);
+        return;
+    }
     red_channel_client_init_send_data(rcc, base->type, base);
     switch (base->type) {
         case SPICE_MSG_MAIN_CHANNELS_LIST:
@@ -646,6 +663,7 @@ static void main_channel_send_item(RedChannelClient *rcc, PipeItem *base)
                 mcc->ping_id);
             break;
         case SPICE_MSG_MAIN_INIT:
+            mcc->init_sent = TRUE;
             main_channel_marshall_init(m,
                 SPICE_CONTAINEROF(base, InitPipeItem, base));
             break;
@@ -710,6 +728,25 @@ void main_channel_client_handle_migrate_connected(MainChannelClient *mcc, int su
     }
 }
 
+void main_channel_client_handle_migrate_end(MainChannelClient *mcc)
+{
+    if (!red_client_during_migrate_at_target(mcc->base.client)) {
+        red_printf("unexpected SPICE_MSGC_MIGRATE_END");
+        return;
+    }
+    if (!red_channel_client_test_remote_cap(&mcc->base,
+                                            SPICE_MAIN_CAP_SEMI_SEAMLESS_MIGRATE)) {
+        red_printf("unexpected SPICE_MSGC_MIGRATE_END, "
+                   "client does not support semi-seamless migration");
+            return;
+    }
+    red_client_migrate_complete(mcc->base.client);
+    if (mcc->mig_wait_prev_complete) {
+        red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_BEGIN);
+        mcc->mig_wait_connect = TRUE;
+        mcc->mig_wait_prev_complete = FALSE;
+    }
+}
 static int main_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint16_t type, void *message)
 {
     MainChannel *main_chan = SPICE_CONTAINEROF(rcc->channel, MainChannel, base);
@@ -796,6 +833,9 @@ static int main_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint
     case SPICE_MSGC_MIGRATE_DATA: {
                 }
     case SPICE_MSGC_DISCONNECTING:
+        break;
+    case SPICE_MSGC_MAIN_MIGRATE_END:
+        main_channel_client_handle_migrate_end(mcc);
         break;
     default:
         red_printf("unexpected type %d", type);
@@ -989,8 +1029,13 @@ int main_channel_migrate_connect(MainChannel *main_channel, RedsMigSpice *mig_ta
         MainChannelClient * mcc = SPICE_CONTAINEROF(client_link, MainChannelClient, base.channel_link);
         if (red_channel_client_test_remote_cap(&mcc->base,
                                                SPICE_MAIN_CAP_SEMI_SEAMLESS_MIGRATE)) {
-            red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_BEGIN);
-            mcc->mig_wait_connect = TRUE;
+            if (red_client_during_migrate_at_target(mcc->base.client)) {
+                red_printf("client %p: wait till previous migration completes", mcc->base.client);
+                mcc->mig_wait_prev_complete = TRUE;
+            } else {
+                red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_BEGIN);
+                mcc->mig_wait_connect = TRUE;
+            }
             mcc->mig_connect_ok = FALSE;
             main_channel->num_clients_mig_wait++;
         }
@@ -1011,6 +1056,7 @@ void main_channel_migrate_cancel_wait(MainChannel *main_chan)
             mcc->mig_wait_connect = FALSE;
             mcc->mig_connect_ok = FALSE;
         }
+        mcc->mig_wait_prev_complete = FALSE;
     }
     main_chan->num_clients_mig_wait = 0;
 }

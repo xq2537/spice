@@ -450,13 +450,15 @@ struct RedClient {
     pthread_t thread_id;
 
     int disconnecting;
-
+    int migrated;
 };
 
-RedClient *red_client_new(void);
+RedClient *red_client_new(int migrated);
 MainChannelClient *red_client_get_main(RedClient *client);
 // main should be set once before all the other channels are created
 void red_client_set_main(RedClient *client, MainChannelClient *mcc);
+void red_client_migrate_complete(RedClient *client);
+int red_client_during_migrate_at_target(RedClient *client);
 
 void red_client_migrate(RedClient *client);
 // disconnects all the client's channels (should be called from the client's thread)

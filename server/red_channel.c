@@ -1215,7 +1215,7 @@ void red_channel_client_pipe_remove_and_release(RedChannelClient *rcc,
  * pretty tied together.
  */
 
-RedClient *red_client_new()
+RedClient *red_client_new(int migrated)
 {
     RedClient *client;
 
@@ -1223,6 +1223,7 @@ RedClient *red_client_new()
     ring_init(&client->channels);
     pthread_mutex_init(&client->lock, NULL);
     client->thread_id = pthread_self();
+    client->migrated = migrated;
 
     return client;
 }
@@ -1284,6 +1285,18 @@ MainChannelClient *red_client_get_main(RedClient *client) {
 
 void red_client_set_main(RedClient *client, MainChannelClient *mcc) {
     client->mcc = mcc;
+}
+
+void red_client_migrate_complete(RedClient *client)
+{
+    ASSERT(client->migrated);
+    client->migrated = FALSE;
+    reds_on_client_migrate_complete(client);
+}
+
+int red_client_during_migrate_at_target(RedClient *client)
+{
+    return client->migrated;
 }
 
 /*

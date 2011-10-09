@@ -191,6 +191,18 @@ typedef struct RedsStatValue {
 
 #endif
 
+typedef struct RedsMigPendingLink {
+    RingItem ring_link; // list of links that belongs to the same client
+    SpiceLinkMess *link_msg;
+    RedsStream *stream;
+} RedsMigPendingLink;
+
+typedef struct RedsMigTargetClient {
+    RingItem link;
+    RedClient *client;
+    Ring pending_links;
+} RedsMigTargetClient;
+
 typedef struct RedsState {
     int listen_socket;
     int secure_listen_socket;
@@ -206,7 +218,8 @@ typedef struct RedsState {
     int mig_wait_disconnect;
     int mig_inprogress;
     int expect_migrate;
-    int mig_target;
+    Ring mig_target_clients;
+    int num_mig_target_clients;
     RedsMigSpice *mig_spice;
     int num_of_channels;
     Ring channels;
@@ -219,7 +232,6 @@ typedef struct RedsState {
     SpiceTimer *vdi_port_write_timer;
     int vdi_port_write_timer_started;
 
-    TicketAuthentication taTicket;
     SSL_CTX *ctx;
 
 #ifdef RED_STATISTICS
@@ -295,6 +307,8 @@ struct ChannelSecurityOptions {
 };
 
 static void migrate_timeout(void *opaque);
+static RedsMigTargetClient* reds_mig_target_client_find(RedClient *client);
+static void reds_mig_target_client_free(RedsMigTargetClient *mig_client);
 
 static ChannelSecurityOptions *channels_security = NULL;
 static int default_channel_security =
@@ -593,6 +607,8 @@ static int reds_main_channel_connected(void)
 
 void reds_client_disconnect(RedClient *client)
 {
+    RedsMigTargetClient *mig_client;
+
     if (!client || client->disconnecting) {
         return;
     }
@@ -607,6 +623,10 @@ void reds_client_disconnect(RedClient *client)
     // TODO: we need to handle agent properly for all clients!!!! (e.g., cut and paste, how?)
     // We shouldn't initialize the agent when there are still clients connected
 
+    mig_client = reds_mig_target_client_find(client);
+    if (mig_client) {
+        reds_mig_target_client_free(mig_client);
+    }
     ring_remove(&client->link);
     reds->num_clients--;
     red_client_destroy(client);
@@ -693,14 +713,14 @@ static void reds_update_mouse_mode(void)
 
 static void reds_agent_remove(void)
 {
-    if (!reds->mig_target) {
-        reds_reset_vdp();
-    }
+    // TODO: agent is broken with multiple clients. also need to figure out what to do when
+    // part of the clients are during target migration.
+    reds_reset_vdp();
 
     vdagent = NULL;
     reds_update_mouse_mode();
 
-    if (reds_main_channel_connected() && !reds->mig_target) {
+    if (reds_main_channel_connected()) {
         main_channel_push_agent_disconnected(reds->main_channel);
     }
 }
@@ -740,7 +760,7 @@ static int write_to_vdi_port(void)
     int total = 0;
     int n;
 
-    if (!vdagent || reds->mig_target) {
+    if (!vdagent) {
         return 0;
     }
 
@@ -844,8 +864,8 @@ static int read_from_vdi_port(void)
     }
     inside_call = 1;
 
-    if (reds->mig_target || !vdagent) {
-        // discard data only if we are migrating or vdagent has not been
+    if (!vdagent) {
+        // discard data only if we are migrating (?) or vdagent has not been
         // initialized.
         inside_call = 0;
         return 0;
@@ -931,7 +951,7 @@ void reds_handle_agent_mouse_event(const VDAgentMouseState *mouse_state)
     if (!inputs_inited()) {
         return;
     }
-    if (reds->mig_target || !(ring_item = ring_get_head(&reds->agent_state.internal_bufs))) {
+    if (!(ring_item = ring_get_head(&reds->agent_state.internal_bufs))) {
         reds->pending_mouse_event = TRUE;
         vdi_port_write_timer_start();
         return;
@@ -1346,7 +1366,6 @@ void reds_on_main_receive_migrate_data(MainMigrateData *data, uint8_t *end)
     reds_main_channel_restore_vdi_wqueue(data, pos, end);
     ASSERT(state->num_client_tokens + state->num_tokens == REDS_AGENT_WINDOW_SIZE);
 
-    reds->mig_target = FALSE;
     while (write_to_vdi_port() || read_from_vdi_port());
 }
 
@@ -1486,6 +1505,75 @@ int reds_expects_link_id(uint32_t connection_id)
     return 1;
 }
 
+static void reds_mig_target_client_add(RedClient *client)
+{
+    RedsMigTargetClient *mig_client;
+
+    ASSERT(reds);
+    red_printf("");
+    mig_client = spice_malloc0(sizeof(RedsMigTargetClient));
+    mig_client->client = client;
+    ring_init(&mig_client->pending_links);
+    ring_add(&reds->mig_target_clients, &mig_client->link);
+    reds->num_mig_target_clients++;
+
+}
+
+static RedsMigTargetClient* reds_mig_target_client_find(RedClient *client)
+{
+    RingItem *item;
+
+    RING_FOREACH(item, &reds->mig_target_clients) {
+        RedsMigTargetClient *mig_client;
+
+        mig_client = SPICE_CONTAINEROF(item, RedsMigTargetClient, link);
+        if (mig_client->client == client) {
+            return mig_client;
+        }
+    }
+    return NULL;
+}
+
+static void reds_mig_target_client_add_pending_link(RedsMigTargetClient *client,
+                                                    SpiceLinkMess *link_msg,
+                                                    RedsStream *stream)
+{
+    RedsMigPendingLink *mig_link;
+
+    ASSERT(reds);
+    ASSERT(client);
+    mig_link = spice_malloc0(sizeof(RedsMigPendingLink));
+    mig_link->link_msg = link_msg;
+    mig_link->stream = stream;
+
+    ring_add(&client->pending_links, &mig_link->ring_link);
+}
+
+static void reds_mig_target_client_free(RedsMigTargetClient *mig_client)
+{
+    RingItem *now, *next;
+
+    ring_remove(&mig_client->link);
+    reds->num_mig_target_clients--;
+
+    RING_FOREACH_SAFE(now, next, &mig_client->pending_links) {
+        RedsMigPendingLink *mig_link = SPICE_CONTAINEROF(now, RedsMigPendingLink, ring_link);
+        ring_remove(now);
+        free(mig_link);
+    }
+    free(mig_client);
+}
+
+static void reds_mig_target_client_disconnect_all()
+{
+    RingItem *now, *next;
+
+    RING_FOREACH_SAFE(now, next, &reds->mig_target_clients) {
+        RedsMigTargetClient *mig_client = SPICE_CONTAINEROF(now, RedsMigTargetClient, link);
+        reds_client_disconnect(mig_client->client);
+    }
+}
+
 // TODO: now that main is a separate channel this should
 // actually be joined with reds_handle_other_links, become reds_handle_link
 static void reds_handle_main_link(RedLinkInfo *link)
@@ -1496,6 +1584,7 @@ static void reds_handle_main_link(RedLinkInfo *link)
     uint32_t *caps;
     uint32_t connection_id;
     MainChannelClient *mcc;
+    int mig_target = FALSE;
 
     red_printf("");
     ASSERT(reds->main_channel);
@@ -1509,18 +1598,13 @@ static void reds_handle_main_link(RedLinkInfo *link)
         reds_send_link_result(link, SPICE_LINK_ERR_OK);
         while((connection_id = rand()) == 0);
         reds->agent_state.num_tokens = 0;
-        memcpy(&(reds->taTicket), &taTicket, sizeof(reds->taTicket));
-        reds->mig_target = FALSE;
+        mig_target = FALSE;
     } else {
-        // migration - check if this is one of the expected connection_id's
-        if (!reds_expects_link_id(link_mess->connection_id)) {
-            reds_send_link_result(link, SPICE_LINK_ERR_BAD_CONNECTION_ID);
-            reds_link_free(link);
-            return;
-        }
+        // TODO: make sure link_mess->connection_id is the same
+        // connection id the migration src had (use vmstate to store the connection id)
         reds_send_link_result(link, SPICE_LINK_ERR_OK);
         connection_id = link_mess->connection_id;
-        reds->mig_target = TRUE;
+        mig_target = TRUE;
     }
 
     reds->mig_inprogress = FALSE;
@@ -1534,11 +1618,11 @@ static void reds_handle_main_link(RedLinkInfo *link)
     link->link_mess = NULL;
     reds_link_free(link);
     caps = (uint32_t *)((uint8_t *)link_mess + link_mess->caps_offset);
-    client = red_client_new();
+    client = red_client_new(mig_target);
     ring_add(&reds->clients, &client->link);
     reds->num_clients++;
     mcc = main_channel_link(reds->main_channel, client,
-                            stream, connection_id, reds->mig_target,
+                            stream, connection_id, mig_target,
                             link_mess->num_common_caps,
                             link_mess->num_common_caps ? caps : NULL, link_mess->num_channel_caps,
                             link_mess->num_channel_caps ? caps + link_mess->num_common_caps : NULL);
@@ -1551,9 +1635,10 @@ static void reds_handle_main_link(RedLinkInfo *link)
         reds->agent_state.plug_generation++;
     }
 
-    if (!reds->mig_target) {
-        reds->agent_state.num_client_tokens = REDS_AGENT_WINDOW_SIZE;
-        main_channel_push_init(mcc, connection_id, red_dispatcher_count(),
+    reds->agent_state.num_client_tokens = REDS_AGENT_WINDOW_SIZE;
+
+    if (!mig_target) {
+        main_channel_push_init(mcc, red_dispatcher_count(),
             reds->mouse_mode, reds->is_client_mouse_allowed,
             reds_get_mm_time() - MM_TIME_DELTA,
             red_dispatcher_qxl_ram_size());
@@ -1561,6 +1646,8 @@ static void reds_handle_main_link(RedLinkInfo *link)
         main_channel_client_start_net_test(mcc);
         /* Now that we have a client, forward any pending agent data */
         while (read_from_vdi_port());
+    } else {
+        reds_mig_target_client_add(client);
     }
 }
 
@@ -1614,7 +1701,8 @@ static void reds_channel_do_link(RedChannel *channel, RedClient *client,
     }
 
     caps = (uint32_t *)((uint8_t *)link_msg + link_msg->caps_offset);
-    channel->client_cbs.connect(channel, client, stream, reds->mig_target,
+    channel->client_cbs.connect(channel, client, stream,
+                                red_client_during_migrate_at_target(client),
                                 link_msg->num_common_caps,
                                 link_msg->num_common_caps ? caps : NULL,
                                 link_msg->num_channel_caps,
@@ -1622,11 +1710,55 @@ static void reds_channel_do_link(RedChannel *channel, RedClient *client,
                                 caps + link_msg->num_common_caps : NULL);
 }
 
+void reds_on_client_migrate_complete(RedClient *client)
+{
+    RedsMigTargetClient *mig_client;
+    MainChannelClient *mcc;
+    RingItem *item;
+
+    red_printf("%p", client);
+    mcc = red_client_get_main(client);
+    mig_client = reds_mig_target_client_find(client);
+    if (!mig_client) {
+        red_printf("Error: mig target client was not found");
+        return;
+    }
+
+    // TODO: not doing net test. consider doing it on client_migrate_info
+    main_channel_push_init(mcc, red_dispatcher_count(),
+                           reds->mouse_mode, reds->is_client_mouse_allowed,
+                           reds_get_mm_time() - MM_TIME_DELTA,
+                           red_dispatcher_qxl_ram_size());
+
+    RING_FOREACH(item, &mig_client->pending_links) {
+        RedsMigPendingLink *mig_link;
+        RedChannel *channel;
+
+        mig_link = SPICE_CONTAINEROF(item, RedsMigPendingLink, ring_link);
+        channel = reds_find_channel(mig_link->link_msg->channel_type,
+                                    mig_link->link_msg->channel_id);
+        if (!channel) {
+            red_printf("warning: client %p channel (%d, %d) (type, id) wasn't found",
+                       client,
+                       mig_link->link_msg->channel_type,
+                       mig_link->link_msg->channel_id);
+            continue;
+        }
+        reds_channel_do_link(channel, client, mig_link->link_msg, mig_link->stream);
+    }
+
+    reds_mig_target_client_free(mig_client);
+
+    /* Now that we have a client, forward any pending agent data */
+    while (read_from_vdi_port());
+}
+
 static void reds_handle_other_links(RedLinkInfo *link)
 {
     RedChannel *channel;
     RedClient *client = NULL;
     SpiceLinkMess *link_mess;
+    RedsMigTargetClient *mig_client;
 
     link_mess = link->link_mess;
     if (reds->main_channel) {
@@ -1654,8 +1786,16 @@ static void reds_handle_other_links(RedLinkInfo *link)
     reds_send_link_result(link, SPICE_LINK_ERR_OK);
     reds_show_new_channel(link, link_mess->connection_id);
     reds_stream_remove_watch(link->stream);
-    reds_channel_do_link(channel, client, link_mess, link->stream);
-    free(link_mess);
+
+    mig_client = reds_mig_target_client_find(client);
+    if (red_client_during_migrate_at_target(client)) {
+        ASSERT(mig_client);
+        reds_mig_target_client_add_pending_link(mig_client, link_mess, link->stream);
+    } else {
+        ASSERT(!mig_client);
+        reds_channel_do_link(channel, client, link_mess, link->stream);
+        free(link_mess);
+    }
     link->stream = NULL;
     link->link_mess = NULL;
     reds_link_free(link);
@@ -1683,10 +1823,9 @@ static void reds_handle_ticket(void *opaque)
                         (unsigned char *)password, link->tiTicketing.rsa, RSA_PKCS1_OAEP_PADDING);
 
     if (ticketing_enabled) {
-        int expired = !link->link_mess->connection_id && taTicket.expiration_time < ltime;
-        char *actual_sever_pass = link->link_mess->connection_id ? reds->taTicket.password :
-                                                                   taTicket.password;
-        if (strlen(actual_sever_pass) == 0) {
+        int expired =  taTicket.expiration_time < ltime;
+
+        if (strlen(taTicket.password) == 0) {
             reds_send_link_result(link, SPICE_LINK_ERR_PERMISSION_DENIED);
             red_printf("Ticketing is enabled, but no password is set. "
                        "please set a ticket first");
@@ -1694,7 +1833,7 @@ static void reds_handle_ticket(void *opaque)
             return;
         }
 
-        if (expired || strncmp(password, actual_sever_pass, SPICE_MAX_PASSWORD_LENGTH) != 0) {
+        if (expired || strncmp(password, taTicket.password, SPICE_MAX_PASSWORD_LENGTH) != 0) {
             reds_send_link_result(link, SPICE_LINK_ERR_PERMISSION_DENIED);
             reds_link_free(link);
             return;
@@ -3049,7 +3188,10 @@ static void migrate_timeout(void *opaque)
     red_printf("");
     ASSERT(reds->mig_wait_connect || reds->mig_wait_disconnect);
     if (reds->mig_wait_connect) {
+        /* we will fall back to the switch host scheme when migration completes */
         main_channel_migrate_cancel_wait(reds->main_channel);
+        /* in case part of the client haven't yet completed the previous migration, disconnect them */
+        reds_mig_target_client_disconnect_all();
         reds_mig_cleanup();
     } else {
         reds_mig_disconnect();
@@ -3108,9 +3250,7 @@ static void attach_to_red_agent(SpiceCharDeviceInstance *sin)
     state->read_filter.discard_all = FALSE;
     reds->agent_state.plug_generation++;
 
-    if (!reds->mig_target) {
-        main_channel_push_agent_connected(reds->main_channel);
-    }
+    main_channel_push_agent_connected(reds->main_channel);
 }
 
 SPICE_GNUC_VISIBLE void spice_server_char_device_wakeup(SpiceCharDeviceInstance* sin)
@@ -3413,6 +3553,7 @@ static int do_spice_init(SpiceCoreInterface *core_interface)
     reds->num_clients = 0;
     main_dispatcher_init(core);
     ring_init(&reds->channels);
+    ring_init(&reds->mig_target_clients);
 
     if (!(reds->mig_timer = core->timer_add(migrate_timeout, NULL))) {
         red_error("migration timer create failed");
@@ -3847,7 +3988,7 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_connect(SpiceServer *s, const char* 
 
     reds->expect_migrate = TRUE;
 
-
+    /* main channel will take care of clients that are still during migration (at target)*/
     if (main_channel_migrate_connect(reds->main_channel, reds->mig_spice)) {
         reds_mig_started();
     } else {
