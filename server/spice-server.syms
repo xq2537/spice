@@ -89,5 +89,6 @@ global:
     spice_server_record_set_mute;
     spice_server_record_set_volume;
     spice_server_get_num_clients;
+    spice_server_migrate_connect;
 } SPICE_SERVER_0.8.2;
 

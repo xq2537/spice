@@ -1,3 +1,11 @@
+Major changes in 0.9.2:
+=======================
+* !Development Release!
+* server: semi-seamless migration support (RHBZ 738266)
+* client: semi-seamless migration support (RHBZ 725009, 738270)
+* Various bugfixes / cleanups
+* require spice-protocol >= 0.9.1
+
 Major changes in 0.9.1:
 =======================
 * !Development Release!
