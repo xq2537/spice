@@ -2005,9 +2005,6 @@ static void red_clear_surface_drawables_from_pipes(RedWorker *worker, int surfac
             // in case that the pipe didn't contain any item that is dependent on the surface, but
             // there is one during sending.
             red_wait_outgoing_item(&dcc->common.base);
-            if (dcc) {
-                ASSERT(red_channel_client_no_item_being_sent(&dcc->common.base));
-            }
         }
     }
 }
@@ -10001,6 +9998,8 @@ static void red_wait_outgoing_item(RedChannelClient *rcc)
         // TODO - shutting down the socket but we still need to trigger
         // disconnection. Right now we wait for main channel to error for that.
         red_channel_client_shutdown(rcc);
+    } else {
+        ASSERT(red_channel_client_no_item_being_sent(rcc));
     }
 }
 
@@ -10008,6 +10007,8 @@ static void rcc_shutdown_if_blocked(RedChannelClient *rcc)
 {
     if (red_channel_client_blocked(rcc)) {
         red_channel_client_shutdown(rcc);
+    } else {
+        ASSERT(red_channel_client_no_item_being_sent(rcc));
     }
 }
 
@@ -10032,6 +10033,8 @@ static void red_wait_outgoing_items(RedChannel *channel)
     if (blocked) {
         red_printf("timeout");
         red_channel_apply_clients(channel, rcc_shutdown_if_blocked);
+    } else {
+        ASSERT(red_channel_no_item_being_sent(channel));
     }
 }
 
@@ -10234,7 +10237,6 @@ static inline void red_cursor_reset(RedWorker *worker)
             red_pipes_add_verb(&worker->cursor_channel->common.base, SPICE_MSG_CURSOR_RESET);
         }
         red_wait_outgoing_items(&worker->cursor_channel->common.base);
-        ASSERT(red_channel_no_item_being_sent(&worker->cursor_channel->common.base));
     }
 }
 
