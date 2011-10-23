@@ -7,7 +7,7 @@ Name: spice
 Description: SPICE server library
 Version: @VERSION@
 
-Requires: @SPICE_REQUIRES@
+Requires.private: @SPICE_REQUIRES@
 Libs: -L${libdir} -lspice-server
 Libs.private: @SPICE_NONPKGCONFIG_LIBS@
 Cflags: -I${includedir}/spice-server
