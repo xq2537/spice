@@ -1,0 +1,81 @@
+#ifndef MAIN_DISPATCHER_H
+#define MAIN_DISPATCHER_H
+
+#include <spice.h>
+
+typedef struct Dispatcher Dispatcher;
+
+typedef void (*dispatcher_handle_message)(void *opaque,
+                                          void *payload);
+
+typedef struct DispatcherMessage {
+    size_t size;
+    int ack;
+    dispatcher_handle_message handler;
+} DispatcherMessage;
+
+struct Dispatcher {
+    SpiceCoreInterface *recv_core;
+    int recv_fd;
+    int send_fd;
+    pthread_t self;
+    pthread_mutex_t lock;
+    DispatcherMessage *messages;
+    int stage;  /* message parser stage - sender has no stages */
+    size_t max_message_type;
+    void *payload; /* allocated as max of message sizes */
+    size_t payload_size; /* used to track realloc calls */
+    void *opaque;
+};
+
+/*
+ * dispatcher_send_message
+ * @message_type: message type
+ * @payload:      payload
+ */
+void dispatcher_send_message(Dispatcher *dispatcher, uint32_t message_type,
+                             void *payload);
+
+/*
+ * dispatcher_init
+ * @max_message_type: number of message types. Allows upfront allocation
+ *  of a DispatcherMessage list.
+ * up front, and registration in any order wanted.
+ */
+void dispatcher_init(Dispatcher *dispatcher, size_t max_message_type,
+                     void *opaque);
+
+/*
+ * dispatcher_register_handler
+ * @dispatcher:           dispatcher
+ * @messsage_type:  message type
+ * @handler:        message handler
+ * @size:           message size. Each type has a fixed associated size.
+ * @ack:            send an ack. This is per message type - you can't send the
+ *                  same message type with and without. Register two different
+ *                  messages if that is what you want.
+ */
+void dispatcher_register_handler(Dispatcher *dispatcher, uint32_t message_type,
+                                 dispatcher_handle_message handler, size_t size,
+                                 int ack);
+
+/*
+ *  dispatcher_handle_recv_read
+ *  @dispatcher: Dispatcher instance
+ */
+void dispatcher_handle_recv_read(Dispatcher *);
+
+/*
+ *  dispatcher_get_recv_fd
+ *  @return: receive file descriptor of the dispatcher
+ */
+int dispatcher_get_recv_fd(Dispatcher *);
+
+/*
+ * dispatcher_set_opaque
+ * @dispatcher: Dispatcher instance
+ * @opaque: opaque to use for callbacks
+ */
+void dispatcher_set_opaque(Dispatcher *dispatcher, void *opaque);
+
+#endif //MAIN_DISPATCHER_H

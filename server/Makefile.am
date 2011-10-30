@@ -78,6 +78,8 @@ libspice_server_la_SOURCES =			\
 	red_client_cache.h			\
 	red_client_shared_cache.h		\
 	red_common.h				\
+	dispatcher.c				\
+	dispatcher.h				\
 	red_dispatcher.c			\
 	red_dispatcher.h			\
 	main_dispatcher.c			\
