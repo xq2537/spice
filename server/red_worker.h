@@ -84,6 +84,8 @@ enum {
 
     RED_WORKER_MESSAGE_DISPLAY_CHANNEL_CREATE,
     RED_WORKER_MESSAGE_CURSOR_CHANNEL_CREATE,
+
+    RED_WORKER_MESSAGE_COUNT // LAST
 };
 
 typedef uint32_t RedWorkerMessage;
@@ -102,7 +104,6 @@ typedef struct RedDispatcher RedDispatcher;
 typedef struct WorkerInitData {
     struct QXLInstance *qxl;
     int id;
-    int channel;
     uint32_t *pending;
     uint32_t num_renderers;
     uint32_t renderers[RED_MAX_RENDERERS];
@@ -116,7 +117,7 @@ typedef struct WorkerInitData {
     uint8_t memslot_id_bits;
     uint8_t internal_groupslot_id;
     uint32_t n_surfaces;
-    RedDispatcher *dispatcher;
+    RedDispatcher *red_dispatcher;
 } WorkerInitData;
 
 void *red_worker_main(void *arg);
