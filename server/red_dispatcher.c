@@ -44,6 +44,11 @@ static int num_active_workers = 0;
 
 //volatile
 
+#define DBG_ASYNC(s, ...)   \
+    do {                    \
+        red_printf_debug(2, "ASYNC", s, ##__VA_ARGS__);   \
+    } while (0);
+
 struct AsyncCommand {
     RingItem link;
     RedWorkerMessage message;
@@ -281,6 +286,7 @@ static AsyncCommand *async_command_alloc(RedDispatcher *dispatcher,
     async_command->message = message;
     ring_add(&dispatcher->async_commands, &async_command->link);
     pthread_mutex_unlock(&dispatcher->async_lock);
+    DBG_ASYNC("%p", async_command);
     return async_command;
 }
 
@@ -385,7 +391,7 @@ red_dispatcher_destroy_primary_surface(RedDispatcher *dispatcher,
                                        uint32_t surface_id, int async, uint64_t cookie)
 {
     RedWorkerMessage message;
-    AsyncCommand *cmd;
+    AsyncCommand *cmd = NULL;
 
     if (async) {
         message = RED_WORKER_MESSAGE_DESTROY_PRIMARY_SURFACE_ASYNC;
@@ -429,7 +435,7 @@ red_dispatcher_create_primary_surface(RedDispatcher *dispatcher, uint32_t surfac
                                       QXLDevSurfaceCreate *surface, int async, uint64_t cookie)
 {
     RedWorkerMessage message;
-    AsyncCommand *cmd;
+    AsyncCommand *cmd = NULL;
 
     if (async) {
         message = RED_WORKER_MESSAGE_CREATE_PRIMARY_SURFACE_ASYNC;
@@ -490,7 +496,7 @@ static void red_dispatcher_destroy_surface_wait(RedDispatcher *dispatcher, uint3
                                                 int async, uint64_t cookie)
 {
     RedWorkerMessage message;
-    AsyncCommand *cmd;
+    AsyncCommand *cmd = NULL;
 
     if (async ) {
         message = RED_WORKER_MESSAGE_DESTROY_SURFACE_WAIT_ASYNC;
@@ -835,9 +841,9 @@ void red_dispatcher_async_complete(struct RedDispatcher *dispatcher,
 {
     pthread_mutex_lock(&dispatcher->async_lock);
     ring_remove(&async_command->link);
-    red_printf_debug(2, "%p: cookie %" PRId64, async_command, async_command->cookie);
+    DBG_ASYNC("%p: cookie %" PRId64, async_command, async_command->cookie);
     if (ring_is_empty(&dispatcher->async_commands)) {
-        red_printf_debug(2, "%s: no more async commands", __func__);
+        red_printf_debug(2, "ASYNC", "no more async commands");
     }
     pthread_mutex_unlock(&dispatcher->async_lock);
     switch (async_command->message) {
@@ -918,6 +924,7 @@ RedDispatcher *red_dispatcher_init(QXLInstance *qxl)
     dispatcher = spice_new0(RedDispatcher, 1);
     dispatcher->channel = channels[0];
     ring_init(&dispatcher->async_commands);
+    DBG_ASYNC("dispatcher->async_commands.next %p", dispatcher->async_commands.next);
     init_data.qxl = dispatcher->qxl = qxl;
     init_data.id = qxl->id;
     init_data.channel = channels[1];

@@ -4778,9 +4778,9 @@ static void red_free_some(RedWorker *worker)
     DisplayChannelClient *dcc;
     RingItem *item;
 
-    red_printf_debug(3, "#draw=%d, #red_draw=%d, #glz_draw=%d", worker->drawable_count,
-                                                                worker->red_drawable_count,
-                                                                worker->glz_drawable_count);
+    red_printf_debug(3, "WORKER",
+                     "#draw=%d, #red_draw=%d, #glz_draw=%d", worker->drawable_count,
+                     worker->red_drawable_count, worker->glz_drawable_count);
     WORKER_FOREACH_DCC(worker, item, dcc) {
         GlzSharedDictionary *glz_dict = dcc ? dcc->glz_dict : NULL;
 
@@ -8651,9 +8651,9 @@ static void display_channel_client_on_disconnect(RedChannelClient *rcc)
     if (!red_channel_is_connected(rcc->channel)) {
         red_display_destroy_compress_bufs(display_channel);
     }
-    red_printf_debug(3, "#draw=%d, #red_draw=%d, #glz_draw=%d", worker->drawable_count,
-                                                                worker->red_drawable_count,
-                                                                worker->glz_drawable_count);
+    red_printf_debug(3, "WORKER", "#draw=%d, #red_draw=%d, #glz_draw=%d",
+                     worker->drawable_count, worker->red_drawable_count,
+                     worker->glz_drawable_count);
 }
 
 void red_disconnect_all_display_TODO_remove_me(RedChannel *channel)
@@ -10433,7 +10433,8 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
     case RED_WORKER_MESSAGE_OOM:
         ASSERT(worker->running);
         // streams? but without streams also leak
-        red_printf_debug(1, "OOM1 #draw=%u, #red_draw=%u, #glz_draw=%u current %u pipes %u",
+        red_printf_debug(1, "WORKER",
+                         "OOM1 #draw=%u, #red_draw=%u, #glz_draw=%u current %u pipes %u",
                          worker->drawable_count,
                          worker->red_drawable_count,
                          worker->glz_drawable_count,
@@ -10447,7 +10448,8 @@ static void handle_dev_input(EventListener *listener, uint32_t events)
             red_free_some(worker);
             worker->qxl->st->qif->flush_resources(worker->qxl);
         }
-        red_printf_debug(1, "OOM2 #draw=%u, #red_draw=%u, #glz_draw=%u current %u pipes %u",
+        red_printf_debug(1, "WORKER",
+                         "OOM2 #draw=%u, #red_draw=%u, #glz_draw=%u current %u pipes %u",
                          worker->drawable_count,
                          worker->red_drawable_count,
                          worker->glz_drawable_count,

@@ -65,13 +65,13 @@
     }                                                               \
 } while (0)
 
-#define red_printf_debug(debug, format, ...) do {                   \
+#define red_printf_debug(debug, prefix, format, ...) do {                   \
     static int debug_level = -1;                                    \
     if (debug_level == -1) {                                        \
         debug_level = getenv("SPICE_DEBUG_LEVEL") != NULL ? atoi(getenv("SPICE_DEBUG_LEVEL")) : 0;  \
     }                                                               \
     if (debug <= debug_level) {                                     \
-        printf("%s: " format "\n", __FUNCTION__, ## __VA_ARGS__ );  \
+        printf("%s: %s: " format "\n", prefix, __FUNCTION__, ## __VA_ARGS__ );  \
     }                                                               \
 } while(0)
 

@@ -695,7 +695,7 @@ static void main_channel_release_pipe_item(RedChannelClient *rcc,
         case SPICE_MSG_MAIN_AGENT_DATA: {
             AgentDataPipeItem *data = (AgentDataPipeItem*)base;
             if (!--data->refs->refs) {
-                red_printf_debug(1, "SPICE_MSG_MAIN_AGENT_DATA %p %p, %d",
+                red_printf_debug(1, "MAIN", "SPICE_MSG_MAIN_AGENT_DATA %p %p, %d",
                                  data, data->refs, data->refs->refs);
                 free(data->refs);
                 data->free_data(data->data, data->opaque);
