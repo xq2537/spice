@@ -126,6 +126,9 @@ static int dispatcher_handle_single_read(Dispatcher *dispatcher)
             red_printf("error writing ack for message %d\n", type);
             /* TODO: close socketpair? */
         }
+    } else if (msg->ack == DISPATCHER_ASYNC && dispatcher->handle_async_done) {
+        dispatcher->handle_async_done(dispatcher->opaque, type,
+                                      (void *)payload);
     }
     return 1;
 }
@@ -174,9 +177,17 @@ unlock:
     pthread_mutex_unlock(&dispatcher->lock);
 }
 
+void dispatcher_register_async_done_callback(
+                                        Dispatcher *dispatcher,
+                                        dispatcher_handle_async_done handler)
+{
+    assert(dispatcher->handle_async_done == NULL);
+    dispatcher->handle_async_done = handler;
+}
+
 void dispatcher_register_handler(Dispatcher *dispatcher, uint32_t message_type,
-                                 dispatcher_handle_message handler, size_t size,
-                                 int ack)
+                                 dispatcher_handle_message handler,
+                                 size_t size, int ack)
 {
     DispatcherMessage *msg;
 

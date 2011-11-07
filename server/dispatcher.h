@@ -8,6 +8,11 @@ typedef struct Dispatcher Dispatcher;
 typedef void (*dispatcher_handle_message)(void *opaque,
                                           void *payload);
 
+typedef void (*dispatcher_handle_async_done)(void *opaque,
+                                             uint32_t message_type,
+                                             void *payload);
+
+
 typedef struct DispatcherMessage {
     size_t size;
     int ack;
@@ -26,6 +31,7 @@ struct Dispatcher {
     void *payload; /* allocated as max of message sizes */
     size_t payload_size; /* used to track realloc calls */
     void *opaque;
+    dispatcher_handle_async_done handle_async_done;
 };
 
 /*
@@ -67,6 +73,16 @@ enum {
 void dispatcher_register_handler(Dispatcher *dispatcher, uint32_t message_type,
                                  dispatcher_handle_message handler, size_t size,
                                  int ack);
+
+/*
+ * dispatcher_register_async_done_callback
+ * @dispatcher:     dispatcher
+ * @handler:        callback on the receiver side called *after* the
+ *                  message callback in case ack == DISPATCHER_ASYNC.
+ */
+void dispatcher_register_async_done_callback(
+                                    Dispatcher *dispatcher,
+                                    dispatcher_handle_async_done handler);
 
 /*
  *  dispatcher_handle_recv_read
