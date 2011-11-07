@@ -45,13 +45,22 @@ void dispatcher_send_message(Dispatcher *dispatcher, uint32_t message_type,
 void dispatcher_init(Dispatcher *dispatcher, size_t max_message_type,
                      void *opaque);
 
+enum {
+    DISPATCHER_NONE = 0,
+    DISPATCHER_ACK,
+    DISPATCHER_ASYNC
+};
+
 /*
  * dispatcher_register_handler
- * @dispatcher:           dispatcher
+ * @dispatcher:     dispatcher
  * @messsage_type:  message type
  * @handler:        message handler
  * @size:           message size. Each type has a fixed associated size.
- * @ack:            send an ack. This is per message type - you can't send the
+ * @ack:            One of DISPATCHER_NONE, DISPATCHER_ACK, DISPATCHER_ASYNC.
+ *                  DISPATCHER_NONE - only send the message
+ *                  DISPATCHER_ACK - send an ack after the message
+ *                  DISPATCHER_ASYNC - call send an ack. This is per message type - you can't send the
  *                  same message type with and without. Register two different
  *                  messages if that is what you want.
  */

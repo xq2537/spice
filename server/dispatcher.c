@@ -120,10 +120,12 @@ static int dispatcher_handle_single_read(Dispatcher *dispatcher)
     } else {
         red_printf("error: no handler for message type %d\n", type);
     }
-    if (msg->ack && write_safe(dispatcher->recv_fd,
-                               &ack, sizeof(ack)) == -1) {
-        red_printf("error writing ack for message %d\n", type);
-        /* TODO: close socketpair? */
+    if (msg->ack == DISPATCHER_ACK) {
+        if (write_safe(dispatcher->recv_fd,
+                       &ack, sizeof(ack)) == -1) {
+            red_printf("error writing ack for message %d\n", type);
+            /* TODO: close socketpair? */
+        }
     }
     return 1;
 }
@@ -159,7 +161,7 @@ void dispatcher_send_message(Dispatcher *dispatcher, uint32_t message_type,
                    message_type);
         goto unlock;
     }
-    if (msg->ack) {
+    if (msg->ack == DISPATCHER_ACK) {
         if (read_safe(send_fd, &ack, sizeof(ack), 1) == -1) {
             red_printf("error: failed to read ack");
         } else if (ack != ACK) {
