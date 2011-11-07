@@ -47,7 +47,7 @@ static int num_active_workers = 0;
 #define DBG_ASYNC(s, ...)   \
     do {                    \
         red_printf_debug(2, "ASYNC", s, ##__VA_ARGS__);   \
-    } while (0);
+    } while (0)
 
 struct AsyncCommand {
     RingItem link;
