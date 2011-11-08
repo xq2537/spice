@@ -82,6 +82,11 @@ global:
     spice_qxl_flush_surfaces_async;
 } SPICE_SERVER_0.8.1;
 
+SPICE_SERVER_0.8.3 {
+global:
+    spice_server_migrate_connect;
+} SPICE_SERVER_0.8.2;
+
 SPICE_SERVER_0.10.0 {
 global:
     spice_server_playback_set_mute;
@@ -89,6 +94,5 @@ global:
     spice_server_record_set_mute;
     spice_server_record_set_volume;
     spice_server_get_num_clients;
-    spice_server_migrate_connect;
-} SPICE_SERVER_0.8.2;
+} SPICE_SERVER_0.8.3;
 
