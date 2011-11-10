@@ -19,6 +19,7 @@
 #include <config.h>
 #endif
 
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -802,13 +803,14 @@ static int main_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint
                 if (roundtrip <= mcc->latency) {
                     // probably high load on client or server result with incorrect values
                     mcc->latency = 0;
-                    red_printf("net test: invalid values, latency %lu roundtrip %lu. assuming high"
+                    red_printf("net test: invalid values, latency %" PRIu64
+                               " roundtrip %" PRIu64 ". assuming high"
                                "bandwidth", mcc->latency, roundtrip);
                     break;
                 }
                 mcc->bitrate_per_sec = (uint64_t)(NET_TEST_BYTES * 8) * 1000000
                                         / (roundtrip - mcc->latency);
-                red_printf("net test: latency %f ms, bitrate %lu bps (%f Mbps)%s",
+                red_printf("net test: latency %f ms, bitrate %"PRIu64" bps (%f Mbps)%s",
                            (double)mcc->latency / 1000,
                            mcc->bitrate_per_sec,
                            (double)mcc->bitrate_per_sec / 1024 / 1024,
