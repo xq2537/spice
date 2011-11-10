@@ -104,7 +104,7 @@ typedef struct {
   struct jpeg_destination_mgr pub; /* public fields */
 
   unsigned char ** outbuffer;	/* target buffer */
-  unsigned long * outsize;
+  size_t * outsize;
   unsigned char * newbuffer;	/* newly allocated buffer */
   uint8_t * buffer;		/* start of buffer */
   size_t bufsize;
@@ -164,7 +164,7 @@ static void term_mem_destination(j_compress_ptr cinfo)
 
 static void
 spice_jpeg_mem_dest(j_compress_ptr cinfo,
-                    unsigned char ** outbuffer, unsigned long * outsize)
+                    unsigned char ** outbuffer, size_t * outsize)
 {
   mem_destination_mgr *dest;
 #define OUTPUT_BUF_SIZE  4096	/* choose an efficiently fwrite'able size */
