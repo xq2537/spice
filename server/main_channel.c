@@ -213,13 +213,18 @@ static PipeItem *main_ping_item_new(MainChannelClient *mcc, int size)
     return &item->base;
 }
 
+typedef struct MainTokensItemInfo {
+    uint32_t num_tokens;
+} MainTokensItemInfo;
+
 static PipeItem *main_tokens_item_new(RedChannelClient *rcc, void *data, int num)
 {
     TokensPipeItem *item = spice_malloc(sizeof(TokensPipeItem));
+    MainTokensItemInfo *init = data;
 
     red_channel_pipe_item_init(rcc->channel, &item->base,
                                SPICE_MSG_MAIN_AGENT_TOKEN);
-    item->tokens = (uint64_t)data;
+    item->tokens = init->num_tokens;
     return &item->base;
 }
 
@@ -387,8 +392,10 @@ static void main_channel_marshall_agent_disconnected(SpiceMarshaller *m)
 // TODO: make this targeted (requires change to agent token accounting)
 void main_channel_push_tokens(MainChannel *main_chan, uint32_t num_tokens)
 {
+    MainTokensItemInfo init = {.num_tokens = num_tokens};
+
     red_channel_pipes_new_add_push(&main_chan->base,
-        main_tokens_item_new, (void*)(uint64_t)num_tokens);
+        main_tokens_item_new, &init);
 }
 
 static void main_channel_marshall_tokens(SpiceMarshaller *m, uint32_t num_tokens)
