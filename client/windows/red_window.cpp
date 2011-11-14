@@ -52,6 +52,33 @@ static inline int to_red_mouse_state(WPARAM wParam)
            ((wParam & MK_RBUTTON) ? SPICE_MOUSE_BUTTON_MASK_RIGHT : 0);
 }
 
+// Return true if VK_RCONTROL is followed by a VK_RMENU with the same timestamp.
+static bool is_fake_ctrl(UINT message, WPARAM wParam, LPARAM lParam)
+{
+    if ((wParam == VK_CONTROL) && ((HIWORD (lParam) & KF_EXTENDED) == 0)) {
+        UINT next_peek;
+        if (message == WM_KEYDOWN) {
+            next_peek = WM_KEYDOWN;
+        } else if (message == WM_SYSKEYUP) {
+            next_peek = WM_KEYUP;
+        } else {
+            next_peek = WM_NULL;
+        }
+        if (next_peek != WM_NULL) {
+            MSG next_msg;
+            LONG time = GetMessageTime();
+            BOOL msg_exist = PeekMessage(&next_msg, NULL,
+                next_peek, next_peek, PM_NOREMOVE);
+            if ((msg_exist == TRUE) && (next_msg.time == time) &&
+                (next_msg.wParam == VK_MENU) &&
+                (HIWORD (next_msg.lParam) & KF_EXTENDED)) {
+                    return true;
+            }
+        }
+    }
+    return false;
+}
+
 static inline RedKey translate_key(UINT message, WPARAM wParam, LPARAM lParam)
 {
     uint32_t scan = HIWORD(lParam) & 0xff;
@@ -74,6 +101,13 @@ static inline RedKey translate_key(UINT message, WPARAM wParam, LPARAM lParam)
             return REDKEY_INVALID; // prevent double key (VK_PROCESSKEY + VK_HANJA)
         } else if (scan == 0xf2) {
             return REDKEY_KOREAN_HANGUL;
+        }
+        break;
+    case VK_CONTROL:
+        // Ignore the fake right ctrl message which is send when alt-gr is
+        // pressed when using a non-US keyboard layout.
+        if (is_fake_ctrl(message, wParam, lParam)) {
+            return REDKEY_INVALID;
         }
         break;
     default:
