@@ -52,12 +52,13 @@ static inline int to_red_mouse_state(WPARAM wParam)
            ((wParam & MK_RBUTTON) ? SPICE_MOUSE_BUTTON_MASK_RIGHT : 0);
 }
 
-static inline RedKey translate_key(int virtual_key, uint32_t scan, bool escape)
+static inline RedKey translate_key(UINT message, WPARAM wParam, LPARAM lParam)
 {
+    uint32_t scan = HIWORD(lParam) & 0xff;
     if (scan == 0) {
         return REDKEY_INVALID;
     }
-    switch (virtual_key) {
+    switch (wParam) {
     case VK_PAUSE:
         return REDKEY_PAUSE;
     case VK_SNAPSHOT:
@@ -74,13 +75,16 @@ static inline RedKey translate_key(int virtual_key, uint32_t scan, bool escape)
         } else if (scan == 0xf2) {
             return REDKEY_KOREAN_HANGUL;
         }
+        break;
     default:
-        //todo: always use vitrtual key
-        if (escape) {
-            scan += REDKEY_ESCAPE_BASE;
-        }
-        return (RedKey)scan;
+        break;
     }
+    // TODO: always use virtual key
+    bool extended = ((HIWORD (lParam) & KF_EXTENDED) != 0);
+    if (extended) {
+        scan += REDKEY_ESCAPE_BASE;
+    }
+    return (RedKey)scan;
 }
 
 static inline void send_filtered_keys(RedWindow* window)
@@ -214,7 +218,7 @@ LRESULT CALLBACK RedWindow_p::WindowProc(HWND hWnd, UINT message, WPARAM wParam,
         break;
     case WM_SYSKEYDOWN:
     case WM_KEYDOWN: {
-        RedKey key = translate_key(wParam, HIWORD(lParam) & 0xff, (lParam & (1 << 24)) != 0);
+        RedKey key = translate_key(message, wParam, lParam);
         window->get_listener().on_key_press(key);
 
         BYTE key_state[256];
@@ -237,7 +241,7 @@ LRESULT CALLBACK RedWindow_p::WindowProc(HWND hWnd, UINT message, WPARAM wParam,
     }
     case WM_SYSKEYUP:
     case WM_KEYUP: {
-        RedKey key = translate_key(wParam, HIWORD(lParam) & 0xff, (lParam & (1 << 24)) != 0);
+        RedKey key = translate_key(message, wParam, lParam);
         window->get_listener().on_key_release(key);
         break;
     }
@@ -1049,8 +1053,7 @@ static LRESULT CALLBACK MessageFilterProc(int nCode, WPARAM wParam, LPARAM lPara
         switch (msg->message) {
         case WM_SYSKEYUP:
         case WM_KEYUP: {
-            RedKey key = translate_key(msg->wParam, HIWORD(msg->lParam) & 0xff,
-                                       (msg->lParam & (1 << 24)) != 0);
+            RedKey key = translate_key(msg->message, wParam, lParam);
             filtered_up_keys.push_back(key);
             break;
         }
