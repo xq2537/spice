@@ -6,7 +6,6 @@ INCLUDES = \
 	-I$(top_srcdir)				\
 	-I$(top_srcdir)/common			\
 	-DRED_STATISTICS			\
-	$(Z_LIBS)				\
 	$(CELT051_CFLAGS)			\
 	$(PIXMAN_CFLAGS)			\
 	$(PROTOCOL_CFLAGS)			\
@@ -48,6 +47,7 @@ libspice_server_la_LIBADD =				\
 	$(SASL_LIBS)					\
 	$(SLIRP_LIBS)					\
 	$(SSL_LIBS)					\
+	$(Z_LIBS)					\
 	$(NULL)
 
 libspice_server_la_SOURCES =			\
