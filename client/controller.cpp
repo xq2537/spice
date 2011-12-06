@@ -216,7 +216,7 @@ bool ControllerConnection::read_msgs()
         pos += hdr->size;
     }
     if (nread > 0 && pos != _read_buf) {
-        memcpy(_read_buf, pos, nread);
+        memmove(_read_buf, pos, nread);
     }
     _read_pos = _read_buf + nread;
     return true;
