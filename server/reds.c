@@ -2729,18 +2729,12 @@ error:
 }
 
 
-static void reds_accept_ssl_connection(int fd, int event, void *data)
+static RedLinkInfo *reds_init_client_ssl_connection(int socket)
 {
     RedLinkInfo *link;
     int return_code;
     int ssl_error;
     BIO *sbio;
-    int socket;
-
-    if ((socket = accept(reds->secure_listen_socket, NULL, 0)) == -1) {
-        red_printf("accept failed, %s", strerror(errno));
-        return;
-    }
 
     link = reds_init_client_connection(socket);
     if (link == NULL)
@@ -2768,7 +2762,7 @@ static void reds_accept_ssl_connection(int fd, int event, void *data)
     return_code = SSL_accept(link->stream->ssl);
     if (return_code == 1) {
         reds_handle_new_link(link);
-        return;
+        return link;
     }
 
     ssl_error = SSL_get_error(link->stream->ssl, return_code);
@@ -2778,7 +2772,7 @@ static void reds_accept_ssl_connection(int fd, int event, void *data)
             SPICE_WATCH_EVENT_READ : SPICE_WATCH_EVENT_WRITE;
         link->stream->watch = core->watch_add(link->stream->socket, eventmask,
                                             reds_handle_ssl_accept, link);
-        return;
+        return link;
     }
 
     ERR_print_errors_fp(stderr);
@@ -2786,11 +2780,28 @@ static void reds_accept_ssl_connection(int fd, int event, void *data)
     SSL_free(link->stream->ssl);
 
 error:
-    close(socket);
     free(link->stream);
     BN_free(link->tiTicketing.bn);
     free(link);
+    return NULL;
 }
+
+static void reds_accept_ssl_connection(int fd, int event, void *data)
+{
+    RedLinkInfo *link;
+    int socket;
+
+    if ((socket = accept(reds->secure_listen_socket, NULL, 0)) == -1) {
+        red_printf("accept failed, %s", strerror(errno));
+        return;
+    }
+
+    if (!(link = reds_init_client_ssl_connection(socket))) {
+        close(socket);
+        return;
+    }
+}
+
 
 static void reds_accept(int fd, int event, void *data)
 {
