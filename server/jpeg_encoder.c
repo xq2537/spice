@@ -145,7 +145,7 @@ static void convert_BGRX32_to_RGB24(uint8_t *line, int width, uint8_t **out_line
     uint8_t *out_pix;
     int x;
     
-	ASSERT(out_line && *out_line);
+        ASSERT(out_line && *out_line);
 
     out_pix = *out_line;
 

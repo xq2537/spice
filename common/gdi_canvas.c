@@ -580,15 +580,15 @@ static uint8_t *create_bitmap(HBITMAP *bitmap, HBITMAP *prev_bitmap, HDC *dc,
 }
 
 static uint8_t *create_bitmap_from_pixman(HBITMAP *bitmap, HBITMAP *prev_bitmap, HDC *dc,
-										   pixman_image_t *surface, int rotate)
+                                          pixman_image_t *surface, int rotate)
 {
     return create_bitmap(bitmap, prev_bitmap, dc,
                          (uint8_t*)pixman_image_get_data(surface),
-						 pixman_image_get_width(surface),
-						 pixman_image_get_height(surface),
-						 pixman_image_get_stride(surface),
-						 spice_pixman_image_get_bpp(surface),
-						 rotate);
+                         pixman_image_get_width(surface),
+                         pixman_image_get_height(surface),
+                         pixman_image_get_stride(surface),
+                         spice_pixman_image_get_bpp(surface),
+                         rotate);
 }
 
 
@@ -798,17 +798,17 @@ static struct BitmapData get_mask_bitmap(struct GdiCanvas *canvas, struct SpiceQ
 
     gdi_surface = (GdiCanvas *)canvas_get_surface_mask(&canvas->base, mask->bitmap);
     if (gdi_surface) {
-        	HBITMAP _bitmap;
+        HBITMAP _bitmap;
 
-            _bitmap = (HBITMAP)GetCurrentObject(gdi_surface->dc, OBJ_BITMAP);
-            if (!_bitmap) {
-                CANVAS_ERROR ("GetCurrentObject failed");
-            }
-            bitmap.dc = gdi_surface->dc;
-            bitmap.hbitmap = _bitmap;
-            bitmap.prev_hbitmap = (HBITMAP)0;
-            bitmap.cache = 0;
-            bitmap.from_surface = 1;
+        _bitmap = (HBITMAP)GetCurrentObject(gdi_surface->dc, OBJ_BITMAP);
+        if (!_bitmap) {
+            CANVAS_ERROR ("GetCurrentObject failed");
+        }
+        bitmap.dc = gdi_surface->dc;
+        bitmap.hbitmap = _bitmap;
+        bitmap.prev_hbitmap = (HBITMAP)0;
+        bitmap.cache = 0;
+        bitmap.from_surface = 1;
     } else {
     
         if (!(surface = canvas_get_mask(&canvas->base, mask, NULL))) {
@@ -1149,10 +1149,10 @@ static void gdi_canvas_put_image(SpiceCanvas *spice_canvas, HDC dc, const SpiceR
         gdi_draw_bitmap_redrop(canvas->dc, &src, dest, dc,
                                NULL, SPICE_ROPD_OP_PUT, 0);
     } else {
-		pixman_image_t *image = pixman_image_create_bits(PIXMAN_a8r8g8b8, src_width, src_height, 
-			                                             (uint32_t *)src_data, src_stride);
+        pixman_image_t *image = pixman_image_create_bits(PIXMAN_a8r8g8b8, src_width, src_height, 
+                                                         (uint32_t *)src_data, src_stride);
         gdi_draw_image(canvas->dc, &src, dest, image, NULL, SPICE_ROPD_OP_PUT, 0);
-		pixman_image_unref(image);
+        pixman_image_unref(image);
     }
 }
 
@@ -1244,7 +1244,7 @@ static void gdi_draw_bitmap_alpha(HDC dest_dc, const SpiceRect *src, const Spice
 }
 
 static void gdi_draw_image_alpha(HDC dest_dc, const SpiceRect *src, const SpiceRect *dest,
-								 pixman_image_t *image, uint8_t alpha,
+                                 pixman_image_t *image, uint8_t alpha,
                                  int rotate, int use_bitmap_alpha)
 {
     HDC dc;
@@ -1411,7 +1411,7 @@ static void gdi_canvas_draw_blend(SpiceCanvas *spice_canvas, SpiceRect *bbox, Sp
             ReleaseMutex(pixman_data->mutex);
         } else {
             gdi_draw_image(canvas->dc, &blend->src_area, bbox, surface,
-				           &bitmapmask, blend->rop_descriptor, 0);
+                           &bitmapmask, blend->rop_descriptor, 0);
         }
 
         pixman_image_unref(surface);

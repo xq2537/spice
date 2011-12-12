@@ -928,7 +928,7 @@ pixman_format_code_t spice_surface_format_to_pixman(uint32_t surface_format)
         abort();
         break;
     }
-	return (pixman_format_code_t)0; /* Not reached */
+        return (pixman_format_code_t)0; /* Not reached */
 }
 
 /* Returns the "spice native" pixman version of a specific bitmap format.

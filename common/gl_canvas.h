@@ -38,7 +38,7 @@ SpiceCanvas *gl_canvas_create(int width, int height, uint32_t format
 #elif defined(SW_CANVAS_IMAGE_CACHE)
                            , SpiceImageCache *bits_cache
 #endif
-			   , SpiceImageSurfaces *surfaces
+                           , SpiceImageSurfaces *surfaces
                            , SpiceGlzDecoder *glz_decoder
                            , SpiceJpegDecoder *jpeg_decoder
                            , SpiceZlibDecoder *zlib_decoder
