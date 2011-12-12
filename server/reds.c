@@ -2687,18 +2687,12 @@ static void reds_handle_ssl_accept(int fd, int event, void *data)
     reds_handle_new_link(link);
 }
 
-static RedLinkInfo *__reds_accept_connection(int listen_socket)
+static RedLinkInfo *reds_init_client_connection(int socket)
 {
     RedLinkInfo *link;
     RedsStream *stream;
     int delay_val = 1;
     int flags;
-    int socket;
-
-    if ((socket = accept(listen_socket, NULL, 0)) == -1) {
-        red_printf("accept failed, %s", strerror(errno));
-        return NULL;
-    }
 
     if ((flags = fcntl(socket, F_GETFL)) == -1) {
         red_printf("accept failed, %s", strerror(errno));
@@ -2731,8 +2725,6 @@ static RedLinkInfo *__reds_accept_connection(int listen_socket)
     return link;
 
 error:
-    close(socket);
-
     return NULL;
 }
 
@@ -2743,11 +2735,16 @@ static void reds_accept_ssl_connection(int fd, int event, void *data)
     int return_code;
     int ssl_error;
     BIO *sbio;
+    int socket;
 
-    link = __reds_accept_connection(reds->secure_listen_socket);
-    if (link == NULL) {
+    if ((socket = accept(reds->secure_listen_socket, NULL, 0)) == -1) {
+        red_printf("accept failed, %s", strerror(errno));
         return;
     }
+
+    link = reds_init_client_connection(socket);
+    if (link == NULL)
+        goto error;
 
     // Handle SSL handshaking
     if (!(sbio = BIO_new_socket(link->stream->socket, BIO_NOCLOSE))) {
@@ -2789,7 +2786,7 @@ static void reds_accept_ssl_connection(int fd, int event, void *data)
     SSL_free(link->stream->ssl);
 
 error:
-    close(link->stream->socket);
+    close(socket);
     free(link->stream);
     BN_free(link->tiTicketing.bn);
     free(link);
@@ -2799,9 +2796,17 @@ static void reds_accept(int fd, int event, void *data)
 {
     RedLinkInfo *link;
     RedsStream *stream;
+    int socket;
 
-    if (!(link = __reds_accept_connection(reds->listen_socket))) {
+    if ((socket = accept(reds->listen_socket, NULL, 0)) == -1) {
+        red_printf("accept failed, %s", strerror(errno));
+        return;
+    }
+
+
+    if (!(link = reds_init_client_connection(socket))) {
         red_printf("accept failed");
+        close(socket);
         return;
     }
 
