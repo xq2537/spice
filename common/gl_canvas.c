@@ -870,9 +870,7 @@ static void gl_canvas_destroy(SpiceCanvas *spice_canvas)
     }
     canvas_base_destroy(&canvas->base);
     glc_destroy(canvas->glc, canvas->textures_lost);
-    if (canvas->private_data) {
-        free(canvas->private_data);
-    }
+    free(canvas->private_data);
     free(canvas);
 }
 

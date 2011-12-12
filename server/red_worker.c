@@ -2472,9 +2472,7 @@ static void red_display_release_stream_clip(RedWorker *worker, StreamClipItem *i
 {
     if (!--item->refs) {
         red_display_release_stream(worker, item->stream_agent);
-        if (item->rects) {
-            free(item->rects);
-        }
+        free(item->rects);
         free(item);
     }
 }

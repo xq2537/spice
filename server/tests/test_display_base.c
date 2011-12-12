@@ -29,9 +29,7 @@ static void test_spice_destroy_update(SimpleSpiceUpdate *update)
     if (!update) {
         return;
     }
-    if (update->bitmap) {
-        free(update->bitmap);
-    }
+    free(update->bitmap);
     free(update);
 }
 

@@ -1773,9 +1773,7 @@ static void gdi_canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox, S
     }
 #endif
 
-    if (user_style) {
-        free(user_style);
-    }
+    free(user_style);
 }
 
 static void gdi_canvas_clear(SpiceCanvas *spice_canvas)

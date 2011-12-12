@@ -51,9 +51,7 @@ static void release_data(pixman_image_t *image, void *release_data)
         gdi_handlers--;
     }
 #endif
-    if (data->data) {
-        free(data->data);
-    }
+    free(data->data);
 
     free(data);
 }

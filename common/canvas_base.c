@@ -749,9 +749,7 @@ static pixman_image_t *canvas_get_lz(CanvasBase *canvas, SpiceImage *image, int 
     int free_palette;
 
     if (setjmp(lz_data->jmp_env)) {
-        if (decomp_buf) {
-            free(decomp_buf);
-        }
+        free(decomp_buf);
         CANVAS_ERROR("lz error, %s", lz_data->message_buf);
     }
 
@@ -3134,9 +3132,7 @@ static void canvas_draw_stroke(SpiceCanvas *spice_canvas, SpiceRect *bbox,
 
     stroke_lines_draw(&lines, (lineGC *)&gc, dashed);
 
-    if (gc.base.dash) {
-        free(gc.base.dash);
-    }
+    free(gc.base.dash);
     stroke_lines_free(&lines);
 
     if (!gc.solid && gc.tile && !surface_canvas) {

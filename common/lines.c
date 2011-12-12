@@ -580,8 +580,7 @@ miAppendSpans (SpanGroup * spanGroup, SpanGroup * otherGroup, Spans * spans)
 static void
 miFreeSpanGroup (SpanGroup * spanGroup)
 {
-    if (spanGroup->group != NULL)
-        xfree (spanGroup->group);
+    xfree (spanGroup->group);
 }
 
 static void
@@ -776,10 +775,8 @@ miFillUniqueSpanGroup (GCPtr pGC, SpanGroup * spanGroup, Boolean foreground)
         ysizes = (int *)xalloc (ylength * sizeof (int));
 
         if (!yspans || !ysizes) {
-            if (yspans)
-                xfree (yspans);
-            if (ysizes)
-                xfree (ysizes);
+            xfree (yspans);
+            xfree (ysizes);
             miDisposeSpanGroup (spanGroup);
             return;
         }
@@ -849,10 +846,8 @@ miFillUniqueSpanGroup (GCPtr pGC, SpanGroup * spanGroup, Boolean foreground)
             }
             xfree (yspans);
             xfree (ysizes);
-            if (points)
-                xfree (points);
-            if (widths)
-                xfree (widths);
+            xfree (points);
+            xfree (widths);
             return;
         }
         count = 0;

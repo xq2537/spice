@@ -1166,9 +1166,7 @@ static void canvas_destroy(SpiceCanvas *spice_canvas)
     }
     pixman_image_unref(canvas->image);
     canvas_base_destroy(&canvas->base);
-    if (canvas->private_data) {
-        free(canvas->private_data);
-    }
+    free(canvas->private_data);
     free(canvas);
 }
 
