@@ -2736,22 +2736,6 @@ error:
     return NULL;
 }
 
-static RedLinkInfo *reds_accept_connection(int listen_socket)
-{
-    RedLinkInfo *link;
-    RedsStream *stream;
-
-    if (!(link = __reds_accept_connection(listen_socket))) {
-        return NULL;
-    }
-
-    stream = link->stream;
-    stream->read = stream_read_cb;
-    stream->write = stream_write_cb;
-    stream->writev = stream_writev_cb;
-
-    return link;
-}
 
 static void reds_accept_ssl_connection(int fd, int event, void *data)
 {
@@ -2814,12 +2798,18 @@ error:
 static void reds_accept(int fd, int event, void *data)
 {
     RedLinkInfo *link;
+    RedsStream *stream;
 
-    link = reds_accept_connection(reds->listen_socket);
-    if (link == NULL) {
+    if (!(link = __reds_accept_connection(reds->listen_socket))) {
         red_printf("accept failed");
         return;
     }
+
+    stream = link->stream;
+    stream->read = stream_read_cb;
+    stream->write = stream_write_cb;
+    stream->writev = stream_writev_cb;
+
     reds_handle_new_link(link);
 }
 
