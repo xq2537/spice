@@ -466,8 +466,10 @@ static int inputs_channel_config_socket(RedChannelClient *rcc)
 
     if (setsockopt(stream->socket, IPPROTO_TCP, TCP_NODELAY,
             &delay_val, sizeof(delay_val)) == -1) {
-        red_printf("setsockopt failed, %s", strerror(errno));
-        return FALSE;
+        if (errno != ENOTSUP) {
+            red_printf("setsockopt failed, %s", strerror(errno));
+            return FALSE;
+        }
     }
 
     if ((flags = fcntl(stream->socket, F_GETFL)) == -1 ||
