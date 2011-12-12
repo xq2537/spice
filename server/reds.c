@@ -263,6 +263,7 @@ typedef struct RedLinkInfo {
     int mess_pos;
     TicketInfo tiTicketing;
     SpiceLinkAuthMechanism auth_mechanism;
+    int skip_auth;
 } RedLinkInfo;
 
 typedef struct VDIPortBuf VDIPortBuf;
@@ -1387,9 +1388,9 @@ static int sync_write(RedsStream *stream, const void *in_buf, size_t n)
     return TRUE;
 }
 
-static void reds_channel_init_auth_caps(RedChannel *channel)
+static void reds_channel_init_auth_caps(RedLinkInfo *link, RedChannel *channel)
 {
-    if (sasl_enabled) {
+    if (sasl_enabled && !link->skip_auth) {
         red_channel_set_common_cap(channel, SPICE_COMMON_CAP_AUTH_SASL);
     } else {
         red_channel_set_common_cap(channel, SPICE_COMMON_CAP_AUTH_SPICE);
@@ -1421,7 +1422,7 @@ static int reds_send_link_ack(RedLinkInfo *link)
         channel = &reds->main_channel->base;
     }
 
-    reds_channel_init_auth_caps(channel); /* make sure common caps are set */
+    reds_channel_init_auth_caps(link, channel); /* make sure common caps are set */
 
     channel_caps = &channel->local_caps;
     ack.num_common_caps = channel_caps->num_common_caps;
@@ -1822,7 +1823,7 @@ static void reds_handle_ticket(void *opaque)
                         link->tiTicketing.encrypted_ticket.encrypted_data,
                         (unsigned char *)password, link->tiTicketing.rsa, RSA_PKCS1_OAEP_PADDING);
 
-    if (ticketing_enabled) {
+    if (ticketing_enabled && !link->skip_auth) {
         int expired =  taTicket.expiration_time < ltime;
 
         if (strlen(taTicket.password) == 0) {
@@ -2584,7 +2585,7 @@ static void reds_handle_read_link_done(void *opaque)
     }
 
     if (!auth_selection) {
-        if (sasl_enabled) {
+        if (sasl_enabled && !link->skip_auth) {
             red_printf("SASL enabled, but peer supports only spice authentication");
             reds_send_link_error(link, SPICE_LINK_ERR_VERSION_MISMATCH);
             return;
@@ -2812,12 +2813,12 @@ static void reds_accept(int fd, int event, void *data)
         return;
     }
 
-    if (spice_server_add_client(reds, socket) < 0)
+    if (spice_server_add_client(reds, socket, 0) < 0)
         close(socket);
 }
 
 
-SPICE_GNUC_VISIBLE int spice_server_add_client(SpiceServer *s, int socket)
+SPICE_GNUC_VISIBLE int spice_server_add_client(SpiceServer *s, int socket, int skip_auth)
 {
     RedLinkInfo *link;
     RedsStream *stream;
@@ -2827,6 +2828,8 @@ SPICE_GNUC_VISIBLE int spice_server_add_client(SpiceServer *s, int socket)
         red_printf("accept failed");
         return -1;
     }
+
+    link->skip_auth = skip_auth;
 
     stream = link->stream;
     stream->read = stream_read_cb;
@@ -2838,7 +2841,7 @@ SPICE_GNUC_VISIBLE int spice_server_add_client(SpiceServer *s, int socket)
 }
 
 
-SPICE_GNUC_VISIBLE int spice_server_add_ssl_client(SpiceServer *s, int socket)
+SPICE_GNUC_VISIBLE int spice_server_add_ssl_client(SpiceServer *s, int socket, int skip_auth)
 {
     RedLinkInfo *link;
 
@@ -2846,6 +2849,8 @@ SPICE_GNUC_VISIBLE int spice_server_add_ssl_client(SpiceServer *s, int socket)
     if (!(link = reds_init_client_ssl_connection(socket))) {
         return -1;
     }
+
+    link->skip_auth = skip_auth;
     return 0;
 }
 

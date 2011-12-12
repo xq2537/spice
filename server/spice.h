@@ -425,8 +425,8 @@ int spice_server_set_tls(SpiceServer *s, int port,
                          const char *private_key_file, const char *key_passwd,
                          const char *dh_key_file, const char *ciphersuite);
 
-int spice_server_add_client(SpiceServer *s, int socket);
-int spice_server_add_ssl_client(SpiceServer *s, int socket);
+int spice_server_add_client(SpiceServer *s, int socket, int skip_auth);
+int spice_server_add_ssl_client(SpiceServer *s, int socket, int skip_auth);
 
 int spice_server_add_interface(SpiceServer *s,
                                SpiceBaseInstance *sin);
