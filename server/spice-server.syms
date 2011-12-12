@@ -96,3 +96,8 @@ global:
     spice_server_get_num_clients;
 } SPICE_SERVER_0.8.3;
 
+SPICE_SERVER_0.10.1 {
+global:
+    spice_server_add_client;
+    spice_server_add_ssl_client;
+} SPICE_SERVER_0.10.0;

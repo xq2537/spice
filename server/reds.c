@@ -2805,8 +2805,6 @@ static void reds_accept_ssl_connection(int fd, int event, void *data)
 
 static void reds_accept(int fd, int event, void *data)
 {
-    RedLinkInfo *link;
-    RedsStream *stream;
     int socket;
 
     if ((socket = accept(reds->listen_socket, NULL, 0)) == -1) {
@@ -2814,11 +2812,20 @@ static void reds_accept(int fd, int event, void *data)
         return;
     }
 
+    if (spice_server_add_client(reds, socket) < 0)
+        close(socket);
+}
 
+
+SPICE_GNUC_VISIBLE int spice_server_add_client(SpiceServer *s, int socket)
+{
+    RedLinkInfo *link;
+    RedsStream *stream;
+
+    ASSERT(reds == s);
     if (!(link = reds_init_client_connection(socket))) {
         red_printf("accept failed");
-        close(socket);
-        return;
+        return -1;
     }
 
     stream = link->stream;
@@ -2827,7 +2834,21 @@ static void reds_accept(int fd, int event, void *data)
     stream->writev = stream_writev_cb;
 
     reds_handle_new_link(link);
+    return 0;
 }
+
+
+SPICE_GNUC_VISIBLE int spice_server_add_ssl_client(SpiceServer *s, int socket)
+{
+    RedLinkInfo *link;
+
+    ASSERT(reds == s);
+    if (!(link = reds_init_client_ssl_connection(socket))) {
+        return -1;
+    }
+    return 0;
+}
+
 
 static int reds_init_socket(const char *addr, int portnr, int family)
 {
