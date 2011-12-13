@@ -66,7 +66,7 @@ public:
     void set_cursor(LocalCursor* local_cursor);
     void hide_cursor();
     void show_cursor();
-    void cupture_mouse();
+    void capture_mouse();
     void release_mouse();
     void start_key_interception();
     void stop_key_interception();

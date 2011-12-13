@@ -695,7 +695,7 @@ bool RedWindow::get_mouse_anchor_point(SpicePoint& pt)
     return true;
 }
 
-void RedWindow::cupture_mouse()
+void RedWindow::capture_mouse()
 {
     RECT client_rect;
     POINT origin;
