@@ -599,7 +599,7 @@ int Application::run()
 
 void Application::on_start_running()
 {
-    _foreign_menu.reset(new ForeignMenu(this));
+    _foreign_menu.reset(new ForeignMenu(this, _active));
     if (_enable_controller) {
         _controller.reset(new Controller(this));
         return;
