@@ -36,9 +36,9 @@
 #define PIPE_NAME "/tmp/SpiceForeignMenu-%lu.uds"
 #endif
 
-ForeignMenu::ForeignMenu(ForeignMenuInterface *handler)
+ForeignMenu::ForeignMenu(ForeignMenuInterface *handler, bool active)
     : _handler (handler)
-    , _active (false)
+    , _active (active)
     , _refs (1)
 {
     char pipe_name[PIPE_NAME_MAX_LEN];

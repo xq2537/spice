@@ -38,7 +38,7 @@ public:
 
 class ForeignMenu : public NamedPipe::ListenerInterface {
 public:
-    ForeignMenu(ForeignMenuInterface *handler);
+    ForeignMenu(ForeignMenuInterface *handler, bool active = false);
     virtual ~ForeignMenu();
 
     ForeignMenu* ref() { _refs++; return this;}
