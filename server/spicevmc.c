@@ -99,7 +99,11 @@ static void spicevmc_red_channel_client_on_disconnect(RedChannelClient *rcc)
     sin = state->chardev_sin;
     sif = SPICE_CONTAINEROF(sin->base.sif, SpiceCharDeviceInterface, base);
 
-    red_channel_client_destroy(rcc);
+    /* Don't destroy the rcc if the entire client is disconnecting, as then
+       red_client_destroy will already do this! */
+    if (!rcc->client->disconnecting)
+        red_channel_client_destroy(rcc);
+
     state->rcc = NULL;
     if (sif->state) {
         sif->state(sin, 0);
