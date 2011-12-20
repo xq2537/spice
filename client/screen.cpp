@@ -100,6 +100,7 @@ RedScreen::RedScreen(Application& owner, int id, const std::string& name, int wi
     , _mouse_captured (false)
     , _active_layer_change_event (false)
     , _pointer_on_screen (false)
+    , _menu_needs_update (false)
 {
     region_init(&_dirty_region);
     set_name(name);
@@ -784,6 +785,9 @@ void RedScreen::exit_full_screen()
     _origin.x = _origin.y = 0;
     _window.set_origin(0, 0);
     show();
+    if (_menu_needs_update) {
+        update_menu();
+    }
     _full_screen = false;
     _out_of_sync = false;
     _frame_area = false;
@@ -875,7 +879,8 @@ void RedScreen::external_show()
 void RedScreen::update_menu()
 {
     AutoRef<Menu> menu(_owner.get_app_menu());
-    _window.set_menu(*menu);
+    int ret = _window.set_menu(*menu);
+    _menu_needs_update = (ret != 0); /* try again if menu update failed */
 }
 
 void RedScreen::on_exposed_rect(const SpiceRect& area)
