@@ -1064,18 +1064,26 @@ void RedWindow_p::release_menu(Menu* menu)
     }
 }
 
-void RedWindow::set_menu(Menu* menu)
+int RedWindow::set_menu(Menu* menu)
 {
     release_menu(_menu);
     _menu = NULL;
 
     if (!menu) {
-        return;
+        return 0;
     }
-    _menu = menu->ref();
+
     _sys_menu = GetSystemMenu(_win, FALSE);
+    if (! _sys_menu) {
+        return -1;
+    }
+
+    _menu = menu->ref();
+
     insert_separator(_sys_menu);
     insert_menu(_menu, _sys_menu, _commands_map);
+
+    return 0;
 }
 
 static LRESULT CALLBACK MessageFilterProc(int nCode, WPARAM wParam, LPARAM lParam)
