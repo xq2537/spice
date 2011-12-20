@@ -70,7 +70,7 @@ public:
     void release_mouse();
     void start_key_interception();
     void stop_key_interception();
-    void set_menu(Menu* menu);
+    int set_menu(Menu* menu);
 
 #ifdef USE_OPENGL
     void untouch_context();

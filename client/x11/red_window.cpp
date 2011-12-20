@@ -2218,8 +2218,9 @@ void RedWindow::on_pointer_leave()
     }
 }
 
-void RedWindow::set_menu(Menu* menu)
+int RedWindow::set_menu(Menu* menu)
 {
+    return 0;
 }
 
 void RedWindow::init()
