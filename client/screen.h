@@ -178,6 +178,7 @@ private:
     bool _key_interception;
     bool _update_by_timer;
     bool _size_locked;
+    bool _menu_needs_update;
     int _forec_update_timer;
     AutoRef<UpdateTimer> _update_timer;
     RedDrawable* _composit_area;
