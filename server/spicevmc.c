@@ -23,6 +23,10 @@
 #endif
 
 #include <assert.h>
+#include <errno.h>
+#include <string.h>
+#include <netinet/in.h> // IPPROTO_TCP
+#include <netinet/tcp.h> // TCP_NODELAY
 
 #include "server/char_device.h"
 #include "server/red_channel.h"
@@ -82,6 +86,17 @@ static void spicevmc_chardev_wakeup(SpiceCharDeviceInstance *sin)
 
 static int spicevmc_red_channel_client_config_socket(RedChannelClient *rcc)
 {
+    int delay_val = 1;
+    RedsStream *stream = red_channel_client_get_stream(rcc);
+
+    if (rcc->channel->type == SPICE_CHANNEL_USBREDIR) {
+        if (setsockopt(stream->socket, IPPROTO_TCP, TCP_NODELAY,
+                &delay_val, sizeof(delay_val)) != 0) {
+            red_printf("setsockopt failed, %s", strerror(errno));
+            return FALSE;
+        }
+    }
+
     return TRUE;
 }
 
