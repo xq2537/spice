@@ -8660,18 +8660,13 @@ static void display_channel_client_on_disconnect(RedChannelClient *rcc)
 
 void red_disconnect_all_display_TODO_remove_me(RedChannel *channel)
 {
-    DisplayChannel *display_channel;
-    RedWorker *worker;
     // TODO: we need to record the client that actually causes the timeout. So
     // we need to check the locations of the various pipe heads when counting,
     // and disconnect only those/that.
     if (!channel) {
         return;
     }
-    display_channel = SPICE_CONTAINEROF(channel, DisplayChannel, common.base);
-    worker = display_channel->common.worker;
     red_channel_apply_clients(channel, display_channel_client_disconnect);
-    worker->display_channel = NULL;
 }
 
 static void red_migrate_display(RedWorker *worker, RedChannelClient *rcc)
@@ -9707,7 +9702,7 @@ static void display_channel_release_item(RedChannelClient *rcc, PipeItem *item, 
     }
 }
 
-static void ensure_display_channel_created(RedWorker *worker, int migrate)
+static void display_channel_create(RedWorker *worker, int migrate)
 {
     DisplayChannel *display_channel;
 
@@ -9761,8 +9756,8 @@ static void handle_new_display_channel(RedWorker *worker, RedClient *client, Red
     size_t stream_buf_size;
     int is_low_bandwidth = main_channel_client_is_low_bandwidth(red_client_get_main(client));
 
-    ensure_display_channel_created(worker, migrate);
     if (!worker->display_channel) {
+        red_printf("Warning: Display channel was not created");
         return;
     }
     display_channel = worker->display_channel;
@@ -9925,7 +9920,7 @@ static void cursor_channel_release_item(RedChannelClient *rcc, PipeItem *item, i
     }
 }
 
-static void ensure_cursor_channel_created(RedWorker *worker, int migrate)
+static void cursor_channel_create(RedWorker *worker, int migrate)
 {
     if (worker->cursor_channel != NULL) {
         return;
@@ -9951,9 +9946,8 @@ static void red_connect_cursor(RedWorker *worker, RedClient *client, RedsStream 
     CursorChannel *channel;
     CursorChannelClient *ccc;
 
-    ensure_cursor_channel_created(worker, migrate);
     if (worker->cursor_channel == NULL) {
-        red_printf("failed to create cursor channel");
+        red_printf("Warning: cursor channel was not created");
         return;
     }
     channel = worker->cursor_channel;
@@ -10514,7 +10508,7 @@ void handle_dev_display_channel_create(void *opaque, void *payload)
 
     RedChannel *red_channel;
     // TODO: handle seemless migration. Temp, setting migrate to FALSE
-    ensure_display_channel_created(worker, FALSE);
+    display_channel_create(worker, FALSE);
     red_channel = &worker->display_channel->common.base;
     send_data(worker->channel, &red_channel, sizeof(RedChannel *));
 }
@@ -10559,7 +10553,7 @@ void handle_dev_cursor_channel_create(void *opaque, void *payload)
     RedChannel *red_channel;
 
     // TODO: handle seemless migration. Temp, setting migrate to FALSE
-    ensure_cursor_channel_created(worker, FALSE);
+    cursor_channel_create(worker, FALSE);
     red_channel = &worker->cursor_channel->common.base;
     send_data(worker->channel, &red_channel, sizeof(RedChannel *));
 }
