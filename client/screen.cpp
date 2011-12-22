@@ -87,6 +87,7 @@ RedScreen::RedScreen(Application& owner, int id, const std::string& name, int wi
     , _key_interception (false)
     , _update_by_timer (true)
     , _size_locked (false)
+    , _menu_needs_update (false)
     , _forec_update_timer (0)
     , _update_timer (new UpdateTimer(this))
     , _composit_area (NULL)
@@ -100,7 +101,6 @@ RedScreen::RedScreen(Application& owner, int id, const std::string& name, int wi
     , _mouse_captured (false)
     , _active_layer_change_event (false)
     , _pointer_on_screen (false)
-    , _menu_needs_update (false)
 {
     region_init(&_dirty_region);
     set_name(name);
