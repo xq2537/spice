@@ -9442,12 +9442,18 @@ SpiceCoreInterface worker_core = {
 };
 
 static CommonChannelClient *common_channel_client_create(int size,
-    CommonChannel *common, RedClient *client, RedsStream *stream)
+                                                         CommonChannel *common,
+                                                         RedClient *client,
+                                                         RedsStream *stream,
+                                                         uint32_t *common_caps,
+                                                         int num_common_caps,
+                                                         uint32_t *caps,
+                                                         int num_caps)
 {
     MainChannelClient *mcc = red_client_get_main(client);
     RedChannelClient *rcc =
         red_channel_client_create(size, &common->base, client, stream,
-                                  0, NULL, 0, NULL);
+                                  num_common_caps, common_caps, num_caps, caps);
     CommonChannelClient *common_cc = (CommonChannelClient*)rcc;
     common_cc->worker = common->worker;
 
@@ -9460,11 +9466,15 @@ static CommonChannelClient *common_channel_client_create(int size,
 
 
 DisplayChannelClient *display_channel_client_create(CommonChannel *common,
-                             RedClient *client, RedsStream *stream)
+                                                    RedClient *client, RedsStream *stream,
+                                                    uint32_t *common_caps, int num_common_caps,
+                                                    uint32_t *caps, int num_caps)
 {
     DisplayChannelClient *dcc =
         (DisplayChannelClient*)common_channel_client_create(
-            sizeof(DisplayChannelClient), common, client, stream);
+            sizeof(DisplayChannelClient), common, client, stream,
+            common_caps, num_common_caps,
+            caps, num_caps);
 
     if (!dcc) {
         return NULL;
@@ -9475,11 +9485,17 @@ DisplayChannelClient *display_channel_client_create(CommonChannel *common,
 }
 
 CursorChannelClient *cursor_channel_create_rcc(CommonChannel *common,
-                             RedClient *client, RedsStream *stream)
+                                               RedClient *client, RedsStream *stream,
+                                               uint32_t *common_caps, int num_common_caps,
+                                               uint32_t *caps, int num_caps)
 {
     CursorChannelClient *ccc =
         (CursorChannelClient*)common_channel_client_create(
-            sizeof(CursorChannelClient), common, client, stream);
+            sizeof(CursorChannelClient), common, client, stream,
+            common_caps,
+            num_common_caps,
+            caps,
+            num_caps);
 
     if (!ccc) {
         return NULL;
@@ -9749,7 +9765,9 @@ static void display_channel_create(RedWorker *worker, int migrate)
 
 
 static void handle_new_display_channel(RedWorker *worker, RedClient *client, RedsStream *stream,
-                                       int migrate)
+                                       int migrate,
+                                       uint32_t *common_caps, int num_common_caps,
+                                       uint32_t *caps, int num_caps)
 {
     DisplayChannel *display_channel;
     DisplayChannelClient *dcc;
@@ -9762,7 +9780,9 @@ static void handle_new_display_channel(RedWorker *worker, RedClient *client, Red
     }
     display_channel = worker->display_channel;
     red_printf("add display channel client");
-    dcc = display_channel_client_create(&display_channel->common, client, stream);
+    dcc = display_channel_client_create(&display_channel->common, client, stream,
+                                        common_caps, num_common_caps,
+                                        caps, num_caps);
     if (!dcc) {
         return;
     }
@@ -9941,7 +9961,9 @@ static void cursor_channel_create(RedWorker *worker, int migrate)
 }
 
 static void red_connect_cursor(RedWorker *worker, RedClient *client, RedsStream *stream,
-                               int migrate)
+                               int migrate,
+                               uint32_t *common_caps, int num_common_caps,
+                               uint32_t *caps, int num_caps)
 {
     CursorChannel *channel;
     CursorChannelClient *ccc;
@@ -9952,7 +9974,9 @@ static void red_connect_cursor(RedWorker *worker, RedClient *client, RedsStream 
     }
     channel = worker->cursor_channel;
     red_printf("add cursor channel client");
-    ccc = cursor_channel_create_rcc(&channel->common, client, stream);
+    ccc = cursor_channel_create_rcc(&channel->common, client, stream,
+                                    common_caps, num_common_caps,
+                                    caps, num_caps);
     if (!ccc) {
         return;
     }
@@ -10522,7 +10546,11 @@ void handle_dev_display_connect(void *opaque, void *payload)
     int migration = msg->migration;
 
     red_printf("connect");
-    handle_new_display_channel(worker, client, stream, migration);
+    handle_new_display_channel(worker, client, stream, migration,
+                               msg->common_caps, msg->num_common_caps,
+                               msg->caps, msg->num_caps);
+    free(msg->caps);
+    free(msg->common_caps);
 }
 
 void handle_dev_display_disconnect(void *opaque, void *payload)
@@ -10567,7 +10595,11 @@ void handle_dev_cursor_connect(void *opaque, void *payload)
     int migration = msg->migration;
 
     red_printf("cursor connect");
-    red_connect_cursor(worker, client, stream, migration);
+    red_connect_cursor(worker, client, stream, migration,
+                       msg->common_caps, msg->num_common_caps,
+                       msg->caps, msg->num_caps);
+    free(msg->caps);
+    free(msg->common_caps);
 }
 
 void handle_dev_cursor_disconnect(void *opaque, void *payload)

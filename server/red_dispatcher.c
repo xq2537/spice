@@ -102,6 +102,14 @@ static void red_dispatcher_set_display_peer(RedChannel *channel, RedClient *clie
     payload.client = client;
     payload.stream = stream;
     payload.migration = migration;
+    payload.num_common_caps = num_common_caps;
+    payload.common_caps = spice_malloc(sizeof(uint32_t)*num_common_caps);
+    payload.num_caps = num_caps;
+    payload.caps = spice_malloc(sizeof(uint32_t)*num_caps);
+
+    memcpy(payload.common_caps, common_caps, sizeof(uint32_t)*num_common_caps);
+    memcpy(payload.caps, caps, sizeof(uint32_t)*num_caps);
+
     dispatcher_send_message(&dispatcher->dispatcher,
                             RED_WORKER_MESSAGE_DISPLAY_CONNECT,
                             &payload);
@@ -154,6 +162,14 @@ static void red_dispatcher_set_cursor_peer(RedChannel *channel, RedClient *clien
     payload.client = client;
     payload.stream = stream;
     payload.migration = migration;
+    payload.num_common_caps = num_common_caps;
+    payload.common_caps = spice_malloc(sizeof(uint32_t)*num_common_caps);
+    payload.num_caps = num_caps;
+    payload.caps = spice_malloc(sizeof(uint32_t)*num_caps);
+
+    memcpy(payload.common_caps, common_caps, sizeof(uint32_t)*num_common_caps);
+    memcpy(payload.caps, caps, sizeof(uint32_t)*num_caps);
+
     dispatcher_send_message(&dispatcher->dispatcher,
                             RED_WORKER_MESSAGE_CURSOR_CONNECT,
                             &payload);
