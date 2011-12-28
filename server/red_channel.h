@@ -207,6 +207,17 @@ struct RedChannelClient {
         PipeItem *item;
         int blocked;
         uint64_t serial;
+
+        struct {
+            SpiceMarshaller *marshaller;
+            SpiceDataHeader *header;
+            PipeItem *item;
+        } main;
+
+        struct {
+            SpiceMarshaller *marshaller;
+            SpiceDataHeader *header;
+        } urgent;
     } send_data;
 
     OutgoingHandler outgoing;
@@ -331,8 +342,22 @@ void red_channel_client_init_send_data(RedChannelClient *rcc, uint16_t msg_type,
 uint64_t red_channel_client_get_message_serial(RedChannelClient *channel);
 void red_channel_client_set_message_serial(RedChannelClient *channel, uint64_t);
 
-/* when sending a msg. should first call red_channel_client_begin_send_message */
+/* When sending a msg. Should first call red_channel_client_begin_send_message.
+ * It will first send the pending urgent data, if there is any, and then
+ * the rest of the data.
+ */
 void red_channel_client_begin_send_message(RedChannelClient *rcc);
+
+/*
+ * Stores the current send data, and switches to urgent send data.
+ * When it begins the actual send, it will send first the urgent data
+ * and afterward the rest of the data.
+ * Should be called only if during the marshalling of on message,
+ * the need to send another message, before, rises.
+ * Important: the serial of the non-urgent sent data, will be succeeded.
+ * return: the urgent send data marshaller
+ */
+SpiceMarshaller *red_channel_client_switch_to_urgent_sender(RedChannelClient *rcc);
 
 void red_channel_pipe_item_init(RedChannel *channel, PipeItem *item, int type);
 

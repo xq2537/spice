@@ -38,6 +38,7 @@
 static void red_channel_client_event(int fd, int event, void *data);
 static void red_client_add_channel(RedClient *client, RedChannelClient *rcc);
 static void red_client_remove_channel(RedChannelClient *rcc);
+static void red_channel_client_restore_main_sender(RedChannelClient *rcc);
 
 /* return the number of bytes read. -1 in case of error */
 static int red_peer_receive(RedsStream *stream, uint8_t *buf, uint32_t size)
@@ -204,10 +205,13 @@ static void red_peer_handle_outgoing(RedsStream *stream, OutgoingHandler *handle
             handler->pos += n;
             handler->cb->on_output(handler->opaque, n);
             if (handler->pos == handler->size) { // finished writing data
-                handler->cb->on_msg_done(handler->opaque);
+                /* reset handler before calling on_msg_done, since it
+                 * can trigger another call to red_peer_handle_outgoing (when
+                 * switching from the urgent marshaller to the main one */
                 handler->vec = handler->vec_buf;
                 handler->pos = 0;
                 handler->size = 0;
+                handler->cb->on_msg_done(handler->opaque);
                 return;
             }
         }
@@ -252,6 +256,11 @@ static void red_channel_client_peer_on_out_block(void *opaque)
                                      SPICE_WATCH_EVENT_WRITE);
 }
 
+static inline int red_channel_client_urgent_marshaller_is_active(RedChannelClient *rcc)
+{
+    return (rcc->send_data.marshaller == rcc->send_data.urgent.marshaller);
+}
+
 static void red_channel_client_reset_send_data(RedChannelClient *rcc)
 {
     spice_marshaller_reset(rcc->send_data.marshaller);
@@ -261,7 +270,16 @@ static void red_channel_client_reset_send_data(RedChannelClient *rcc)
     rcc->send_data.header->type = 0;
     rcc->send_data.header->size = 0;
     rcc->send_data.header->sub_list = 0;
-    rcc->send_data.header->serial = ++rcc->send_data.serial;
+
+    if (!red_channel_client_urgent_marshaller_is_active(rcc)) {
+        rcc->send_data.header->serial = ++rcc->send_data.serial;
+    } else {
+        /*  The serial was incremented by the call to reset_send_data
+         *  that was done for the main marshaller. The urgent msg should
+         *  receive this serial, and the main msg serial should be
+         *  the following one. */
+        rcc->send_data.header->serial = rcc->send_data.serial++;
+    }
 }
 
 void red_channel_client_push_set_ack(RedChannelClient *rcc)
@@ -343,6 +361,12 @@ static void red_channel_peer_on_out_msg_done(void *opaque)
         rcc->channel->core->watch_update_mask(rcc->stream->watch,
                                          SPICE_WATCH_EVENT_READ);
     }
+
+    if (red_channel_client_urgent_marshaller_is_active(rcc)) {
+        red_channel_client_restore_main_sender(rcc);
+        ASSERT(rcc->send_data.header != NULL);
+        red_channel_client_begin_send_message(rcc);
+    }
 }
 
 static void red_channel_client_pipe_remove(RedChannelClient *rcc, PipeItem *item)
@@ -407,7 +431,10 @@ RedChannelClient *red_channel_client_create(int size, RedChannel *channel, RedCl
                                              // block flags)
     rcc->ack_data.client_generation = ~0;
     rcc->ack_data.client_window = CLIENT_ACK_WINDOW;
-    rcc->send_data.marshaller = spice_marshaller_new();
+    rcc->send_data.main.marshaller = spice_marshaller_new();
+    rcc->send_data.urgent.marshaller = spice_marshaller_new();
+
+    rcc->send_data.marshaller = rcc->send_data.main.marshaller;
 
     rcc->incoming.opaque = rcc;
     rcc->incoming.cb = &channel->incoming_cb;
@@ -643,9 +670,14 @@ void red_channel_client_destroy(RedChannelClient *rcc)
         red_channel_client_disconnect(rcc);
     }
     red_client_remove_channel(rcc);
-    if (rcc->send_data.marshaller) {
-        spice_marshaller_destroy(rcc->send_data.marshaller);
+    if (rcc->send_data.main.marshaller) {
+        spice_marshaller_destroy(rcc->send_data.main.marshaller);
     }
+
+    if (rcc->send_data.urgent.marshaller) {
+        spice_marshaller_destroy(rcc->send_data.urgent.marshaller);
+    }
+
     red_channel_client_destroy_remote_caps(rcc);
     free(rcc);
 }
@@ -872,6 +904,28 @@ void red_channel_client_begin_send_message(RedChannelClient *rcc)
     rcc->ack_data.messages_window++;
     rcc->send_data.header = NULL; /* avoid writing to this until we have a new message */
     red_channel_client_send(rcc);
+}
+
+SpiceMarshaller *red_channel_client_switch_to_urgent_sender(RedChannelClient *rcc)
+{
+    ASSERT(red_channel_client_no_item_being_sent(rcc));
+    ASSERT(rcc->send_data.header != NULL);
+    rcc->send_data.main.header = rcc->send_data.header;
+    rcc->send_data.main.item = rcc->send_data.item;
+
+    rcc->send_data.marshaller = rcc->send_data.urgent.marshaller;
+    rcc->send_data.item = NULL;
+    red_channel_client_reset_send_data(rcc);
+    return rcc->send_data.marshaller;
+}
+
+static void red_channel_client_restore_main_sender(RedChannelClient *rcc)
+{
+    spice_marshaller_reset(rcc->send_data.urgent.marshaller);
+    rcc->send_data.marshaller = rcc->send_data.main.marshaller;
+    rcc->send_data.header = rcc->send_data.main.header;
+    rcc->send_data.header->serial = rcc->send_data.serial;
+    rcc->send_data.item = rcc->send_data.main.item;
 }
 
 uint64_t red_channel_client_get_message_serial(RedChannelClient *rcc)
