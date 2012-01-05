@@ -38,11 +38,11 @@
    At the final stage, this interface shouldn't be exposed. Only RedChannel will use it. */
 
 typedef int (*handle_message_proc)(void *opaque,
-                                   SpiceDataHeader *header, uint8_t *msg);
+                                   uint16_t type, uint32_t size, uint8_t *msg);
 typedef int (*handle_parsed_proc)(void *opaque, uint32_t size, uint16_t type, void *message);
-typedef uint8_t *(*alloc_msg_recv_buf_proc)(void *opaque, SpiceDataHeader *msg_header);
+typedef uint8_t *(*alloc_msg_recv_buf_proc)(void *opaque, uint16_t type, uint32_t size);
 typedef void (*release_msg_recv_buf_proc)(void *opaque,
-                                          SpiceDataHeader *msg_header, uint8_t *msg);
+                                          uint16_t type, uint32_t size, uint8_t *msg);
 typedef void (*on_incoming_error_proc)(void *opaque);
 
 typedef struct IncomingHandlerInterface {
@@ -119,13 +119,13 @@ typedef struct PipeItem {
 } PipeItem;
 
 typedef uint8_t *(*channel_alloc_msg_recv_buf_proc)(RedChannelClient *channel,
-                                                    SpiceDataHeader *msg_header);
+                                                    uint16_t type, uint32_t size);
 typedef int (*channel_handle_parsed_proc)(RedChannelClient *rcc, uint32_t size, uint16_t type,
                                         void *message);
 typedef int (*channel_handle_message_proc)(RedChannelClient *rcc,
-                                           SpiceDataHeader *header, uint8_t *msg);
+                                           uint16_t type, uint32_t size, uint8_t *msg);
 typedef void (*channel_release_msg_recv_buf_proc)(RedChannelClient *channel,
-                                                  SpiceDataHeader *msg_header, uint8_t *msg);
+                                                  uint16_t type, uint32_t size, uint8_t *msg);
 typedef void (*channel_disconnect_proc)(RedChannelClient *rcc);
 typedef int (*channel_configure_socket_proc)(RedChannelClient *rcc);
 typedef void (*channel_send_pipe_item_proc)(RedChannelClient *rcc, PipeItem *item);
@@ -334,7 +334,7 @@ void red_channel_init_outgoing_messages_window(RedChannel *channel);
 
 /* handles general channel msgs from the client */
 int red_channel_client_handle_message(RedChannelClient *rcc, uint32_t size,
-                               uint16_t type, void *message);
+                                      uint16_t type, void *message);
 
 /* when preparing send_data: should call init and then use marshaller */
 void red_channel_client_init_send_data(RedChannelClient *rcc, uint16_t msg_type, PipeItem *item);
@@ -444,13 +444,9 @@ SpiceMarshaller *red_channel_client_get_marshaller(RedChannelClient *rcc);
 RedsStream *red_channel_client_get_stream(RedChannelClient *rcc);
 RedClient *red_channel_client_get_client(RedChannelClient *rcc);
 
-/* this is a convenience function for sending messages, sometimes (migration only?)
- * the serial from the header needs to be available for sending. Note that the header
- * pointer retrieved is not valid except between red_channel_reset_send_data and
- * red_channel_begin_send_message. red_channel_init_send_data changes the header (sets
- * the type in it) as a convenience function. It is preffered to do that through it and
- * not via the below accessor and direct header manipulation. */
-SpiceDataHeader *red_channel_client_get_header(RedChannelClient *rcc);
+/* Note that the header is valid only between red_channel_reset_send_data and
+ * red_channel_begin_send_message.*/
+void red_channel_client_set_header_sub_list(RedChannelClient *rcc, uint32_t sub_list);
 
 /* return the sum of all the rcc pipe size */
 uint32_t red_channel_max_pipe_size(RedChannel *channel);

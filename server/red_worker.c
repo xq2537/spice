@@ -1517,15 +1517,15 @@ static void release_upgrade_item(RedWorker* worker, UpgradeItem *item)
     }
 }
 
-static uint8_t *common_alloc_recv_buf(RedChannelClient *rcc, SpiceDataHeader *msg_header)
+static uint8_t *common_alloc_recv_buf(RedChannelClient *rcc, uint16_t type, uint32_t size)
 {
     CommonChannel *common = SPICE_CONTAINEROF(rcc->channel, CommonChannel, base);
 
     return common->recv_buf;
 }
 
-static void common_release_recv_buf(RedChannelClient *rcc,
-                                    SpiceDataHeader *msg_header, uint8_t* msg)
+static void common_release_recv_buf(RedChannelClient *rcc, uint16_t type, uint32_t size,
+                                    uint8_t* msg)
 {
 }
 
@@ -7785,7 +7785,6 @@ static inline void display_begin_send_message(RedChannelClient *rcc,
 {
     DisplayChannelClient *dcc = RCC_TO_DCC(rcc);
     FreeList *free_list = &dcc->send_data.free_list;
-    SpiceDataHeader *header = red_channel_client_get_header(rcc);
 
     if (free_list->res->count) {
         int sub_list_len = 1;
@@ -7828,7 +7827,7 @@ static inline void display_begin_send_message(RedChannelClient *rcc,
             spice_marshaller_add_uint32(sub_list_m, spice_marshaller_get_offset(wait_m));
         }
         spice_marshaller_add_uint32(sub_list_m, spice_marshaller_get_offset(inval_m));
-        header->sub_list = spice_marshaller_get_offset(sub_list_m);
+        red_channel_client_set_header_sub_list(rcc, spice_marshaller_get_offset(sub_list_m));
     }
     red_channel_client_begin_send_message(rcc);
 }

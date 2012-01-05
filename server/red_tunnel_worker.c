@@ -1644,27 +1644,27 @@ static int tunnel_channel_handle_socket_token(TunnelChannelClient *channel, RedS
 }
 
 static uint8_t *tunnel_channel_alloc_msg_rcv_buf(RedChannelClient *rcc,
-                                                 SpiceDataHeader *msg_header)
+                                                 uint16_t type, uint32_t size)
 {
     TunnelChannelClient *tunnel_channel = (TunnelChannelClient *)rcc->channel;
 
-    if (msg_header->type == SPICE_MSGC_TUNNEL_SOCKET_DATA) {
+    if (type == SPICE_MSGC_TUNNEL_SOCKET_DATA) {
         return (__tunnel_worker_alloc_socket_rcv_buf(tunnel_channel->worker)->buf);
-    } else if ((msg_header->type == SPICE_MSGC_MIGRATE_DATA) ||
-               (msg_header->type == SPICE_MSGC_TUNNEL_SERVICE_ADD)) {
-        return spice_malloc(msg_header->size);
+    } else if ((type == SPICE_MSGC_MIGRATE_DATA) ||
+               (type == SPICE_MSGC_TUNNEL_SERVICE_ADD)) {
+        return spice_malloc(size);
     } else {
         return (tunnel_channel->control_rcv_buf);
     }
 }
 
 // called by the receive routine of the channel, before the buffer was assigned to a socket
-static void tunnel_channel_release_msg_rcv_buf(RedChannelClient *rcc, SpiceDataHeader *msg_header,
+static void tunnel_channel_release_msg_rcv_buf(RedChannelClient *rcc, uint16_t type, uint32_t size,
                                                uint8_t *msg)
 {
     TunnelChannelClient *tunnel_channel = (TunnelChannelClient *)rcc->channel;
 
-    if (msg_header->type == SPICE_MSGC_TUNNEL_SOCKET_DATA) {
+    if (type == SPICE_MSGC_TUNNEL_SOCKET_DATA) {
         ASSERT(!(SPICE_CONTAINEROF(msg, RedSocketRawRcvBuf, buf)->base.usr_opaque));
         __tunnel_worker_free_socket_rcv_buf(tunnel_channel->worker,
                                             SPICE_CONTAINEROF(msg, RedSocketRawRcvBuf, buf));
@@ -2243,12 +2243,13 @@ error:
 }
 
 //  msg was allocated by tunnel_channel_alloc_msg_rcv_buf
-static int tunnel_channel_handle_message(RedChannelClient *rcc, SpiceDataHeader *header, uint8_t *msg)
+static int tunnel_channel_handle_message(RedChannelClient *rcc, uint16_t type,
+                                         uint32_t size, uint8_t *msg)
 {
     TunnelChannelClient *tunnel_channel = (TunnelChannelClient *)rcc->channel;
     RedSocket *sckt = NULL;
     // retrieve the sckt
-    switch (header->type) {
+    switch (type) {
     case SPICE_MSGC_MIGRATE_FLUSH_MARK:
     case SPICE_MSGC_MIGRATE_DATA:
     case SPICE_MSGC_TUNNEL_SERVICE_ADD:
@@ -2269,12 +2270,12 @@ static int tunnel_channel_handle_message(RedChannelClient *rcc, SpiceDataHeader 
         }
         break;
     default:
-        return red_channel_client_handle_message(rcc, header->size, header->type, msg);
+        return red_channel_client_handle_message(rcc, size, type, msg);
     }
 
-    switch (header->type) {
+    switch (type) {
     case SPICE_MSGC_TUNNEL_SERVICE_ADD:
-        if (header->size < sizeof(SpiceMsgcTunnelAddGenericService)) {
+        if (size < sizeof(SpiceMsgcTunnelAddGenericService)) {
             red_printf("bad message size");
             free(msg);
             return FALSE;
@@ -2285,7 +2286,7 @@ static int tunnel_channel_handle_message(RedChannelClient *rcc, SpiceDataHeader 
         red_printf("REDC_TUNNEL_REMOVE_SERVICE not supported yet");
         return FALSE;
     case SPICE_MSGC_TUNNEL_SOCKET_OPEN_ACK:
-        if (header->size != sizeof(SpiceMsgcTunnelSocketOpenAck)) {
+        if (size != sizeof(SpiceMsgcTunnelSocketOpenAck)) {
             red_printf("bad message size");
             return FALSE;
         }
@@ -2294,7 +2295,7 @@ static int tunnel_channel_handle_message(RedChannelClient *rcc, SpiceDataHeader 
                                                         ((SpiceMsgcTunnelSocketOpenAck *)msg)->tokens);
 
     case SPICE_MSGC_TUNNEL_SOCKET_OPEN_NACK:
-        if (header->size != sizeof(SpiceMsgcTunnelSocketOpenNack)) {
+        if (size != sizeof(SpiceMsgcTunnelSocketOpenNack)) {
             red_printf("bad message size");
             return FALSE;
         }
@@ -2302,35 +2303,35 @@ static int tunnel_channel_handle_message(RedChannelClient *rcc, SpiceDataHeader 
         return tunnel_channel_handle_socket_connect_nack(tunnel_channel, sckt);
     case SPICE_MSGC_TUNNEL_SOCKET_DATA:
     {
-        if (header->size < sizeof(SpiceMsgcTunnelSocketData)) {
+        if (size < sizeof(SpiceMsgcTunnelSocketData)) {
             red_printf("bad message size");
             return FALSE;
         }
 
         return tunnel_channel_handle_socket_receive_data(tunnel_channel, sckt,
                                                     SPICE_CONTAINEROF(msg, RedSocketRawRcvBuf, buf),
-                                                    header->size - sizeof(SpiceMsgcTunnelSocketData));
+                                                    size - sizeof(SpiceMsgcTunnelSocketData));
     }
     case SPICE_MSGC_TUNNEL_SOCKET_FIN:
-        if (header->size != sizeof(SpiceMsgcTunnelSocketFin)) {
+        if (size != sizeof(SpiceMsgcTunnelSocketFin)) {
             red_printf("bad message size");
             return FALSE;
         }
         return tunnel_channel_handle_socket_fin(tunnel_channel, sckt);
     case SPICE_MSGC_TUNNEL_SOCKET_CLOSED:
-        if (header->size != sizeof(SpiceMsgcTunnelSocketClosed)) {
+        if (size != sizeof(SpiceMsgcTunnelSocketClosed)) {
             red_printf("bad message size");
             return FALSE;
         }
         return tunnel_channel_handle_socket_closed(tunnel_channel, sckt);
     case SPICE_MSGC_TUNNEL_SOCKET_CLOSED_ACK:
-        if (header->size != sizeof(SpiceMsgcTunnelSocketClosedAck)) {
+        if (size != sizeof(SpiceMsgcTunnelSocketClosedAck)) {
             red_printf("bad message size");
             return FALSE;
         }
         return tunnel_channel_handle_socket_closed_ack(tunnel_channel, sckt);
     case SPICE_MSGC_TUNNEL_SOCKET_TOKEN:
-        if (header->size != sizeof(SpiceMsgcTunnelSocketTokens)) {
+        if (size != sizeof(SpiceMsgcTunnelSocketTokens)) {
             red_printf("bad message size");
             return FALSE;
         }
@@ -2338,7 +2339,7 @@ static int tunnel_channel_handle_message(RedChannelClient *rcc, SpiceDataHeader 
         return tunnel_channel_handle_socket_token(tunnel_channel, sckt,
                                                   (SpiceMsgcTunnelSocketTokens *)msg);
     default:
-        return red_channel_client_handle_message(rcc, header->size, header->type, msg);
+        return red_channel_client_handle_message(rcc, size, type, msg);
     }
     return TRUE;
 }

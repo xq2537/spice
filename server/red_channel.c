@@ -103,7 +103,9 @@ static void red_peer_handle_incoming(RedsStream *stream, IncomingHandler *handle
 
         if (handler->msg_pos < handler->header.size) {
             if (!handler->msg) {
-                handler->msg = handler->cb->alloc_msg_buf(handler->opaque, &handler->header);
+                handler->msg = handler->cb->alloc_msg_buf(handler->opaque,
+                                                          handler->header.type,
+                                                          handler->header.size);
                 if (handler->msg == NULL) {
                     red_printf("ERROR: channel refused to allocate buffer.");
                     handler->cb->on_error(handler->opaque);
@@ -115,7 +117,10 @@ static void red_peer_handle_incoming(RedsStream *stream, IncomingHandler *handle
                                           handler->msg + handler->msg_pos,
                                           handler->header.size - handler->msg_pos);
             if (bytes_read == -1) {
-                handler->cb->release_msg_buf(handler->opaque, &handler->header, handler->msg);
+                handler->cb->release_msg_buf(handler->opaque,
+                                             handler->header.type,
+                                             handler->header.size,
+                                             handler->msg);
                 handler->cb->on_error(handler->opaque);
                 return;
             }
@@ -131,7 +136,9 @@ static void red_peer_handle_incoming(RedsStream *stream, IncomingHandler *handle
                 SPICE_VERSION_MINOR, &parsed_size, &parsed_free);
             if (parsed == NULL) {
                 red_printf("failed to parse message type %d", handler->header.type);
-                handler->cb->release_msg_buf(handler->opaque, &handler->header, handler->msg);
+                handler->cb->release_msg_buf(handler->opaque, handler->header.type,
+                                             handler->header.size,
+                                             handler->msg);
                 handler->cb->on_error(handler->opaque);
                 return;
             }
@@ -139,11 +146,16 @@ static void red_peer_handle_incoming(RedsStream *stream, IncomingHandler *handle
                                     handler->header.type, parsed);
             parsed_free(parsed);
         } else {
-            ret_handle = handler->cb->handle_message(handler->opaque, &handler->header,
-                                                 handler->msg);
+            ret_handle = handler->cb->handle_message(handler->opaque,
+                                                     handler->header.type,
+                                                     handler->header.size,
+                                                     handler->msg);
         }
         handler->msg_pos = 0;
-        handler->cb->release_msg_buf(handler->opaque, &handler->header, handler->msg);
+        handler->cb->release_msg_buf(handler->opaque,
+                                     handler->header.type,
+                                     handler->header.size,
+                                     handler->msg);
         handler->msg = NULL;
         handler->header_pos = 0;
 
@@ -586,7 +598,10 @@ RedChannel *red_channel_create_dummy(int size, uint32_t type, uint32_t id)
     return channel;
 }
 
-static int do_nothing_handle_message(RedChannelClient *rcc, SpiceDataHeader *header, uint8_t *msg)
+static int do_nothing_handle_message(RedChannelClient *rcc,
+                                     uint16_t type,
+                                     uint32_t size,
+                                     uint8_t *msg)
 {
     return TRUE;
 }
@@ -1204,10 +1219,11 @@ RedClient *red_channel_client_get_client(RedChannelClient *rcc)
     return rcc->client;
 }
 
-SpiceDataHeader *red_channel_client_get_header(RedChannelClient *rcc)
+void red_channel_client_set_header_sub_list(RedChannelClient *rcc, uint32_t sub_list)
 {
-    return rcc->send_data.header;
+    rcc->send_data.header->sub_list = sub_list;
 }
+
 /* end of accessors */
 
 int red_channel_get_first_socket(RedChannel *channel)

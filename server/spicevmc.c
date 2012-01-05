@@ -126,7 +126,9 @@ static void spicevmc_red_channel_client_on_disconnect(RedChannelClient *rcc)
 }
 
 static int spicevmc_red_channel_client_handle_message(RedChannelClient *rcc,
-    SpiceDataHeader *header, uint8_t *msg)
+                                                      uint16_t type,
+                                                      uint32_t size,
+                                                      uint8_t *msg)
 {
     SpiceVmcState *state;
     SpiceCharDeviceInstance *sin;
@@ -136,22 +138,22 @@ static int spicevmc_red_channel_client_handle_message(RedChannelClient *rcc,
     sin = state->chardev_sin;
     sif = SPICE_CONTAINEROF(sin->base.sif, SpiceCharDeviceInterface, base);
 
-    if (header->type != SPICE_MSGC_SPICEVMC_DATA) {
-        return red_channel_client_handle_message(rcc, header->size,
-                                                 header->type, msg);
+    if (type != SPICE_MSGC_SPICEVMC_DATA) {
+        return red_channel_client_handle_message(rcc, size, type, msg);
     }
 
     /*
      * qemu spicevmc will consume everything we give it, no need for
      * flow control checks (or to use a pipe).
      */
-    sif->write(sin, msg, header->size);
+    sif->write(sin, msg, size);
 
     return TRUE;
 }
 
 static uint8_t *spicevmc_red_channel_alloc_msg_rcv_buf(RedChannelClient *rcc,
-    SpiceDataHeader *msg_header)
+                                                       uint16_t type,
+                                                       uint32_t size)
 {
     SpiceVmcState *state;
 
@@ -159,9 +161,9 @@ static uint8_t *spicevmc_red_channel_alloc_msg_rcv_buf(RedChannelClient *rcc,
 
     assert(!state->rcv_buf_in_use);
 
-    if (msg_header->size > state->rcv_buf_size) {
-        state->rcv_buf = spice_realloc(state->rcv_buf, msg_header->size);
-        state->rcv_buf_size = msg_header->size;
+    if (size > state->rcv_buf_size) {
+        state->rcv_buf = spice_realloc(state->rcv_buf, size);
+        state->rcv_buf_size = size;
     }
 
     state->rcv_buf_in_use = 1;
@@ -170,7 +172,9 @@ static uint8_t *spicevmc_red_channel_alloc_msg_rcv_buf(RedChannelClient *rcc,
 }
 
 static void spicevmc_red_channel_release_msg_rcv_buf(RedChannelClient *rcc,
-    SpiceDataHeader *msg_header, uint8_t *msg)
+                                                     uint16_t type,
+                                                     uint32_t size,
+                                                     uint8_t *msg)
 {
     SpiceVmcState *state;
 

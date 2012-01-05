@@ -168,18 +168,22 @@ const VDAgentMouseState *inputs_get_mouse_state(void)
     return &g_inputs_channel->mouse_state;
 }
 
-static uint8_t *inputs_channel_alloc_msg_rcv_buf(RedChannelClient *rcc, SpiceDataHeader *msg_header)
+static uint8_t *inputs_channel_alloc_msg_rcv_buf(RedChannelClient *rcc,
+                                                 uint16_t type,
+                                                 uint32_t size)
 {
     InputsChannel *inputs_channel = SPICE_CONTAINEROF(rcc->channel, InputsChannel, base);
 
-    if (msg_header->size > RECEIVE_BUF_SIZE) {
+    if (size > RECEIVE_BUF_SIZE) {
         red_printf("error: too large incoming message");
         return NULL;
     }
     return inputs_channel->recv_buf;
 }
 
-static void inputs_channel_release_msg_rcv_buf(RedChannelClient *rcc, SpiceDataHeader *msg_header,
+static void inputs_channel_release_msg_rcv_buf(RedChannelClient *rcc,
+                                               uint16_t type,
+                                               uint32_t size,
                                                uint8_t *msg)
 {
 }
