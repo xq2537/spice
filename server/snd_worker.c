@@ -101,7 +101,6 @@ struct SndChannel {
 
     struct {
         uint64_t serial;
-        SpiceDataHeader *header;
         SpiceMarshaller *marshaller;
         uint32_t size;
         uint32_t pos;
@@ -109,7 +108,7 @@ struct SndChannel {
 
     struct {
         uint8_t buf[RECIVE_BUF_SIZE];
-        SpiceDataHeader *message;
+        uint8_t *message_start;
         uint8_t *now;
         uint8_t *end;
     } recive_data;
@@ -417,9 +416,13 @@ static int snd_record_handle_message(SndChannel *channel, size_t size, uint32_t 
 static void snd_receive(void* data)
 {
     SndChannel *channel = (SndChannel*)data;
+    SpiceDataHeaderOpaque *header;
+
     if (!channel) {
         return;
     }
+
+    header = &channel->channel_client->incoming.header;
 
     for (;;) {
         ssize_t n;
@@ -448,40 +451,44 @@ static void snd_receive(void* data)
         } else {
             channel->recive_data.now += n;
             for (;;) {
-                SpiceDataHeader *header = channel->recive_data.message;
-                uint8_t *data = (uint8_t *)(header+1);
+                uint8_t *msg_start = channel->recive_data.message_start;
+                uint8_t *data = msg_start + header->header_size;
                 size_t parsed_size;
                 uint8_t *parsed;
                 message_destructor_t parsed_free;
 
-                n = channel->recive_data.now - (uint8_t *)header;
-                if (n < sizeof(SpiceDataHeader) || n < sizeof(SpiceDataHeader) + header->size) {
+                header->data = msg_start;
+                n = channel->recive_data.now - msg_start;
+
+                if (n < header->header_size ||
+                    n < header->header_size + header->get_msg_size(header)) {
                     break;
                 }
-                parsed = channel->parser((void *)data, data + header->size, header->type,
+                parsed = channel->parser((void *)data, data + header->get_msg_size(header),
+                                         header->get_msg_type(header),
                                          SPICE_VERSION_MINOR, &parsed_size, &parsed_free);
                 if (parsed == NULL) {
-                    red_printf("failed to parse message type %d", header->type);
+                    red_printf("failed to parse message type %d", header->get_msg_type(header));
                     snd_disconnect_channel(channel);
                     return;
                 }
-                if (!channel->handle_message(channel, parsed_size, header->type, parsed)) {
+                if (!channel->handle_message(channel, parsed_size,
+                                             header->get_msg_type(header), parsed)) {
                     free(parsed);
                     snd_disconnect_channel(channel);
                     return;
                 }
                 parsed_free(parsed);
-                channel->recive_data.message = (SpiceDataHeader *)((uint8_t *)header +
-                                                                 sizeof(SpiceDataHeader) +
-                                                                 header->size);
+                channel->recive_data.message_start = msg_start + header->header_size +
+                                                     header->get_msg_size(header);
             }
-            if (channel->recive_data.now == (uint8_t *)channel->recive_data.message) {
+            if (channel->recive_data.now == channel->recive_data.message_start) {
                 channel->recive_data.now = channel->recive_data.buf;
-                channel->recive_data.message = (SpiceDataHeader *)channel->recive_data.buf;
+                channel->recive_data.message_start = channel->recive_data.buf;
             } else if (channel->recive_data.now == channel->recive_data.end) {
-                memcpy(channel->recive_data.buf, channel->recive_data.message, n);
+                memcpy(channel->recive_data.buf, channel->recive_data.message_start, n);
                 channel->recive_data.now = channel->recive_data.buf + n;
-                channel->recive_data.message = (SpiceDataHeader *)channel->recive_data.buf;
+                channel->recive_data.message_start = channel->recive_data.buf;
             }
         }
     }
@@ -501,28 +508,37 @@ static void snd_event(int fd, int event, void *data)
 
 static inline int snd_reset_send_data(SndChannel *channel, uint16_t verb)
 {
+    SpiceDataHeaderOpaque *header;
+
     if (!channel) {
         return FALSE;
     }
 
+    header = &channel->channel_client->send_data.header;
     spice_marshaller_reset(channel->send_data.marshaller);
-    channel->send_data.header = (SpiceDataHeader *)
-        spice_marshaller_reserve_space(channel->send_data.marshaller, sizeof(SpiceDataHeader));
-    spice_marshaller_set_base(channel->send_data.marshaller, sizeof(SpiceDataHeader));
+    header->data = spice_marshaller_reserve_space(channel->send_data.marshaller,
+                                                  header->header_size);
+    spice_marshaller_set_base(channel->send_data.marshaller,
+                              header->header_size);
     channel->send_data.pos = 0;
-    channel->send_data.header->sub_list = 0;
-    channel->send_data.header->size = 0;
-    channel->send_data.header->type = verb;
-    channel->send_data.header->serial = ++channel->send_data.serial;
+    header->set_msg_size(header, 0);
+    header->set_msg_type(header, verb);
+    channel->send_data.serial++;
+    if (!channel->channel_client->is_mini_header) {
+        header->set_msg_serial(header, channel->send_data.serial);
+        header->set_msg_sub_list(header, 0);
+    }
+
     return TRUE;
 }
 
 static int snd_begin_send_message(SndChannel *channel)
 {
+    SpiceDataHeaderOpaque *header = &channel->channel_client->send_data.header;
+
     spice_marshaller_flush(channel->send_data.marshaller);
     channel->send_data.size = spice_marshaller_get_total_size(channel->send_data.marshaller);
-    channel->send_data.header->size = channel->send_data.size - sizeof(SpiceDataHeader);
-    channel->send_data.header = NULL; /* avoid writing to this until we have a new message */
+    header->set_msg_size(header, channel->send_data.size - header->header_size);
     return snd_send_data(channel);
 }
 
@@ -709,22 +725,25 @@ static int snd_record_send_migrate(RecordChannel *record_channel)
 {
     SndChannel *channel = (SndChannel *)record_channel;
     SpiceMsgMigrate migrate;
-    SpiceDataHeader *header;
+    SpiceDataHeaderOpaque *header;
     RecordMigrateData *data;
 
     if (!snd_reset_send_data(channel, SPICE_MSG_MIGRATE)) {
         return FALSE;
     }
 
+    header = &channel->channel_client->send_data.header;
     migrate.flags = SPICE_MIGRATE_NEED_DATA_TRANSFER;
     spice_marshall_msg_migrate(channel->send_data.marshaller, &migrate);
 
-    header = (SpiceDataHeader *)spice_marshaller_reserve_space(channel->send_data.marshaller,
-                                                               sizeof(SpiceDataHeader));
-    header->type = SPICE_MSG_MIGRATE_DATA;
-    header->size = sizeof(RecordMigrateData);
-    header->serial = ++channel->send_data.serial;
-    header->sub_list = 0;
+    header->data = spice_marshaller_reserve_space(channel->send_data.marshaller, header->header_size);
+    header->set_msg_size(header, sizeof(RecordMigrateData));
+    header->set_msg_type(header, SPICE_MSG_MIGRATE_DATA);
+    ++channel->send_data.serial;
+    if (!channel->channel_client->is_mini_header) {
+        header->set_msg_serial(header, channel->send_data.serial);
+        header->set_msg_sub_list(header, 0);
+    }
 
     data = (RecordMigrateData *)spice_marshaller_reserve_space(channel->send_data.marshaller,
                                                                sizeof(RecordMigrateData));
@@ -735,7 +754,8 @@ static int snd_record_send_migrate(RecordChannel *record_channel)
     data->mode_time = record_channel->mode_time;
 
     channel->send_data.size = spice_marshaller_get_total_size(channel->send_data.marshaller);
-    channel->send_data.header->size = channel->send_data.size - sizeof(SpiceDataHeader) - sizeof(SpiceDataHeader) - sizeof(*data);
+    header->set_msg_size(header, channel->send_data.size - header->header_size -
+                         header->header_size - sizeof(*data));
 
     return snd_send_data(channel);
 }
@@ -876,6 +896,7 @@ static SndChannel *__new_channel(SndWorker *worker, int size, uint32_t channel_i
                                  snd_channel_handle_message_proc handle_message,
                                  snd_channel_on_message_done_proc on_message_done,
                                  snd_channel_cleanup_channel_proc cleanup,
+                                 uint32_t *common_caps, int num_common_caps,
                                  uint32_t *caps, int num_caps)
 {
     SndChannel *channel;
@@ -917,7 +938,7 @@ static SndChannel *__new_channel(SndWorker *worker, int size, uint32_t channel_i
     channel->parser = spice_get_client_channel_parser(channel_id, NULL);
     channel->stream = stream;
     channel->worker = worker;
-    channel->recive_data.message = (SpiceDataHeader *)channel->recive_data.buf;
+    channel->recive_data.message_start = channel->recive_data.buf;
     channel->recive_data.now = channel->recive_data.buf;
     channel->recive_data.end = channel->recive_data.buf + sizeof(channel->recive_data.buf);
     channel->send_data.marshaller = spice_marshaller_new();
@@ -938,7 +959,7 @@ static SndChannel *__new_channel(SndWorker *worker, int size, uint32_t channel_i
     channel->channel_client = red_channel_client_create_dummy(sizeof(RedChannelClient),
                                                               worker->base_channel,
                                                               client,
-                                                              0, NULL,
+                                                              num_common_caps, common_caps,
                                                               num_caps, caps);
     return channel;
 
@@ -1159,6 +1180,7 @@ static void snd_set_playback_peer(RedChannel *channel, RedClient *client, RedsSt
                                                               snd_playback_handle_message,
                                                               snd_playback_on_message_done,
                                                               snd_playback_cleanup,
+                                                              common_caps, num_common_caps,
                                                               caps, num_caps))) {
         goto error_2;
     }
@@ -1367,6 +1389,7 @@ static void snd_set_record_peer(RedChannel *channel, RedClient *client, RedsStre
                                                           snd_record_handle_message,
                                                           snd_record_on_message_done,
                                                           snd_record_cleanup,
+                                                          common_caps, num_common_caps,
                                                           caps, num_caps))) {
         goto error_2;
     }

@@ -593,6 +593,9 @@ typedef struct CommonChannelClient {
     struct RedWorker *worker;
 } CommonChannelClient;
 
+/* Each drawable can refer to at most 3 images: src, brush and mask */
+#define MAX_DRAWABLE_PIXMAP_CACHE_ITEMS 3
+
 struct DisplayChannelClient {
     CommonChannelClient common;
 
@@ -616,6 +619,8 @@ struct DisplayChannelClient {
         RedCompressBuf *used_compress_bufs;
 
         FreeList free_list;
+        uint64_t pixmap_cache_items[MAX_DRAWABLE_PIXMAP_CACHE_ITEMS];
+        int num_pixmap_cache_items;
     } send_data;
 
     /* global lz encoding entities */
@@ -986,8 +991,7 @@ static void red_display_release_stream(RedWorker *worker, StreamAgent *agent);
 static inline void red_detach_stream(RedWorker *worker, Stream *stream);
 static void red_stop_stream(RedWorker *worker, Stream *stream);
 static inline void red_stream_maintenance(RedWorker *worker, Drawable *candidate, Drawable *sect);
-static inline void display_begin_send_message(RedChannelClient *rcc,
-                                              SpiceMarshaller *base_marshaller);
+static inline void display_begin_send_message(RedChannelClient *rcc);
 static void red_release_pixmap_cache(DisplayChannelClient *dcc);
 static void red_release_glz(DisplayChannelClient *dcc);
 static void red_freeze_glz(DisplayChannelClient *dcc);
@@ -6248,6 +6252,8 @@ static inline void red_display_add_image_to_pixmap_cache(RedChannelClient *rcc,
                                  image->descriptor.width * image->descriptor.height, is_lossy,
                                  dcc)) {
                 io_image->descriptor.flags |= SPICE_IMAGE_FLAGS_CACHE_ME;
+                dcc->send_data.pixmap_cache_items[dcc->send_data.num_pixmap_cache_items++] =
+                                                                               image->descriptor.id;
                 stat_inc_counter(display_channel->add_to_cache_counter, 1);
             }
         }
@@ -6290,6 +6296,8 @@ static FillBitsType fill_bits(DisplayChannelClient *dcc, SpiceMarshaller *m,
         int lossy_cache_item;
         if (pixmap_cache_hit(dcc->pixmap_cache, image.descriptor.id,
                              &lossy_cache_item, dcc)) {
+            dcc->send_data.pixmap_cache_items[dcc->send_data.num_pixmap_cache_items++] =
+                                                                               image.descriptor.id;
             if (can_lossy || !lossy_cache_item) {
                 if (!display_channel->enable_jpeg || lossy_cache_item) {
                     image.descriptor.type = SPICE_IMAGE_TYPE_FROM_CACHE;
@@ -6463,6 +6471,7 @@ static inline void red_display_reset_send_data(DisplayChannelClient *dcc)
 {
     red_display_reset_compress_buf(dcc);
     dcc->send_data.free_list.res->count = 0;
+    dcc->send_data.num_pixmap_cache_items = 0;
     memset(dcc->send_data.free_list.sync, 0, sizeof(dcc->send_data.free_list.sync));
 }
 
@@ -7780,26 +7789,122 @@ static void display_channel_push_release(DisplayChannelClient *dcc, uint8_t type
     free_list->res->resources[free_list->res->count++].id = id;
 }
 
-static inline void display_begin_send_message(RedChannelClient *rcc,
-                                              SpiceMarshaller *base_marshaller)
+static inline void display_marshal_sub_msg_inval_list(SpiceMarshaller *m,
+                                                       FreeList *free_list)
+{
+    /* type + size + submessage */
+    spice_marshaller_add_uint16(m, SPICE_MSG_DISPLAY_INVAL_LIST);
+    spice_marshaller_add_uint32(m, sizeof(*free_list->res) +
+                                free_list->res->count * sizeof(free_list->res->resources[0]));
+    spice_marshall_msg_display_inval_list(m, free_list->res);
+}
+
+static inline void display_marshal_sub_msg_inval_list_wait(SpiceMarshaller *m,
+                                                            FreeList *free_list)
+
+{
+    /* type + size + submessage */
+    spice_marshaller_add_uint16(m, SPICE_MSG_WAIT_FOR_CHANNELS);
+    spice_marshaller_add_uint32(m, sizeof(free_list->wait.header) +
+                                free_list->wait.header.wait_count * sizeof(free_list->wait.buf[0]));
+    spice_marshall_msg_wait_for_channels(m, &free_list->wait.header);
+}
+
+/* use legacy SpiceDataHeader (with sub_list) */
+static inline void display_channel_send_free_list_legacy(RedChannelClient *rcc)
+{
+    DisplayChannelClient *dcc = RCC_TO_DCC(rcc);
+    FreeList *free_list = &dcc->send_data.free_list;
+    SpiceMarshaller *marshaller;
+    int sub_list_len = 1;
+    SpiceMarshaller *wait_m = NULL;
+    SpiceMarshaller *inval_m;
+    SpiceMarshaller *sub_list_m;
+
+    marshaller = red_channel_client_get_marshaller(rcc);
+    inval_m = spice_marshaller_get_submarshaller(marshaller);
+
+    display_marshal_sub_msg_inval_list(inval_m, free_list);
+
+    if (free_list->wait.header.wait_count) {
+        wait_m = spice_marshaller_get_submarshaller(marshaller);
+        display_marshal_sub_msg_inval_list_wait(wait_m, free_list);
+        sub_list_len++;
+    }
+
+    sub_list_m = spice_marshaller_get_submarshaller(marshaller);
+    spice_marshaller_add_uint16(sub_list_m, sub_list_len);
+    if (wait_m) {
+        spice_marshaller_add_uint32(sub_list_m, spice_marshaller_get_offset(wait_m));
+    }
+    spice_marshaller_add_uint32(sub_list_m, spice_marshaller_get_offset(inval_m));
+    red_channel_client_set_header_sub_list(rcc, spice_marshaller_get_offset(sub_list_m));
+}
+
+/* use mini header and SPICE_MSG_LIST */
+static inline void display_channel_send_free_list(RedChannelClient *rcc)
+{
+    DisplayChannelClient *dcc = RCC_TO_DCC(rcc);
+    FreeList *free_list = &dcc->send_data.free_list;
+    int sub_list_len = 1;
+    SpiceMarshaller *urgent_marshaller;
+    SpiceMarshaller *wait_m = NULL;
+    SpiceMarshaller *inval_m;
+    uint32_t sub_arr_offset;
+    uint32_t wait_offset = 0;
+    uint32_t inval_offset = 0;
+    int i;
+
+    urgent_marshaller = red_channel_client_switch_to_urgent_sender(rcc);
+    for (i = 0; i < dcc->send_data.num_pixmap_cache_items; i++) {
+        int dummy;
+        /* When using the urgent marshaller, the serial number of the message that is
+         * going to be sent right after the SPICE_MSG_LIST, is increased by one.
+         * But all this message pixmaps cache references used its old serial.
+         * we use pixmap_cache_items to collect these pixmaps, and we update their serial by calling pixmap_cache_hit.*/
+        pixmap_cache_hit(dcc->pixmap_cache, dcc->send_data.pixmap_cache_items[i],
+                         &dummy, dcc);
+    }
+
+    if (free_list->wait.header.wait_count) {
+        red_channel_client_init_send_data(rcc, SPICE_MSG_LIST, NULL);
+    } else { /* only one message, no need for a list */
+        red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_INVAL_LIST, NULL);
+        spice_marshall_msg_display_inval_list(urgent_marshaller, free_list->res);
+        return;
+    }
+
+    inval_m = spice_marshaller_get_submarshaller(urgent_marshaller);
+    display_marshal_sub_msg_inval_list(inval_m, free_list);
+
+    if (free_list->wait.header.wait_count) {
+        wait_m = spice_marshaller_get_submarshaller(urgent_marshaller);
+        display_marshal_sub_msg_inval_list_wait(wait_m, free_list);
+        sub_list_len++;
+    }
+
+    sub_arr_offset = sub_list_len * sizeof(uint32_t);
+
+    spice_marshaller_add_uint16(urgent_marshaller, sub_list_len);
+    inval_offset = spice_marshaller_get_offset(inval_m); // calc the offset before
+                                                         // adding the sub list
+                                                         // offsets array to the marshaller
+    /* adding the array of offsets */
+    if (wait_m) {
+        wait_offset = spice_marshaller_get_offset(wait_m);
+        spice_marshaller_add_uint32(urgent_marshaller, wait_offset + sub_arr_offset);
+    }
+    spice_marshaller_add_uint32(urgent_marshaller, inval_offset + sub_arr_offset);
+}
+
+static inline void display_begin_send_message(RedChannelClient *rcc)
 {
     DisplayChannelClient *dcc = RCC_TO_DCC(rcc);
     FreeList *free_list = &dcc->send_data.free_list;
 
     if (free_list->res->count) {
-        int sub_list_len = 1;
-        SpiceMarshaller *wait_m = NULL;
-        SpiceMarshaller *inval_m;
         int sync_count = 0;
         int i;
-
-        inval_m = spice_marshaller_get_submarshaller(base_marshaller);
-
-        /* type + size + submessage */
-        spice_marshaller_add_uint16(inval_m, SPICE_MSG_DISPLAY_INVAL_LIST);
-        spice_marshaller_add_uint32(inval_m, sizeof(*free_list->res) +
-                        free_list->res->count * sizeof(free_list->res->resources[0]));
-        spice_marshall_msg_display_inval_list(inval_m, free_list->res);
 
         for (i = 0; i < MAX_CACHE_CLIENTS; i++) {
             if (i != dcc->common.id && free_list->sync[i] != 0) {
@@ -7810,24 +7915,11 @@ static inline void display_begin_send_message(RedChannelClient *rcc,
         }
         free_list->wait.header.wait_count = sync_count;
 
-        if (sync_count) {
-            wait_m = spice_marshaller_get_submarshaller(base_marshaller);
-
-            /* type + size + submessage */
-            spice_marshaller_add_uint16(wait_m, SPICE_MSG_WAIT_FOR_CHANNELS);
-            spice_marshaller_add_uint32(wait_m, sizeof(free_list->wait.header) +
-                                                sync_count * sizeof(free_list->wait.buf[0]));
-            spice_marshall_msg_wait_for_channels(wait_m, &free_list->wait.header);
-            sub_list_len++;
+        if (rcc->is_mini_header) {
+            display_channel_send_free_list(rcc);
+        } else {
+            display_channel_send_free_list_legacy(rcc);
         }
-
-        SpiceMarshaller *sub_list_m = spice_marshaller_get_submarshaller(base_marshaller);
-        spice_marshaller_add_uint16(sub_list_m, sub_list_len);
-        if (wait_m) {
-            spice_marshaller_add_uint32(sub_list_m, spice_marshaller_get_offset(wait_m));
-        }
-        spice_marshaller_add_uint32(sub_list_m, spice_marshaller_get_offset(inval_m));
-        red_channel_client_set_header_sub_list(rcc, spice_marshaller_get_offset(sub_list_m));
     }
     red_channel_client_begin_send_message(rcc);
 }
@@ -8495,7 +8587,7 @@ static void display_channel_send_item(RedChannelClient *rcc, PipeItem *pipe_item
 
     // a message is pending
     if (red_channel_client_send_message_pending(rcc)) {
-        display_begin_send_message(rcc, m);
+        display_begin_send_message(rcc);
     }
 }
 

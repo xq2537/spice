@@ -33,9 +33,33 @@
 #define MAX_SEND_VEC 100
 #define CLIENT_ACK_WINDOW 20
 
+#define MAX_HEADER_SIZE sizeof(SpiceDataHeader)
+
 /* Basic interface for channels, without using the RedChannel interface.
    The intention is to move towards one channel interface gradually.
    At the final stage, this interface shouldn't be exposed. Only RedChannel will use it. */
+
+typedef struct SpiceDataHeaderOpaque SpiceDataHeaderOpaque;
+
+typedef uint16_t (*get_msg_type_proc)(SpiceDataHeaderOpaque *header);
+typedef uint32_t (*get_msg_size_proc)(SpiceDataHeaderOpaque *header);
+typedef void (*set_msg_type_proc)(SpiceDataHeaderOpaque *header, uint16_t type);
+typedef void (*set_msg_size_proc)(SpiceDataHeaderOpaque *header, uint32_t size);
+typedef void (*set_msg_serial_proc)(SpiceDataHeaderOpaque *header, uint64_t serial);
+typedef void (*set_msg_sub_list_proc)(SpiceDataHeaderOpaque *header, uint32_t sub_list);
+
+struct SpiceDataHeaderOpaque {
+    uint8_t *data;
+    uint16_t header_size;
+
+    set_msg_type_proc set_msg_type;
+    set_msg_size_proc set_msg_size;
+    set_msg_serial_proc set_msg_serial;
+    set_msg_sub_list_proc set_msg_sub_list;
+
+    get_msg_type_proc get_msg_type;
+    get_msg_size_proc get_msg_size;
+};
 
 typedef int (*handle_message_proc)(void *opaque,
                                    uint16_t type, uint32_t size, uint8_t *msg);
@@ -58,10 +82,12 @@ typedef struct IncomingHandlerInterface {
 typedef struct IncomingHandler {
     IncomingHandlerInterface *cb;
     void *opaque;
-    SpiceDataHeader header;
+    uint8_t header_buf[MAX_HEADER_SIZE];
+    SpiceDataHeaderOpaque header;
     uint32_t header_pos;
     uint8_t *msg; // data of the msg following the header. allocated by alloc_msg_buf.
     uint32_t msg_pos;
+    uint64_t serial;
 } IncomingHandler;
 
 typedef int (*get_outgoing_msg_size_proc)(void *opaque);
@@ -202,21 +228,21 @@ struct RedChannelClient {
 
     struct {
         SpiceMarshaller *marshaller;
-        SpiceDataHeader *header;
+        SpiceDataHeaderOpaque header;
         uint32_t size;
         PipeItem *item;
         int blocked;
         uint64_t serial;
+        uint64_t last_sent_serial;
 
         struct {
             SpiceMarshaller *marshaller;
-            SpiceDataHeader *header;
+            uint8_t *header_data;
             PipeItem *item;
         } main;
 
         struct {
             SpiceMarshaller *marshaller;
-            SpiceDataHeader *header;
         } urgent;
     } send_data;
 
@@ -228,6 +254,7 @@ struct RedChannelClient {
     uint32_t pipe_size;
 
     RedChannelCapabilities remote_caps;
+    int is_mini_header;
 };
 
 struct RedChannel {
