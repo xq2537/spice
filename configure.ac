@@ -99,7 +99,7 @@ AC_ARG_ENABLE(tunnel,
 AS_IF([test x"$enable_tunnel" != "xno"], [enable_tunnel="yes"])
 AM_CONDITIONAL(SUPPORT_TUNNEL, test "x$enable_tunnel" != "xno")
 if test "x$enable_tunnel" != "xno"; then
-   AC_DEFINE(USE_TUNNEL, [1], [Define if supporting tunnel proxying])
+   AC_DEFINE([USE_TUNNEL], [1], [Define if supporting tunnel proxying])
 fi
 
 AC_ARG_ENABLE(gui,
@@ -120,7 +120,7 @@ AC_ARG_ENABLE(smartcard,
 AS_IF([test x"$enable_smartcard" != "xno"], [enable_smartcard="yes"])
 AM_CONDITIONAL(SUPPORT_SMARTCARD, test "x$enable_smartcard" != "xno")
 if test "x$enable_smartcard" = "xyes"; then
-   AC_DEFINE(USE_SMARTCARD, [1], [Define if supporting smartcard proxying])
+   AC_DEFINE([USE_SMARTCARD], [1], [Define if supporting smartcard proxying])
 fi
 
 AC_ARG_ENABLE(client,
@@ -139,7 +139,7 @@ AC_CHECK_LIBM
 AC_SUBST(LIBM)
 
 AC_CHECK_LIB(rt, clock_gettime,
-   AC_DEFINE(HAVE_CLOCK_GETTIME, 1, [Defined if we have clock_gettime()])
+   AC_DEFINE([HAVE_CLOCK_GETTIME], 1, [Defined if we have clock_gettime()])
    LIBRT=-lrt
    )
 AC_SUBST(LIBRT)
@@ -168,7 +168,7 @@ else
     AC_MSG_RESULT($posix_yield_func)
     posix_yield_func="$posix_yield_func()"
 fi
-AC_DEFINE_UNQUOTED(POSIX_YIELD_FUNC,$posix_yield_func,[The POSIX RT yield function])
+AC_DEFINE_UNQUOTED([POSIX_YIELD_FUNC],$posix_yield_func,[The POSIX RT yield function])
 
 SPICE_REQUIRES=""
 
