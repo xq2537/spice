@@ -335,7 +335,8 @@ static void smartcard_channel_release_pipe_item(RedChannelClient *rcc,
                                       PipeItem *item, int item_pushed)
 {
     if (item->type == PIPE_ITEM_TYPE_MSG) {
-        free(((MsgItem*)item)->vheader);
+        MsgItem *mi = (MsgItem *)item;
+        free(mi->vheader);
     }
     free(item);
 }
