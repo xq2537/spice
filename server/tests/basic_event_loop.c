@@ -1,7 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/time.h>
-#include <strings.h>
 #include <signal.h>
 #include <string.h>
 
