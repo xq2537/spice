@@ -92,4 +92,3 @@ class EventSources::Handle: public EventSource, public Handle_p {
 };
 
 #endif
-

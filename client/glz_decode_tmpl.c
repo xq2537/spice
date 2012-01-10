@@ -335,4 +335,3 @@ static size_t FNAME(decode)(GlzDecoderWindow &window, uint8_t* in_buf,
 #undef COPY_COMP_PIXEL
 #undef COPY_PLT_ENTRY
 #undef CAST_PLT_DISTANCE
-

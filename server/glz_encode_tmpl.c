@@ -572,4 +572,3 @@ static void FNAME(compress)(Encoder *encoder)
 #undef LZ_RGB32
 #undef MIN_REF_ENCODE_SIZE
 #undef MAX_REF_ENCODE_SIZE
-

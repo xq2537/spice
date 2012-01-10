@@ -118,4 +118,3 @@ RedPixmapSw::~RedPixmapSw()
         DeleteDC(dc);
     }
 }
-

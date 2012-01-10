@@ -388,4 +388,3 @@ uint SoftRenderer::getVertScreenDPI() const
 }
 
 }
-

@@ -90,4 +90,3 @@ void spice_log_cleanup(void);
 }
 
 #endif // _H_DEBUG
-

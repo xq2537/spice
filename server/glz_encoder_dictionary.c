@@ -631,4 +631,3 @@ void glz_dictionary_post_encode(uint32_t encoder_id, GlzEncoderUsrContext *usr,
     dict->window.encoders_heads[encoder_id] = NULL_IMAGE_SEG_ID;
     pthread_mutex_unlock(&dict->lock);
 }
-

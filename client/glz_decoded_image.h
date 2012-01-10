@@ -62,4 +62,3 @@ inline uint8_t* GlzDecodedImage::get_pixel_ref(int offset)
 }
 
 #endif
-

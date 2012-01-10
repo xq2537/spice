@@ -570,4 +570,3 @@ void inputs_init(void)
         red_error("key modifiers timer create failed");
     }
 }
-

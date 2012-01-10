@@ -574,4 +574,3 @@ SpiceServer* test_init(SpiceCoreInterface *core)
     wakeup_timer = core->timer_add(do_wakeup, NULL);
     return server;
 }
-

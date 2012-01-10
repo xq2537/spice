@@ -309,4 +309,3 @@ RedPixmapGL::~RedPixmapGL()
      */
     GLC_ERROR_TEST_FINISH;
 }
-

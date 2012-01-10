@@ -2254,4 +2254,3 @@ void RedWindow::init()
 void RedWindow::cleanup()
 {
 }
-

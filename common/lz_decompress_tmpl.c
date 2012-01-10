@@ -324,4 +324,3 @@ static size_t FNAME(decompress)(Encoder *encoder, OUT_PIXEL *out_buf, int size)
 #undef COPY_COMP_PIXEL
 #undef COPY_PLT_ENTRY
 #undef CAST_PLT_DISTANCE
-

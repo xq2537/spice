@@ -42,4 +42,3 @@ bool RedPixmap::is_big_endian_bits()
 {
     return false;
 }
-

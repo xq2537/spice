@@ -146,4 +146,3 @@ const char* res_get_string(int id)
 
     return NULL;
 }
-

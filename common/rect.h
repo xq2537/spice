@@ -120,4 +120,3 @@ static inline int rect_is_same_size(const SpiceRect& r1, const SpiceRect& r2)
 #endif
 
 #endif
-

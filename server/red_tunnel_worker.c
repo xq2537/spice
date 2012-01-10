@@ -3505,4 +3505,3 @@ static void red_tunnel_channel_create(TunnelWorker *worker)
     red_channel_set_data(channel, worker);
     reds_register_channel(worker->channel);
 }
-

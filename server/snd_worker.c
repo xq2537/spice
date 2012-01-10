@@ -1562,4 +1562,3 @@ int snd_get_playback_compression(void)
 {
     return (playback_compression == SPICE_AUDIO_DATA_MODE_RAW) ? FALSE : TRUE;
 }
-

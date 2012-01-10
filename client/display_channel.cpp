@@ -1840,4 +1840,3 @@ ChannelFactory& DisplayChannel::Factory()
 {
     return factory;
 }
-

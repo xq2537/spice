@@ -24,4 +24,3 @@ typedef uint8_t * (*spice_parse_channel_func_t)(uint8_t *message_start, uint8_t 
 spice_parse_channel_func_t spice_get_client_channel_parser(uint32_t channel, unsigned int *max_message_type);
 
 #endif
-

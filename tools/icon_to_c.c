@@ -374,4 +374,3 @@ int main(int argc, char **argv)
 
     return icon_to_c_struct(icon, dest, struct_name);
 }
-

@@ -939,4 +939,3 @@ void RedScreen::unset_type_gl()
     _window.unset_type_gl();
 }
 #endif // USE_OPENGL
-

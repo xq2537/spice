@@ -42,4 +42,3 @@ int str_to_port(const char *str)
     }
     return port;
 }
-

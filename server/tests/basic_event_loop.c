@@ -281,4 +281,3 @@ SpiceCoreInterface *basic_event_loop_init(void)
     ignore_sigpipe();
     return &core;
 }
-

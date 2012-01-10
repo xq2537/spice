@@ -184,4 +184,3 @@ void glz_dictionary_post_encode(uint32_t encoder_id, GlzEncoderUsrContext *usr,
         ref_seg->pixels_so_far)))
 
 #endif // _H_GLZ_ENCODER_DICTIONARY_PROTECTED
-

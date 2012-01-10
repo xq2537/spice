@@ -89,4 +89,3 @@ private:
     RGBToBGRXConverter _rgb2bgrx;
 };
 #endif
-

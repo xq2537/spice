@@ -164,4 +164,3 @@ cd $ORIGDIR || exit $?
 rm -f config.cache
 
 do_cmd $srcdir/configure --enable-maintainer-mode ${1+"$@"} || exit 1
-

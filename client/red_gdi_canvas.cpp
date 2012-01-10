@@ -91,4 +91,3 @@ CanvasType GDICanvas::get_pixmap_type()
 {
     return CANVAS_TYPE_GDI;
 }
-

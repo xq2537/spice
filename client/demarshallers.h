@@ -25,4 +25,3 @@ spice_parse_channel_func_t spice_get_server_channel_parser(uint32_t channel, uns
 spice_parse_channel_func_t spice_get_server_channel_parser1(uint32_t channel, unsigned int *max_message_type);
 
 #endif
-

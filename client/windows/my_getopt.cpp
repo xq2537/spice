@@ -20,4 +20,3 @@
 
 #include "common.h"
 #include "../../common/win/my_getopt-1.5/my_getopt.c"
-

@@ -169,4 +169,3 @@ void LinuxListener::on_event()
         conn_interface.bind((NamedPipe::ConnectionRef)conn);
     }
 }
-

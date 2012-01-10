@@ -327,4 +327,3 @@ inline int GlzDecoderWindow::calc_image_win_idx(uint64_t image_id)
 {
     return (int)((_head_idx + _n_images - 1 - (_tail_image_id - image_id)) % _images_capacity);
 }
-

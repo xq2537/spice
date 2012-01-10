@@ -108,4 +108,3 @@ int WINAPI WinMain(HINSTANCE hInstance,
 
     return exit_val;
 }
-

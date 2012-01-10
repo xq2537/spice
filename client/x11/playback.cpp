@@ -218,4 +218,3 @@ uint32_t WavePlayer::get_delay_ms()
     }
     return delay / _sampels_per_ms;
 }
-

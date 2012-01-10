@@ -1407,4 +1407,3 @@ void RedClient::register_channel_factory(ChannelFactory& factory)
 {
     _factorys.push_back(&factory);
 }
-

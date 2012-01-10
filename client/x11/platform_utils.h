@@ -36,4 +36,3 @@ typedef int SOCKET;
 #define sock_err_message(err) strerror(err)
 
 #endif
-

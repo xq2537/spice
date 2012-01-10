@@ -237,4 +237,3 @@ void ScreenLayer::detach_from_screen(Application& application)
     }
     ASSERT(!_screen);
 }
-

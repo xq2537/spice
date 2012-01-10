@@ -64,4 +64,3 @@ public:
 #define GLZ_DECODE_TO_RGB32
 
 #endif  //_H_GLZ_DECODER_CONFIG
-

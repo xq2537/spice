@@ -129,4 +129,3 @@ error1:
     free(shm_name);
     return ret;
 }
-

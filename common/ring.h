@@ -170,4 +170,3 @@ static inline unsigned int ring_get_length(Ring *ring)
 #endif
 
 #endif
-

@@ -1697,4 +1697,3 @@ void quic_init(void)
     init_zeroLUT();
 #endif
 }
-

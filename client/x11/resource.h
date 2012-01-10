@@ -22,4 +22,3 @@
 #define ALT_IMAGE_RES_ID 4
 
 #endif
-

@@ -147,4 +147,3 @@ void HotKeysParser::add_hotkey(const std::string& hotkey, const CommandsMap& com
     std::string keys = hotkey.substr(key_start + 1);
     parse_keys(command_id, keys);
 }
-

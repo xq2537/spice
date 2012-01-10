@@ -238,4 +238,3 @@ void WaveRecorder::on_event()
         }
     }
 }
-

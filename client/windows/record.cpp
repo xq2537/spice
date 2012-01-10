@@ -193,4 +193,3 @@ bool WaveRecorder::abort()
 {
     return true;
 }
-

@@ -350,4 +350,3 @@ void MessageHandlerImp<HandlerClass, channel_id>::set_handler(unsigned int id, H
 }
 
 #endif
-

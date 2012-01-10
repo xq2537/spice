@@ -1857,4 +1857,3 @@ void gdi_canvas_init(void) //unsafe global function
 
     rop3_init();
 }
-

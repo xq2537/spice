@@ -35,4 +35,3 @@ struct IconHeader {
 class RedDrawable;
 
 #endif
-

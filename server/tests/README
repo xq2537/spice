@@ -21,4 +21,3 @@ test_fail_on_null_core_interface
 
 basic_event_loop.c
  used by test_just_sockets_no_ssl, can be used by other tests. very crude event loop. Should probably use libevent for better tests, but this is self contained.
-

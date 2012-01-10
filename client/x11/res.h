@@ -22,4 +22,3 @@ const PixmapHeader *res_get_image(int id);
 const IconHeader *res_get_icon(int id);
 
 #endif
-

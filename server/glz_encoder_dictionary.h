@@ -67,4 +67,3 @@ void glz_enc_dictionary_remove_image(GlzEncDictContext *opaque_dict,
                                      GlzEncDictImageContext *image, GlzEncoderUsrContext *usr);
 
 #endif // _H_GLZ_ENCODER_DICTIONARY
-

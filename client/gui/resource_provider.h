@@ -57,4 +57,3 @@ enum {
 const char* res_get_string(int id);
 
 #endif
-

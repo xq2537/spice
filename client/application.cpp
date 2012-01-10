@@ -2670,4 +2670,3 @@ int Application::main(int argc, char** argv, const char* version_str)
     cleanup_globals();
     return ret;
 }
-

@@ -1110,4 +1110,3 @@ void red_put_cursor_cmd(RedCursorCmd *red)
         break;
     }
 }
-

@@ -147,4 +147,3 @@ enum RedKey {
 };
 
 #endif
-

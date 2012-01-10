@@ -24,4 +24,3 @@ int main(void)
     basic_event_loop_mainloop();
     return 0;
 }
-

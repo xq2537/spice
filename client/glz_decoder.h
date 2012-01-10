@@ -82,4 +82,3 @@ private:
 };
 
 #endif // _H_GLZ_DECODER
-

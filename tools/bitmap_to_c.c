@@ -392,4 +392,3 @@ int main(int argc, char **argv)
     }
     return pixmap_to_c_struct(pixmap, dest, struct_name, alpha_convertion);
 }
-

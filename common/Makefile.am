@@ -74,4 +74,3 @@ EXTRA_DIST =				\
 	quic_rgb_tmpl.c			\
 	quic_tmpl.c			\
 	$(NULL)
-

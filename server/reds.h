@@ -149,4 +149,3 @@ void reds_on_main_receive_migrate_data(MainMigrateData *data, uint8_t *end);
 void reds_on_main_mouse_mode_request(void *message, size_t size);
 void reds_on_client_migrate_complete(RedClient *client);
 #endif
-

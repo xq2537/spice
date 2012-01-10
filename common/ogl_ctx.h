@@ -36,4 +36,3 @@ void oglctx_destroy(OGLCtx *ctx);
 #endif
 
 #endif
-

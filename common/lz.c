@@ -738,4 +738,3 @@ void lz_decode(LzContext *lz, LzImageType to_type, uint8_t *buf)
         encoder->usr->error(encoder->usr, "bad decode size\n");
     }
 }
-

@@ -176,4 +176,3 @@ uint32_t WavePlayer::get_delay_ms()
 {
     return _in_use * WavePlaybackAbstract::FRAME_SIZE / _sampels_per_ms;
 }
-

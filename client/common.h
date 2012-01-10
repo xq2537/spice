@@ -88,4 +88,3 @@ extern const char* PACKAGE_VERSION;
 #include "red_types.h"
 
 #endif
-

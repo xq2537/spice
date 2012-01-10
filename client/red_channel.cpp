@@ -885,4 +885,3 @@ void RedChannel::handle_wait_for_channels(RedPeer::InMessage* message)
     }
     _client.wait_for_channels(wait->wait_count, wait->wait_list);
 }
-

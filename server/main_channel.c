@@ -1113,4 +1113,3 @@ int main_channel_migrate_complete(MainChannel *main_chan, int success)
    }
    return semi_seamless_count;
 }
-
