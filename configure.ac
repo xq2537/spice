@@ -332,7 +332,7 @@ SASL_CFLAGS=
 SASL_LIBS=
 enable_sasl=no
 if test "x$with_sasl" != "xno"; then
-  if test "x$with_sasl" != "xyes" -a "x$with_sasl" != "xcheck"; then
+  if test "x$with_sasl" != "xyes" && test "x$with_sasl" != "xcheck"; then
     SASL_CFLAGS="-I$with_sasl"
     SASL_LIBS="-L$with_sasl"
   fi
@@ -350,7 +350,7 @@ if test "x$with_sasl" != "xno"; then
   if test "x$with_sasl" != "xno" ; then
     AC_CHECK_LIB([sasl2], [sasl_client_init],[with_sasl2=yes],[with_sasl2=no])
   fi
-  if test "x$with_sasl2" = "xno" -a "x$with_sasl" != "xno" ; then
+  if test "x$with_sasl2" = "xno" && test "x$with_sasl" != "xno" ; then
     AC_CHECK_LIB([sasl], [sasl_client_init],[with_sasl=yes],[with_sasl=no])
   fi
   if test "x$with_sasl2" = "xyes"; then
@@ -362,13 +362,13 @@ if test "x$with_sasl" != "xno"; then
   fi
   CFLAGS="$old_cflags"
   LIBS="$old_libs"
-  if test "x$with_sasl2" = "xyes" -o "x$with_sasl" = "xyes" ; then
+  if test "x$with_sasl2" = "xyes" || test "x$with_sasl" = "xyes" ; then
     AC_DEFINE_UNQUOTED([HAVE_SASL], 1,
       [whether Cyrus SASL is available for authentication])
     enable_sasl=yes
   fi
 fi
-AM_CONDITIONAL([HAVE_SASL], [test "x$with_sasl2" = "xyes" -o "x$with_sasl" = "xyes"])
+AM_CONDITIONAL([HAVE_SASL], [test "x$with_sasl2" = "xyes" || test "x$with_sasl" = "xyes"])
 AC_SUBST([SASL_CFLAGS])
 AC_SUBST([SASL_LIBS])
 
@@ -496,7 +496,7 @@ error Need GCC 4.0 for visibility
 int main () { return 0; }
 ])], have_gcc4=yes)
 
-if test "x$have_gcc4" = "xyes" -a ! "$os_win32" = "yes" ; then
+if test "x$have_gcc4" = "xyes" && test ! "$os_win32" = "yes" ; then
    VISIBILITY_HIDDEN_CFLAGS="-fvisibility=hidden"
 fi
 AC_MSG_RESULT($have_gcc4)
