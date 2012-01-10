@@ -2,7 +2,6 @@
 #include <string.h>
 #include <errno.h>
 #include <pthread.h>
-#include <assert.h>
 
 #include "red_common.h"
 #include "dispatcher.h"
