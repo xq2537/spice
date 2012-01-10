@@ -18,7 +18,7 @@
 
 /*
  * Taken from xserver os/backtrace.c:
- * Copyright 2008 Red Hat, Inc.
+ * Copyright (C) 2008 Red Hat, Inc.
  */
 
 #include "config.h"
