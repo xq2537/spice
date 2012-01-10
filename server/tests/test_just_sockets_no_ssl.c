@@ -1,3 +1,4 @@
+#include <config.h>
 #include <sys/select.h>
 #include <spice.h>
 #include "basic_event_loop.h"

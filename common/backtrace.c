@@ -21,7 +21,7 @@
  * Copyright (C) 2008 Red Hat, Inc.
  */
 
-#include "config.h"
+#include <config.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>

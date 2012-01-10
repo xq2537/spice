@@ -4,6 +4,7 @@
  * TODO: stop updating same rect, check (prog) that stream stops
  */
 
+#include <config.h>
 #include "test_display_base.h"
 
 int simple_commands[] = {
