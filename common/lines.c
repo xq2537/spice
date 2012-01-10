@@ -509,17 +509,15 @@ miSubtractSpans (SpanGroup * spanGroup, Spans * sub)
                                 int *newwid;
 
 #define EXTRA 8
-                                newPt =
-                                    (DDXPointPtr) xrealloc (spans->points,
-                                                            (spans->count +
-                                                             EXTRA) * sizeof (DDXPointRec));
+                                newPt = xrealloc (spans->points,
+                                                  (spans->count +
+                                                   EXTRA) * sizeof (DDXPointRec));
                                 if (!newPt)
                                     break;
                                 spansPt = newPt + (spansPt - spans->points);
                                 spans->points = newPt;
-                                newwid =
-                                    (int *) xrealloc (spans->widths,
-                                                      (spans->count + EXTRA) * sizeof (int));
+                                newwid = xrealloc (spans->widths,
+                                                   (spans->count + EXTRA) * sizeof (int));
                                 if (!newwid)
                                     break;
                                 spansWid = newwid + (spansWid - spans->widths);
@@ -556,7 +554,7 @@ miAppendSpans (SpanGroup * spanGroup, SpanGroup * otherGroup, Spans * spans)
     if (spansCount > 0) {
         if (spanGroup->size == spanGroup->count) {
             spanGroup->size = (spanGroup->size + 8) * 2;
-            spanGroup->group = (Spans *)
+            spanGroup->group =
                 xrealloc (spanGroup->group, sizeof (Spans) * spanGroup->size);
         }
 
@@ -803,10 +801,10 @@ miFillUniqueSpanGroup (GCPtr pGC, SpanGroup * spanGroup, Boolean foreground)
                         DDXPointPtr newpoints;
                         int *newwidths;
                         ysizes[index] = (ysizes[index] + 8) * 2;
-                        newpoints = (DDXPointPtr) xrealloc (newspans->points,
-                                                            ysizes[index] * sizeof (DDXPointRec));
-                        newwidths = (int *) xrealloc (newspans->widths,
-                                                      ysizes[index] * sizeof (int));
+                        newpoints = xrealloc (newspans->points,
+                                              ysizes[index] * sizeof (DDXPointRec));
+                        newwidths = xrealloc (newspans->widths,
+                                              ysizes[index] * sizeof (int));
                         if (!newpoints || !newwidths) {
                             int i;
 
