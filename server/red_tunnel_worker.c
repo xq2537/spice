@@ -323,7 +323,7 @@ static TunneledBufferProcessQueue *tunnel_socket_alloc_simple_print_reply_proces
 static void free_simple_process_queue(TunneledBufferProcessQueue *queue);
 
 typedef struct ServiceCallback {
-    /* allocating the the queue & setting the analysis proc by service type */
+    /* allocating the queue & setting the analysis proc by service type */
     TunneledBufferProcessQueue *(*alloc_process_queue)(RedSocket * sckt);
     void (*free_process_queue)(TunneledBufferProcessQueue *queue);
 } ServiceCallback;

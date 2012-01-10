@@ -53,7 +53,7 @@ struct JpegEncoderUsrContext {
 JpegEncoderContext* jpeg_encoder_create(JpegEncoderUsrContext *usr);
 void jpeg_encoder_destroy(JpegEncoderContext *encoder);
 
-/* returns the total size of the encoded data. Images must be supplied from the the 
+/* returns the total size of the encoded data. Images must be supplied from the
    top line to the bottom */
 int jpeg_encode(JpegEncoderContext *jpeg, int quality, JpegEncoderImageType type,
                 int width, int height, uint8_t *lines, unsigned int num_lines, int stride,
