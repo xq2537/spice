@@ -3098,7 +3098,7 @@ static inline int red_current_add_equal(RedWorker *worker, DrawItem *item, TreeI
             other_drawable->refs++;
             current_remove_drawable(worker, other_drawable);
 
-            /* sending the drawable to clients that already received 
+            /* sending the drawable to clients that already received
              * (or will receive) other_drawable */
             worker_ring_item = ring_get_head(&worker->display_channel->common.base.clients);
             dpi_ring_item = ring_get_head(&other_drawable->pipes);

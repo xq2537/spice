@@ -36,7 +36,7 @@ static void op_decode(SpiceZlibDecoder *decoder,
 ZlibDecoder::ZlibDecoder()
 {
     int z_ret;
-    
+
     _z_strm.zalloc = Z_NULL;
     _z_strm.zfree = Z_NULL;
     _z_strm.opaque = Z_NULL;
@@ -71,7 +71,7 @@ void ZlibDecoder::decode(uint8_t *data, int data_size, uint8_t *dest, int dest_s
     _z_strm.avail_out = dest_size;
 
     z_ret = inflate(&_z_strm, Z_FINISH);
-   
+
     if (z_ret != Z_STREAM_END) {
         THROW("zlib inflate failed, error %d", z_ret);
     }

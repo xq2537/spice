@@ -166,7 +166,7 @@ int main(int argc, char *argv[])
     //send_data(CONTROLLER_HOST_SUBJECT, (uint8_t*)HOST_SUBJECT, sizeof(HOST_SUBJECT));
     send_data(CONTROLLER_SET_TITLE, (uint8_t*)TITLE, sizeof(TITLE));
     send_data(CONTROLLER_HOTKEYS, (uint8_t*)HOTKEYS, sizeof(HOTKEYS));
-    
+
     send_data(CONTROLLER_CREATE_MENU, (uint8_t*)MENU, sizeof(MENU));
 
     send_value(CONTROLLER_FULL_SCREEN, /*CONTROLLER_SET_FULL_SCREEN |*/ CONTROLLER_AUTO_DISPLAY_RES);
@@ -194,7 +194,7 @@ int main(int argc, char *argv[])
     printf("Press <Enter> to close connection\n");
     getchar();
 #ifdef WIN32
-    CloseHandle(pipe); 
+    CloseHandle(pipe);
 #else
     close(sock);
 #endif

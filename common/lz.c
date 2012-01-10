@@ -439,7 +439,7 @@ typedef uint16_t rgb16_pixel_t;
 #define COMP_LEVEL_SIZE_LIMIT 65536
 
 // TODO: implemented lz2. should lz1 be an option (no RLE + distance limitation of MAX_DISTANCE)
-// TODO: I think MAX_FARDISTANCE can be changed easily to 2^29 
+// TODO: I think MAX_FARDISTANCE can be changed easily to 2^29
 //       (and maybe even more when pixel > byte).
 // i.e. we can support 512M Bytes/Pixels distance instead of only ~68K.
 #define MAX_DISTANCE 8191                        // 2^13

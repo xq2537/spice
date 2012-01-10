@@ -163,7 +163,7 @@ main(int argc, char * argv[])
   /* long option list index */
   int longind = 0;
 
-  /* 
+  /*
    * print a warning when the POSIXLY_CORRECT environment variable will
    * interfere with argument placement
    */
@@ -326,12 +326,12 @@ main(int argc, char * argv[])
   if (optind < argc)
     {
       int argindex;
-      
+
       for (argindex = optind; argindex < argc; argindex ++)
         {
           char *infilename = argv[argindex];
           FILE *infile;
-          
+
           /* we allow "-" as a synonym for stdin here */
           if (! strcmp(infilename, "-"))
             {

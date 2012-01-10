@@ -619,7 +619,7 @@ static pixman_image_t *canvas_get_jpeg_alpha(CanvasBase *canvas,
         decomp_alpha_buf = dest;
     }
     lz_decode(lz_data->lz, LZ_IMAGE_TYPE_XXXA, decomp_alpha_buf);
-    
+
     if (invers) {
         uint8_t *end = dest + height * stride;
         for (; dest != end; dest += stride) {

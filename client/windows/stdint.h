@@ -104,11 +104,11 @@ typedef unsigned long long   uint_least64_t;
 
 
 
-/*  7.18.1.3  Fastest minimum-width integer types 
+/*  7.18.1.3  Fastest minimum-width integer types
 
  *  Not actually guaranteed to be fastest for all purposes
 
- *  Here we use the exact-width types for 8 and 16-bit ints. 
+ *  Here we use the exact-width types for 8 and 16-bit ints.
 
  */
 
@@ -164,7 +164,7 @@ typedef unsigned long long   uintmax_t;
 
 /* 7.18.2.1  Limits of exact-width integer types */
 
-#define INT8_MIN (-128) 
+#define INT8_MIN (-128)
 
 #define INT16_MIN (-32768)
 
@@ -260,7 +260,7 @@ typedef unsigned long long   uintmax_t;
 
 /* 7.18.2.4  Limits of integer types capable of holding
 
-    object pointers */ 
+    object pointers */
 
 #define INTPTR_MIN INT32_MIN
 
@@ -298,7 +298,7 @@ typedef unsigned long long   uintmax_t;
 
 
 
-#ifndef WCHAR_MIN  /* also in wchar.h */ 
+#ifndef WCHAR_MIN  /* also in wchar.h */
 
 #define WCHAR_MIN 0
 

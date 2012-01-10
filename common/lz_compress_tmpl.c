@@ -296,7 +296,7 @@ match:        // RLE or dictionary (both are encoded by distance from ref (-1) a
             PIXEL x = *ref;
             while ((ip < ip_bound) && (ref < ref_limit)) { // TODO: maybe separate a run from
                                                            //       the same seg or from different
-                                                           //       ones in order to spare 
+                                                           //       ones in order to spare
                                                            //       ref < ref_limit
                 if (!SAME_PIXEL(*ref, x)) {
                     ref++;

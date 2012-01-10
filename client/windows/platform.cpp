@@ -139,7 +139,7 @@ static uint32_t get_clipboard_format(uint32_t type) {
     for (size_t i = 0; i < clipboard_formats_count; i++) {
         for (uint32_t* ptype = clipboard_formats[i].types; *ptype; ptype++) {
             if (*ptype == type) {
-                return clipboard_formats[i].format; 
+                return clipboard_formats[i].format;
             }
         }
     }
@@ -228,7 +228,7 @@ static LRESULT CALLBACK PlatformWinProc(HWND hWnd, UINT message, WPARAM wParam, 
         // handling WM_RENDERFORMAT. Therefore, we try our best by sending CLIPBOARD_REQUEST to the
         // agent, while waiting alertably for a while (hoping for good) for receiving CLIPBOARD data
         // or CLIPBOARD_RELEASE from the agent, which both will signal clipboard_event.
-        uint32_t type = get_clipboard_type(wParam);       
+        uint32_t type = get_clipboard_type(wParam);
         if (!type) {
             LOG_INFO("Unsupported clipboard format %u", wParam);
             break;
@@ -985,11 +985,11 @@ void Platform::set_clipboard_listener(ClipboardListener* listener)
 
 static HGLOBAL utf8_alloc(LPCSTR data, int size)
 {
-    HGLOBAL handle; 
+    HGLOBAL handle;
     LPVOID buf;
     int len;
 
-    // Received utf8 string is not null-terminated   
+    // Received utf8 string is not null-terminated
     if (!(len = MultiByteToWideChar(CP_UTF8, 0, data, size, NULL, 0))) {
         return NULL;
     }
@@ -1001,7 +1001,7 @@ static HGLOBAL utf8_alloc(LPCSTR data, int size)
     if (!(buf = GlobalLock(handle))) {
         GlobalFree(handle);
         return NULL;
-    }  
+    }
     // Translate data and set clipboard content
     if (!(MultiByteToWideChar(CP_UTF8, 0, data, size, (LPWSTR)buf, len))) {
         GlobalUnlock(handle);

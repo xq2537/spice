@@ -75,7 +75,7 @@ static int FUNC_NAME(set_lossy)(CACHE *cache, uint64_t id, int lossy)
             break;
         }
         item = item->next;
-   } 
+    }
     pthread_mutex_unlock(&cache->lock);
     return !!item;
 }
