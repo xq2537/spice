@@ -136,6 +136,11 @@ spicec_SOURCES +=			\
 	windows/stdint.h		\
 	windows/win_platform.h		\
 	$(NULL)
+
+spicec_resource_LDADD = windows/redc.o
+
+windows/redc.o: windows/redc.rc
+	$(WINDRES) $< -o $@
 else
 spicec_SOURCES +=			\
 	x11/atomic_count.h		\
@@ -165,6 +170,12 @@ spicec_SOURCES +=			\
 	x11/x_icon.h			\
 	x11/x_platform.h		\
 	$(NULL)
+endif
+
+if OS_WIN32
+PLATFORM_INCLUDES=-I$(top_srcdir)/client/windows
+else
+PLATFORM_INCLUDES=-I$(top_srcdir)/client/x11
 endif
 
 if SUPPORT_TUNNEL
@@ -210,7 +221,7 @@ endif
 
 INCLUDES = \
 	-D__STDC_LIMIT_MACROS				\
-	-I$(top_srcdir)/client/x11			\
+	$(PLATFORM_INCLUDES)				\
 	-I$(top_srcdir)/common				\
 	$(ALSA_CFLAGS)					\
 	$(CEGUI_CFLAGS)					\
@@ -227,6 +238,7 @@ INCLUDES = \
 	$(XFIXES_CFLAGS)				\
 	$(WARN_CFLAGS)					\
 	$(XINERAMA_CFLAGS)				\
+	$(CXIMAGE_CFLAGS)				\
 	$(NULL)
 
 spicec_LDFLAGS = $(SPICEC_STATIC_LINKAGE_BSTATIC)
@@ -248,6 +260,7 @@ spicec_LDADD =						\
 	$(XRANDR_LIBS)					\
 	$(Z_LIBS)					\
 	$(XINERAMA_LIBS)				\
+	$(spicec_resource_LDADD)			\
 	$(NULL)
 
 EXTRA_DIST =				\
