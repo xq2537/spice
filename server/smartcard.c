@@ -453,7 +453,7 @@ static int smartcard_channel_handle_message(RedChannelClient *rcc,
         return red_channel_client_handle_message(rcc, size, type, msg);
     }
 
-    ASSERT(header->size == vheader->length + sizeof(VSCMsgHeader));
+    ASSERT(size == vheader->length + sizeof(VSCMsgHeader));
     switch (vheader->type) {
         case VSC_ReaderAdd:
             smartcard_add_reader(rcc, msg + sizeof(VSCMsgHeader));
