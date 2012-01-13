@@ -461,9 +461,6 @@ static void copy_bitmap_alpha(const uint8_t *src_alpha, int height, int width, i
     uint8_t i_offset;
     int i_count = 0;
     int i = 0;
-    int width_div_stride;
-
-    width_div_stride = width / src_stride;
 
     if (alpha_bits_size == 1) {
         i_offset = 1;
@@ -1602,7 +1599,6 @@ static void gdi_canvas_draw_text(SpiceCanvas *spice_canvas, SpiceRect *bbox, Spi
 
 static uint32_t *gdi_get_userstyle(GdiCanvas *canvas, uint8_t nseg, SPICE_FIXED28_4* style, int start_is_gap)
 {
-    double offset = 0;
     uint32_t *local_style;
     int i;
 
@@ -1612,7 +1608,6 @@ static uint32_t *gdi_get_userstyle(GdiCanvas *canvas, uint8_t nseg, SPICE_FIXED2
     local_style = spice_new(uint32_t , nseg);
 
     if (start_is_gap) {
-        offset = (uint32_t)fix_to_double(*style);
         local_style[nseg - 1] = (uint32_t)fix_to_double(*style);
         style++;
 
@@ -1815,24 +1810,23 @@ SpiceCanvas *gdi_canvas_create(int width, int height,
                             )
 {
     GdiCanvas *canvas;
-    int init_ok;
 
     if (need_init) {
         return NULL;
     }
     canvas = spice_new0(GdiCanvas, 1);
-    init_ok = canvas_base_init(&canvas->base, &gdi_canvas_ops,
-                               width, height, format
+    canvas_base_init(&canvas->base, &gdi_canvas_ops,
+                     width, height, format,
 #ifdef SW_CANVAS_CACHE
-                               ,bits_cache
-                               ,palette_cache
+                     bits_cache,
+                     palette_cache,
 #elif defined(SW_CANVAS_IMAGE_CACHE)
-                               , bits_cache
+                     bits_cache,
 #endif
-                               , surfaces
-                               , glz_decoder
-                               , jpeg_decoder
-                               , zlib_decoder);
+                     surfaces,
+                     glz_decoder,
+                     jpeg_decoder,
+                     zlib_decoder);
     canvas->dc = dc;
     canvas->lock = lock;
     return (SpiceCanvas *)canvas;
