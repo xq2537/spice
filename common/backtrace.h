@@ -23,7 +23,7 @@
 
 SPICE_BEGIN_DECLS
 
-#ifdef WIN32
+#if defined(WIN32) && !defined(__MINGW32__)
 #define spice_backtrace()
 #else
 void spice_backtrace(void);
