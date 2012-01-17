@@ -162,6 +162,10 @@ static void red_peer_handle_incoming(RedsStream *stream, IncomingHandler *handle
     uint16_t msg_type;
     uint32_t msg_size;
 
+    if (!stream) {
+        return;
+    }
+
     for (;;) {
         int ret_handle;
         if (handler->header_pos < handler->header.header_size) {
