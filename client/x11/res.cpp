@@ -80,4 +80,3 @@ const IconHeader *res_get_icon(int id)
     }
     return NULL;
 }
-

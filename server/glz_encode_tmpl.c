@@ -144,10 +144,10 @@
 /* returns the length of the match. 0 if no match.
   if image_distance = 0, pixel_distance is the distance between the matching pixels.
   Otherwise, it is the offset from the beginning of the referred image */
-static INLINE size_t FNAME(do_match)(SharedDictionary *dict, 
-                                     WindowImageSegment *ref_seg, const PIXEL *ref, 
+static INLINE size_t FNAME(do_match)(SharedDictionary *dict,
+                                     WindowImageSegment *ref_seg, const PIXEL *ref,
                                      const PIXEL *ref_limit,
-                                     WindowImageSegment *ip_seg,  const PIXEL *ip, 
+                                     WindowImageSegment *ip_seg,  const PIXEL *ip,
                                      const PIXEL *ip_limit,
 #ifdef  LZ_PLT
                                      int pix_per_byte,
@@ -546,9 +546,9 @@ static void FNAME(compress)(Encoder *encoder)
     FNAME(compress_seg)(encoder, seg_id, ip, 2);
 
     // compressing the next segments
-    for (seg_id = dict->window.segs[seg_id].next; 
+    for (seg_id = dict->window.segs[seg_id].next;
         seg_id != NULL_IMAGE_SEG_ID && (
-        dict->window.segs[seg_id].image->id == encoder->cur_image.id); 
+        dict->window.segs[seg_id].image->id == encoder->cur_image.id);
         seg_id = dict->window.segs[seg_id].next) {
         FNAME(compress_seg)(encoder, seg_id, (PIXEL *)dict->window.segs[seg_id].lines, 0);
     }
@@ -572,4 +572,3 @@ static void FNAME(compress)(Encoder *encoder)
 #undef LZ_RGB32
 #undef MIN_REF_ENCODE_SIZE
 #undef MAX_REF_ENCODE_SIZE
-

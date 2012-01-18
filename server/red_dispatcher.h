@@ -38,6 +38,10 @@ typedef struct RedWorkerMessageDisplayConnect {
     RedClient * client;
     RedsStream * stream;
     int migration;
+    uint32_t *common_caps; // red_worker should free
+    int num_common_caps;
+    uint32_t *caps;        // red_worker should free
+    int num_caps;
 } RedWorkerMessageDisplayConnect;
 
 typedef struct RedWorkerMessageDisplayDisconnect {
@@ -52,6 +56,10 @@ typedef struct RedWorkerMessageCursorConnect {
     RedClient *client;
     RedsStream *stream;
     int migration;
+    uint32_t *common_caps; // red_worker should free
+    int num_common_caps;
+    uint32_t *caps;        // red_worker should free
+    int num_caps;
 } RedWorkerMessageCursorConnect;
 
 typedef struct RedWorkerMessageCursorDisconnect {

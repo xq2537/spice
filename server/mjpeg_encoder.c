@@ -129,8 +129,7 @@ static boolean empty_mem_output_buffer(j_compress_ptr cinfo)
 
   memcpy(nextbuffer, dest->buffer, dest->bufsize);
 
-  if (dest->newbuffer != NULL)
-    free(dest->newbuffer);
+  free(dest->newbuffer);
 
   dest->newbuffer = nextbuffer;
 

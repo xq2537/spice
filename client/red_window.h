@@ -196,4 +196,3 @@ static bool find_anchor_point(const REGION& region, SpicePoint& pt)
 }
 
 #endif
-

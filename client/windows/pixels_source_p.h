@@ -26,4 +26,3 @@ struct PixelsSource_p {
 };
 
 #endif
-

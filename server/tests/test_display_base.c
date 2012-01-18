@@ -1,3 +1,4 @@
+#include <config.h>
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
@@ -29,9 +30,7 @@ static void test_spice_destroy_update(SimpleSpiceUpdate *update)
     if (!update) {
         return;
     }
-    if (update->bitmap) {
-        free(update->bitmap);
-    }
+    free(update->bitmap);
     free(update);
 }
 
@@ -576,4 +575,3 @@ SpiceServer* test_init(SpiceCoreInterface *core)
     wakeup_timer = core->timer_add(do_wakeup, NULL);
     return server;
 }
-

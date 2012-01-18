@@ -52,4 +52,3 @@ class Handle_p {
 };
 
 #endif
-

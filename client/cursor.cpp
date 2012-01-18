@@ -113,4 +113,3 @@ int LocalCursor::get_size_bits(const SpiceCursorHeader& header, int& size)
         return 0;
     }
 }
-

@@ -27,7 +27,20 @@
 extern "C" {
 #endif
 
-#if defined(WIN32) && !defined(_WIN64)
+#if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
+static inline int spice_bit_find_msb(unsigned int val)
+{
+    int ret;
+
+    asm ("bsrl %1,%0\n\t"
+         "jnz 1f\n\t"
+         "movl $-1,%0\n"
+         "1:"
+         : "=r"(ret) : "r"(val));
+    return ret + 1;
+}
+
+#elif defined(WIN32) && !defined(_WIN64)
 static INLINE int spice_bit_find_msb(uint32_t val)
 {
     uint32_t r;
@@ -40,19 +53,6 @@ found:
         mov r, eax
     }
     return r + 1;
-}
-
-#elif defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
-static inline int spice_bit_find_msb(unsigned int val)
-{
-    int ret;
-
-    asm ("bsrl %1,%0\n\t"
-         "jnz 1f\n\t"
-         "movl $-1,%0\n"
-         "1:"
-         : "=r"(ret) : "r"(val));
-    return ret + 1;
 }
 
 #else

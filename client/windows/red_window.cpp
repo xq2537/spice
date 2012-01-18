@@ -179,9 +179,8 @@ LRESULT CALLBACK RedWindow_p::WindowProc(HWND hWnd, UINT message, WPARAM wParam,
     switch (message) {
     case WM_PAINT: {
         PAINTSTRUCT ps;
-        HDC hdc;
 
-        hdc = BeginPaint(hWnd, &ps);
+        BeginPaint(hWnd, &ps);
         SpicePoint origin = window->get_origin();
         SpiceRect r;
         r.left = ps.rcPaint.left - origin.x;

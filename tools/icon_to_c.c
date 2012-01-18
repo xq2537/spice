@@ -15,6 +15,7 @@
    License along with this library; if not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <config.h>
 #include <string.h>
 #include <stdint.h>
 #include <unistd.h>
@@ -374,4 +375,3 @@ int main(int argc, char **argv)
 
     return icon_to_c_struct(icon, dest, struct_name);
 }
-

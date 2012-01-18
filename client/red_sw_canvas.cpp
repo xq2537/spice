@@ -106,4 +106,3 @@ CanvasType SCanvas::get_pixmap_type()
 {
     return CANVAS_TYPE_SW;
 }
-

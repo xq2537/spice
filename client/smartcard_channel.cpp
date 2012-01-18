@@ -551,4 +551,3 @@ ChannelFactory& SmartCardChannel::Factory()
 {
     return factory;
 }
-

@@ -1,6 +1,6 @@
 static const struct {
-    uint32_t width;
-    uint32_t height;
+    int width;
+    int height;
     uint8_t pixmap[4096];
     uint8_t mask[128];
 } _red_icon = { 32, 32, {

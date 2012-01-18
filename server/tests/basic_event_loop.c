@@ -1,7 +1,7 @@
+#include <config.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/time.h>
-#include <strings.h>
 #include <signal.h>
 #include <string.h>
 
@@ -281,4 +281,3 @@ SpiceCoreInterface *basic_event_loop_init(void)
     ignore_sigpipe();
     return &core;
 }
-

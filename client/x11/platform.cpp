@@ -534,7 +534,7 @@ XIC XPlatform::get_input_context()
 void XPlatform::set_win_proc(Window win, win_proc_t proc)
 {
     int res;
-    
+
     XLockDisplay(x_display);
     res = XSaveContext(x_display, win, win_proc_context, (XPointer)proc);
     XUnlockDisplay(x_display);
@@ -1046,7 +1046,7 @@ bool DynamicScreen::set_screen_size(int size_index)
     XLockDisplay(get_display());
     config = XRRGetScreenInfo(get_display(), root_window);
     XUnlockDisplay(get_display());
-    
+
     if (!config) {
         LOG_WARN("get screen info failed");
         return false;

@@ -1,7 +1,7 @@
 /* -*- Mode: C; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 /*
 
- Copyright 2009 Red Hat, Inc. and/or its affiliates.
+ Copyright (C) 2009 Red Hat, Inc. and/or its affiliates.
 
    This library is free software; you can redistribute it and/or
    modify it under the terms of the GNU Lesser General Public
@@ -170,7 +170,7 @@
     out->b =  (out->b << 3) | ((out->b >> 2) & 0x07);                  \
     out->pad = 0;                                                      \
     out++;                                                             \
-}                                                        
+}
 #endif
 #endif
 
@@ -324,4 +324,3 @@ static size_t FNAME(decompress)(Encoder *encoder, OUT_PIXEL *out_buf, int size)
 #undef COPY_COMP_PIXEL
 #undef COPY_PLT_ENTRY
 #undef CAST_PLT_DISTANCE
-

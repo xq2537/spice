@@ -793,4 +793,3 @@ void RedDrawable::frame_rect(const SpiceRect& area, rgb32_t color)
         THROW("invalid dest type %d", dest->source.type);
     }
 }
-

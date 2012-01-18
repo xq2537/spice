@@ -18,16 +18,20 @@
 
 /*
  * Taken from xserver os/backtrace.c:
- * Copyright 2008 Red Hat, Inc.
+ * Copyright (C) 2008 Red Hat, Inc.
  */
 
-#include "config.h"
+#include <config.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
+#include <unistd.h>
 #include <sys/types.h>
+#ifndef __MINGW32__
 #include <sys/wait.h>
+#endif
+
 #include "spice_common.h"
 
 #define GSTACK_PATH "/usr/bin/gstack"
@@ -49,6 +53,10 @@ static void spice_backtrace_backtrace(void)
 }
 #endif
 
+/* XXX perhaps gstack can be available in windows but pipe/waitpid isn't,
+ * so until it is ported properly just compile it out, we lose the
+ * backtrace only. */
+#ifndef __MINGW32__
 static int spice_backtrace_gstack(void)
 {
     pid_t kidpid;
@@ -104,11 +112,22 @@ static int spice_backtrace_gstack(void)
     }
     return 0;
 }
+#else
+static int spice_backtrace_gstack(void)
+{
+    /* empty failing implementation */
+    return -1;
+}
+#endif
 
-void spice_backtrace() {
+void spice_backtrace(void)
+{
+    int ret = -1;
+
     if (!access(GSTACK_PATH, X_OK)) {
-        spice_backtrace_gstack();
-    } else {
+        ret = spice_backtrace_gstack();
+    }
+    if (ret != 0) {
         spice_backtrace_backtrace();
     }
 }

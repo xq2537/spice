@@ -133,4 +133,3 @@ Mutex::~Mutex()
 {
     pthread_mutex_destroy(&_mutex);
 }
-

@@ -41,6 +41,13 @@ static void init_winsock()
     }
 }
 
+#ifdef __MINGW32__
+// XXX: for mingw32 we can do both actually, but it seems easier
+// to just use the autoconf provided PACKAGE_VERSION.
+static void init_version_string()
+{
+}
+#else
 const char* PACKAGE_VERSION = "???";
 static char _version_string[40];
 
@@ -68,6 +75,7 @@ static void init_version_string()
         (int)(file_info->dwFileVersionLS & 0x0ffff));
     PACKAGE_VERSION = _version_string;
 }
+#endif
 
 int WINAPI WinMain(HINSTANCE hInstance,
                    HINSTANCE hPrevInstance,
@@ -100,4 +108,3 @@ int WINAPI WinMain(HINSTANCE hInstance,
 
     return exit_val;
 }
-

@@ -118,4 +118,3 @@ void GCanvas::post_gl_copy()
 {
     _pixmap->past_copy();
 }
-

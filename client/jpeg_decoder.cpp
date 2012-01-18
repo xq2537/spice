@@ -23,7 +23,7 @@
 #include "debug.h"
 #include "utils.h"
 
-#if !defined(jpeg_boolean) && !defined(__MINGW32__)
+#if !defined(jpeg_boolean)
 #define jpeg_boolean boolean
 #endif
 
@@ -85,7 +85,7 @@ JpegDecoder::JpegDecoder()
     _cinfo.src->skip_input_data = jpeg_decoder_skip_input_data;
     _cinfo.src->resync_to_restart = jpeg_resync_to_restart;
     _cinfo.src->term_source = jpeg_decoder_term_source;
-    
+
     static SpiceJpegDecoderOps decoder_ops = {
         op_begin_decode,
         op_decode,

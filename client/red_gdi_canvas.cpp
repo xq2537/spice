@@ -15,6 +15,9 @@
    License along with this library; if not, see <http://www.gnu.org/licenses/>.
 */
 #ifdef HAVE_CONFIG_H
+#ifdef __MINGW32__
+#undef HAVE_STDLIB_H
+#endif
 #include <config.h>
 #endif
 
@@ -88,4 +91,3 @@ CanvasType GDICanvas::get_pixmap_type()
 {
     return CANVAS_TYPE_GDI;
 }
-

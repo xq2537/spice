@@ -291,4 +291,3 @@ ChannelFactory& RecordChannel::Factory()
 {
     return factory;
 }
-

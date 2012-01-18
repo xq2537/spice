@@ -137,4 +137,3 @@ void SoftTexture::loadFromMemory(const void* buffPtr, uint buffWidth,
 
 
 }
-

@@ -151,4 +151,3 @@ void RedDrawable::frame_rect(const SpiceRect& rect, rgb32_t color)
     }
     DeleteObject(brush);
 }
-

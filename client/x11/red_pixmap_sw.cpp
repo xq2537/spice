@@ -91,4 +91,3 @@ RedPixmapSw::~RedPixmapSw()
         delete[] _data;
     }
 }
-

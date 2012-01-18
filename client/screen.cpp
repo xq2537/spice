@@ -88,7 +88,7 @@ RedScreen::RedScreen(Application& owner, int id, const std::string& name, int wi
     , _update_by_timer (true)
     , _size_locked (false)
     , _menu_needs_update (false)
-    , _forec_update_timer (0)
+    , _force_update_timer (0)
     , _update_timer (new UpdateTimer(this))
     , _composit_area (NULL)
     , _update_mark (1)
@@ -402,7 +402,7 @@ void RedScreen::periodic_update()
     if (is_dirty()) {
         need_update = true;
     } else {
-        if (!_forec_update_timer) {
+        if (!_force_update_timer) {
             _owner.deactivate_interval_timer(*_update_timer);
             _periodic_update = false;
         }
@@ -742,14 +742,14 @@ void RedScreen::on_stop_key_interception()
 
 void RedScreen::enter_modal_loop()
 {
-    _forec_update_timer++;
+    _force_update_timer++;
     activate_timer();
 }
 
 void RedScreen::exit_modal_loop()
 {
-    ASSERT(_forec_update_timer > 0)
-    _forec_update_timer--;
+    ASSERT(_force_update_timer > 0)
+    _force_update_timer--;
 }
 
 void RedScreen::pre_migrate()
@@ -939,4 +939,3 @@ void RedScreen::unset_type_gl()
     _window.unset_type_gl();
 }
 #endif // USE_OPENGL
-

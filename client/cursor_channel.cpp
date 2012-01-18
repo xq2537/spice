@@ -667,4 +667,3 @@ ChannelFactory& CursorChannel::Factory()
 {
     return factory;
 }
-

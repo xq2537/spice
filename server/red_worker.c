@@ -593,6 +593,9 @@ typedef struct CommonChannelClient {
     struct RedWorker *worker;
 } CommonChannelClient;
 
+/* Each drawable can refer to at most 3 images: src, brush and mask */
+#define MAX_DRAWABLE_PIXMAP_CACHE_ITEMS 3
+
 struct DisplayChannelClient {
     CommonChannelClient common;
 
@@ -616,6 +619,8 @@ struct DisplayChannelClient {
         RedCompressBuf *used_compress_bufs;
 
         FreeList free_list;
+        uint64_t pixmap_cache_items[MAX_DRAWABLE_PIXMAP_CACHE_ITEMS];
+        int num_pixmap_cache_items;
     } send_data;
 
     /* global lz encoding entities */
@@ -986,8 +991,7 @@ static void red_display_release_stream(RedWorker *worker, StreamAgent *agent);
 static inline void red_detach_stream(RedWorker *worker, Stream *stream);
 static void red_stop_stream(RedWorker *worker, Stream *stream);
 static inline void red_stream_maintenance(RedWorker *worker, Drawable *candidate, Drawable *sect);
-static inline void display_begin_send_message(RedChannelClient *rcc,
-                                              SpiceMarshaller *base_marshaller);
+static inline void display_begin_send_message(RedChannelClient *rcc);
 static void red_release_pixmap_cache(DisplayChannelClient *dcc);
 static void red_release_glz(DisplayChannelClient *dcc);
 static void red_freeze_glz(DisplayChannelClient *dcc);
@@ -1517,15 +1521,15 @@ static void release_upgrade_item(RedWorker* worker, UpgradeItem *item)
     }
 }
 
-static uint8_t *common_alloc_recv_buf(RedChannelClient *rcc, SpiceDataHeader *msg_header)
+static uint8_t *common_alloc_recv_buf(RedChannelClient *rcc, uint16_t type, uint32_t size)
 {
     CommonChannel *common = SPICE_CONTAINEROF(rcc->channel, CommonChannel, base);
 
     return common->recv_buf;
 }
 
-static void common_release_recv_buf(RedChannelClient *rcc,
-                                    SpiceDataHeader *msg_header, uint8_t* msg)
+static void common_release_recv_buf(RedChannelClient *rcc, uint16_t type, uint32_t size,
+                                    uint8_t* msg)
 {
 }
 
@@ -2468,9 +2472,7 @@ static void red_display_release_stream_clip(RedWorker *worker, StreamClipItem *i
 {
     if (!--item->refs) {
         red_display_release_stream(worker, item->stream_agent);
-        if (item->rects) {
-            free(item->rects);
-        }
+        free(item->rects);
         free(item);
     }
 }
@@ -3096,7 +3098,7 @@ static inline int red_current_add_equal(RedWorker *worker, DrawItem *item, TreeI
             other_drawable->refs++;
             current_remove_drawable(worker, other_drawable);
 
-            /* sending the drawable to clients that already received 
+            /* sending the drawable to clients that already received
              * (or will receive) other_drawable */
             worker_ring_item = ring_get_head(&worker->display_channel->common.base.clients);
             dpi_ring_item = ring_get_head(&other_drawable->pipes);
@@ -6162,7 +6164,7 @@ static inline int red_compress_image(DisplayChannelClient *dcc,
                 } else {
                     if (drawable->copy_bitmap_graduality == BITMAP_GRADUAL_INVALID) {
                         quic_compress = BITMAP_FMT_IS_RGB[src->format] &&
-			    (_get_bitmap_graduality_level(display_channel->common.worker, src, drawable->group_id) ==
+                            (_get_bitmap_graduality_level(display_channel->common.worker, src, drawable->group_id) ==
                              BITMAP_GRADUAL_HIGH);
                     } else {
                         quic_compress = (drawable->copy_bitmap_graduality == BITMAP_GRADUAL_HIGH);
@@ -6248,6 +6250,8 @@ static inline void red_display_add_image_to_pixmap_cache(RedChannelClient *rcc,
                                  image->descriptor.width * image->descriptor.height, is_lossy,
                                  dcc)) {
                 io_image->descriptor.flags |= SPICE_IMAGE_FLAGS_CACHE_ME;
+                dcc->send_data.pixmap_cache_items[dcc->send_data.num_pixmap_cache_items++] =
+                                                                               image->descriptor.id;
                 stat_inc_counter(display_channel->add_to_cache_counter, 1);
             }
         }
@@ -6290,6 +6294,8 @@ static FillBitsType fill_bits(DisplayChannelClient *dcc, SpiceMarshaller *m,
         int lossy_cache_item;
         if (pixmap_cache_hit(dcc->pixmap_cache, image.descriptor.id,
                              &lossy_cache_item, dcc)) {
+            dcc->send_data.pixmap_cache_items[dcc->send_data.num_pixmap_cache_items++] =
+                                                                               image.descriptor.id;
             if (can_lossy || !lossy_cache_item) {
                 if (!display_channel->enable_jpeg || lossy_cache_item) {
                     image.descriptor.type = SPICE_IMAGE_TYPE_FROM_CACHE;
@@ -6463,6 +6469,7 @@ static inline void red_display_reset_send_data(DisplayChannelClient *dcc)
 {
     red_display_reset_compress_buf(dcc);
     dcc->send_data.free_list.res->count = 0;
+    dcc->send_data.num_pixmap_cache_items = 0;
     memset(dcc->send_data.free_list.sync, 0, sizeof(dcc->send_data.free_list.sync));
 }
 
@@ -7780,27 +7787,122 @@ static void display_channel_push_release(DisplayChannelClient *dcc, uint8_t type
     free_list->res->resources[free_list->res->count++].id = id;
 }
 
-static inline void display_begin_send_message(RedChannelClient *rcc,
-                                              SpiceMarshaller *base_marshaller)
+static inline void display_marshal_sub_msg_inval_list(SpiceMarshaller *m,
+                                                       FreeList *free_list)
+{
+    /* type + size + submessage */
+    spice_marshaller_add_uint16(m, SPICE_MSG_DISPLAY_INVAL_LIST);
+    spice_marshaller_add_uint32(m, sizeof(*free_list->res) +
+                                free_list->res->count * sizeof(free_list->res->resources[0]));
+    spice_marshall_msg_display_inval_list(m, free_list->res);
+}
+
+static inline void display_marshal_sub_msg_inval_list_wait(SpiceMarshaller *m,
+                                                            FreeList *free_list)
+
+{
+    /* type + size + submessage */
+    spice_marshaller_add_uint16(m, SPICE_MSG_WAIT_FOR_CHANNELS);
+    spice_marshaller_add_uint32(m, sizeof(free_list->wait.header) +
+                                free_list->wait.header.wait_count * sizeof(free_list->wait.buf[0]));
+    spice_marshall_msg_wait_for_channels(m, &free_list->wait.header);
+}
+
+/* use legacy SpiceDataHeader (with sub_list) */
+static inline void display_channel_send_free_list_legacy(RedChannelClient *rcc)
 {
     DisplayChannelClient *dcc = RCC_TO_DCC(rcc);
     FreeList *free_list = &dcc->send_data.free_list;
-    SpiceDataHeader *header = red_channel_client_get_header(rcc);
+    SpiceMarshaller *marshaller;
+    int sub_list_len = 1;
+    SpiceMarshaller *wait_m = NULL;
+    SpiceMarshaller *inval_m;
+    SpiceMarshaller *sub_list_m;
+
+    marshaller = red_channel_client_get_marshaller(rcc);
+    inval_m = spice_marshaller_get_submarshaller(marshaller);
+
+    display_marshal_sub_msg_inval_list(inval_m, free_list);
+
+    if (free_list->wait.header.wait_count) {
+        wait_m = spice_marshaller_get_submarshaller(marshaller);
+        display_marshal_sub_msg_inval_list_wait(wait_m, free_list);
+        sub_list_len++;
+    }
+
+    sub_list_m = spice_marshaller_get_submarshaller(marshaller);
+    spice_marshaller_add_uint16(sub_list_m, sub_list_len);
+    if (wait_m) {
+        spice_marshaller_add_uint32(sub_list_m, spice_marshaller_get_offset(wait_m));
+    }
+    spice_marshaller_add_uint32(sub_list_m, spice_marshaller_get_offset(inval_m));
+    red_channel_client_set_header_sub_list(rcc, spice_marshaller_get_offset(sub_list_m));
+}
+
+/* use mini header and SPICE_MSG_LIST */
+static inline void display_channel_send_free_list(RedChannelClient *rcc)
+{
+    DisplayChannelClient *dcc = RCC_TO_DCC(rcc);
+    FreeList *free_list = &dcc->send_data.free_list;
+    int sub_list_len = 1;
+    SpiceMarshaller *urgent_marshaller;
+    SpiceMarshaller *wait_m = NULL;
+    SpiceMarshaller *inval_m;
+    uint32_t sub_arr_offset;
+    uint32_t wait_offset = 0;
+    uint32_t inval_offset = 0;
+    int i;
+
+    urgent_marshaller = red_channel_client_switch_to_urgent_sender(rcc);
+    for (i = 0; i < dcc->send_data.num_pixmap_cache_items; i++) {
+        int dummy;
+        /* When using the urgent marshaller, the serial number of the message that is
+         * going to be sent right after the SPICE_MSG_LIST, is increased by one.
+         * But all this message pixmaps cache references used its old serial.
+         * we use pixmap_cache_items to collect these pixmaps, and we update their serial by calling pixmap_cache_hit.*/
+        pixmap_cache_hit(dcc->pixmap_cache, dcc->send_data.pixmap_cache_items[i],
+                         &dummy, dcc);
+    }
+
+    if (free_list->wait.header.wait_count) {
+        red_channel_client_init_send_data(rcc, SPICE_MSG_LIST, NULL);
+    } else { /* only one message, no need for a list */
+        red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_INVAL_LIST, NULL);
+        spice_marshall_msg_display_inval_list(urgent_marshaller, free_list->res);
+        return;
+    }
+
+    inval_m = spice_marshaller_get_submarshaller(urgent_marshaller);
+    display_marshal_sub_msg_inval_list(inval_m, free_list);
+
+    if (free_list->wait.header.wait_count) {
+        wait_m = spice_marshaller_get_submarshaller(urgent_marshaller);
+        display_marshal_sub_msg_inval_list_wait(wait_m, free_list);
+        sub_list_len++;
+    }
+
+    sub_arr_offset = sub_list_len * sizeof(uint32_t);
+
+    spice_marshaller_add_uint16(urgent_marshaller, sub_list_len);
+    inval_offset = spice_marshaller_get_offset(inval_m); // calc the offset before
+                                                         // adding the sub list
+                                                         // offsets array to the marshaller
+    /* adding the array of offsets */
+    if (wait_m) {
+        wait_offset = spice_marshaller_get_offset(wait_m);
+        spice_marshaller_add_uint32(urgent_marshaller, wait_offset + sub_arr_offset);
+    }
+    spice_marshaller_add_uint32(urgent_marshaller, inval_offset + sub_arr_offset);
+}
+
+static inline void display_begin_send_message(RedChannelClient *rcc)
+{
+    DisplayChannelClient *dcc = RCC_TO_DCC(rcc);
+    FreeList *free_list = &dcc->send_data.free_list;
 
     if (free_list->res->count) {
-        int sub_list_len = 1;
-        SpiceMarshaller *wait_m = NULL;
-        SpiceMarshaller *inval_m;
         int sync_count = 0;
         int i;
-
-        inval_m = spice_marshaller_get_submarshaller(base_marshaller);
-
-        /* type + size + submessage */
-        spice_marshaller_add_uint16(inval_m, SPICE_MSG_DISPLAY_INVAL_LIST);
-        spice_marshaller_add_uint32(inval_m, sizeof(*free_list->res) +
-                        free_list->res->count * sizeof(free_list->res->resources[0]));
-        spice_marshall_msg_display_inval_list(inval_m, free_list->res);
 
         for (i = 0; i < MAX_CACHE_CLIENTS; i++) {
             if (i != dcc->common.id && free_list->sync[i] != 0) {
@@ -7811,24 +7913,11 @@ static inline void display_begin_send_message(RedChannelClient *rcc,
         }
         free_list->wait.header.wait_count = sync_count;
 
-        if (sync_count) {
-            wait_m = spice_marshaller_get_submarshaller(base_marshaller);
-
-            /* type + size + submessage */
-            spice_marshaller_add_uint16(wait_m, SPICE_MSG_WAIT_FOR_CHANNELS);
-            spice_marshaller_add_uint32(wait_m, sizeof(free_list->wait.header) +
-                                                sync_count * sizeof(free_list->wait.buf[0]));
-            spice_marshall_msg_wait_for_channels(wait_m, &free_list->wait.header);
-            sub_list_len++;
+        if (rcc->is_mini_header) {
+            display_channel_send_free_list(rcc);
+        } else {
+            display_channel_send_free_list_legacy(rcc);
         }
-
-        SpiceMarshaller *sub_list_m = spice_marshaller_get_submarshaller(base_marshaller);
-        spice_marshaller_add_uint16(sub_list_m, sub_list_len);
-        if (wait_m) {
-            spice_marshaller_add_uint32(sub_list_m, spice_marshaller_get_offset(wait_m));
-        }
-        spice_marshaller_add_uint32(sub_list_m, spice_marshaller_get_offset(inval_m));
-        header->sub_list = spice_marshaller_get_offset(sub_list_m);
     }
     red_channel_client_begin_send_message(rcc);
 }
@@ -8496,7 +8585,7 @@ static void display_channel_send_item(RedChannelClient *rcc, PipeItem *pipe_item
 
     // a message is pending
     if (red_channel_client_send_message_pending(rcc)) {
-        display_begin_send_message(rcc, m);
+        display_begin_send_message(rcc);
     }
 }
 
@@ -8660,18 +8749,13 @@ static void display_channel_client_on_disconnect(RedChannelClient *rcc)
 
 void red_disconnect_all_display_TODO_remove_me(RedChannel *channel)
 {
-    DisplayChannel *display_channel;
-    RedWorker *worker;
     // TODO: we need to record the client that actually causes the timeout. So
     // we need to check the locations of the various pipe heads when counting,
     // and disconnect only those/that.
     if (!channel) {
         return;
     }
-    display_channel = SPICE_CONTAINEROF(channel, DisplayChannel, common.base);
-    worker = display_channel->common.worker;
     red_channel_apply_clients(channel, display_channel_client_disconnect);
-    worker->display_channel = NULL;
 }
 
 static void red_migrate_display(RedWorker *worker, RedChannelClient *rcc)
@@ -9447,12 +9531,18 @@ SpiceCoreInterface worker_core = {
 };
 
 static CommonChannelClient *common_channel_client_create(int size,
-    CommonChannel *common, RedClient *client, RedsStream *stream)
+                                                         CommonChannel *common,
+                                                         RedClient *client,
+                                                         RedsStream *stream,
+                                                         uint32_t *common_caps,
+                                                         int num_common_caps,
+                                                         uint32_t *caps,
+                                                         int num_caps)
 {
     MainChannelClient *mcc = red_client_get_main(client);
     RedChannelClient *rcc =
         red_channel_client_create(size, &common->base, client, stream,
-                                  0, NULL, 0, NULL);
+                                  num_common_caps, common_caps, num_caps, caps);
     CommonChannelClient *common_cc = (CommonChannelClient*)rcc;
     common_cc->worker = common->worker;
 
@@ -9465,11 +9555,15 @@ static CommonChannelClient *common_channel_client_create(int size,
 
 
 DisplayChannelClient *display_channel_client_create(CommonChannel *common,
-                             RedClient *client, RedsStream *stream)
+                                                    RedClient *client, RedsStream *stream,
+                                                    uint32_t *common_caps, int num_common_caps,
+                                                    uint32_t *caps, int num_caps)
 {
     DisplayChannelClient *dcc =
         (DisplayChannelClient*)common_channel_client_create(
-            sizeof(DisplayChannelClient), common, client, stream);
+            sizeof(DisplayChannelClient), common, client, stream,
+            common_caps, num_common_caps,
+            caps, num_caps);
 
     if (!dcc) {
         return NULL;
@@ -9480,11 +9574,17 @@ DisplayChannelClient *display_channel_client_create(CommonChannel *common,
 }
 
 CursorChannelClient *cursor_channel_create_rcc(CommonChannel *common,
-                             RedClient *client, RedsStream *stream)
+                                               RedClient *client, RedsStream *stream,
+                                               uint32_t *common_caps, int num_common_caps,
+                                               uint32_t *caps, int num_caps)
 {
     CursorChannelClient *ccc =
         (CursorChannelClient*)common_channel_client_create(
-            sizeof(CursorChannelClient), common, client, stream);
+            sizeof(CursorChannelClient), common, client, stream,
+            common_caps,
+            num_common_caps,
+            caps,
+            num_caps);
 
     if (!ccc) {
         return NULL;
@@ -9707,7 +9807,7 @@ static void display_channel_release_item(RedChannelClient *rcc, PipeItem *item, 
     }
 }
 
-static void ensure_display_channel_created(RedWorker *worker, int migrate)
+static void display_channel_create(RedWorker *worker, int migrate)
 {
     DisplayChannel *display_channel;
 
@@ -9754,20 +9854,24 @@ static void ensure_display_channel_created(RedWorker *worker, int migrate)
 
 
 static void handle_new_display_channel(RedWorker *worker, RedClient *client, RedsStream *stream,
-                                       int migrate)
+                                       int migrate,
+                                       uint32_t *common_caps, int num_common_caps,
+                                       uint32_t *caps, int num_caps)
 {
     DisplayChannel *display_channel;
     DisplayChannelClient *dcc;
     size_t stream_buf_size;
     int is_low_bandwidth = main_channel_client_is_low_bandwidth(red_client_get_main(client));
 
-    ensure_display_channel_created(worker, migrate);
     if (!worker->display_channel) {
+        red_printf("Warning: Display channel was not created");
         return;
     }
     display_channel = worker->display_channel;
     red_printf("add display channel client");
-    dcc = display_channel_client_create(&display_channel->common, client, stream);
+    dcc = display_channel_client_create(&display_channel->common, client, stream,
+                                        common_caps, num_common_caps,
+                                        caps, num_caps);
     if (!dcc) {
         return;
     }
@@ -9925,7 +10029,7 @@ static void cursor_channel_release_item(RedChannelClient *rcc, PipeItem *item, i
     }
 }
 
-static void ensure_cursor_channel_created(RedWorker *worker, int migrate)
+static void cursor_channel_create(RedWorker *worker, int migrate)
 {
     if (worker->cursor_channel != NULL) {
         return;
@@ -9946,19 +10050,22 @@ static void ensure_cursor_channel_created(RedWorker *worker, int migrate)
 }
 
 static void red_connect_cursor(RedWorker *worker, RedClient *client, RedsStream *stream,
-                               int migrate)
+                               int migrate,
+                               uint32_t *common_caps, int num_common_caps,
+                               uint32_t *caps, int num_caps)
 {
     CursorChannel *channel;
     CursorChannelClient *ccc;
 
-    ensure_cursor_channel_created(worker, migrate);
     if (worker->cursor_channel == NULL) {
-        red_printf("failed to create cursor channel");
+        red_printf("Warning: cursor channel was not created");
         return;
     }
     channel = worker->cursor_channel;
     red_printf("add cursor channel client");
-    ccc = cursor_channel_create_rcc(&channel->common, client, stream);
+    ccc = cursor_channel_create_rcc(&channel->common, client, stream,
+                                    common_caps, num_common_caps,
+                                    caps, num_caps);
     if (!ccc) {
         return;
     }
@@ -10514,7 +10621,7 @@ void handle_dev_display_channel_create(void *opaque, void *payload)
 
     RedChannel *red_channel;
     // TODO: handle seemless migration. Temp, setting migrate to FALSE
-    ensure_display_channel_created(worker, FALSE);
+    display_channel_create(worker, FALSE);
     red_channel = &worker->display_channel->common.base;
     send_data(worker->channel, &red_channel, sizeof(RedChannel *));
 }
@@ -10528,7 +10635,11 @@ void handle_dev_display_connect(void *opaque, void *payload)
     int migration = msg->migration;
 
     red_printf("connect");
-    handle_new_display_channel(worker, client, stream, migration);
+    handle_new_display_channel(worker, client, stream, migration,
+                               msg->common_caps, msg->num_common_caps,
+                               msg->caps, msg->num_caps);
+    free(msg->caps);
+    free(msg->common_caps);
 }
 
 void handle_dev_display_disconnect(void *opaque, void *payload)
@@ -10559,7 +10670,7 @@ void handle_dev_cursor_channel_create(void *opaque, void *payload)
     RedChannel *red_channel;
 
     // TODO: handle seemless migration. Temp, setting migrate to FALSE
-    ensure_cursor_channel_created(worker, FALSE);
+    cursor_channel_create(worker, FALSE);
     red_channel = &worker->cursor_channel->common.base;
     send_data(worker->channel, &red_channel, sizeof(RedChannel *));
 }
@@ -10573,7 +10684,11 @@ void handle_dev_cursor_connect(void *opaque, void *payload)
     int migration = msg->migration;
 
     red_printf("cursor connect");
-    red_connect_cursor(worker, client, stream, migration);
+    red_connect_cursor(worker, client, stream, migration,
+                       msg->common_caps, msg->num_common_caps,
+                       msg->caps, msg->num_caps);
+    free(msg->caps);
+    free(msg->common_caps);
 }
 
 void handle_dev_cursor_disconnect(void *opaque, void *payload)

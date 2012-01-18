@@ -299,4 +299,3 @@ void GlzDecoder::decode(uint8_t *data, SpicePalette *palette, void *opaque_usr_i
 
     _images_window.post_decode(decoded_image);
 }
-

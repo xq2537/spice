@@ -273,15 +273,18 @@ static int smartcard_channel_client_config_socket(RedChannelClient *rcc)
 }
 
 static uint8_t *smartcard_channel_alloc_msg_rcv_buf(RedChannelClient *rcc,
-                                                    SpiceDataHeader *msg_header)
+                                                    uint16_t type,
+                                                    uint32_t size)
 {
-    return spice_malloc(msg_header->size);
+    return spice_malloc(size);
 }
 
 static void smartcard_channel_release_msg_rcv_buf(RedChannelClient *rcc,
-                                SpiceDataHeader *msg_header, uint8_t *msg)
+                                                  uint16_t type,
+                                                  uint32_t size,
+                                                  uint8_t *msg)
 {
-    red_printf("freeing %d bytes", msg_header->size);
+    red_printf("freeing %d bytes", size);
     free(msg);
 }
 
@@ -332,7 +335,8 @@ static void smartcard_channel_release_pipe_item(RedChannelClient *rcc,
                                       PipeItem *item, int item_pushed)
 {
     if (item->type == PIPE_ITEM_TYPE_MSG) {
-        free(((MsgItem*)item)->vheader);
+        MsgItem *mi = (MsgItem *)item;
+        free(mi->vheader);
     }
     free(item);
 }
@@ -439,17 +443,18 @@ static void smartcard_channel_write_to_reader(VSCMsgHeader *vheader)
 }
 
 static int smartcard_channel_handle_message(RedChannelClient *rcc,
-                                            SpiceDataHeader *header,
+                                            uint16_t type,
+                                            uint32_t size,
                                             uint8_t *msg)
 {
     VSCMsgHeader* vheader = (VSCMsgHeader*)msg;
 
-    if (header->type != SPICE_MSGC_SMARTCARD_DATA) {
+    if (type != SPICE_MSGC_SMARTCARD_DATA) {
         /* handle ack's, spicy sends them while spicec does not */
-        return red_channel_client_handle_message(rcc, header->size, header->type, msg);
+        return red_channel_client_handle_message(rcc, size, type, msg);
     }
 
-    ASSERT(header->size == vheader->length + sizeof(VSCMsgHeader));
+    ASSERT(size == vheader->length + sizeof(VSCMsgHeader));
     switch (vheader->type) {
         case VSC_ReaderAdd:
             smartcard_add_reader(rcc, msg + sizeof(VSCMsgHeader));

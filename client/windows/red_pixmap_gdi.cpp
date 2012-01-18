@@ -64,9 +64,12 @@ RedPixmapGdi::RedPixmapGdi(int width, int height, RedDrawable::Format format, bo
         bitmap_info.inf.bmiColors[0].rgbRed = 0;
         bitmap_info.inf.bmiColors[0].rgbGreen = 0;
         bitmap_info.inf.bmiColors[0].rgbBlue = 0;
+#ifndef __MINGW32__
+        // inf.bmiColors is [1] in mingw/include/wingdi.h
         bitmap_info.inf.bmiColors[1].rgbRed = 0xff;
         bitmap_info.inf.bmiColors[1].rgbGreen = 0xff;
         bitmap_info.inf.bmiColors[1].rgbBlue = 0xff;
+#endif
         break;
      case RedDrawable::RGB16_565:
         pixel_format = (DWORD *)bitmap_info.inf.bmiColors;
@@ -116,4 +119,3 @@ RecurciveMutex& RedPixmapGdi::get_mutex()
     RedPixmap_p* p_data = (RedPixmap_p*)get_opaque();
     return *p_data->pixels_source_p._mutex;
 }
-

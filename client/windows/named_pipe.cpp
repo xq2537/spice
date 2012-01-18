@@ -230,4 +230,3 @@ void WinListener::create_pipe()
         THROW("ConnectNamedPipe() failed %u", GetLastError());
     }
 }
-

@@ -68,4 +68,3 @@ void region_dump(const QRegion *rgn, const char *prefix);
 #endif
 
 #endif
-

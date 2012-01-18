@@ -49,4 +49,3 @@ class Trigger_p: public Handle_p {
 };
 
 #endif
-

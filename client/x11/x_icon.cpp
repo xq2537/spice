@@ -173,4 +173,3 @@ Icon* Platform::load_icon(int id)
     XIcon *xicon = new XIcon(id, icon);
     return xicon->ref();
 }
-

@@ -159,4 +159,3 @@ def parse(filename):
         t.register()
     protocol = types[-1]
     return protocol
-

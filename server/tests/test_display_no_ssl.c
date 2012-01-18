@@ -6,6 +6,7 @@
  * existing ones in the test_display_base supplied queue.
  */
 
+#include <config.h>
 #include <stdlib.h>
 #include "test_display_base.h"
 
@@ -50,4 +51,3 @@ int main(void)
 
     return 0;
 }
-

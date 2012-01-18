@@ -38,4 +38,3 @@ enum {
 int spice_server_migrate_client_state(SpiceServer *s);
 
 #endif // __SPICE_EXPERIMENTAL_H__
-

@@ -69,7 +69,7 @@ public:
         };
 
         ConnectionOptions(Type in_type, int in_port, int in_sport,
-			  int in_protocol,
+                          int in_protocol,
                           const HostAuthOptions& in_host_auth,
                           const std::string& in_ciphers)
             : type (in_type)
@@ -206,4 +206,3 @@ protected:
 };
 
 #endif
-

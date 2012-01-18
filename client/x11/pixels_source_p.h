@@ -89,4 +89,3 @@ struct RedDrawable_p {
 };
 
 #endif
-

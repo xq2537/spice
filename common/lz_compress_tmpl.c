@@ -1,7 +1,7 @@
 /* -*- Mode: C; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 /*
 
- Copyright 2009 Red Hat, Inc. and/or its affiliates.
+ Copyright (C) 2009 Red Hat, Inc. and/or its affiliates.
 
    This library is free software; you can redistribute it and/or
    modify it under the terms of the GNU Lesser General Public
@@ -296,7 +296,7 @@ match:        // RLE or dictionary (both are encoded by distance from ref (-1) a
             PIXEL x = *ref;
             while ((ip < ip_bound) && (ref < ref_limit)) { // TODO: maybe separate a run from
                                                            //       the same seg or from different
-                                                           //       ones in order to spare 
+                                                           //       ones in order to spare
                                                            //       ref < ref_limit
                 if (!SAME_PIXEL(*ref, x)) {
                     ref++;

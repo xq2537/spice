@@ -133,6 +133,7 @@ channel BaseChannel {
 	uint8 message[message_len] @end @nomarshal;
     } notify;
 
+    Data list; /* the msg body is SpiceSubMessageList */
  client:
     message {
 	uint32 generation;
@@ -1112,11 +1113,14 @@ client:
     Data data = 101;
 };
 
-channel UsbredirChannel : BaseChannel {
+channel SpicevmcChannel : BaseChannel {
 server:
     Data data = 101;
 client:
     Data data = 101;
+};
+
+channel UsbredirChannel : SpicevmcChannel {
 };
 
 protocol Spice {

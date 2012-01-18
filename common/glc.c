@@ -1511,4 +1511,3 @@ void glc_destroy(GLCCtx glc, int textures_lost)
         8. support more image formats
         9. use GLCImage in mask ops?
 */
-

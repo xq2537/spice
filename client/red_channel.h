@@ -296,13 +296,13 @@ void MessageHandlerImp<HandlerClass, channel_id>::handle_message(RedPeer::Compou
     message_destructor_t parsed_free;
 
     if (_parser == NULL) {
-	/* We need to do this lazily rather than at constuction because we
-	   don't know the major until we've connected */
-	if (_obj.get_peer_major() == 1) {
-	    _parser = spice_get_server_channel_parser1(channel_id, NULL);
-	} else {
-	    _parser = spice_get_server_channel_parser(channel_id, NULL);
-	}
+        /* We need to do this lazily rather than at constuction because we
+           don't know the major until we've connected */
+        if (_obj.get_peer_major() == 1) {
+            _parser = spice_get_server_channel_parser1(channel_id, NULL);
+        } else {
+            _parser = spice_get_server_channel_parser(channel_id, NULL);
+        }
     }
 
     if (message.sub_list()) {
@@ -350,4 +350,3 @@ void MessageHandlerImp<HandlerClass, channel_id>::set_handler(unsigned int id, H
 }
 
 #endif
-

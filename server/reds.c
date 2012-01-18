@@ -263,6 +263,7 @@ typedef struct RedLinkInfo {
     int mess_pos;
     TicketInfo tiTicketing;
     SpiceLinkAuthMechanism auth_mechanism;
+    int skip_auth;
 } RedLinkInfo;
 
 typedef struct VDIPortBuf VDIPortBuf;
@@ -1387,9 +1388,9 @@ static int sync_write(RedsStream *stream, const void *in_buf, size_t n)
     return TRUE;
 }
 
-static void reds_channel_init_auth_caps(RedChannel *channel)
+static void reds_channel_init_auth_caps(RedLinkInfo *link, RedChannel *channel)
 {
-    if (sasl_enabled) {
+    if (sasl_enabled && !link->skip_auth) {
         red_channel_set_common_cap(channel, SPICE_COMMON_CAP_AUTH_SASL);
     } else {
         red_channel_set_common_cap(channel, SPICE_COMMON_CAP_AUTH_SPICE);
@@ -1421,7 +1422,7 @@ static int reds_send_link_ack(RedLinkInfo *link)
         channel = &reds->main_channel->base;
     }
 
-    reds_channel_init_auth_caps(channel); /* make sure common caps are set */
+    reds_channel_init_auth_caps(link, channel); /* make sure common caps are set */
 
     channel_caps = &channel->local_caps;
     ack.num_common_caps = channel_caps->num_common_caps;
@@ -1822,7 +1823,7 @@ static void reds_handle_ticket(void *opaque)
                         link->tiTicketing.encrypted_ticket.encrypted_data,
                         (unsigned char *)password, link->tiTicketing.rsa, RSA_PKCS1_OAEP_PADDING);
 
-    if (ticketing_enabled) {
+    if (ticketing_enabled && !link->skip_auth) {
         int expired =  taTicket.expiration_time < ltime;
 
         if (strlen(taTicket.password) == 0) {
@@ -2584,7 +2585,7 @@ static void reds_handle_read_link_done(void *opaque)
     }
 
     if (!auth_selection) {
-        if (sasl_enabled) {
+        if (sasl_enabled && !link->skip_auth) {
             red_printf("SASL enabled, but peer supports only spice authentication");
             reds_send_link_error(link, SPICE_LINK_ERR_VERSION_MISMATCH);
             return;
@@ -2687,18 +2688,12 @@ static void reds_handle_ssl_accept(int fd, int event, void *data)
     reds_handle_new_link(link);
 }
 
-static RedLinkInfo *__reds_accept_connection(int listen_socket)
+static RedLinkInfo *reds_init_client_connection(int socket)
 {
     RedLinkInfo *link;
     RedsStream *stream;
     int delay_val = 1;
     int flags;
-    int socket;
-
-    if ((socket = accept(listen_socket, NULL, 0)) == -1) {
-        red_printf("accept failed, %s", strerror(errno));
-        return NULL;
-    }
 
     if ((flags = fcntl(socket, F_GETFL)) == -1) {
         red_printf("accept failed, %s", strerror(errno));
@@ -2731,39 +2726,20 @@ static RedLinkInfo *__reds_accept_connection(int listen_socket)
     return link;
 
 error:
-    close(socket);
-
     return NULL;
 }
 
-static RedLinkInfo *reds_accept_connection(int listen_socket)
-{
-    RedLinkInfo *link;
-    RedsStream *stream;
 
-    if (!(link = __reds_accept_connection(listen_socket))) {
-        return NULL;
-    }
-
-    stream = link->stream;
-    stream->read = stream_read_cb;
-    stream->write = stream_write_cb;
-    stream->writev = stream_writev_cb;
-
-    return link;
-}
-
-static void reds_accept_ssl_connection(int fd, int event, void *data)
+static RedLinkInfo *reds_init_client_ssl_connection(int socket)
 {
     RedLinkInfo *link;
     int return_code;
     int ssl_error;
     BIO *sbio;
 
-    link = __reds_accept_connection(reds->secure_listen_socket);
-    if (link == NULL) {
-        return;
-    }
+    link = reds_init_client_connection(socket);
+    if (link == NULL)
+        goto error;
 
     // Handle SSL handshaking
     if (!(sbio = BIO_new_socket(link->stream->socket, BIO_NOCLOSE))) {
@@ -2787,7 +2763,7 @@ static void reds_accept_ssl_connection(int fd, int event, void *data)
     return_code = SSL_accept(link->stream->ssl);
     if (return_code == 1) {
         reds_handle_new_link(link);
-        return;
+        return link;
     }
 
     ssl_error = SSL_get_error(link->stream->ssl, return_code);
@@ -2797,7 +2773,7 @@ static void reds_accept_ssl_connection(int fd, int event, void *data)
             SPICE_WATCH_EVENT_READ : SPICE_WATCH_EVENT_WRITE;
         link->stream->watch = core->watch_add(link->stream->socket, eventmask,
                                             reds_handle_ssl_accept, link);
-        return;
+        return link;
     }
 
     ERR_print_errors_fp(stderr);
@@ -2805,23 +2781,79 @@ static void reds_accept_ssl_connection(int fd, int event, void *data)
     SSL_free(link->stream->ssl);
 
 error:
-    close(link->stream->socket);
     free(link->stream);
     BN_free(link->tiTicketing.bn);
     free(link);
+    return NULL;
 }
+
+static void reds_accept_ssl_connection(int fd, int event, void *data)
+{
+    RedLinkInfo *link;
+    int socket;
+
+    if ((socket = accept(reds->secure_listen_socket, NULL, 0)) == -1) {
+        red_printf("accept failed, %s", strerror(errno));
+        return;
+    }
+
+    if (!(link = reds_init_client_ssl_connection(socket))) {
+        close(socket);
+        return;
+    }
+}
+
 
 static void reds_accept(int fd, int event, void *data)
 {
-    RedLinkInfo *link;
+    int socket;
 
-    link = reds_accept_connection(reds->listen_socket);
-    if (link == NULL) {
-        red_printf("accept failed");
+    if ((socket = accept(reds->listen_socket, NULL, 0)) == -1) {
+        red_printf("accept failed, %s", strerror(errno));
         return;
     }
-    reds_handle_new_link(link);
+
+    if (spice_server_add_client(reds, socket, 0) < 0)
+        close(socket);
 }
+
+
+SPICE_GNUC_VISIBLE int spice_server_add_client(SpiceServer *s, int socket, int skip_auth)
+{
+    RedLinkInfo *link;
+    RedsStream *stream;
+
+    ASSERT(reds == s);
+    if (!(link = reds_init_client_connection(socket))) {
+        red_printf("accept failed");
+        return -1;
+    }
+
+    link->skip_auth = skip_auth;
+
+    stream = link->stream;
+    stream->read = stream_read_cb;
+    stream->write = stream_write_cb;
+    stream->writev = stream_writev_cb;
+
+    reds_handle_new_link(link);
+    return 0;
+}
+
+
+SPICE_GNUC_VISIBLE int spice_server_add_ssl_client(SpiceServer *s, int socket, int skip_auth)
+{
+    RedLinkInfo *link;
+
+    ASSERT(reds == s);
+    if (!(link = reds_init_client_ssl_connection(socket))) {
+        return -1;
+    }
+
+    link->skip_auth = skip_auth;
+    return 0;
+}
+
 
 static int reds_init_socket(const char *addr, int portnr, int family)
 {

@@ -209,4 +209,3 @@ void EventSources::add_file(File& file)
 void EventSources::remove_file(File& file)
 {
 }
-

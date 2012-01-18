@@ -16,6 +16,9 @@
    License along with this library; if not, see <http://www.gnu.org/licenses/>.
 */
 #ifdef HAVE_CONFIG_H
+#ifdef __MINGW32__
+#undef HAVE_STDLIB_H
+#endif
 #include <config.h>
 #endif
 
@@ -469,8 +472,8 @@ static void __scale_image(SpiceCanvas *spice_canvas,
 
     pixman_transform_init_scale(&transform, fsx, fsy);
     pixman_transform_translate(&transform, NULL,
-			       pixman_int_to_fixed (src_x),
-			       pixman_int_to_fixed (src_y));
+                               pixman_int_to_fixed (src_x),
+                               pixman_int_to_fixed (src_y));
 
     pixman_image_set_transform(src, &transform);
     pixman_image_set_repeat(src, PIXMAN_REPEAT_NONE);
@@ -550,8 +553,8 @@ static void __scale_image_rop(SpiceCanvas *spice_canvas,
 
     pixman_transform_init_scale(&transform, fsx, fsy);
     pixman_transform_translate(&transform, NULL,
-			       pixman_int_to_fixed (src_x),
-			       pixman_int_to_fixed (src_y));
+                               pixman_int_to_fixed (src_x),
+                               pixman_int_to_fixed (src_y));
 
     pixman_image_set_transform(src, &transform);
     pixman_image_set_repeat(src, PIXMAN_REPEAT_NONE);
@@ -744,8 +747,8 @@ static void __blend_scale_image(SpiceCanvas *spice_canvas,
 
     pixman_transform_init_scale(&transform, fsx, fsy);
     pixman_transform_translate(&transform, NULL,
-			       pixman_int_to_fixed (src_x),
-			       pixman_int_to_fixed (src_y));
+                               pixman_int_to_fixed (src_x),
+                               pixman_int_to_fixed (src_y));
 
     mask = NULL;
     if (overall_alpha != 0xff) {
@@ -906,8 +909,8 @@ static void __colorkey_scale_image(SpiceCanvas *spice_canvas,
 
     pixman_transform_init_scale(&transform, fsx, fsy);
     pixman_transform_translate(&transform, NULL,
-			       pixman_int_to_fixed (src_x),
-			       pixman_int_to_fixed (src_y));
+                               pixman_int_to_fixed (src_x),
+                               pixman_int_to_fixed (src_y));
 
     pixman_image_set_transform(src, &transform);
     pixman_image_set_repeat(src, PIXMAN_REPEAT_NONE);
@@ -1163,9 +1166,7 @@ static void canvas_destroy(SpiceCanvas *spice_canvas)
     }
     pixman_image_unref(canvas->image);
     canvas_base_destroy(&canvas->base);
-    if (canvas->private_data) {
-        free(canvas->private_data);
-    }
+    free(canvas->private_data);
     free(canvas);
 }
 

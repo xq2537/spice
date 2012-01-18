@@ -179,7 +179,7 @@ private:
     bool _update_by_timer;
     bool _size_locked;
     bool _menu_needs_update;
-    int _forec_update_timer;
+    int _force_update_timer;
     AutoRef<UpdateTimer> _update_timer;
     RedDrawable* _composit_area;
     uint64_t _update_mark;
@@ -208,4 +208,3 @@ private:
 };
 
 #endif
-

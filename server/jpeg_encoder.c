@@ -41,13 +41,13 @@ typedef struct JpegEncoder {
 
 /* jpeg destination manager callbacks */
 
-static void dest_mgr_init_destination(j_compress_ptr cinfo) 
+static void dest_mgr_init_destination(j_compress_ptr cinfo)
 {
     JpegEncoder *enc = (JpegEncoder *)cinfo->client_data;
     if (enc->dest_mgr.free_in_buffer == 0) {
-        enc->dest_mgr.free_in_buffer = enc->usr->more_space(enc->usr, 
+        enc->dest_mgr.free_in_buffer = enc->usr->more_space(enc->usr,
                                                             &enc->dest_mgr.next_output_byte);
-        
+
         if (enc->dest_mgr.free_in_buffer == 0) {
             red_error("not enough space");
         }
@@ -59,12 +59,12 @@ static void dest_mgr_init_destination(j_compress_ptr cinfo)
 static boolean dest_mgr_empty_output_buffer(j_compress_ptr cinfo)
 {
     JpegEncoder *enc = (JpegEncoder *)cinfo->client_data;
-    enc->dest_mgr.free_in_buffer = enc->usr->more_space(enc->usr, 
+    enc->dest_mgr.free_in_buffer = enc->usr->more_space(enc->usr,
                                                         &enc->dest_mgr.next_output_byte);
-        
+
     if (enc->dest_mgr.free_in_buffer == 0) {
         red_error("not enough space");
-    }    
+    }
     enc->cur_image.out_size += enc->dest_mgr.free_in_buffer;
     return TRUE;
 }
@@ -85,13 +85,13 @@ JpegEncoderContext* jpeg_encoder_create(JpegEncoderUsrContext *usr)
     enc = spice_new0(JpegEncoder, 1);
 
     enc->usr = usr;
-    
+
     enc->dest_mgr.init_destination = dest_mgr_init_destination;
     enc->dest_mgr.empty_output_buffer = dest_mgr_empty_output_buffer;
     enc->dest_mgr.term_destination = dest_mgr_term_destination;
 
     enc->cinfo.err = jpeg_std_error(&enc->jerr);
-   
+
     jpeg_create_compress(&enc->cinfo);
     enc->cinfo.client_data = enc;
     enc->cinfo.dest = &enc->dest_mgr;
@@ -99,7 +99,7 @@ JpegEncoderContext* jpeg_encoder_create(JpegEncoderUsrContext *usr)
 }
 
 void jpeg_encoder_destroy(JpegEncoderContext* encoder)
-{    
+{
     jpeg_destroy_compress(&((JpegEncoder*)encoder)->cinfo);
     free(encoder);
 }
@@ -144,8 +144,8 @@ static void convert_BGRX32_to_RGB24(uint8_t *line, int width, uint8_t **out_line
     uint32_t *src_line = (uint32_t *)line;
     uint8_t *out_pix;
     int x;
-    
-	ASSERT(out_line && *out_line);
+
+    ASSERT(out_line && *out_line);
 
     out_pix = *out_line;
 
@@ -174,7 +174,7 @@ static void convert_RGB24_to_RGB24(uint8_t *line, int width, uint8_t **out_line)
 }
 
 static void do_jpeg_encode(JpegEncoder *jpeg, uint8_t *lines, unsigned int num_lines)
-{    
+{
     uint8_t *lines_end;
     uint8_t *RGB24_line;
     int stride, width;
@@ -204,7 +204,7 @@ int jpeg_encode(JpegEncoderContext *jpeg, int quality, JpegEncoderImageType type
                 int width, int height, uint8_t *lines, unsigned int num_lines, int stride,
                 uint8_t *io_ptr, unsigned int num_io_bytes)
 {
-    JpegEncoder *enc = (JpegEncoder *)jpeg; 
+    JpegEncoder *enc = (JpegEncoder *)jpeg;
 
     enc->cur_image.type = type;
     enc->cur_image.width = width;
@@ -243,6 +243,6 @@ int jpeg_encode(JpegEncoderContext *jpeg, int quality, JpegEncoderImageType type
 
     do_jpeg_encode(enc, lines, num_lines);
 
-   jpeg_finish_compress(&enc->cinfo);
-   return enc->cur_image.out_size;
+    jpeg_finish_compress(&enc->cinfo);
+    return enc->cur_image.out_size;
 }

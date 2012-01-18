@@ -368,4 +368,3 @@ ChannelFactory& PlaybackChannel::Factory()
 {
     return factory;
 }
-

@@ -51,7 +51,7 @@ HBITMAP get_bitmap_res(int id)
 {
     HBITMAP bitmap = LoadBitmap(GetModuleHandle(NULL), MAKEINTRESOURCE(id));
     if (!bitmap) {
-        THROW("get bitmpa #%d failed", id);
+        THROW("get bitmap #%d failed", id);
     }
     return bitmap;
 }
@@ -61,7 +61,7 @@ HBITMAP get_alpha_bitmap_res(int id)
     AutoGDIObject bitmap(LoadImage(GetModuleHandle(NULL), MAKEINTRESOURCE(id), IMAGE_BITMAP, 0, 0,
                                    LR_DEFAULTCOLOR | LR_CREATEDIBSECTION | LR_SHARED));
     if (!bitmap.valid()) {
-        THROW("get bitmpa #%d failed", id);
+        THROW("get alpha bitmap #%d failed", id);
     }
 
     BITMAP src_info;
@@ -148,4 +148,3 @@ int inet_aton(const char* ip, struct in_addr* in_addr)
     in_addr->S_un.S_addr = addr;
     return 1;
 }
-

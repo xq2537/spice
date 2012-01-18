@@ -10,7 +10,6 @@ SPICE_MSG_MAIN_CHANNEL_NEW
  single user only, so only one of the clients can use it.
 
 Chardev channel: allow adding a chardev channel without any server changes:
- qemu -spicevmc name=generic,channelname=bla,id=bla -mon chardev=bla 
+ qemu -spicevmc name=generic,channelname=bla,id=bla -mon chardev=bla
  Note: client will still need to decide what to do with it of course. So the channelname
  will have to have a predefined meaning.
-

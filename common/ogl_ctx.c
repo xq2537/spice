@@ -249,4 +249,3 @@ void oglctx_destroy(OGLCtx *ctx)
     XCloseDisplay(ctx->x_display);
     free(ctx);
 }
-

@@ -32,7 +32,7 @@ class RedPixmap;
 class GDICanvas: public Canvas {
 public:
     GDICanvas(int width, int height, uint32_t format,
-	      PixmapCache& pixmap_cache, PaletteCache& palette_cache,
+              PixmapCache& pixmap_cache, PaletteCache& palette_cache,
               GlzDecoderWindow &glz_decoder_window, SurfacesCache &csurfaces);
     virtual ~GDICanvas();
 
@@ -53,4 +53,3 @@ private:
 };
 
 #endif
-

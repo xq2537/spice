@@ -947,6 +947,9 @@ class ChannelType(Type):
             server_messages_byname = self.base.server_messages_byname.copy()
             client_messages = self.base.client_messages[:]
             client_messages_byname = self.base.client_messages_byname.copy()
+
+            # Set default member_name, FooChannel -> foo
+            self.member_name = self.name[:-7].lower()
         else:
             server_messages = []
             server_messages_byname = {}
@@ -998,7 +1001,6 @@ class ProtocolMember:
 
     def resolve(self, protocol):
         self.channel_type = self.channel_type.resolve()
-        assert(self.channel_type.member_name == None)
         self.channel_type.member_name = self.name
         return self
 

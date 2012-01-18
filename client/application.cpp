@@ -2645,6 +2645,13 @@ int Application::main(int argc, char** argv, const char* version_str)
 
     init_globals();
     LOG_INFO("starting %s", version_str);
+    std::string command_line = argv[0];
+    for (int i = 1 ; i < argc ; ++i) {
+        command_line += " ";
+        command_line += argv[i];
+    }
+    LOG_INFO("command line: %s", command_line.c_str());
+
     std::auto_ptr<Application> app(new Application());
     AutoAbort auto_abort(*app.get());
     if (app->process_cmd_line(argc, argv, full_screen)) {
@@ -2663,4 +2670,3 @@ int Application::main(int argc, char** argv, const char* version_str)
     cleanup_globals();
     return ret;
 }
-

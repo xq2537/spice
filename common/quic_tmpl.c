@@ -633,4 +633,3 @@ static void FNAME(uncompress_row)(Encoder *encoder, Channel *channel,
 #undef family
 #undef BPC
 #undef BPC_MASK
-

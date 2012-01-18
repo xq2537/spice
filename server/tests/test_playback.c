@@ -1,5 +1,5 @@
+#include <config.h>
 #include <stdio.h>
-#include <strings.h>
 #include <sys/select.h>
 #include <sys/time.h>
 #include <math.h>

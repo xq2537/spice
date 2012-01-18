@@ -19,10 +19,9 @@
 
 typedef void (*message_destructor_t)(uint8_t *message);
 typedef uint8_t * (*spice_parse_channel_func_t)(uint8_t *message_start, uint8_t *message_end, uint16_t message_type, int minor,
-						size_t *size_out, message_destructor_t *free_message);
+                                                size_t *size_out, message_destructor_t *free_message);
 
 spice_parse_channel_func_t spice_get_server_channel_parser(uint32_t channel, unsigned int *max_message_type);
 spice_parse_channel_func_t spice_get_server_channel_parser1(uint32_t channel, unsigned int *max_message_type);
 
 #endif
-

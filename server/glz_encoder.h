@@ -53,4 +53,3 @@ int glz_encode(GlzEncoderContext *opaque_encoder, LzImageType type, int width, i
 
 
 #endif // _H_GLZ_ENCODER
-

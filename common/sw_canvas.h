@@ -41,7 +41,7 @@ SpiceCanvas *canvas_create(int width, int height, uint32_t format
 #elif defined(SW_CANVAS_IMAGE_CACHE)
                            , SpiceImageCache *bits_cache
 #endif
-			   , SpiceImageSurfaces *surfaces
+                           , SpiceImageSurfaces *surfaces
                            , SpiceGlzDecoder *glz_decoder
                            , SpiceJpegDecoder *jpeg_decoder
                            , SpiceZlibDecoder *zlib_decoder
@@ -54,7 +54,7 @@ SpiceCanvas *canvas_create_for_data(int width, int height, uint32_t format, uint
 #elif defined(SW_CANVAS_IMAGE_CACHE)
                            , SpiceImageCache *bits_cache
 #endif
-			   , SpiceImageSurfaces *surfaces
+                           , SpiceImageSurfaces *surfaces
                            , SpiceGlzDecoder *glz_decoder
                            , SpiceJpegDecoder *jpeg_decoder
                            , SpiceZlibDecoder *zlib_decoder

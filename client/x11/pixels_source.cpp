@@ -106,4 +106,3 @@ SpicePoint AlphaImageFromRes::get_size()
     pt.y = pixman_image_get_height(image);
     return pt;
 }
-

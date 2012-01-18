@@ -763,4 +763,3 @@ static void FNAME(uncompress_row)(Encoder *encoder,
 #undef SET_b
 #undef GET_b
 #undef UNCOMPRESS_PIX_START
-

@@ -22,7 +22,7 @@
 #include "common.h"
 #include "red_canvas_base.h"
 
-#ifdef WIN32
+#if defined(WIN32) && !defined(__MINGW32__)
 /* We need some hacks to avoid warnings from the jpeg headers */
 #define XMD_H
 #undef FAR
@@ -89,4 +89,3 @@ private:
     RGBToBGRXConverter _rgb2bgrx;
 };
 #endif
-

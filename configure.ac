@@ -99,7 +99,7 @@ AC_ARG_ENABLE(tunnel,
 AS_IF([test x"$enable_tunnel" != "xno"], [enable_tunnel="yes"])
 AM_CONDITIONAL(SUPPORT_TUNNEL, test "x$enable_tunnel" != "xno")
 if test "x$enable_tunnel" != "xno"; then
-   AC_DEFINE(USE_TUNNEL, [1], [Define if supporting tunnel proxying])
+   AC_DEFINE([USE_TUNNEL], [1], [Define if supporting tunnel proxying])
 fi
 
 AC_ARG_ENABLE(gui,
@@ -120,7 +120,7 @@ AC_ARG_ENABLE(smartcard,
 AS_IF([test x"$enable_smartcard" != "xno"], [enable_smartcard="yes"])
 AM_CONDITIONAL(SUPPORT_SMARTCARD, test "x$enable_smartcard" != "xno")
 if test "x$enable_smartcard" = "xyes"; then
-   AC_DEFINE(USE_SMARTCARD, [1], [Define if supporting smartcard proxying])
+   AC_DEFINE([USE_SMARTCARD], [1], [Define if supporting smartcard proxying])
 fi
 
 AC_ARG_ENABLE(client,
@@ -132,14 +132,14 @@ AM_CONDITIONAL(SUPPORT_CLIENT, test "x$enable_client" = "xyes")
 dnl =========================================================================
 dnl Check deps
 
-PKG_CHECK_MODULES(PROTOCOL, spice-protocol >= 0.9.1)
+PKG_CHECK_MODULES(PROTOCOL, spice-protocol >= 0.10.1)
 AC_SUBST(PROTOCOL_CFLAGS)
 
 AC_CHECK_LIBM
 AC_SUBST(LIBM)
 
 AC_CHECK_LIB(rt, clock_gettime,
-   AC_DEFINE(HAVE_CLOCK_GETTIME, 1, [Defined if we have clock_gettime()])
+   AC_DEFINE([HAVE_CLOCK_GETTIME], 1, [Defined if we have clock_gettime()])
    LIBRT=-lrt
    )
 AC_SUBST(LIBRT)
@@ -168,7 +168,7 @@ else
     AC_MSG_RESULT($posix_yield_func)
     posix_yield_func="$posix_yield_func()"
 fi
-AC_DEFINE_UNQUOTED(POSIX_YIELD_FUNC,$posix_yield_func,[The POSIX RT yield function])
+AC_DEFINE_UNQUOTED([POSIX_YIELD_FUNC],$posix_yield_func,[The POSIX RT yield function])
 
 SPICE_REQUIRES=""
 
@@ -332,7 +332,7 @@ SASL_CFLAGS=
 SASL_LIBS=
 enable_sasl=no
 if test "x$with_sasl" != "xno"; then
-  if test "x$with_sasl" != "xyes" -a "x$with_sasl" != "xcheck"; then
+  if test "x$with_sasl" != "xyes" && test "x$with_sasl" != "xcheck"; then
     SASL_CFLAGS="-I$with_sasl"
     SASL_LIBS="-L$with_sasl"
   fi
@@ -350,7 +350,7 @@ if test "x$with_sasl" != "xno"; then
   if test "x$with_sasl" != "xno" ; then
     AC_CHECK_LIB([sasl2], [sasl_client_init],[with_sasl2=yes],[with_sasl2=no])
   fi
-  if test "x$with_sasl2" = "xno" -a "x$with_sasl" != "xno" ; then
+  if test "x$with_sasl2" = "xno" && test "x$with_sasl" != "xno" ; then
     AC_CHECK_LIB([sasl], [sasl_client_init],[with_sasl=yes],[with_sasl=no])
   fi
   if test "x$with_sasl2" = "xyes"; then
@@ -362,13 +362,13 @@ if test "x$with_sasl" != "xno"; then
   fi
   CFLAGS="$old_cflags"
   LIBS="$old_libs"
-  if test "x$with_sasl2" = "xyes" -o "x$with_sasl" = "xyes" ; then
+  if test "x$with_sasl2" = "xyes" || test "x$with_sasl" = "xyes" ; then
     AC_DEFINE_UNQUOTED([HAVE_SASL], 1,
       [whether Cyrus SASL is available for authentication])
     enable_sasl=yes
   fi
 fi
-AM_CONDITIONAL([HAVE_SASL], [test "x$with_sasl2" = "xyes" -o "x$with_sasl" = "xyes"])
+AM_CONDITIONAL([HAVE_SASL], [test "x$with_sasl2" = "xyes" || test "x$with_sasl" = "xyes"])
 AC_SUBST([SASL_CFLAGS])
 AC_SUBST([SASL_LIBS])
 
@@ -496,7 +496,7 @@ error Need GCC 4.0 for visibility
 int main () { return 0; }
 ])], have_gcc4=yes)
 
-if test "x$have_gcc4" = "xyes" -a ! "$os_win32" = "yes" ; then
+if test "x$have_gcc4" = "xyes" && test ! "$os_win32" = "yes" ; then
    VISIBILITY_HIDDEN_CFLAGS="-fvisibility=hidden"
 fi
 AC_MSG_RESULT($have_gcc4)

@@ -852,14 +852,18 @@ static int main_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint
     return TRUE;
 }
 
-static uint8_t *main_channel_alloc_msg_rcv_buf(RedChannelClient *rcc, SpiceDataHeader *msg_header)
+static uint8_t *main_channel_alloc_msg_rcv_buf(RedChannelClient *rcc,
+                                               uint16_t type,
+                                               uint32_t size)
 {
     MainChannel *main_chan = SPICE_CONTAINEROF(rcc->channel, MainChannel, base);
 
     return main_chan->recv_buf;
 }
 
-static void main_channel_release_msg_rcv_buf(RedChannelClient *rcc, SpiceDataHeader *msg_header,
+static void main_channel_release_msg_rcv_buf(RedChannelClient *rcc,
+                                               uint16_t type,
+                                               uint32_t size,
                                                uint8_t *msg)
 {
 }
@@ -1109,4 +1113,3 @@ int main_channel_migrate_complete(MainChannel *main_chan, int success)
    }
    return semi_seamless_count;
 }
-

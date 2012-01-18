@@ -58,11 +58,11 @@
 #pragma warning(disable:4355)
 #pragma warning(disable:4996)
 #pragma warning(disable:4200)
+
+extern const char* PACKAGE_VERSION;
 #endif
 
 #define strcasecmp stricmp
-
-extern const char* PACKAGE_VERSION;
 
 #else
 #include <unistd.h>
@@ -88,4 +88,3 @@ extern const char* PACKAGE_VERSION;
 #include "red_types.h"
 
 #endif
-

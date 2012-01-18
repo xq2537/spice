@@ -157,4 +157,3 @@ private:
 };
 
 #endif // __SMART_CARD_H__
-

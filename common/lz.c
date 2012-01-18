@@ -1,7 +1,7 @@
 /* -*- Mode: C; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 /*
 
- Copyright 2009 Red Hat, Inc. and/or its affiliates.
+ Copyright (C) 2009 Red Hat, Inc. and/or its affiliates.
 
    This library is free software; you can redistribute it and/or
    modify it under the terms of the GNU Lesser General Public
@@ -439,7 +439,7 @@ typedef uint16_t rgb16_pixel_t;
 #define COMP_LEVEL_SIZE_LIMIT 65536
 
 // TODO: implemented lz2. should lz1 be an option (no RLE + distance limitation of MAX_DISTANCE)
-// TODO: I think MAX_FARDISTANCE can be changed easily to 2^29 
+// TODO: I think MAX_FARDISTANCE can be changed easily to 2^29
 //       (and maybe even more when pixel > byte).
 // i.e. we can support 512M Bytes/Pixels distance instead of only ~68K.
 #define MAX_DISTANCE 8191                        // 2^13
@@ -738,4 +738,3 @@ void lz_decode(LzContext *lz, LzImageType to_type, uint8_t *buf)
         encoder->usr->error(encoder->usr, "bad decode size\n");
     }
 }
-

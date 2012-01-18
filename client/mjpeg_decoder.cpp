@@ -24,7 +24,7 @@
 #include "utils.h"
 #include "mjpeg_decoder.h"
 
-#if !defined(jpeg_boolean) && !defined(__MINGW32__)
+#if !defined(jpeg_boolean)
 #define jpeg_boolean boolean
 #endif
 

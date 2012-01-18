@@ -93,35 +93,35 @@ version_check() {
 
     vc_checkprog=`eval echo "\\$$vc_variable"`
     if [ -n "$vc_checkprog" ]; then
-	printbold "using $vc_checkprog for $vc_package"
-	return 0
+        printbold "using $vc_checkprog for $vc_package"
+        return 0
     fi
 
     printbold "checking for $vc_package >= $vc_min_version..."
     for vc_checkprog in $vc_checkprogs; do
-	echo $ECHO_N "  testing $vc_checkprog... "
-	if $vc_checkprog --version < /dev/null > /dev/null 2>&1; then
-	    vc_actual_version=`$vc_checkprog --version | head -n 1 | \
+        echo $ECHO_N "  testing $vc_checkprog... "
+        if $vc_checkprog --version < /dev/null > /dev/null 2>&1; then
+            vc_actual_version=`$vc_checkprog --version | head -n 1 | \
                                sed 's/^.*[ 	]\([0-9.]*[a-z]*\).*$/\1/'`
-	    if compare_versions $vc_min_version $vc_actual_version; then
-		echo "found $vc_actual_version"
-		# set variable
-		eval "$vc_variable=$vc_checkprog"
-		vc_status=0
-		break
-	    else
-		echo "too old (found version $vc_actual_version)"
-	    fi
-	else
-	    echo "not found."
-	fi
+            if compare_versions $vc_min_version $vc_actual_version; then
+                echo "found $vc_actual_version"
+                # set variable
+                eval "$vc_variable=$vc_checkprog"
+                vc_status=0
+                break
+            else
+                echo "too old (found version $vc_actual_version)"
+            fi
+        else
+            echo "not found."
+        fi
     done
     if [ "$vc_status" != 0 ]; then
-	printerr "***Error***: You must have $vc_package >= $vc_min_version installed"
-	printerr "  to build $PROJECT.  Download the appropriate package for"
-	printerr "  from your distribution or get the source tarball at"
+        printerr "***Error***: You must have $vc_package >= $vc_min_version installed"
+        printerr "  to build $PROJECT.  Download the appropriate package for"
+        printerr "  from your distribution or get the source tarball at"
         printerr "    $vc_source"
-	printerr
+        printerr
     fi
     return $vc_status
 }
@@ -164,4 +164,3 @@ cd $ORIGDIR || exit $?
 rm -f config.cache
 
 do_cmd $srcdir/configure --enable-maintainer-mode ${1+"$@"} || exit 1
-

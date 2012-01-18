@@ -18,4 +18,3 @@ EXTRA_DIST = \
 	taharez_look.scheme.c		\
 	taharez_look.tga.c		\
         $(NULL)
-

@@ -115,4 +115,3 @@ static s_bucket *FNAME(find_bucket)(Channel *channel, const unsigned int val)
 #undef FNAME
 #undef VNAME
 #undef BPC
-

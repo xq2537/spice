@@ -1515,7 +1515,7 @@ static void uncompress_gray(Encoder *encoder, uint8_t *buf, int stride)
                                               encoder->width);                                  \
             encoder->rows_completed++;                                                          \
         }
-        
+
 int quic_decode(QuicContext *quic, QuicImageType type, uint8_t *buf, int stride)
 {
     Encoder *encoder = (Encoder *)quic;
@@ -1697,4 +1697,3 @@ void quic_init(void)
     init_zeroLUT();
 #endif
 }
-

@@ -120,4 +120,3 @@ inline uint8_t *GlzDecoderWindow::get_ref_pixel(DecodedImageWinId decoded_image_
 }
 
 #endif // _H_GLZ_DECODER_WINDOW
-

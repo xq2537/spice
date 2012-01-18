@@ -409,9 +409,7 @@ void red_put_image(SpiceImage *red)
 
     switch (red->descriptor.type) {
     case SPICE_IMAGE_TYPE_BITMAP:
-        if (red->u.bitmap.palette) {
-            free(red->u.bitmap.palette);
-        }
+        free(red->u.bitmap.palette);
         spice_chunks_destroy(red->u.bitmap.data);
         break;
     case SPICE_IMAGE_TYPE_QUIC:
@@ -1112,4 +1110,3 @@ void red_put_cursor_cmd(RedCursorCmd *red)
         break;
     }
 }
-

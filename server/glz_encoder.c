@@ -308,4 +308,3 @@ int glz_encode(GlzEncoderContext *opaque_encoder,
 
     return encoder->io.bytes_count;
 }
-

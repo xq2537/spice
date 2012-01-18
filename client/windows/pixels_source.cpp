@@ -108,4 +108,3 @@ SpicePoint AlphaImageFromRes::get_size()
     Lock lock(*p_data->source_p._mutex);
     return get_bitmap_size(p_data->source_p.dc);
 }
-

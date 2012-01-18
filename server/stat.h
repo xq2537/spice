@@ -45,4 +45,3 @@ void stat_remove_counter(uint64_t *counter);
 #endif
 
 #endif
-

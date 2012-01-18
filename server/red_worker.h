@@ -165,4 +165,3 @@ static inline void read_message(int fd, RedWorkerMessage *message)
 }
 
 #endif
-

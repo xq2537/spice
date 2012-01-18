@@ -16,6 +16,7 @@
 */
 
 #define _GNU_SOURCE
+#include <config.h>
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <fcntl.h>
@@ -129,4 +130,3 @@ error1:
     free(shm_name);
     return ret;
 }
-

@@ -1306,7 +1306,7 @@ void DisplayChannel::reset_screen()
     AutoRef<ResetTimer> reset_timer(new ResetTimer(screen()->ref(), get_client()));
 
     detach_from_screen(get_client().get_application());
-    
+
     get_client().activate_interval_timer(*reset_timer, RESET_TIMEOUT);
 }
 
@@ -1840,4 +1840,3 @@ ChannelFactory& DisplayChannel::Factory()
 {
     return factory;
 }
-

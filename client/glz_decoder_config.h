@@ -48,12 +48,12 @@ public:
 
 #ifdef RED_DEBUG
 
-#define GLZ_ASSERT(debug, x) {						                    \
-    if (!(x)) {								                            \
-	std::ostringstream os;						                        \
-        os << __FUNCTION__ << ": ASSERT " << #x << " failed\n";		    \
-        (debug).error(os.str());					                    \
-    }									                                \
+#define GLZ_ASSERT(debug, x) {                                  \
+    if (!(x)) {                                                 \
+        std::ostringstream os;                                  \
+        os << __FUNCTION__ << ": ASSERT " << #x << " failed\n"; \
+        (debug).error(os.str());                                \
+    }                                                           \
 }
 #else
 
@@ -64,4 +64,3 @@ public:
 #define GLZ_DECODE_TO_RGB32
 
 #endif  //_H_GLZ_DECODER_CONFIG
-

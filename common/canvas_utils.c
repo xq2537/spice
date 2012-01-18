@@ -51,9 +51,7 @@ static void release_data(pixman_image_t *image, void *release_data)
         gdi_handlers--;
     }
 #endif
-    if (data->data) {
-        free(data->data);
-    }
+    free(data->data);
 
     free(data);
 }
@@ -299,4 +297,3 @@ pixman_image_t *alloc_lz_image_surface(LzDecodeUsrData *canvas_data,
     canvas_data->out_surface = surface;
     return surface;
 }
-

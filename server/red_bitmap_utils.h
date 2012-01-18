@@ -159,4 +159,3 @@ static void FNAME(compute_lines_gradual_score)(PIXEL *lines, int width, int num_
 #undef CONTRAST_TH
 #undef SAME_PIXEL_WEIGHT
 #undef NOT_CONTRAST_PIXELS_WEIGHT
-

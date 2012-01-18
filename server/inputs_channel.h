@@ -36,4 +36,3 @@ void inputs_detach_tablet(SpiceTabletInstance *_tablet);
 void inputs_set_tablet_logical_size(int x_res, int y_res);
 
 #endif
-

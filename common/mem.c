@@ -130,9 +130,7 @@ void *spice_realloc(void *mem, size_t n_bytes)
                      (unsigned long)n_bytes);
     }
 
-    if (mem) {
-        free(mem);
-    }
+    free(mem);
 
     return NULL;
 }

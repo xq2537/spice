@@ -1412,4 +1412,3 @@ bool GUI::message_box(MessageType type, const char *text, const ButtonsList& but
     }
     return _dialog->message_box(type, text, buttons, _response_handler);
 }
-

@@ -609,4 +609,3 @@ ChannelFactory& InputsChannel::Factory()
 {
     return factory;
 }
-

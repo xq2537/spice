@@ -386,4 +386,3 @@ void ClientNetSocket::apply_disconnect()
     _close_pending = false;
     _fin_pending = false;
 }
-

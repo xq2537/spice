@@ -1311,7 +1311,7 @@ void RedClient::dispatch_agent_message(VDAgentMessage* msg, void* data)
     default:
         DBG(0, "Unsupported message type %u size %u", msg->type, msg->size);
     }
-}                                       
+}
 
 void RedClient::handle_agent_tokens(RedPeer::InMessage* message)
 {
@@ -1407,4 +1407,3 @@ void RedClient::register_channel_factory(ChannelFactory& factory)
 {
     _factorys.push_back(&factory);
 }
-
