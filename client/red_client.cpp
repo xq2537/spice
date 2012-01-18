@@ -274,7 +274,6 @@ void* Migrate::worker_main(void *data)
 
 void Migrate::start(const SpiceMsgMainMigrationBegin* migrate)
 {
-    std::string cert_subject;
     uint32_t peer_major;
     uint32_t peer_minor;
 

@@ -538,7 +538,7 @@ void RedScreen::capture_mouse()
     _mouse_captured = true;
     _window.hide_cursor();
     reset_mouse_pos();
-    _window.cupture_mouse();
+    _window.capture_mouse();
 }
 
 void RedScreen::relase_mouse()

@@ -1867,7 +1867,7 @@ void RedWindow::release_mouse()
     sync(true);
 }
 
-void RedWindow::cupture_mouse()
+void RedWindow::capture_mouse()
 {
     int grab_retries = MOUSE_GRAB_RETRIES;
     XLockDisplay(x_display);
