@@ -3365,7 +3365,9 @@ static int tunnel_channel_config_socket(RedChannelClient *rcc)
 
     if (setsockopt(stream->socket, IPPROTO_TCP, TCP_NODELAY, &delay_val,
                    sizeof(delay_val)) == -1) {
-        red_printf("setsockopt failed, %s", strerror(errno));
+        if (errno != ENOTSUP) {
+            red_printf("setsockopt failed, %s", strerror(errno));
+        }
     }
 
     return TRUE;

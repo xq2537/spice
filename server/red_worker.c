@@ -9498,7 +9498,9 @@ static int common_channel_config_socket(RedChannelClient *rcc)
     // TODO - this should be dynamic, not one time at channel creation
     delay_val = main_channel_client_is_low_bandwidth(mcc) ? 0 : 1;
     if (setsockopt(stream->socket, IPPROTO_TCP, TCP_NODELAY, &delay_val, sizeof(delay_val)) == -1) {
-        red_printf("setsockopt failed, %s", strerror(errno));
+        if (errno != ENOTSUP) {
+            red_printf("setsockopt failed, %s", strerror(errno));
+        }
     }
     return TRUE;
 }

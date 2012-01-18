@@ -919,12 +919,16 @@ static SndChannel *__new_channel(SndWorker *worker, int size, uint32_t channel_i
 
     tos = IPTOS_LOWDELAY;
     if (setsockopt(stream->socket, IPPROTO_IP, IP_TOS, (void*)&tos, sizeof(tos)) == -1) {
-        red_printf("setsockopt failed, %s", strerror(errno));
+        if (errno != ENOTSUP) {
+            red_printf("setsockopt failed, %s", strerror(errno));
+        }
     }
 
     delay_val = main_channel_client_is_low_bandwidth(mcc) ? 0 : 1;
     if (setsockopt(stream->socket, IPPROTO_TCP, TCP_NODELAY, &delay_val, sizeof(delay_val)) == -1) {
-        red_printf("setsockopt failed, %s", strerror(errno));
+        if (errno != ENOTSUP) {
+            red_printf("setsockopt failed, %s", strerror(errno));
+        }
     }
 
     if (fcntl(stream->socket, F_SETFL, flags | O_NONBLOCK) == -1) {
