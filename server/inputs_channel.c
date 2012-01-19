@@ -282,7 +282,8 @@ static void inputs_channel_send_item(RedChannelClient *rcc, PipeItem *base)
     red_channel_client_begin_send_message(rcc);
 }
 
-static int inputs_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint16_t type, void *message)
+static int inputs_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint16_t type,
+                                        void *message)
 {
     InputsChannel *inputs_channel = (InputsChannel *)rcc->channel;
     InputsChannelClient *icc = (InputsChannelClient *)rcc;
@@ -464,7 +465,6 @@ static void inputs_pipe_add_init(RedChannelClient *rcc)
 
 static int inputs_channel_config_socket(RedChannelClient *rcc)
 {
-    int flags;
     int delay_val = 1;
     RedsStream *stream = red_channel_client_get_stream(rcc);
 
@@ -476,11 +476,6 @@ static int inputs_channel_config_socket(RedChannelClient *rcc)
         }
     }
 
-    if ((flags = fcntl(stream->socket, F_GETFL)) == -1 ||
-                 fcntl(stream->socket, F_SETFL, flags | O_ASYNC) == -1) {
-        red_printf("fcntl failed, %s", strerror(errno));
-        return FALSE;
-    }
     return TRUE;
 }
 
