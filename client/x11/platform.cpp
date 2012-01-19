@@ -34,7 +34,6 @@
 #include <X11/extensions/Xfixes.h>
 #include <unistd.h>
 #include <sys/socket.h>
-#include <sys/epoll.h>
 #include <sys/resource.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
