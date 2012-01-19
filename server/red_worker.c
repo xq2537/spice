@@ -1043,14 +1043,17 @@ static void dump_bitmap(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_i
 
 #define DCC_FOREACH(link, dcc, channel) \
     for (link = channel ? ring_get_head(&(channel)->clients) : NULL,\
-         dcc = link ? SPICE_CONTAINEROF((link), DisplayChannelClient, common.base.channel_link) : NULL;\
+         dcc = link ? SPICE_CONTAINEROF((link), DisplayChannelClient,\
+                                        common.base.channel_link) : NULL;\
             (link);                              \
             (link) = ring_next(&(channel)->clients, link),\
             dcc = SPICE_CONTAINEROF((link), DisplayChannelClient, common.base.channel_link))
 
 #define WORKER_FOREACH_DCC(worker, link, dcc) \
-    for (link = ((worker) && (worker)->display_channel) ? ring_get_head(&(worker)->display_channel->common.base.clients) : NULL,\
-         dcc = link ? SPICE_CONTAINEROF((link), DisplayChannelClient, common.base.channel_link) : NULL;\
+    for (link = ((worker) && (worker)->display_channel) ?\
+            ring_get_head(&(worker)->display_channel->common.base.clients) : NULL,\
+         dcc = link ? SPICE_CONTAINEROF((link), DisplayChannelClient,\
+                                        common.base.channel_link) : NULL;\
             (link);                              \
             (link) = ring_next(&(worker)->display_channel->common.base.clients, link),\
             dcc = SPICE_CONTAINEROF((link), DisplayChannelClient, common.base.channel_link))
@@ -1090,7 +1093,8 @@ static void dump_bitmap(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_i
 
 // TODO: replace with DCC_FOREACH when it is introduced
 #define WORKER_TO_DCC(worker) \
-    (worker->display_channel ? SPICE_CONTAINEROF(worker->display_channel->common.base.rcc, DisplayChannelClient, common.base) : NULL)
+    (worker->display_channel ? SPICE_CONTAINEROF(worker->display_channel->common.base.rcc,\
+                       DisplayChannelClient, common.base) : NULL)
 
 #define DCC_TO_DC(dcc) SPICE_CONTAINEROF((dcc)->common.base.channel,\
                                          DisplayChannel, common.base)
@@ -1481,7 +1485,8 @@ static inline void red_pipes_remove_drawable(Drawable *drawable)
     RING_FOREACH_SAFE(item, next, &drawable->pipes) {
         dpi = SPICE_CONTAINEROF(item, DrawablePipeItem, base);
         if (pipe_item_is_linked(&dpi->dpi_pipe_item)) {
-            red_channel_client_pipe_remove_and_release(&dpi->dcc->common.base, &dpi->dpi_pipe_item);
+            red_channel_client_pipe_remove_and_release(&dpi->dcc->common.base,
+                                                       &dpi->dpi_pipe_item);
         }
     }
 }
@@ -1934,7 +1939,8 @@ static void red_current_clear(RedWorker *worker, int surface_id)
     }
 }
 
-static void red_clear_surface_drawables_from_pipe(DisplayChannelClient *dcc, int surface_id, int force)
+static void red_clear_surface_drawables_from_pipe(DisplayChannelClient *dcc, int surface_id,
+                                                  int force)
 {
     Ring *ring;
     PipeItem *item;
@@ -2340,7 +2346,9 @@ static int is_equal_path(RedWorker *worker, SpicePath *path1, SpicePath *path2)
 // partial imp
 static int is_equal_brush(SpiceBrush *b1, SpiceBrush *b2)
 {
-    return b1->type == b2->type && b1->type == SPICE_BRUSH_TYPE_SOLID && b1->u.color == b1->u.color;
+    return b1->type == b2->type &&
+           b1->type == SPICE_BRUSH_TYPE_SOLID &&
+           b1->u.color == b1->u.color;
 }
 
 // partial imp
@@ -2379,9 +2387,11 @@ static int is_same_drawable(RedWorker *worker, Drawable *d1, Drawable *d2)
 
     switch (d1->red_drawable->type) {
     case QXL_DRAW_STROKE:
-        return is_equal_brush(&d1->red_drawable->u.stroke.brush, &d2->red_drawable->u.stroke.brush);
+        return is_equal_brush(&d1->red_drawable->u.stroke.brush,
+                              &d2->red_drawable->u.stroke.brush);
     case QXL_DRAW_FILL:
-        return is_equal_brush(&d1->red_drawable->u.fill.brush, &d2->red_drawable->u.fill.brush);
+        return is_equal_brush(&d1->red_drawable->u.fill.brush,
+                              &d2->red_drawable->u.fill.brush);
     default:
         return FALSE;
     }
@@ -2936,7 +2946,8 @@ static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream)
             return;
         }
 
-        double drop_factor = ((double)agent->frames - (double)agent->drops) / (double)agent->frames;
+        double drop_factor = ((double)agent->frames - (double)agent->drops) /
+                             (double)agent->frames;
 
         if (drop_factor == 1) {
             if (agent->fps < MAX_FPS) {
@@ -3072,7 +3083,8 @@ static inline int red_current_add_equal(RedWorker *worker, DrawItem *item, TreeI
     other_drawable = SPICE_CONTAINEROF(other_draw_item, Drawable, tree_item);
 
     if (item->effect == QXL_EFFECT_OPAQUE) {
-        int add_after = !!other_drawable->stream && is_drawable_independent_from_surfaces(drawable);
+        int add_after = !!other_drawable->stream &&
+                        is_drawable_independent_from_surfaces(drawable);
         red_stream_maintenance(worker, drawable, other_drawable);
         __current_add_drawable(worker, drawable, &other->siblings_link);
         other_drawable->refs++;
@@ -3355,7 +3367,8 @@ static inline Shadow *__new_shadow(RedWorker *worker, Drawable *item, SpicePoint
     return shadow;
 }
 
-static inline int red_current_add_with_shadow(RedWorker *worker, Ring *ring, Drawable *item, SpicePoint *delta)
+static inline int red_current_add_with_shadow(RedWorker *worker, Ring *ring, Drawable *item,
+                                              SpicePoint *delta)
 {
 #ifdef RED_WORKER_STAT
     stat_time_t start_time = stat_now();
@@ -3737,7 +3750,8 @@ static inline void red_inc_surfaces_drawable_dependencies(RedWorker *worker, Dra
     }
 }
 
-static inline void red_process_drawable(RedWorker *worker, RedDrawable *drawable, uint32_t group_id)
+static inline void red_process_drawable(RedWorker *worker, RedDrawable *drawable,
+                                        uint32_t group_id)
 {
     int surface_id;
     Drawable *item = get_drawable(worker, drawable->effect, drawable, group_id);
@@ -3810,7 +3824,8 @@ static inline void red_create_surface(RedWorker *worker, uint32_t surface_id,uin
                                       uint32_t height, int32_t stride, uint32_t format,
                                       void *line_0, int data_is_valid, int send_client);
 
-static inline void red_process_surface(RedWorker *worker, RedSurfaceCmd *surface, uint32_t group_id, int loadvm)
+static inline void red_process_surface(RedWorker *worker, RedSurfaceCmd *surface,
+                                       uint32_t group_id, int loadvm)
 {
     int surface_id;
     RedSurface *red_surface;
@@ -4818,8 +4833,8 @@ static void red_current_flush(RedWorker *worker, int surface_id)
 }
 
 // adding the pipe item after pos. If pos == NULL, adding to head.
-static ImageItem *red_add_surface_area_image(DisplayChannelClient *dcc, int surface_id, SpiceRect *area,
-                                             PipeItem *pos, int can_lossy)
+static ImageItem *red_add_surface_area_image(DisplayChannelClient *dcc, int surface_id,
+                                             SpiceRect *area, PipeItem *pos, int can_lossy)
 {
     DisplayChannel *display_channel = DCC_TO_DC(dcc);
     RedWorker *worker = display_channel->common.worker;
@@ -5049,7 +5064,7 @@ static RedGlzDrawable *red_display_get_glz_drawable(DisplayChannelClient *dcc, D
     RedGlzDrawable *ret;
     RingItem *item;
 
-    // TODO - I don't really understand what's going on here, so just doing the technical equivalent
+    // TODO - I don't really understand what's going on here, so doing the technical equivalent
     // now that we have multiple glz_dicts, so the only way to go from dcc to drawable glz is to go
     // over the glz_ring (unless adding some better data structure then a ring)
     DRAWABLE_FOREACH_GLZ(drawable, item, ret) {
@@ -6164,7 +6179,8 @@ static inline int red_compress_image(DisplayChannelClient *dcc,
                 } else {
                     if (drawable->copy_bitmap_graduality == BITMAP_GRADUAL_INVALID) {
                         quic_compress = BITMAP_FMT_IS_RGB[src->format] &&
-                            (_get_bitmap_graduality_level(display_channel->common.worker, src, drawable->group_id) ==
+                            (_get_bitmap_graduality_level(display_channel->common.worker, src,
+                                                          drawable->group_id) ==
                              BITMAP_GRADUAL_HIGH);
                     } else {
                         quic_compress = (drawable->copy_bitmap_graduality == BITMAP_GRADUAL_HIGH);
@@ -7094,7 +7110,8 @@ static void red_marshall_qxl_draw_transparent(RedWorker *worker,
     SpiceMarshaller *src_bitmap_out;
     SpiceTransparent transparent;
 
-    red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_DRAW_TRANSPARENT, &dpi->dpi_pipe_item);
+    red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_DRAW_TRANSPARENT,
+                                      &dpi->dpi_pipe_item);
     fill_base(base_marshaller, item);
     transparent = drawable->u.transparent;
     spice_marshall_Transparent(base_marshaller,
@@ -7144,13 +7161,15 @@ static FillBitsType red_marshall_qxl_draw_alpha_blend(RedWorker *worker,
     SpiceAlphaBlend alpha_blend;
     FillBitsType src_send_type;
 
-    red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_DRAW_ALPHA_BLEND, &dpi->dpi_pipe_item);
+    red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_DRAW_ALPHA_BLEND,
+                                      &dpi->dpi_pipe_item);
     fill_base(base_marshaller, item);
     alpha_blend = drawable->u.alpha_blend;
     spice_marshall_AlphaBlend(base_marshaller,
                               &alpha_blend,
                               &src_bitmap_out);
-    src_send_type = fill_bits(dcc, src_bitmap_out, alpha_blend.src_bitmap, item, src_allowed_lossy);
+    src_send_type = fill_bits(dcc, src_bitmap_out, alpha_blend.src_bitmap, item,
+                              src_allowed_lossy);
 
     return src_send_type;
 }
@@ -8766,7 +8785,8 @@ static void red_migrate_display(RedWorker *worker, RedChannelClient *rcc)
         red_pipe_add_verb(rcc, PIPE_ITEM_TYPE_MIGRATE);
 //        red_pipes_add_verb(&worker->display_channel->common.base,
 //                           SPICE_MSG_DISPLAY_STREAM_DESTROY_ALL);
-//        red_channel_pipes_add_type(&worker->display_channel->common.base, PIPE_ITEM_TYPE_MIGRATE);
+//        red_channel_pipes_add_type(&worker->display_channel->common.base,
+//                                   PIPE_ITEM_TYPE_MIGRATE);
     }
 }
 
@@ -9068,8 +9088,8 @@ static inline void flush_cursor_commands(RedWorker *worker)
     }
 }
 
-// TODO: on timeout, don't disconnect all channeld immeduiatly - try to disconnect the slowest ones first
-// and maybe turn timeouts to several timeouts in order to disconnect channels gradually.
+// TODO: on timeout, don't disconnect all channeld immeduiatly - try to disconnect the slowest ones
+// first and maybe turn timeouts to several timeouts in order to disconnect channels gradually.
 // Should use disconnect or shutdown?
 static inline void flush_all_qxl_commands(RedWorker *worker)
 {
@@ -9404,7 +9424,8 @@ static uint64_t display_channel_handle_migrate_data_get_serial(
     return migrate_data->message_serial;
 }
 
-static uint64_t display_channel_handle_migrate_data(RedChannelClient *rcc, uint32_t size, void *message)
+static uint64_t display_channel_handle_migrate_data(RedChannelClient *rcc, uint32_t size,
+                                                    void *message)
 {
     DisplayChannelMigrateData *migrate_data;
     DisplayChannel *display_channel = SPICE_CONTAINEROF(rcc->channel, DisplayChannel, common.base);
@@ -9461,7 +9482,8 @@ static uint64_t display_channel_handle_migrate_data(RedChannelClient *rcc, uint3
     return TRUE;
 }
 
-static int display_channel_handle_message(RedChannelClient *rcc, uint32_t size, uint16_t type, void *message)
+static int display_channel_handle_message(RedChannelClient *rcc, uint32_t size, uint16_t type,
+                                          void *message)
 {
     DisplayChannelClient *dcc = RCC_TO_DCC(rcc);
     switch (type) {
@@ -9497,7 +9519,8 @@ static int common_channel_config_socket(RedChannelClient *rcc)
 
     // TODO - this should be dynamic, not one time at channel creation
     delay_val = main_channel_client_is_low_bandwidth(mcc) ? 0 : 1;
-    if (setsockopt(stream->socket, IPPROTO_TCP, TCP_NODELAY, &delay_val, sizeof(delay_val)) == -1) {
+    if (setsockopt(stream->socket, IPPROTO_TCP, TCP_NODELAY, &delay_val,
+                   sizeof(delay_val)) == -1) {
         if (errno != ENOTSUP) {
             red_printf("setsockopt failed, %s", strerror(errno));
         }
@@ -9625,7 +9648,7 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_t
                                  channel_handle_parsed_proc handle_parsed,
                                  channel_handle_migrate_flush_mark_proc handle_migrate_flush_mark,
                                  channel_handle_migrate_data_proc handle_migrate_data,
-                                 channel_handle_migrate_data_get_serial_proc handle_migrate_data_get_serial)
+                                 channel_handle_migrate_data_get_serial_proc migrate_get_serial)
 {
     RedChannel *channel = NULL;
     CommonChannel *common;
@@ -9640,7 +9663,7 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_t
     channel_cbs.release_recv_buf = common_release_recv_buf;
     channel_cbs.handle_migrate_flush_mark = handle_migrate_flush_mark;
     channel_cbs.handle_migrate_data = handle_migrate_data;
-    channel_cbs.handle_migrate_data_get_serial = handle_migrate_data_get_serial;
+    channel_cbs.handle_migrate_data_get_serial = migrate_get_serial;
 
     channel = red_channel_create_parser(size, &worker_core,
                                         channel_type, worker->id,
@@ -10350,7 +10373,8 @@ static inline void red_cursor_reset(RedWorker *worker)
     worker->cursor_trail_length = worker->cursor_trail_frequency = 0;
 
     if (cursor_is_connected(worker)) {
-        red_channel_pipes_add_type(&worker->cursor_channel->common.base, PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
+        red_channel_pipes_add_type(&worker->cursor_channel->common.base,
+                                   PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
         if (!worker->cursor_channel->common.base.migrate) {
             red_pipes_add_verb(&worker->cursor_channel->common.base, SPICE_MSG_CURSOR_RESET);
         }
@@ -10407,8 +10431,8 @@ static void dev_create_primary_surface(RedWorker *worker, uint32_t surface_id,
     PANIC_ON(((uint64_t)abs(surface.stride) * (uint64_t)surface.height) !=
              abs(surface.stride) * surface.height);
 
-    line_0 = (uint8_t*)get_virt(&worker->mem_slots, surface.mem, surface.height * abs(surface.stride),
-                                surface.group_id);
+    line_0 = (uint8_t*)get_virt(&worker->mem_slots, surface.mem,
+                                surface.height * abs(surface.stride), surface.group_id);
     if (surface.stride < 0) {
         line_0 -= (int32_t)(surface.stride * (surface.height -1));
     }
