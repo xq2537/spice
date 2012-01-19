@@ -360,7 +360,8 @@ void main_channel_push_mouse_mode(MainChannel *main_chan, int current_mode,
         main_mouse_mode_item_new, &info);
 }
 
-static void main_channel_marshall_mouse_mode(SpiceMarshaller *m, int current_mode, int is_client_mouse_allowed)
+static void main_channel_marshall_mouse_mode(SpiceMarshaller *m, int current_mode,
+                                             int is_client_mouse_allowed)
 {
     SpiceMsgMainMouseMode mouse_mode;
     mouse_mode.supported_modes = SPICE_MOUSE_MODE_SERVER;
@@ -435,7 +436,8 @@ static void main_channel_push_migrate_data_item(MainChannel *main_chan)
 
 static void main_channel_marshall_migrate_data_item(SpiceMarshaller *m, int serial, int ping_id)
 {
-    MainMigrateData *data = (MainMigrateData *)spice_marshaller_reserve_space(m, sizeof(MainMigrateData));
+    MainMigrateData *data = (MainMigrateData *)
+                            spice_marshaller_reserve_space(m, sizeof(MainMigrateData));
 
     reds_marshall_migrate_data_item(m, data); // TODO: from reds split. ugly separation.
     data->serial = serial;
@@ -755,7 +757,8 @@ void main_channel_client_handle_migrate_end(MainChannelClient *mcc)
         mcc->mig_wait_prev_complete = FALSE;
     }
 }
-static int main_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint16_t type, void *message)
+static int main_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint16_t type,
+                                      void *message)
 {
     MainChannel *main_chan = SPICE_CONTAINEROF(rcc->channel, MainChannel, base);
     MainChannelClient *mcc = SPICE_CONTAINEROF(rcc, MainChannelClient, base);
@@ -927,13 +930,10 @@ static MainChannelClient *main_channel_client_create(MainChannel *main_chan, Red
                                                      int num_common_caps, uint32_t *common_caps,
                                                      int num_caps, uint32_t *caps)
 {
-    MainChannelClient *mcc = (MainChannelClient*)red_channel_client_create(sizeof(MainChannelClient),
-                                                                           &main_chan->base,
-                                                                           client, stream,
-                                                                           num_common_caps,
-                                                                           common_caps,
-                                                                           num_caps,
-                                                                           caps);
+    MainChannelClient *mcc = (MainChannelClient*)
+                             red_channel_client_create(sizeof(MainChannelClient), &main_chan->base,
+                                                       client, stream, num_common_caps,
+                                                       common_caps, num_caps, caps);
 
     mcc->connection_id = connection_id;
     mcc->bitrate_per_sec = ~0;
@@ -1039,7 +1039,8 @@ int main_channel_migrate_connect(MainChannel *main_channel, RedsMigSpice *mig_ta
     main_channel->num_clients_mig_wait = 0;
 
     RING_FOREACH(client_link, &main_channel->base.clients) {
-        MainChannelClient * mcc = SPICE_CONTAINEROF(client_link, MainChannelClient, base.channel_link);
+        MainChannelClient * mcc = SPICE_CONTAINEROF(client_link, MainChannelClient,
+                                                    base.channel_link);
         if (red_channel_client_test_remote_cap(&mcc->base,
                                                SPICE_MAIN_CAP_SEMI_SEAMLESS_MIGRATE)) {
             if (red_client_during_migrate_at_target(mcc->base.client)) {
