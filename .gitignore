@@ -17,7 +17,9 @@ depcomp
 install-sh
 libtool
 ltmain.sh
+m4/
 missing
 Makefile
 Makefile.in
+spice-server.pc
 stamp-h1
