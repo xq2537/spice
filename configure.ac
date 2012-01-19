@@ -217,7 +217,7 @@ SPICE_REQUIRES+=" celt051 >= 0.5.1.1"
 
 if test ! -e client/generated_marshallers.cpp; then
 AC_MSG_CHECKING([for pyparsing python module])
-echo "import pyparsing" | python - >/dev/null 2>&1
+echo "import pyparsing" | ${PYTHON} - >/dev/null 2>&1
 if test $? -ne 0 ; then
     AC_MSG_RESULT([not found])
     AC_MSG_ERROR([pyparsing python module is required to compile this package])
@@ -531,6 +531,7 @@ echo "
         prefix:                   ${prefix}
         c compiler:               ${CC}
         c++ compiler:             ${CXX}
+        python:                   ${PYTHON}
 
         Build Spice client:       ${enable_client}
 
