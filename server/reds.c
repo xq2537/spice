@@ -2706,7 +2706,9 @@ static RedLinkInfo *reds_init_client_connection(int socket)
     }
 
     if (setsockopt(socket, IPPROTO_TCP, TCP_NODELAY, &delay_val, sizeof(delay_val)) == -1) {
-        red_printf("setsockopt failed, %s", strerror(errno));
+        if (errno != ENOTSUP) {
+            red_printf("setsockopt failed, %s", strerror(errno));
+        }
     }
 
     link = spice_new0(RedLinkInfo, 1);

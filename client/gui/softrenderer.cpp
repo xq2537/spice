@@ -45,7 +45,7 @@ SoftRenderer::SoftRenderer(uint8_t* surface, uint width, uint height, uint strid
     , _image_codec_module (NULL)
     , _queueing(true)
 {
-    assert(stride == _width * 4); //for now
+    assert(stride == width * 4); //for now
     if (!_image_codec) {
         setupImageCodec();
     }

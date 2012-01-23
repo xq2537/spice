@@ -922,7 +922,7 @@ void RedWindow_p::win_proc(XEvent& event)
     case ClientMessage:
         if (event.xclient.message_type == wm_protocol_atom) {
             ASSERT(event.xclient.format == 32);
-            if (event.xclient.data.l[0] == wm_delete_window_atom) {
+            if ((Atom)event.xclient.data.l[0] == wm_delete_window_atom) {
                 DBG(0, "wm_delete_window");
                 Platform::send_quit_request();
             }

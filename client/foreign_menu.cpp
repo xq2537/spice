@@ -30,7 +30,7 @@
 
 #ifdef WIN32
 #define PIPE_NAME "SpiceForeignMenu-%lu"
-#elif defined(__i386__)
+#elif defined(__i386__) || __SIZEOF_LONG__ == 4
 #define PIPE_NAME "/tmp/SpiceForeignMenu-%llu.uds"
 #else
 #define PIPE_NAME "/tmp/SpiceForeignMenu-%lu.uds"

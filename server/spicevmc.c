@@ -92,8 +92,10 @@ static int spicevmc_red_channel_client_config_socket(RedChannelClient *rcc)
     if (rcc->channel->type == SPICE_CHANNEL_USBREDIR) {
         if (setsockopt(stream->socket, IPPROTO_TCP, TCP_NODELAY,
                 &delay_val, sizeof(delay_val)) != 0) {
-            red_printf("setsockopt failed, %s", strerror(errno));
-            return FALSE;
+            if (errno != ENOTSUP) {
+                red_printf("setsockopt failed, %s", strerror(errno));
+                return FALSE;
+            }
         }
     }
 

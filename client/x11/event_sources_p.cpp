@@ -119,7 +119,7 @@ bool EventSources::wait_events(int timeout_msec)
         return false;
     }
 
-    for (int i = 0; i < _events.size(); i++) {
+    for (unsigned int i = 0; i < _events.size(); i++) {
         if (FD_ISSET(_fds[i], &rfds)) {
             _events[i]->action();
             /* The action may have removed / added event sources changing
