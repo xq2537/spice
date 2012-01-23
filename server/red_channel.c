@@ -162,6 +162,8 @@ static void red_peer_handle_incoming(RedsStream *stream, IncomingHandler *handle
     uint16_t msg_type;
     uint32_t msg_size;
 
+    /* XXX: This needs further investigation as to the underlying cause, it happened
+     * after spicec disconnect (but not with spice-gtk) repeatedly. */
     if (!stream) {
         return;
     }
