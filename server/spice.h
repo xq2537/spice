@@ -22,7 +22,7 @@
 #include <sys/socket.h>
 #include <spice/qxl_dev.h>
 
-#define SPICE_SERVER_VERSION 0x000901 /* release 0.9.1 */
+#define SPICE_SERVER_VERSION 0x000a01 /* release 0.10.1 */
 
 /* interface base type */
 
