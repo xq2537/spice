@@ -497,10 +497,9 @@ void CmdLineParser::show_help()
                 os << "                              ";
             }
             if (line.size() > HELP_WIDTH) {
-                int now = HELP_WIDTH;
+                size_t last_space, now = HELP_WIDTH;
                 std::string sub;
                 sub.append(line, 0, now);
-                int last_space;
                 if ((last_space = sub.find_last_of(' ')) != std::string::npos) {
                     now = last_space;
                     sub.resize(now++);

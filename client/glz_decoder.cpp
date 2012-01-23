@@ -50,7 +50,7 @@ GlzDecoder::~GlzDecoder()
 
 void GlzDecoder::decode_header()
 {
-    int magic;
+    uint32_t magic;
     int version;
     uint8_t tmp;
     int stride;
