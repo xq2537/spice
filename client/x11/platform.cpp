@@ -135,7 +135,7 @@ static struct clipboard_format_info clipboard_formats[] = {
     { VD_AGENT_CLIPBOARD_IMAGE_JPG, { "image/jpeg", NULL }, },
 };
 
-#define clipboard_format_count (sizeof(clipboard_formats)/sizeof(clipboard_formats[0]))
+#define clipboard_format_count ((int)(sizeof(clipboard_formats)/sizeof(clipboard_formats[0])))
 
 struct selection_request {
     XEvent event;
@@ -145,11 +145,11 @@ struct selection_request {
 static int expected_targets_notifies = 0;
 static bool waiting_for_property_notify = false;
 static uint8_t* clipboard_data = NULL;
-static int32_t clipboard_data_size = 0;
-static int32_t clipboard_data_space = 0;
+static uint32_t clipboard_data_size = 0;
+static uint32_t clipboard_data_space = 0;
 static Atom clipboard_request_target = None;
 static selection_request *next_selection_request = NULL;
-static uint32_t clipboard_type_count = 0;
+static int clipboard_type_count = 0;
 static uint32_t clipboard_agent_types[256];
 static Atom clipboard_x11_targets[256];
 static Mutex clipboard_lock;
@@ -1242,7 +1242,7 @@ private:
     void update_position();
     bool find_mode_in_outputs(RRMode mode, int start_index, XRRScreenResources* res);
     bool find_mode_in_clones(RRMode mode, XRRScreenResources* res);
-    XRRModeInfo* find_mode(int width, int height, XRRScreenResources* res);
+    XRRModeInfo* find_mode(unsigned int width, unsigned int height, XRRScreenResources* res);
 
 private:
     MultyMonScreen& _container;
@@ -2181,7 +2181,7 @@ public:
     }
 };
 
-XRRModeInfo* XMonitor::find_mode(int width, int height, XRRScreenResources* res)
+XRRModeInfo* XMonitor::find_mode(unsigned int width, unsigned int height, XRRScreenResources* res)
 {
     typedef std::set<ModeInfo, ModeCompare> ModesSet;
     ModesSet modes_set;
