@@ -405,7 +405,7 @@ dnl MAYBE_WARN="-Wall -Wno-sign-compare -Werror -Wno-deprecated-declarations"
 if test "$red_target" = "windows"; then
 	MAYBE_WARN="-Wall -Wno-sign-compare -Wno-deprecated-declarations"
 else
-	MAYBE_WARN="-Wall -Wno-sign-compare -Werror -Wno-deprecated-declarations"
+	MAYBE_WARN="-Wall -Wno-sign-compare -Wno-deprecated-declarations"
 fi
 
 AC_ARG_ENABLE(werror,
@@ -418,7 +418,6 @@ else
 	set_werror=no
 fi
 ])
-
 
 # invalidate cached value if MAYBE_WARN has changed
 if test "x$spice_cv_warn_maybe" != "x$MAYBE_WARN"; then
