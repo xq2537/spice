@@ -96,7 +96,7 @@ bool WaveRecorder::init(uint32_t sampels_per_sec,
                         uint32_t channels)
 {
     const int frame_size = WaveRecordAbstract::FRAME_SIZE;
-    const char* pcm_device = "hw:0,0"; // "default" ???
+    const char* pcm_device = "default";
     snd_pcm_format_t format;
     int err;
 
