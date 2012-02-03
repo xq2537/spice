@@ -393,21 +393,7 @@ Application::Application()
     Platform::get_app_data_dir(_host_auth_opt.CA_file, app_name);
     Platform::path_append(_host_auth_opt.CA_file, CA_FILE_NAME);
 
-    std::auto_ptr<HotKeysParser> parser(new HotKeysParser("toggle-fullscreen=shift+f11"
-                                                          ",release-cursor=shift+f12"
-#ifdef RED_DEBUG
-                                                          ",connect=shift+f5"
-                                                          ",disconnect=shift+f6"
-#endif
-#ifdef USE_GUI
-                                                          ",show-gui=shift+f7"
-#endif // USE_GUI
-#ifdef USE_SMARTCARD
-                                                          ",smartcard-insert=shift+f8"
-                                                          ",smartcard-remove=shift+f9"
-#endif
-                                                          , _commands_map));
-    _hot_keys = parser->get();
+    this->set_default_hotkeys();
 
     _sticky_info.trace_is_on = false;
     _sticky_info.sticky_mode = false;
@@ -1867,10 +1853,36 @@ void Application::hide_me()
     hide();
 }
 
+void Application::set_default_hotkeys(void)
+{
+    const std::string default_hotkeys = "toggle-fullscreen=shift+f11"
+                                        ",release-cursor=shift+f12"
+#ifdef RED_DEBUG
+                                        ",connect=shift+f5"
+                                        ",disconnect=shift+f6"
+#endif
+#ifdef USE_GUI
+                                        ",show-gui=shift+f7"
+#endif // USE_GUI
+#ifdef USE_SMARTCARD
+                                        ",smartcard-insert=shift+f8"
+                                        ",smartcard-remove=shift+f9"
+#endif
+                                        "";
+
+    this->set_hotkeys(default_hotkeys);
+}
+
 void Application::set_hotkeys(const std::string& hotkeys)
 {
-    std::auto_ptr<HotKeysParser> parser(new HotKeysParser(hotkeys, _commands_map));
-    _hot_keys = parser->get();
+
+    try {
+        std::auto_ptr<HotKeysParser> parser(new HotKeysParser(hotkeys, _commands_map));
+        _hot_keys = parser->get();
+    } catch (Exception &e) {
+        LOG_WARN("%s", e.what());
+        this->set_default_hotkeys();
+    }
 }
 
 int Application::get_controller_menu_item_id(int32_t opaque_conn_ref, uint32_t msg_id)

@@ -250,6 +250,7 @@ public:
     void show_me(bool full_screen);
     void hide_me();
     void set_hotkeys(const std::string& hotkeys);
+    void set_default_hotkeys(void);
     int get_controller_menu_item_id(int32_t opaque_conn_ref, uint32_t msg_id);
     void set_menu(Menu* menu);
     void delete_menu();
