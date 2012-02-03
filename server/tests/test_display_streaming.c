@@ -10,13 +10,19 @@
 int simple_commands[] = {
     SIMPLE_DRAW,
     SIMPLE_UPDATE,
+    PATH_PROGRESS,
+    SIMPLE_CREATE_SURFACE,
+    SIMPLE_DESTROY_SURFACE,
 };
 
 SpiceCoreInterface *core;
 SpiceServer *server;
 
-int main(void)
+int main(int argc, char **argv)
 {
+#ifdef AUTOMATED_TESTS
+    check_automated(argc, argv);
+#endif
     core = basic_event_loop_init();
     server = test_init(core);
     spice_server_set_streaming_video(server, SPICE_STREAM_VIDEO_ALL);

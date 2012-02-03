@@ -129,6 +129,13 @@ AC_ARG_ENABLE(client,
 AS_IF([test x"$enable_client" != "xno"], [enable_client="yes"])
 AM_CONDITIONAL(SUPPORT_CLIENT, test "x$enable_client" = "xyes")
 
+AC_ARG_ENABLE(automated_tests,
+[  --enable-automated-tests     Enable automated tests using snappy (part of spice--gtk)],,
+[enable_automated_tests="no"])
+AS_IF([test x"$enable_automated_tests" != "xno"], [enable_automated_tests="yes"])
+AM_CONDITIONAL(SUPPORT_AUTOMATED_TESTS, test "x$enable_automated_tests" != "xno")
+
+
 dnl =========================================================================
 dnl Check deps
 
@@ -372,6 +379,16 @@ AM_CONDITIONAL([HAVE_SASL], [test "x$with_sasl2" = "xyes" || test "x$with_sasl" 
 AC_SUBST([SASL_CFLAGS])
 AC_SUBST([SASL_LIBS])
 
+if test "x$enable_automated_tests" = "xyes"; then
+    AC_MSG_CHECKING([for snappy])
+    snappy --help >/dev/null 2>&1
+    if test $? -ne 0 ; then
+        AC_MSG_RESULT([not found])
+        AC_MSG_ERROR([snappy was not found, this module is part of spice-gtk andis required to compile this package])
+    fi
+    AC_MSG_RESULT([found])
+fi
+
 dnl ===========================================================================
 dnl check compiler flags
 
@@ -549,6 +566,8 @@ echo "
         Smartcard:                ${enable_smartcard}
 
         SASL support:             ${enable_sasl}
+
+        Automated tests:          ${enable_automated_tests}
 "
 
 if test $os_win32 == "yes" ; then

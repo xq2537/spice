@@ -9,6 +9,10 @@ INCLUDES =                              \
 	$(SPICE_NONPKGCONFIG_CFLAGS)    \
 	$(NULL)
 
+if SUPPORT_AUTOMATED_TESTS
+INCLUDES += -DAUTOMATED_TESTS
+endif
+
 AM_LDFLAGS = $(top_builddir)/server/libspice-server.la
 
 COMMON_BASE=basic_event_loop.c basic_event_loop.h test_util.h ../../common/backtrace.c

@@ -1,9 +1,14 @@
+
 #include <config.h>
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
+#include <unistd.h>
+#include <signal.h>
+#include <wait.h>
 #include <sys/select.h>
+#include <sys/types.h>
 #include <spice/qxl_dev.h>
 #include "test_display_base.h"
 #include "red_channel.h"
@@ -34,14 +39,52 @@ static void test_spice_destroy_update(SimpleSpiceUpdate *update)
     free(update);
 }
 
-#define WIDTH 320
+#define WIDTH 640
 #define HEIGHT 320
 
-#define SINGLE_PART 8
+#define SINGLE_PART 4
 static const int angle_parts = 64 / SINGLE_PART;
 static int unique = 1;
 static int color = -1;
 static int c_i = 0;
+
+/* Used for automated tests */
+static int control = 3; //used to know when we can take a screenshot
+static int rects = 16; //number of rects that will be draw
+static int has_automated_tests = 0; //automated test flag
+
+static void sigchld_handler(int signal_num) // wait for the child process and exit
+{
+    int status;
+    wait(&status);
+    exit(0);
+}
+
+static void regression_test(void)
+{
+    pid_t pid;
+
+    if (--rects != 0) {
+        return;
+    }
+
+    rects = 16;
+
+    if (--control != 0) {
+        return;
+    }
+
+    pid = fork();
+    if (pid == 0) {
+        char buf[PATH_MAX];
+        char *envp[] = {buf, NULL};
+
+        snprintf(buf, sizeof(buf), "PATH=%s", getenv("PATH"));
+        execve("regression_test.py", NULL, envp);
+    } else if (pid > 0) {
+        return;
+    }
+}
 
 static void set_cmd(QXLCommandExt *ext, uint32_t type, QXLPHYSICAL data)
 {
@@ -107,7 +150,13 @@ static SimpleSpiceUpdate *test_spice_create_update_draw(uint32_t surface_id, int
     if ((t % angle_parts) == 0) {
         c_i++;
     }
-    color = (color + 1) % 2;
+
+    if(surface_id != 0) {
+        color = (color + 1) % 2;
+    } else {
+        color = surface_id;
+    }
+
     unique++;
 
     update   = calloc(sizeof(*update), 1);
@@ -116,6 +165,7 @@ static SimpleSpiceUpdate *test_spice_create_update_draw(uint32_t surface_id, int
 
     bw       = WIDTH/SINGLE_PART;
     bh       = 48;
+
     bbox.right = bbox.left + bw;
     bbox.bottom = bbox.top + bh;
     update->bitmap = malloc(bw * bh * 4);
@@ -303,6 +353,7 @@ int cursor_notify = NOTIFY_CURSOR_BATCH;
 #define SURF_WIDTH 320
 #define SURF_HEIGHT 240
 uint8_t secondary_surface[SURF_WIDTH * SURF_HEIGHT * 4];
+int has_secondary;
 
 // We shall now have a ring of commands, so that we can update
 // it from a separate thread - since get_command is called from
@@ -354,6 +405,10 @@ static void produce_command(void)
     static int target_surface = 0;
     static int cmd_index = 0;
 
+
+    if (has_secondary)
+        target_surface = 1;
+
     ASSERT(num_simple_commands);
 
     switch (simple_commands[cmd_index]) {
@@ -361,35 +416,50 @@ static void produce_command(void)
             path_progress(&path);
             break;
         case SIMPLE_UPDATE: {
-            QXLRect rect = {.left = 0, .right = WIDTH,
-                            .top = 0, .bottom = HEIGHT};
-            qxl_worker->update_area(qxl_worker, 0, &rect, NULL, 0, 1);
+            QXLRect rect = {.left = 0, .right = SURF_WIDTH,
+                            .top = 0, .bottom = SURF_HEIGHT};
+            qxl_worker->update_area(qxl_worker, target_surface, &rect, NULL, 0, 1);
             break;
         }
+
         case SIMPLE_COPY_BITS:
         case SIMPLE_DRAW: {
             SimpleSpiceUpdate *update;
+
+            if (has_automated_tests)
+            {
+                if (control == 0) {
+                     return;
+                }
+
+                regression_test();
+            }
+
             switch (simple_commands[cmd_index]) {
                 case SIMPLE_COPY_BITS:
-                    update = test_spice_create_update_copy_bits(target_surface);
+                    update = test_spice_create_update_copy_bits(0);
                     break;
                 case SIMPLE_DRAW:
-                    update = test_spice_create_update_draw(target_surface, path.t);
+                    update = test_spice_create_update_draw(0, path.t);
                     break;
             }
             push_command(&update->ext);
             break;
         }
+
         case SIMPLE_CREATE_SURFACE: {
             SimpleSurfaceCmd *update;
             target_surface = MAX_SURFACE_NUM - 1;
             update = create_surface(target_surface, SURF_WIDTH, SURF_HEIGHT,
                                     secondary_surface);
             push_command(&update->ext);
+            has_secondary = 1;
             break;
         }
+
         case SIMPLE_DESTROY_SURFACE: {
             SimpleSurfaceCmd *update;
+            has_secondary = 0;
             update = destroy_surface(target_surface);
             target_surface = 0;
             push_command(&update->ext);
@@ -529,6 +599,8 @@ QXLInterface display_sif = {
     .set_compression_level = set_compression_level,
     .set_mm_time = set_mm_time,
     .get_init_info = get_init_info,
+
+ /* the callbacks below are called from spice server thread context */
     .get_command = get_command,
     .req_cmd_notification = req_cmd_notification,
     .release_resource = release_resource,
@@ -572,6 +644,37 @@ SpiceServer* test_init(SpiceCoreInterface *core)
     path_init(&path, 0, angle_parts);
     bzero(primary_surface, sizeof(primary_surface));
     bzero(secondary_surface, sizeof(secondary_surface));
+    has_secondary = 0;
     wakeup_timer = core->timer_add(do_wakeup, NULL);
     return server;
+}
+
+void check_automated(int argc, char **argv)
+{
+    struct sigaction sa;
+
+    if (argc == 1) {
+        return;
+    }
+
+    if (argc > 2) {
+        goto invalid_option;
+    }
+
+    if (strcmp(argv[1], "--automated-tests") != 0) {
+        goto invalid_option;
+    }
+
+    has_automated_tests = 1;
+
+    memset(&sa, 0, sizeof sa);
+    sa.sa_handler = &sigchld_handler;
+    sigaction(SIGCHLD, &sa, NULL);
+
+    return;
+
+invalid_option:
+    printf("Invalid option!\n"
+           "Please, check README before run tests!\n" );
+    exit(0);
 }

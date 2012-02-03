@@ -10,6 +10,9 @@ void test_set_simple_command_list(int* commands, int num_commands);
 void test_add_display_interface(SpiceServer *server);
 SpiceServer* test_init(SpiceCoreInterface* core);
 
+/* Used for automated tests */
+void check_automated(int argc, char **argv);
+
 // simple queue for commands
 enum {
     PATH_PROGRESS,
