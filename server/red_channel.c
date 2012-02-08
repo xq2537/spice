@@ -780,6 +780,7 @@ void red_channel_set_data(RedChannel *channel, void *data)
 
 void red_channel_client_destroy(RedChannelClient *rcc)
 {
+    rcc->destroying = 1;
     if (red_channel_client_is_connected(rcc)) {
         red_channel_client_disconnect(rcc);
     }
@@ -1439,6 +1440,7 @@ void red_client_destroy(RedClient *client)
         // some channels may be in other threads, so disconnection
         // is not synchronous.
         rcc = SPICE_CONTAINEROF(link, RedChannelClient, client_link);
+        rcc->destroying = 1;
         // some channels may be in other threads. However we currently
         // assume disconnect is synchronous (we changed the dispatcher
         // to wait for disconnection)

@@ -255,6 +255,7 @@ struct RedChannelClient {
 
     RedChannelCapabilities remote_caps;
     int is_mini_header;
+    int destroying;
 };
 
 struct RedChannel {
