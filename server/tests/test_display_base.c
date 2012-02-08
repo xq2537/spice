@@ -348,7 +348,7 @@ static void get_init_info(QXLInstance *qin, QXLDevInitInfo *info)
 }
 
 #define NOTIFY_DISPLAY_BATCH (SINGLE_PART/2)
-#define NOTIFY_CURSOR_BATCH 0
+#define NOTIFY_CURSOR_BATCH 10
 
 int cursor_notify = NOTIFY_CURSOR_BATCH;
 
@@ -506,6 +506,14 @@ static void release_resource(QXLInstance *qin, struct QXLReleaseInfoExt release_
         case QXL_CMD_SURFACE:
             free(ext);
             break;
+        case QXL_CMD_CURSOR: {
+            QXLCursorCmd *cmd = (QXLCursorCmd *)ext->cmd.data;
+            if (cmd->type == QXL_CURSOR_SET) {
+                free(cmd);
+            }
+            free(ext);
+            break;
+        }
         default:
             abort();
     }
@@ -519,56 +527,64 @@ static struct {
     uint8_t data[CURSOR_WIDTH * CURSOR_HEIGHT * 4]; // 32bit per pixel
 } cursor;
 
-#if 0
-static void init_cursor()
+static void cursor_init()
 {
-    cursor.cursor.header.unique = 0; // TODO ??
+    cursor.cursor.header.unique = 0;
     cursor.cursor.header.type = SPICE_CURSOR_TYPE_COLOR32;
     cursor.cursor.header.width = CURSOR_WIDTH;
     cursor.cursor.header.height = CURSOR_HEIGHT;
     cursor.cursor.header.hot_spot_x = 0;
     cursor.cursor.header.hot_spot_y = 0;
-    cursor.cursor.data_size = CURSOR_WIDTH * CURSOR_HEIGHT;
+    cursor.cursor.data_size = CURSOR_WIDTH * CURSOR_HEIGHT * 4;
+
+    // X drivers addes it to the cursor size because it could be
+    // cursor data information or another cursor related stuffs.
+    // Otherwise, the code will break in client/cursor.cpp side,
+    // that expect the data_size plus cursor information.
+    // Blame cursor protocol for this. :-)
+    cursor.cursor.data_size += 128;
     cursor.cursor.chunk.data_size = cursor.cursor.data_size;
     cursor.cursor.chunk.prev_chunk = cursor.cursor.chunk.next_chunk = 0;
 }
-#endif
 
 static int get_cursor_command(QXLInstance *qin, struct QXLCommandExt *ext)
 {
     static int color = 0;
+    static int set = 1;
+    static int x = 0, y = 0;
     QXLCursorCmd *cursor_cmd;
-    int i, x, y, p;
-    QXLCommandExt cmd;
+    QXLCommandExt *cmd;
 
     if (!cursor_notify) {
         return FALSE;
     }
+
     cursor_notify--;
+    cmd = calloc(sizeof(QXLCommandExt), 1);
     cursor_cmd = calloc(sizeof(QXLCursorCmd), 1);
-    color = 100 + ((color + 1) % 100);
-    cursor_cmd->type = QXL_CURSOR_SET;
-    cursor_cmd->release_info.id = 0; // TODO: we leak the QXLCommandExt's
-    cursor_cmd->u.set.position.x = 0;
-    cursor_cmd->u.set.position.y = 0;
-    cursor_cmd->u.set.visible = TRUE;
-    cursor_cmd->u.set.shape = (uint64_t)&cursor;
-    for (x = 0 ; x < CURSOR_WIDTH; ++x) {
-        for (y = 0 ; y < CURSOR_HEIGHT; ++y) {
-            p = 0;
-            cursor.data[p] = (y*10 > color) ? color : 0;
-            cursor.data[p+1] = cursor.data[p+2] = cursor.data[p+3] = 0;
-        }
+
+    cursor_cmd->release_info.id = (uint64_t)cmd;
+
+    if (set) {
+        cursor_cmd->type = QXL_CURSOR_SET;
+        cursor_cmd->u.set.position.x = 0;
+        cursor_cmd->u.set.position.y = 0;
+        cursor_cmd->u.set.visible = TRUE;
+        cursor_cmd->u.set.shape = (uint64_t)&cursor;
+        // Only a white rect (32x32) as cursor
+        memset(cursor.data, 255, sizeof(cursor.data));
+        set = 0;
+    } else {
+        cursor_cmd->type = QXL_CURSOR_MOVE;
+        cursor_cmd->u.position.x = x++ % WIDTH;
+        cursor_cmd->u.position.y = y++ % HEIGHT;
     }
-    // TODO - shape has the, well, shape. device_data has?
-    for (i = 0 ; i < QXL_CURSUR_DEVICE_DATA_SIZE ; ++i) {
-        cursor_cmd->device_data[i] = color;
-    }
-    cmd.cmd.data = (uint64_t)cursor_cmd;
-    cmd.cmd.type = QXL_CMD_CURSOR;
-    cmd.group_id = MEM_SLOT_GROUP_ID;
-    cmd.flags    = 0; // TODO - cursor flags (qxl->cmdflags in qxl/pointer.c)?
-    *ext = cmd;
+
+    cmd->cmd.data = (uint64_t)cursor_cmd;
+    cmd->cmd.type = QXL_CMD_CURSOR;
+    cmd->group_id = MEM_SLOT_GROUP_ID;
+    cmd->flags    = 0;
+    *ext = *cmd;
     //printf("%s\n", __func__);
     return TRUE;
 }
@@ -602,7 +618,7 @@ QXLInterface display_sif = {
     .set_mm_time = set_mm_time,
     .get_init_info = get_init_info,
 
- /* the callbacks below are called from spice server thread context */
+    /* the callbacks below are called from spice server thread context */
     .get_command = get_command,
     .req_cmd_notification = req_cmd_notification,
     .release_resource = release_resource,
@@ -643,6 +659,7 @@ SpiceServer* test_init(SpiceCoreInterface *core)
     spice_server_set_noauth(server);
     spice_server_init(server, core);
 
+    cursor_init();
     path_init(&path, 0, angle_parts);
     memset(primary_surface, 0, sizeof(primary_surface));
     memset(secondary_surface, 0, sizeof(secondary_surface));
