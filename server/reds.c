@@ -2005,7 +2005,7 @@ static void reds_get_spice_ticket(RedLinkInfo *link)
 
 #if HAVE_SASL
 static char *addr_to_string(const char *format,
-                            struct sockaddr *sa,
+                            struct sockaddr_storage *sa,
                             socklen_t salen) {
     char *addr;
     char host[NI_MAXHOST];
@@ -2013,7 +2013,7 @@ static char *addr_to_string(const char *format,
     int err;
     size_t addrlen;
 
-    if ((err = getnameinfo(sa, salen,
+    if ((err = getnameinfo((struct sockaddr *)sa, salen,
                            host, sizeof(host),
                            serv, sizeof(serv),
                            NI_NUMERICHOST | NI_NUMERICSERV)) != 0) {
@@ -2402,11 +2402,13 @@ static void reds_start_auth_sasl(RedLinkInfo *link)
     RedsSASL *sasl = &link->stream->sasl;
 
     /* Get local & remote client addresses in form  IPADDR;PORT */
-    if (!(localAddr = addr_to_string("%s;%s", &link->stream->info.laddr, link->stream->info.llen))) {
+    if (!(localAddr = addr_to_string("%s;%s", &link->stream->info.laddr_ext,
+                                              link->stream->info.llen_ext))) {
         goto error;
     }
 
-    if (!(remoteAddr = addr_to_string("%s;%s", &link->stream->info.paddr, link->stream->info.plen))) {
+    if (!(remoteAddr = addr_to_string("%s;%s", &link->stream->info.paddr_ext,
+                                               link->stream->info.plen_ext))) {
         free(localAddr);
         goto error;
     }
@@ -2717,10 +2719,21 @@ static RedLinkInfo *reds_init_client_connection(int socket)
 
     stream->socket = socket;
     /* gather info + send event */
+
+    /* deprecated fields. Filling them for backward compatibility */
     stream->info.llen = sizeof(stream->info.laddr);
     stream->info.plen = sizeof(stream->info.paddr);
     getsockname(stream->socket, (struct sockaddr*)(&stream->info.laddr), &stream->info.llen);
     getpeername(stream->socket, (struct sockaddr*)(&stream->info.paddr), &stream->info.plen);
+
+    stream->info.flags |= SPICE_CHANNEL_EVENT_FLAG_ADDR_EXT;
+    stream->info.llen_ext = sizeof(stream->info.laddr_ext);
+    stream->info.plen_ext = sizeof(stream->info.paddr_ext);
+    getsockname(stream->socket, (struct sockaddr*)(&stream->info.laddr_ext),
+                &stream->info.llen_ext);
+    getpeername(stream->socket, (struct sockaddr*)(&stream->info.paddr_ext),
+                &stream->info.plen_ext);
+
     reds_stream_channel_event(stream, SPICE_CHANNEL_EVENT_CONNECTED);
 
     openssl_init(link);

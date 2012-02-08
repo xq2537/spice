@@ -54,6 +54,7 @@ typedef struct SpiceCoreInterface SpiceCoreInterface;
 #define SPICE_CHANNEL_EVENT_DISCONNECTED  3
 
 #define SPICE_CHANNEL_EVENT_FLAG_TLS      (1 << 0)
+#define SPICE_CHANNEL_EVENT_FLAG_ADDR_EXT (1 << 1)
 
 typedef struct SpiceWatch SpiceWatch;
 typedef void (*SpiceWatchFunc)(int fd, int event, void *opaque);
@@ -66,9 +67,14 @@ typedef struct SpiceChannelEventInfo {
     int type;
     int id;
     int flags;
+    /* deprecated, can't hold ipv6 addresses, kept for backward compatibility */
     struct sockaddr laddr;
     struct sockaddr paddr;
     socklen_t llen, plen;
+    /* should be used if (flags & SPICE_CHANNEL_EVENT_FLAG_ADDR_EXT) */
+    struct sockaddr_storage laddr_ext;
+    struct sockaddr_storage paddr_ext;
+    socklen_t llen_ext, plen_ext;
 } SpiceChannelEventInfo;
 
 struct SpiceCoreInterface {
