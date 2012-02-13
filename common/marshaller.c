@@ -525,7 +525,7 @@ int spice_marshaller_fill_iovec(SpiceMarshaller *m, struct iovec *vec,
             if (v == n_vec) {
                 return v; /* Not enough space in vec */
             }
-            vec[v].iov_base = item->data + skip_bytes;
+            vec[v].iov_base = (void *)item->data + skip_bytes;
             vec[v].iov_len = item->len - skip_bytes;
             skip_bytes = 0;
             v++;

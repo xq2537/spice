@@ -84,7 +84,7 @@ int main(int argc, char **argv)
         return -1;
     }
     shm_size = sizeof(SpiceStat);
-    reds_stat = mmap(NULL, shm_size, PROT_READ, MAP_SHARED, fd, 0);
+    reds_stat = (SpiceStat *)mmap(NULL, shm_size, PROT_READ, MAP_SHARED, fd, 0);
     if (reds_stat == (SpiceStat *)MAP_FAILED) {
         perror("mmap");
         goto error1;

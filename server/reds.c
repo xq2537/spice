@@ -3623,7 +3623,7 @@ static int do_spice_init(SpiceCoreInterface *core_interface)
     if (ftruncate(fd, REDS_STAT_SHM_SIZE) == -1) {
         red_error("statistics ftruncate failed, %s", strerror(errno));
     }
-    reds->stat = mmap(NULL, REDS_STAT_SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    reds->stat = (SpiceStat *)mmap(NULL, REDS_STAT_SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (reds->stat == (SpiceStat *)MAP_FAILED) {
         red_error("statistics mmap failed, %s", strerror(errno));
     }
