@@ -20,9 +20,7 @@ SpiceServer *server;
 
 int main(int argc, char **argv)
 {
-#ifdef AUTOMATED_TESTS
-    check_automated(argc, argv);
-#endif
+    spice_test_config_parse_args(argc, argv);
     core = basic_event_loop_init();
     server = test_init(core);
     spice_server_set_streaming_video(server, SPICE_STREAM_VIDEO_ALL);

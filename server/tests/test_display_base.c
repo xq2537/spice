@@ -1,4 +1,3 @@
-
 #include <config.h>
 #include <stdlib.h>
 #include <math.h>
@@ -9,7 +8,10 @@
 #include <wait.h>
 #include <sys/select.h>
 #include <sys/types.h>
+#include <getopt.h>
+
 #include <spice/qxl_dev.h>
+
 #include "test_display_base.h"
 #include "red_channel.h"
 #include "test_util.h"
@@ -649,32 +651,43 @@ SpiceServer* test_init(SpiceCoreInterface *core)
     return server;
 }
 
-void check_automated(int argc, char **argv)
+void init_automated()
 {
     struct sigaction sa;
-
-    if (argc == 1) {
-        return;
-    }
-
-    if (argc > 2) {
-        goto invalid_option;
-    }
-
-    if (strcmp(argv[1], "--automated-tests") != 0) {
-        goto invalid_option;
-    }
-
-    has_automated_tests = 1;
 
     memset(&sa, 0, sizeof sa);
     sa.sa_handler = &sigchld_handler;
     sigaction(SIGCHLD, &sa, NULL);
+}
 
+void spice_test_config_parse_args(int argc, char **argv)
+{
+    struct option options[] = {
+#ifdef AUTOMATED_TESTS
+        {"automated-tests", no_argument, &has_automated_tests, 1},
+#endif
+        {NULL, 0, NULL, 0},
+    };
+    int option_index;
+    int val;
+
+    while ((val = getopt_long(argc, argv, "", options, &option_index)) != -1) {
+        switch (val) {
+        case '?':
+            printf("unrecognized option %s", argv[optind]);
+            goto invalid_option;
+        case 0:
+            break;
+        }
+    }
+
+    if (has_automated_tests) {
+        init_automated();
+    }
     return;
 
 invalid_option:
     printf("Invalid option!\n"
-           "Please, check README before run tests!\n" );
+           "usage: %s [--automated-tests]\n", argv[0]);
     exit(0);
 }
