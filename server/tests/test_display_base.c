@@ -339,7 +339,7 @@ static void set_mm_time(QXLInstance *qin, uint32_t mm_time)
 
 static void get_init_info(QXLInstance *qin, QXLDevInitInfo *info)
 {
-    bzero(info, sizeof(*info));
+    memset(info, 0, sizeof(*info));
     info->num_memslots = 1;
     info->num_memslots_groups = 1;
     info->memslot_id_bits = 1;
@@ -644,8 +644,8 @@ SpiceServer* test_init(SpiceCoreInterface *core)
     spice_server_init(server, core);
 
     path_init(&path, 0, angle_parts);
-    bzero(primary_surface, sizeof(primary_surface));
-    bzero(secondary_surface, sizeof(secondary_surface));
+    memset(primary_surface, 0, sizeof(primary_surface));
+    memset(secondary_surface, 0, sizeof(secondary_surface));
     has_secondary = 0;
     wakeup_timer = core->timer_add(do_wakeup, NULL);
     return server;

@@ -267,7 +267,7 @@ SpiceCoreInterface *basic_event_loop_init(void)
 {
     ring_init(&watches);
     ring_init(&timers);
-    bzero(&core, sizeof(core));
+    memset(&core, 0, sizeof(core));
     core.base.major_version = SPICE_INTERFACE_CORE_MAJOR;
     core.base.minor_version = SPICE_INTERFACE_CORE_MINOR; // anything less then 3 and channel_event isn't called
     core.timer_add = timer_add;

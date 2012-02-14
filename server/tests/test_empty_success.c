@@ -1,6 +1,6 @@
 #include <config.h>
 #include <stdlib.h>
-#include <strings.h>
+#include <string.h>
 
 #include <spice.h>
 
@@ -43,7 +43,7 @@ int main(void)
     SpiceServer *server = spice_server_new();
     SpiceCoreInterface core;
 
-    bzero(&core, sizeof(core));
+    memset(&core, 0, sizeof(core));
     core.base.major_version = SPICE_INTERFACE_CORE_MAJOR;
     core.timer_add = timer_add;
     core.timer_start = timer_start;
