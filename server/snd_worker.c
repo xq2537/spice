@@ -204,7 +204,7 @@ static SndChannel *snd_channel_put(SndChannel *channel)
     if (!--channel->refs) {
         channel->worker->connection = NULL;
         free(channel);
-        red_printf("sound channel freed\n");
+        red_printf("sound channel freed");
         return NULL;
     }
     return channel;

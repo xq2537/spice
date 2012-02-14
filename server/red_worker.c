@@ -10465,7 +10465,7 @@ static void dev_destroy_primary_surface(RedWorker *worker, uint32_t surface_id)
     PANIC_ON(surface_id != 0);
 
     if (!worker->surfaces[surface_id].context.canvas) {
-        red_printf("double destroy of primary surface\n");
+        red_printf("double destroy of primary surface");
         return;
     }
 

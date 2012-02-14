@@ -55,7 +55,7 @@
     }                                                               \
 } while (0)
 
-#define WARN(format, ...) red_printf("warning: "format"\n", ##__VA_ARGS__ );
+#define WARN(format, ...) red_printf("warning: "format, ##__VA_ARGS__ );
 #define WARN_ONCE red_printf_once
 
 #define red_printf_some(every, format, ...) do {                    \

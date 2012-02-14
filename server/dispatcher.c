@@ -103,7 +103,7 @@ static int dispatcher_handle_single_read(Dispatcher *dispatcher)
     uint32_t ack = ACK;
 
     if ((ret = read_safe(dispatcher->recv_fd, &type, sizeof(type), 0)) == -1) {
-        red_printf("error reading from dispatcher: %d\n", errno);
+        red_printf("error reading from dispatcher: %d", errno);
         return 0;
     }
     if (ret == 0) {
@@ -112,19 +112,19 @@ static int dispatcher_handle_single_read(Dispatcher *dispatcher)
     }
     msg = &dispatcher->messages[type];
     if (read_safe(dispatcher->recv_fd, payload, msg->size, 1) == -1) {
-        red_printf("error reading from dispatcher: %d\n", errno);
+        red_printf("error reading from dispatcher: %d", errno);
         /* TODO: close socketpair? */
         return 0;
     }
     if (msg->handler) {
         msg->handler(dispatcher->opaque, (void *)payload);
     } else {
-        red_printf("error: no handler for message type %d\n", type);
+        red_printf("error: no handler for message type %d", type);
     }
     if (msg->ack == DISPATCHER_ACK) {
         if (write_safe(dispatcher->recv_fd,
                        &ack, sizeof(ack)) == -1) {
-            red_printf("error writing ack for message %d\n", type);
+            red_printf("error writing ack for message %d", type);
             /* TODO: close socketpair? */
         }
     } else if (msg->ack == DISPATCHER_ASYNC && dispatcher->handle_async_done) {
@@ -156,12 +156,12 @@ void dispatcher_send_message(Dispatcher *dispatcher, uint32_t message_type,
     msg = &dispatcher->messages[message_type];
     pthread_mutex_lock(&dispatcher->lock);
     if (write_safe(send_fd, &message_type, sizeof(message_type)) == -1) {
-        red_printf("error: failed to send message type for message %d\n",
+        red_printf("error: failed to send message type for message %d",
                    message_type);
         goto unlock;
     }
     if (write_safe(send_fd, payload, msg->size) == -1) {
-        red_printf("error: failed to send message body for message %d\n",
+        red_printf("error: failed to send message body for message %d",
                    message_type);
         goto unlock;
     }
