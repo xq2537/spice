@@ -330,7 +330,7 @@ static void reds_stream_channel_event(RedsStream *s, int event)
 {
     if (core->base.minor_version < 3 || core->channel_event == NULL)
         return;
-    main_dispatcher_channel_event(event, &s->info);
+    main_dispatcher_channel_event(event, s->info);
 }
 
 static ssize_t stream_write_cb(RedsStream *s, const void *buf, size_t size)
@@ -1487,11 +1487,11 @@ static void reds_show_new_channel(RedLinkInfo *link, int connection_id)
                link->stream->ssl == NULL ? "Non Secure" : "Secure");
     /* add info + send event */
     if (link->stream->ssl) {
-        link->stream->info.flags |= SPICE_CHANNEL_EVENT_FLAG_TLS;
+        link->stream->info->flags |= SPICE_CHANNEL_EVENT_FLAG_TLS;
     }
-    link->stream->info.connection_id = connection_id;
-    link->stream->info.type = link->link_mess->channel_type;
-    link->stream->info.id   = link->link_mess->channel_id;
+    link->stream->info->connection_id = connection_id;
+    link->stream->info->type = link->link_mess->channel_type;
+    link->stream->info->id   = link->link_mess->channel_id;
     reds_stream_channel_event(link->stream, SPICE_CHANNEL_EVENT_INITIALIZED);
 }
 
@@ -2402,13 +2402,13 @@ static void reds_start_auth_sasl(RedLinkInfo *link)
     RedsSASL *sasl = &link->stream->sasl;
 
     /* Get local & remote client addresses in form  IPADDR;PORT */
-    if (!(localAddr = addr_to_string("%s;%s", &link->stream->info.laddr_ext,
-                                              link->stream->info.llen_ext))) {
+    if (!(localAddr = addr_to_string("%s;%s", &link->stream->info->laddr_ext,
+                                              link->stream->info->llen_ext))) {
         goto error;
     }
 
-    if (!(remoteAddr = addr_to_string("%s;%s", &link->stream->info.paddr_ext,
-                                               link->stream->info.plen_ext))) {
+    if (!(remoteAddr = addr_to_string("%s;%s", &link->stream->info->paddr_ext,
+                                               link->stream->info->plen_ext))) {
         free(localAddr);
         goto error;
     }
@@ -2715,24 +2715,25 @@ static RedLinkInfo *reds_init_client_connection(int socket)
 
     link = spice_new0(RedLinkInfo, 1);
     stream = spice_new0(RedsStream, 1);
+    stream->info = spice_new0(SpiceChannelEventInfo, 1);
     link->stream = stream;
 
     stream->socket = socket;
     /* gather info + send event */
 
     /* deprecated fields. Filling them for backward compatibility */
-    stream->info.llen = sizeof(stream->info.laddr);
-    stream->info.plen = sizeof(stream->info.paddr);
-    getsockname(stream->socket, (struct sockaddr*)(&stream->info.laddr), &stream->info.llen);
-    getpeername(stream->socket, (struct sockaddr*)(&stream->info.paddr), &stream->info.plen);
+    stream->info->llen = sizeof(stream->info->laddr);
+    stream->info->plen = sizeof(stream->info->paddr);
+    getsockname(stream->socket, (struct sockaddr*)(&stream->info->laddr), &stream->info->llen);
+    getpeername(stream->socket, (struct sockaddr*)(&stream->info->paddr), &stream->info->plen);
 
-    stream->info.flags |= SPICE_CHANNEL_EVENT_FLAG_ADDR_EXT;
-    stream->info.llen_ext = sizeof(stream->info.laddr_ext);
-    stream->info.plen_ext = sizeof(stream->info.paddr_ext);
-    getsockname(stream->socket, (struct sockaddr*)(&stream->info.laddr_ext),
-                &stream->info.llen_ext);
-    getpeername(stream->socket, (struct sockaddr*)(&stream->info.paddr_ext),
-                &stream->info.plen_ext);
+    stream->info->flags |= SPICE_CHANNEL_EVENT_FLAG_ADDR_EXT;
+    stream->info->llen_ext = sizeof(stream->info->laddr_ext);
+    stream->info->plen_ext = sizeof(stream->info->paddr_ext);
+    getsockname(stream->socket, (struct sockaddr*)(&stream->info->laddr_ext),
+                &stream->info->llen_ext);
+    getpeername(stream->socket, (struct sockaddr*)(&stream->info->paddr_ext),
+                &stream->info->plen_ext);
 
     reds_stream_channel_event(stream, SPICE_CHANNEL_EVENT_CONNECTED);
 

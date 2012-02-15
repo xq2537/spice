@@ -52,6 +52,9 @@ static void main_dispatcher_self_handle_channel_event(
                                                 SpiceChannelEventInfo *info)
 {
     main_dispatcher.core->channel_event(event, info);
+    if (event == SPICE_CHANNEL_EVENT_DISCONNECTED) {
+        free(info);
+    }
 }
 
 static void main_dispatcher_handle_channel_event(void *opaque,

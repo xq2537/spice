@@ -77,7 +77,11 @@ struct RedsStream {
     RedsSASL sasl;
 #endif
 
-    SpiceChannelEventInfo info;
+    /* life time of info:
+     * allocated when creating RedsStream.
+     * deallocated when main_dispatcher handles the SPICE_CHANNEL_EVENT_DISCONNECTED
+     * event, either from same thread or by call back from main thread. */
+    SpiceChannelEventInfo* info;
 
     /* private */
     ssize_t (*read)(RedsStream *s, void *buf, size_t nbyte);
