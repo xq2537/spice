@@ -79,4 +79,9 @@ version 2.1 of the License, or (at your option) any later version.
 Please see the COPYING file for the complete LGPLv2+ license
 terms, or visit <http://www.gnu.org/licenses/>.
 
+Experimental Features
+---------------------
+To enable multiple client connections, set:
+SPICE_DEBUG_ALLOW_MC=1
+
 -- End of readme
