@@ -47,8 +47,6 @@
 
 #define ZERO_BUF_SIZE 4096
 
-#define REDS_MAX_SEND_IOVEC 100
-
 #define NET_TEST_WARMUP_BYTES 0
 #define NET_TEST_BYTES (1024 * 250)
 

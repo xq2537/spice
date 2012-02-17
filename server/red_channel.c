@@ -329,7 +329,7 @@ static void red_channel_client_peer_prepare_out_msg(
     RedChannelClient *rcc = (RedChannelClient *)opaque;
 
     *vec_size = spice_marshaller_fill_iovec(rcc->send_data.marshaller,
-                                            vec, MAX_SEND_VEC, pos);
+                                            vec, IOV_MAX, pos);
 }
 
 static void red_channel_client_peer_on_out_block(void *opaque)

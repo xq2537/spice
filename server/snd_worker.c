@@ -21,6 +21,7 @@
 
 #include <fcntl.h>
 #include <errno.h>
+#include <limits.h>
 #include <sys/socket.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
@@ -36,7 +37,9 @@
 #include "generated_marshallers.h"
 #include "demarshallers.h"
 
-#define MAX_SEND_VEC 100
+#ifndef IOV_MAX
+#define IOV_MAX 1024
+#endif
 
 #define RECIVE_BUF_SIZE (16 * 1024 * 2)
 
@@ -262,7 +265,7 @@ static int snd_send_data(SndChannel *channel)
     }
 
     for (;;) {
-        struct iovec vec[MAX_SEND_VEC];
+        struct iovec vec[IOV_MAX];
         int vec_size;
 
         if (!n) {
@@ -276,7 +279,7 @@ static int snd_send_data(SndChannel *channel)
         }
 
         vec_size = spice_marshaller_fill_iovec(channel->send_data.marshaller,
-                                               vec, MAX_SEND_VEC, channel->send_data.pos);
+                                               vec, IOV_MAX, channel->send_data.pos);
         n = reds_stream_writev(channel->stream, vec, vec_size);
         if (n == -1) {
             switch (errno) {

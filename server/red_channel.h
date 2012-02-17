@@ -22,16 +22,21 @@
 #ifndef _H_RED_CHANNEL
 #define _H_RED_CHANNEL
 
-#include "red_common.h"
 #include <pthread.h>
+#include <limits.h>
+
+#include "red_common.h"
 #include "spice.h"
 #include "ring.h"
 #include "common/marshaller.h"
 #include "server/demarshallers.h"
 
 #define MAX_SEND_BUFS 1000
-#define MAX_SEND_VEC 100
 #define CLIENT_ACK_WINDOW 20
+
+#ifndef IOV_MAX
+#define IOV_MAX 1024
+#endif
 
 #define MAX_HEADER_SIZE sizeof(SpiceDataHeader)
 
@@ -109,7 +114,7 @@ typedef struct OutgoingHandlerInterface {
 typedef struct OutgoingHandler {
     OutgoingHandlerInterface *cb;
     void *opaque;
-    struct iovec vec_buf[MAX_SEND_VEC];
+    struct iovec vec_buf[IOV_MAX];
     int vec_size;
     struct iovec *vec;
     int pos;
