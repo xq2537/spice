@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/socket.h>
+#include <sys/uio.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
@@ -340,7 +341,31 @@ static ssize_t stream_write_cb(RedsStream *s, const void *buf, size_t size)
 
 static ssize_t stream_writev_cb(RedsStream *s, const struct iovec *iov, int iovcnt)
 {
-    return writev(s->socket, iov, iovcnt);
+    ssize_t ret = 0;
+    do {
+        int tosend;
+        ssize_t n, expected = 0;
+        int i;
+#ifdef IOV_MAX
+        tosend = MIN(iovcnt, IOV_MAX);
+#else
+        tosend = iovcnt;
+#endif
+        for (i = 0; i < tosend; i++) {
+            expected += iov[i].iov_len;
+        }
+        n = writev(s->socket, iov, tosend);
+        if (n <= expected) {
+            if (n > 0)
+                ret += n;
+            return ret == 0 ? n : ret;
+        }
+        ret += n;
+        iov += tosend;
+        iovcnt -= tosend;
+    } while(iovcnt > 0);
+
+    return ret;
 }
 
 static ssize_t stream_read_cb(RedsStream *s, void *buf, size_t size)
