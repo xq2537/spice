@@ -232,7 +232,7 @@ double inline stat_byte_to_mega(uint64_t size)
 #endif
 
 #define MAX_EPOLL_SOURCES 10
-#define INF_EPOLL_WAIT ~0
+#define INF_EVENT_WAIT ~0
 
 
 typedef struct EventListener EventListener;
@@ -878,7 +878,7 @@ typedef struct RedWorker {
     int running;
     uint32_t *pending;
     int epoll;
-    unsigned int epoll_timeout;
+    unsigned int event_timeout;
     uint32_t repoll_cmd_ring;
     uint32_t repoll_cursor_ring;
     uint32_t num_renderers;
@@ -4658,7 +4658,7 @@ static int red_process_cursor(RedWorker *worker, uint32_t max_pipe_size, int *ri
             *ring_is_empty = TRUE;
             if (worker->repoll_cursor_ring < CMD_RING_POLL_RETRIES) {
                 worker->repoll_cursor_ring++;
-                worker->epoll_timeout = MIN(worker->epoll_timeout, CMD_RING_POLL_TIMEOUT);
+                worker->event_timeout = MIN(worker->event_timeout, CMD_RING_POLL_TIMEOUT);
                 break;
             }
             if (worker->repoll_cursor_ring > CMD_RING_POLL_RETRIES ||
@@ -4713,7 +4713,7 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
             *ring_is_empty = TRUE;;
             if (worker->repoll_cmd_ring < CMD_RING_POLL_RETRIES) {
                 worker->repoll_cmd_ring++;
-                worker->epoll_timeout = MIN(worker->epoll_timeout, CMD_RING_POLL_TIMEOUT);
+                worker->event_timeout = MIN(worker->event_timeout, CMD_RING_POLL_TIMEOUT);
                 break;
             }
             if (worker->repoll_cmd_ring > CMD_RING_POLL_RETRIES ||
@@ -4782,7 +4782,7 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
         if ((worker->display_channel &&
              red_channel_all_blocked(&worker->display_channel->common.base))
             || red_now() - start > 10 * 1000 * 1000) {
-            worker->epoll_timeout = 0;
+            worker->event_timeout = 0;
             return n;
         }
     }
@@ -7878,7 +7878,8 @@ static inline void display_channel_send_free_list(RedChannelClient *rcc)
         /* When using the urgent marshaller, the serial number of the message that is
          * going to be sent right after the SPICE_MSG_LIST, is increased by one.
          * But all this message pixmaps cache references used its old serial.
-         * we use pixmap_cache_items to collect these pixmaps, and we update their serial by calling pixmap_cache_hit.*/
+         * we use pixmap_cache_items to collect these pixmaps, and we update their serial
+         * by calling pixmap_cache_hit. */
         pixmap_cache_hit(dcc->pixmap_cache, dcc->send_data.pixmap_cache_items[i],
                          &dummy, dcc);
     }
@@ -11153,15 +11154,15 @@ void *red_worker_main(void *arg)
     red_init_lz(&worker);
     red_init_jpeg(&worker);
     red_init_zlib(&worker);
-    worker.epoll_timeout = INF_EPOLL_WAIT;
+    worker.event_timeout = INF_EVENT_WAIT;
     for (;;) {
         struct epoll_event events[MAX_EPOLL_SOURCES];
         int num_events;
         struct epoll_event *event;
         struct epoll_event *end;
 
-        worker.epoll_timeout = MIN(red_get_streams_timout(&worker), worker.epoll_timeout);
-        num_events = epoll_wait(worker.epoll, events, MAX_EPOLL_SOURCES, worker.epoll_timeout);
+        worker.event_timeout = MIN(red_get_streams_timout(&worker), worker.event_timeout);
+        num_events = epoll_wait(worker.epoll, events, MAX_EPOLL_SOURCES, worker.event_timeout);
         red_handle_streams_timout(&worker);
 
         if (worker.display_channel) {
@@ -11172,7 +11173,7 @@ void *red_worker_main(void *arg)
                 red_display_cc_free_glz_drawables);
         }
 
-        worker.epoll_timeout = INF_EPOLL_WAIT;
+        worker.event_timeout = INF_EVENT_WAIT;
         if (num_events == -1) {
             if (errno != EINTR) {
                 red_error("poll_wait failed, %s", strerror(errno));
