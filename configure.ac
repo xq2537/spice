@@ -518,6 +518,16 @@ fi
 AC_MSG_RESULT($have_gcc4)
 AC_SUBST(VISIBILITY_HIDDEN_CFLAGS)
 
+dnl ensure linker supports ---version-script option before using it
+AC_CACHE_CHECK([if -Wl,--version-script works], [spice_cv_ld_version_script],
+    [save_LDFLAGS="$LDFLAGS"
+     LDFLAGS="$LDFLAGS -Wl,--version-script=$srcdir/server/spice-server.syms"
+     AC_LINK_IFELSE([AC_LANG_PROGRAM([], [])],
+        [spice_cv_ld_version_script=yes], [spice_cv_ld_version_script=no])
+     LDFLAGS="$save_LDFLAGS"])
+AM_CONDITIONAL([HAVE_LD_VERSION_SCRIPT],
+    [test x"$spice_cv_ld_version_script" = xyes])
+
 AC_SUBST(SPICE_REQUIRES)
 AC_SUBST(SPICE_NONPKGCONFIG_CFLAGS)
 AC_SUBST(SPICE_NONPKGCONFIG_LIBS)

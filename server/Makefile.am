@@ -31,11 +31,15 @@ generated_marshallers.h: $(top_srcdir)/spice.proto
 
 lib_LTLIBRARIES = libspice-server.la
 
-libspice_server_la_LDFLAGS =						\
-	-version-number $(SPICE_LT_VERSION)				\
-	-Wl,--version-script=$(top_srcdir)/server/spice-server.syms	\
-	-no-undefined							\
+libspice_server_la_LDFLAGS =			\
+	-version-number $(SPICE_LT_VERSION)	\
+	-no-undefined				\
 	$(NULL)
+
+if HAVE_LD_VERSION_SCRIPT
+libspice_server_la_LDFLAGS += \
+	-Wl,--version-script=$(top_srcdir)/server/spice-server.syms
+endif
 
 libspice_server_la_LIBADD =				\
 	$(top_builddir)/common/libspice-common.la	\
