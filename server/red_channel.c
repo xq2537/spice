@@ -610,14 +610,7 @@ RedChannel *red_channel_create(int size,
     channel->type = type;
     channel->id = id;
     channel->handle_acks = handle_acks;
-    channel->channel_cbs.on_disconnect = channel_cbs->on_disconnect;
-    channel->channel_cbs.send_item = channel_cbs->send_item;
-    channel->channel_cbs.release_item = channel_cbs->release_item;
-    channel->channel_cbs.hold_item = channel_cbs->hold_item;
-    channel->channel_cbs.handle_migrate_flush_mark = channel_cbs->handle_migrate_flush_mark;
-    channel->channel_cbs.handle_migrate_data = channel_cbs->handle_migrate_data;
-    channel->channel_cbs.handle_migrate_data_get_serial = channel_cbs->handle_migrate_data_get_serial;
-    channel->channel_cbs.config_socket = channel_cbs->config_socket;
+    memcpy(&channel->channel_cbs, channel_cbs, sizeof(ChannelCbs));
 
     channel->core = core;
     channel->migrate = migrate;
