@@ -1201,8 +1201,6 @@ void red_channel_client_disconnect(RedChannelClient *rcc)
     reds_stream_free(rcc->stream);
     rcc->stream = NULL;
     red_channel_remove_client(rcc);
-    // TODO: not do it till destroyed?
-//    red_channel_client_remove(rcc);
     rcc->channel->channel_cbs.on_disconnect(rcc);
 }
 

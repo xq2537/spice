@@ -8721,17 +8721,6 @@ void red_show_tree(RedWorker *worker)
     }
 }
 
-// TODO: move to red_channel
-static void red_disconnect_channel(RedChannel *channel)
-{
-    red_channel_disconnect(channel);
-}
-
-static void display_channel_client_disconnect(RedChannelClient *rcc)
-{
-    red_channel_client_disconnect(rcc);
-}
-
 static void display_channel_client_on_disconnect(RedChannelClient *rcc)
 {
     DisplayChannel *display_channel;
@@ -8775,7 +8764,7 @@ void red_disconnect_all_display_TODO_remove_me(RedChannel *channel)
     if (!channel) {
         return;
     }
-    red_channel_apply_clients(channel, display_channel_client_disconnect);
+    red_channel_apply_clients(channel, red_channel_client_disconnect);
 }
 
 static void red_migrate_display(RedWorker *worker, RedChannelClient *rcc)
@@ -9132,7 +9121,7 @@ static int display_channel_client_wait_for_init(DisplayChannelClient *dcc)
         }
         if (red_now() > end_time) {
             red_printf("timeout");
-            display_channel_client_disconnect(&dcc->common.base);
+            red_channel_client_disconnect(&dcc->common.base);
             break;
         }
         usleep(DISPLAY_CLIENT_RETRY_INTERVAL);
@@ -9944,11 +9933,6 @@ error:
     red_channel_client_destroy(&dcc->common.base);
 }
 
-static void cursor_channel_client_disconnect(RedChannelClient *rcc)
-{
-    red_channel_client_disconnect(rcc);
-}
-
 static void cursor_channel_client_on_disconnect(RedChannelClient *rcc)
 {
     if (!rcc) {
@@ -9968,7 +9952,7 @@ static void red_disconnect_cursor(RedChannel *channel)
     ASSERT(channel == (RedChannel *)common->worker->cursor_channel);
     common->worker->cursor_channel = NULL;
     red_channel_apply_clients(channel, red_reset_cursor_cache);
-    red_disconnect_channel(channel);
+    red_channel_disconnect(channel);
 }
 
 static void red_migrate_cursor(RedWorker *worker, RedChannelClient *rcc)
@@ -10676,7 +10660,7 @@ void handle_dev_display_disconnect(void *opaque, void *payload)
 
     red_printf("disconnect display client");
     ASSERT(rcc);
-    display_channel_client_disconnect(rcc);
+    red_channel_client_disconnect(rcc);
 }
 
 void handle_dev_display_migrate(void *opaque, void *payload)
@@ -10725,7 +10709,7 @@ void handle_dev_cursor_disconnect(void *opaque, void *payload)
 
     red_printf("disconnect cursor client");
     ASSERT(rcc);
-    cursor_channel_client_disconnect(rcc);
+    red_channel_client_disconnect(rcc);
 }
 
 void handle_dev_cursor_migrate(void *opaque, void *payload)
