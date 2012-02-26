@@ -169,6 +169,10 @@ int main(int argc, char *argv[])
 
     send_data(CONTROLLER_CREATE_MENU, (uint8_t*)MENU, sizeof(MENU));
 
+    printf("Smartcard...\n");
+    getchar();
+    send_value(CONTROLLER_ENABLE_SMARTCARD, 1);
+
     send_value(CONTROLLER_FULL_SCREEN, /*CONTROLLER_SET_FULL_SCREEN |*/ CONTROLLER_AUTO_DISPLAY_RES);
     printf("Show...\n");
     getchar();
