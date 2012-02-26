@@ -1675,6 +1675,11 @@ void Application::set_title(const std::string& title)
     }
 }
 
+void Application::enable_smartcard(bool enable)
+{
+    _smartcard_options->enable = enable;
+}
+
 bool Application::is_key_set_pressed(const HotkeySet& key_set)
 {
     HotkeySet::const_iterator iter = key_set.begin();

@@ -227,6 +227,7 @@ public:
     void external_show();
     void connect();
     void switch_host(const std::string& host, int port, int sport, const std::string& cert_subject);
+    void enable_smartcard(bool enable);
 
     const PeerConnectionOptMap& get_con_opt_map() {return _peer_con_opt;}
     const RedPeer::HostAuthOptions& get_host_auth_opt() { return _host_auth_opt;}

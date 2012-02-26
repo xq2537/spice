@@ -50,6 +50,7 @@ public:
     virtual Menu* get_app_menu() = 0;
     virtual void set_menu(Menu* menu) = 0;
     virtual void delete_menu() = 0;
+    virtual void enable_smartcard(bool enable) = 0;
 };
 
 class Controller : public NamedPipe::ListenerInterface {
