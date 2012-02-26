@@ -121,9 +121,9 @@ DWORD read_from_pipe(LPVOID data, DWORD size)
 
 int main(int argc, char *argv[])
 {
-    int spicec_pid = (argc > 1 ? atoi(argv[1]) : 0);
-    char* host = (argc > 2 ? argv[2] : (char*)HOST);
-    int port = (argc > 3 ? atoi(argv[3]) : PORT);
+    int spicec_pid = (argc > 3 ? atoi(argv[3]) : 0);
+    char* host = (argc > 1 ? argv[1] : (char*)HOST);
+    int port = (argc > 2 ? atoi(argv[2]) : PORT);
     TCHAR pipe_name[PIPE_NAME_MAX_LEN];
     ControllerValue msg;
     DWORD read;
