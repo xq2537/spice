@@ -997,8 +997,7 @@ uint64_t main_channel_client_get_bitrate_per_sec(MainChannelClient *mcc)
 MainChannel* main_channel_init(void)
 {
     RedChannel *channel;
-    ChannelCbs channel_cbs;
-
+    ChannelCbs channel_cbs = {0,};
 
     channel_cbs.config_socket = main_channel_config_socket;
     channel_cbs.on_disconnect = main_channel_client_on_disconnect;
