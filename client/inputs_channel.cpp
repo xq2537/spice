@@ -561,7 +561,10 @@ void InputsChannel::init_scan_table()
     init_escape_scan_code(REDKEY_ESCAPE_BASE);
     init_escape_scan_code(REDKEY_PAD_ENTER);
     init_escape_scan_code(REDKEY_R_CTRL);
+    init_escape_scan_code(REDKEY_MUTE);
     init_escape_scan_code(REDKEY_FAKE_L_SHIFT);
+    init_escape_scan_code(REDKEY_VOLUME_DOWN);
+    init_escape_scan_code(REDKEY_VOLUME_UP);
     init_escape_scan_code(REDKEY_PAD_DIVIDE);
     init_escape_scan_code(REDKEY_FAKE_R_SHIFT);
     init_escape_scan_code(REDKEY_CTRL_PRINT_SCREEN);
