@@ -1,3 +1,5 @@
+ACLOCAL_AMFLAGS = -I m4
+
 SUBDIRS = common server python_modules
 
 if SUPPORT_CLIENT
