@@ -64,7 +64,7 @@ CursorData::CursorData(SpiceCursor& cursor, int data_size)
     }
 
     if (data_size < expected_size) {
-        THROW("access violation 0x%lx %u", (unsigned long)cursor.data, expected_size);
+        THROW("access violation 0x%lx %u", (uintptr_t)cursor.data, expected_size);
     }
     _data = new uint8_t[expected_size];
     memcpy(_data, cursor.data, expected_size);

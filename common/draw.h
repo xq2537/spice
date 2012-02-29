@@ -39,8 +39,8 @@
 extern "C" {
 #endif
 
-#define SPICE_GET_ADDRESS(addr) ((void *)(unsigned long)(addr))
-#define SPICE_SET_ADDRESS(addr, val) ((addr) = (unsigned long)(val))
+#define SPICE_GET_ADDRESS(addr) ((void *)(uintptr_t)(addr))
+#define SPICE_SET_ADDRESS(addr, val) ((addr) = (uintptr_t)(val))
 
 typedef int32_t SPICE_FIXED28_4;
 

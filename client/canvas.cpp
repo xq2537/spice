@@ -70,7 +70,7 @@ void Canvas::clear()
 
 void Canvas::begin_draw(SpiceMsgDisplayBase& base, int size, size_t min_size)
 {
-    _base = (unsigned long)&base;
+    _base = (uintptr_t)&base;
 }
 
 void Canvas::draw_fill(SpiceMsgDisplayDrawFill& fill, int size)
