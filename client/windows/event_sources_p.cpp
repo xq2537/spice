@@ -94,7 +94,7 @@ bool EventSources::wait_events(int timeout_ms)
     size_t event_index = wait_res - WAIT_OBJECT_0;
     if (event_index == _handles.size()) {
         return process_system_events();
-    } else if ((event_index >= 0) && (event_index < (int)_handles.size())) {
+    } else if ((event_index >= 0) && (event_index < _handles.size())) {
         _events[event_index]->action();
         return false;
     } else {

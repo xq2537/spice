@@ -375,7 +375,7 @@ private:
 
     GlzDecoderWindowDebug _glz_debug;
     GlzDecoderWindow _glz_window;
-    int _glz_window_size; // in pixels
+    unsigned int _glz_window_size; // in pixels
 
     Mutex _mm_clock_lock;
     uint64_t _mm_clock_last_update;

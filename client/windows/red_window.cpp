@@ -69,7 +69,7 @@ static bool is_fake_ctrl(UINT message, WPARAM wParam, LPARAM lParam)
             LONG time = GetMessageTime();
             BOOL msg_exist = PeekMessage(&next_msg, NULL,
                 next_peek, next_peek, PM_NOREMOVE);
-            if ((msg_exist == TRUE) && (next_msg.time == time) &&
+            if ((msg_exist == TRUE) && ((LONG)next_msg.time == time) &&
                 (next_msg.wParam == VK_MENU) &&
                 (HIWORD (next_msg.lParam) & KF_EXTENDED)) {
                     return true;
