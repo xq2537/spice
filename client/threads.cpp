@@ -28,6 +28,13 @@
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
 #endif
+#ifdef __MINGW32__
+//workaround for what I think is a mingw bug: it has a prototype for
+//_ftime_s in its headers, but no symbol for it at link time.
+//The #define from common.h cannot be used since it breaks other mingw
+//headers if any are included after the #define.
+#define _ftime_s _ftime
+#endif
 
 Thread::Thread(thread_main_t thread_main, void* opaque)
 {
