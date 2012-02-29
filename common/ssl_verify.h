@@ -29,6 +29,7 @@
 #include <openssl/x509.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#undef X509_NAME
 #include <openssl/x509v3.h>
 
 #ifdef __cplusplus
