@@ -334,9 +334,11 @@ bool ControllerConnection::handle_message(ControllerMsg *hdr)
     case CONTROLLER_DELETE_MENU:
         _handler->delete_menu();
         break;
+#if USE_SMARTCARD
     case CONTROLLER_ENABLE_SMARTCARD:
         _handler->enable_smartcard(value);
         break;
+#endif
     case CONTROLLER_SEND_CAD:
     default:
         LOG_ERROR("Ignoring an unknown/SEND_CAD controller message %u", hdr->id);
