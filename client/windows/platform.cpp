@@ -249,6 +249,7 @@ static void create_message_wind()
 {
     WNDCLASSEX wclass;
     ATOM class_atom;
+    DWORD err;
 
     const LPCWSTR class_name = L"spicec_platform_wclass";
 
@@ -272,9 +273,9 @@ static void create_message_wind()
     if (!(platform_win = CreateWindow(class_name, L"", 0, 0, 0, 0, 0, NULL, NULL, instance, NULL))) {
         THROW("create message window failed");
     }
-
-    if (!(next_clipboard_viewer_win = SetClipboardViewer(platform_win)) && GetLastError()) {
-        THROW("set clipboard viewer failed");
+    SetLastError(0);
+    if (!(next_clipboard_viewer_win = SetClipboardViewer(platform_win)) && (err = GetLastError())) {
+        THROW("set clipboard viewer failed %u", err);
     }
     if (!(clipboard_event = CreateEvent(NULL, FALSE, FALSE, NULL))) {
         THROW("create clipboard event failed");
