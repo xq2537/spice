@@ -13,12 +13,12 @@ if SUPPORT_AUTOMATED_TESTS
 INCLUDES += -DAUTOMATED_TESTS
 endif
 
-AM_LDFLAGS =						\
+LDADD =							\
+	$(top_builddir)/common/libspice-common.la	\
 	$(top_builddir)/server/libspice-server.la	\
 	$(NULL)
 
 COMMON_BASE =					\
-	../../common/backtrace.c		\
 	basic_event_loop.c			\
 	basic_event_loop.h			\
 	test_util.h				\
