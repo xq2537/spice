@@ -3086,7 +3086,9 @@ static void reds_init_ssl(void)
 
     /* Load our keys and certificates*/
     return_code = SSL_CTX_use_certificate_chain_file(reds->ctx, ssl_parameters.certs_file);
-    if (return_code != 1) {
+    if (return_code == 1) {
+        red_printf("Loaded certificates from %s", ssl_parameters.certs_file);
+    } else {
         red_error("Could not load certificates from %s", ssl_parameters.certs_file);
     }
 
@@ -3094,14 +3096,18 @@ static void reds_init_ssl(void)
 
     return_code = SSL_CTX_use_PrivateKey_file(reds->ctx, ssl_parameters.private_key_file,
                                               SSL_FILETYPE_PEM);
-    if (return_code != 1) {
+    if (return_code == 1) {
+        red_printf("Using private key from %s", ssl_parameters.private_key_file);
+    } else {
         red_error("Could not use private key file");
     }
 
     /* Load the CAs we trust*/
     return_code = SSL_CTX_load_verify_locations(reds->ctx, ssl_parameters.ca_certificate_file, 0);
-    if (return_code != 1) {
-        red_error("Could not use ca file");
+    if (return_code == 1) {
+        red_printf("Loaded CA certificates from %s", ssl_parameters.ca_certificate_file);
+    } else {
+        red_error("Could not use CA file %s", ssl_parameters.ca_certificate_file);
     }
 
 #if (OPENSSL_VERSION_NUMBER < 0x00905100L)
