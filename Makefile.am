@@ -1,6 +1,7 @@
 ACLOCAL_AMFLAGS = -I m4
 
 SUBDIRS = common server python_modules
+DIST_SUBDIRS = spice-protocol $(SUBDIRS)
 
 if SUPPORT_CLIENT
 SUBDIRS += client

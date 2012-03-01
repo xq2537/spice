@@ -25,6 +25,7 @@ AC_PROG_LIBTOOL
 AM_PROG_CC_C_O
 AC_C_BIGENDIAN
 AC_PATH_PROGS(PYTHON, python2 python)
+PKG_PROG_PKG_CONFIG
 
 AC_CHECK_HEADERS([sys/time.h])
 AC_CHECK_HEADERS([execinfo.h])
@@ -139,7 +140,8 @@ AM_CONDITIONAL(SUPPORT_AUTOMATED_TESTS, test "x$enable_automated_tests" != "xno"
 dnl =========================================================================
 dnl Check deps
 
-PKG_CHECK_MODULES(PROTOCOL, spice-protocol >= 0.10.1)
+AC_CONFIG_SUBDIRS([spice-protocol])
+PROTOCOL_CFLAGS='-I ${top_srcdir}/spice-protocol'
 AC_SUBST(PROTOCOL_CFLAGS)
 
 AC_CHECK_LIBM
