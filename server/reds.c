@@ -1860,6 +1860,11 @@ static void reds_handle_ticket(void *opaque)
         }
 
         if (expired || strncmp(password, taTicket.password, SPICE_MAX_PASSWORD_LENGTH) != 0) {
+            if (expired) {
+                red_printf("Ticket has expired");
+            } else {
+                red_printf("Invalid password");
+            }
             reds_send_link_result(link, SPICE_LINK_ERR_PERMISSION_DENIED);
             reds_link_free(link);
             return;
