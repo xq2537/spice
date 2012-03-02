@@ -101,3 +101,9 @@ global:
     spice_server_add_client;
     spice_server_add_ssl_client;
 } SPICE_SERVER_0.10.0;
+
+SPICE_SERVER_0.10.2 {
+global:
+    spice_server_set_name;
+    spice_server_set_uuid;
+} SPICE_SERVER_0.10.1;

@@ -22,7 +22,7 @@
 #include <sys/socket.h>
 #include <spice/qxl_dev.h>
 
-#define SPICE_SERVER_VERSION 0x000a01 /* release 0.10.1 */
+#define SPICE_SERVER_VERSION 0x000a02 /* release 0.10.2 */
 
 /* interface base type */
 
@@ -518,5 +518,8 @@ int spice_server_migrate_connect(SpiceServer *s, const char* dest,
                                  const char* cert_subject);
 int spice_server_migrate_start(SpiceServer *s);
 int spice_server_migrate_end(SpiceServer *s, int completed);
+
+void spice_server_set_name(SpiceServer *s, const char *name);
+void spice_server_set_uuid(SpiceServer *s, const uint8_t uuid[16]);
 
 #endif

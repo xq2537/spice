@@ -103,4 +103,7 @@ int main_channel_migrate_connect(MainChannel *main_channel, RedsMigSpice *mig_ta
 void main_channel_migrate_cancel_wait(MainChannel *main_chan);
 /* returns the number of clients for which SPICE_MSG_MAIN_MIGRATE_END was sent*/
 int main_channel_migrate_complete(MainChannel *main_chan, int success);
+void main_channel_push_name(MainChannelClient *mcc, const char *name);
+void main_channel_push_uuid(MainChannelClient *mcc, const uint8_t uuid[16]);
+
 #endif

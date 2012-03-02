@@ -35,6 +35,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <ctype.h>
+#include <stdbool.h>
 
 #include <openssl/bio.h>
 #include <openssl/pem.h>
@@ -100,6 +101,9 @@ static int sasl_enabled = 0; // sasl disabled by default
 #if HAVE_SASL
 static char *sasl_appname = NULL; // default to "spice" if NULL
 #endif
+static char *spice_name = NULL;
+static bool spice_uuid_is_set = FALSE;
+static uint8_t spice_uuid[16] = { 0, };
 
 static int ticketing_enabled = 1; //Ticketing is enabled by default
 static pthread_mutex_t *lock_cs;
@@ -1668,6 +1672,10 @@ static void reds_handle_main_link(RedLinkInfo *link)
             reds->mouse_mode, reds->is_client_mouse_allowed,
             reds_get_mm_time() - MM_TIME_DELTA,
             red_dispatcher_qxl_ram_size());
+        if (spice_name)
+            main_channel_push_name(mcc, spice_name);
+        if (spice_uuid_is_set)
+            main_channel_push_uuid(mcc, spice_uuid);
 
         main_channel_client_start_net_test(mcc);
         /* Now that we have a client, forward any pending agent data */
@@ -3808,6 +3816,18 @@ SPICE_GNUC_VISIBLE int spice_server_set_sasl_appname(SpiceServer *s, const char 
 #else
     return -1;
 #endif
+}
+
+SPICE_GNUC_VISIBLE void spice_server_set_name(SpiceServer *s, const char *name)
+{
+    free(spice_name);
+    spice_name = strdup(name);
+}
+
+SPICE_GNUC_VISIBLE void spice_server_set_uuid(SpiceServer *s, const uint8_t uuid[16])
+{
+    memcpy(spice_uuid, uuid, sizeof(spice_uuid));
+    spice_uuid_is_set = TRUE;
 }
 
 SPICE_GNUC_VISIBLE int spice_server_set_ticket(SpiceServer *s,

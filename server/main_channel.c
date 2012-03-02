@@ -103,6 +103,16 @@ typedef struct InitPipeItem {
     int ram_hint;
 } InitPipeItem;
 
+typedef struct NamePipeItem {
+    PipeItem base;
+    SpiceMsgMainName msg;
+} NamePipeItem;
+
+typedef struct UuidPipeItem {
+    PipeItem base;
+    SpiceMsgMainUuid msg;
+} UuidPipeItem;
+
 typedef struct NotifyPipeItem {
     PipeItem base;
     uint8_t *mess;
@@ -264,6 +274,29 @@ static PipeItem *main_init_item_new(MainChannelClient *mcc,
     item->is_client_mouse_allowed = is_client_mouse_allowed;
     item->multi_media_time = multi_media_time;
     item->ram_hint = ram_hint;
+    return &item->base;
+}
+
+static PipeItem *main_name_item_new(MainChannelClient *mcc, const char *name)
+{
+    NamePipeItem *item = spice_malloc(sizeof(NamePipeItem) + strlen(name) + 1);
+
+    red_channel_pipe_item_init(mcc->base.channel, &item->base,
+                               SPICE_MSG_MAIN_NAME);
+    item->msg.name_len = strlen(name) + 1;
+    memcpy(&item->msg.name, name, item->msg.name_len);
+
+    return &item->base;
+}
+
+static PipeItem *main_uuid_item_new(MainChannelClient *mcc, const uint8_t uuid[16])
+{
+    UuidPipeItem *item = spice_malloc(sizeof(UuidPipeItem));
+
+    red_channel_pipe_item_init(mcc->base.channel, &item->base,
+                               SPICE_MSG_MAIN_UUID);
+    memcpy(item->msg.uuid, uuid, sizeof(item->msg.uuid));
+
     return &item->base;
 }
 
@@ -501,6 +534,30 @@ static void main_channel_marshall_init(SpiceMarshaller *m,
     spice_marshall_msg_main_init(m, &init);
 }
 
+void main_channel_push_name(MainChannelClient *mcc, const char *name)
+{
+    PipeItem *item;
+
+    if (!red_channel_client_test_remote_cap(&mcc->base,
+                                            SPICE_MAIN_CAP_NAME_AND_UUID))
+        return;
+
+    item = main_name_item_new(mcc, name);
+    red_channel_client_pipe_add_push(&mcc->base, item);
+}
+
+void main_channel_push_uuid(MainChannelClient *mcc, const uint8_t uuid[16])
+{
+    PipeItem *item;
+
+    if (!red_channel_client_test_remote_cap(&mcc->base,
+                                            SPICE_MAIN_CAP_NAME_AND_UUID))
+        return;
+
+    item = main_uuid_item_new(mcc, uuid);
+    red_channel_client_pipe_add_push(&mcc->base, item);
+}
+
 // TODO - some notifications are new client only (like "keyboard is insecure" on startup)
 void main_channel_push_notify(MainChannel *main_chan, uint8_t *mess, const int mess_len)
 {
@@ -691,6 +748,14 @@ static void main_channel_send_item(RedChannelClient *rcc, PipeItem *base)
             break;
         case SPICE_MSG_MAIN_MIGRATE_SWITCH_HOST:
             main_channel_marshall_migrate_switch(m, rcc);
+            break;
+        case SPICE_MSG_MAIN_NAME:
+            spice_marshall_msg_main_name(m, &SPICE_CONTAINEROF(base, NamePipeItem, base)->msg);
+            break;
+        case SPICE_MSG_MAIN_UUID:
+            spice_marshall_msg_main_uuid(m, &SPICE_CONTAINEROF(base, UuidPipeItem, base)->msg);
+            break;
+        default:
             break;
     };
     red_channel_client_begin_send_message(rcc);

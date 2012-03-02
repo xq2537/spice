@@ -134,6 +134,7 @@ channel BaseChannel {
     } notify;
 
     Data list; /* the msg body is SpiceSubMessageList */
+
  client:
     message {
 	uint32 generation;
@@ -221,6 +222,15 @@ channel MainChannel : BaseChannel {
     } @ctype(SpiceMsgMainMigrationSwitchHost) migrate_switch_host;
 
     Empty migrate_end;
+
+    message {
+       uint32 name_len;
+       uint8 name[name_len];
+    } name;
+
+    message {
+       uint8 uuid[16];
+    } uuid;
 
  client:
     message {
