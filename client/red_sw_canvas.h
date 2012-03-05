@@ -45,8 +45,6 @@ public:
 
 private:
     RedPixmap *_pixmap;
-    unsigned long _base;
-    unsigned long _max;
 };
 
 #endif

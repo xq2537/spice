@@ -48,8 +48,6 @@ private:
     RedPixmapGdi *_helper_pixmap;
     HDC _dc;
     HBITMAP _prev_bitmap;
-    unsigned long _base;
-    unsigned long _max;
 };
 
 #endif

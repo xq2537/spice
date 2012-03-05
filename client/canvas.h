@@ -343,9 +343,6 @@ private:
     ZlibDecoder _zlib_decoder;
 
     SurfacesCache& _surfaces_cache;
-
-    unsigned long _base;
-    unsigned long _max;
 };
 
 
