@@ -44,7 +44,7 @@ Controller::Controller(ControllerInterface *handler)
 #ifdef WIN32
     snprintf(pipe_name, PIPE_NAME_MAX_LEN, PIPE_NAME, Platform::get_process_id());
 #else
-    char *p_socket = getenv("SPICE_XPI_SOCKET");
+    const char *p_socket = getenv("SPICE_XPI_SOCKET");
     if (!p_socket) {
         LOG_ERROR("Failed to get a controller connection (SPICE_XPI_SOCKET)");
         throw Exception("Failed to get a controller connection (SPICE_XPI_SOCKET)");
