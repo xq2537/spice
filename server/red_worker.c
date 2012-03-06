@@ -11194,7 +11194,7 @@ void *red_worker_main(void *arg)
             if (pfd->revents) {
                 EventListener *evt_listener = worker.listeners[i];
 
-                if (evt_listener->refs > 1) {
+                if (evt_listener && evt_listener->refs > 1) {
                     evt_listener->action(evt_listener, pfd);
                     if (--evt_listener->refs) {
                         continue;
@@ -11202,6 +11202,7 @@ void *red_worker_main(void *arg)
                 }
                 red_printf("freeing event listener");
                 evt_listener->free(evt_listener);
+                worker.listeners[i] = NULL;
             }
         }
 
