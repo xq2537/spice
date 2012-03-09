@@ -601,7 +601,7 @@ RedChannel *red_channel_create(int size,
                                ChannelCbs *channel_cbs)
 {
     RedChannel *channel;
-    ClientCbs client_cbs;
+    ClientCbs client_cbs = { NULL, };
 
     ASSERT(size >= sizeof(*channel));
     ASSERT(channel_cbs->config_socket && channel_cbs->on_disconnect && handle_message &&
@@ -668,7 +668,7 @@ SpiceCoreInterface dummy_core = {
 RedChannel *red_channel_create_dummy(int size, uint32_t type, uint32_t id)
 {
     RedChannel *channel;
-    ClientCbs client_cbs;
+    ClientCbs client_cbs = { NULL, };
 
     ASSERT(size >= sizeof(*channel));
     channel = spice_malloc0(size);

@@ -255,8 +255,8 @@ void spicevmc_device_connect(SpiceCharDeviceInstance *sin,
 {
     static uint8_t id[256] = { 0, };
     SpiceVmcState *state;
-    ChannelCbs channel_cbs = {0,};
-    ClientCbs client_cbs = {0,};
+    ChannelCbs channel_cbs = { NULL, };
+    ClientCbs client_cbs = { NULL, };
 
     channel_cbs.config_socket = spicevmc_red_channel_client_config_socket;
     channel_cbs.on_disconnect = spicevmc_red_channel_client_on_disconnect;

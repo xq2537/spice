@@ -3474,8 +3474,8 @@ static void handle_tunnel_channel_client_migrate(RedChannelClient *rcc)
 static void red_tunnel_channel_create(TunnelWorker *worker)
 {
     RedChannel *channel;
-    ChannelCbs channel_cbs;
-    ClientCbs client_cbs = {0,};
+    ChannelCbs channel_cbs = { NULL, };
+    ClientCbs client_cbs = { NULL, };
 
     channel_cbs.config_socket = tunnel_channel_config_socket;
     channel_cbs.on_disconnect = tunnel_channel_client_on_disconnect;

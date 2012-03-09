@@ -1464,7 +1464,7 @@ void snd_attach_playback(SpicePlaybackInstance *sin)
 {
     SndWorker *playback_worker;
     RedChannel *channel;
-    ClientCbs client_cbs = {0,};
+    ClientCbs client_cbs = { NULL, };
 
     sin->st = spice_new0(SpicePlaybackState, 1);
     sin->st->sin = sin;
@@ -1491,7 +1491,7 @@ void snd_attach_record(SpiceRecordInstance *sin)
 {
     SndWorker *record_worker;
     RedChannel *channel;
-    ClientCbs client_cbs = {0,};
+    ClientCbs client_cbs = { NULL, };
 
     sin->st = spice_new0(SpiceRecordState, 1);
     sin->st->sin = sin;

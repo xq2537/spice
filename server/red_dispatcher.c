@@ -984,7 +984,7 @@ RedDispatcher *red_dispatcher_init(QXLInstance *qxl)
     RedChannel *cursor_channel;
     sigset_t thread_sig_mask;
     sigset_t curr_sig_mask;
-    ClientCbs client_cbs = {0,};
+    ClientCbs client_cbs = { NULL, };
 
     quic_init();
     sw_canvas_init();

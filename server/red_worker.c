@@ -9664,7 +9664,7 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_t
 {
     RedChannel *channel = NULL;
     CommonChannel *common;
-    ChannelCbs channel_cbs;
+    ChannelCbs channel_cbs = { NULL, };
 
     channel_cbs.config_socket = common_channel_config_socket;
     channel_cbs.pre_disconnect = pre_disconnect;
