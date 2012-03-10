@@ -1194,6 +1194,10 @@ void red_channel_client_disconnect(RedChannelClient *rcc)
     if (rcc->channel->channel_cbs.pre_disconnect) {
         rcc->channel->channel_cbs.pre_disconnect(rcc);
     }
+    if (rcc->stream->watch) {
+        rcc->channel->core->watch_remove(rcc->stream->watch);
+        rcc->stream->watch = NULL;
+    }
     reds_stream_free(rcc->stream);
     rcc->stream = NULL;
     red_channel_remove_client(rcc);
