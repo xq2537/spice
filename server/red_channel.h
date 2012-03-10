@@ -187,7 +187,6 @@ typedef void (*channel_client_migrate_proc)(RedChannelClient *base);
  */
 typedef struct {
     channel_configure_socket_proc config_socket;
-    channel_disconnect_proc pre_disconnect;
     channel_disconnect_proc on_disconnect;
     channel_send_pipe_item_proc send_item;
     channel_hold_pipe_item_proc hold_item;
