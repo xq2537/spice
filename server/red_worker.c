@@ -237,11 +237,8 @@ double inline stat_byte_to_mega(uint64_t size)
 
 typedef struct EventListener EventListener;
 typedef void (*event_listener_action_proc)(EventListener *ctx, struct pollfd *pfd);
-typedef void (*event_listener_free_proc)(EventListener *ctx);
 struct EventListener {
-    uint32_t refs;
     event_listener_action_proc action;
-    event_listener_free_proc free;
 };
 
 enum {
@@ -8732,6 +8729,7 @@ static void poll_channel_client_pre_disconnect(RedChannelClient *rcc)
         struct pollfd *pfd = common->worker->poll_fds + i;
         if (pfd->fd == rcc->stream->socket) {
             pfd->fd = -1;
+            common->worker->listeners[i] = NULL;
             break;
         }
     }
@@ -9534,14 +9532,6 @@ static int common_channel_config_socket(RedChannelClient *rcc)
     return TRUE;
 }
 
-static void free_common_cc_from_listener(EventListener *ctx)
-{
-    CommonChannelClient* common_cc = SPICE_CONTAINEROF(ctx, CommonChannelClient, listener);
-
-    red_printf("");
-    free(common_cc);
-}
-
 static void worker_watch_update_mask(SpiceWatch *watch, int event_mask)
 {
 }
@@ -9630,9 +9620,7 @@ static int listen_to_new_client_channel(CommonChannel *common,
 {
     int i;
 
-    common_cc->listener.refs = 1;
     common_cc->listener.action = common->listener_action;
-    common_cc->listener.free = free_common_cc_from_listener;
     ASSERT(common->base.clients_num);
     common_cc->id = common->worker->id;
     red_printf("NEW ID = %d", common_cc->id);
@@ -11059,11 +11047,6 @@ static void handle_dev_input(EventListener *listener, struct pollfd *pfd)
     dispatcher_handle_recv_read(red_dispatcher_get_dispatcher(worker->red_dispatcher));
 }
 
-static void handle_dev_free(EventListener *ctx)
-{
-    free(ctx);
-}
-
 static void red_init(RedWorker *worker, WorkerInitData *init_data)
 {
     RedWorkerMessage message;
@@ -11081,9 +11064,7 @@ static void red_init(RedWorker *worker, WorkerInitData *init_data)
     worker->channel = dispatcher_get_recv_fd(dispatcher);
     register_callbacks(dispatcher);
     worker->pending = init_data->pending;
-    worker->dev_listener.refs = 1;
     worker->dev_listener.action = handle_dev_input;
-    worker->dev_listener.free = handle_dev_free;
     worker->cursor_visible = TRUE;
     ASSERT(init_data->num_renderers > 0);
     worker->num_renderers = init_data->num_renderers;
@@ -11185,24 +11166,11 @@ void *red_worker_main(void *arg)
         for (i = 0; i < MAX_EVENT_SOURCES; i++) {
             struct pollfd *pfd = worker.poll_fds + i;
             if (pfd->revents) {
-                worker.listeners[i]->refs++;
-            }
-        }
-
-        for (i = 0; i < MAX_EVENT_SOURCES; i++) {
-            struct pollfd *pfd = worker.poll_fds + i;
-            if (pfd->revents) {
                 EventListener *evt_listener = worker.listeners[i];
 
-                if (evt_listener && evt_listener->refs > 1) {
+                if (evt_listener) {
                     evt_listener->action(evt_listener, pfd);
-                    if (--evt_listener->refs) {
-                        continue;
-                    }
                 }
-                red_printf("freeing event listener");
-                evt_listener->free(evt_listener);
-                worker.listeners[i] = NULL;
             }
         }
 
