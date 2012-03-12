@@ -106,4 +106,5 @@ SPICE_SERVER_0.10.2 {
 global:
     spice_server_set_name;
     spice_server_set_uuid;
+    spice_server_set_listen_socket_fd;
 } SPICE_SERVER_0.10.1;

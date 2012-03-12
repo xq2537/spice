@@ -421,6 +421,7 @@ int spice_server_set_compat_version(SpiceServer *s,
                                     spice_compat_version_t version);
 int spice_server_set_port(SpiceServer *s, int port);
 void spice_server_set_addr(SpiceServer *s, const char *addr, int flags);
+int spice_server_set_listen_socket_fd(SpiceServer *s, int listen_fd);
 int spice_server_set_noauth(SpiceServer *s);
 int spice_server_set_sasl(SpiceServer *s, int enabled);
 int spice_server_set_sasl_appname(SpiceServer *s, const char *appname);

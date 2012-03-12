@@ -94,6 +94,7 @@ static SpiceMigrateInstance *migration_interface = NULL;
 
 static int spice_port = -1;
 static int spice_secure_port = -1;
+static int spice_listen_socket_fd = -1;
 static char spice_addr[256];
 static int spice_family = PF_UNSPEC;
 static char *default_renderer = "sw";
@@ -2995,6 +2996,19 @@ static int reds_init_net(void)
             red_error("set fd handle failed");
         }
     }
+
+    if (spice_listen_socket_fd != -1 ) {
+        reds->listen_socket = spice_listen_socket_fd;
+        if (-1 == reds->listen_socket) {
+            return -1;
+        }
+        reds->listen_watch = core->watch_add(reds->listen_socket,
+                                             SPICE_WATCH_EVENT_READ,
+                                             reds_accept, NULL);
+        if (reds->listen_watch == NULL) {
+            red_error("set fd handle failed");
+        }
+    }
     return 0;
 }
 
@@ -3785,6 +3799,13 @@ SPICE_GNUC_VISIBLE void spice_server_set_addr(SpiceServer *s, const char *addr, 
     if (flags & SPICE_ADDR_FLAG_IPV6_ONLY) {
         spice_family = PF_INET6;
     }
+}
+
+SPICE_GNUC_VISIBLE int spice_server_set_listen_socket_fd(SpiceServer *s, int listen_fd)
+{
+    ASSERT(reds == s);
+    spice_listen_socket_fd = listen_fd;
+    return 0;
 }
 
 SPICE_GNUC_VISIBLE int spice_server_set_noauth(SpiceServer *s)
