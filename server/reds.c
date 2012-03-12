@@ -2999,9 +2999,6 @@ static int reds_init_net(void)
 
     if (spice_listen_socket_fd != -1 ) {
         reds->listen_socket = spice_listen_socket_fd;
-        if (-1 == reds->listen_socket) {
-            return -1;
-        }
         reds->listen_watch = core->watch_add(reds->listen_socket,
                                              SPICE_WATCH_EVENT_READ,
                                              reds_accept, NULL);
