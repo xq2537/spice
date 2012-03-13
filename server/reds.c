@@ -97,7 +97,7 @@ static int spice_secure_port = -1;
 static int spice_listen_socket_fd = -1;
 static char spice_addr[256];
 static int spice_family = PF_UNSPEC;
-static char *default_renderer = "sw";
+static const char *default_renderer = "sw";
 static int sasl_enabled = 0; // sasl disabled by default
 #if HAVE_SASL
 static char *sasl_appname = NULL; // default to "spice" if NULL
@@ -1730,7 +1730,7 @@ static void reds_channel_do_link(RedChannel *channel, RedClient *client,
     spice_assert(stream);
 
     if (link_msg->channel_type == SPICE_CHANNEL_INPUTS && !stream->ssl) {
-        char *mess = "keyboard channel is insecure";
+        const char *mess = "keyboard channel is insecure";
         const int mess_len = strlen(mess);
         main_channel_push_notify(reds->main_channel, (uint8_t*)mess, mess_len);
     }

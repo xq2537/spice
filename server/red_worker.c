@@ -1202,7 +1202,7 @@ static inline void validate_surface(RedWorker *worker, uint32_t surface_id)
     }
 }
 
-static char *draw_type_to_str(uint8_t type)
+static const char *draw_type_to_str(uint8_t type)
 {
     switch (type) {
     case QXL_DRAW_FILL:
