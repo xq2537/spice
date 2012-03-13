@@ -322,7 +322,7 @@ void SendTrigger::on_event()
     _channel.on_send_trigger();
 }
 
-void AbortTrigger::on_event()
+SPICE_GNUC_NORETURN void AbortTrigger::on_event()
 {
     THROW("abort");
 }

@@ -11132,7 +11132,7 @@ static void red_display_cc_free_glz_drawables(RedChannelClient *rcc)
     red_display_handle_glz_drawables_to_free(dcc);
 }
 
-void *red_worker_main(void *arg)
+SPICE_GNUC_NORETURN void *red_worker_main(void *arg)
 {
     RedWorker worker;
 
@@ -11206,8 +11206,7 @@ void *red_worker_main(void *arg)
         }
         red_push(&worker);
     }
-    spice_printerr("exit");
-    return 0;
+    abort();
 }
 
 #ifdef DUMP_BITMAP
