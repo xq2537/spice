@@ -49,7 +49,7 @@
  *        if 0 poll first, return immediately if no bytes available, otherwise
  *         read size in blocking mode.
  */
-static int read_safe(int fd, void *buf, size_t size, int block)
+static int read_safe(int fd, uint8_t *buf, size_t size, int block)
 {
     int read_size = 0;
     int ret;
@@ -94,7 +94,7 @@ static int read_safe(int fd, void *buf, size_t size, int block)
  * write_safe
  * @return -1 for error, otherwise number of written bytes. may be zero.
  */
-static int write_safe(int fd, void *buf, size_t size)
+static int write_safe(int fd, uint8_t *buf, size_t size)
 {
     int written_size = 0;
     int ret;
@@ -121,7 +121,7 @@ static int dispatcher_handle_single_read(Dispatcher *dispatcher)
     uint8_t *payload = dispatcher->payload;
     uint32_t ack = ACK;
 
-    if ((ret = read_safe(dispatcher->recv_fd, &type, sizeof(type), 0)) == -1) {
+    if ((ret = read_safe(dispatcher->recv_fd, (uint8_t*)&type, sizeof(type), 0)) == -1) {
         spice_printerr("error reading from dispatcher: %d", errno);
         return 0;
     }
@@ -142,7 +142,7 @@ static int dispatcher_handle_single_read(Dispatcher *dispatcher)
     }
     if (msg->ack == DISPATCHER_ACK) {
         if (write_safe(dispatcher->recv_fd,
-                       &ack, sizeof(ack)) == -1) {
+                       (uint8_t*)&ack, sizeof(ack)) == -1) {
             spice_printerr("error writing ack for message %d", type);
             /* TODO: close socketpair? */
         }
@@ -174,7 +174,7 @@ void dispatcher_send_message(Dispatcher *dispatcher, uint32_t message_type,
     assert(dispatcher->messages[message_type].handler);
     msg = &dispatcher->messages[message_type];
     pthread_mutex_lock(&dispatcher->lock);
-    if (write_safe(send_fd, &message_type, sizeof(message_type)) == -1) {
+    if (write_safe(send_fd, (uint8_t*)&message_type, sizeof(message_type)) == -1) {
         spice_printerr("error: failed to send message type for message %d",
                    message_type);
         goto unlock;
@@ -185,7 +185,7 @@ void dispatcher_send_message(Dispatcher *dispatcher, uint32_t message_type,
         goto unlock;
     }
     if (msg->ack == DISPATCHER_ACK) {
-        if (read_safe(send_fd, &ack, sizeof(ack), 1) == -1) {
+        if (read_safe(send_fd, (uint8_t*)&ack, sizeof(ack), 1) == -1) {
             spice_printerr("error: failed to read ack");
         } else if (ack != ACK) {
             spice_printerr("error: got wrong ack value in dispatcher "
