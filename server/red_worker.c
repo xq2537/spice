@@ -11134,7 +11134,7 @@ static void red_display_cc_free_glz_drawables(RedChannelClient *rcc)
 
 SPICE_GNUC_NORETURN void *red_worker_main(void *arg)
 {
-    RedWorker worker;
+    RedWorker *worker = spice_malloc(sizeof(RedWorker));
 
     spice_printerr("begin");
     spice_assert(MAX_PIPE_SIZE > WIDE_CLIENT_ACK_WINDOW &&
@@ -11146,28 +11146,28 @@ SPICE_GNUC_NORETURN void *red_worker_main(void *arg)
     }
 #endif
 
-    red_init(&worker, (WorkerInitData *)arg);
-    red_init_quic(&worker);
-    red_init_lz(&worker);
-    red_init_jpeg(&worker);
-    red_init_zlib(&worker);
-    worker.event_timeout = INF_EVENT_WAIT;
+    red_init(worker, (WorkerInitData *)arg);
+    red_init_quic(worker);
+    red_init_lz(worker);
+    red_init_jpeg(worker);
+    red_init_zlib(worker);
+    worker->event_timeout = INF_EVENT_WAIT;
     for (;;) {
         int i, num_events;
 
-        worker.event_timeout = MIN(red_get_streams_timout(&worker), worker.event_timeout);
-        num_events = poll(worker.poll_fds, MAX_EVENT_SOURCES, worker.event_timeout);
-        red_handle_streams_timout(&worker);
+        worker->event_timeout = MIN(red_get_streams_timout(worker), worker->event_timeout);
+        num_events = poll(worker->poll_fds, MAX_EVENT_SOURCES, worker->event_timeout);
+        red_handle_streams_timout(worker);
 
-        if (worker.display_channel) {
+        if (worker->display_channel) {
             /* during migration, in the dest, the display channel can be initialized
                while the global lz data not since migrate data msg hasn't been
                received yet */
-            red_channel_apply_clients(&worker.display_channel->common.base,
-                red_display_cc_free_glz_drawables);
+            red_channel_apply_clients(&worker->display_channel->common.base,
+                                      red_display_cc_free_glz_drawables);
         }
 
-        worker.event_timeout = INF_EVENT_WAIT;
+        worker->event_timeout = INF_EVENT_WAIT;
         if (num_events == -1) {
             if (errno != EINTR) {
                 spice_error("poll failed, %s", strerror(errno));
@@ -11178,33 +11178,33 @@ SPICE_GNUC_NORETURN void *red_worker_main(void *arg)
             /* The watch may have been removed by the watch-func from
                another fd (ie a disconnect through the dispatcher),
                in this case watch_func is NULL. */
-            if (worker.poll_fds[i].revents && worker.watches[i].watch_func) {
+            if (worker->poll_fds[i].revents && worker->watches[i].watch_func) {
                 int events = 0;
-                if (worker.poll_fds[i].revents & POLLIN) {
+                if (worker->poll_fds[i].revents & POLLIN) {
                     events |= SPICE_WATCH_EVENT_READ;
                 }
-                if (worker.poll_fds[i].revents & POLLOUT) {
+                if (worker->poll_fds[i].revents & POLLOUT) {
                     events |= SPICE_WATCH_EVENT_WRITE;
                 }
-                worker.watches[i].watch_func(worker.poll_fds[i].fd, events,
-                                        worker.watches[i].watch_func_opaque);
+                worker->watches[i].watch_func(worker->poll_fds[i].fd, events,
+                                        worker->watches[i].watch_func_opaque);
             }
         }
 
         /* Clear the poll_fd for any removed watches, see the comment in
            watch_remove for why we don't do this there. */
         for (i = 0; i < MAX_EVENT_SOURCES; i++) {
-            if (!worker.watches[i].watch_func) {
-                worker.poll_fds[i].fd = -1;
+            if (!worker->watches[i].watch_func) {
+                worker->poll_fds[i].fd = -1;
             }
         }
 
-        if (worker.running) {
+        if (worker->running) {
             int ring_is_empty;
-            red_process_cursor(&worker, MAX_PIPE_SIZE, &ring_is_empty);
-            red_process_commands(&worker, MAX_PIPE_SIZE, &ring_is_empty);
+            red_process_cursor(worker, MAX_PIPE_SIZE, &ring_is_empty);
+            red_process_commands(worker, MAX_PIPE_SIZE, &ring_is_empty);
         }
-        red_push(&worker);
+        red_push(worker);
     }
     abort();
 }
