@@ -3666,9 +3666,10 @@ static int do_spice_init(SpiceCoreInterface *core_interface)
     reds->vdi_port_write_timer_started = FALSE;
 
 #ifdef RED_STATISTICS
-    int shm_name_len = strlen(SPICE_STAT_SHM_NAME) + 20;
+    int shm_name_len;
     int fd;
 
+    shm_name_len = strlen(SPICE_STAT_SHM_NAME) + 20;
     reds->stat_shm_name = (char *)spice_malloc(shm_name_len);
     snprintf(reds->stat_shm_name, shm_name_len, SPICE_STAT_SHM_NAME, getpid());
     if ((fd = shm_open(reds->stat_shm_name, O_CREAT | O_RDWR, 0444)) == -1) {
