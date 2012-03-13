@@ -428,8 +428,7 @@ static void smartcard_channel_write_to_reader(VSCMsgHeader *vheader)
     uint32_t n;
     uint32_t actual_length = vheader->length;
 
-    spice_assert(vheader->reader_id >= 0 &&
-           vheader->reader_id <= g_smartcard_readers.num);
+    spice_assert(vheader->reader_id <= g_smartcard_readers.num);
     sin = g_smartcard_readers.sin[vheader->reader_id];
     sif = SPICE_CONTAINEROF(sin->base.sif, SpiceCharDeviceInterface, base);
     /* protocol requires messages to be in network endianess */
