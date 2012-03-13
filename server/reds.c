@@ -1595,7 +1595,7 @@ static void reds_mig_target_client_free(RedsMigTargetClient *mig_client)
     free(mig_client);
 }
 
-static void reds_mig_target_client_disconnect_all()
+static void reds_mig_target_client_disconnect_all(void)
 {
     RingItem *now, *next;
 

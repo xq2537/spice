@@ -65,7 +65,7 @@ static struct Readers {
     SpiceCharDeviceInstance* sin[SMARTCARD_MAX_READERS];
 } g_smartcard_readers = {0, {NULL}};
 
-static SpiceCharDeviceInstance* smartcard_readers_get_unattached();
+static SpiceCharDeviceInstance* smartcard_readers_get_unattached(void);
 static SpiceCharDeviceInstance* smartcard_readers_get(uint32_t reader_id);
 static int smartcard_char_device_add_to_readers(SpiceCharDeviceInstance *sin);
 static void smartcard_char_device_attach(
@@ -77,7 +77,7 @@ static void smartcard_char_device_on_message_from_device(
     SmartCardDeviceState *state, VSCMsgHeader *header);
 static void smartcard_on_message_from_device(
     RedChannelClient *rcc, VSCMsgHeader *vheader);
-static SmartCardDeviceState* smartcard_device_state_new();
+static SmartCardDeviceState* smartcard_device_state_new(void);
 static void smartcard_device_state_free(SmartCardDeviceState* st);
 static void smartcard_init(void);
 
@@ -180,7 +180,7 @@ static SpiceCharDeviceInstance *smartcard_readers_get(uint32_t reader_id)
     return g_smartcard_readers.sin[reader_id];
 }
 
-static SpiceCharDeviceInstance *smartcard_readers_get_unattached()
+static SpiceCharDeviceInstance *smartcard_readers_get_unattached(void)
 {
     int i;
     SmartCardDeviceState* state;
@@ -195,7 +195,7 @@ static SpiceCharDeviceInstance *smartcard_readers_get_unattached()
     return NULL;
 }
 
-static SmartCardDeviceState* smartcard_device_state_new()
+static SmartCardDeviceState* smartcard_device_state_new(void)
 {
     SmartCardDeviceState *st;
 
