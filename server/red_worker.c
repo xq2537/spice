@@ -5926,9 +5926,9 @@ static int red_jpeg_compress_image(DisplayChannelClient *dcc, SpiceImage *dest,
     LzData *lz_data = &worker->lz_data;
     JpegEncoderContext *jpeg = worker->jpeg;
     LzContext *lz = worker->lz;
-    JpegEncoderImageType jpeg_in_type;
+    volatile JpegEncoderImageType jpeg_in_type;
     int jpeg_size = 0;
-    int has_alpha = FALSE;
+    volatile int has_alpha = FALSE;
     int alpha_lz_size = 0;
     int comp_head_filled;
     int comp_head_left;
@@ -6066,7 +6066,7 @@ static inline int red_quic_compress_image(DisplayChannelClient *dcc, SpiceImage 
     RedWorker *worker = display_channel->common.worker;
     QuicData *quic_data = &worker->quic_data;
     QuicContext *quic = worker->quic;
-    QuicImageType type;
+    volatile QuicImageType type;
     int size, stride;
 
 #ifdef COMPRESS_STAT
