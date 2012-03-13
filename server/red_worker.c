@@ -9514,8 +9514,15 @@ static int common_channel_config_socket(RedChannelClient *rcc)
 
 static void worker_watch_update_mask(SpiceWatch *watch, int event_mask)
 {
-    struct RedWorker *worker = watch->worker;
-    int i = watch - worker->watches;
+    struct RedWorker *worker;
+    int i;
+
+    if (!watch) {
+        return;
+    }
+
+    worker = watch->worker;
+    i = watch - worker->watches;
 
     worker->poll_fds[i].events = 0;
     if (event_mask & SPICE_WATCH_EVENT_READ) {
@@ -9561,6 +9568,10 @@ static SpiceWatch *worker_watch_add(int fd, int event_mask, SpiceWatchFunc func,
 
 static void worker_watch_remove(SpiceWatch *watch)
 {
+    if (!watch) {
+        return;
+    }
+
     /* Note we don't touch the poll_fd here, to avoid the
        poll_fds/watches table entry getting re-used in the same
        red_worker_main loop over the fds as it is removed.
