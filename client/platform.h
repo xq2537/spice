@@ -42,7 +42,7 @@ public:
     static void path_append(std::string& path, const std::string& partial_path);
     static uint64_t get_process_id();
     static uint64_t get_thread_id();
-    static void term_printf(const char* format, ...);
+    static SPICE_GNUC_PRINTF(1, 2) void term_printf(const char* format, ...);
     static void error_beep();
 
     static const MonitorsList& init_monitors();

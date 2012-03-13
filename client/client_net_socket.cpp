@@ -147,7 +147,7 @@ void ClientNetSocket::push_send(SendBuffer& buf)
     }
 
     if (_fin_pending || _close_pending) {
-        THROW("%s: unexpected send attempt for connection_id=% - shutdown send pending",
+        THROW("%s: unexpected send attempt for connection_id=%d - shutdown send pending",
               __FUNCTION__, _id);
     }
 

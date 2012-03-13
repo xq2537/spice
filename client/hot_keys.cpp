@@ -139,9 +139,7 @@ void HotKeysParser::add_hotkey(const std::string& hotkey, const CommandsMap& com
     std::string command_name = hotkey.substr(0, key_start);
 
     if (commands_map.find(command_name) == commands_map.end()) {
-        char buf[1000];
-        snprintf(buf, sizeof(buf), "invalid action bname %s", command_name.c_str());
-        THROW(buf);
+        THROW("invalid action bname %s", command_name.c_str());
     }
     int command_id = commands_map.find(command_name)->second;
     std::string keys = hotkey.substr(key_start + 1);

@@ -98,7 +98,7 @@ static inline void set_bit_be(const void* addr, int bit)
 int str_to_port(const char *str);
 
 void string_vprintf(std::string& str, const char* format, va_list ap);
-void string_printf(std::string& str, const char *format, ...);
+SPICE_GNUC_PRINTF(2, 3) void string_printf(std::string& str, const char *format, ...);
 
 template<class T>
 class FreeObject {

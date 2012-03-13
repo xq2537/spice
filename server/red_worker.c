@@ -5274,7 +5274,7 @@ static int red_display_free_some_independent_glz_drawables(DisplayChannelClient 
 /******************************************************
  *              Encoders callbacks
 *******************************************************/
-static void quic_usr_error(QuicUsrContext *usr, const char *fmt, ...)
+static SPICE_GNUC_PRINTF(2, 3) void quic_usr_error(QuicUsrContext *usr, const char *fmt, ...)
 {
     EncoderData *usr_data = &(((QuicData *)usr)->data);
     va_list ap;
@@ -5287,7 +5287,7 @@ static void quic_usr_error(QuicUsrContext *usr, const char *fmt, ...)
     longjmp(usr_data->jmp_env, 1);
 }
 
-static void lz_usr_error(LzUsrContext *usr, const char *fmt, ...)
+static SPICE_GNUC_PRINTF(2, 3) void lz_usr_error(LzUsrContext *usr, const char *fmt, ...)
 {
     EncoderData *usr_data = &(((LzData *)usr)->data);
     va_list ap;
@@ -5300,7 +5300,7 @@ static void lz_usr_error(LzUsrContext *usr, const char *fmt, ...)
     longjmp(usr_data->jmp_env, 1);
 }
 
-static void glz_usr_error(GlzEncoderUsrContext *usr, const char *fmt, ...)
+static SPICE_GNUC_PRINTF(2, 3) void glz_usr_error(GlzEncoderUsrContext *usr, const char *fmt, ...)
 {
     EncoderData *usr_data = &(((GlzData *)usr)->data);
     va_list ap;
@@ -5315,7 +5315,7 @@ static void glz_usr_error(GlzEncoderUsrContext *usr, const char *fmt, ...)
                                         // and the client
 }
 
-static void quic_usr_warn(QuicUsrContext *usr, const char *fmt, ...)
+static SPICE_GNUC_PRINTF(2, 3) void quic_usr_warn(QuicUsrContext *usr, const char *fmt, ...)
 {
     EncoderData *usr_data = &(((QuicData *)usr)->data);
     va_list ap;
@@ -5326,7 +5326,7 @@ static void quic_usr_warn(QuicUsrContext *usr, const char *fmt, ...)
     spice_printerr("%s", usr_data->message_buf);
 }
 
-static void lz_usr_warn(LzUsrContext *usr, const char *fmt, ...)
+static SPICE_GNUC_PRINTF(2, 3) void lz_usr_warn(LzUsrContext *usr, const char *fmt, ...)
 {
     EncoderData *usr_data = &(((LzData *)usr)->data);
     va_list ap;
@@ -5337,7 +5337,7 @@ static void lz_usr_warn(LzUsrContext *usr, const char *fmt, ...)
     spice_printerr("%s", usr_data->message_buf);
 }
 
-static void glz_usr_warn(GlzEncoderUsrContext *usr, const char *fmt, ...)
+static SPICE_GNUC_PRINTF(2, 3) void glz_usr_warn(GlzEncoderUsrContext *usr, const char *fmt, ...)
 {
     EncoderData *usr_data = &(((GlzData *)usr)->data);
     va_list ap;

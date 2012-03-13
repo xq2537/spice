@@ -38,7 +38,7 @@ static void ssl_error()
     unsigned long last_error = ERR_peek_last_error();
 
     ERR_print_errors_fp(stderr);
-    THROW_ERR(SPICEC_ERROR_CODE_SSL_ERROR, "SSL Error:", ERR_error_string(last_error, NULL));
+    THROW_ERR(SPICEC_ERROR_CODE_SSL_ERROR, "SSL Error: %s", ERR_error_string(last_error, NULL));
 }
 
 RedPeer::RedPeer()

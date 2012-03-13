@@ -2359,7 +2359,7 @@ bool Application::process_cmd_line(int argc, char** argv, bool &full_screen)
         case SPICE_OPT_VERSION: {
             std::ostringstream os;
             os << argv[0] << " "<< PACKAGE_VERSION << std::endl;
-            Platform::term_printf(os.str().c_str());
+            Platform::term_printf("%s", os.str().c_str());
             return false;
         }
         case SPICE_OPT_HOST:

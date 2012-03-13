@@ -514,5 +514,5 @@ void CmdLineParser::show_help()
     }
 
     os << "\n";
-    Platform::term_printf(os.str().c_str());
+    Platform::term_printf("%s", os.str().c_str());
 }
