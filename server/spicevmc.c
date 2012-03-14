@@ -93,7 +93,7 @@ static int spicevmc_red_channel_client_config_socket(RedChannelClient *rcc)
         if (setsockopt(stream->socket, IPPROTO_TCP, TCP_NODELAY,
                 &delay_val, sizeof(delay_val)) != 0) {
             if (errno != ENOTSUP && errno != ENOPROTOOPT) {
-                red_printf("setsockopt failed, %s", strerror(errno));
+                spice_printerr("setsockopt failed, %s", strerror(errno));
                 return FALSE;
             }
         }
@@ -223,8 +223,8 @@ static void spicevmc_connect(RedChannel *channel, RedClient *client,
     sif = SPICE_CONTAINEROF(sin->base.sif, SpiceCharDeviceInterface, base);
 
     if (state->rcc) {
-        WARN("channel client %d:%d (%p) already connected, refusing second connection\n",
-             channel->type, channel->id, state->rcc);
+        spice_printerr("channel client %d:%d (%p) already connected, refusing second connection",
+                       channel->type, channel->id, state->rcc);
         // TODO: notify client in advance about the in use channel using
         // SPICE_MSG_MAIN_CHANNEL_IN_USE (for example)
         reds_stream_free(stream);

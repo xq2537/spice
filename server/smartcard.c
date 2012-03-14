@@ -101,7 +101,7 @@ void smartcard_char_device_wakeup(SpiceCharDeviceInstance *sin)
         if (actual_length > state->buf_size) {
             state->buf_size = MAX(state->buf_size*2, actual_length + sizeof(VSCMsgHeader));
             state->buf = spice_realloc(state->buf, state->buf_size);
-            ASSERT(state->buf != NULL);
+            spice_assert(state->buf != NULL);
         }
         if (state->buf_used - sizeof(VSCMsgHeader) < actual_length) {
             continue;
@@ -135,7 +135,7 @@ void smartcard_char_device_on_message_from_device(
     }
     /* We pass any VSC_Error right now - might need to ignore some? */
     if (state->reader_id == VSCARD_UNDEFINED_READER_ID && vheader->type != VSC_Init) {
-        red_printf("error: reader_id not assigned for message of type %d", vheader->type);
+        spice_printerr("error: reader_id not assigned for message of type %d", vheader->type);
     }
     if (state->rcc) {
         sent_header = spice_memdup(vheader, sizeof(*vheader) + vheader->length);
@@ -176,7 +176,7 @@ static int smartcard_char_device_add_to_readers(SpiceCharDeviceInstance *char_de
 
 static SpiceCharDeviceInstance *smartcard_readers_get(uint32_t reader_id)
 {
-    ASSERT(reader_id < g_smartcard_readers.num);
+    spice_assert(reader_id < g_smartcard_readers.num);
     return g_smartcard_readers.sin[reader_id];
 }
 
@@ -284,15 +284,15 @@ static void smartcard_channel_release_msg_rcv_buf(RedChannelClient *rcc,
                                                   uint32_t size,
                                                   uint8_t *msg)
 {
-    red_printf("freeing %d bytes", size);
+    spice_printerr("freeing %d bytes", size);
     free(msg);
 }
 
 static void smartcard_channel_send_data(RedChannelClient *rcc, SpiceMarshaller *m,
                                         PipeItem *item, VSCMsgHeader *vheader)
 {
-    ASSERT(rcc);
-    ASSERT(vheader);
+    spice_assert(rcc);
+    spice_assert(vheader);
     red_channel_client_init_send_data(rcc, SPICE_MSG_SMARTCARD_DATA, item);
     spice_marshaller_add_ref(m, (uint8_t*)vheader, sizeof(VSCMsgHeader));
     if (vheader->length > 0) {
@@ -428,7 +428,7 @@ static void smartcard_channel_write_to_reader(VSCMsgHeader *vheader)
     uint32_t n;
     uint32_t actual_length = vheader->length;
 
-    ASSERT(vheader->reader_id >= 0 &&
+    spice_assert(vheader->reader_id >= 0 &&
            vheader->reader_id <= g_smartcard_readers.num);
     sin = g_smartcard_readers.sin[vheader->reader_id];
     sif = SPICE_CONTAINEROF(sin->base.sif, SpiceCharDeviceInterface, base);
@@ -439,7 +439,7 @@ static void smartcard_channel_write_to_reader(VSCMsgHeader *vheader)
     n = sif->write(sin, (uint8_t*)vheader,
                    actual_length + sizeof(VSCMsgHeader));
     // TODO - add ring
-    ASSERT(n == actual_length + sizeof(VSCMsgHeader));
+    spice_assert(n == actual_length + sizeof(VSCMsgHeader));
 }
 
 static int smartcard_channel_handle_message(RedChannelClient *rcc,
@@ -454,7 +454,7 @@ static int smartcard_channel_handle_message(RedChannelClient *rcc,
         return red_channel_client_handle_message(rcc, size, type, msg);
     }
 
-    ASSERT(size == vheader->length + sizeof(VSCMsgHeader));
+    spice_assert(size == vheader->length + sizeof(VSCMsgHeader));
     switch (vheader->type) {
         case VSC_ReaderAdd:
             smartcard_add_reader(rcc, msg + sizeof(VSCMsgHeader));
@@ -479,7 +479,7 @@ static int smartcard_channel_handle_message(RedChannelClient *rcc,
     }
 
     if (vheader->reader_id >= g_smartcard_readers.num) {
-        red_printf("ERROR: received message for non existent reader: %d, %d, %d", vheader->reader_id,
+        spice_printerr("ERROR: received message for non existent reader: %d, %d, %d", vheader->reader_id,
             vheader->type, vheader->length);
         return FALSE;
     }
@@ -515,7 +515,7 @@ static void smartcard_init(void)
     ChannelCbs channel_cbs = { NULL, };
     ClientCbs client_cbs = { NULL, };
 
-    ASSERT(!g_smartcard_channel);
+    spice_assert(!g_smartcard_channel);
 
     channel_cbs.config_socket = smartcard_channel_client_config_socket;
     channel_cbs.on_disconnect = smartcard_channel_on_disconnect;
@@ -533,7 +533,7 @@ static void smartcard_init(void)
                                              &channel_cbs);
 
     if (!g_smartcard_channel) {
-        red_error("failed to allocate Inputs Channel");
+        spice_error("failed to allocate Inputs Channel");
     }
 
     client_cbs.connect = smartcard_connect;

@@ -89,7 +89,7 @@ static void full_header_set_msg_serial(SpiceDataHeaderOpaque *header, uint64_t s
 
 static void mini_header_set_msg_serial(SpiceDataHeaderOpaque *header, uint64_t serial)
 {
-    red_error("attempt to set header serial on mini header");
+    spice_error("attempt to set header serial on mini header");
 }
 
 static void full_header_set_msg_sub_list(SpiceDataHeaderOpaque *header, uint32_t sub_list)
@@ -99,7 +99,7 @@ static void full_header_set_msg_sub_list(SpiceDataHeaderOpaque *header, uint32_t
 
 static void mini_header_set_msg_sub_list(SpiceDataHeaderOpaque *header, uint32_t sub_list)
 {
-    red_error("attempt to set header sub list on mini header");
+    spice_error("attempt to set header sub list on mini header");
 }
 
 static SpiceDataHeaderOpaque full_header_wrapper = {NULL, sizeof(SpiceDataHeader),
@@ -132,7 +132,7 @@ static int red_peer_receive(RedsStream *stream, uint8_t *buf, uint32_t size)
             if (now == 0) {
                 return -1;
             }
-            ASSERT(now == -1);
+            spice_assert(now == -1);
             if (errno == EAGAIN) {
                 break;
             } else if (errno == EINTR) {
@@ -140,7 +140,7 @@ static int red_peer_receive(RedsStream *stream, uint8_t *buf, uint32_t size)
             } else if (errno == EPIPE) {
                 return -1;
             } else {
-                red_printf("%s", strerror(errno));
+                spice_printerr("%s", strerror(errno));
                 return -1;
             }
         } else {
@@ -193,7 +193,7 @@ static void red_peer_handle_incoming(RedsStream *stream, IncomingHandler *handle
             if (!handler->msg) {
                 handler->msg = handler->cb->alloc_msg_buf(handler->opaque, msg_type, msg_size);
                 if (handler->msg == NULL) {
-                    red_printf("ERROR: channel refused to allocate buffer.");
+                    spice_printerr("ERROR: channel refused to allocate buffer.");
                     handler->cb->on_error(handler->opaque);
                     return;
                 }
@@ -218,7 +218,7 @@ static void red_peer_handle_incoming(RedsStream *stream, IncomingHandler *handle
                 handler->msg + msg_size, msg_type,
                 SPICE_VERSION_MINOR, &parsed_size, &parsed_free);
             if (parsed == NULL) {
-                red_printf("failed to parse message type %d", msg_type);
+                spice_printerr("failed to parse message type %d", msg_type);
                 handler->cb->release_msg_buf(handler->opaque, msg_type, msg_size, handler->msg);
                 handler->cb->on_error(handler->opaque);
                 return;
@@ -285,7 +285,7 @@ static void red_peer_handle_outgoing(RedsStream *stream, OutgoingHandler *handle
                 handler->cb->on_error(handler->opaque);
                 return;
             default:
-                red_printf("%s", strerror(errno));
+                spice_printerr("%s", strerror(errno));
                 handler->cb->on_error(handler->opaque);
                 return;
             }
@@ -362,7 +362,7 @@ static void red_channel_client_reset_send_data(RedChannelClient *rcc)
      * has been called before, but no message has been sent since then.
      */
     if (rcc->send_data.last_sent_serial != rcc->send_data.serial) {
-        ASSERT(rcc->send_data.serial - rcc->send_data.last_sent_serial == 1);
+        spice_assert(rcc->send_data.serial - rcc->send_data.last_sent_serial == 1);
         /*  When the urgent marshaller is active, the serial was incremented by
          *  the call to reset_send_data that was made for the main marshaller.
          *  The urgent msg receives this serial, and the main msg serial is
@@ -375,7 +375,7 @@ static void red_channel_client_reset_send_data(RedChannelClient *rcc)
     rcc->send_data.serial++;
 
     if (!rcc->is_mini_header) {
-        ASSERT(rcc->send_data.marshaller != rcc->send_data.urgent.marshaller);
+        spice_assert(rcc->send_data.marshaller != rcc->send_data.urgent.marshaller);
         rcc->send_data.header.set_msg_sub_list(&rcc->send_data.header, 0);
         rcc->send_data.header.set_msg_serial(&rcc->send_data.header, rcc->send_data.serial);
     }
@@ -395,7 +395,7 @@ static void red_channel_client_send_set_ack(RedChannelClient *rcc)
 {
     SpiceMsgSetAck ack;
 
-    ASSERT(rcc);
+    spice_assert(rcc);
     red_channel_client_init_send_data(rcc, SPICE_MSG_SET_ACK, NULL);
     ack.generation = ++rcc->ack_data.generation;
     ack.window = rcc->ack_data.client_window;
@@ -410,7 +410,7 @@ static void red_channel_client_send_item(RedChannelClient *rcc, PipeItem *item)
 {
     int handled = TRUE;
 
-    ASSERT(red_channel_client_no_item_being_sent(rcc));
+    spice_assert(red_channel_client_no_item_being_sent(rcc));
     red_channel_client_reset_send_data(rcc);
     switch (item->type) {
         case PIPE_ITEM_TYPE_SET_ACK:
@@ -463,7 +463,7 @@ static void red_channel_peer_on_out_msg_done(void *opaque)
 
     if (red_channel_client_urgent_marshaller_is_active(rcc)) {
         red_channel_client_restore_main_sender(rcc);
-        ASSERT(rcc->send_data.header.data != NULL);
+        spice_assert(rcc->send_data.header.data != NULL);
         red_channel_client_begin_send_message(rcc);
     }
 }
@@ -476,7 +476,7 @@ static void red_channel_client_pipe_remove(RedChannelClient *rcc, PipeItem *item
 
 static void red_channel_add_client(RedChannel *channel, RedChannelClient *rcc)
 {
-    ASSERT(rcc);
+    spice_assert(rcc);
     ring_add(&channel->clients, &rcc->channel_link);
     channel->clients_num++;
 }
@@ -521,7 +521,7 @@ RedChannelClient *red_channel_client_create(int size, RedChannel *channel, RedCl
 {
     RedChannelClient *rcc;
 
-    ASSERT(stream && channel && size >= sizeof(RedChannelClient));
+    spice_assert(stream && channel && size >= sizeof(RedChannelClient));
     rcc = spice_malloc0(size);
     rcc->stream = stream;
     rcc->channel = channel;
@@ -583,7 +583,7 @@ static void red_channel_client_default_connect(RedChannel *channel, RedClient *c
                                                int num_common_caps, uint32_t *common_caps,
                                                int num_caps, uint32_t *caps)
 {
-    red_error("not implemented");
+    spice_error("not implemented");
 }
 
 static void red_channel_client_default_disconnect(RedChannelClient *base)
@@ -605,8 +605,8 @@ RedChannel *red_channel_create(int size,
     RedChannel *channel;
     ClientCbs client_cbs = { NULL, };
 
-    ASSERT(size >= sizeof(*channel));
-    ASSERT(channel_cbs->config_socket && channel_cbs->on_disconnect && handle_message &&
+    spice_assert(size >= sizeof(*channel));
+    spice_assert(channel_cbs->config_socket && channel_cbs->on_disconnect && handle_message &&
            channel_cbs->alloc_recv_buf && channel_cbs->release_item);
     channel = spice_malloc0(size);
     channel->type = type;
@@ -672,7 +672,7 @@ RedChannel *red_channel_create_dummy(int size, uint32_t type, uint32_t id)
     RedChannel *channel;
     ClientCbs client_cbs = { NULL, };
 
-    ASSERT(size >= sizeof(*channel));
+    spice_assert(size >= sizeof(*channel));
     channel = spice_malloc0(size);
     channel->type = type;
     channel->id = id;
@@ -723,7 +723,7 @@ RedChannel *red_channel_create_parser(int size,
 
 void red_channel_register_client_cbs(RedChannel *channel, ClientCbs *client_cbs)
 {
-    ASSERT(client_cbs->connect);
+    spice_assert(client_cbs->connect);
     channel->client_cbs.connect = client_cbs->connect;
 
     if (client_cbs->disconnect) {
@@ -769,7 +769,7 @@ void red_channel_set_cap(RedChannel *channel, uint32_t cap)
 
 void red_channel_set_data(RedChannel *channel, void *data)
 {
-    ASSERT(channel);
+    spice_assert(channel);
     channel->data = data;
 }
 
@@ -876,7 +876,7 @@ void red_channel_client_push(RedChannelClient *rcc)
 
     if (!red_channel_client_no_item_being_sent(rcc) && !rcc->send_data.blocked) {
         rcc->send_data.blocked = TRUE;
-        red_printf("ERROR: an item waiting to be sent and not blocked");
+        spice_printerr("ERROR: an item waiting to be sent and not blocked");
     }
 
     while ((pipe_item = red_channel_client_pipe_item_get(rcc))) {
@@ -938,7 +938,7 @@ static void red_channel_handle_migrate_data(RedChannelClient *rcc, uint32_t size
     if (!rcc->channel->channel_cbs.handle_migrate_data) {
         return;
     }
-    ASSERT(red_channel_client_get_message_serial(rcc) == 0);
+    spice_assert(red_channel_client_get_message_serial(rcc) == 0);
     red_channel_client_set_message_serial(rcc,
         rcc->channel->channel_cbs.handle_migrate_data_get_serial(rcc, size, message));
     rcc->channel->channel_cbs.handle_migrate_data(rcc, size, message);
@@ -950,7 +950,7 @@ int red_channel_client_handle_message(RedChannelClient *rcc, uint32_t size,
     switch (type) {
     case SPICE_MSGC_ACK_SYNC:
         if (size != sizeof(uint32_t)) {
-            red_printf("bad message size");
+            spice_printerr("bad message size");
             return FALSE;
         }
         rcc->ack_data.client_generation = *(uint32_t *)(message);
@@ -970,7 +970,7 @@ int red_channel_client_handle_message(RedChannelClient *rcc, uint32_t size,
         red_channel_handle_migrate_data(rcc, size, message);
         break;
     default:
-        red_printf("invalid message type %u", type);
+        spice_printerr("invalid message type %u", type);
         return FALSE;
     }
     return TRUE;
@@ -990,8 +990,8 @@ static void red_channel_client_event(int fd, int event, void *data)
 
 void red_channel_client_init_send_data(RedChannelClient *rcc, uint16_t msg_type, PipeItem *item)
 {
-    ASSERT(red_channel_client_no_item_being_sent(rcc));
-    ASSERT(msg_type != 0);
+    spice_assert(red_channel_client_no_item_being_sent(rcc));
+    spice_assert(msg_type != 0);
     rcc->send_data.header.set_msg_type(&rcc->send_data.header, msg_type);
     rcc->send_data.item = item;
     if (item) {
@@ -1005,7 +1005,7 @@ void red_channel_client_begin_send_message(RedChannelClient *rcc)
 
     // TODO - better check: type in channel_allowed_types. Better: type in channel_allowed_types(channel_state)
     if (rcc->send_data.header.get_msg_type(&rcc->send_data.header) == 0) {
-        red_printf("BUG: header->type == 0");
+        spice_printerr("BUG: header->type == 0");
         return;
     }
     spice_marshaller_flush(m);
@@ -1020,8 +1020,8 @@ void red_channel_client_begin_send_message(RedChannelClient *rcc)
 
 SpiceMarshaller *red_channel_client_switch_to_urgent_sender(RedChannelClient *rcc)
 {
-    ASSERT(red_channel_client_no_item_being_sent(rcc));
-    ASSERT(rcc->send_data.header.data != NULL);
+    spice_assert(red_channel_client_no_item_being_sent(rcc));
+    spice_assert(rcc->send_data.header.data != NULL);
     rcc->send_data.main.header_data = rcc->send_data.header.data;
     rcc->send_data.main.item = rcc->send_data.item;
 
@@ -1060,7 +1060,7 @@ void red_channel_pipe_item_init(RedChannel *channel, PipeItem *item, int type)
 
 void red_channel_client_pipe_add(RedChannelClient *rcc, PipeItem *item)
 {
-    ASSERT(rcc && item);
+    spice_assert(rcc && item);
     rcc->pipe_size++;
     ring_add(&rcc->pipe, &item->link);
 }
@@ -1074,9 +1074,9 @@ void red_channel_client_pipe_add_push(RedChannelClient *rcc, PipeItem *item)
 void red_channel_client_pipe_add_after(RedChannelClient *rcc,
                                        PipeItem *item, PipeItem *pos)
 {
-    ASSERT(rcc);
-    ASSERT(pos);
-    ASSERT(item);
+    spice_assert(rcc);
+    spice_assert(pos);
+    spice_assert(item);
 
     rcc->pipe_size++;
     ring_add_after(&item->link, &pos->link);
@@ -1091,14 +1091,14 @@ int red_channel_client_pipe_item_is_linked(RedChannelClient *rcc,
 void red_channel_client_pipe_add_tail_no_push(RedChannelClient *rcc,
                                               PipeItem *item)
 {
-    ASSERT(rcc);
+    spice_assert(rcc);
     rcc->pipe_size++;
     ring_add_before(&item->link, &rcc->pipe);
 }
 
 void red_channel_client_pipe_add_tail(RedChannelClient *rcc, PipeItem *item)
 {
-    ASSERT(rcc);
+    spice_assert(rcc);
     rcc->pipe_size++;
     ring_add_before(&item->link, &rcc->pipe);
     red_channel_client_push(rcc);
@@ -1170,9 +1170,9 @@ void red_channel_client_ack_set_client_window(RedChannelClient *rcc, int client_
 
 static void red_channel_remove_client(RedChannelClient *rcc)
 {
-    ASSERT(pthread_equal(pthread_self(), rcc->channel->thread_id));
+    spice_assert(pthread_equal(pthread_self(), rcc->channel->thread_id));
     ring_remove(&rcc->channel_link);
-    ASSERT(rcc->channel->clients_num > 0);
+    spice_assert(rcc->channel->clients_num > 0);
     rcc->channel->clients_num--;
     // TODO: should we set rcc->channel to NULL???
 }
@@ -1187,7 +1187,7 @@ static void red_client_remove_channel(RedChannelClient *rcc)
 
 void red_channel_client_disconnect(RedChannelClient *rcc)
 {
-    red_printf("%p (channel %p type %d id %d)", rcc, rcc->channel,
+    spice_printerr("%p (channel %p type %d id %d)", rcc, rcc->channel,
                                                 rcc->channel->type, rcc->channel->id);
     if (!red_channel_client_is_connected(rcc)) {
         return;
@@ -1222,7 +1222,7 @@ RedChannelClient *red_channel_client_create_dummy(int size,
 {
     RedChannelClient *rcc;
 
-    ASSERT(size >= sizeof(RedChannelClient));
+    spice_assert(size >= sizeof(RedChannelClient));
     rcc = spice_malloc0(size);
     rcc->client = client;
     rcc->channel = channel;
@@ -1416,8 +1416,8 @@ void red_client_migrate(RedClient *client)
     RingItem *link, *next;
     RedChannelClient *rcc;
 
-    red_printf("migrate client with #channels %d", client->channels_num);
-    ASSERT(pthread_equal(pthread_self(), client->thread_id));
+    spice_printerr("migrate client with #channels %d", client->channels_num);
+    spice_assert(pthread_equal(pthread_self(), client->thread_id));
     RING_FOREACH_SAFE(link, next, &client->channels) {
         rcc = SPICE_CONTAINEROF(link, RedChannelClient, client_link);
         if (red_channel_client_is_connected(rcc)) {
@@ -1431,8 +1431,8 @@ void red_client_destroy(RedClient *client)
     RingItem *link, *next;
     RedChannelClient *rcc;
 
-    red_printf("destroy client with #channels %d", client->channels_num);
-    ASSERT(pthread_equal(pthread_self(), client->thread_id));
+    spice_printerr("destroy client with #channels %d", client->channels_num);
+    spice_assert(pthread_equal(pthread_self(), client->thread_id));
     RING_FOREACH_SAFE(link, next, &client->channels) {
         // some channels may be in other threads, so disconnection
         // is not synchronous.
@@ -1444,9 +1444,9 @@ void red_client_destroy(RedClient *client)
         // TODO: should we go back to async. For this we need to use
         // ref count for channel clients.
         rcc->channel->client_cbs.disconnect(rcc);
-        ASSERT(ring_is_empty(&rcc->pipe));
-        ASSERT(rcc->pipe_size == 0);
-        ASSERT(rcc->send_data.size == 0);
+        spice_assert(ring_is_empty(&rcc->pipe));
+        spice_assert(rcc->pipe_size == 0);
+        spice_assert(rcc->send_data.size == 0);
         red_channel_client_destroy(rcc);
     }
 
@@ -1456,7 +1456,7 @@ void red_client_destroy(RedClient *client)
 
 static void red_client_add_channel(RedClient *client, RedChannelClient *rcc)
 {
-    ASSERT(rcc && client);
+    spice_assert(rcc && client);
     pthread_mutex_lock(&client->lock);
     ring_add(&client->channels, &rcc->client_link);
     client->channels_num++;
@@ -1473,7 +1473,7 @@ void red_client_set_main(RedClient *client, MainChannelClient *mcc) {
 
 void red_client_migrate_complete(RedClient *client)
 {
-    ASSERT(client->migrated);
+    spice_assert(client->migrated);
     client->migrated = FALSE;
     reds_on_client_migrate_complete(client);
 }

@@ -131,7 +131,7 @@ static inline void send_data(int fd, void *in_buf, int n)
             if (errno == EINTR) {
                 continue;
             }
-            red_error("%s", strerror(errno));
+            spice_error("%s", strerror(errno));
         }
         buf += now;
         n -= now;
@@ -152,7 +152,7 @@ static inline void receive_data(int fd, void *in_buf, int n)
             if (errno == EINTR) {
                 continue;
             }
-            red_error("%s", strerror(errno));
+            spice_error("%s", strerror(errno));
         }
         buf += now;
         n -= now;

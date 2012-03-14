@@ -208,7 +208,7 @@ static SndChannel *snd_channel_put(SndChannel *channel)
     if (!--channel->refs) {
         channel->worker->connection = NULL;
         free(channel);
-        red_printf("sound channel freed");
+        spice_printerr("sound channel freed");
         return NULL;
     }
     return channel;
@@ -295,7 +295,7 @@ static int snd_send_data(SndChannel *channel)
                 snd_disconnect_channel(channel);
                 return FALSE;
             default:
-                red_printf("%s", strerror(errno));
+                spice_printerr("%s", strerror(errno));
                 snd_disconnect_channel(channel);
                 return FALSE;
             }
@@ -326,7 +326,7 @@ static int snd_record_handle_write(RecordChannel *record_channel, size_t size, v
         int celt_err = celt051_decode(record_channel->celt_decoder, packet->data, size,
                                       (celt_int16_t *)record_channel->celt_buf);
         if (celt_err != CELT_OK) {
-            red_printf("celt decode failed (%d)", celt_err);
+            spice_printerr("celt decode failed (%d)", celt_err);
             return FALSE;
         }
         data = record_channel->celt_buf;
@@ -366,7 +366,7 @@ static int snd_playback_handle_message(SndChannel *channel, size_t size, uint32_
     case SPICE_MSGC_DISCONNECTING:
         break;
     default:
-        red_printf("invalid message type %u", type);
+        spice_printerr("invalid message type %u", type);
         return FALSE;
     }
     return TRUE;
@@ -388,7 +388,7 @@ static int snd_record_handle_message(SndChannel *channel, size_t size, uint32_t 
         record_channel->mode_time = mode->time;
         if (record_channel->mode != SPICE_AUDIO_DATA_MODE_CELT_0_5_1 &&
                                                   record_channel->mode != SPICE_AUDIO_DATA_MODE_RAW) {
-            red_printf("unsupported mode");
+            spice_printerr("unsupported mode");
         }
         break;
     }
@@ -402,7 +402,7 @@ static int snd_record_handle_message(SndChannel *channel, size_t size, uint32_t 
     case SPICE_MSGC_MIGRATE_DATA: {
         RecordMigrateData* mig_data = (RecordMigrateData *)message;
         if (mig_data->version != RECORD_MIG_VERSION) {
-            red_printf("invalid mig version");
+            spice_printerr("invalid mig version");
             break;
         }
         record_channel->mode = mig_data->mode;
@@ -411,7 +411,7 @@ static int snd_record_handle_message(SndChannel *channel, size_t size, uint32_t 
         break;
     }
     default:
-        red_printf("invalid message type %u", type);
+        spice_printerr("invalid message type %u", type);
         return FALSE;
     }
     return TRUE;
@@ -431,14 +431,14 @@ static void snd_receive(void* data)
     for (;;) {
         ssize_t n;
         n = channel->recive_data.end - channel->recive_data.now;
-        ASSERT(n);
+        spice_assert(n);
         n = reds_stream_read(channel->stream, channel->recive_data.now, n);
         if (n <= 0) {
             if (n == 0) {
                 snd_disconnect_channel(channel);
                 return;
             }
-            ASSERT(n == -1);
+            spice_assert(n == -1);
             switch (errno) {
             case EAGAIN:
                 return;
@@ -448,7 +448,7 @@ static void snd_receive(void* data)
                 snd_disconnect_channel(channel);
                 return;
             default:
-                red_printf("%s", strerror(errno));
+                spice_printerr("%s", strerror(errno));
                 snd_disconnect_channel(channel);
                 return;
             }
@@ -472,7 +472,7 @@ static void snd_receive(void* data)
                                          header->get_msg_type(header),
                                          SPICE_VERSION_MINOR, &parsed_size, &parsed_free);
                 if (parsed == NULL) {
-                    red_printf("failed to parse message type %d", header->get_msg_type(header));
+                    spice_printerr("failed to parse message type %d", header->get_msg_type(header));
                     snd_disconnect_channel(channel);
                     return;
                 }
@@ -629,7 +629,7 @@ static int snd_playback_send_start(PlaybackChannel *playback_channel)
 
     start.channels = SPICE_INTERFACE_PLAYBACK_CHAN;
     start.frequency = SPICE_INTERFACE_PLAYBACK_FREQ;
-    ASSERT(SPICE_INTERFACE_PLAYBACK_FMT == SPICE_INTERFACE_AUDIO_FMT_S16);
+    spice_assert(SPICE_INTERFACE_PLAYBACK_FMT == SPICE_INTERFACE_AUDIO_FMT_S16);
     start.format = SPICE_AUDIO_FMT_S16;
     start.time = reds_get_mm_time();
     spice_marshall_msg_playback_start(channel->send_data.marshaller, &start);
@@ -670,7 +670,7 @@ static int snd_record_send_start(RecordChannel *record_channel)
 
     start.channels = SPICE_INTERFACE_RECORD_CHAN;
     start.frequency = SPICE_INTERFACE_RECORD_FREQ;
-    ASSERT(SPICE_INTERFACE_RECORD_FMT == SPICE_INTERFACE_AUDIO_FMT_S16);
+    spice_assert(SPICE_INTERFACE_RECORD_FMT == SPICE_INTERFACE_AUDIO_FMT_S16);
     start.format = SPICE_AUDIO_FMT_S16;
     spice_marshall_msg_record_start(channel->send_data.marshaller, &start);
 
@@ -783,7 +783,7 @@ static int snd_playback_send_write(PlaybackChannel *playback_channel)
         int n = celt051_encode(playback_channel->celt_encoder, (celt_int16_t *)frame->samples, NULL,
                                playback_channel->send_data.celt_buf, CELT_COMPRESSED_FRAME_BYTES);
         if (n < 0) {
-            red_printf("celt encode failed");
+            spice_printerr("celt encode failed");
             snd_disconnect_channel(channel);
             return FALSE;
         }
@@ -829,12 +829,12 @@ static void snd_playback_send(void* data)
             channel->command &= ~SND_PLAYBACK_MODE_MASK;
         }
         if (channel->command & SND_PLAYBACK_PCM_MASK) {
-            ASSERT(!playback_channel->in_progress && playback_channel->pending_frame);
+            spice_assert(!playback_channel->in_progress && playback_channel->pending_frame);
             playback_channel->in_progress = playback_channel->pending_frame;
             playback_channel->pending_frame = NULL;
             channel->command &= ~SND_PLAYBACK_PCM_MASK;
             if (!snd_playback_send_write(playback_channel)) {
-                red_printf("snd_send_playback_write failed");
+                spice_printerr("snd_send_playback_write failed");
                 return;
             }
         }
@@ -913,7 +913,7 @@ static SndChannel *__new_channel(SndWorker *worker, int size, uint32_t channel_i
     MainChannelClient *mcc = red_client_get_main(client);
 
     if ((flags = fcntl(stream->socket, F_GETFL)) == -1) {
-        red_printf("accept failed, %s", strerror(errno));
+        spice_printerr("accept failed, %s", strerror(errno));
         goto error1;
     }
 
@@ -922,7 +922,7 @@ static SndChannel *__new_channel(SndWorker *worker, int size, uint32_t channel_i
     if (setsockopt(stream->socket, SOL_SOCKET, SO_PRIORITY, (void*)&priority,
                    sizeof(priority)) == -1) {
         if (errno != ENOTSUP) {
-            red_printf("setsockopt failed, %s", strerror(errno));
+            spice_printerr("setsockopt failed, %s", strerror(errno));
         }
     }
 #endif
@@ -930,23 +930,23 @@ static SndChannel *__new_channel(SndWorker *worker, int size, uint32_t channel_i
     tos = IPTOS_LOWDELAY;
     if (setsockopt(stream->socket, IPPROTO_IP, IP_TOS, (void*)&tos, sizeof(tos)) == -1) {
         if (errno != ENOTSUP) {
-            red_printf("setsockopt failed, %s", strerror(errno));
+            spice_printerr("setsockopt failed, %s", strerror(errno));
         }
     }
 
     delay_val = main_channel_client_is_low_bandwidth(mcc) ? 0 : 1;
     if (setsockopt(stream->socket, IPPROTO_TCP, TCP_NODELAY, &delay_val, sizeof(delay_val)) == -1) {
         if (errno != ENOTSUP) {
-            red_printf("setsockopt failed, %s", strerror(errno));
+            spice_printerr("setsockopt failed, %s", strerror(errno));
         }
     }
 
     if (fcntl(stream->socket, F_SETFL, flags | O_NONBLOCK) == -1) {
-        red_printf("accept failed, %s", strerror(errno));
+        spice_printerr("accept failed, %s", strerror(errno));
         goto error1;
     }
 
-    ASSERT(size >= sizeof(*channel));
+    spice_assert(size >= sizeof(*channel));
     channel = spice_malloc0(size);
     channel->refs = 1;
     channel->parser = spice_get_client_channel_parser(channel_id, NULL);
@@ -960,7 +960,7 @@ static SndChannel *__new_channel(SndWorker *worker, int size, uint32_t channel_i
     stream->watch = core->watch_add(stream->socket, SPICE_WATCH_EVENT_READ,
                                   snd_event, channel);
     if (stream->watch == NULL) {
-        red_printf("watch_add failed, %s", strerror(errno));
+        spice_printerr("watch_add failed, %s", strerror(errno));
         goto error2;
     }
 
@@ -989,13 +989,13 @@ static void snd_disconnect_channel_client(RedChannelClient *rcc)
 {
     SndWorker *worker;
 
-    ASSERT(rcc->channel);
-    ASSERT(rcc->channel->data);
+    spice_assert(rcc->channel);
+    spice_assert(rcc->channel->data);
     worker = (SndWorker *)rcc->channel->data;
 
-    ASSERT(worker->connection->channel_client == rcc);
+    spice_assert(worker->connection->channel_client == rcc);
     snd_disconnect_channel(worker->connection);
-    ASSERT(worker->connection == NULL);
+    spice_assert(worker->connection == NULL);
 }
 
 static void snd_set_command(SndChannel *channel, uint32_t command)
@@ -1046,7 +1046,7 @@ SPICE_GNUC_VISIBLE void spice_server_playback_start(SpicePlaybackInstance *sin)
     sin->st->worker.active = 1;
     if (!channel)
         return;
-    ASSERT(!playback_channel->base.active);
+    spice_assert(!playback_channel->base.active);
     reds_disable_mm_timer();
     playback_channel->base.active = TRUE;
     if (!playback_channel->base.client_active) {
@@ -1065,7 +1065,7 @@ SPICE_GNUC_VISIBLE void spice_server_playback_stop(SpicePlaybackInstance *sin)
     sin->st->worker.active = 0;
     if (!channel)
         return;
-    ASSERT(playback_channel->base.active);
+    spice_assert(playback_channel->base.active);
     reds_enable_mm_timer();
     playback_channel->base.active = FALSE;
     if (playback_channel->base.client_active) {
@@ -1076,7 +1076,7 @@ SPICE_GNUC_VISIBLE void spice_server_playback_stop(SpicePlaybackInstance *sin)
         playback_channel->base.command &= ~SND_PLAYBACK_PCM_MASK;
 
         if (playback_channel->pending_frame) {
-            ASSERT(!playback_channel->in_progress);
+            spice_assert(!playback_channel->in_progress);
             snd_playback_free_frame(playback_channel,
                                     playback_channel->pending_frame);
             playback_channel->pending_frame = NULL;
@@ -1095,7 +1095,7 @@ SPICE_GNUC_VISIBLE void spice_server_playback_get_buffer(SpicePlaybackInstance *
         *num_samples = 0;
         return;
     }
-    ASSERT(playback_channel->base.active);
+    spice_assert(playback_channel->base.active);
     snd_channel_get(channel);
 
     *frame = playback_channel->free_frames->samples;
@@ -1116,7 +1116,7 @@ SPICE_GNUC_VISIBLE void spice_server_playback_put_samples(SpicePlaybackInstance 
         /* lost last reference, channel has been destroyed previously */
         return;
     }
-    ASSERT(playback_channel->base.active);
+    spice_assert(playback_channel->base.active);
 
     if (playback_channel->pending_frame) {
         snd_playback_free_frame(playback_channel, playback_channel->pending_frame);
@@ -1134,7 +1134,7 @@ static void on_new_playback_channel(SndWorker *worker)
     PlaybackChannel *playback_channel =
         SPICE_CONTAINEROF(worker->connection, PlaybackChannel, base);
 
-    ASSERT(playback_channel);
+    spice_assert(playback_channel);
 
     snd_set_command((SndChannel *)playback_channel, SND_PLAYBACK_MODE_MASK);
     if (!playback_channel->base.migrate && playback_channel->base.active) {
@@ -1175,12 +1175,12 @@ static void snd_set_playback_peer(RedChannel *channel, RedClient *client, RedsSt
     if (!(celt_mode = celt051_mode_create(SPICE_INTERFACE_PLAYBACK_FREQ,
                                           SPICE_INTERFACE_PLAYBACK_CHAN,
                                           FRAME_SIZE, &celt_error))) {
-        red_printf("create celt mode failed %d", celt_error);
+        spice_printerr("create celt mode failed %d", celt_error);
         return;
     }
 
     if (!(celt_encoder = celt051_encoder_create(celt_mode))) {
-        red_printf("create celt encoder failed");
+        spice_printerr("create celt encoder failed");
         goto error_1;
     }
 
@@ -1228,12 +1228,12 @@ static void snd_record_migrate_channel_client(RedChannelClient *rcc)
 {
     SndWorker *worker;
 
-    ASSERT(rcc->channel);
-    ASSERT(rcc->channel->data);
+    spice_assert(rcc->channel);
+    spice_assert(rcc->channel->data);
     worker = (SndWorker *)rcc->channel->data;
 
     if (worker->connection) {
-        ASSERT(worker->connection->channel_client == rcc);
+        spice_assert(worker->connection->channel_client == rcc);
         snd_set_command(worker->connection, SND_RECORD_MIGRATE_MASK);
         snd_record_send(worker->connection);
     }
@@ -1279,7 +1279,7 @@ SPICE_GNUC_VISIBLE void spice_server_record_start(SpiceRecordInstance *sin)
     sin->st->worker.active = 1;
     if (!channel)
         return;
-    ASSERT(!record_channel->base.active);
+    spice_assert(!record_channel->base.active);
     record_channel->base.active = TRUE;
     record_channel->read_pos = record_channel->write_pos = 0;   //todo: improve by
                                                                 //stream generation
@@ -1299,7 +1299,7 @@ SPICE_GNUC_VISIBLE void spice_server_record_stop(SpiceRecordInstance *sin)
     sin->st->worker.active = 0;
     if (!channel)
         return;
-    ASSERT(record_channel->base.active);
+    spice_assert(record_channel->base.active);
     record_channel->base.active = FALSE;
     if (record_channel->base.client_active) {
         snd_set_command(&record_channel->base, SND_RECORD_CTRL_MASK);
@@ -1320,7 +1320,7 @@ SPICE_GNUC_VISIBLE uint32_t spice_server_record_get_samples(SpiceRecordInstance 
 
     if (!channel)
         return 0;
-    ASSERT(record_channel->base.active);
+    spice_assert(record_channel->base.active);
 
     if (record_channel->write_pos < RECORD_SAMPLES_SIZE / 2) {
         return 0;
@@ -1350,7 +1350,7 @@ SPICE_GNUC_VISIBLE uint32_t spice_server_record_get_samples(SpiceRecordInstance 
 static void on_new_record_channel(SndWorker *worker)
 {
     RecordChannel *record_channel = (RecordChannel *)worker->connection;
-    ASSERT(record_channel);
+    spice_assert(record_channel);
 
     snd_set_command((SndChannel *)record_channel, SND_RECORD_VOLUME_MASK);
     if (!record_channel->base.migrate) {
@@ -1384,12 +1384,12 @@ static void snd_set_record_peer(RedChannel *channel, RedClient *client, RedsStre
     if (!(celt_mode = celt051_mode_create(SPICE_INTERFACE_RECORD_FREQ,
                                           SPICE_INTERFACE_RECORD_CHAN,
                                           FRAME_SIZE, &celt_error))) {
-        red_printf("create celt mode failed %d", celt_error);
+        spice_printerr("create celt mode failed %d", celt_error);
         return;
     }
 
     if (!(celt_decoder = celt051_decoder_create(celt_mode))) {
-        red_printf("create celt decoder failed");
+        spice_printerr("create celt decoder failed");
         goto error_1;
     }
 
@@ -1431,12 +1431,12 @@ static void snd_playback_migrate_channel_client(RedChannelClient *rcc)
 {
     SndWorker *worker;
 
-    ASSERT(rcc->channel);
-    ASSERT(rcc->channel->data);
+    spice_assert(rcc->channel);
+    spice_assert(rcc->channel->data);
     worker = (SndWorker *)rcc->channel->data;
 
     if (worker->connection) {
-        ASSERT(worker->connection->channel_client == rcc);
+        spice_assert(worker->connection->channel_client == rcc);
         snd_set_command(worker->connection, SND_PLAYBACK_MIGRATE_MASK);
         snd_playback_send(worker->connection);
     }
@@ -1458,7 +1458,7 @@ static void remove_worker(SndWorker *worker)
         }
         now = &(*now)->next;
     }
-    red_printf("not found");
+    spice_printerr("not found");
 }
 
 void snd_attach_playback(SpicePlaybackInstance *sin)
@@ -1561,7 +1561,7 @@ void snd_set_playback_compression(int on)
             PlaybackChannel* playback = (PlaybackChannel*)now->connection;
             if (!red_channel_client_test_remote_cap(sndchannel->channel_client,
                                                     SPICE_PLAYBACK_CAP_CELT_0_5_1)) {
-                ASSERT(playback->mode == SPICE_AUDIO_DATA_MODE_RAW);
+                spice_assert(playback->mode == SPICE_AUDIO_DATA_MODE_RAW);
                 continue;
             }
             if (playback->mode != playback_compression) {

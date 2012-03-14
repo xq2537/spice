@@ -66,7 +66,7 @@ static uint8_t *red_linearize_chunk(RedDataChunk *head, size_t size, bool *free_
     uint32_t copy;
 
     if (head->next_chunk == NULL) {
-        ASSERT(size <= head->data_size);
+        spice_assert(size <= head->data_size);
         *free_chunk = false;
         return head->data;
     }
@@ -79,7 +79,7 @@ static uint8_t *red_linearize_chunk(RedDataChunk *head, size_t size, bool *free_
         ptr += copy;
         size -= copy;
     }
-    ASSERT(size == 0);
+    spice_assert(size == 0);
     return data;
 }
 
@@ -205,15 +205,15 @@ static SpicePath *red_get_path(RedMemSlotInfo *slots, int group_id,
 
         /* Protect against overflow in size calculations before
            writing to memory */
-        ASSERT(mem_size2 + sizeof(SpicePathSeg) > mem_size2);
+        spice_assert(mem_size2 + sizeof(SpicePathSeg) > mem_size2);
         mem_size2  += sizeof(SpicePathSeg);
-        ASSERT(count < UINT32_MAX / sizeof(SpicePointFix));
+        spice_assert(count < UINT32_MAX / sizeof(SpicePointFix));
         dsize = count * sizeof(SpicePointFix);
-        ASSERT(mem_size2 + dsize > mem_size2);
+        spice_assert(mem_size2 + dsize > mem_size2);
         mem_size2  += dsize;
 
         /* Verify that we didn't overflow due to guest changing data */
-        ASSERT(mem_size2 <= mem_size);
+        spice_assert(mem_size2 <= mem_size);
 
         seg->flags = start->flags;
         seg->count = count;
@@ -225,7 +225,7 @@ static SpicePath *red_get_path(RedMemSlotInfo *slots, int group_id,
         seg = (SpicePathSeg*)(&seg->points[i]);
     }
     /* Ensure guest didn't tamper with segment count */
-    ASSERT(n_segments == red->num_segments);
+    spice_assert(n_segments == red->num_segments);
 
     if (free_data) {
         free(data);
@@ -252,7 +252,7 @@ static SpiceClipRects *red_get_clip_rects(RedMemSlotInfo *slots, int group_id,
     data = red_linearize_chunk(&chunks, size, &free_data);
     red_put_data_chunks(&chunks);
 
-    ASSERT(qxl->num_rects * sizeof(QXLRect) == size);
+    spice_assert(qxl->num_rects * sizeof(QXLRect) == size);
     red = spice_malloc(sizeof(*red) + qxl->num_rects * sizeof(SpiceRect));
     red->num_rects = qxl->num_rects;
 
@@ -299,7 +299,7 @@ static SpiceChunks *red_get_image_data_chunked(RedMemSlotInfo *slots, int group_
         data->chunk[i].len   = chunk->data_size;
         data->data_size     += chunk->data_size;
     }
-    ASSERT(i == data->num_chunks);
+    spice_assert(i == data->num_chunks);
     return data;
 }
 
@@ -373,7 +373,7 @@ static SpiceImage *red_get_image(RedMemSlotInfo *slots, int group_id,
         } else {
             size = red_get_data_chunks(slots, group_id,
                                        &chunks, qxl->bitmap.data);
-            ASSERT(size == bitmap_size);
+            spice_assert(size == bitmap_size);
             red->u.bitmap.data = red_get_image_data_chunked(slots, group_id,
                                                             &chunks);
             red_put_data_chunks(&chunks);
@@ -390,14 +390,13 @@ static SpiceImage *red_get_image(RedMemSlotInfo *slots, int group_id,
         size = red_get_data_chunks_ptr(slots, group_id,
                                        get_memslot_id(slots, addr),
                                        &chunks, (QXLDataChunk *)qxl->quic.data);
-        ASSERT(size == red->u.quic.data_size);
+        spice_assert(size == red->u.quic.data_size);
         red->u.quic.data = red_get_image_data_chunked(slots, group_id,
                                                       &chunks);
         red_put_data_chunks(&chunks);
         break;
     default:
-        red_error("%s: unknown type %d", __FUNCTION__, red->descriptor.type);
-        abort();
+        spice_error("unknown type %d", red->descriptor.type);
     }
     return red;
 }
@@ -593,7 +592,7 @@ static void red_get_stroke_ptr(RedMemSlotInfo *slots, int group_id,
         style_nseg = qxl->attr.style_nseg;
         red->attr.style = spice_malloc_n(style_nseg, sizeof(SPICE_FIXED28_4));
         red->attr.style_nseg  = style_nseg;
-        ASSERT(qxl->attr.style);
+        spice_assert(qxl->attr.style);
         buf = (uint8_t *)get_virt(slots, qxl->attr.style,
                                   style_nseg * sizeof(QXLFIXED), group_id);
         memcpy(red->attr.style, buf, style_nseg * sizeof(QXLFIXED));
@@ -636,7 +635,7 @@ static SpiceString *red_get_string(RedMemSlotInfo *slots, int group_id,
     red_put_data_chunks(&chunks);
 
     qxl_size = qxl->data_size;
-    ASSERT(chunk_size == qxl_size);
+    spice_assert(chunk_size == qxl_size);
 
     if (qxl->flags & SPICE_STRING_FLAGS_RASTER_A1) {
         bpp = 1;
@@ -645,21 +644,21 @@ static SpiceString *red_get_string(RedMemSlotInfo *slots, int group_id,
     } else if (qxl->flags & SPICE_STRING_FLAGS_RASTER_A8) {
         bpp = 8;
     }
-    ASSERT(bpp != 0);
+    spice_assert(bpp != 0);
 
     start = (QXLRasterGlyph*)data;
     end = (QXLRasterGlyph*)(data + chunk_size);
     red_size = sizeof(SpiceString);
     glyphs = 0;
     while (start < end) {
-        ASSERT((QXLRasterGlyph*)(&start->data[0]) <= end);
+        spice_assert((QXLRasterGlyph*)(&start->data[0]) <= end);
         glyphs++;
         glyph_size = start->height * ((start->width * bpp + 7) / 8);
         red_size += sizeof(SpiceRasterGlyph *) + SPICE_ALIGN(sizeof(SpiceRasterGlyph) + glyph_size, 4);
         start = (QXLRasterGlyph*)(&start->data[glyph_size]);
     }
-    ASSERT(start <= end);
-    ASSERT(glyphs == qxl->length);
+    spice_assert(start <= end);
+    spice_assert(glyphs == qxl->length);
 
     red = spice_malloc(red_size);
     red->length = qxl->length;
@@ -669,14 +668,14 @@ static SpiceString *red_get_string(RedMemSlotInfo *slots, int group_id,
     end = (QXLRasterGlyph*)(data + chunk_size);
     glyph = (SpiceRasterGlyph *)&red->glyphs[red->length];
     for (i = 0; i < red->length; i++) {
-        ASSERT((QXLRasterGlyph*)(&start->data[0]) <= end);
+        spice_assert((QXLRasterGlyph*)(&start->data[0]) <= end);
         red->glyphs[i] = glyph;
         glyph->width = start->width;
         glyph->height = start->height;
         red_get_point_ptr(&glyph->render_pos, &start->render_pos);
         red_get_point_ptr(&glyph->glyph_origin, &start->glyph_origin);
         glyph_size = glyph->height * ((glyph->width * bpp + 7) / 8);
-        ASSERT((QXLRasterGlyph*)(&start->data[glyph_size]) <= end);
+        spice_assert((QXLRasterGlyph*)(&start->data[glyph_size]) <= end);
         memcpy(glyph->data, start->data, glyph_size);
         start = (QXLRasterGlyph*)(&start->data[glyph_size]);
         glyph = (SpiceRasterGlyph*)
@@ -831,7 +830,7 @@ static void red_get_native_drawable(RedMemSlotInfo *slots, int group_id,
                               &red->u.whiteness, &qxl->u.whiteness, flags);
         break;
     default:
-        red_error("%s: unknown type %d", __FUNCTION__, red->type);
+        spice_error("unknown type %d", red->type);
         break;
     };
 }
@@ -911,7 +910,7 @@ static void red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
                               &red->u.whiteness, &qxl->u.whiteness, flags);
         break;
     default:
-        red_error("%s: unknown type %d", __FUNCTION__, red->type);
+        spice_error("unknown type %d", red->type);
         break;
     };
 }

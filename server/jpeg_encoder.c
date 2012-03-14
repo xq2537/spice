@@ -49,7 +49,7 @@ static void dest_mgr_init_destination(j_compress_ptr cinfo)
                                                             &enc->dest_mgr.next_output_byte);
 
         if (enc->dest_mgr.free_in_buffer == 0) {
-            red_error("not enough space");
+            spice_error("not enough space");
         }
     }
 
@@ -63,7 +63,7 @@ static boolean dest_mgr_empty_output_buffer(j_compress_ptr cinfo)
                                                         &enc->dest_mgr.next_output_byte);
 
     if (enc->dest_mgr.free_in_buffer == 0) {
-        red_error("not enough space");
+        spice_error("not enough space");
     }
     enc->cur_image.out_size += enc->dest_mgr.free_in_buffer;
     return TRUE;
@@ -110,7 +110,7 @@ static void convert_RGB16_to_RGB24(uint8_t *line, int width, uint8_t **out_line)
     uint8_t *out_pix;
     int x;
 
-    ASSERT(out_line && *out_line);
+    spice_assert(out_line && *out_line);
 
     out_pix = *out_line;
 
@@ -127,7 +127,7 @@ static void convert_BGR24_to_RGB24(uint8_t *line, int width, uint8_t **out_line)
     int x;
     uint8_t *out_pix;
 
-    ASSERT(out_line && *out_line);
+    spice_assert(out_line && *out_line);
 
     out_pix = *out_line;
 
@@ -145,7 +145,7 @@ static void convert_BGRX32_to_RGB24(uint8_t *line, int width, uint8_t **out_line
     uint8_t *out_pix;
     int x;
 
-    ASSERT(out_line && *out_line);
+    spice_assert(out_line && *out_line);
 
     out_pix = *out_line;
 
@@ -167,7 +167,7 @@ static void convert_RGB24_to_RGB24(uint8_t *line, int width, uint8_t **out_line)
     if (lines == lines_end) {                                           \
         int n = jpeg->usr->more_lines(jpeg->usr, &lines);               \
         if (n <= 0) {                                                   \
-            red_error("more lines failed\n");                           \
+            spice_error("more lines failed");                           \
         }                                                               \
         lines_end = lines + n * stride;                                 \
     }                                                                   \
@@ -226,7 +226,7 @@ int jpeg_encode(JpegEncoderContext *jpeg, int quality, JpegEncoderImageType type
         enc->cur_image.convert_line_to_RGB24 = convert_BGRX32_to_RGB24;
         break;
     default:
-        red_error("bad image type");
+        spice_error("bad image type");
     }
 
     enc->cinfo.image_width = width;

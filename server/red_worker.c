@@ -19,6 +19,8 @@
 #include <config.h>
 #endif
 
+#define SPICE_LOG_DOMAIN "SpiceWorker"
+
 /* Common variable abberiviations:
  *
  * rcc - RedChannelClient
@@ -1113,46 +1115,46 @@ static void print_compress_stats(DisplayChannel *display_channel)
                        display_channel->zlib_glz_stat.comp_size :
                        display_channel->glz_stat.comp_size;
 
-    red_printf("==> Compression stats for display %u", display_channel->common.id);
-    red_printf("Method   \t  count  \torig_size(MB)\tenc_size(MB)\tenc_time(s)");
-    red_printf("QUIC     \t%8d\t%13.2f\t%12.2f\t%12.2f",
+    spice_printerr("==> Compression stats for display %u", display_channel->common.id);
+    spice_printerr("Method   \t  count  \torig_size(MB)\tenc_size(MB)\tenc_time(s)");
+    spice_printerr("QUIC     \t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->quic_stat.count,
                stat_byte_to_mega(display_channel->quic_stat.orig_size),
                stat_byte_to_mega(display_channel->quic_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->quic_stat.total)
                );
-    red_printf("GLZ      \t%8d\t%13.2f\t%12.2f\t%12.2f",
+    spice_printerr("GLZ      \t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->glz_stat.count,
                stat_byte_to_mega(display_channel->glz_stat.orig_size),
                stat_byte_to_mega(display_channel->glz_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->glz_stat.total)
                );
-    red_printf("ZLIB GLZ \t%8d\t%13.2f\t%12.2f\t%12.2f",
+    spice_printerr("ZLIB GLZ \t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->zlib_glz_stat.count,
                stat_byte_to_mega(display_channel->zlib_glz_stat.orig_size),
                stat_byte_to_mega(display_channel->zlib_glz_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->zlib_glz_stat.total)
                );
-    red_printf("LZ       \t%8d\t%13.2f\t%12.2f\t%12.2f",
+    spice_printerr("LZ       \t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->lz_stat.count,
                stat_byte_to_mega(display_channel->lz_stat.orig_size),
                stat_byte_to_mega(display_channel->lz_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->lz_stat.total)
                );
-    red_printf("JPEG     \t%8d\t%13.2f\t%12.2f\t%12.2f",
+    spice_printerr("JPEG     \t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->jpeg_stat.count,
                stat_byte_to_mega(display_channel->jpeg_stat.orig_size),
                stat_byte_to_mega(display_channel->jpeg_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->jpeg_stat.total)
                );
-    red_printf("JPEG-RGBA\t%8d\t%13.2f\t%12.2f\t%12.2f",
+    spice_printerr("JPEG-RGBA\t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->jpeg_alpha_stat.count,
                stat_byte_to_mega(display_channel->jpeg_alpha_stat.orig_size),
                stat_byte_to_mega(display_channel->jpeg_alpha_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->jpeg_alpha_stat.total)
                );
-    red_printf("-------------------------------------------------------------------");
-    red_printf("Total    \t%8d\t%13.2f\t%12.2f\t%12.2f",
+    spice_printerr("-------------------------------------------------------------------");
+    spice_printerr("Total    \t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->lz_stat.count + display_channel->glz_stat.count +
                                                 display_channel->quic_stat.count +
                                                 display_channel->jpeg_stat.count +
@@ -1188,15 +1190,15 @@ static inline int is_primary_surface(RedWorker *worker, uint32_t surface_id)
 
 static inline void __validate_surface(RedWorker *worker, uint32_t surface_id)
 {
-    PANIC_ON(surface_id >= worker->n_surfaces);
+    spice_warn_if(surface_id >= worker->n_surfaces);
 }
 
 static inline void validate_surface(RedWorker *worker, uint32_t surface_id)
 {
-    PANIC_ON(surface_id >= worker->n_surfaces);
+    spice_warn_if(surface_id >= worker->n_surfaces);
     if (!worker->surfaces[surface_id].context.canvas) {
-        red_printf("failed on %d", surface_id);
-        PANIC_ON(!worker->surfaces[surface_id].context.canvas);
+        spice_printerr("failed on %d", surface_id);
+        spice_warn_if(!worker->surfaces[surface_id].context.canvas);
     }
 }
 
@@ -1264,7 +1266,7 @@ static void show_red_drawable(RedWorker *worker, RedDrawable *drawable, const ch
     case QXL_DRAW_TEXT:
         break;
     default:
-        red_error("bad drawable type");
+        spice_error("bad drawable type");
     }
     printf("\n");
 }
@@ -1363,8 +1365,8 @@ static void put_drawable_pipe_item(DrawablePipeItem *dpi)
         return;
     }
 
-    ASSERT(!ring_item_is_linked(&dpi->dpi_pipe_item.link));
-    ASSERT(!ring_item_is_linked(&dpi->base));
+    spice_assert(!ring_item_is_linked(&dpi->dpi_pipe_item.link));
+    spice_assert(!ring_item_is_linked(&dpi->base));
     release_drawable(worker, dpi->drawable);
     free(dpi);
 }
@@ -1387,7 +1389,7 @@ static inline DrawablePipeItem *get_drawable_pipe_item(DisplayChannelClient *dcc
 
 static inline DrawablePipeItem *ref_drawable_pipe_item(DrawablePipeItem *dpi)
 {
-    ASSERT(dpi->drawable);
+    spice_assert(dpi->drawable);
     dpi->refs++;
     return dpi;
 }
@@ -1406,7 +1408,7 @@ static inline void red_pipes_add_drawable(RedWorker *worker, Drawable *drawable)
     DisplayChannelClient *dcc;
     RingItem *dcc_ring_item;
 
-    PANIC_ON(!ring_is_empty(&drawable->pipes));
+    spice_warn_if(!ring_is_empty(&drawable->pipes));
     WORKER_FOREACH_DCC(worker, dcc_ring_item, dcc) {
         red_pipe_add_drawable(dcc, drawable);
     }
@@ -1446,7 +1448,7 @@ static inline void red_pipes_add_drawable_after(RedWorker *worker,
     }
     if (num_other_linked != worker->display_channel->common.base.clients_num) {
         RingItem *worker_item;
-        red_printf("TODO: not O(n^2)");
+        spice_printerr("TODO: not O(n^2)");
         WORKER_FOREACH_DCC(worker, worker_item, dcc) {
             int sent = 0;
             DRAWABLE_FOREACH_DPI(pos_after, dpi_link, dpi_pos_after) {
@@ -1592,7 +1594,7 @@ static SurfaceDestroyItem *get_surface_destroy_item(RedChannel *channel,
     SurfaceDestroyItem *destroy;
 
     destroy = (SurfaceDestroyItem *)malloc(sizeof(SurfaceDestroyItem));
-    PANIC_ON(!destroy);
+    spice_warn_if(!destroy);
 
     destroy->surface_destroy.surface_id = surface_id;
 
@@ -1628,7 +1630,7 @@ static inline void red_destroy_surface(RedWorker *worker, uint32_t surface_id)
         if (is_primary_surface(worker, surface_id)) {
             red_reset_stream_trace(worker);
         }
-        ASSERT(surface->context.canvas);
+        spice_assert(surface->context.canvas);
 
         surface->context.canvas->ops->destroy(surface->context.canvas);
         if (surface->create.info) {
@@ -1644,7 +1646,7 @@ static inline void red_destroy_surface(RedWorker *worker, uint32_t surface_id)
             red_destroy_surface_item(worker, dcc, surface_id);
         }
 
-        PANIC_ON(!ring_is_empty(&surface->depend_on_me));
+        spice_warn_if(!ring_is_empty(&surface->depend_on_me));
     }
 }
 
@@ -1693,8 +1695,8 @@ static inline void put_red_drawable(RedWorker *worker, RedDrawable *drawable, ui
 
 static void remove_depended_item(DependItem *item)
 {
-    ASSERT(item->drawable);
-    ASSERT(ring_item_is_linked(&item->ring_item));
+    spice_assert(item->drawable);
+    spice_assert(ring_item_is_linked(&item->ring_item));
     item->drawable = NULL;
     ring_remove(&item->ring_item);
 }
@@ -1731,9 +1733,9 @@ static inline void release_drawable(RedWorker *worker, Drawable *drawable)
     RingItem *item, *next;
 
     if (!--drawable->refs) {
-        ASSERT(!drawable->stream);
-        ASSERT(!drawable->tree_item.shadow);
-        ASSERT(ring_is_empty(&drawable->pipes));
+        spice_assert(!drawable->stream);
+        spice_assert(!drawable->tree_item.shadow);
+        spice_assert(ring_is_empty(&drawable->pipes));
         region_destroy(&drawable->tree_item.base.rgn);
 
         remove_drawable_dependencies(worker, drawable);
@@ -1769,7 +1771,7 @@ static inline void remove_shadow(RedWorker *worker, DrawItem *item)
 
 static inline void current_remove_container(RedWorker *worker, Container *container)
 {
-    ASSERT(ring_is_empty(&container->items));
+    spice_assert(ring_is_empty(&container->items));
     worker->containers_count--;
     ring_remove(&container->base.siblings_link);
     region_destroy(&container->base.rgn);
@@ -1782,7 +1784,7 @@ static inline void container_cleanup(RedWorker *worker, Container *container)
         Container *next = container->base.container;
         if (container->items.next != &container->items) {
             TreeItem *item = (TreeItem *)ring_get_head(&container->items);
-            ASSERT(item);
+            spice_assert(item);
             ring_remove(&item->siblings_link);
             ring_add_after(&item->siblings_link, &container->base.siblings_link);
             item->container = container->base.container;
@@ -1867,7 +1869,7 @@ static inline void current_remove(RedWorker *worker, TreeItem *item)
         } else {
             Container *container = (Container *)now;
 
-            ASSERT(now->type == TREE_ITEM_TYPE_CONTAINER);
+            spice_assert(now->type == TREE_ITEM_TYPE_CONTAINER);
 
             if ((ring_item = ring_get_head(&container->items))) {
                 now = SPICE_CONTAINEROF(ring_item, TreeItem, siblings_link);
@@ -2080,7 +2082,7 @@ static void print_base_item(const char* prefix, const TreeItem *base)
         print_container_item(prefix, (const Container *)base);
         break;
     default:
-        red_error("invalid type %u", base->type);
+        spice_error("invalid type %u", base->type);
     }
 }
 
@@ -2092,7 +2094,7 @@ void __show_current(TreeItem *item, void *data)
 static void show_current(RedWorker *worker, Ring *ring)
 {
     if (ring_is_empty(ring)) {
-        red_printf("TEST: TREE: EMPTY");
+        spice_printerr("TEST: TREE: EMPTY");
         return;
     }
     current_tree_for_each(ring, __show_current, NULL);
@@ -2128,7 +2130,7 @@ static inline Ring *ring_of(RedWorker *worker, Ring *ring, TreeItem *item)
 
 static inline int __contained_by(RedWorker *worker, TreeItem *item, Ring *ring)
 {
-    ASSERT(item && ring);
+    spice_assert(item && ring);
     do {
         Ring *now = ring_of(worker, ring, item);
         if (now == ring) {
@@ -2200,7 +2202,7 @@ static inline void __exclude_region(RedWorker *worker, Ring *ring, TreeItem *ite
         } else {
             Shadow *shadow;
 
-            ASSERT(item->type == TREE_ITEM_TYPE_SHADOW);
+            spice_assert(item->type == TREE_ITEM_TYPE_SHADOW);
             shadow = (Shadow *)item;
             region_exclude(rgn, &and_rgn);
             region_or(&shadow->on_hold, &and_rgn);
@@ -2228,7 +2230,7 @@ static void exclude_region(RedWorker *worker, Ring *ring, RingItem *ring_item, Q
         TreeItem *now = SPICE_CONTAINEROF(ring_item, TreeItem, siblings_link);
         Container *container = now->container;
 
-        ASSERT(!region_is_empty(&now->rgn));
+        spice_assert(!region_is_empty(&now->rgn));
 
         if (region_intersects(rgn, &now->rgn)) {
             print_base_item("EXCLUDE2", now);
@@ -2236,7 +2238,7 @@ static void exclude_region(RedWorker *worker, Ring *ring, RingItem *ring_item, Q
             print_base_item("EXCLUDE3", now);
 
             if (region_is_empty(&now->rgn)) {
-                ASSERT(now->type != TREE_ITEM_TYPE_SHADOW);
+                spice_assert(now->type != TREE_ITEM_TYPE_SHADOW);
                 ring_item = now->siblings_link.prev;
                 print_base_item("EXCLUDE_REMOVE", now);
                 current_remove(worker, now);
@@ -2247,7 +2249,7 @@ static void exclude_region(RedWorker *worker, Ring *ring, RingItem *ring_item, Q
                 Container *container = (Container *)now;
                 if ((ring_item = ring_get_head(&container->items))) {
                     ring = &container->items;
-                    ASSERT(((TreeItem *)ring_item)->container);
+                    spice_assert(((TreeItem *)ring_item)->container);
                     continue;
                 }
                 ring_item = &now->siblings_link;
@@ -2402,7 +2404,7 @@ static inline void red_free_stream(RedWorker *worker, Stream *stream)
 static void red_release_stream(RedWorker *worker, Stream *stream)
 {
     if (!--stream->refs) {
-        ASSERT(!ring_item_is_linked(&stream->link));
+        spice_assert(!ring_item_is_linked(&stream->link));
         if (stream->mjpeg_encoder) {
             mjpeg_encoder_destroy(stream->mjpeg_encoder);
         }
@@ -2413,8 +2415,8 @@ static void red_release_stream(RedWorker *worker, Stream *stream)
 
 static inline void red_detach_stream(RedWorker *worker, Stream *stream)
 {
-    ASSERT(stream->current && stream->current->stream);
-    ASSERT(stream->current->stream == stream);
+    spice_assert(stream->current && stream->current->stream);
+    spice_assert(stream->current->stream == stream);
     stream->current->stream = NULL;
     stream->current = NULL;
 }
@@ -2438,7 +2440,7 @@ static void push_stream_clip_by_drawable(DisplayChannelClient* dcc, StreamAgent 
     int n_rects;
 
     if (!item) {
-        PANIC("alloc failed");
+        spice_critical("alloc failed");
     }
 
     if (drawable->red_drawable->clip.type == SPICE_CLIP_TYPE_NONE) {
@@ -2462,7 +2464,7 @@ static void push_stream_clip(DisplayChannelClient* dcc, StreamAgent *agent)
     int n_rects;
 
     if (!item) {
-        PANIC("alloc failed");
+        spice_critical("alloc failed");
     }
     item->clip_type = SPICE_CLIP_TYPE_RECTS;
 
@@ -2489,8 +2491,8 @@ static void red_attach_stream(RedWorker *worker, Drawable *drawable, Stream *str
     StreamAgent *agent;
     RingItem *item;
 
-    ASSERT(!drawable->stream && !stream->current);
-    ASSERT(drawable && stream);
+    spice_assert(!drawable->stream && !stream->current);
+    spice_assert(drawable && stream);
     stream->current = drawable;
     drawable->stream = stream;
     stream->last_time = drawable->creation_time;
@@ -2510,13 +2512,13 @@ static void red_stop_stream(RedWorker *worker, Stream *stream)
     DisplayChannelClient *dcc;
     RingItem *item;
 
-    ASSERT(ring_item_is_linked(&stream->link));
-    ASSERT(!stream->current);
+    spice_assert(ring_item_is_linked(&stream->link));
+    spice_assert(!stream->current);
     WORKER_FOREACH_DCC(worker, item, dcc) {
         StreamAgent *stream_agent;
         stream_agent = &dcc->stream_agents[stream - worker->streams_buf];
         region_clear(&stream_agent->vis_region);
-        ASSERT(!pipe_item_is_linked(&stream_agent->destroy_item));
+        spice_assert(!pipe_item_is_linked(&stream_agent->destroy_item));
         stream->refs++;
         red_channel_client_pipe_add(&dcc->common.base, &stream_agent->destroy_item);
     }
@@ -2536,7 +2538,7 @@ static inline void red_detach_stream_gracefully(RedWorker *worker, Stream *strea
     RedChannelClient *rcc;
     DisplayChannelClient *dcc;
 
-    ASSERT(stream->current);
+    spice_assert(stream->current);
     WORKER_FOREACH_DCC(worker, item, dcc) {
         UpgradeItem *upgrade_item;
         int n_rects;
@@ -2682,7 +2684,7 @@ static inline void red_handle_streams_timout(RedWorker *worker)
 
 static void red_display_release_stream(RedWorker *worker, StreamAgent *agent)
 {
-    ASSERT(agent->stream);
+    spice_assert(agent->stream);
     red_release_stream(worker, agent->stream);
 }
 
@@ -2736,7 +2738,7 @@ static void red_display_create_stream(DisplayChannelClient *dcc, Stream *stream)
     StreamAgent *agent = &dcc->stream_agents[stream - dcc->common.worker->streams_buf];
 
     stream->refs++;
-    ASSERT(region_is_empty(&agent->vis_region));
+    spice_assert(region_is_empty(&agent->vis_region));
     if (stream->current) {
         agent->frames = 1;
         region_clone(&agent->vis_region, &stream->current->tree_item.base.rgn);
@@ -2760,13 +2762,13 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
     int stream_width;
     int stream_height;
 
-    ASSERT(!drawable->stream);
+    spice_assert(!drawable->stream);
 
     if (!(stream = red_alloc_stream(worker))) {
         return;
     }
 
-    ASSERT(drawable->red_drawable->type == QXL_DRAW_COPY);
+    spice_assert(drawable->red_drawable->type == QXL_DRAW_COPY);
     src_rect = &drawable->red_drawable->u.copy.src_area;
     stream_width = src_rect->right - src_rect->left;
     stream_height = src_rect->bottom - src_rect->top;
@@ -2919,7 +2921,7 @@ static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream)
     StreamAgent *agent;
     RingItem *ring_item;
 
-    ASSERT(stream->current);
+    spice_assert(stream->current);
 
     if (!display_is_connected(worker)) {
         return;
@@ -2962,7 +2964,7 @@ static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream)
 static inline void red_update_copy_graduality(RedWorker* worker, Drawable *drawable)
 {
     SpiceBitmap *bitmap;
-    ASSERT(drawable->red_drawable->type == QXL_DRAW_COPY);
+    spice_assert(drawable->red_drawable->type == QXL_DRAW_COPY);
 
     if (worker->streaming_video != STREAM_VIDEO_FILTER) {
         drawable->copy_bitmap_graduality = BITMAP_GRADUAL_INVALID;
@@ -3211,7 +3213,7 @@ static void red_reset_stream_trace(RedWorker *worker)
         if (!stream->current) {
             red_stop_stream(worker, stream);
         } else {
-            red_printf("attached stream");
+            spice_printerr("attached stream");
         }
     }
 
@@ -3230,7 +3232,7 @@ static inline int red_current_add(RedWorker *worker, Ring *ring, Drawable *drawa
     RingItem *exclude_base = NULL;
 
     print_base_item("ADD", &item->base);
-    ASSERT(!region_is_empty(&item->base.rgn));
+    spice_assert(!region_is_empty(&item->base.rgn));
     region_init(&exclude_rgn);
     now = ring_next(ring, ring);
 
@@ -3298,11 +3300,11 @@ static inline int red_current_add(RedWorker *worker, Ring *ring, Drawable *drawa
                     now = ring_next(ring, ring);
                     continue;
                 }
-                ASSERT(IS_DRAW_ITEM(sibling));
+                spice_assert(IS_DRAW_ITEM(sibling));
                 if (!((DrawItem *)sibling)->container_root) {
                     container = __new_container(worker, (DrawItem *)sibling);
                     if (!container) {
-                        red_printf("create new container failed");
+                        spice_printerr("create new container failed");
                         region_destroy(&exclude_rgn);
                         return FALSE;
                     }
@@ -3465,17 +3467,17 @@ static inline int red_current_add_qxl(RedWorker *worker, Ring *ring, Drawable *d
 #ifdef RED_WORKER_STAT
     if ((++worker->add_count % 100) == 0) {
         stat_time_t total = worker->add_stat.total;
-        red_printf("add with shadow count %u",
+        spice_printerr("add with shadow count %u",
                    worker->add_with_shadow_count);
         worker->add_with_shadow_count = 0;
-        red_printf("add[%u] %f exclude[%u] %f __exclude[%u] %f",
+        spice_printerr("add[%u] %f exclude[%u] %f __exclude[%u] %f",
                    worker->add_stat.count,
                    stat_cpu_time_to_sec(total),
                    worker->exclude_stat.count,
                    stat_cpu_time_to_sec(worker->exclude_stat.total),
                    worker->__exclude_stat.count,
                    stat_cpu_time_to_sec(worker->__exclude_stat.total));
-        red_printf("add %f%% exclude %f%% exclude2 %f%% __exclude %f%%",
+        spice_printerr("add %f%% exclude %f%% exclude2 %f%% __exclude %f%%",
                    (double)(total - worker->exclude_stat.total) / total * 100,
                    (double)(worker->exclude_stat.total) / total * 100,
                    (double)(worker->exclude_stat.total -
@@ -3514,7 +3516,7 @@ static int surface_format_to_image_type(uint32_t surface_format)
     case SPICE_SURFACE_FMT_32_ARGB:
         return SPICE_BITMAP_FMT_RGBA;
     default:
-        PANIC("Unsupported surface format");
+        spice_critical("Unsupported surface format");
     }
     return 0;
 }
@@ -3614,7 +3616,7 @@ static void free_one_drawable(RedWorker *worker, int force_glz_free)
     Drawable *drawable;
     Container *container;
 
-    ASSERT(ring_item);
+    spice_assert(ring_item);
     drawable = SPICE_CONTAINEROF(ring_item, Drawable, list_link);
     if (force_glz_free) {
         RingItem *glz_item, *next_item;
@@ -3752,7 +3754,7 @@ static inline void red_process_drawable(RedWorker *worker, RedDrawable *drawable
     int surface_id;
     Drawable *item = get_drawable(worker, drawable->effect, drawable, group_id);
 
-    ASSERT(item);
+    spice_assert(item);
 
     surface_id = item->surface_id;
 
@@ -3851,7 +3853,7 @@ static inline void red_process_surface(RedWorker *worker, RedSurfaceCmd *surface
         break;
     }
     case QXL_SURFACE_CMD_DESTROY:
-        PANIC_ON(!red_surface->context.canvas);
+        spice_warn_if(!red_surface->context.canvas);
         set_surface_release_info(worker, surface_id, 0, surface->release_info, group_id);
         red_handle_depends_on_target_surface(worker, surface_id);
         /* note that red_handle_depends_on_target_surface must be called before red_current_clear.
@@ -3862,7 +3864,7 @@ static inline void red_process_surface(RedWorker *worker, RedSurfaceCmd *surface
         red_destroy_surface(worker, surface_id);
         break;
     default:
-            red_error("unknown surface command");
+            spice_error("unknown surface command");
     };
     red_put_surface_cmd(surface);
     free(surface);
@@ -3921,7 +3923,7 @@ static void image_cache_remove(ImageCache *cache, ImageCacheItem *item)
 
     now = &cache->hash_table[item->id % IMAGE_CACHE_HASH_SIZE];
     for (;;) {
-        ASSERT(*now);
+        spice_assert(*now);
         if (*now == item) {
             *now = item->next;
             break;
@@ -3946,7 +3948,7 @@ static void image_cache_put(SpiceImageCache *spice_cache, uint64_t id, pixman_im
 #ifndef IMAGE_CACHE_AGE
     if (cache->num_items == IMAGE_CACHE_MAX_ITEMS) {
         ImageCacheItem *tail = (ImageCacheItem *)ring_get_tail(&cache->lru);
-        ASSERT(tail);
+        spice_assert(tail);
         image_cache_remove(cache, tail);
     }
 #endif
@@ -3973,7 +3975,7 @@ static pixman_image_t *image_cache_get(SpiceImageCache *spice_cache, uint64_t id
 
     ImageCacheItem *item = image_cache_find(cache, id);
     if (!item) {
-        red_error("not found");
+        spice_error("not found");
     }
     return pixman_image_ref(item->image);
 }
@@ -4028,8 +4030,8 @@ static void localize_bitmap(RedWorker *worker, SpiceImage **image_ptr, SpiceImag
     SpiceImage *image = *image_ptr;
 
     if (image == NULL) {
-        ASSERT(drawable != NULL);
-        ASSERT(drawable->self_bitmap != NULL);
+        spice_assert(drawable != NULL);
+        spice_assert(drawable->self_bitmap != NULL);
         *image_ptr = drawable->self_bitmap;
         return;
     }
@@ -4061,7 +4063,7 @@ static void localize_bitmap(RedWorker *worker, SpiceImage **image_ptr, SpiceImag
         /* nothing */
         break;
     default:
-        red_error("invalid image type");
+        spice_error("invalid image type");
     }
 }
 
@@ -4204,7 +4206,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         break;
     }
     default:
-        red_printf("invalid type");
+        spice_printerr("invalid type");
     }
 }
 
@@ -4242,7 +4244,7 @@ static void validate_area(RedWorker *worker, const SpiceRect *area, uint32_t sur
             return;
         }
 
-        ASSERT(stride < 0);
+        spice_assert(stride < 0);
         uint8_t *dest = line_0 + (area->top * stride) + area->left * sizeof(uint32_t);
         dest += (h - 1) * stride;
         canvas->ops->read_bits(canvas, dest, -stride, area);
@@ -4280,7 +4282,7 @@ static inline void __red_collect_for_update(RedWorker *worker, Ring *ring, RingI
 
                 if ((ring_item = ring_get_head(&container->items))) {
                     ring = &container->items;
-                    ASSERT(((TreeItem *)ring_item)->container);
+                    spice_assert(((TreeItem *)ring_item)->container);
                     continue;
                 }
                 ring_item = &now->siblings_link;
@@ -4353,8 +4355,8 @@ static void red_update_area_till(RedWorker *worker, const SpiceRect *area, int s
     Drawable *now;
     QRegion rgn;
 
-    ASSERT(last);
-    ASSERT(ring_item_is_linked(&last->list_link));
+    spice_assert(last);
+    spice_assert(ring_item_is_linked(&last->list_link));
 
     surface = &worker->surfaces[surface_id];
 
@@ -4471,7 +4473,7 @@ static void red_update_area(RedWorker *worker, const SpiceRect *area, int surfac
         release_drawable(worker, now);
 #ifdef ACYCLIC_SURFACE_DEBUG
         if (gn != surface->current_gn) {
-            red_error("cyclic surface dependencies");
+            spice_error("cyclic surface dependencies");
         }
 #endif
     } while (now != last);
@@ -4533,7 +4535,7 @@ static inline void free_cursor_item(RedWorker *worker, CursorItem *item)
     worker->free_cursor_items = (_CursorItem *)item;
 #ifdef DEBUG_CURSORS
     ++_cursor_count;
-    ASSERT(_cursor_count <= NUM_CURSORS);
+    spice_assert(_cursor_count <= NUM_CURSORS);
 #endif
 }
 
@@ -4551,7 +4553,7 @@ static CursorItem *get_cursor_item(RedWorker *worker, RedCursorCmd *cmd, uint32_
 {
     CursorItem *cursor_item;
 
-    PANIC_ON(!(cursor_item = alloc_cursor_item(worker)));
+    spice_warn_if(!(cursor_item = alloc_cursor_item(worker)));
 
     cursor_item->refs = 1;
     cursor_item->group_id = group_id;
@@ -4562,7 +4564,7 @@ static CursorItem *get_cursor_item(RedWorker *worker, RedCursorCmd *cmd, uint32_
 
 static CursorPipeItem *ref_cursor_pipe_item(CursorPipeItem *item)
 {
-    ASSERT(item);
+    spice_assert(item);
     item->refs++;
     return item;
 }
@@ -4580,13 +4582,13 @@ static PipeItem *new_cursor_pipe_item(RedChannelClient *rcc, void *data, int num
 
 static void put_cursor_pipe_item(CursorChannelClient *ccc, CursorPipeItem *pipe_item)
 {
-    ASSERT(pipe_item);
+    spice_assert(pipe_item);
 
     if (--pipe_item->refs) {
         return;
     }
 
-    ASSERT(!pipe_item_is_linked(&pipe_item->base));
+    spice_assert(!pipe_item_is_linked(&pipe_item->base));
 
     red_release_cursor(ccc->common.worker, pipe_item->cursor_item);
     free(pipe_item);
@@ -4617,7 +4619,7 @@ static void qxl_process_cursor(RedWorker *worker, RedCursorCmd *cursor_cmd, uint
         worker->cursor_trail_frequency = cursor_cmd->u.trail.frequency;
         break;
     default:
-        red_error("invalid cursor command %u", cursor_cmd->type);
+        spice_error("invalid cursor command %u", cursor_cmd->type);
     }
 
     if (cursor_is_connected(worker) && (worker->mouse_mode == SPICE_MOUSE_MODE_SERVER ||
@@ -4675,7 +4677,7 @@ static int red_process_cursor(RedWorker *worker, uint32_t max_pipe_size, int *ri
             break;
         }
         default:
-            red_error("bad command type");
+            spice_error("bad command type");
         }
         n++;
     }
@@ -4755,7 +4757,7 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
                             &message, ext_cmd.cmd.data);
 #ifdef DEBUG
             /* alert: accessing message.data is insecure */
-            red_printf("MESSAGE: %s", message.data);
+            spice_printerr("MESSAGE: %s", message.data);
 #endif
             release_info_ext.group_id = ext_cmd.group_id;
             release_info_ext.info = message.release_info;
@@ -4772,7 +4774,7 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
             break;
         }
         default:
-            red_error("bad command type");
+            spice_error("bad command type");
         }
         n++;
         if ((worker->display_channel &&
@@ -4793,9 +4795,8 @@ static void red_free_some(RedWorker *worker)
     DisplayChannelClient *dcc;
     RingItem *item;
 
-    red_printf_debug(3, "WORKER",
-                     "#draw=%d, #red_draw=%d, #glz_draw=%d", worker->drawable_count,
-                     worker->red_drawable_count, worker->glz_drawable_count);
+    spice_debug("#draw=%d, #red_draw=%d, #glz_draw=%d", worker->drawable_count,
+                worker->red_drawable_count, worker->glz_drawable_count);
     WORKER_FOREACH_DCC(worker, item, dcc) {
         GlzSharedDictionary *glz_dict = dcc ? dcc->glz_dict : NULL;
 
@@ -4844,7 +4845,7 @@ static ImageItem *red_add_surface_area_image(DisplayChannelClient *dcc, int surf
     int bpp;
     int all_set;
 
-    ASSERT(area);
+    spice_assert(area);
 
     width = area->right - area->left;
     height = area->bottom - area->top;
@@ -4929,7 +4930,7 @@ static void marshaller_add_compressed(SpiceMarshaller *m,
     size_t max = size;
     size_t now;
     do {
-        ASSERT(comp_buf);
+        spice_assert(comp_buf);
         now = MIN(sizeof(comp_buf->buf), max);
         max -= now;
         spice_marshaller_add_ref(m, (uint8_t*)comp_buf->buf, now);
@@ -5020,7 +5021,7 @@ static void red_display_free_compress_buf(DisplayChannelClient *dcc,
     RedCompressBuf **curr_used = &dcc->send_data.used_compress_bufs;
 
     for (;;) {
-        ASSERT(*curr_used);
+        spice_assert(*curr_used);
         if (*curr_used == buf) {
             *curr_used = buf->next;
             break;
@@ -5041,7 +5042,7 @@ static void red_display_reset_compress_buf(DisplayChannelClient *dcc)
 
 static void red_display_destroy_compress_bufs(DisplayChannel *display_channel)
 {
-    ASSERT(!red_channel_is_connected(&display_channel->common.base));
+    spice_assert(!red_channel_is_connected(&display_channel->common.base));
     while (display_channel->free_compress_bufs) {
         RedCompressBuf *buf = display_channel->free_compress_bufs;
         display_channel->free_compress_bufs = buf->next;
@@ -5091,7 +5092,7 @@ static RedGlzDrawable *red_display_get_glz_drawable(DisplayChannelClient *dcc, D
    NOTE - the caller should set the glz_instance returned by the encoder by itself.*/
 static GlzDrawableInstanceItem *red_display_add_glz_drawable_instance(RedGlzDrawable *glz_drawable)
 {
-    ASSERT(glz_drawable->instances_count < MAX_GLZ_DRAWABLE_INSTANCES);
+    spice_assert(glz_drawable->instances_count < MAX_GLZ_DRAWABLE_INSTANCES);
     // NOTE: We assume the additions are performed consecutively, without removals in the middle
     GlzDrawableInstanceItem *ret = glz_drawable->instances_pool + glz_drawable->instances_count;
     glz_drawable->instances_count++;
@@ -5117,13 +5118,13 @@ static void red_display_free_glz_drawable_instance(DisplayChannelClient *dcc,
     RedWorker *worker = display_channel->common.worker;
     RedGlzDrawable *glz_drawable;
 
-    ASSERT(glz_drawable_instance);
-    ASSERT(glz_drawable_instance->red_glz_drawable);
+    spice_assert(glz_drawable_instance);
+    spice_assert(glz_drawable_instance->red_glz_drawable);
 
     glz_drawable = glz_drawable_instance->red_glz_drawable;
 
-    ASSERT(glz_drawable->dcc == dcc);
-    ASSERT(glz_drawable->instances_count);
+    spice_assert(glz_drawable->dcc == dcc);
+    spice_assert(glz_drawable->instances_count);
 
     ring_remove(&glz_drawable_instance->glz_link);
     glz_drawable->instances_count--;
@@ -5134,7 +5135,7 @@ static void red_display_free_glz_drawable_instance(DisplayChannelClient *dcc,
     }
 
     if (ring_is_empty(&glz_drawable->instances)) {
-        ASSERT(!glz_drawable->instances_count);
+        spice_assert(!glz_drawable->instances_count);
 
         Drawable *drawable = glz_drawable->drawable;
 
@@ -5272,7 +5273,7 @@ static void quic_usr_error(QuicUsrContext *usr, const char *fmt, ...)
     va_start(ap, fmt);
     vsnprintf(usr_data->message_buf, sizeof(usr_data->message_buf), fmt, ap);
     va_end(ap);
-    red_printf("%s", usr_data->message_buf);
+    spice_printerr("%s", usr_data->message_buf);
 
     longjmp(usr_data->jmp_env, 1);
 }
@@ -5285,7 +5286,7 @@ static void lz_usr_error(LzUsrContext *usr, const char *fmt, ...)
     va_start(ap, fmt);
     vsnprintf(usr_data->message_buf, sizeof(usr_data->message_buf), fmt, ap);
     va_end(ap);
-    red_printf("%s", usr_data->message_buf);
+    spice_printerr("%s", usr_data->message_buf);
 
     longjmp(usr_data->jmp_env, 1);
 }
@@ -5299,7 +5300,7 @@ static void glz_usr_error(GlzEncoderUsrContext *usr, const char *fmt, ...)
     vsnprintf(usr_data->message_buf, sizeof(usr_data->message_buf), fmt, ap);
     va_end(ap);
 
-    PANIC("%s", usr_data->message_buf); // if global lz fails in the middle
+    spice_critical("%s", usr_data->message_buf); // if global lz fails in the middle
                                         // the consequences are not predictable since the window
                                         // can turn to be unsynchronized between the server and
                                         // and the client
@@ -5313,7 +5314,7 @@ static void quic_usr_warn(QuicUsrContext *usr, const char *fmt, ...)
     va_start(ap, fmt);
     vsnprintf(usr_data->message_buf, sizeof(usr_data->message_buf), fmt, ap);
     va_end(ap);
-    red_printf("%s", usr_data->message_buf);
+    spice_printerr("%s", usr_data->message_buf);
 }
 
 static void lz_usr_warn(LzUsrContext *usr, const char *fmt, ...)
@@ -5324,7 +5325,7 @@ static void lz_usr_warn(LzUsrContext *usr, const char *fmt, ...)
     va_start(ap, fmt);
     vsnprintf(usr_data->message_buf, sizeof(usr_data->message_buf), fmt, ap);
     va_end(ap);
-    red_printf("%s", usr_data->message_buf);
+    spice_printerr("%s", usr_data->message_buf);
 }
 
 static void glz_usr_warn(GlzEncoderUsrContext *usr, const char *fmt, ...)
@@ -5335,7 +5336,7 @@ static void glz_usr_warn(GlzEncoderUsrContext *usr, const char *fmt, ...)
     va_start(ap, fmt);
     vsnprintf(usr_data->message_buf, sizeof(usr_data->message_buf), fmt, ap);
     va_end(ap);
-    red_printf("%s", usr_data->message_buf);
+    spice_printerr("%s", usr_data->message_buf);
 }
 
 static void *quic_usr_malloc(QuicUsrContext *usr, int size)
@@ -5472,7 +5473,7 @@ static int zlib_usr_more_input(ZlibEncoderUsrContext *usr, uint8_t** input)
     int buf_size;
 
     if (!usr_data->u.compressed_data.next) {
-        ASSERT(usr_data->u.compressed_data.size_left == 0);
+        spice_assert(usr_data->u.compressed_data.size_left == 0);
         return 0;
     }
 
@@ -5521,7 +5522,7 @@ static inline void red_init_quic(RedWorker *worker)
     worker->quic = quic_create(&worker->quic_data.usr);
 
     if (!worker->quic) {
-        PANIC("create quic failed");
+        spice_critical("create quic failed");
     }
 }
 
@@ -5538,7 +5539,7 @@ static inline void red_init_lz(RedWorker *worker)
     worker->lz = lz_create(&worker->lz_data.usr);
 
     if (!worker->lz) {
-        PANIC("create lz failed");
+        spice_critical("create lz failed");
     }
 }
 
@@ -5563,7 +5564,7 @@ static inline void red_init_jpeg(RedWorker *worker)
     worker->jpeg = jpeg_encoder_create(&worker->jpeg_data.usr);
 
     if (!worker->jpeg) {
-        PANIC("create jpeg encoder failed");
+        spice_critical("create jpeg encoder failed");
     }
 }
 
@@ -5575,7 +5576,7 @@ static inline void red_init_zlib(RedWorker *worker)
     worker->zlib = zlib_encoder_create(&worker->zlib_data.usr, ZLIB_DEFAULT_COMPRESSION_LEVEL);
 
     if (!worker->zlib) {
-        PANIC("create zlib encoder failed");
+        spice_critical("create zlib encoder failed");
     }
 }
 
@@ -5655,13 +5656,13 @@ static BitmapGradualType _get_bitmap_graduality_level(RedWorker *worker, SpiceBi
                                               &chunk_score, &chunk_num_samples);
             break;
         default:
-            red_error("invalid bitmap format (not RGB) %u", bitmap->format);
+            spice_error("invalid bitmap format (not RGB) %u", bitmap->format);
         }
         score += chunk_score;
         num_samples += chunk_num_samples;
     }
 
-    ASSERT(num_samples);
+    spice_assert(num_samples);
     score /= num_samples;
 
     if (bitmap->format == SPICE_BITMAP_FMT_16BIT) {
@@ -5683,7 +5684,7 @@ static BitmapGradualType _get_bitmap_graduality_level(RedWorker *worker, SpiceBi
 
 static inline int _stride_is_extra(SpiceBitmap *bitmap)
 {
-    ASSERT(bitmap);
+    spice_assert(bitmap);
     if (BITMAP_FMT_IS_RGB[bitmap->format]) {
         return ((bitmap->x * BITMAP_FMP_BYTES_PER_PIXEL[bitmap->format]) < bitmap->stride);
     } else {
@@ -5701,9 +5702,11 @@ static inline int _stride_is_extra(SpiceBitmap *bitmap)
             return bytes_width < bitmap->stride;
         }
         default:
-            red_error("invalid image type %u", bitmap->format);
+            spice_error("invalid image type %u", bitmap->format);
+            return 0;
         }
     }
+    return 0;
 }
 
 static const LzImageType MAP_BITMAP_FMT_TO_LZ_IMAGE_TYPE[] = {
@@ -5736,7 +5739,7 @@ static inline int red_glz_compress_image(DisplayChannelClient *dcc,
 #ifdef COMPRESS_STAT
     stat_time_t start_time = stat_now();
 #endif
-    ASSERT(BITMAP_FMT_IS_RGB[src->format]);
+    spice_assert(BITMAP_FMT_IS_RGB[src->format]);
     GlzData *glz_data = &dcc->glz_data;
     ZlibData *zlib_data;
     LzImageType type = MAP_BITMAP_FMT_TO_LZ_IMAGE_TYPE[src->format];
@@ -5785,7 +5788,7 @@ static inline int red_glz_compress_image(DisplayChannelClient *dcc,
     zlib_data->data.bufs_head = zlib_data->data.bufs_tail;
 
     if (!zlib_data->data.bufs_head) {
-        red_printf("failed to allocate zlib compress buffer");
+        spice_printerr("failed to allocate zlib compress buffer");
         goto glz;
     }
 
@@ -5948,7 +5951,7 @@ static int red_jpeg_compress_image(DisplayChannelClient *dcc, SpiceImage *dest,
     jpeg_data->data.bufs_head = jpeg_data->data.bufs_tail;
 
     if (!jpeg_data->data.bufs_head) {
-        red_printf("failed to allocate compress buffer");
+        spice_printerr("failed to allocate compress buffer");
         return FALSE;
     }
 
@@ -6190,7 +6193,7 @@ static inline int red_compress_image(DisplayChannelClient *dcc,
 
     if (quic_compress) {
 #ifdef COMPRESS_DEBUG
-        red_printf("QUIC compress");
+        spice_printerr("QUIC compress");
 #endif
         // if bitmaps is picture-like, compress it using jpeg
         if (can_lossy && display_channel->enable_jpeg &&
@@ -6216,7 +6219,8 @@ static inline int red_compress_image(DisplayChannelClient *dcc,
                    (image_compression == SPICE_IMAGE_COMPRESS_LZ)) {
             glz = FALSE;
         } else {
-            red_error("invalid image compression type %u", image_compression);
+            spice_error("invalid image compression type %u", image_compression);
+            return FALSE;
         }
 
         if (glz) {
@@ -6236,12 +6240,12 @@ static inline int red_compress_image(DisplayChannelClient *dcc,
             ret = red_lz_compress_image(dcc, dest, src, o_comp_data,
                                         drawable->group_id);
 #ifdef COMPRESS_DEBUG
-            red_printf("LZ LOCAL compress");
+            spice_printerr("LZ LOCAL compress");
 #endif
         }
 #ifdef COMPRESS_DEBUG
         else {
-            red_printf("LZ global compress fmt=%d", src->format);
+            spice_printerr("LZ global compress fmt=%d", src->format);
         }
 #endif
         return ret;
@@ -6256,7 +6260,7 @@ static inline void red_display_add_image_to_pixmap_cache(RedChannelClient *rcc,
     DisplayChannelClient *dcc = RCC_TO_DCC(rcc);
 
     if ((image->descriptor.flags & SPICE_IMAGE_FLAGS_CACHE_ME)) {
-        ASSERT(image->descriptor.width * image->descriptor.height > 0);
+        spice_assert(image->descriptor.width * image->descriptor.height > 0);
         if (!(io_image->descriptor.flags & SPICE_IMAGE_FLAGS_CACHE_REPLACE_ME)) {
             if (pixmap_cache_add(dcc->pixmap_cache, image->descriptor.id,
                                  image->descriptor.width * image->descriptor.height, is_lossy,
@@ -6296,7 +6300,7 @@ static FillBitsType fill_bits(DisplayChannelClient *dcc, SpiceMarshaller *m,
     SpiceMarshaller *bitmap_palette_out, *lzplt_palette_out;
 
     if (simage == NULL) {
-        ASSERT(drawable->self_bitmap);
+        spice_assert(drawable->self_bitmap);
         simage = drawable->self_bitmap;
     }
 
@@ -6319,8 +6323,8 @@ static FillBitsType fill_bits(DisplayChannelClient *dcc, SpiceMarshaller *m,
                 }
                 spice_marshall_Image(m, &image,
                                      &bitmap_palette_out, &lzplt_palette_out);
-                ASSERT(bitmap_palette_out == NULL);
-                ASSERT(lzplt_palette_out == NULL);
+                spice_assert(bitmap_palette_out == NULL);
+                spice_assert(lzplt_palette_out == NULL);
                 stat_inc_counter(display_channel->cache_hits_counter, 1);
                 return FILL_BITS_TYPE_CACHE;
             } else {
@@ -6348,8 +6352,8 @@ static FillBitsType fill_bits(DisplayChannelClient *dcc, SpiceMarshaller *m,
         image.u.surface.surface_id = surface_id;
         spice_marshall_Image(m, &image,
                              &bitmap_palette_out, &lzplt_palette_out);
-        ASSERT(bitmap_palette_out == NULL);
-        ASSERT(lzplt_palette_out == NULL);
+        spice_assert(bitmap_palette_out == NULL);
+        spice_assert(lzplt_palette_out == NULL);
         return FILL_BITS_TYPE_SURFACE;
     }
     case SPICE_IMAGE_TYPE_BITMAP: {
@@ -6373,7 +6377,7 @@ static FillBitsType fill_bits(DisplayChannelClient *dcc, SpiceMarshaller *m,
             fill_palette(dcc, palette, &bitmap->flags);
             spice_marshall_Image(m, &image,
                                  &bitmap_palette_out, &lzplt_palette_out);
-            ASSERT(lzplt_palette_out == NULL);
+            spice_assert(lzplt_palette_out == NULL);
 
             if (bitmap_palette_out && palette) {
                 spice_marshall_Palette(bitmap_palette_out, palette);
@@ -6387,7 +6391,7 @@ static FillBitsType fill_bits(DisplayChannelClient *dcc, SpiceMarshaller *m,
 
             spice_marshall_Image(m, &image,
                                  &bitmap_palette_out, &lzplt_palette_out);
-            ASSERT(bitmap_palette_out == NULL);
+            spice_assert(bitmap_palette_out == NULL);
 
             marshaller_add_compressed(m, comp_send_data.comp_buf,
                                       comp_send_data.comp_buf_size);
@@ -6396,7 +6400,7 @@ static FillBitsType fill_bits(DisplayChannelClient *dcc, SpiceMarshaller *m,
                 spice_marshall_Palette(lzplt_palette_out, comp_send_data.lzplt_palette);
             }
 
-            ASSERT(!comp_send_data.is_lossy || can_lossy);
+            spice_assert(!comp_send_data.is_lossy || can_lossy);
             return (comp_send_data.is_lossy ? FILL_BITS_TYPE_COMPRESS_LOSSY :
                                               FILL_BITS_TYPE_COMPRESS_LOSSLESS);
         }
@@ -6407,13 +6411,15 @@ static FillBitsType fill_bits(DisplayChannelClient *dcc, SpiceMarshaller *m,
         image.u.quic = simage->u.quic;
         spice_marshall_Image(m, &image,
                              &bitmap_palette_out, &lzplt_palette_out);
-        ASSERT(bitmap_palette_out == NULL);
-        ASSERT(lzplt_palette_out == NULL);
+        spice_assert(bitmap_palette_out == NULL);
+        spice_assert(lzplt_palette_out == NULL);
         spice_marshaller_add_ref_chunks(m, image.u.quic.data);
         return FILL_BITS_TYPE_COMPRESS_LOSSLESS;
     default:
-        red_error("invalid image type %u", image.descriptor.type);
+        spice_error("invalid image type %u", image.descriptor.type);
     }
+
+    return 0;
 }
 
 static void fill_mask(RedChannelClient *rcc, SpiceMarshaller *m,
@@ -6706,7 +6712,7 @@ static int pipe_rendered_drawables_intersect_with_areas(RedWorker *worker,
     PipeItem *pipe_item;
     Ring *pipe;
 
-    ASSERT(num_surfaces);
+    spice_assert(num_surfaces);
     pipe = &dcc->common.base.pipe;
 
     for (pipe_item = (PipeItem *)ring_get_head(pipe);
@@ -6780,7 +6786,7 @@ static void red_pipe_replace_rendered_drawables_with_images(RedWorker *worker,
         resent_areas[num_resent] = drawable->red_drawable->bbox;
         num_resent++;
 
-        ASSERT(image);
+        spice_assert(image);
         red_channel_client_pipe_remove_and_release(&dcc->common.base, &dpi->dpi_pipe_item);
         pipe_item = &image->link;
     }
@@ -7722,7 +7728,7 @@ static void red_lossy_marshall_qxl_drawable(RedWorker *worker, RedChannelClient 
         red_lossy_marshall_qxl_draw_text(worker, rcc, base_marshaller, dpi);
         break;
     default:
-        red_error("invalid type");
+        spice_error("invalid type");
     }
 }
 
@@ -7773,7 +7779,7 @@ static inline void red_marshall_qxl_drawable(RedWorker *worker, RedChannelClient
         red_marshall_qxl_draw_text(worker, rcc, m, dpi);
         break;
     default:
-        red_error("invalid type");
+        spice_error("invalid type");
     }
 }
 
@@ -7956,7 +7962,7 @@ static inline uint8_t *red_get_image_line(RedWorker *worker, SpiceChunks *chunks
     }
 
     if (chunk->len - *offset < stride) {
-        red_printf("bad chunk alignment");
+        spice_printerr("bad chunk alignment");
         return NULL;
     }
     ret = chunk->data + *offset;
@@ -8011,8 +8017,8 @@ static inline int red_marshall_stream_data(RedChannelClient *rcc,
     RedWorker *worker = dcc->common.worker;
     int n;
 
-    ASSERT(stream);
-    ASSERT(drawable->red_drawable->type == QXL_DRAW_COPY);
+    spice_assert(stream);
+    spice_assert(drawable->red_drawable->type == QXL_DRAW_COPY);
 
     worker = display_channel->common.worker;
     image = drawable->red_drawable->u.copy.src_bitmap;
@@ -8062,7 +8068,7 @@ static inline void marshall_qxl_drawable(RedChannelClient *rcc,
     Drawable *item = dpi->drawable;
     DisplayChannel *display_channel = SPICE_CONTAINEROF(rcc->channel, DisplayChannel, common.base);
 
-    ASSERT(display_channel && rcc);
+    spice_assert(display_channel && rcc);
     if (item->stream && red_marshall_stream_data(rcc, m, item)) {
         return;
     }
@@ -8074,7 +8080,7 @@ static inline void marshall_qxl_drawable(RedChannelClient *rcc,
 
 static inline void red_marshall_verb(RedChannelClient *rcc, uint16_t verb)
 {
-    ASSERT(rcc);
+    spice_assert(rcc);
     red_channel_client_init_send_data(rcc, verb, NULL);
 }
 
@@ -8109,9 +8115,9 @@ static void display_channel_marshall_migrate_data(RedChannelClient *rcc,
 
     red_channel_client_init_send_data(rcc, SPICE_MSG_MIGRATE_DATA, NULL);
 
-    ASSERT(dcc->pixmap_cache);
+    spice_assert(dcc->pixmap_cache);
     display_data.magic = DISPLAY_MIGRATE_DATA_MAGIC;
-    ASSERT(MAX_CACHE_CLIENTS == 4); //MIGRATE_DATA_VERSION dependent
+    spice_assert(MAX_CACHE_CLIENTS == 4); //MIGRATE_DATA_VERSION dependent
     display_data.version = DISPLAY_MIGRATE_DATA_VERSION;
 
     display_data.message_serial = red_channel_client_get_message_serial(rcc);
@@ -8122,7 +8128,7 @@ static void display_channel_marshall_migrate_data(RedChannelClient *rcc,
     memcpy(display_data.pixmap_cache_clients, dcc->pixmap_cache->sync,
            sizeof(display_data.pixmap_cache_clients));
 
-    ASSERT(dcc->glz_dict);
+    spice_assert(dcc->glz_dict);
     red_freeze_glz(dcc);
     display_data.glz_dict_id = dcc->glz_dict->id;
     glz_enc_dictionary_get_restore_data(dcc->glz_dict->dict,
@@ -8187,7 +8193,7 @@ static void red_marshall_image(RedChannelClient *rcc, SpiceMarshaller *m, ImageI
     SpiceMarshaller *src_bitmap_out, *mask_bitmap_out;
     SpiceMarshaller *bitmap_palette_out, *lzplt_palette_out;
 
-    ASSERT(rcc && display_channel && item);
+    spice_assert(rcc && display_channel && item);
     worker = display_channel->common.worker;
 
     QXL_SET_IMAGE_ID(&red_image, QXL_IMAGE_GROUP_RED, ++worker->bits_unique);
@@ -8312,14 +8318,14 @@ static void red_display_marshall_upgrade(RedChannelClient *rcc, SpiceMarshaller 
     SpiceMsgDisplayDrawCopy copy;
     SpiceMarshaller *src_bitmap_out, *mask_bitmap_out;
 
-    ASSERT(rcc && rcc->channel && item && item->drawable);
+    spice_assert(rcc && rcc->channel && item && item->drawable);
 
     red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_DRAW_COPY, &item->base);
 
     red_drawable = item->drawable->red_drawable;
-    ASSERT(red_drawable->type == QXL_DRAW_COPY);
-    ASSERT(red_drawable->u.copy.rop_descriptor == SPICE_ROPD_OP_PUT);
-    ASSERT(red_drawable->u.copy.mask.bitmap == 0);
+    spice_assert(red_drawable->type == QXL_DRAW_COPY);
+    spice_assert(red_drawable->u.copy.rop_descriptor == SPICE_ROPD_OP_PUT);
+    spice_assert(red_drawable->u.copy.mask.bitmap == 0);
 
     copy.base.surface_id = 0;
     copy.base.box = red_drawable->bbox;
@@ -8340,7 +8346,7 @@ static void red_display_marshall_stream_start(RedChannelClient *rcc,
     Stream *stream = agent->stream;
 
     agent->last_send_time = 0;
-    ASSERT(stream);
+    spice_assert(stream);
     red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_STREAM_CREATE, &agent->create_item);
     SpiceMsgDisplayStreamCreate stream_create;
     SpiceClipRects clip_rects;
@@ -8377,7 +8383,7 @@ static void red_display_marshall_stream_clip(RedChannelClient *rcc,
     DisplayChannelClient *dcc = RCC_TO_DCC(rcc);
     StreamAgent *agent = item->stream_agent;
 
-    ASSERT(agent->stream);
+    spice_assert(agent->stream);
 
     red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_STREAM_CLIP, &item->base);
     SpiceMsgDisplayStreamClip stream_clip;
@@ -8404,7 +8410,7 @@ static void red_display_marshall_stream_end(RedChannelClient *rcc,
 static void red_cursor_marshall_inval(RedChannelClient *rcc,
                 SpiceMarshaller *m, CacheItem *cach_item)
 {
-    ASSERT(rcc);
+    spice_assert(rcc);
     red_marshall_inval(rcc, m, cach_item);
 }
 
@@ -8417,7 +8423,7 @@ static void red_marshall_cursor_init(RedChannelClient *rcc, SpiceMarshaller *bas
     SpiceMsgCursorInit msg;
     AddBufInfo info;
 
-    ASSERT(rcc);
+    spice_assert(rcc);
     cursor_channel = SPICE_CONTAINEROF(rcc->channel, CursorChannel, common.base);
     worker = cursor_channel->common.worker;
 
@@ -8453,7 +8459,7 @@ static void red_marshall_cursor(RedChannelClient *rcc,
     RedCursorCmd *cmd;
     RedWorker *worker;
 
-    ASSERT(cursor_channel);
+    spice_assert(cursor_channel);
 
     worker = cursor_channel->common.worker;
 
@@ -8495,7 +8501,7 @@ static void red_marshall_cursor(RedChannelClient *rcc,
         }
         break;
     default:
-        red_error("bad cursor command %d", cmd->type);
+        spice_error("bad cursor command %d", cmd->type);
     }
 }
 
@@ -8561,7 +8567,7 @@ static void display_channel_send_item(RedChannelClient *rcc, PipeItem *pipe_item
         red_marshall_verb(rcc, ((VerbItem*)pipe_item)->verb);
         break;
     case PIPE_ITEM_TYPE_MIGRATE:
-        red_printf("PIPE_ITEM_TYPE_MIGRATE");
+        spice_printerr("PIPE_ITEM_TYPE_MIGRATE");
         display_channel_marshall_migrate(rcc, m);
         break;
     case PIPE_ITEM_TYPE_MIGRATE_DATA:
@@ -8593,7 +8599,7 @@ static void display_channel_send_item(RedChannelClient *rcc, PipeItem *pipe_item
         break;
     }
     default:
-        red_error("invalid pipe item type");
+        spice_error("invalid pipe item type");
     }
 
     display_channel_client_release_item_before_push(dcc, pipe_item);
@@ -8620,7 +8626,7 @@ static void cursor_channel_send_item(RedChannelClient *rcc, PipeItem *pipe_item)
         red_marshall_verb(rcc, ((VerbItem*)pipe_item)->verb);
         break;
     case PIPE_ITEM_TYPE_MIGRATE:
-        red_printf("PIPE_ITEM_TYPE_MIGRATE");
+        spice_printerr("PIPE_ITEM_TYPE_MIGRATE");
         cursor_channel_marshall_migrate(rcc, m);
         break;
     case PIPE_ITEM_TYPE_CURSOR_INIT:
@@ -8632,7 +8638,7 @@ static void cursor_channel_send_item(RedChannelClient *rcc, PipeItem *pipe_item)
         red_marshall_verb(rcc, SPICE_MSG_CURSOR_INVAL_ALL);
         break;
     default:
-        red_error("invalid pipe item type");
+        spice_error("invalid pipe item type");
     }
 
     cursor_channel_client_release_item_before_push(ccc, pipe_item);
@@ -8662,7 +8668,7 @@ static void __show_tree_call(TreeItem *item, void *data)
     int i;
 
     while (tree_data->container != item->container) {
-        ASSERT(tree_data->container);
+        spice_assert(tree_data->container);
         tree_data->level--;
         tree_data->container = tree_data->container->base.container;
     }
@@ -8726,11 +8732,11 @@ static void display_channel_client_on_disconnect(RedChannelClient *rcc)
     if (!rcc) {
         return;
     }
-    red_printf("");
+    spice_printerr("");
     common = SPICE_CONTAINEROF(rcc->channel, CommonChannel, base);
     worker = common->worker;
     display_channel = (DisplayChannel *)rcc->channel;
-    ASSERT(display_channel == worker->display_channel);
+    spice_assert(display_channel == worker->display_channel);
 #ifdef COMPRESS_STAT
     print_compress_stats(display_channel);
 #endif
@@ -8746,9 +8752,9 @@ static void display_channel_client_on_disconnect(RedChannelClient *rcc)
     if (!red_channel_is_connected(rcc->channel)) {
         red_display_destroy_compress_bufs(display_channel);
     }
-    red_printf_debug(3, "WORKER", "#draw=%d, #red_draw=%d, #glz_draw=%d",
-                     worker->drawable_count, worker->red_drawable_count,
-                     worker->glz_drawable_count);
+    spice_debug("#draw=%d, #red_draw=%d, #glz_draw=%d",
+                worker->drawable_count, worker->red_drawable_count,
+                worker->glz_drawable_count);
 }
 
 void red_disconnect_all_display_TODO_remove_me(RedChannel *channel)
@@ -8858,8 +8864,10 @@ static inline void *create_canvas_for_surface(RedWorker *worker, RedSurface *sur
         return canvas;
 #endif
     default:
-        red_error("invalid renderer type");
+        spice_error("invalid renderer type");
     };
+
+    return NULL;
 }
 
 static SurfaceCreateItem *get_surface_create_item(
@@ -8870,7 +8878,7 @@ static SurfaceCreateItem *get_surface_create_item(
     SurfaceCreateItem *create;
 
     create = (SurfaceCreateItem *)malloc(sizeof(SurfaceCreateItem));
-    PANIC_ON(!create);
+    spice_warn_if(!create);
 
     create->surface_create.surface_id = surface_id;
     create->surface_create.width = width;
@@ -8931,9 +8939,9 @@ static inline void red_create_surface(RedWorker *worker, uint32_t surface_id, ui
     uint32_t i;
 
     if (stride >= 0) {
-        PANIC("Untested path stride >= 0");
+        spice_critical("Untested path stride >= 0");
     }
-    PANIC_ON(surface->context.canvas);
+    spice_warn_if(surface->context.canvas);
 
     surface->context.canvas_draws_on_surface = FALSE;
     surface->context.width = width;
@@ -8956,7 +8964,7 @@ static inline void red_create_surface(RedWorker *worker, uint32_t surface_id, ui
                                                             width, height, stride,
                                                             surface->context.format, line_0);
         if (!surface->context.canvas) {
-            PANIC("drawing canvas creating failed - can`t create same type canvas");
+            spice_critical("drawing canvas creating failed - can`t create same type canvas");
         }
 
         if (send_client) {
@@ -8984,7 +8992,7 @@ static inline void red_create_surface(RedWorker *worker, uint32_t surface_id, ui
         }
     }
 
-    PANIC("unable to create drawing canvas");
+    spice_critical("unable to create drawing canvas");
 }
 
 static inline void flush_display_commands(RedWorker *worker)
@@ -9021,7 +9029,7 @@ static inline void flush_display_commands(RedWorker *worker)
             // TODO: MC: the whole timeout will break since it takes lowest timeout, should
             // do it client by client.
             if (red_now() >= end_time) {
-                red_printf("update timeout");
+                spice_printerr("update timeout");
                 red_disconnect_all_display_TODO_remove_me(channel);
             } else {
                 sleep_count++;
@@ -9063,7 +9071,7 @@ static inline void flush_cursor_commands(RedWorker *worker)
             red_channel_receive(channel);
             red_channel_send(channel);
             if (red_now() >= end_time) {
-                red_printf("flush cursor timeout");
+                spice_printerr("flush cursor timeout");
                 red_disconnect_cursor(channel);
             } else {
                 sleep_count++;
@@ -9107,15 +9115,15 @@ static int display_channel_client_wait_for_init(DisplayChannelClient *dcc)
         if (dcc->pixmap_cache && dcc->glz_dict) {
             dcc->pixmap_cache_generation = dcc->pixmap_cache->generation;
             /* TODO: move common.id? if it's used for a per client structure.. */
-            red_printf("creating encoder with id == %d", dcc->common.id);
+            spice_printerr("creating encoder with id == %d", dcc->common.id);
             dcc->glz = glz_encoder_create(dcc->common.id, dcc->glz_dict->dict, &dcc->glz_data.usr);
             if (!dcc->glz) {
-                PANIC("create global lz failed");
+                spice_critical("create global lz failed");
             }
             return TRUE;
         }
         if (red_now() > end_time) {
-            red_printf("timeout");
+            spice_printerr("timeout");
             red_channel_client_disconnect(&dcc->common.base);
             break;
         }
@@ -9189,10 +9197,10 @@ static GlzSharedDictionary *red_create_glz_dictionary(DisplayChannelClient *dcc,
                                                             MAX_LZ_ENCODERS,
                                                             &dcc->glz_data.usr);
 #ifdef COMPRESS_DEBUG
-    red_printf("Lz Window %d Size=%d", id, window_size);
+    spice_printerr("Lz Window %d Size=%d", id, window_size);
 #endif
     if (!glz_dict) {
-        PANIC("failed creating lz dictionary");
+        spice_critical("failed creating lz dictionary");
         return NULL;
     }
     return _red_create_glz_dictionary(dcc->common.base.client, id, glz_dict);
@@ -9205,7 +9213,7 @@ static GlzSharedDictionary *red_create_restored_glz_dictionary(DisplayChannelCli
     GlzEncDictContext *glz_dict = glz_enc_dictionary_restore(restore_data,
                                                              &dcc->glz_data.usr);
     if (!glz_dict) {
-        PANIC("failed creating lz dictionary");
+        spice_critical("failed creating lz dictionary");
         return NULL;
     }
     return _red_create_glz_dictionary(dcc->common.base.client, id, glz_dict);
@@ -9342,7 +9350,7 @@ static void red_release_pixmap_cache(DisplayChannelClient *dcc)
 
 static int display_channel_init_cache(DisplayChannelClient *dcc, SpiceMsgcDisplayInit *init_info)
 {
-    ASSERT(!dcc->pixmap_cache);
+    spice_assert(!dcc->pixmap_cache);
     return !!(dcc->pixmap_cache = red_get_pixmap_cache(dcc->common.base.client,
                                                        init_info->pixmap_cache_id,
                                                        init_info->pixmap_cache_size));
@@ -9351,7 +9359,7 @@ static int display_channel_init_cache(DisplayChannelClient *dcc, SpiceMsgcDispla
 static int display_channel_init_glz_dictionary(DisplayChannelClient *dcc,
                                                SpiceMsgcDisplayInit *init_info)
 {
-    ASSERT(!dcc->glz_dict);
+    spice_assert(!dcc->glz_dict);
     ring_init(&dcc->glz_drawables);
     ring_init(&dcc->glz_drawables_inst_to_free);
     pthread_mutex_init(&dcc->glz_drawables_inst_to_free_lock, NULL);
@@ -9369,7 +9377,7 @@ static int display_channel_init(DisplayChannelClient *dcc, SpiceMsgcDisplayInit 
 static int display_channel_handle_migrate_glz_dictionary(DisplayChannelClient *dcc,
                                                          DisplayChannelMigrateData *migrate_info)
 {
-    ASSERT(!dcc->glz_dict);
+    spice_assert(!dcc->glz_dict);
     ring_init(&dcc->glz_drawables);
     ring_init(&dcc->glz_drawables_inst_to_free);
     pthread_mutex_init(&dcc->glz_drawables_inst_to_free_lock, NULL);
@@ -9384,7 +9392,7 @@ static int display_channel_handle_migrate_mark(RedChannelClient *rcc)
     RedChannel *channel = &display_channel->common.base;
 
     if (!display_channel->expect_migrate_mark) {
-        red_printf("unexpected");
+        spice_printerr("unexpected");
         return FALSE;
     }
     display_channel->expect_migrate_mark = FALSE;
@@ -9398,12 +9406,12 @@ static uint64_t display_channel_handle_migrate_data_get_serial(
     DisplayChannelMigrateData *migrate_data = message;
 
     if (size < sizeof(*migrate_data)) {
-        red_printf("bad message size");
+        spice_printerr("bad message size");
         return 0;
     }
     if (migrate_data->magic != DISPLAY_MIGRATE_DATA_MAGIC ||
         migrate_data->version != DISPLAY_MIGRATE_DATA_VERSION) {
-        red_printf("invalid content");
+        spice_printerr("invalid content");
         return 0;
     }
     return migrate_data->message_serial;
@@ -9419,17 +9427,17 @@ static uint64_t display_channel_handle_migrate_data(RedChannelClient *rcc, uint3
     int i;
 
     if (size < sizeof(*migrate_data)) {
-        red_printf("bad message size");
+        spice_printerr("bad message size");
         return FALSE;
     }
     migrate_data = (DisplayChannelMigrateData *)message;
     if (migrate_data->magic != DISPLAY_MIGRATE_DATA_MAGIC ||
         migrate_data->version != DISPLAY_MIGRATE_DATA_VERSION) {
-        red_printf("invalid content");
+        spice_printerr("invalid content");
         return FALSE;
     }
     if (!display_channel->expect_migrate_data) {
-        red_printf("unexpected");
+        spice_printerr("unexpected");
         return FALSE;
     }
     display_channel->expect_migrate_data = FALSE;
@@ -9456,10 +9464,10 @@ static uint64_t display_channel_handle_migrate_data(RedChannelClient *rcc, uint3
         dcc->glz = glz_encoder_create(dcc->common.id,
                                       dcc->glz_dict->dict, &dcc->glz_data.usr);
         if (!dcc->glz) {
-            PANIC("create global lz failed");
+            spice_critical("create global lz failed");
         }
     } else {
-        PANIC("restoring global lz dictionary failed");
+        spice_critical("restoring global lz dictionary failed");
     }
 
     red_channel_client_pipe_add_type(rcc, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
@@ -9474,7 +9482,7 @@ static int display_channel_handle_message(RedChannelClient *rcc, uint32_t size, 
     switch (type) {
     case SPICE_MSGC_DISPLAY_INIT:
         if (!dcc->expect_init) {
-            red_printf("unexpected SPICE_MSGC_DISPLAY_INIT");
+            spice_printerr("unexpected SPICE_MSGC_DISPLAY_INIT");
             return FALSE;
         }
         dcc->expect_init = FALSE;
@@ -9493,12 +9501,12 @@ static int common_channel_config_socket(RedChannelClient *rcc)
     int delay_val;
 
     if ((flags = fcntl(stream->socket, F_GETFL)) == -1) {
-        red_printf("accept failed, %s", strerror(errno));
+        spice_printerr("accept failed, %s", strerror(errno));
         return FALSE;
     }
 
     if (fcntl(stream->socket, F_SETFL, flags | O_NONBLOCK) == -1) {
-        red_printf("accept failed, %s", strerror(errno));
+        spice_printerr("accept failed, %s", strerror(errno));
         return FALSE;
     }
 
@@ -9507,7 +9515,7 @@ static int common_channel_config_socket(RedChannelClient *rcc)
     if (setsockopt(stream->socket, IPPROTO_TCP, TCP_NODELAY, &delay_val,
                    sizeof(delay_val)) == -1) {
         if (errno != ENOTSUP) {
-            red_printf("setsockopt failed, %s", strerror(errno));
+            spice_printerr("setsockopt failed, %s", strerror(errno));
         }
     }
     return TRUE;
@@ -9553,7 +9561,7 @@ static SpiceWatch *worker_watch_add(int fd, int event_mask, SpiceWatchFunc func,
         }
     }
     if (i == MAX_EVENT_SOURCES) {
-        red_printf("ERROR could not add a watch for channel type %u id %u",
+        spice_printerr("ERROR could not add a watch for channel type %u id %u",
                    rcc->channel->type, rcc->channel->id);
         return NULL;
     }
@@ -9700,7 +9708,7 @@ error:
 
 static void display_channel_hold_pipe_item(RedChannelClient *rcc, PipeItem *item)
 {
-    ASSERT(item);
+    spice_assert(item);
     switch (item->type) {
     case PIPE_ITEM_TYPE_DRAW:
         ref_drawable_pipe_item(SPICE_CONTAINEROF(item, DrawablePipeItem, dpi_pipe_item));
@@ -9722,7 +9730,7 @@ static void display_channel_hold_pipe_item(RedChannelClient *rcc, PipeItem *item
         ((ImageItem *)item)->refs++;
         break;
     default:
-        PANIC("invalid item type");
+        spice_critical("invalid item type");
     }
 }
 
@@ -9755,7 +9763,7 @@ static void display_channel_client_release_item_after_push(DisplayChannelClient 
         free(item);
         break;
     default:
-        PANIC("invalid item type");
+        spice_critical("invalid item type");
     }
 }
 
@@ -9814,7 +9822,7 @@ static void display_channel_client_release_item_before_push(DisplayChannelClient
         free(item);
         break;
     default:
-        PANIC("invalid item type");
+        spice_critical("invalid item type");
     }
 }
 
@@ -9822,11 +9830,11 @@ static void display_channel_release_item(RedChannelClient *rcc, PipeItem *item, 
 {
     DisplayChannelClient *dcc = RCC_TO_DCC(rcc);
 
-    ASSERT(item);
+    spice_assert(item);
     if (item_pushed) {
         display_channel_client_release_item_after_push(dcc, item);
     } else {
-        red_printf_once("not pushed (%d)", item->type);
+        spice_debug("not pushed (%d)", item->type);
         display_channel_client_release_item_before_push(dcc, item);
     }
 }
@@ -9839,7 +9847,7 @@ static void display_channel_create(RedWorker *worker, int migrate)
         return;
     }
 
-    red_printf("create display channel");
+    spice_printerr("create display channel");
     if (!(worker->display_channel = (DisplayChannel *)__new_channel(
             worker, sizeof(*display_channel),
             SPICE_CHANNEL_DISPLAY, migrate,
@@ -9852,7 +9860,7 @@ static void display_channel_create(RedWorker *worker, int migrate)
             display_channel_handle_migrate_data,
             display_channel_handle_migrate_data_get_serial
             ))) {
-        red_printf("failed to create display channel");
+        spice_printerr("failed to create display channel");
         return;
     }
     display_channel = worker->display_channel;
@@ -9887,18 +9895,18 @@ static void handle_new_display_channel(RedWorker *worker, RedClient *client, Red
     int is_low_bandwidth = main_channel_client_is_low_bandwidth(red_client_get_main(client));
 
     if (!worker->display_channel) {
-        red_printf("Warning: Display channel was not created");
+        spice_printerr("Warning: Display channel was not created");
         return;
     }
     display_channel = worker->display_channel;
-    red_printf("add display channel client");
+    spice_printerr("add display channel client");
     dcc = display_channel_client_create(&display_channel->common, client, stream,
                                         common_caps, num_common_caps,
                                         caps, num_caps);
     if (!dcc) {
         return;
     }
-    red_printf("New display (client %p) dcc %p stream %p", client, dcc, stream);
+    spice_printerr("New display (client %p) dcc %p stream %p", client, dcc, stream);
     stream_buf_size = 32*1024;
     dcc->send_data.stream_outbuf = spice_malloc(stream_buf_size);
     dcc->send_data.stream_outbuf_size = stream_buf_size;
@@ -9925,8 +9933,8 @@ static void handle_new_display_channel(RedWorker *worker, RedClient *client, Red
                                                  SPICE_WAN_COMPRESSION_ALWAYS);
     }
 
-    red_printf("jpeg %s", display_channel->enable_jpeg ? "enabled" : "disabled");
-    red_printf("zlib-over-glz %s", display_channel->enable_zlib_glz_wrap ? "enabled" : "disabled");
+    spice_printerr("jpeg %s", display_channel->enable_jpeg ? "enabled" : "disabled");
+    spice_printerr("zlib-over-glz %s", display_channel->enable_zlib_glz_wrap ? "enabled" : "disabled");
 
     // todo: tune level according to bandwidth
     display_channel->zlib_level = ZLIB_DEFAULT_COMPRESSION_LEVEL;
@@ -9950,7 +9958,7 @@ static void red_disconnect_cursor(RedChannel *channel)
         return;
     }
     common = SPICE_CONTAINEROF(channel, CommonChannel, base);
-    ASSERT(channel == (RedChannel *)common->worker->cursor_channel);
+    spice_assert(channel == (RedChannel *)common->worker->cursor_channel);
     common->worker->cursor_channel = NULL;
     red_channel_apply_clients(channel, red_reset_cursor_cache);
     red_channel_disconnect(channel);
@@ -9971,7 +9979,7 @@ static void on_new_cursor_channel(RedWorker *worker, RedChannelClient *rcc)
 {
     CursorChannel *channel = worker->cursor_channel;
 
-    ASSERT(channel);
+    spice_assert(channel);
     red_channel_client_ack_zero_messages_window(rcc);
     red_channel_client_push_set_ack(rcc);
     // TODO: why do we check for context.canvas? defer this to after display cc is connected
@@ -9984,7 +9992,7 @@ static void on_new_cursor_channel(RedWorker *worker, RedChannelClient *rcc)
 static void cursor_channel_hold_pipe_item(RedChannelClient *rcc, PipeItem *item)
 {
     CursorPipeItem *cursor_pipe_item;
-    ASSERT(item);
+    spice_assert(item);
     cursor_pipe_item = SPICE_CONTAINEROF(item, CursorPipeItem, base);
     ref_cursor_pipe_item(cursor_pipe_item);
 }
@@ -10008,7 +10016,7 @@ static void cursor_channel_client_release_item_before_push(CursorChannelClient *
         free(item);
         break;
     default:
-        red_error("invalid pipe item type");
+        spice_error("invalid pipe item type");
     }
 }
 
@@ -10022,7 +10030,7 @@ static void cursor_channel_client_release_item_after_push(CursorChannelClient *c
             break;
         }
         default:
-            PANIC("invalid item type");
+            spice_critical("invalid item type");
     }
 }
 
@@ -10030,12 +10038,12 @@ static void cursor_channel_release_item(RedChannelClient *rcc, PipeItem *item, i
 {
     CursorChannelClient *ccc = RCC_TO_CCC(rcc);
 
-    ASSERT(item);
+    spice_assert(item);
 
     if (item_pushed) {
         cursor_channel_client_release_item_after_push(ccc, item);
     } else {
-        red_printf_once("not pushed (%d)", item->type);
+        spice_debug("not pushed (%d)", item->type);
         cursor_channel_client_release_item_before_push(ccc, item);
     }
 }
@@ -10045,7 +10053,7 @@ static void cursor_channel_create(RedWorker *worker, int migrate)
     if (worker->cursor_channel != NULL) {
         return;
     }
-    red_printf("create cursor channel");
+    spice_printerr("create cursor channel");
     worker->cursor_channel = (CursorChannel *)__new_channel(
         worker, sizeof(*worker->cursor_channel),
         SPICE_CHANNEL_CURSOR, migrate,
@@ -10068,11 +10076,11 @@ static void red_connect_cursor(RedWorker *worker, RedClient *client, RedsStream 
     CursorChannelClient *ccc;
 
     if (worker->cursor_channel == NULL) {
-        red_printf("Warning: cursor channel was not created");
+        spice_printerr("Warning: cursor channel was not created");
         return;
     }
     channel = worker->cursor_channel;
-    red_printf("add cursor channel client");
+    spice_printerr("add cursor channel client");
     ccc = cursor_channel_create_rcc(&channel->common, client, stream,
                                     common_caps, num_common_caps,
                                     caps, num_caps);
@@ -10104,7 +10112,7 @@ static void red_wait_outgoing_item(RedChannelClient *rcc)
         return;
     }
     end_time = red_now() + DETACH_TIMEOUT;
-    red_printf("blocked");
+    spice_printerr("blocked");
 
     do {
         usleep(DETACH_SLEEP_DURATION);
@@ -10113,12 +10121,12 @@ static void red_wait_outgoing_item(RedChannelClient *rcc)
     } while ((blocked = red_channel_client_blocked(rcc)) && red_now() < end_time);
 
     if (blocked) {
-        red_printf("timeout");
+        spice_printerr("timeout");
         // TODO - shutting down the socket but we still need to trigger
         // disconnection. Right now we wait for main channel to error for that.
         red_channel_client_shutdown(rcc);
     } else {
-        ASSERT(red_channel_client_no_item_being_sent(rcc));
+        spice_assert(red_channel_client_no_item_being_sent(rcc));
     }
 }
 
@@ -10127,7 +10135,7 @@ static void rcc_shutdown_if_blocked(RedChannelClient *rcc)
     if (red_channel_client_blocked(rcc)) {
         red_channel_client_shutdown(rcc);
     } else {
-        ASSERT(red_channel_client_no_item_being_sent(rcc));
+        spice_assert(red_channel_client_no_item_being_sent(rcc));
     }
 }
 
@@ -10141,7 +10149,7 @@ static void red_wait_outgoing_items(RedChannel *channel)
     }
 
     end_time = red_now() + DETACH_TIMEOUT;
-    red_printf("blocked");
+    spice_printerr("blocked");
 
     do {
         usleep(DETACH_SLEEP_DURATION);
@@ -10150,10 +10158,10 @@ static void red_wait_outgoing_items(RedChannel *channel)
     } while ((blocked = red_channel_any_blocked(channel)) && red_now() < end_time);
 
     if (blocked) {
-        red_printf("timeout");
+        spice_printerr("timeout");
         red_channel_apply_clients(channel, rcc_shutdown_if_blocked);
     } else {
-        ASSERT(red_channel_no_item_being_sent(channel));
+        spice_assert(red_channel_no_item_being_sent(channel));
     }
 }
 
@@ -10168,7 +10176,7 @@ static void red_wait_pipe_item_sent(RedChannelClient *rcc, PipeItem *item)
         return;
     }
 
-    red_printf("");
+    spice_printerr("");
     channel->channel_cbs.hold_item(rcc, item);
 
     end_time = red_now() + CHANNEL_PUSH_TIMEOUT;
@@ -10187,7 +10195,7 @@ static void red_wait_pipe_item_sent(RedChannelClient *rcc, PipeItem *item)
     }
 
     if (item_in_pipe) {
-        red_printf("timeout");
+        spice_printerr("timeout");
         red_channel_client_disconnect(rcc);
     } else {
         if (red_channel_client_item_being_sent(rcc, item)) {
@@ -10236,7 +10244,7 @@ void handle_dev_update_async(void *opaque, void *payload)
     red_get_rect_ptr(&rect, &qxl_area);
     flush_display_commands(worker);
 
-    ASSERT(worker->running);
+    spice_assert(worker->running);
 
     validate_surface(worker, surface_id);
     red_update_area(worker, &rect, surface_id);
@@ -10272,7 +10280,7 @@ void handle_dev_update(void *opaque, void *payload)
     red_get_rect_ptr(rect, qxl_area);
     flush_display_commands(worker);
 
-    ASSERT(worker->running);
+    spice_assert(worker->running);
 
     validate_surface(worker, surface_id);
     red_update_area(worker, rect, surface_id);
@@ -10328,7 +10336,7 @@ static inline void destroy_surface_wait(RedWorker *worker, int surface_id)
 
 static void dev_destroy_surface_wait(RedWorker *worker, uint32_t surface_id)
 {
-    ASSERT(surface_id == 0);
+    spice_assert(surface_id == 0);
 
     flush_all_qxl_commands(worker);
 
@@ -10381,10 +10389,10 @@ static inline void dev_destroy_surfaces(RedWorker *worker)
             if (worker->surfaces[i].context.canvas) {
                 red_destroy_surface(worker, i);
             }
-            ASSERT(!worker->surfaces[i].context.canvas);
+            spice_assert(!worker->surfaces[i].context.canvas);
         }
     }
-    ASSERT(ring_is_empty(&worker->streams));
+    spice_assert(ring_is_empty(&worker->streams));
 
     if (display_is_connected(worker)) {
         red_channel_pipes_add_type(&worker->display_channel->common.base,
@@ -10410,9 +10418,9 @@ static void dev_create_primary_surface(RedWorker *worker, uint32_t surface_id,
 {
     uint8_t *line_0;
 
-    PANIC_ON(surface_id != 0);
-    PANIC_ON(surface.height == 0);
-    PANIC_ON(((uint64_t)abs(surface.stride) * (uint64_t)surface.height) !=
+    spice_warn_if(surface_id != 0);
+    spice_warn_if(surface.height == 0);
+    spice_warn_if(((uint64_t)abs(surface.stride) * (uint64_t)surface.height) !=
              abs(surface.stride) * surface.height);
 
     line_0 = (uint8_t*)get_virt(&worker->mem_slots, surface.mem,
@@ -10446,19 +10454,19 @@ void handle_dev_create_primary_surface(void *opaque, void *payload)
 
 static void dev_destroy_primary_surface(RedWorker *worker, uint32_t surface_id)
 {
-    PANIC_ON(surface_id != 0);
+    spice_warn_if(surface_id != 0);
 
     if (!worker->surfaces[surface_id].context.canvas) {
-        red_printf("double destroy of primary surface");
+        spice_printerr("double destroy of primary surface");
         return;
     }
 
     flush_all_qxl_commands(worker);
     dev_destroy_surface_wait(worker, 0);
     red_destroy_surface(worker, 0);
-    ASSERT(ring_is_empty(&worker->streams));
+    spice_assert(ring_is_empty(&worker->streams));
 
-    ASSERT(!worker->surfaces[surface_id].context.canvas);
+    spice_assert(!worker->surfaces[surface_id].context.canvas);
 
     red_cursor_reset(worker);
 }
@@ -10518,8 +10526,8 @@ void handle_dev_stop(void *opaque, void *payload)
 {
     RedWorker *worker = opaque;
 
-    red_printf("stop");
-    ASSERT(worker->running);
+    spice_printerr("stop");
+    spice_assert(worker->running);
     worker->running = FALSE;
     red_display_clear_glz_drawables(worker->display_channel);
     flush_all_surfaces(worker);
@@ -10533,7 +10541,7 @@ void handle_dev_start(void *opaque, void *payload)
     RedChannel *cursor_red_channel = &worker->cursor_channel->common.base;
     RedChannel *display_red_channel = &worker->display_channel->common.base;
 
-    ASSERT(!worker->running);
+    spice_assert(!worker->running);
     if (worker->cursor_channel) {
         cursor_red_channel->migrate = FALSE;
     }
@@ -10558,16 +10566,15 @@ void handle_dev_oom(void *opaque, void *payload)
     RedChannel *display_red_channel = &worker->display_channel->common.base;
     int ring_is_empty;
 
-    ASSERT(worker->running);
+    spice_assert(worker->running);
     // streams? but without streams also leak
-    red_printf_debug(1, "WORKER",
-                     "OOM1 #draw=%u, #red_draw=%u, #glz_draw=%u current %u pipes %u",
-                     worker->drawable_count,
-                     worker->red_drawable_count,
-                     worker->glz_drawable_count,
-                     worker->current_size,
-                     worker->display_channel ?
-                     red_channel_sum_pipes_size(display_red_channel) : 0);
+    spice_debug("OOM1 #draw=%u, #red_draw=%u, #glz_draw=%u current %u pipes %u",
+                worker->drawable_count,
+                worker->red_drawable_count,
+                worker->glz_drawable_count,
+                worker->current_size,
+                worker->display_channel ?
+                red_channel_sum_pipes_size(display_red_channel) : 0);
     while (red_process_commands(worker, MAX_PIPE_SIZE, &ring_is_empty)) {
         red_channel_push(&worker->display_channel->common.base);
     }
@@ -10575,14 +10582,13 @@ void handle_dev_oom(void *opaque, void *payload)
         red_free_some(worker);
         worker->qxl->st->qif->flush_resources(worker->qxl);
     }
-    red_printf_debug(1, "WORKER",
-                     "OOM2 #draw=%u, #red_draw=%u, #glz_draw=%u current %u pipes %u",
-                     worker->drawable_count,
-                     worker->red_drawable_count,
-                     worker->glz_drawable_count,
-                     worker->current_size,
-                     worker->display_channel ?
-                     red_channel_sum_pipes_size(display_red_channel) : 0);
+    spice_debug("OOM2 #draw=%u, #red_draw=%u, #glz_draw=%u current %u pipes %u",
+                worker->drawable_count,
+                worker->red_drawable_count,
+                worker->glz_drawable_count,
+                worker->current_size,
+                worker->display_channel ?
+                red_channel_sum_pipes_size(display_red_channel) : 0);
     clear_bit(RED_WORKER_PENDING_OOM, worker->pending);
 }
 
@@ -10644,7 +10650,7 @@ void handle_dev_display_connect(void *opaque, void *payload)
     RedClient *client = msg->client;
     int migration = msg->migration;
 
-    red_printf("connect");
+    spice_printerr("connect");
     handle_new_display_channel(worker, client, stream, migration,
                                msg->common_caps, msg->num_common_caps,
                                msg->caps, msg->num_caps);
@@ -10657,8 +10663,8 @@ void handle_dev_display_disconnect(void *opaque, void *payload)
     RedWorkerMessageDisplayDisconnect *msg = payload;
     RedChannelClient *rcc = msg->rcc;
 
-    red_printf("disconnect display client");
-    ASSERT(rcc);
+    spice_printerr("disconnect display client");
+    spice_assert(rcc);
     red_channel_client_disconnect(rcc);
 }
 
@@ -10668,8 +10674,8 @@ void handle_dev_display_migrate(void *opaque, void *payload)
     RedWorker *worker = opaque;
 
     RedChannelClient *rcc = msg->rcc;
-    red_printf("migrate display client");
-    ASSERT(rcc);
+    spice_printerr("migrate display client");
+    spice_assert(rcc);
     red_migrate_display(worker, rcc);
 }
 
@@ -10693,7 +10699,7 @@ void handle_dev_cursor_connect(void *opaque, void *payload)
     RedClient *client = msg->client;
     int migration = msg->migration;
 
-    red_printf("cursor connect");
+    spice_printerr("cursor connect");
     red_connect_cursor(worker, client, stream, migration,
                        msg->common_caps, msg->num_common_caps,
                        msg->caps, msg->num_caps);
@@ -10706,8 +10712,8 @@ void handle_dev_cursor_disconnect(void *opaque, void *payload)
     RedWorkerMessageCursorDisconnect *msg = payload;
     RedChannelClient *rcc = msg->rcc;
 
-    red_printf("disconnect cursor client");
-    ASSERT(rcc);
+    spice_printerr("disconnect cursor client");
+    spice_assert(rcc);
     red_channel_client_disconnect(rcc);
 }
 
@@ -10717,8 +10723,8 @@ void handle_dev_cursor_migrate(void *opaque, void *payload)
     RedWorker *worker = opaque;
     RedChannelClient *rcc = msg->rcc;
 
-    red_printf("migrate cursor client");
-    ASSERT(rcc);
+    spice_printerr("migrate cursor client");
+    spice_assert(rcc);
     red_migrate_cursor(worker, rcc);
 }
 
@@ -10730,25 +10736,25 @@ void handle_dev_set_compression(void *opaque, void *payload)
     worker->image_compression = msg->image_compression;
     switch (worker->image_compression) {
     case SPICE_IMAGE_COMPRESS_AUTO_LZ:
-        red_printf("ic auto_lz");
+        spice_printerr("ic auto_lz");
         break;
     case SPICE_IMAGE_COMPRESS_AUTO_GLZ:
-        red_printf("ic auto_glz");
+        spice_printerr("ic auto_glz");
         break;
     case SPICE_IMAGE_COMPRESS_QUIC:
-        red_printf("ic quic");
+        spice_printerr("ic quic");
         break;
     case SPICE_IMAGE_COMPRESS_LZ:
-        red_printf("ic lz");
+        spice_printerr("ic lz");
         break;
     case SPICE_IMAGE_COMPRESS_GLZ:
-        red_printf("ic glz");
+        spice_printerr("ic glz");
         break;
     case SPICE_IMAGE_COMPRESS_OFF:
-        red_printf("ic off");
+        spice_printerr("ic off");
         break;
     default:
-        red_printf("ic invalid");
+        spice_printerr("ic invalid");
     }
 #ifdef COMPRESS_STAT
     print_compress_stats(worker->display_channel);
@@ -10769,19 +10775,19 @@ void handle_dev_set_streaming_video(void *opaque, void *payload)
     RedWorker *worker = opaque;
 
     worker->streaming_video = msg->streaming_video;
-    ASSERT(worker->streaming_video != STREAM_VIDEO_INVALID);
+    spice_assert(worker->streaming_video != STREAM_VIDEO_INVALID);
     switch(worker->streaming_video) {
         case STREAM_VIDEO_ALL:
-            red_printf("sv all");
+            spice_printerr("sv all");
             break;
         case STREAM_VIDEO_FILTER:
-            red_printf("sv filter");
+            spice_printerr("sv filter");
             break;
         case STREAM_VIDEO_OFF:
-            red_printf("sv off");
+            spice_printerr("sv off");
             break;
         default:
-            red_printf("sv invalid");
+            spice_printerr("sv invalid");
     }
 }
 
@@ -10791,7 +10797,7 @@ void handle_dev_set_mouse_mode(void *opaque, void *payload)
     RedWorker *worker = opaque;
 
     worker->mouse_mode = msg->mode;
-    red_printf("mouse mode %u", worker->mouse_mode);
+    spice_printerr("mouse mode %u", worker->mouse_mode);
 }
 
 void handle_dev_add_memslot_async(void *opaque, void *payload)
@@ -10819,7 +10825,7 @@ void handle_dev_loadvm_commands(void *opaque, void *payload)
     uint32_t count = msg->count;
     QXLCommandExt *ext = msg->ext;
 
-    red_printf("loadvm_commands");
+    spice_printerr("loadvm_commands");
     for (i = 0 ; i < count ; ++i) {
         switch (ext[i].cmd.type) {
         case QXL_CMD_CURSOR:
@@ -10835,7 +10841,7 @@ void handle_dev_loadvm_commands(void *opaque, void *payload)
             red_process_surface(worker, surface_cmd, ext[i].group_id, TRUE);
             break;
         default:
-            red_printf("unhandled loadvm command type (%d)", ext[i].cmd.type);
+            spice_printerr("unhandled loadvm command type (%d)", ext[i].cmd.type);
             break;
         }
     }
@@ -10848,7 +10854,7 @@ static void worker_handle_dispatcher_async_done(void *opaque,
     RedWorker *worker = opaque;
     RedWorkerMessageAsync *msg_async = payload;
 
-    red_printf_debug(2, "WORKER", "");
+    spice_debug(NULL);
     red_dispatcher_async_complete(worker->red_dispatcher, msg_async->cmd);
 }
 
@@ -11039,7 +11045,7 @@ static void red_init(RedWorker *worker, WorkerInitData *init_data)
     Dispatcher *dispatcher;
     int i;
 
-    ASSERT(sizeof(CursorItem) <= QXL_CURSUR_DEVICE_DATA_SIZE);
+    spice_assert(sizeof(CursorItem) <= QXL_CURSUR_DEVICE_DATA_SIZE);
 
     memset(worker, 0, sizeof(RedWorker));
     dispatcher = red_dispatcher_get_dispatcher(init_data->red_dispatcher);
@@ -11051,7 +11057,7 @@ static void red_init(RedWorker *worker, WorkerInitData *init_data)
     register_callbacks(dispatcher);
     worker->pending = init_data->pending;
     worker->cursor_visible = TRUE;
-    ASSERT(init_data->num_renderers > 0);
+    spice_assert(init_data->num_renderers > 0);
     worker->num_renderers = init_data->num_renderers;
     memcpy(worker->renderers, init_data->renderers, sizeof(worker->renderers));
     worker->renderer = RED_RENDERER_INVALID;
@@ -11093,7 +11099,7 @@ static void red_init(RedWorker *worker, WorkerInitData *init_data)
                           init_data->memslot_id_bits,
                           init_data->internal_groupslot_id);
 
-    PANIC_ON(init_data->n_surfaces > NUM_SURFACES);
+    spice_warn_if(init_data->n_surfaces > NUM_SURFACES);
     worker->n_surfaces = init_data->n_surfaces;
 
     message = RED_WORKER_MESSAGE_READY;
@@ -11111,13 +11117,13 @@ void *red_worker_main(void *arg)
 {
     RedWorker worker;
 
-    red_printf("begin");
-    ASSERT(MAX_PIPE_SIZE > WIDE_CLIENT_ACK_WINDOW &&
+    spice_printerr("begin");
+    spice_assert(MAX_PIPE_SIZE > WIDE_CLIENT_ACK_WINDOW &&
            MAX_PIPE_SIZE > NARROW_CLIENT_ACK_WINDOW); //ensure wakeup by ack message
 
 #if  defined(RED_WORKER_STAT) || defined(COMPRESS_STAT)
     if (pthread_getcpuclockid(pthread_self(), &clock_id)) {
-        red_error("pthread_getcpuclockid failed");
+        spice_error("pthread_getcpuclockid failed");
     }
 #endif
 
@@ -11145,7 +11151,7 @@ void *red_worker_main(void *arg)
         worker.event_timeout = INF_EVENT_WAIT;
         if (num_events == -1) {
             if (errno != EINTR) {
-                red_error("poll failed, %s", strerror(errno));
+                spice_error("poll failed, %s", strerror(errno));
             }
         }
 
@@ -11181,7 +11187,7 @@ void *red_worker_main(void *arg)
         }
         red_push(&worker);
     }
-    red_printf("exit");
+    spice_printerr("exit");
     return 0;
 }
 
@@ -11260,7 +11266,7 @@ static void dump_bitmap(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_i
         alpha = 1;
         break;
     default:
-        red_error("invalid bitmap format  %u", bitmap->format);
+        spice_error("invalid bitmap format  %u", bitmap->format);
     }
 
     if (!rgb) {
@@ -11282,7 +11288,7 @@ static void dump_bitmap(RedWorker *worker, SpiceBitmap *bitmap, uint32_t group_i
 
     f = fopen(file_str, "wb");
     if (!f) {
-        red_error("Error creating bmp\n");
+        spice_error("Error creating bmp");
         return;
     }
 

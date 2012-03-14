@@ -63,11 +63,11 @@ static void FUNC_NAME(remove)(CHANNELCLIENT *channel_client, CacheItem *item)
 {
     CacheItem **now;
     CHANNEL *channel = CHANNEL_FROM_RCC(&channel_client->common.base);
-    ASSERT(item);
+    spice_assert(item);
 
     now = &channel_client->CACHE_NAME[CACHE_HASH_KEY(item->id)];
     for (;;) {
-        ASSERT(*now);
+        spice_assert(*now);
         if (*now == item) {
             *now = item->u.cache_data.next;
             break;

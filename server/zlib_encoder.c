@@ -50,7 +50,7 @@ ZlibEncoder* zlib_encoder_create(ZlibEncoderUsrContext *usr, int level)
     z_ret = deflateInit(&enc->strm, level);
     enc->last_level = level;
     if (z_ret != Z_OK) {
-        red_printf("zlib error");
+        spice_printerr("zlib error");
         free(enc);
         return NULL;
     }
@@ -76,7 +76,7 @@ int zlib_encode(ZlibEncoder *zlib, int level, int input_size,
     z_ret = deflateReset(&zlib->strm);
 
     if (z_ret != Z_OK) {
-        red_error("deflateReset failed");
+        spice_error("deflateReset failed");
     }
 
     zlib->strm.next_out = io_ptr;
@@ -86,12 +86,12 @@ int zlib_encode(ZlibEncoder *zlib, int level, int input_size,
         if (zlib->strm.avail_out == 0) {
             zlib->strm.avail_out = zlib->usr->more_space(zlib->usr, &zlib->strm.next_out);
             if (zlib->strm.avail_out == 0) {
-                red_error("not enough space");
+                spice_error("not enough space");
             }
         }
         z_ret = deflateParams(&zlib->strm, level, Z_DEFAULT_STRATEGY);
         if (z_ret != Z_OK) {
-            red_error("deflateParams failed");
+            spice_error("deflateParams failed");
         }
         zlib->last_level = level;
     }
@@ -100,14 +100,14 @@ int zlib_encode(ZlibEncoder *zlib, int level, int input_size,
     do {
         zlib->strm.avail_in = zlib->usr->more_input(zlib->usr, &zlib->strm.next_in);
         if (zlib->strm.avail_in <= 0) {
-            red_error("more input failed\n");
+            spice_error("more input failed");
         }
         enc_size += zlib->strm.avail_in;
         flush = (enc_size == input_size) ?  Z_FINISH : Z_NO_FLUSH;
         while (1) {
             int deflate_size = zlib->strm.avail_out;
             z_ret = deflate(&zlib->strm, flush);
-            ASSERT(z_ret != Z_STREAM_ERROR);
+            spice_assert(z_ret != Z_STREAM_ERROR);
             out_size += deflate_size - zlib->strm.avail_out;
             if (zlib->strm.avail_out) {
                 break;
@@ -115,11 +115,11 @@ int zlib_encode(ZlibEncoder *zlib, int level, int input_size,
 
             zlib->strm.avail_out = zlib->usr->more_space(zlib->usr, &zlib->strm.next_out);
             if (zlib->strm.avail_out == 0) {
-                red_error("not enough space");
+                spice_error("not enough space");
             }
         }
     } while (flush != Z_FINISH);
 
-    ASSERT(z_ret == Z_STREAM_END);
+    spice_assert(z_ret == Z_STREAM_END);
     return out_size;
 }

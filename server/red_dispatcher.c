@@ -44,13 +44,6 @@
 
 static int num_active_workers = 0;
 
-//volatile
-
-#define DBG_ASYNC(s, ...)   \
-    do {                    \
-        red_printf_debug(2, "ASYNC", s, ##__VA_ARGS__);   \
-    } while (0)
-
 struct AsyncCommand {
     RingItem link;
     RedWorkerMessage message;
@@ -98,7 +91,7 @@ static void red_dispatcher_set_display_peer(RedChannel *channel, RedClient *clie
     RedWorkerMessageDisplayConnect payload;
     RedDispatcher *dispatcher;
 
-    red_printf("");
+    spice_printerr("");
     dispatcher = (RedDispatcher *)channel->data;
     payload.client = client;
     payload.stream = stream;
@@ -127,7 +120,7 @@ static void red_dispatcher_disconnect_display_peer(RedChannelClient *rcc)
 
     dispatcher = (RedDispatcher *)rcc->channel->data;
 
-    red_printf("");
+    spice_printerr("");
     payload.rcc = rcc;
 
     // TODO: we turned it to be sync, due to client_destroy . Should we support async? - for this we will need ref count
@@ -145,7 +138,7 @@ static void red_dispatcher_display_migrate(RedChannelClient *rcc)
         return;
     }
     dispatcher = (RedDispatcher *)rcc->channel->data;
-    red_printf("channel type %u id %u", rcc->channel->type, rcc->channel->id);
+    spice_printerr("channel type %u id %u", rcc->channel->type, rcc->channel->id);
     payload.rcc = rcc;
     dispatcher_send_message(&dispatcher->dispatcher,
                             RED_WORKER_MESSAGE_DISPLAY_MIGRATE,
@@ -159,7 +152,7 @@ static void red_dispatcher_set_cursor_peer(RedChannel *channel, RedClient *clien
 {
     RedWorkerMessageCursorConnect payload;
     RedDispatcher *dispatcher = (RedDispatcher *)channel->data;
-    red_printf("");
+    spice_printerr("");
     payload.client = client;
     payload.stream = stream;
     payload.migration = migration;
@@ -186,7 +179,7 @@ static void red_dispatcher_disconnect_cursor_peer(RedChannelClient *rcc)
     }
 
     dispatcher = (RedDispatcher *)rcc->channel->data;
-    red_printf("");
+    spice_printerr("");
     payload.rcc = rcc;
 
     dispatcher_send_message(&dispatcher->dispatcher,
@@ -203,7 +196,7 @@ static void red_dispatcher_cursor_migrate(RedChannelClient *rcc)
         return;
     }
     dispatcher = (RedDispatcher *)rcc->channel->data;
-    red_printf("channel type %u id %u", rcc->channel->type, rcc->channel->id);
+    spice_printerr("channel type %u id %u", rcc->channel->type, rcc->channel->id);
     payload.rcc = rcc;
     dispatcher_send_message(&dispatcher->dispatcher,
                             RED_WORKER_MESSAGE_CURSOR_MIGRATE,
@@ -313,7 +306,7 @@ static AsyncCommand *async_command_alloc(RedDispatcher *dispatcher,
     async_command->message = message;
     ring_add(&dispatcher->async_commands, &async_command->link);
     pthread_mutex_unlock(&dispatcher->async_lock);
-    DBG_ASYNC("%p", async_command);
+    spice_debug("%p", async_command);
     return async_command;
 }
 
@@ -675,7 +668,7 @@ static void red_dispatcher_loadvm_commands(RedDispatcher *dispatcher,
 {
     RedWorkerMessageLoadvmCommands payload;
 
-    red_printf("");
+    spice_printerr("");
     payload.count = count;
     payload.ext = ext;
     dispatcher_send_message(&dispatcher->dispatcher,
@@ -701,7 +694,7 @@ void red_dispatcher_set_mm_time(uint32_t mm_time)
 
 static inline int calc_compression_level(void)
 {
-    ASSERT(streaming_video != STREAM_VIDEO_INVALID);
+    spice_assert(streaming_video != STREAM_VIDEO_INVALID);
     if ((streaming_video != STREAM_VIDEO_OFF) ||
         (image_compression != SPICE_IMAGE_COMPRESS_QUIC)) {
         return 0;
@@ -920,9 +913,9 @@ void red_dispatcher_async_complete(struct RedDispatcher *dispatcher,
 {
     pthread_mutex_lock(&dispatcher->async_lock);
     ring_remove(&async_command->link);
-    DBG_ASYNC("%p: cookie %" PRId64, async_command, async_command->cookie);
+    spice_debug("%p: cookie %" PRId64, async_command, async_command->cookie);
     if (ring_is_empty(&dispatcher->async_commands)) {
-        red_printf_debug(2, "ASYNC", "no more async commands");
+        spice_debug("no more async commands");
     }
     pthread_mutex_unlock(&dispatcher->async_lock);
     switch (async_command->message) {
@@ -943,7 +936,7 @@ void red_dispatcher_async_complete(struct RedDispatcher *dispatcher,
     case RED_WORKER_MESSAGE_FLUSH_SURFACES_ASYNC:
         break;
     default:
-        WARN("unexpected message");
+        spice_warning("unexpected message %d", async_command->message);
     }
     dispatcher->qxl->st->qif->async_complete(dispatcher->qxl,
                                              async_command->cookie);
@@ -995,7 +988,7 @@ RedDispatcher *red_dispatcher_init(QXLInstance *qxl)
 
     red_dispatcher = spice_new0(RedDispatcher, 1);
     ring_init(&red_dispatcher->async_commands);
-    DBG_ASYNC("red_dispatcher->async_commands.next %p", red_dispatcher->async_commands.next);
+    spice_debug("red_dispatcher->async_commands.next %p", red_dispatcher->async_commands.next);
     dispatcher_init(&red_dispatcher->dispatcher, RED_WORKER_MESSAGE_COUNT, NULL);
     init_data.qxl = red_dispatcher->qxl = qxl;
     init_data.id = qxl->id;
@@ -1046,12 +1039,12 @@ RedDispatcher *red_dispatcher_init(QXLInstance *qxl)
     sigdelset(&thread_sig_mask, SIGSEGV);
     pthread_sigmask(SIG_SETMASK, &thread_sig_mask, &curr_sig_mask);
     if ((r = pthread_create(&red_dispatcher->worker_thread, NULL, red_worker_main, &init_data))) {
-        red_error("create thread failed %d", r);
+        spice_error("create thread failed %d", r);
     }
     pthread_sigmask(SIG_SETMASK, &curr_sig_mask, NULL);
 
     read_message(red_dispatcher->dispatcher.send_fd, &message);
-    ASSERT(message == RED_WORKER_MESSAGE_READY);
+    spice_assert(message == RED_WORKER_MESSAGE_READY);
 
     display_channel = red_dispatcher_display_channel_create(red_dispatcher);
 

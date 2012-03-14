@@ -49,7 +49,7 @@ static int FUNC_NAME(hit)(CACHE *cache, uint64_t id, int *lossy, DisplayChannelC
         if (item->id == id) {
             ring_remove(&item->lru_link);
             ring_add(&cache->lru, &item->lru_link);
-            ASSERT(dcc->common.id < MAX_CACHE_CLIENTS)
+            spice_assert(dcc->common.id < MAX_CACHE_CLIENTS);
             item->sync[dcc->common.id] = serial;
             cache->sync[dcc->common.id] = serial;
             *lossy = item->lossy;
@@ -86,7 +86,7 @@ static int FUNC_NAME(add)(CACHE *cache, uint64_t id, uint32_t size, int lossy, D
     uint64_t serial;
     int key;
 
-    ASSERT(size > 0);
+    spice_assert(size > 0);
 
     item = spice_new(NewCacheItem, 1);
     serial = red_channel_client_get_message_serial(&dcc->common.base);
@@ -119,7 +119,7 @@ static int FUNC_NAME(add)(CACHE *cache, uint64_t id, uint32_t size, int lossy, D
 
         now = &cache->hash_table[CACHE_HASH_KEY(tail->id)];
         for (;;) {
-            ASSERT(*now);
+            spice_assert(*now);
             if (*now == tail) {
                 *now = tail->next;
                 break;
@@ -217,7 +217,7 @@ static int FUNC_NAME(freeze)(CACHE *cache)
 
 static void FUNC_NAME(destroy)(CACHE *cache)
 {
-    ASSERT(cache);
+    spice_assert(cache);
 
     pthread_mutex_lock(&cache->lock);
     PRIVATE_FUNC_NAME(clear)(cache);

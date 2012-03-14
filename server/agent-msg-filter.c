@@ -39,7 +39,7 @@ int agent_msg_filter_process_data(struct AgentMsgFilter *filter,
     struct VDAgentMessage msg_header;
 
     if (len > VD_AGENT_MAX_DATA_SIZE) {
-        red_printf("invalid agent message: too large");
+        spice_printerr("invalid agent message: too large");
         return AGENT_MSG_FILTER_PROTO_ERROR;
     }
 
@@ -47,7 +47,7 @@ int agent_msg_filter_process_data(struct AgentMsgFilter *filter,
     if (filter->msg_data_to_read) {
 data_to_read:
         if (len > filter->msg_data_to_read) {
-            red_printf("invalid agent message: data exceeds size from header");
+            spice_printerr("invalid agent message: data exceeds size from header");
             return AGENT_MSG_FILTER_PROTO_ERROR;
         }
         filter->msg_data_to_read -= len;
@@ -55,14 +55,14 @@ data_to_read:
     }
 
     if (len < sizeof(msg_header)) {
-        red_printf("invalid agent message: incomplete header");
+        spice_printerr("invalid agent message: incomplete header");
         return AGENT_MSG_FILTER_PROTO_ERROR;
     }
     memcpy(&msg_header, data, sizeof(msg_header));
     len -= sizeof(msg_header);
 
     if (msg_header.protocol != VD_AGENT_PROTOCOL) {
-        red_printf("invalid agent protocol: %u", msg_header.protocol);
+        spice_printerr("invalid agent protocol: %u", msg_header.protocol);
         return AGENT_MSG_FILTER_PROTO_ERROR;
     }
 

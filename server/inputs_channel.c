@@ -115,7 +115,7 @@ int inputs_inited(void)
 int inputs_set_keyboard(SpiceKbdInstance *_keyboard)
 {
     if (keyboard) {
-        red_printf("already have keyboard");
+        spice_printerr("already have keyboard");
         return -1;
     }
     keyboard = _keyboard;
@@ -126,7 +126,7 @@ int inputs_set_keyboard(SpiceKbdInstance *_keyboard)
 int inputs_set_mouse(SpiceMouseInstance *_mouse)
 {
     if (mouse) {
-        red_printf("already have mouse");
+        spice_printerr("already have mouse");
         return -1;
     }
     mouse = _mouse;
@@ -137,7 +137,7 @@ int inputs_set_mouse(SpiceMouseInstance *_mouse)
 int inputs_set_tablet(SpiceTabletInstance *_tablet)
 {
     if (tablet) {
-        red_printf("already have tablet");
+        spice_printerr("already have tablet");
         return -1;
     }
     tablet = _tablet;
@@ -152,7 +152,7 @@ int inputs_has_tablet(void)
 
 void inputs_detach_tablet(SpiceTabletInstance *_tablet)
 {
-    red_printf("");
+    spice_printerr("");
     tablet = NULL;
 }
 
@@ -166,7 +166,7 @@ void inputs_set_tablet_logical_size(int x_res, int y_res)
 
 const VDAgentMouseState *inputs_get_mouse_state(void)
 {
-    ASSERT(g_inputs_channel);
+    spice_assert(g_inputs_channel);
     return &g_inputs_channel->mouse_state;
 }
 
@@ -177,7 +177,7 @@ static uint8_t *inputs_channel_alloc_msg_rcv_buf(RedChannelClient *rcc,
     InputsChannel *inputs_channel = SPICE_CONTAINEROF(rcc->channel, InputsChannel, base);
 
     if (size > RECEIVE_BUF_SIZE) {
-        red_printf("error: too large incoming message");
+        spice_printerr("error: too large incoming message");
         return NULL;
     }
     return inputs_channel->recv_buf;
@@ -291,7 +291,7 @@ static int inputs_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, ui
     InputsChannelClient *icc = (InputsChannelClient *)rcc;
     uint8_t *buf = (uint8_t *)message;
 
-    ASSERT(g_inputs_channel == inputs_channel);
+    spice_assert(g_inputs_channel == inputs_channel);
     switch (type) {
     case SPICE_MSGC_INPUTS_KEY_DOWN: {
         SpiceMsgcKeyDown *key_up = (SpiceMsgcKeyDown *)buf;
@@ -333,7 +333,7 @@ static int inputs_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, ui
         if (reds_get_mouse_mode() != SPICE_MOUSE_MODE_CLIENT) {
             break;
         }
-        ASSERT((reds_get_agent_mouse() && reds_has_vdagent()) || tablet);
+        spice_assert((reds_get_agent_mouse() && reds_has_vdagent()) || tablet);
         if (!reds_get_agent_mouse() || !reds_has_vdagent()) {
             SpiceTabletInterface *sif;
             sif = SPICE_CONTAINEROF(tablet->base.sif, SpiceTabletInterface, base);
@@ -425,7 +425,7 @@ static int inputs_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, ui
     case SPICE_MSGC_DISCONNECTING:
         break;
     default:
-        red_printf("unexpected type %d", type);
+        spice_printerr("unexpected type %d", type);
         return FALSE;
     }
     return TRUE;
@@ -451,7 +451,7 @@ static void inputs_channel_on_disconnect(RedChannelClient *rcc)
 
 static void inputs_migrate(RedChannelClient *rcc)
 {
-    ASSERT(g_inputs_channel == (InputsChannel *)rcc->channel);
+    spice_assert(g_inputs_channel == (InputsChannel *)rcc->channel);
     red_channel_client_pipe_add_type(rcc, PIPE_ITEM_MIGRATE);
 }
 
@@ -473,7 +473,7 @@ static int inputs_channel_config_socket(RedChannelClient *rcc)
     if (setsockopt(stream->socket, IPPROTO_TCP, TCP_NODELAY,
             &delay_val, sizeof(delay_val)) == -1) {
         if (errno != ENOTSUP && errno != ENOPROTOOPT) {
-            red_printf("setsockopt failed, %s", strerror(errno));
+            spice_printerr("setsockopt failed, %s", strerror(errno));
             return FALSE;
         }
     }
@@ -492,10 +492,10 @@ static void inputs_connect(RedChannel *channel, RedClient *client,
 {
     InputsChannelClient *icc;
 
-    ASSERT(g_inputs_channel);
-    ASSERT(channel == &g_inputs_channel->base);
+    spice_assert(g_inputs_channel);
+    spice_assert(channel == &g_inputs_channel->base);
 
-    red_printf("inputs channel client create");
+    spice_printerr("inputs channel client create");
     icc = (InputsChannelClient*)red_channel_client_create(sizeof(InputsChannelClient),
                                                           channel,
                                                           client,
@@ -530,7 +530,7 @@ void inputs_init(void)
     ChannelCbs channel_cbs = { NULL, };
     ClientCbs client_cbs = { NULL, };
 
-    ASSERT(!g_inputs_channel);
+    spice_assert(!g_inputs_channel);
 
     channel_cbs.config_socket = inputs_channel_config_socket;
     channel_cbs.on_disconnect = inputs_channel_on_disconnect;
@@ -551,7 +551,7 @@ void inputs_init(void)
                                     &channel_cbs);
 
     if (!g_inputs_channel) {
-        red_error("failed to allocate Inputs Channel");
+        spice_error("failed to allocate Inputs Channel");
     }
 
     client_cbs.connect = inputs_connect;
@@ -561,6 +561,6 @@ void inputs_init(void)
     reds_register_channel(&g_inputs_channel->base);
 
     if (!(key_modifiers_timer = core->timer_add(key_modifiers_sender, NULL))) {
-        red_error("key modifiers timer create failed");
+        spice_error("key modifiers timer create failed");
     }
 }
