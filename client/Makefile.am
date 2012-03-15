@@ -213,7 +213,7 @@ INCLUDES = \
 	$(SSL_CFLAGS)					\
 	$(XRANDR_CFLAGS)				\
 	$(XFIXES_CFLAGS)				\
-	$(WARN_CFLAGS)					\
+	$(WARN_CXXFLAGS)				\
 	$(XINERAMA_CFLAGS)				\
 	$(CXIMAGE_CFLAGS)				\
 	$(NULL)
