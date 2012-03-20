@@ -234,11 +234,11 @@ double inline stat_byte_to_mega(uint64_t size)
 #define MAX_EVENT_SOURCES 20
 #define INF_EVENT_WAIT ~0
 
-typedef struct SpiceWatch {
+struct SpiceWatch {
     struct RedWorker *worker;
     SpiceWatchFunc watch_func;
     void *watch_func_opaque;
-} SpiceWatch;
+};
 
 enum {
     BUF_TYPE_RAW = 1,
