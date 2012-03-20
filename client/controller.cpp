@@ -27,9 +27,9 @@
 #include "debug.h"
 #include "platform.h"
 
-#define PIPE_NAME_MAX_LEN 50
 
 #ifdef WIN32
+#define PIPE_NAME_MAX_LEN 50
 #define PIPE_NAME "SpiceController-%lu"
 #endif
 
@@ -38,18 +38,16 @@ Controller::Controller(ControllerInterface *handler)
     , _exclusive (false)
     , _refs (1)
 {
-    char pipe_name[PIPE_NAME_MAX_LEN];
-
     ASSERT(_handler);
 #ifdef WIN32
+    char pipe_name[PIPE_NAME_MAX_LEN];
     snprintf(pipe_name, PIPE_NAME_MAX_LEN, PIPE_NAME, Platform::get_process_id());
 #else
-    const char *p_socket = getenv("SPICE_XPI_SOCKET");
-    if (!p_socket) {
+    const char *pipe_name = getenv("SPICE_XPI_SOCKET");
+    if (!pipe_name) {
         LOG_ERROR("Failed to get a controller connection (SPICE_XPI_SOCKET)");
         throw Exception("Failed to get a controller connection (SPICE_XPI_SOCKET)");
     }
-    strncpy(pipe_name, p_socket, sizeof(pipe_name));
 #endif
     LOG_INFO("Creating a controller connection %s", pipe_name);
     _pipe = NamedPipe::create(pipe_name, *this);
