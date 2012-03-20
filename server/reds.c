@@ -2480,9 +2480,7 @@ static void reds_start_auth_sasl(RedLinkInfo *link)
         if (err != SASL_OK) {
             red_printf("cannot set SASL external SSF %d (%s)",
                        err, sasl_errstring(err, NULL, NULL));
-            sasl_dispose(&sasl->conn);
-            sasl->conn = NULL;
-            goto error;
+            goto error_dispose;
         }
     } else {
         sasl->wantSSF = 1;
@@ -2510,9 +2508,7 @@ static void reds_start_auth_sasl(RedLinkInfo *link)
     if (err != SASL_OK) {
         red_printf("cannot set SASL security props %d (%s)",
                    err, sasl_errstring(err, NULL, NULL));
-        sasl_dispose(&sasl->conn);
-        sasl->conn = NULL;
-        goto error;
+        goto error_dispose;
     }
 
     err = sasl_listmech(sasl->conn,
@@ -2523,13 +2519,12 @@ static void reds_start_auth_sasl(RedLinkInfo *link)
                         &mechlist,
                         NULL,
                         NULL);
-    if (err != SASL_OK) {
+    if (err != SASL_OK || mechlist == NULL) {
         red_printf("cannot list SASL mechanisms %d (%s)",
                    err, sasl_errdetail(sasl->conn));
-        sasl_dispose(&sasl->conn);
-        sasl->conn = NULL;
-        goto error;
+        goto error_dispose;
     }
+
     red_printf("Available mechanisms for client: '%s'", mechlist);
 
     sasl->mechlist = spice_strdup(mechlist);
@@ -2549,6 +2544,9 @@ static void reds_start_auth_sasl(RedLinkInfo *link)
 
     return;
 
+error_dispose:
+    sasl_dispose(&sasl->conn);
+    sasl->conn = NULL;
 error:
     reds_link_free(link);
     return;
