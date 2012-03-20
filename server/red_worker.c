@@ -8374,9 +8374,8 @@ static void red_display_marshall_stream_clip(RedChannelClient *rcc,
 {
     DisplayChannelClient *dcc = RCC_TO_DCC(rcc);
     StreamAgent *agent = item->stream_agent;
-    Stream *stream = agent->stream;
 
-    ASSERT(stream);
+    ASSERT(agent->stream);
 
     red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_STREAM_CLIP, &item->base);
     SpiceMsgDisplayStreamClip stream_clip;
