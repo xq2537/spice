@@ -19,10 +19,12 @@
 #include <config.h>
 #endif
 
+#include <inttypes.h>
+
 #include "red_common.h"
 #include "red_memslots.h"
 
-static unsigned long __get_clean_virt(RedMemSlotInfo *info, unsigned long addr)
+static unsigned long __get_clean_virt(RedMemSlotInfo *info, QXLPHYSICAL addr)
 {
     return addr & info->memslot_clean_virt_mask;
 }
@@ -46,7 +48,7 @@ static void print_memslots(RedMemSlotInfo *info)
     }
 }
 
-unsigned long get_virt_delta(RedMemSlotInfo *info, unsigned long addr, int group_id)
+unsigned long get_virt_delta(RedMemSlotInfo *info, QXLPHYSICAL addr, int group_id)
 {
     MemSlot *slot;
     int slot_id;
@@ -107,7 +109,7 @@ unsigned long get_virt(RedMemSlotInfo *info, QXLPHYSICAL addr, uint32_t add_size
     slot_id = get_memslot_id(info, addr);
     if (slot_id > info->num_memslots) {
         print_memslots(info);
-        PANIC("slot_id too big, addr=%lx", addr);
+        PANIC("slot_id too big, addr=%" PRIx64, addr);
     }
 
     slot = &info->mem_slots[group_id][slot_id];
@@ -165,10 +167,11 @@ void red_memslot_info_init(RedMemSlotInfo *info,
         info->mem_slots[i] = spice_new0(MemSlot, num_slots);
     }
 
+    /* TODO: use QXLPHYSICAL_BITS */
     info->memslot_id_shift = 64 - info->mem_slot_bits;
     info->memslot_gen_shift = 64 - (info->mem_slot_bits + info->generation_bits);
-    info->memslot_gen_mask = ~((unsigned long)-1 << info->generation_bits);
-    info->memslot_clean_virt_mask = (((unsigned long)(-1)) >>
+    info->memslot_gen_mask = ~((QXLPHYSICAL)-1 << info->generation_bits);
+    info->memslot_clean_virt_mask = (((QXLPHYSICAL)(-1)) >>
                                        (info->mem_slot_bits + info->generation_bits));
 }
 
