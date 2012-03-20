@@ -2397,7 +2397,7 @@ static void reds_handle_auth_mechname(void *opaque)
     }
 
     free(sasl->mechlist);
-    sasl->mechlist = strdup(sasl->mechname);
+    sasl->mechlist = spice_strdup(sasl->mechname);
 
     red_printf("Validated mechname '%s'", sasl->mechname);
 
@@ -2532,7 +2532,7 @@ static void reds_start_auth_sasl(RedLinkInfo *link)
     }
     red_printf("Available mechanisms for client: '%s'", mechlist);
 
-    sasl->mechlist = strdup(mechlist);
+    sasl->mechlist = spice_strdup(mechlist);
 
     mechlistlen = strlen(mechlist);
     if (!sync_write(link->stream, &mechlistlen, sizeof(uint32_t))
@@ -3829,7 +3829,7 @@ SPICE_GNUC_VISIBLE int spice_server_set_sasl_appname(SpiceServer *s, const char 
     ASSERT(reds == s);
 #if HAVE_SASL
     free(sasl_appname);
-    sasl_appname = strdup(appname);
+    sasl_appname = spice_strdup(appname);
     return 0;
 #else
     return -1;
@@ -3839,7 +3839,7 @@ SPICE_GNUC_VISIBLE int spice_server_set_sasl_appname(SpiceServer *s, const char 
 SPICE_GNUC_VISIBLE void spice_server_set_name(SpiceServer *s, const char *name)
 {
     free(spice_name);
-    spice_name = strdup(name);
+    spice_name = spice_strdup(name);
 }
 
 SPICE_GNUC_VISIBLE void spice_server_set_uuid(SpiceServer *s, const uint8_t uuid[16])
@@ -4075,9 +4075,9 @@ static int reds_set_migration_dest_info(const char* dest,
     spice_migration = spice_new0(RedsMigSpice, 1);
     spice_migration->port = port;
     spice_migration->sport = secure_port;
-    spice_migration->host = strdup(dest);
+    spice_migration->host = spice_strdup(dest);
     if (cert_subject) {
-        spice_migration->cert_subject = strdup(cert_subject);
+        spice_migration->cert_subject = spice_strdup(cert_subject);
     }
 
     reds->mig_spice = spice_migration;

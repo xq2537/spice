@@ -1077,8 +1077,8 @@ static inline TunnelService *__tunnel_worker_add_service(TunnelWorker *worker, u
     new_service->group = group;
     new_service->port = port;
 
-    new_service->name = strdup(name);
-    new_service->description = strdup(description);
+    new_service->name = spice_strdup(name);
+    new_service->description = spice_strdup(description);
 
     ring_add(&worker->services, &new_service->ring_item);
     worker->num_services++;
