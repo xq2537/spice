@@ -496,7 +496,7 @@ static void do_wakeup(void *opaque)
 
 static void release_resource(QXLInstance *qin, struct QXLReleaseInfoExt release_info)
 {
-    QXLCommandExt *ext = (void*)release_info.info->id;
+    QXLCommandExt *ext = (unsigned long)release_info.info->id;
     //printf("%s\n", __func__);
     ASSERT(release_info.group_id == MEM_SLOT_GROUP_ID);
     switch (ext->cmd.type) {
@@ -507,7 +507,7 @@ static void release_resource(QXLInstance *qin, struct QXLReleaseInfoExt release_
             free(ext);
             break;
         case QXL_CMD_CURSOR: {
-            QXLCursorCmd *cmd = (QXLCursorCmd *)ext->cmd.data;
+            QXLCursorCmd *cmd = (unsigned long)ext->cmd.data;
             if (cmd->type == QXL_CURSOR_SET) {
                 free(cmd);
             }
@@ -563,14 +563,14 @@ static int get_cursor_command(QXLInstance *qin, struct QXLCommandExt *ext)
     cmd = calloc(sizeof(QXLCommandExt), 1);
     cursor_cmd = calloc(sizeof(QXLCursorCmd), 1);
 
-    cursor_cmd->release_info.id = (uint64_t)cmd;
+    cursor_cmd->release_info.id = (unsigned long)cmd;
 
     if (set) {
         cursor_cmd->type = QXL_CURSOR_SET;
         cursor_cmd->u.set.position.x = 0;
         cursor_cmd->u.set.position.y = 0;
         cursor_cmd->u.set.visible = TRUE;
-        cursor_cmd->u.set.shape = (uint64_t)&cursor;
+        cursor_cmd->u.set.shape = (unsigned long)&cursor;
         // Only a white rect (32x32) as cursor
         memset(cursor.data, 255, sizeof(cursor.data));
         set = 0;
@@ -580,7 +580,7 @@ static int get_cursor_command(QXLInstance *qin, struct QXLCommandExt *ext)
         cursor_cmd->u.position.y = y++ % HEIGHT;
     }
 
-    cmd->cmd.data = (uint64_t)cursor_cmd;
+    cmd->cmd.data = (unsigned long)cursor_cmd;
     cmd->cmd.type = QXL_CMD_CURSOR;
     cmd->group_id = MEM_SLOT_GROUP_ID;
     cmd->flags    = 0;
