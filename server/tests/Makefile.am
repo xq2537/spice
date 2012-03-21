@@ -24,13 +24,14 @@ COMMON_BASE =					\
 	test_util.h				\
 	$(NULL)
 
-noinst_PROGRAMS =				\
-	test_display_no_ssl			\
-	test_display_streaming			\
-	test_empty_success			\
+noinst_PROGRAMS =						\
+	test_display_no_ssl					\
+	test_display_streaming				\
+	test_empty_success					\
 	test_fail_on_null_core_interface	\
-	test_just_sockets_no_ssl		\
-	test_playback				\
+	test_just_sockets_no_ssl			\
+	test_playback						\
+	test_display_resolution_changes		\
 	$(NULL)
 
 test_display_streaming_SOURCES =		\
@@ -45,6 +46,13 @@ test_display_no_ssl_SOURCES =			\
 	test_display_base.c			\
 	test_display_base.h			\
 	test_display_no_ssl.c 			\
+	$(NULL)
+
+test_display_resolution_changes_SOURCES = \
+	$(COMMON_BASE)				\
+	test_display_base.c			\
+	test_display_base.h			\
+	test_display_resolution_changes.c	 \
 	$(NULL)
 
 test_just_sockets_no_ssl_SOURCES =		\
