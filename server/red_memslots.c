@@ -127,20 +127,6 @@ unsigned long get_virt(RedMemSlotInfo *info, unsigned long addr, uint32_t add_si
     return h_virt;
 }
 
-void *cb_get_virt(void *opaque, unsigned long addr,
-                  uint32_t add_size, uint32_t group_id)
-{
-    return (void *)get_virt((RedMemSlotInfo *)opaque, addr, add_size, group_id);
-}
-
-void cb_validate_virt(void *opaque,
-                      unsigned long virt, unsigned long from_addr,
-                      uint32_t add_size, uint32_t group_id)
-{
-    int slot_id = get_memslot_id((RedMemSlotInfo *)opaque, from_addr);
-    validate_virt((RedMemSlotInfo *)opaque, virt, slot_id, add_size, group_id);
-}
-
 void *validate_chunk (RedMemSlotInfo *info, QXLPHYSICAL data, uint32_t group_id, uint32_t *data_size_out, QXLPHYSICAL *next_out)
 {
     QXLDataChunk *chunk;
