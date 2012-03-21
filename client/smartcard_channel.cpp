@@ -19,9 +19,9 @@
 #endif
 
 #include <spice/enums.h>
+#include "common/mutex.h"
 
 #include "red_client.h"
-#include "mutex.h"
 
 extern "C" {
 #include <vscard_common.h>

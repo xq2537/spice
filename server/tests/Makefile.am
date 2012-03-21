@@ -1,21 +1,22 @@
 NULL =
 
-INCLUDES =                              \
-	-I$(top_srcdir)                 \
-	-I$(top_srcdir)/common          \
-	-I$(top_srcdir)/server          \
-	-I$(top_srcdir)/server/tests    \
-	$(PROTOCOL_CFLAGS)              \
-	$(SPICE_NONPKGCONFIG_CFLAGS)    \
+INCLUDES =					\
+	-I$(top_srcdir)				\
+	-I$(top_srcdir)/common			\
+	-I$(top_srcdir)/server			\
+	-I$(top_srcdir)/server/tests		\
+	$(COMMON_CFLAGS)			\
+	$(SMARTCARD_CFLAGS)			\
+	$(SPICE_NONPKGCONFIG_CFLAGS)		\
 	$(NULL)
 
 if SUPPORT_AUTOMATED_TESTS
 INCLUDES += -DAUTOMATED_TESTS
 endif
 
-LDADD =							\
-	$(top_builddir)/common/libspice-common.la	\
-	$(top_builddir)/server/libspice-server.la	\
+LDADD =								\
+	$(top_builddir)/spice-common/common/libspice-common.la	\
+	$(top_builddir)/server/libspice-server.la		\
 	$(NULL)
 
 COMMON_BASE =					\

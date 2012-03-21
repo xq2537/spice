@@ -20,12 +20,13 @@
 
 #include <sys/uio.h>
 #include <openssl/ssl.h>
+#include <spice/macros.h>
+
+#include "common/mem.h"
+#include "common/spice_common.h"
+#include "common/messages.h"
 
 #include "spice.h"
-#include "mem.h"
-#include "spice_common.h"
-#include <messages.h>
-#include <spice/macros.h>
 
 enum {
     STREAM_VIDEO_INVALID,

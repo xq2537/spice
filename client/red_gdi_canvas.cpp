@@ -21,19 +21,23 @@
 #include <config.h>
 #endif
 
-#include "common.h"
+#ifdef WIN32
+#include <winsock2.h>
+#endif
 #include <stdint.h>
+
+#include "common/region.h"
+#define SPICE_CANVAS_INTERNAL
+#define SW_CANVAS_CACHE
+#include "common/gdi_canvas.c"
+#undef SW_CANVAS_CACHE
+#undef SPICE_CANVAS_INTERNAL
+
+#include "common.h"
 #include "red_gdi_canvas.h"
 #include "utils.h"
 #include "debug.h"
-#include "region.h"
 #include "red_pixmap_gdi.h"
-
-#define SPICE_CANVAS_INTERNAL
-#define SW_CANVAS_CACHE
-#include "gdi_canvas.c"
-#undef SW_CANVAS_CACHE
-#undef SPICE_CANVAS_INTERNAL
 
 GDICanvas::GDICanvas(int width, int height, uint32_t format,
 		     PixmapCache& pixmap_cache, PaletteCache& palette_cache,

@@ -18,7 +18,7 @@
 #ifndef _H_RED_DRAWABLE
 #define _H_RED_DRAWABLE
 
-#include <pixman_utils.h>
+#include "common/pixman_utils.h"
 #include "pixels_source.h"
 #include "utils.h"
 

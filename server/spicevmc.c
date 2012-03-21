@@ -28,9 +28,9 @@
 #include <netinet/in.h> // IPPROTO_TCP
 #include <netinet/tcp.h> // TCP_NODELAY
 
-#include "server/char_device.h"
-#include "server/red_channel.h"
-#include "server/reds.h"
+#include "char_device.h"
+#include "red_channel.h"
+#include "reds.h"
 
 /* 64K should be enough for all but the largest writes + 32 bytes hdr */
 #define BUF_SIZE (64 * 1024 + 32)

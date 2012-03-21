@@ -18,8 +18,8 @@
 #ifndef _H_CURSOR_
 #define _H_CURSOR_
 
+#include "common/messages.h"
 #include "threads.h"
-#include "messages.h"
 #include "red_window_p.h"
 
 class CursorOpaque {

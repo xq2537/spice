@@ -20,13 +20,11 @@
 
 #include <exception>
 #include <sstream>
-
-#include "lz_common.h"
-
 #include <stdio.h>
 
 #include <spice/types.h>
 #include <spice/macros.h>
+#include "common/lz_common.h"
 
 class GlzException: public std::exception {
 public:

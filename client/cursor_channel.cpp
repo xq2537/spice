@@ -18,6 +18,8 @@
 #include <config.h>
 #endif
 
+#include "common/rect.h"
+
 #include "common.h"
 #include "cursor_channel.h"
 #include "display_channel.h"
@@ -28,7 +30,6 @@
 #include "utils.h"
 #include "screen.h"
 #include "red_pixmap_sw.h"
-#include "rect.h"
 
 static inline uint8_t revers_bits(uint8_t byte)
 {

@@ -140,9 +140,9 @@ AM_CONDITIONAL(SUPPORT_AUTOMATED_TESTS, test "x$enable_automated_tests" != "xno"
 dnl =========================================================================
 dnl Check deps
 
-AC_CONFIG_SUBDIRS([spice-protocol])
-PROTOCOL_CFLAGS='-I ${top_srcdir}/spice-protocol'
-AC_SUBST(PROTOCOL_CFLAGS)
+AC_CONFIG_SUBDIRS([spice-common])
+COMMON_CFLAGS='-I ${top_srcdir}/spice-common/ -I ${top_srcdir}/spice-common/spice-protocol/'
+AC_SUBST(COMMON_CFLAGS)
 
 AC_CHECK_LIBM
 AC_SUBST(LIBM)
@@ -541,10 +541,6 @@ m4_ifdef([AM_SILENT_RULES],[AM_SILENT_RULES([yes])])
 AC_OUTPUT([
 Makefile
 spice-server.pc
-common/Makefile
-common/win/Makefile
-common/win/my_getopt-1.5/Makefile
-python_modules/Makefile
 server/Makefile
 server/tests/Makefile
 client/Makefile

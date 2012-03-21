@@ -20,7 +20,6 @@
 #endif
 
 #include "common.h"
-#include "canvas.h"
 #include "red_pixmap.h"
 #ifdef USE_OPENGL
 #include "red_pixmap_gl.h"

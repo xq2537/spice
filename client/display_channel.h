@@ -19,9 +19,10 @@
 #ifndef _H_DISPLAY_CHANNEL
 #define _H_DISPLAY_CHANNEL
 
+#include "common/region.h"
+
 #include "common.h"
 #include "canvas.h"
-#include "region.h"
 #include "red_channel.h"
 #include "cache.hpp"
 #include "screen_layer.h"

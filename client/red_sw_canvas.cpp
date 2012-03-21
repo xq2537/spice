@@ -19,20 +19,24 @@
 #include <config.h>
 #endif
 
-#include "common.h"
 #include <stdint.h>
+#ifdef WIN32
+#include <winsock2.h>
+#endif
+
+#include "common/region.h"
+#define SPICE_CANVAS_INTERNAL
+#define SW_CANVAS_CACHE
+#include "common/sw_canvas.c"
+#undef SW_CANVAS_CACHE
+#undef SPICE_CANVAS_INTERNAL
+
+#include "common.h"
 #include "red_window.h"
 #include "red_sw_canvas.h"
 #include "utils.h"
 #include "debug.h"
-#include "region.h"
 #include "red_pixmap_sw.h"
-
-#define SPICE_CANVAS_INTERNAL
-#define SW_CANVAS_CACHE
-#include "sw_canvas.c"
-#undef SW_CANVAS_CACHE
-#undef SPICE_CANVAS_INTERNAL
 
 SCanvas::SCanvas(bool onscreen,
                  int width, int height, uint32_t format, RedWindow *win,

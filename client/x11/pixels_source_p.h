@@ -29,7 +29,8 @@
 #ifdef USE_OPENGL
 #include "red_pixmap_gl.h"
 #endif // USE_OPENGL
-#include "pixman_utils.h"
+
+#include "common/pixman_utils.h"
 
 enum {
     PIXELS_SOURCE_TYPE_INVALID,

@@ -23,6 +23,10 @@
 #include <io.h>
 #endif
 
+#include "common/quic.h"
+#include "common/mutex.h"
+#include "common/rect.h"
+
 #include "application.h"
 #include "screen.h"
 #include "utils.h"
@@ -38,13 +42,10 @@
 #ifdef USE_OPENGL
 #include "red_gl_canvas.h"
 #endif
-#include "quic.h"
-#include "mutex.h"
 #include "cmd_line_parser.h"
 #ifdef USE_TUNNEL
 #include "tunnel_channel.h"
 #endif
-#include "rect.h"
 #ifdef USE_GUI
 #include "gui/gui.h"
 #endif

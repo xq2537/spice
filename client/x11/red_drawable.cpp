@@ -26,7 +26,7 @@
 #include "utils.h"
 
 #ifdef USE_OPENGL
-#include "gl_utils.h"
+#include "common/gl_utils.h"
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include <GL/glext.h>

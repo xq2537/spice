@@ -18,8 +18,9 @@
 #ifndef _H_SCREEN
 #define _H_SCREEN
 
+#include "common/region.h"
+
 #include "common.h"
-#include "region.h"
 #include "red_key.h"
 #ifdef USE_OPENGL
 #include "GL/gl.h"

@@ -18,11 +18,11 @@
 #include <config.h>
 #endif
 
-#include "spice_common.h"
+#include "common/spice_common.h"
 
 #include "reds_gl_canvas.h"
 #define SPICE_CANVAS_INTERNAL
 #define SW_CANVAS_IMAGE_CACHE
-#include "gl_canvas.c"
+#include "common/gl_canvas.c"
 #undef SW_CANVAS_IMAGE_CACHE
 #undef SPICE_CANVAS_INTERNAL

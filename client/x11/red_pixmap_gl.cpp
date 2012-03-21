@@ -22,12 +22,12 @@
 #include <GL/glu.h>
 #include <GL/glext.h>
 #include <X11/Xlib.h>
+#include "common/gl_utils.h"
 
 #include "common.h"
 #include "red_pixmap_gl.h"
 #include "debug.h"
 #include "utils.h"
-#include "gl_utils.h"
 #include "pixels_source_p.h"
 #include "x_platform.h"
 #include "red_window_p.h"

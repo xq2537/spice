@@ -47,26 +47,26 @@
 #include <sasl/sasl.h>
 #endif
 
+#include <spice/protocol.h>
+#include <spice/vd_agent.h>
+#include <spice/stats.h>
+
+#include "common/generated_server_marshallers.h"
+#include "common/ring.h"
+
 #include "spice.h"
 #include "spice-experimental.h"
 #include "reds.h"
-#include <spice/protocol.h>
-#include <spice/vd_agent.h>
 #include "agent-msg-filter.h"
-
 #include "inputs_channel.h"
 #include "main_channel.h"
 #include "red_common.h"
 #include "red_dispatcher.h"
 #include "main_dispatcher.h"
 #include "snd_worker.h"
-#include <spice/stats.h>
 #include "stat.h"
-#include "ring.h"
 #include "demarshallers.h"
-#include "marshaller.h"
-#include "generated_marshallers.h"
-#include "server/char_device.h"
+#include "char_device.h"
 #ifdef USE_TUNNEL
 #include "red_tunnel_worker.h"
 #endif

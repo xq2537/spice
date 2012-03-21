@@ -18,15 +18,16 @@
 #include <config.h>
 #endif
 
-#include "common.h"
+#include <algorithm>
 #include <math.h>
+#include "common/client_marshallers.h"
+
+#include "common.h"
 #include "red_client.h"
 #include "application.h"
 #include "process_loop.h"
 #include "utils.h"
 #include "debug.h"
-#include "marshallers.h"
-#include <algorithm>
 
 #ifndef INFINITY
 #define INFINITY HUGE

@@ -19,7 +19,7 @@
 #ifndef _H_GLZ_DECODER
 #define _H_GLZ_DECODER
 
-#include "lz_common.h"
+#include "common/lz_common.h"
 #include "glz_decoder_config.h"
 #include "glz_decoder_window.h"
 #include "red_canvas_base.h"

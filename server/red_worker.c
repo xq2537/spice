@@ -44,31 +44,33 @@
 #include <setjmp.h>
 #include <openssl/ssl.h>
 
-#include <spice/qxl_dev.h>
-#include "spice.h"
-#include "region.h"
 #include <spice/protocol.h>
+#include <spice/qxl_dev.h>
+#include "common/lz.h"
+#include "common/marshaller.h"
+#include "common/quic.h"
+#include "common/rect.h"
+#include "common/region.h"
+#include "common/ring.h"
+#include "common/generated_server_marshallers.h"
+
+#ifdef USE_OPENGL
+#include "common/ogl_ctx.h"
+#include "reds_gl_canvas.h"
+#endif /* USE_OPENGL */
+
+#include "spice.h"
 #include "red_worker.h"
 #include "reds_sw_canvas.h"
-#ifdef USE_OPENGL
-#include "reds_gl_canvas.h"
-#include "ogl_ctx.h"
-#endif /* USE_OPENGL */
-#include "quic.h"
-#include "lz.h"
 #include "glz_encoder_dictionary.h"
 #include "glz_encoder.h"
 #include "stat.h"
 #include "reds.h"
-#include "ring.h"
 #include "mjpeg_encoder.h"
 #include "red_memslots.h"
 #include "red_parse_qxl.h"
 #include "jpeg_encoder.h"
-#include "rect.h"
-#include "marshaller.h"
 #include "demarshallers.h"
-#include "generated_marshallers.h"
 #include "zlib_encoder.h"
 #include "red_channel.h"
 #include "red_dispatcher.h"

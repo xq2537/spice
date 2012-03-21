@@ -29,11 +29,13 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
-#include "ring.h"
+
+#include "common/generated_server_marshallers.h"
+#include "common/ring.h"
+
 #include "stat.h"
 #include "red_channel.h"
 #include "reds.h"
-#include "generated_marshallers.h"
 
 static void red_channel_client_event(int fd, int event, void *data);
 static void red_client_add_channel(RedClient *client, RedChannelClient *rcc);

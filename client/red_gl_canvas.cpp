@@ -18,20 +18,21 @@
 #include <config.h>
 #endif
 
-#include "common.h"
 #include <stdint.h>
-#include "red_gl_canvas.h"
-#include "utils.h"
-#include "debug.h"
-#include "region.h"
-#include "red_pixmap_gl.h"
 #include <GL/glx.h>
+#include "common/region.h"
 
 #define SPICE_CANVAS_INTERNAL
 #define SW_CANVAS_CACHE
-#include "gl_canvas.c"
+#include "common/gl_canvas.c"
 #undef SW_CANVAS_CACHE
 #undef SPICE_CANVAS_INTERNAL
+
+#include "common.h"
+#include "red_gl_canvas.h"
+#include "utils.h"
+#include "debug.h"
+#include "red_pixmap_gl.h"
 
 GCanvas::GCanvas(int width, int height, uint32_t format, RedWindow *win,
                  RenderType rendertype,

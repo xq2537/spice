@@ -18,14 +18,15 @@
 #ifndef _H_REDCHANNEL
 #define _H_REDCHANNEL
 
+#include "common/client_demarshallers.h"
+#include "common/client_marshallers.h"
+
 #include "common.h"
 #include "utils.h"
 #include "threads.h"
 #include "red_peer.h"
 #include "platform.h"
 #include "process_loop.h"
-#include "demarshallers.h"
-#include "marshallers.h"
 
 enum {
     PASSIVE_STATE,

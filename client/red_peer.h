@@ -21,14 +21,15 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
-#include "common.h"
 #include <spice/protocol.h>
+#include "common/marshaller.h"
+#include "common/ssl_verify.h"
+
+#include "common.h"
 #include "process_loop.h"
 #include "threads.h"
 #include "platform_utils.h"
-#include "marshaller.h"
 #include "debug.h"
-#include "ssl_verify.h"
 
 class RedPeer: protected EventSources::Socket {
 public:

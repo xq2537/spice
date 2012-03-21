@@ -18,7 +18,7 @@
 #ifndef _H_MONITOR
 #define _H_MONITOR
 
-#include "draw.h"
+#include "common/draw.h"
 
 class Monitor {
 public:

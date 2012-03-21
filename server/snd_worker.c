@@ -27,14 +27,15 @@
 #include <netinet/tcp.h>
 #include <celt051/celt.h>
 
+#include "common/marshaller.h"
+#include "common/generated_server_marshallers.h"
+
 #include "spice.h"
 #include "red_common.h"
 #include "main_channel.h"
 #include "reds.h"
 #include "red_dispatcher.h"
 #include "snd_worker.h"
-#include "marshaller.h"
-#include "generated_marshallers.h"
 #include "demarshallers.h"
 
 #ifndef IOV_MAX

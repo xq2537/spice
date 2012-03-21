@@ -26,10 +26,12 @@
 #include <errno.h>
 #include <spice/macros.h>
 #include <spice/vd_agent.h>
+
 #include "common/marshaller.h"
 #include "common/messages.h"
-#include "server/demarshallers.h"
-#include "server/generated_marshallers.h"
+#include "common/generated_server_marshallers.h"
+
+#include "demarshallers.h"
 #include "spice.h"
 #include "red_common.h"
 #include "reds.h"

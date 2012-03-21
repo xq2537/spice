@@ -19,18 +19,20 @@
 #ifndef _H_CANVAS
 #define _H_CANVAS
 
+#include <map>
+
+#include "common/region.h"
+#include "common/messages.h"
+#include "common/canvas_utils.h"
+
 #include "common.h"
 #include "debug.h"
-#include "region.h"
-#include "messages.h"
 #include "cache.hpp"
 #include "shared_cache.hpp"
-#include "canvas_utils.h"
 #include "glz_decoded_image.h"
 #include "glz_decoder.h"
 #include "jpeg_decoder.h"
 #include "zlib_decoder.h"
-#include <map>
 
 enum CanvasType {
     CANVAS_TYPE_INVALID,

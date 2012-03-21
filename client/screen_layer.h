@@ -18,8 +18,8 @@
 #ifndef _H_SCREEN_LAYER
 #define _H_SCREEN_LAYER
 
+#include "common/region.h"
 #include "threads.h"
-#include "region.h"
 
 class RedScreen;
 class Application;

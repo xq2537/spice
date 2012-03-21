@@ -19,6 +19,7 @@
 #define _H_REDCLIENT
 
 #include <list>
+#include "common/messages.h"
 
 #include "common.h"
 #include "red_peer.h"
@@ -27,7 +28,6 @@
 #include "inputs_channel.h"
 #include "cursor_channel.h"
 #include "audio_channels.h"
-#include "messages.h"
 #include <spice/vd_agent.h>
 #include "process_loop.h"
 

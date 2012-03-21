@@ -48,20 +48,21 @@
 #include <sys/time.h>
 #endif
 
+#include <spice/vd_agent.h>
+#include "common/rect.h"
+
 #include "platform.h"
 #include "application.h"
 #include "utils.h"
 #include "x_platform.h"
 #include "debug.h"
 #include "monitor.h"
-#include "rect.h"
 #include "record.h"
 #include "playback.h"
 #include "resource.h"
 #include "res.h"
 #include "cursor.h"
 #include "process_loop.h"
-#include <spice/vd_agent.h>
 
 #define DWORD uint32_t
 #define BOOL bool

@@ -30,6 +30,11 @@
 
 extern "C" {
 #include <jpeglib.h>
+#ifdef HAVE_STDLIB_H
+/* on mingw, there is a hack,
+  and we also include config.h from spice-common, which redefine it */
+#undef HAVE_STDLIB_H
+#endif
 }
 
 class RGBConverter {

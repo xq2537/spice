@@ -29,9 +29,10 @@
 #include <inttypes.h>
 
 #include <spice/qxl_dev.h>
+#include "common/quic.h"
+
 #include "spice.h"
 #include "red_worker.h"
-#include "quic.h"
 #include "reds_sw_canvas.h"
 #ifdef USE_OPENGL
 #include "reds_gl_canvas.h"

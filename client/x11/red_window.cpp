@@ -33,20 +33,21 @@
 #endif // USE_OPENGL
 #include <stdio.h>
 
+#include <spice/protocol.h>
+#include "common/region.h"
+
+#ifdef USE_OPENGL
+#include "common/gl_utils.h"
+#include "red_pixmap_gl.h"
+#endif // USE_OPENGL
+
 #include "red_window.h"
 #include "utils.h"
 #include "debug.h"
 #include "platform.h"
 #include "x_platform.h"
 #include "pixels_source_p.h"
-#include <spice/protocol.h>
-#include "region.h"
-#ifdef USE_OPENGL
-#include "gl_utils.h"
-#include "red_pixmap_gl.h"
-#endif // USE_OPENGL
 #include "x_icon.h"
-
 
 #define X_RETRIES 10
 #define X_RETRY_DELAY_MICRO (1000 * 100)

@@ -1,14 +1,11 @@
+NULL =
 SUBDIRS = . tests
 
-NULL =
-
-INCLUDES = \
-	-I$(top_srcdir)				\
-	-I$(top_srcdir)/common			\
+AM_CPPFLAGS =					\
 	-DRED_STATISTICS			\
 	$(CELT051_CFLAGS)			\
+	$(COMMON_CFLAGS)			\
 	$(PIXMAN_CFLAGS)			\
-	$(PROTOCOL_CFLAGS)			\
 	$(SASL_CFLAGS)				\
 	$(SLIRP_CFLAGS)				\
 	$(SMARTCARD_CFLAGS)			\
@@ -16,18 +13,6 @@ INCLUDES = \
 	$(VISIBILITY_HIDDEN_CFLAGS)		\
 	$(WARN_CFLAGS)				\
 	$(NULL)
-
-spice_built_sources = generated_marshallers.c generated_marshallers.h generated_demarshallers.c
-
-generated_demarshallers.c: $(top_srcdir)/spice.proto
-	$(AM_V_GEN)$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-demarshallers --server --include red_common.h $(top_srcdir)/spice.proto generated_demarshallers.c
-
-STRUCTS=-M String -M Rect -M Point -M DisplayBase -M Fill -M Opaque -M Copy -M Blend -M Blackness -M Whiteness -M Invers -M Rop3 -M Stroke -M Text -M Transparent -M AlphaBlend
-generated_marshallers.c: $(top_srcdir)/spice.proto
-	$(AM_V_GEN)$(PYTHON) $(top_srcdir)/spice_codegen.py --include red_common.h --generate-marshallers $(STRUCTS) --server $(top_srcdir)/spice.proto generated_marshallers.c
-
-generated_marshallers.h: $(top_srcdir)/spice.proto
-	$(AM_V_GEN)$(PYTHON) $(top_srcdir)/spice_codegen.py --generate-marshallers $(STRUCTS) --server -H $(top_srcdir)/spice.proto generated_marshallers.h
 
 lib_LTLIBRARIES = libspice-server.la
 
@@ -41,17 +26,18 @@ libspice_server_la_LDFLAGS += \
 	-Wl,--version-script=$(top_srcdir)/server/spice-server.syms
 endif
 
-libspice_server_la_LIBADD =				\
-	$(top_builddir)/common/libspice-common.la	\
-	$(CELT051_LIBS)					\
-	$(GL_LIBS)					\
-	$(JPEG_LIBS)					\
-	$(LIBRT)					\
-	$(PIXMAN_LIBS)					\
-	$(SASL_LIBS)					\
-	$(SLIRP_LIBS)					\
-	$(SSL_LIBS)					\
-	$(Z_LIBS)					\
+libspice_server_la_LIBADD =						\
+	$(top_builddir)/spice-common/common/libspice-common.la		\
+	$(top_builddir)/spice-common/common/libspice-common-server.la	\
+	$(CELT051_LIBS)							\
+	$(GL_LIBS)							\
+	$(JPEG_LIBS)							\
+	$(LIBRT)							\
+	$(PIXMAN_LIBS)							\
+	$(SASL_LIBS)							\
+	$(SLIRP_LIBS)							\
+	$(SSL_LIBS)							\
+	$(Z_LIBS)							\
 	$(NULL)
 
 libspice_server_la_SOURCES =			\
@@ -59,9 +45,6 @@ libspice_server_la_SOURCES =			\
 	agent-msg-filter.h			\
 	char_device.h				\
 	demarshallers.h				\
-	generated_demarshallers.c		\
-	generated_marshallers.c			\
-	generated_marshallers.h			\
 	glz_encoder.c				\
 	glz_encoder.h				\
 	glz_encoder_config.h			\

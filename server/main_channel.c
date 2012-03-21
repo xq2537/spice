@@ -36,14 +36,15 @@
 #include <errno.h>
 #include <ctype.h>
 
-#include "server/red_common.h"
-#include "server/demarshallers.h"
-#include "common/ring.h"
+#include "common/generated_server_marshallers.h"
 #include "common/messages.h"
+#include "common/ring.h"
+
+#include "demarshallers.h"
 #include "main_channel.h"
-#include "reds.h"
 #include "red_channel.h"
-#include "generated_marshallers.h"
+#include "red_common.h"
+#include "reds.h"
 
 #define ZERO_BUF_SIZE 4096
 

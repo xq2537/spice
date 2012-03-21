@@ -20,12 +20,12 @@
 #endif
 
 #include <arpa/inet.h>
-
 #include <vscard_common.h>
-#include "server/reds.h"
-#include "server/char_device.h"
-#include "server/red_channel.h"
-#include "server/smartcard.h"
+
+#include "reds.h"
+#include "char_device.h"
+#include "red_channel.h"
+#include "smartcard.h"
 
 #define SMARTCARD_MAX_READERS 10
 

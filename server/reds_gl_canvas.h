@@ -20,7 +20,7 @@
 
 #define SPICE_CANVAS_INTERNAL
 #define SW_CANVAS_IMAGE_CACHE
-#include "gl_canvas.h"
+#include "common/gl_canvas.h"
 #undef SW_CANVAS_IMAGE_CACHE
 #undef SPICE_CANVAS_INTERNAL
 

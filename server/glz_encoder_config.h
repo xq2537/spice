@@ -19,7 +19,7 @@
 #define _H_GLZ_ENCODER_CONFIG
 
 #include <spice/macros.h>
-#include "lz_common.h"
+#include "common/lz_common.h"
 
 typedef void GlzUsrImageContext;
 typedef struct GlzEncoderUsrContext GlzEncoderUsrContext;

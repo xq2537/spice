@@ -19,15 +19,19 @@
 #include <config.h>
 #endif
 
-#include "common.h"
+#ifdef WIN32
+#include <winsock2.h>
+#endif
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
 #include <spice/protocol.h>
+#include "common/ssl_verify.h"
+
+#include "common.h"
 #include "red_peer.h"
 #include "utils.h"
 #include "debug.h"
 #include "platform_utils.h"
-#include "ssl_verify.h"
 
 static void ssl_error()
 {
