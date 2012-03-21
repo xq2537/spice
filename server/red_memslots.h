@@ -43,12 +43,12 @@ typedef struct RedMemSlotInfo {
     unsigned long memslot_clean_virt_mask;
 } RedMemSlotInfo;
 
-static inline int get_memslot_id(RedMemSlotInfo *info, unsigned long addr)
+static inline int get_memslot_id(RedMemSlotInfo *info, uint64_t addr)
 {
     return addr >> info->memslot_id_shift;
 }
 
-static inline int get_generation(RedMemSlotInfo *info, unsigned long addr)
+static inline int get_generation(RedMemSlotInfo *info, uint64_t addr)
 {
     return (addr >> info->memslot_gen_shift) & info->memslot_gen_mask;
 }

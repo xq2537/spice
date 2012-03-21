@@ -91,7 +91,7 @@ void validate_virt(RedMemSlotInfo *info, unsigned long virt, int slot_id,
     }
 }
 
-unsigned long get_virt(RedMemSlotInfo *info, unsigned long addr, uint32_t add_size,
+unsigned long get_virt(RedMemSlotInfo *info, QXLPHYSICAL addr, uint32_t add_size,
                        int group_id)
 {
     int slot_id;
