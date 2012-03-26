@@ -22,7 +22,7 @@
 #include <sys/socket.h>
 #include <spice/qxl_dev.h>
 
-#define SPICE_SERVER_VERSION 0x000a02 /* release 0.10.2 */
+#define SPICE_SERVER_VERSION 0x000a03 /* release 0.10.3 */
 
 /* interface base type */
 
@@ -484,6 +484,8 @@ int spice_server_set_agent_copypaste(SpiceServer *s, int enable);
 
 int spice_server_get_sock_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen);
 int spice_server_get_peer_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen);
+
+int spice_server_is_server_mouse(SpiceServer *s);
 
 /* migration interface */
 #define SPICE_INTERFACE_MIGRATION "migration"

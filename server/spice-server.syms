@@ -108,3 +108,7 @@ global:
     spice_server_set_uuid;
     spice_server_set_listen_socket_fd;
 } SPICE_SERVER_0.10.1;
+
+SPICE_SERVER_0.10.3 {
+    spice_server_is_server_mouse;
+} SPICE_SERVER_0.10.2;
