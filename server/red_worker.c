@@ -80,6 +80,7 @@
 #include "dispatcher.h"
 #include "main_channel.h"
 #include "migration_protocol.h"
+#include "spice_timer_queue.h"
 
 //#define COMPRESS_STAT
 //#define DUMP_BITMAP
@@ -10090,6 +10091,11 @@ static void worker_watch_remove(SpiceWatch *watch)
 }
 
 SpiceCoreInterface worker_core = {
+    .timer_add = spice_timer_queue_add,
+    .timer_start = spice_timer_set,
+    .timer_cancel = spice_timer_cancel,
+    .timer_remove = spice_timer_remove,
+
     .watch_update_mask = worker_watch_update_mask,
     .watch_add = worker_watch_add,
     .watch_remove = worker_watch_remove,
@@ -11860,6 +11866,10 @@ static void red_init(RedWorker *worker, WorkerInitData *init_data)
     spice_warn_if(init_data->n_surfaces > NUM_SURFACES);
     worker->n_surfaces = init_data->n_surfaces;
 
+    if (!spice_timer_queue_create()) {
+        spice_error("failed to create timer queue");
+    }
+
     message = RED_WORKER_MESSAGE_READY;
     write_message(worker->channel, &message);
 }
@@ -11893,10 +11903,14 @@ SPICE_GNUC_NORETURN void *red_worker_main(void *arg)
     worker->event_timeout = INF_EVENT_WAIT;
     for (;;) {
         int i, num_events;
+        unsigned int timers_queue_timeout;
 
+        timers_queue_timeout = spice_timer_queue_get_timeout_ms();
         worker->event_timeout = MIN(red_get_streams_timout(worker), worker->event_timeout);
+        worker->event_timeout = MIN(timers_queue_timeout, worker->event_timeout);
         num_events = poll(worker->poll_fds, MAX_EVENT_SOURCES, worker->event_timeout);
         red_handle_streams_timout(worker);
+        spice_timer_queue_cb();
 
         if (worker->display_channel) {
             /* during migration, in the dest, the display channel can be initialized
