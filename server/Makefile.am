@@ -93,6 +93,8 @@ libspice_server_la_SOURCES =			\
 	spice.h					\
 	stat.h					\
 	spicevmc.c				\
+	spice_timer_queue.c			\
+	spice_timer_queue.h			\
 	zlib_encoder.c				\
 	zlib_encoder.h				\
 	$(NULL)
