@@ -374,6 +374,12 @@ typedef struct ImageItem {
 
 typedef struct Drawable Drawable;
 
+enum {
+    STREAM_FRAME_NONE,
+    STREAM_FRAME_NATIVE,
+    STREAM_FRAME_CONTAINER,
+};
+
 typedef struct Stream Stream;
 struct Stream {
     uint8_t refs;
@@ -792,6 +798,7 @@ struct Drawable {
     int gradual_frames_count;
     int last_gradual_frame;
     Stream *stream;
+    Stream *sized_stream;
     int streamable;
     BitmapGradualType copy_bitmap_graduality;
     uint32_t group_id;
@@ -994,7 +1001,7 @@ static void red_update_area(RedWorker *worker, const SpiceRect *area, int surfac
 static void red_release_cursor(RedWorker *worker, CursorItem *cursor);
 static inline void release_drawable(RedWorker *worker, Drawable *item);
 static void red_display_release_stream(RedWorker *worker, StreamAgent *agent);
-static inline void red_detach_stream(RedWorker *worker, Stream *stream);
+static inline void red_detach_stream(RedWorker *worker, Stream *stream, int detach_sized);
 static void red_stop_stream(RedWorker *worker, Stream *stream);
 static inline void red_stream_maintenance(RedWorker *worker, Drawable *candidate, Drawable *sect);
 static inline void display_begin_send_message(RedChannelClient *rcc);
@@ -1747,7 +1754,7 @@ static inline void release_drawable(RedWorker *worker, Drawable *drawable)
         spice_assert(ring_is_empty(&drawable->pipes));
 
         if (drawable->stream) {
-            red_detach_stream(worker, drawable->stream);
+            red_detach_stream(worker, drawable->stream, TRUE);
         }
         region_destroy(&drawable->tree_item.base.rgn);
 
@@ -2424,11 +2431,14 @@ static void red_release_stream(RedWorker *worker, Stream *stream)
     }
 }
 
-static inline void red_detach_stream(RedWorker *worker, Stream *stream)
+static inline void red_detach_stream(RedWorker *worker, Stream *stream, int detach_sized)
 {
     spice_assert(stream->current && stream->current->stream);
     spice_assert(stream->current->stream == stream);
     stream->current->stream = NULL;
+    if (detach_sized) {
+        stream->current->sized_stream = NULL;
+    }
     stream->current = NULL;
 }
 
@@ -2531,6 +2541,7 @@ static void red_stop_stream(RedWorker *worker, Stream *stream)
 
     spice_assert(ring_item_is_linked(&stream->link));
     spice_assert(!stream->current);
+    spice_debug("stream %d", get_stream_id(worker, stream));
     WORKER_FOREACH_DCC(worker, item, dcc) {
         StreamAgent *stream_agent;
         stream_agent = &dcc->stream_agents[get_stream_id(worker, stream)];
@@ -2586,11 +2597,13 @@ static inline void red_display_detach_stream_gracefully(DisplayChannelClient *dc
         /* (1) The caller should detach the drawable from the stream. This will
          * lead to sending the drawable losslessly, as an ordinary drawable. */
         if (red_display_drawable_is_in_pipe(dcc, stream->current)) {
-            spice_debug("stream %d: upgrade by linked drawable. box ==>", stream_id);
+            spice_debug("stream %d: upgrade by linked drawable. sized %d, box ==>",
+                        stream_id, stream->current->sized_stream != NULL);
             rect_debug(&stream->current->red_drawable->bbox);
             return;
         }
-        spice_debug("stream %d: upgrade by drawable. box ==>", stream_id);
+        spice_debug("stream %d: upgrade by drawable. sized %d, box ==>",
+                    stream_id, stream->current->sized_stream != NULL);
         rect_debug(&stream->current->red_drawable->bbox);
         rcc = &dcc->common.base;
         channel = rcc->channel;
@@ -2629,7 +2642,7 @@ static inline void red_detach_stream_gracefully(RedWorker *worker, Stream *strea
         red_display_detach_stream_gracefully(dcc, stream);
     }
     if (stream->current) {
-        red_detach_stream(worker, stream);
+        red_detach_stream(worker, stream, TRUE);
     }
 }
 
@@ -2653,14 +2666,15 @@ static void red_detach_streams_behind(RedWorker *worker, QRegion *region)
             if (region_intersects(&agent->vis_region, region)) {
                 red_display_detach_stream_gracefully(dcc, stream);
                 detach_stream = 1;
+                spice_debug("stream %d", get_stream_id(worker, stream));
             }
         }
         if (detach_stream && stream->current) {
-            red_detach_stream(worker, stream);
+            red_detach_stream(worker, stream, TRUE);
         } else if (!has_clients) {
             if (stream->current &&
                 region_intersects(&stream->current->tree_item.base.rgn, region)) {
-                red_detach_stream(worker, stream);
+                red_detach_stream(worker, stream, TRUE);
             }
         }
     }
@@ -2840,7 +2854,7 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
     stream_width = src_rect->right - src_rect->left;
     stream_height = src_rect->bottom - src_rect->top;
 
-    stream->mjpeg_encoder = mjpeg_encoder_new(stream_width, stream_height);
+    stream->mjpeg_encoder = mjpeg_encoder_new();
 
     ring_add(&worker->streams, &stream->link);
     stream->current = drawable;
@@ -2858,7 +2872,9 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
         red_display_create_stream(dcc, stream);
     }
     worker->stream_count++;
-
+    spice_debug("stream %d %dx%d (%d, %d) (%d, %d)", (int)(stream - worker->streams_buf), stream->width,
+    stream->height, stream->dest_area.left, stream->dest_area.top,
+    stream->dest_area.right, stream->dest_area.bottom);
     return;
 }
 
@@ -2919,34 +2935,64 @@ static inline int __red_is_next_stream_frame(RedWorker *worker,
                                              const int other_src_height,
                                              const SpiceRect *other_dest,
                                              const red_time_t other_time,
-                                             const Stream *stream)
+                                             const Stream *stream,
+                                             int container_candidate_allowed)
 {
     RedDrawable *red_drawable;
+    int is_frame_container = FALSE;
 
     if (candidate->creation_time - other_time >
             (stream ? RED_STREAM_CONTINUS_MAX_DELTA : RED_STREAM_DETACTION_MAX_DELTA)) {
-        return FALSE;
+        return STREAM_FRAME_NONE;
     }
 
     red_drawable = candidate->red_drawable;
+    if (!container_candidate_allowed) {
+        SpiceRect* candidate_src;
 
-    if (!rect_is_equal(&red_drawable->bbox, other_dest)) {
-        return FALSE;
-    }
+        if (!rect_is_equal(&red_drawable->bbox, other_dest)) {
+            return STREAM_FRAME_NONE;
+        }
 
-    SpiceRect* candidate_src = &red_drawable->u.copy.src_area;
-    if (candidate_src->right - candidate_src->left != other_src_width ||
-        candidate_src->bottom - candidate_src->top != other_src_height) {
-        return FALSE;
+        candidate_src = &red_drawable->u.copy.src_area;
+        if (candidate_src->right - candidate_src->left != other_src_width ||
+            candidate_src->bottom - candidate_src->top != other_src_height) {
+            return STREAM_FRAME_NONE;
+        }
+    } else {
+        if (rect_contains(&red_drawable->bbox, other_dest)) {
+            int candidate_area = rect_get_area(&red_drawable->bbox);
+            int other_area = rect_get_area(other_dest);
+            /* do not stream drawables that are significantly
+             * bigger than the original frame */
+            if (candidate_area > 2 * other_area) {
+                spice_debug("too big candidate:");
+                spice_debug("prev box ==>");
+                rect_debug(other_dest);
+                spice_debug("new box ==>");
+                rect_debug(&red_drawable->bbox);
+                return STREAM_FRAME_NONE;
+            }
+
+            if (candidate_area > other_area) {
+                is_frame_container = TRUE;
+            }
+        } else {
+            return STREAM_FRAME_NONE;
+        }
     }
 
     if (stream) {
         SpiceBitmap *bitmap = &red_drawable->u.copy.src_bitmap->u.bitmap;
         if (stream->top_down != !!(bitmap->flags & SPICE_BITMAP_FLAGS_TOP_DOWN)) {
-            return FALSE;
+            return STREAM_FRAME_NONE;
         }
     }
-    return TRUE;
+    if (is_frame_container) {
+        return STREAM_FRAME_CONTAINER;
+    } else {
+        return STREAM_FRAME_NATIVE;
+    }
 }
 
 static inline int red_is_next_stream_frame(RedWorker *worker, const Drawable *candidate,
@@ -2960,7 +3006,8 @@ static inline int red_is_next_stream_frame(RedWorker *worker, const Drawable *ca
     return __red_is_next_stream_frame(worker, candidate, prev_src->right - prev_src->left,
                                       prev_src->bottom - prev_src->top,
                                       &prev->red_drawable->bbox, prev->creation_time,
-                                      prev->stream);
+                                      prev->stream,
+                                      FALSE);
 }
 
 static void reset_rate(DisplayChannelClient *dcc, StreamAgent *stream_agent)
@@ -3102,20 +3149,31 @@ static inline void red_stream_maintenance(RedWorker *worker, Drawable *candidate
         return;
     }
 
-    if (!red_is_next_stream_frame(worker, candidate, prev)) {
-        return;
-    }
-
     if ((stream = prev->stream)) {
-        pre_stream_item_swap(worker, stream);
-        red_detach_stream(worker, stream);
-        prev->streamable = FALSE; //prevent item trace
-        red_attach_stream(worker, candidate, stream);
+        int is_next_frame = __red_is_next_stream_frame(worker,
+                                                       candidate,
+                                                       stream->width,
+                                                       stream->height,
+                                                       &stream->dest_area,
+                                                       stream->last_time,
+                                                       stream,
+                                                       TRUE);
+        if (is_next_frame != STREAM_FRAME_NONE) {
+            pre_stream_item_swap(worker, stream);
+            red_detach_stream(worker, stream, FALSE);
+            prev->streamable = FALSE; //prevent item trace
+            red_attach_stream(worker, candidate, stream);
+            if (is_next_frame == STREAM_FRAME_CONTAINER) {
+                candidate->sized_stream = stream;
+            }
+        }
     } else {
-        red_stream_add_frame(worker, candidate,
-                             prev->frames_count,
-                             prev->gradual_frames_count,
-                             prev->last_gradual_frame);
+        if (red_is_next_stream_frame(worker, candidate, prev) != STREAM_FRAME_NONE) {
+            red_stream_add_frame(worker, candidate,
+                                 prev->frames_count,
+                                 prev->gradual_frames_count,
+                                 prev->last_gradual_frame);
+        }
     }
 }
 
@@ -3243,14 +3301,24 @@ static inline void red_use_stream_trace(RedWorker *worker, Drawable *drawable)
 
     while (item) {
         Stream *stream = SPICE_CONTAINEROF(item, Stream, link);
-        if (!stream->current && __red_is_next_stream_frame(worker,
-                                                           drawable,
-                                                           stream->width,
-                                                           stream->height,
-                                                           &stream->dest_area,
-                                                           stream->last_time,
-                                                           stream)) {
+        int is_next_frame = __red_is_next_stream_frame(worker,
+                                                       drawable,
+                                                       stream->width,
+                                                       stream->height,
+                                                       &stream->dest_area,
+                                                       stream->last_time,
+                                                       stream,
+                                                       TRUE);
+        if (is_next_frame != STREAM_FRAME_NONE) {
+            if (stream->current) {
+                stream->current->streamable = FALSE; //prevent item trace
+                pre_stream_item_swap(worker, stream);
+                red_detach_stream(worker, stream, FALSE);
+            }
             red_attach_stream(worker, drawable, stream);
+            if (is_next_frame == STREAM_FRAME_CONTAINER) {
+                drawable->sized_stream = stream;
+            }
             return;
         }
         item = ring_next(ring, item);
@@ -3260,7 +3328,8 @@ static inline void red_use_stream_trace(RedWorker *worker, Drawable *drawable)
     trace_end = trace + NUM_TRACE_ITEMS;
     for (; trace < trace_end; trace++) {
         if (__red_is_next_stream_frame(worker, drawable, trace->width, trace->height,
-                                       &trace->dest_area, trace->time, NULL)) {
+                                       &trace->dest_area, trace->time, NULL, FALSE) !=
+                                       STREAM_FRAME_NONE) {
             if (red_stream_add_frame(worker, drawable,
                                      trace->frames_count,
                                      trace->gradual_frames_count,
@@ -8097,8 +8166,12 @@ static inline int red_marshall_stream_data(RedChannelClient *rcc,
     SpiceImage *image;
     RedWorker *worker = dcc->common.worker;
     int n;
+    int width, height;
 
-    spice_assert(stream);
+    if (!stream) {
+        spice_assert(drawable->sized_stream);
+        stream = drawable->sized_stream;
+    }
     spice_assert(drawable->red_drawable->type == QXL_DRAW_COPY);
 
     worker = display_channel->common.worker;
@@ -8106,6 +8179,20 @@ static inline int red_marshall_stream_data(RedChannelClient *rcc,
 
     if (image->descriptor.type != SPICE_IMAGE_TYPE_BITMAP) {
         return FALSE;
+    }
+
+    if (drawable->sized_stream) {
+        if (red_channel_client_test_remote_cap(rcc, SPICE_DISPLAY_CAP_SIZED_STREAM)) {
+            SpiceRect *src_rect = &drawable->red_drawable->u.copy.src_area;
+
+            width = src_rect->right - src_rect->left;
+            height = src_rect->bottom - src_rect->top;
+        } else {
+            return FALSE;
+        }
+    } else {
+        width = stream->width;
+        height = stream->height;
     }
 
     StreamAgent *agent = &dcc->stream_agents[get_stream_id(worker, stream)];
@@ -8118,6 +8205,7 @@ static inline int red_marshall_stream_data(RedChannelClient *rcc,
 
     outbuf_size = dcc->send_data.stream_outbuf_size;
     if (!mjpeg_encoder_start_frame(stream->mjpeg_encoder, image->u.bitmap.format,
+                                   width, height,
                                    &dcc->send_data.stream_outbuf,
                                    &outbuf_size)) {
         return FALSE;
@@ -8129,14 +8217,32 @@ static inline int red_marshall_stream_data(RedChannelClient *rcc,
     n = mjpeg_encoder_end_frame(stream->mjpeg_encoder);
     dcc->send_data.stream_outbuf_size = outbuf_size;
 
-    red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_STREAM_DATA, NULL);
+    if (!drawable->sized_stream) {
+        SpiceMsgDisplayStreamData stream_data;
 
-    SpiceMsgDisplayStreamData stream_data;
+        red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_STREAM_DATA, NULL);
 
-    stream_data.base.id = get_stream_id(worker, stream);
-    stream_data.base.multi_media_time = drawable->red_drawable->mm_time;
-    stream_data.data_size = n;
-    spice_marshall_msg_display_stream_data(base_marshaller, &stream_data);
+        stream_data.base.id = get_stream_id(worker, stream);
+        stream_data.base.multi_media_time = drawable->red_drawable->mm_time;
+        stream_data.data_size = n;
+
+        spice_marshall_msg_display_stream_data(base_marshaller, &stream_data);
+    } else {
+        SpiceMsgDisplayStreamDataSized stream_data;
+
+        red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_STREAM_DATA_SIZED, NULL);
+
+        stream_data.base.id = get_stream_id(worker, stream);
+        stream_data.base.multi_media_time = drawable->red_drawable->mm_time;
+        stream_data.data_size = n;
+        stream_data.width = width;
+        stream_data.height = height;
+        stream_data.dest = drawable->red_drawable->bbox;
+
+        spice_debug("stream %d: sized frame: dest ==> ", stream_data.base.id);
+        rect_debug(&stream_data.dest);
+        spice_marshall_msg_display_stream_data_sized(base_marshaller, &stream_data);
+    }
     spice_marshaller_add_ref(base_marshaller,
                              dcc->send_data.stream_outbuf, n);
     agent->last_send_time = time_now;
@@ -8150,7 +8256,9 @@ static inline void marshall_qxl_drawable(RedChannelClient *rcc,
     DisplayChannel *display_channel = SPICE_CONTAINEROF(rcc->channel, DisplayChannel, common.base);
 
     spice_assert(display_channel && rcc);
-    if (item->stream && red_marshall_stream_data(rcc, m, item)) {
+    /* allow sized frames to be streamed, even if they where replaced by another frame, since
+     * newer frames might not cover sized frames completely if they are bigger */
+    if ((item->stream || item->sized_stream) && red_marshall_stream_data(rcc, m, item)) {
         return;
     }
     if (!display_channel->enable_jpeg)
@@ -8400,7 +8508,6 @@ static void red_display_marshall_upgrade(RedChannelClient *rcc, SpiceMarshaller 
     SpiceMarshaller *src_bitmap_out, *mask_bitmap_out;
 
     spice_assert(rcc && rcc->channel && item && item->drawable);
-
     red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_DRAW_COPY, &item->base);
 
     red_drawable = item->drawable->red_drawable;

@@ -25,8 +25,6 @@
 #include <jpeglib.h>
 
 struct MJpegEncoder {
-    int width;
-    int height;
     uint8_t *row;
     int first_frame;
     int quality;
@@ -38,15 +36,13 @@ struct MJpegEncoder {
     void (*pixel_converter)(uint8_t *src, uint8_t *dest);
 };
 
-MJpegEncoder *mjpeg_encoder_new(int width, int height)
+MJpegEncoder *mjpeg_encoder_new(void)
 {
     MJpegEncoder *enc;
 
     enc = spice_new0(MJpegEncoder, 1);
 
     enc->first_frame = TRUE;
-    enc->width = width;
-    enc->height = height;
     enc->quality = 70;
     enc->cinfo.err = jpeg_std_error(&enc->jerr);
     jpeg_create_compress(&enc->cinfo);
@@ -200,6 +196,7 @@ spice_jpeg_mem_dest(j_compress_ptr cinfo,
 /* end of code from libjpeg */
 
 int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
+                              int width, int height,
                               uint8_t **dest, size_t *dest_len)
 {
     encoder->cinfo.in_color_space   = JCS_RGB;
@@ -233,9 +230,9 @@ int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
     }
 
     if ((encoder->pixel_converter != NULL) && (encoder->row == NULL)) {
-        unsigned int stride = encoder->width * 3;
+        unsigned int stride = width * 3;
         /* check for integer overflow */
-        if (stride < encoder->width) {
+        if (stride < width) {
             return FALSE;
         }
         encoder->row = spice_malloc(stride);
@@ -243,8 +240,8 @@ int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
 
     spice_jpeg_mem_dest(&encoder->cinfo, dest, dest_len);
 
-    encoder->cinfo.image_width      = encoder->width;
-    encoder->cinfo.image_height     = encoder->height;
+    encoder->cinfo.image_width      = width;
+    encoder->cinfo.image_height     = height;
     jpeg_set_defaults(&encoder->cinfo);
     encoder->cinfo.dct_method       = JDCT_IFAST;
     jpeg_set_quality(&encoder->cinfo, encoder->quality, TRUE);

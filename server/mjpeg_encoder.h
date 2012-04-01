@@ -23,11 +23,12 @@
 
 typedef struct MJpegEncoder MJpegEncoder;
 
-MJpegEncoder *mjpeg_encoder_new(int width, int height);
+MJpegEncoder *mjpeg_encoder_new(void);
 void mjpeg_encoder_destroy(MJpegEncoder *encoder);
 
 uint8_t mjpeg_encoder_get_bytes_per_pixel(MJpegEncoder *encoder);
 int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
+                              int width, int height,
                               uint8_t **dest, size_t *dest_len);
 int mjpeg_encoder_encode_scanline(MJpegEncoder *encoder, uint8_t *src_pixels,
                                   size_t image_width);
