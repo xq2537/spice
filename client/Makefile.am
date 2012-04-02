@@ -199,7 +199,7 @@ endif
 INCLUDES = \
 	-D__STDC_LIMIT_MACROS				\
 	$(PLATFORM_INCLUDES)				\
-	-I$(top_srcdir)/common				\
+	-I$(top_srcdir)/spice-common			\
 	$(ALSA_CFLAGS)					\
 	$(CEGUI_CFLAGS)					\
 	$(CEGUI06_CFLAGS)				\
