@@ -522,7 +522,7 @@ static void do_wakeup(void *opaque)
 
 static void release_resource(QXLInstance *qin, struct QXLReleaseInfoExt release_info)
 {
-    QXLCommandExt *ext = (unsigned long)release_info.info->id;
+    QXLCommandExt *ext = (QXLCommandExt*)(unsigned long)release_info.info->id;
     //printf("%s\n", __func__);
     ASSERT(release_info.group_id == MEM_SLOT_GROUP_ID);
     switch (ext->cmd.type) {
@@ -533,7 +533,7 @@ static void release_resource(QXLInstance *qin, struct QXLReleaseInfoExt release_
             free(ext);
             break;
         case QXL_CMD_CURSOR: {
-            QXLCursorCmd *cmd = (unsigned long)ext->cmd.data;
+            QXLCursorCmd *cmd = (QXLCursorCmd *)(unsigned long)ext->cmd.data;
             if (cmd->type == QXL_CURSOR_SET) {
                 free(cmd);
             }
