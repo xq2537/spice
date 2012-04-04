@@ -4671,9 +4671,10 @@ static int red_process_cursor(RedWorker *worker, uint32_t max_pipe_size, int *ri
         case QXL_CMD_CURSOR: {
             RedCursorCmd *cursor = spice_new0(RedCursorCmd, 1);
 
-            red_get_cursor_cmd(&worker->mem_slots, ext_cmd.group_id,
-                               cursor, ext_cmd.cmd.data);
-            qxl_process_cursor(worker, cursor, ext_cmd.group_id);
+            if (!red_get_cursor_cmd(&worker->mem_slots, ext_cmd.group_id,
+                                    cursor, ext_cmd.cmd.data)) {
+                qxl_process_cursor(worker, cursor, ext_cmd.group_id);
+            }
             break;
         }
         default:
@@ -4727,8 +4728,10 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
         case QXL_CMD_DRAW: {
             RedDrawable *drawable = red_drawable_new(); // returns with 1 ref
 
-            red_get_drawable(&worker->mem_slots, ext_cmd.group_id,
-                             drawable, ext_cmd.cmd.data, ext_cmd.flags);
+            if (red_get_drawable(&worker->mem_slots, ext_cmd.group_id,
+                                 drawable, ext_cmd.cmd.data, ext_cmd.flags)) {
+                break;
+            }
             red_process_drawable(worker, drawable, ext_cmd.group_id);
             // release the red_drawable
             put_red_drawable(worker, drawable, ext_cmd.group_id, NULL);
@@ -4738,8 +4741,10 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
             RedUpdateCmd update;
             QXLReleaseInfoExt release_info_ext;
 
-            red_get_update_cmd(&worker->mem_slots, ext_cmd.group_id,
-                               &update, ext_cmd.cmd.data);
+            if (red_get_update_cmd(&worker->mem_slots, ext_cmd.group_id,
+                                   &update, ext_cmd.cmd.data)) {
+                break;
+            }
             validate_surface(worker, update.surface_id);
             red_update_area(worker, &update.area, update.surface_id);
             worker->qxl->st->qif->notify_update(worker->qxl, update.update_id);
@@ -4753,8 +4758,10 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
             RedMessage message;
             QXLReleaseInfoExt release_info_ext;
 
-            red_get_message(&worker->mem_slots, ext_cmd.group_id,
-                            &message, ext_cmd.cmd.data);
+            if (red_get_message(&worker->mem_slots, ext_cmd.group_id,
+                                &message, ext_cmd.cmd.data)) {
+                break;
+            }
 #ifdef DEBUG
             /* alert: accessing message.data is insecure */
             spice_printerr("MESSAGE: %s", message.data);
@@ -4768,8 +4775,10 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
         case QXL_CMD_SURFACE: {
             RedSurfaceCmd *surface = spice_new0(RedSurfaceCmd, 1);
 
-            red_get_surface_cmd(&worker->mem_slots, ext_cmd.group_id,
-                                surface, ext_cmd.cmd.data);
+            if (red_get_surface_cmd(&worker->mem_slots, ext_cmd.group_id,
+                                    surface, ext_cmd.cmd.data)) {
+                break;
+            }
             red_process_surface(worker, surface, ext_cmd.group_id, FALSE);
             break;
         }
@@ -10417,6 +10426,7 @@ static void dev_create_primary_surface(RedWorker *worker, uint32_t surface_id,
                                        QXLDevSurfaceCreate surface)
 {
     uint8_t *line_0;
+    int error;
 
     spice_warn_if(surface_id != 0);
     spice_warn_if(surface.height == 0);
@@ -10424,7 +10434,11 @@ static void dev_create_primary_surface(RedWorker *worker, uint32_t surface_id,
              abs(surface.stride) * surface.height);
 
     line_0 = (uint8_t*)get_virt(&worker->mem_slots, surface.mem,
-                                surface.height * abs(surface.stride), surface.group_id);
+                                surface.height * abs(surface.stride),
+                                surface.group_id, &error);
+    if (error) {
+        return;
+    }
     if (surface.stride < 0) {
         line_0 -= (int32_t)(surface.stride * (surface.height -1));
     }
@@ -10830,8 +10844,13 @@ void handle_dev_loadvm_commands(void *opaque, void *payload)
         switch (ext[i].cmd.type) {
         case QXL_CMD_CURSOR:
             cursor_cmd = spice_new0(RedCursorCmd, 1);
-            red_get_cursor_cmd(&worker->mem_slots, ext[i].group_id,
-                               cursor_cmd, ext[i].cmd.data);
+            if (red_get_cursor_cmd(&worker->mem_slots, ext[i].group_id,
+                                   cursor_cmd, ext[i].cmd.data)) {
+                /* XXX allow failure in loadvm? */
+                spice_printerr("failed loadvm command type (%d)",
+                               ext[i].cmd.type);
+                continue;
+            }
             qxl_process_cursor(worker, cursor_cmd, ext[i].group_id);
             break;
         case QXL_CMD_SURFACE:
