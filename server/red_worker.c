@@ -427,7 +427,6 @@ struct Stream {
     int width;
     int height;
     SpiceRect dest_area;
-    MJpegEncoder *mjpeg_encoder;
     int top_down;
     Stream *next;
     RingItem link;
@@ -448,6 +447,7 @@ typedef struct StreamAgent {
     PipeItem destroy_item;
     Stream *stream;
     uint64_t last_send_time;
+    MJpegEncoder *mjpeg_encoder;
 
     int frames;
     int drops;
@@ -2484,9 +2484,6 @@ static void red_release_stream(RedWorker *worker, Stream *stream)
 {
     if (!--stream->refs) {
         spice_assert(!ring_item_is_linked(&stream->link));
-        if (stream->mjpeg_encoder) {
-            mjpeg_encoder_destroy(stream->mjpeg_encoder);
-        }
         red_free_stream(worker, stream);
         worker->stream_count--;
     }
@@ -2587,6 +2584,7 @@ static void red_stop_stream(RedWorker *worker, Stream *stream)
     spice_debug("stream %d", get_stream_id(worker, stream));
     WORKER_FOREACH_DCC(worker, item, dcc) {
         StreamAgent *stream_agent;
+
         stream_agent = &dcc->stream_agents[get_stream_id(worker, stream)];
         region_clear(&stream_agent->vis_region);
         region_clear(&stream_agent->clip);
@@ -2889,6 +2887,7 @@ static void red_display_create_stream(DisplayChannelClient *dcc, Stream *stream)
     agent->drops = 0;
     agent->fps = MAX_FPS;
     reset_rate(dcc, agent);
+    agent->mjpeg_encoder = mjpeg_encoder_new();
     red_channel_client_pipe_add(&dcc->common.base, &agent->create_item);
 }
 
@@ -2913,8 +2912,6 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
     src_rect = &drawable->red_drawable->u.copy.src_area;
     stream_width = src_rect->right - src_rect->left;
     stream_height = src_rect->bottom - src_rect->top;
-
-    stream->mjpeg_encoder = mjpeg_encoder_new();
 
     ring_add(&worker->streams, &stream->link);
     stream->current = drawable;
@@ -2973,6 +2970,10 @@ static void red_display_destroy_streams_agents(DisplayChannelClient *dcc)
         StreamAgent *agent = &dcc->stream_agents[i];
         region_destroy(&agent->vis_region);
         region_destroy(&agent->clip);
+        if (agent->mjpeg_encoder) {
+            mjpeg_encoder_destroy(agent->mjpeg_encoder);
+            agent->mjpeg_encoder = NULL;
+        }
     }
 }
 
@@ -8277,7 +8278,7 @@ static inline void display_begin_send_message(RedChannelClient *rcc)
     red_channel_client_begin_send_message(rcc);
 }
 
-static inline uint8_t *red_get_image_line(RedWorker *worker, SpiceChunks *chunks, size_t *offset,
+static inline uint8_t *red_get_image_line(SpiceChunks *chunks, size_t *offset,
                                           int *chunk_nr, int stride)
 {
     uint8_t *ret;
@@ -8303,13 +8304,14 @@ static inline uint8_t *red_get_image_line(RedWorker *worker, SpiceChunks *chunks
     return ret;
 }
 
-static int encode_frame (RedWorker *worker, const SpiceRect *src,
-                         const SpiceBitmap *image, Stream *stream)
+static int encode_frame(DisplayChannelClient *dcc, const SpiceRect *src,
+                        const SpiceBitmap *image, Stream *stream)
 {
     SpiceChunks *chunks;
     uint32_t image_stride;
     size_t offset;
     int i, chunk;
+    StreamAgent *agent = &dcc->stream_agents[stream - dcc->common.worker->streams_buf];
 
     chunks = image->data;
     offset = 0;
@@ -8318,7 +8320,7 @@ static int encode_frame (RedWorker *worker, const SpiceRect *src,
 
     const int skip_lines = stream->top_down ? src->top : image->y - (src->bottom - 0);
     for (i = 0; i < skip_lines; i++) {
-        red_get_image_line(worker, chunks, &offset, &chunk, image_stride);
+        red_get_image_line(chunks, &offset, &chunk, image_stride);
     }
 
     const unsigned int stream_height = src->bottom - src->top;
@@ -8326,14 +8328,14 @@ static int encode_frame (RedWorker *worker, const SpiceRect *src,
 
     for (i = 0; i < stream_height; i++) {
         uint8_t *src_line =
-            (uint8_t *)red_get_image_line(worker, chunks, &offset, &chunk, image_stride);
+            (uint8_t *)red_get_image_line(chunks, &offset, &chunk, image_stride);
 
         if (!src_line) {
             return FALSE;
         }
 
-        src_line += src->left * mjpeg_encoder_get_bytes_per_pixel(stream->mjpeg_encoder);
-        if (mjpeg_encoder_encode_scanline(stream->mjpeg_encoder, src_line, stream_width) == 0)
+        src_line += src->left * mjpeg_encoder_get_bytes_per_pixel(agent->mjpeg_encoder);
+        if (mjpeg_encoder_encode_scanline(agent->mjpeg_encoder, src_line, stream_width) == 0)
             return FALSE;
     }
 
@@ -8387,17 +8389,17 @@ static inline int red_marshall_stream_data(RedChannelClient *rcc,
     }
 
     outbuf_size = dcc->send_data.stream_outbuf_size;
-    if (!mjpeg_encoder_start_frame(stream->mjpeg_encoder, image->u.bitmap.format,
+    if (!mjpeg_encoder_start_frame(agent->mjpeg_encoder, image->u.bitmap.format,
                                    width, height,
                                    &dcc->send_data.stream_outbuf,
                                    &outbuf_size)) {
         return FALSE;
     }
-    if (!encode_frame(worker, &drawable->red_drawable->u.copy.src_area,
+    if (!encode_frame(dcc, &drawable->red_drawable->u.copy.src_area,
                       &image->u.bitmap, stream)) {
         return FALSE;
     }
-    n = mjpeg_encoder_end_frame(stream->mjpeg_encoder);
+    n = mjpeg_encoder_end_frame(agent->mjpeg_encoder);
     dcc->send_data.stream_outbuf_size = outbuf_size;
 
     if (!drawable->sized_stream) {
@@ -8801,6 +8803,10 @@ static void red_display_marshall_stream_end(RedChannelClient *rcc,
     red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_STREAM_DESTROY, NULL);
     destroy.id = get_stream_id(dcc->common.worker, agent->stream);
 
+    if (agent->mjpeg_encoder) {
+        mjpeg_encoder_destroy(agent->mjpeg_encoder);
+        agent->mjpeg_encoder = NULL;
+    }
     spice_marshall_msg_display_stream_destroy(base_marshaller, &destroy);
 }
 
