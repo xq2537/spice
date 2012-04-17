@@ -49,8 +49,8 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories=".;..;$(SPICE_PROTOCOL_DIR);..\..\common;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;;&quot;$(SPICE_LIBS)\include\CxImage&quot;"
-				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;RED_DEBUG;_WIN32_WINNT=0x0500;USE_GUI;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC"
+				AdditionalIncludeDirectories=".;..;&quot;$(SPICE_PROTOCOL_DIR)&quot;;&quot;$(SPICE_COMMON_DIR)&quot;;&quot;$(SPICE_COMMON_DIR)\common&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;;&quot;$(SPICE_LIBS)\include\CxImage&quot;"
+				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;RED_DEBUG;_WIN32_WINNT=0x0500;USE_GUI;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC;HAVE_STRING_H"
 				MinimalRebuild="false"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="1"
@@ -137,8 +137,8 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories=".;..;$(SPICE_PROTOCOL_DIR);..\..\common;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;;&quot;$(SPICE_LIBS)\include\CxImage&quot;"
-				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;RED_DEBUG;_WIN32_WINNT=0x0500;USE_GUI;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC"
+				AdditionalIncludeDirectories=".;..;&quot;$(SPICE_PROTOCOL_DIR)&quot;;&quot;$(SPICE_COMMON_DIR)&quot;;&quot;$(SPICE_COMMON_DIR)\common&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;;&quot;$(SPICE_LIBS)\include\CxImage&quot;"
+				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;RED_DEBUG;_WIN32_WINNT=0x0500;USE_GUI;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC;HAVE_STRING_H"
 				MinimalRebuild="false"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="1"
@@ -220,8 +220,8 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalIncludeDirectories=".;..;$(SPICE_PROTOCOL_DIR);..\..\common;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;;&quot;$(SPICE_LIBS)\include\CxImage&quot;"
-				PreprocessorDefinitions="WIN32;_WINDOWS;_WIN32_WINNT=0x0500;USE_GUI;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC"
+				AdditionalIncludeDirectories=".;..;&quot;$(SPICE_PROTOCOL_DIR)&quot;;&quot;$(SPICE_COMMON_DIR)&quot;;&quot;$(SPICE_COMMON_DIR)\common&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;;&quot;$(SPICE_LIBS)\include\CxImage&quot;"
+				PreprocessorDefinitions="WIN32;_WINDOWS;_WIN32_WINNT=0x0500;USE_GUI;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC;HAVE_STRING_H"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
 				WarningLevel="3"
@@ -303,8 +303,8 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalIncludeDirectories=".;..;$(SPICE_PROTOCOL_DIR);..\..\common;..\..\common\win;&quot;..\..\common\win\my_getopt-1.5&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;;&quot;$(SPICE_LIBS)\include\CxImage&quot;"
-				PreprocessorDefinitions="WIN32;_WINDOWS;_WIN32_WINNT=0x0500;USE_GUI;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC"
+				AdditionalIncludeDirectories=".;..;&quot;$(SPICE_PROTOCOL_DIR)&quot;;&quot;$(SPICE_COMMON_DIR)&quot;;&quot;$(SPICE_COMMON_DIR)\common&quot;;&quot;$(SPICE_LIBS)\include&quot;;&quot;$(SPICE_LIBS)\include\pixman-1&quot;;&quot;$(SPICE_LIBS)\include\CEGUI-0.6.2&quot;;&quot;$(SPICE_LIBS)\include\CxImage&quot;"
+				PreprocessorDefinitions="WIN32;_WINDOWS;_WIN32_WINNT=0x0500;USE_GUI;USE_GLZ;PTW32_STATIC_LIB;CEGUI_STATIC;HAVE_STRING_H"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
 				WarningLevel="3"
@@ -377,7 +377,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\common\canvas_utils.c"
+				RelativePath="$(SPICE_COMMON_DIR)\common\canvas_utils.c"
 				>
 			</File>
 			<File
@@ -413,19 +413,19 @@
 				>
 			</File>
 			<File
-				RelativePath="..\generated_demarshallers.cpp"
+				RelativePath="..\generated_demarshallers.c"
 				>
 			</File>
 			<File
-				RelativePath="..\generated_demarshallers1.cpp"
+				RelativePath="..\generated_demarshallers1.c"
 				>
 			</File>
 			<File
-				RelativePath="..\generated_marshallers.cpp"
+				RelativePath="..\generated_marshallers.c"
 				>
 			</File>
 			<File
-				RelativePath="..\generated_marshallers1.cpp"
+				RelativePath="..\generated_marshallers1.c"
 				>
 			</File>
 			<File
@@ -453,11 +453,15 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\common\lines.c"
+				RelativePath="$(SPICE_COMMON_DIR)\common\lines.c"
 				>
 			</File>
 			<File
-				RelativePath="..\..\common\lz.c"
+				RelativePath="$(SPICE_COMMON_DIR)\common\log.c"
+				>
+			</File>
+			<File
+				RelativePath="$(SPICE_COMMON_DIR)\common\lz.c"
 				>
 			</File>
 			<File
@@ -465,7 +469,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\common\mem.c"
+				RelativePath="$(SPICE_COMMON_DIR)\common\marshaller.c"
+				>
+			</File>
+			<File
+				RelativePath="$(SPICE_COMMON_DIR)\common\mem.c"
 				>
 			</File>
 			<File
@@ -529,7 +537,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\common\pixman_utils.c"
+				RelativePath="$(SPICE_COMMON_DIR)\common\pixman_utils.c"
 				>
 			</File>
 			<File
@@ -553,7 +561,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\common\quic.c"
+				RelativePath="$(SPICE_COMMON_DIR)\common\quic.c"
 				>
 			</File>
 			<File
@@ -605,7 +613,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\common\region.c"
+				RelativePath="$(SPICE_COMMON_DIR)\common\region.c"
 				>
 			</File>
 			<File
@@ -613,7 +621,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\common\rop3.c"
+				RelativePath="$(SPICE_COMMON_DIR)\common\rop3.c"
 				>
 			</File>
 			<File
@@ -633,7 +641,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\common\ssl_verify.c"
+				RelativePath="$(SPICE_COMMON_DIR)\common\ssl_verify.c"
 				>
 			</File>
 			<File
@@ -671,11 +679,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\client_net_socket.h"
+				RelativePath="$(SPICE_COMMON_DIR)\common\client_demarshallers.h"
 				>
 			</File>
 			<File
-				RelativePath="..\common.h"
+				RelativePath="..\client_net_socket.h"
 				>
 			</File>
 			<File
@@ -695,10 +703,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\demarshallers.h"
-				>
-			</File>
-			<File
 				RelativePath="..\display_channel.h"
 				>
 			</File>
@@ -715,11 +719,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\common\gdi_canvas.h"
+				RelativePath="$(SPICE_COMMON_DIR)\common\gdi_canvas.h"
 				>
 			</File>
 			<File
-				RelativePath="..\..\common\win\my_getopt-1.5\getopt.h"
+				RelativePath=".\getopt.h"
 				>
 			</File>
 			<File
@@ -760,10 +764,6 @@
 			</File>
 			<File
 				RelativePath="..\jpeg_decoder.h"
-				>
-			</File>
-			<File
-				RelativePath="..\..\common\marshaller.c"
 				>
 			</File>
 			<File
@@ -867,7 +867,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\common\ssl_verify.h"
+				RelativePath="$(SPICE_COMMON_DIR)\common\ssl_verify.h"
 				>
 			</File>
 			<File
@@ -910,7 +910,7 @@
 			</File>
 		</Filter>
 		<File
-			RelativePath="..\..\spice.proto"
+			RelativePath="$(SPICE_COMMON_DIR)\spice.proto"
 			>
 			<FileConfiguration
 				Name="Debug|Win32"
@@ -956,7 +956,7 @@
 			</FileConfiguration>
 		</File>
 		<File
-			RelativePath="..\..\spice1.proto"
+			RelativePath="$(SPICE_COMMON_DIR)\spice1.proto"
 			>
 			<FileConfiguration
 				Name="Debug|Win32"
