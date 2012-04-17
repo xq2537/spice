@@ -1420,10 +1420,10 @@ static void snd_set_record_peer(RedChannel *channel, RedClient *client, RedsStre
     snd_record_send(worker->connection);
     return;
 
-error_1:
+error_2:
     celt051_decoder_destroy(celt_decoder);
 
-error_2:
+error_1:
     celt051_mode_destroy(celt_mode);
 }
 
