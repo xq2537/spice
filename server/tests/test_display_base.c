@@ -453,7 +453,7 @@ static void produce_command(void)
 
     command = &g_commands[cmd_index];
     if (command->cb) {
-        command->cb(command->cb_opaque, &command->arg1, &command->arg2);
+        command->cb(command);
     }
     switch (command->command) {
         case PATH_PROGRESS:
@@ -511,15 +511,13 @@ static void produce_command(void)
             break;
         }
 
-        case DESTROY_PRIMARY: {
+        case DESTROY_PRIMARY:
             qxl_worker->destroy_primary_surface(qxl_worker, 0);
             break;
-        }
 
-        case CREATE_PRIMARY: {
-            create_primary_surface(qxl_worker, command->arg1, command->arg2);
+        case CREATE_PRIMARY:
+            create_primary_surface(qxl_worker, command->create_primary.width, command->create_primary.height);
             break;
-        }
     }
     cmd_index = (cmd_index + 1) % g_num_commands;
 }

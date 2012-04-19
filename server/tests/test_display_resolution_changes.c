@@ -23,7 +23,7 @@ void pinger(void *opaque)
     core->timer_start(ping_timer, ping_ms);
 }
 
-void set_primary_params(void *cb_opaque, uint64_t *arg1, uint64_t *arg2)
+void set_primary_params(Command *command)
 {
 #if 0
     static int toggle = 0;
@@ -39,14 +39,14 @@ void set_primary_params(void *cb_opaque, uint64_t *arg1, uint64_t *arg2)
 #endif
     static int count = 0;
 
-    *arg1 = 800 + sin((float)count / 6) * 200;
-    *arg2 = 600 + cos((float)count / 6) * 200;
+    command->create_primary.width = 800 + sin((float)count / 6) * 200;
+    command->create_primary.height = 600 + cos((float)count / 6) * 200;
     count++;
 }
 
 static Command commands[] = {
-    {DESTROY_PRIMARY, 0, 0, NULL, NULL},
-    {CREATE_PRIMARY, 0, 0, set_primary_params, NULL},
+    {DESTROY_PRIMARY, NULL},
+    {CREATE_PRIMARY, set_primary_params},
 };
 
 int main(void)

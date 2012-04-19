@@ -23,13 +23,36 @@ typedef enum {
     DESTROY_PRIMARY,
     CREATE_PRIMARY,
 } CommandType;
-typedef struct Command {
+
+typedef struct CommandCreatePrimary {
+    uint32_t width;
+    uint32_t height;
+} CommandCreatePrimary;
+
+typedef struct CommandDrawBitmap {
+    QXLRect bbox;
+    uint8_t *bitmap;
+    uint32_t surface_id;
+} CommandDrawBitmap;
+
+typedef struct CommandDrawSolid {
+    QXLRect bbox;
+    uint32_t color;
+    uint32_t surface_id;
+} CommandDrawSolid;
+
+typedef struct Command Command;
+
+struct Command {
     CommandType command;
-    uint64_t arg1;
-    uint64_t arg2;
-    void (*cb)(void *cb_opaque, uint64_t *arg1, uint64_t *arg2);
+    void (*cb)(Command *command);
     void *cb_opaque;
-} Command;
+    union {
+        CommandCreatePrimary create_primary;
+        CommandDrawBitmap bitmap;
+        CommandDrawSolid solid;
+    };
+};
 
 void test_set_simple_command_list(int *command, int num_commands);
 void test_set_command_list(Command *command, int num_commands);
