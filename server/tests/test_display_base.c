@@ -191,6 +191,27 @@ SimpleSpiceUpdate *test_spice_create_update_from_bitmap(uint32_t surface_id,
     return update;
 }
 
+static SimpleSpiceUpdate *test_spice_create_update_solid(uint32_t surface_id, QXLRect bbox, uint32_t color)
+{
+    uint8_t *bitmap;
+    uint32_t *dst;
+    uint32_t bw;
+    uint32_t bh;
+    int i;
+
+    bw = bbox.right - bbox.left;
+    bh = bbox.bottom - bbox.top;
+
+    bitmap = malloc(bw * bh * 4);
+    dst = (uint32_t *)bitmap;
+
+    for (i = 0 ; i < bh * bw ; ++i, ++dst) {
+        *dst = color;
+    }
+
+    return test_spice_create_update_from_bitmap(surface_id, bbox, bitmap);
+}
+
 static SimpleSpiceUpdate *test_spice_create_update_draw(uint32_t surface_id, int t)
 {
     int top, left;
@@ -468,6 +489,8 @@ static void produce_command(void)
 
         /* Drawing commands, they all push a command to the command ring */
         case SIMPLE_COPY_BITS:
+        case SIMPLE_DRAW_SOLID:
+        case SIMPLE_DRAW_BITMAP:
         case SIMPLE_DRAW: {
             SimpleSpiceUpdate *update;
 
@@ -481,12 +504,20 @@ static void produce_command(void)
             }
 
             switch (command->command) {
-                case SIMPLE_COPY_BITS:
-                    update = test_spice_create_update_copy_bits(0);
-                    break;
-                case SIMPLE_DRAW:
-                    update = test_spice_create_update_draw(0, path.t);
-                    break;
+            case SIMPLE_COPY_BITS:
+                update = test_spice_create_update_copy_bits(0);
+                break;
+            case SIMPLE_DRAW:
+                update = test_spice_create_update_draw(0, path.t);
+                break;
+            case SIMPLE_DRAW_BITMAP:
+                update = test_spice_create_update_from_bitmap(command->bitmap.surface_id,
+                        command->bitmap.bbox, command->bitmap.bitmap);
+                break;
+            case SIMPLE_DRAW_SOLID:
+                update = test_spice_create_update_solid(command->solid.surface_id,
+                        command->solid.bbox, command->solid.color);
+                break;
             }
             push_command(&update->ext);
             break;
