@@ -36,6 +36,9 @@ void test_set_command_list(Command *command, int num_commands);
 void test_add_display_interface(SpiceServer *server);
 SpiceServer* test_init(SpiceCoreInterface* core);
 
+uint32_t test_get_width(void);
+uint32_t test_get_height(void);
+
 void spice_test_config_parse_args(int argc, char **argv);
 
 #endif /* __TEST_DISPLAY_BASE_H__ */

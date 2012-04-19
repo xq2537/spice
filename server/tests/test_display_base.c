@@ -47,6 +47,9 @@ static void test_spice_destroy_update(SimpleSpiceUpdate *update)
     free(update);
 }
 
+static uint32_t test_width;
+static uint32_t test_height;
+
 #define DEFAULT_WIDTH 640
 #define DEFAULT_HEIGHT 320
 
@@ -320,7 +323,20 @@ static void create_primary_surface(QXLWorker *worker, uint32_t width,
     surface.mem        = (uint64_t)&g_primary_surface;
     surface.group_id   = MEM_SLOT_GROUP_ID;
 
+    test_width = width;
+    test_height = height;
+
     qxl_worker->create_primary_surface(qxl_worker, 0, &surface);
+}
+
+uint32_t test_get_width(void)
+{
+    return test_width;
+}
+
+uint32_t test_get_height(void)
+{
+    return test_height;
 }
 
 QXLDevMemSlot slot = {
