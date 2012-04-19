@@ -140,44 +140,22 @@ static void draw_pos(int t, int *x, int *y)
 #endif
 }
 
-static SimpleSpiceUpdate *test_spice_create_update_draw(uint32_t surface_id, int t)
+/* bitmap is freeds, so it must be allocated with malloc */
+SimpleSpiceUpdate *test_spice_create_update_from_bitmap(uint32_t surface_id,
+        QXLRect bbox, uint8_t *bitmap)
 {
     SimpleSpiceUpdate *update;
     QXLDrawable *drawable;
     QXLImage *image;
-    int top, left;
-    draw_pos(t, &left, &top);
-    QXLRect bbox = {
-        .top = top,
-        .left = left,
-    };
-    uint8_t *dst;
-    int bw, bh;
-    int i;
+    uint32_t bw, bh;
 
-    if ((t % angle_parts) == 0) {
-        c_i++;
-    }
-
-    if(surface_id != 0) {
-        color = (color + 1) % 2;
-    } else {
-        color = surface_id;
-    }
-
-    unique++;
+    bh = bbox.bottom - bbox.top;
+    bw = bbox.right - bbox.left;
 
     update   = calloc(sizeof(*update), 1);
+    update->bitmap = bitmap;
     drawable = &update->drawable;
     image    = &update->image;
-
-    bw       = g_primary_width/SINGLE_PART;
-    bh       = 48;
-
-    bbox.right = bbox.left + bw;
-    bbox.bottom = bbox.top + bh;
-    update->bitmap = malloc(bw * bh * 4);
-    //printf("allocated %p, %p\n", update, update->bitmap);
 
     drawable->surface_id      = surface_id;
 
@@ -201,11 +179,43 @@ static SimpleSpiceUpdate *test_spice_create_update_draw(uint32_t surface_id, int
     image->bitmap.stride     = bw * 4;
     image->descriptor.width  = image->bitmap.x = bw;
     image->descriptor.height = image->bitmap.y = bh;
-    image->bitmap.data = (intptr_t)(update->bitmap);
+    image->bitmap.data = (intptr_t)bitmap;
     image->bitmap.palette = 0;
     image->bitmap.format = SPICE_BITMAP_FMT_32BIT;
 
-    dst = update->bitmap;
+    set_cmd(&update->ext, QXL_CMD_DRAW, (intptr_t)drawable);
+
+    return update;
+}
+
+static SimpleSpiceUpdate *test_spice_create_update_draw(uint32_t surface_id, int t)
+{
+    int top, left;
+    uint8_t *dst;
+    uint8_t *bitmap;
+    int bw, bh;
+    int i;
+    QXLRect bbox;
+
+    draw_pos(t, &left, &top);
+    if ((t % angle_parts) == 0) {
+        c_i++;
+    }
+
+    if (surface_id != 0) {
+        color = (color + 1) % 2;
+    } else {
+        color = surface_id;
+    }
+
+    unique++;
+
+    bw       = g_primary_width/SINGLE_PART;
+    bh       = 48;
+
+    bitmap = dst = malloc(bw * bh * 4);
+    //printf("allocated %p\n", dst);
+
     for (i = 0 ; i < bh * bw ; ++i, dst+=4) {
         *dst = (color+i % 255);
         *(dst+((1+c_i)%3)) = 255 - color;
@@ -213,9 +223,9 @@ static SimpleSpiceUpdate *test_spice_create_update_draw(uint32_t surface_id, int
         *(dst+((3+c_i)%3)) = 0;
     }
 
-    set_cmd(&update->ext, QXL_CMD_DRAW, (intptr_t)drawable);
-
-    return update;
+    bbox.left = left; bbox.top = top;
+    bbox.right = left + bw; bbox.bottom = top + bh;
+    return test_spice_create_update_from_bitmap(surface_id, bbox, bitmap);
 }
 
 static SimpleSpiceUpdate *test_spice_create_update_copy_bits(uint32_t surface_id)
@@ -440,6 +450,7 @@ static void produce_command(void)
             break;
         }
 
+        /* Drawing commands, they all push a command to the command ring */
         case SIMPLE_COPY_BITS:
         case SIMPLE_DRAW: {
             SimpleSpiceUpdate *update;
