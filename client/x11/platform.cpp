@@ -128,12 +128,12 @@ struct clipboard_format_info {
 
 static struct clipboard_format_info clipboard_formats[] = {
     { VD_AGENT_CLIPBOARD_UTF8_TEXT, { "UTF8_STRING",
-      "text/plain;charset=UTF-8", "text/plain;charset=utf-8", NULL }, },
-    { VD_AGENT_CLIPBOARD_IMAGE_PNG, { "image/png", NULL }, },
+      "text/plain;charset=UTF-8", "text/plain;charset=utf-8", NULL }, { 0 }, 0},
+    { VD_AGENT_CLIPBOARD_IMAGE_PNG, { "image/png", NULL }, { 0 }, 0},
     { VD_AGENT_CLIPBOARD_IMAGE_BMP, { "image/bmp", "image/x-bmp",
-      "image/x-MS-bmp", "image/x-win-bitmap", NULL }, },
-    { VD_AGENT_CLIPBOARD_IMAGE_TIFF, { "image/tiff", NULL }, },
-    { VD_AGENT_CLIPBOARD_IMAGE_JPG, { "image/jpeg", NULL }, },
+      "image/x-MS-bmp", "image/x-win-bitmap", NULL }, { 0 }, 0},
+    { VD_AGENT_CLIPBOARD_IMAGE_TIFF, { "image/tiff", NULL }, { 0 }, 0},
+    { VD_AGENT_CLIPBOARD_IMAGE_JPG, { "image/jpeg", NULL }, { 0 }, 0},
 };
 
 #define clipboard_format_count ((int)(sizeof(clipboard_formats)/sizeof(clipboard_formats[0])))
