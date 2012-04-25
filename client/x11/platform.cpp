@@ -3167,11 +3167,10 @@ static int x_error_handler(Display* display, XErrorEvent* error_event)
     return 0;
 }
 
-static int x_io_error_handler(Display* display)
+static SPICE_GNUC_NORETURN int x_io_error_handler(Display* display)
 {
     LOG_ERROR("x io error on %s", XDisplayString(display));
     _exit(-1);
-    return 0;
 }
 
 static XVisualInfo* get_x_vis_info(int screen)

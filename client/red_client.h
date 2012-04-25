@@ -99,7 +99,7 @@ private:
 
 class GlzDecoderWindowDebug: public GlzDecoderDebug {
 public:
-    virtual void error(const std::string& str)
+    virtual SPICE_GNUC_NORETURN void error(const std::string& str)
     {
         throw Exception(str);
     }

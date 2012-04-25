@@ -52,10 +52,9 @@ extern "C" {
     {
     }
 
-    static jpeg_boolean jpeg_decoder_fill_input_buffer(j_decompress_ptr cinfo)
+    static SPICE_GNUC_NORETURN jpeg_boolean jpeg_decoder_fill_input_buffer(j_decompress_ptr cinfo)
     {
         PANIC("no more data for jpeg");
-        return FALSE;
     }
 
     static void jpeg_decoder_skip_input_data(j_decompress_ptr cinfo, long num_bytes)

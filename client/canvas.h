@@ -252,7 +252,7 @@ public:
 /* TODO: unite with the window debug callbacks? */
 class GlzDecoderCanvasDebug: public GlzDecoderDebug {
 public:
-    virtual void error(const std::string& str)
+    virtual SPICE_GNUC_NORETURN void error(const std::string& str)
     {
         throw Exception(str);
     }

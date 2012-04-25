@@ -5274,7 +5274,8 @@ static int red_display_free_some_independent_glz_drawables(DisplayChannelClient 
 /******************************************************
  *              Encoders callbacks
 *******************************************************/
-static SPICE_GNUC_PRINTF(2, 3) void quic_usr_error(QuicUsrContext *usr, const char *fmt, ...)
+static SPICE_GNUC_NORETURN SPICE_GNUC_PRINTF(2, 3) void
+quic_usr_error(QuicUsrContext *usr, const char *fmt, ...)
 {
     EncoderData *usr_data = &(((QuicData *)usr)->data);
     va_list ap;
@@ -5287,7 +5288,8 @@ static SPICE_GNUC_PRINTF(2, 3) void quic_usr_error(QuicUsrContext *usr, const ch
     longjmp(usr_data->jmp_env, 1);
 }
 
-static SPICE_GNUC_PRINTF(2, 3) void lz_usr_error(LzUsrContext *usr, const char *fmt, ...)
+static SPICE_GNUC_NORETURN SPICE_GNUC_PRINTF(2, 3) void
+lz_usr_error(LzUsrContext *usr, const char *fmt, ...)
 {
     EncoderData *usr_data = &(((LzData *)usr)->data);
     va_list ap;

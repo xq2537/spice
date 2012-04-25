@@ -33,7 +33,7 @@
 #include "debug.h"
 #include "platform_utils.h"
 
-static void ssl_error()
+static void SPICE_GNUC_NORETURN ssl_error()
 {
     unsigned long last_error = ERR_peek_last_error();
 
