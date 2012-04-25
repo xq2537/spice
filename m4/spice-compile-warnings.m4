@@ -148,7 +148,10 @@ AC_DEFUN([SPICE_COMPILE_WARNINGS],[
     AC_SUBST([WARN_CXXFLAGS])
 
     # These are C-only warnings
-    gl_WARN_ADD([-Waggregate-return])
+    if test "x$enable_tunnel" != "xyes"; then
+        # Slirp causes pain :-(
+        gl_WARN_ADD([-Waggregate-return])
+    fi
     gl_WARN_ADD([-Wstrict-prototypes])
     gl_WARN_ADD([-Wold-style-definition])
     gl_WARN_ADD([-Wnested-externs])
