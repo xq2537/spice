@@ -2,8 +2,8 @@
  * Recreate the primary surface endlessly.
  */
 
-#include <math.h>
 #include <config.h>
+#include <math.h>
 #include <stdlib.h>
 #include "test_display_base.h"
 
