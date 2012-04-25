@@ -136,7 +136,7 @@ exclude_file_name_regexp--sc_preprocessor_indentation = ^*/*.[ch]
 
 exclude_file_name_regexp--sc_const_long_option = ^common/win/my_getopt-1.5/getopt.(3|txt)
 
-exclude_file_name_regexp--sc_prohibit_empty_lines_at_EOF = ^common/win/my_getopt-1.5/getopt.(3|txt)|client/windows/(spice.ico|sticky_alt.bmp)|client/tests/controller_test/build
+exclude_file_name_regexp--sc_prohibit_empty_lines_at_EOF = ^common/win/my_getopt-1.5/getopt.(3|txt)|client/windows/(spice.ico|sticky_alt.bmp)|client/tests/controller_test/build|docs/.*.odt|server/tests/base_test.ppm
 
 # XXX this should be removed & all cases fixde
 exclude_file_name_regexp--sc_prohibit_have_config_h = ^*/.*(c|cpp|h)
@@ -145,6 +145,8 @@ exclude_file_name_regexp--sc_require_config_h = ^client/gui/.*\.(ttf|font)\.c|cl
 
 exclude_file_name_regexp--sc_require_config_h_first = ^client/gui/.*\.(ttf|font)\.c|client/gui/taharez.*\.c|client/x11/images/(alt_image|red_icon)\.c|common/win/my_getopt-1.5
 
-exclude_file_name_regexp--sc_trailing_blank = ^common/win/my_getopt-1.5/getopt.3
+exclude_file_name_regexp--sc_trailing_blank = ^common/win/my_getopt-1.5/getopt.3|docs/.*.odt
 
 exclude_file_name_regexp--sc_unmarked_diagnostics = ^.*\.(c|py|h)
+
+exclude_file_name_regexp--sc_prohibit_path_max_allocation = server/tests/test_display_base.c
