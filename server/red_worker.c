@@ -2346,7 +2346,7 @@ static int is_equal_brush(SpiceBrush *b1, SpiceBrush *b2)
 {
     return b1->type == b2->type &&
            b1->type == SPICE_BRUSH_TYPE_SOLID &&
-           b1->u.color == b1->u.color;
+           b1->u.color == b2->u.color;
 }
 
 // partial imp
