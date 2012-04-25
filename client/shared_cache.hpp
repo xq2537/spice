@@ -159,7 +159,7 @@ public:
             }
             item = &(*item)->next;
         }
-        THROW("%s id %lu, not found", Treat::name(), id);
+        THROW("%s id %" PRIu64 ", not found", Treat::name(), id);
     }
 
     void clear()

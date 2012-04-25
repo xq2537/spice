@@ -45,7 +45,7 @@ public:
 
         while (*item) {
             if ((*item)->id == id) {
-                THROW("%s id %lu, double insert", Treat::name(), id);
+                THROW("%s id %" PRIu64 ", double insert", Treat::name(), id);
             }
             item = &(*item)->next;
         }
@@ -61,7 +61,7 @@ public:
         }
 
         if (!item) {
-            THROW("%s id %lu, not found", Treat::name(), id);
+            THROW("%s id %" PRIu64 ", not found", Treat::name(), id);
         }
         return Treat::get(item->data);
     }
@@ -79,7 +79,7 @@ public:
             }
             item = &(*item)->next;
         }
-        THROW("%s id %lu, not found", Treat::name(), id);
+        THROW("%s id %" PRIu64 ", not found", Treat::name(), id);
     }
 
     void clear()
