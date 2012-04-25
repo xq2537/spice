@@ -26,7 +26,6 @@
 #include <errno.h>
 #endif
 
-#define __STDC_FORMAT_MACROS
 #ifndef _WIN32
 #include <inttypes.h>
 #endif

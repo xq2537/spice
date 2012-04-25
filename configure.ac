@@ -31,6 +31,8 @@ AC_CHECK_HEADERS([sys/time.h])
 AC_CHECK_HEADERS([execinfo.h])
 AC_FUNC_ALLOCA
 
+AC_DEFINE([__STDC_FORMAT_MACROS],[],[Force definition of format macros for C++])
+
 SPICE_LT_VERSION=m4_format("%d:%d:%d", 1, 0, 2)
 AC_SUBST(SPICE_LT_VERSION)
 
