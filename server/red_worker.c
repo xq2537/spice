@@ -4636,7 +4636,7 @@ static inline uint64_t red_now(void)
 
     clock_gettime(CLOCK_MONOTONIC, &time);
 
-    return time.tv_sec * 1000000000 + time.tv_nsec;
+    return ((uint64_t) time.tv_sec) * 1000000000 + time.tv_nsec;
 }
 
 static int red_process_cursor(RedWorker *worker, uint32_t max_pipe_size, int *ring_is_empty)
