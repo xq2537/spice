@@ -390,7 +390,15 @@ struct Stream {
 };
 
 typedef struct StreamAgent {
-    QRegion vis_region;
+    QRegion vis_region; /* the part of the surface area that is currently occupied by video
+                           fragments */
+    QRegion clip;       /* the current video clipping. It can be different from vis_region:
+                           for example, let c1 be the clip area at time t1, and c2
+                           be the clip area at time t2, where t1 < t2. If c1 contains c2, and
+                           at least part of c1/c2, hasn't been covered by a non-video images,
+                           vis_region will contain c2 and also the part of c1/c2 that still
+                           displays fragments of the video */
+
     PipeItem create_item;
     PipeItem destroy_item;
     Stream *stream;
@@ -2468,11 +2476,11 @@ static void push_stream_clip(DisplayChannelClient* dcc, StreamAgent *agent)
     }
     item->clip_type = SPICE_CLIP_TYPE_RECTS;
 
-    n_rects = pixman_region32_n_rects(&agent->vis_region);
+    n_rects = pixman_region32_n_rects(&agent->clip);
 
     item->rects = spice_malloc_n_m(n_rects, sizeof(SpiceRect), sizeof(SpiceClipRects));
     item->rects->num_rects = n_rects;
-    region_ret_rects(&agent->vis_region, item->rects->rects, n_rects);
+    region_ret_rects(&agent->clip, item->rects->rects, n_rects);
     red_channel_client_pipe_add(&dcc->common.base, (PipeItem *)item);
 }
 
@@ -2493,7 +2501,6 @@ static inline int get_stream_id(RedWorker *worker, Stream *stream)
 static void red_attach_stream(RedWorker *worker, Drawable *drawable, Stream *stream)
 {
     DisplayChannelClient *dcc;
-    StreamAgent *agent;
     RingItem *item;
 
     spice_assert(!drawable->stream && !stream->current);
@@ -2503,10 +2510,12 @@ static void red_attach_stream(RedWorker *worker, Drawable *drawable, Stream *str
     stream->last_time = drawable->creation_time;
 
     WORKER_FOREACH_DCC(worker, item, dcc) {
-        agent = &dcc->stream_agents[get_stream_id(worker, stream)];
-        if (!region_is_equal(&agent->vis_region, &drawable->tree_item.base.rgn)) {
-            region_destroy(&agent->vis_region);
-            region_clone(&agent->vis_region, &drawable->tree_item.base.rgn);
+        StreamAgent *agent = &dcc->stream_agents[get_stream_id(worker, stream)];
+
+        region_or(&agent->vis_region, &drawable->tree_item.base.rgn);
+        if (!region_is_equal(&agent->clip, &drawable->tree_item.base.rgn)) {
+            region_destroy(&agent->clip);
+            region_clone(&agent->clip, &drawable->tree_item.base.rgn);
             push_stream_clip_by_drawable(dcc, agent, drawable);
         }
     }
@@ -2523,6 +2532,7 @@ static void red_stop_stream(RedWorker *worker, Stream *stream)
         StreamAgent *stream_agent;
         stream_agent = &dcc->stream_agents[get_stream_id(worker, stream)];
         region_clear(&stream_agent->vis_region);
+        region_clear(&stream_agent->clip);
         spice_assert(!pipe_item_is_linked(&stream_agent->destroy_item));
         stream->refs++;
         red_channel_client_pipe_add(&dcc->common.base, &stream_agent->destroy_item);
@@ -2585,7 +2595,8 @@ static void red_detach_streams_behind(RedWorker *worker, QRegion *region)
         WORKER_FOREACH_DCC(worker, dcc_ring_item, dcc) {
             StreamAgent *agent = &dcc->stream_agents[get_stream_id(worker, stream)];
             if (region_intersects(&agent->vis_region, region)) {
-                region_clear(&agent->vis_region);
+                /* hiding the stream at the client side at once */
+                region_clear(&agent->clip);
                 push_stream_clip(dcc, agent);
                 detach_stream = 1;
             }
@@ -2604,7 +2615,7 @@ static void red_detach_streams_behind(RedWorker *worker, QRegion *region)
     }
 }
 
-static void red_streams_update_clip(RedWorker *worker, Drawable *drawable)
+static void red_streams_update_visible_region(RedWorker *worker, Drawable *drawable)
 {
     Ring *ring;
     RingItem *item;
@@ -2637,6 +2648,7 @@ static void red_streams_update_clip(RedWorker *worker, Drawable *drawable)
 
             if (region_intersects(&agent->vis_region, &drawable->tree_item.base.rgn)) {
                 region_exclude(&agent->vis_region, &drawable->tree_item.base.rgn);
+                region_exclude(&agent->clip, &drawable->tree_item.base.rgn);
                 push_stream_clip(dcc, agent);
             }
         }
@@ -2747,6 +2759,7 @@ static void red_display_create_stream(DisplayChannelClient *dcc, Stream *stream)
     if (stream->current) {
         agent->frames = 1;
         region_clone(&agent->vis_region, &stream->current->tree_item.base.rgn);
+        region_clone(&agent->clip, &agent->vis_region);
     } else {
         agent->frames = 0;
     }
@@ -2821,6 +2834,7 @@ static void red_display_client_init_streams(DisplayChannelClient *dcc)
         StreamAgent *agent = &dcc->stream_agents[i];
         agent->stream = &worker->streams_buf[i];
         region_init(&agent->vis_region);
+        region_init(&agent->clip);
         red_channel_pipe_item_init(channel, &agent->create_item, PIPE_ITEM_TYPE_STREAM_CREATE);
         red_channel_pipe_item_init(channel, &agent->destroy_item, PIPE_ITEM_TYPE_STREAM_DESTROY);
     }
@@ -2833,6 +2847,7 @@ static void red_display_destroy_streams(DisplayChannelClient *dcc)
     for (i = 0; i < NUM_STREAMS; i++) {
         StreamAgent *agent = &dcc->stream_agents[i];
         region_destroy(&agent->vis_region);
+        region_destroy(&agent->clip);
     }
 }
 
@@ -3327,7 +3342,7 @@ static inline int red_current_add(RedWorker *worker, Ring *ring, Drawable *drawa
         region_or(&exclude_rgn, &item->base.rgn);
         exclude_region(worker, ring, exclude_base, &exclude_rgn, NULL, drawable);
         red_use_stream_trace(worker, drawable);
-        red_streams_update_clip(worker, drawable);
+        red_streams_update_visible_region(worker, drawable);
     } else {
         if (drawable->surface_id == 0) {
             red_detach_streams_behind(worker, &drawable->tree_item.base.rgn);
@@ -3397,7 +3412,7 @@ static inline int red_current_add_with_shadow(RedWorker *worker, Ring *ring, Dra
         region_clone(&exclude_rgn, &item->tree_item.base.rgn);
         exclude_region(worker, ring, &shadow->base.siblings_link, &exclude_rgn, NULL, NULL);
         region_destroy(&exclude_rgn);
-        red_streams_update_clip(worker, item);
+        red_streams_update_visible_region(worker, item);
     } else {
         if (item->surface_id == 0) {
             red_detach_streams_behind(worker, &item->tree_item.base.rgn);
