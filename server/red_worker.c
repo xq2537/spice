@@ -1006,6 +1006,8 @@ static void display_channel_push_release(DisplayChannelClient *dcc, uint8_t type
 static void red_display_release_stream_clip(RedWorker *worker, StreamClipItem *item);
 static int red_display_free_some_independent_glz_drawables(DisplayChannelClient *dcc);
 static void red_display_free_glz_drawable(DisplayChannelClient *dcc, RedGlzDrawable *drawable);
+static ImageItem *red_add_surface_area_image(DisplayChannelClient *dcc, int surface_id,
+                                             SpiceRect *area, PipeItem *pos, int can_lossy);
 static void reset_rate(DisplayChannelClient *dcc, StreamAgent *stream_agent);
 static BitmapGradualType _get_bitmap_graduality_level(RedWorker *worker, SpiceBitmap *bitmap,
                                                       uint32_t group_id);
@@ -2541,25 +2543,54 @@ static void red_stop_stream(RedWorker *worker, Stream *stream)
     red_release_stream(worker, stream);
 }
 
-static int drawable_is_linked(Drawable *drawable)
+static int red_display_drawable_is_in_pipe(DisplayChannelClient *dcc, Drawable *drawable)
 {
-    return !ring_is_empty(&drawable->pipes);
+    DrawablePipeItem *dpi;
+    RingItem *dpi_link;
+
+    DRAWABLE_FOREACH_DPI(drawable, dpi_link, dpi) {
+        if (dpi->dcc == dcc) {
+            return TRUE;
+        }
+    }
+
+    return FALSE;
 }
 
-static inline void red_detach_stream_gracefully(RedWorker *worker, Stream *stream)
+/*
+ * after red_display_detach_stream_gracefully is called for all the display channel clients,
+ * red_detach_stream should be called. See comment (1).
+ */
+static inline void red_display_detach_stream_gracefully(DisplayChannelClient *dcc, Stream *stream)
 {
-    RedChannel *channel;
-    RingItem *item;
-    RedChannelClient *rcc;
-    DisplayChannelClient *dcc;
+    int stream_id = get_stream_id(dcc->common.worker, stream);
+    StreamAgent *agent = &dcc->stream_agents[stream_id];
 
-    spice_assert(stream->current);
-    WORKER_FOREACH_DCC(worker, item, dcc) {
+    /* stopping the client from playing older frames at once*/
+    region_clear(&agent->clip);
+    push_stream_clip(dcc, agent);
+
+    if (region_is_empty(&agent->vis_region)) {
+        spice_debug("stream %d: vis region empty", stream_id);
+        return;
+    }
+
+    if (stream->current &&
+        region_contains(&stream->current->tree_item.base.rgn, &agent->vis_region)) {
+        RedChannel *channel;
+        RedChannelClient *rcc;
         UpgradeItem *upgrade_item;
         int n_rects;
-        if (drawable_is_linked(stream->current)) {
-            continue;
+
+        /* (1) The caller should detach the drawable from the stream. This will
+         * lead to sending the drawable losslessly, as an ordinary drawable. */
+        if (red_display_drawable_is_in_pipe(dcc, stream->current)) {
+            spice_debug("stream %d: upgrade by linked drawable. box ==>", stream_id);
+            rect_debug(&stream->current->red_drawable->bbox);
+            return;
         }
+        spice_debug("stream %d: upgrade by drawable. box ==>", stream_id);
+        rect_debug(&stream->current->red_drawable->bbox);
         rcc = &dcc->common.base;
         channel = rcc->channel;
         upgrade_item = spice_new(UpgradeItem, 1);
@@ -2574,8 +2605,31 @@ static inline void red_detach_stream_gracefully(RedWorker *worker, Stream *strea
         region_ret_rects(&upgrade_item->drawable->tree_item.base.rgn,
                          upgrade_item->rects->rects, n_rects);
         red_channel_client_pipe_add(rcc, &upgrade_item->base);
+
+    } else {
+        SpiceRect upgrade_area;
+
+        region_extents(&agent->vis_region, &upgrade_area);
+        spice_debug("stream %d: upgrade by screenshot. has current %d. box ==>",
+                    stream_id, stream->current != NULL);
+        rect_debug(&upgrade_area);
+        red_update_area(dcc->common.worker, &upgrade_area, 0);
+        red_add_surface_area_image(dcc, 0, &upgrade_area, NULL, FALSE);
     }
-    red_detach_stream(worker, stream);
+
+}
+
+static inline void red_detach_stream_gracefully(RedWorker *worker, Stream *stream)
+{
+    RingItem *item;
+    DisplayChannelClient *dcc;
+
+    WORKER_FOREACH_DCC(worker, item, dcc) {
+        red_display_detach_stream_gracefully(dcc, stream);
+    }
+    if (stream->current) {
+        red_detach_stream(worker, stream);
+    }
 }
 
 // region should be a primary surface region
@@ -2594,22 +2648,18 @@ static void red_detach_streams_behind(RedWorker *worker, QRegion *region)
 
         WORKER_FOREACH_DCC(worker, dcc_ring_item, dcc) {
             StreamAgent *agent = &dcc->stream_agents[get_stream_id(worker, stream)];
+
             if (region_intersects(&agent->vis_region, region)) {
-                /* hiding the stream at the client side at once */
-                region_clear(&agent->clip);
-                push_stream_clip(dcc, agent);
+                red_display_detach_stream_gracefully(dcc, stream);
                 detach_stream = 1;
             }
         }
-        if (!has_clients) {
+        if (detach_stream && stream->current) {
+            red_detach_stream(worker, stream);
+        } else if (!has_clients) {
             if (stream->current &&
                 region_intersects(&stream->current->tree_item.base.rgn, region)) {
                 red_detach_stream(worker, stream);
-            }
-        }
-        if (detach_stream) {
-            if (stream->current) {
-                red_detach_stream_gracefully(worker, stream);
             }
         }
     }
