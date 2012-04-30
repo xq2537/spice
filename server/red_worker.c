@@ -1743,9 +1743,12 @@ static inline void release_drawable(RedWorker *worker, Drawable *drawable)
     RingItem *item, *next;
 
     if (!--drawable->refs) {
-        spice_assert(!drawable->stream);
         spice_assert(!drawable->tree_item.shadow);
         spice_assert(ring_is_empty(&drawable->pipes));
+
+        if (drawable->stream) {
+            red_detach_stream(worker, drawable->stream);
+        }
         region_destroy(&drawable->tree_item.base.rgn);
 
         remove_drawable_dependencies(worker, drawable);
@@ -1846,9 +1849,7 @@ static inline void current_remove_drawable(RedWorker *worker, Drawable *item)
     if (item->tree_item.effect != QXL_EFFECT_OPAQUE) {
         worker->transparent_count--;
     }
-    if (item->stream) {
-        red_detach_stream(worker, item->stream);
-    } else {
+    if (!item->stream) {
         red_add_item_trace(worker, item);
     }
     remove_shadow(worker, &item->tree_item);
@@ -2741,9 +2742,7 @@ static inline void red_handle_streams_timout(RedWorker *worker)
         Stream *stream = SPICE_CONTAINEROF(item, Stream, link);
         item = ring_next(ring, item);
         if (now >= (stream->last_time + RED_STREAM_TIMOUT)) {
-            if (stream->current) {
-                red_detach_stream_gracefully(worker, stream);
-            }
+            red_detach_stream_gracefully(worker, stream);
             red_stop_stream(worker, stream);
         }
     }
@@ -4504,7 +4503,8 @@ static void red_update_area(RedWorker *worker, const SpiceRect *area, int surfac
 #ifdef ACYCLIC_SURFACE_DEBUG
     int gn;
 #endif
-
+    spice_debug("surface %d: area ==>", surface_id);
+    rect_debug(area);
     surface = &worker->surfaces[surface_id];
 
     last = NULL;
