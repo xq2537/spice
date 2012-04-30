@@ -2454,31 +2454,6 @@ static StreamClipItem *__new_stream_clip(DisplayChannelClient* dcc, StreamAgent 
     return item;
 }
 
-static void push_stream_clip_by_drawable(DisplayChannelClient* dcc, StreamAgent *agent,
-                                         Drawable *drawable)
-{
-    StreamClipItem *item = __new_stream_clip(dcc, agent);
-    int n_rects;
-
-    if (!item) {
-        spice_critical("alloc failed");
-    }
-
-    if (drawable->red_drawable->clip.type == SPICE_CLIP_TYPE_NONE) {
-        item->rects = NULL;
-        item->clip_type = SPICE_CLIP_TYPE_NONE;
-        item->rects = NULL;
-    } else {
-        item->clip_type = SPICE_CLIP_TYPE_RECTS;
-        n_rects = pixman_region32_n_rects(&drawable->tree_item.base.rgn);
-
-        item->rects = spice_malloc_n_m(n_rects, sizeof(SpiceRect), sizeof(SpiceClipRects));
-        item->rects->num_rects = n_rects;
-        region_ret_rects(&drawable->tree_item.base.rgn, item->rects->rects, n_rects);
-    }
-    red_channel_client_pipe_add(&dcc->common.base, (PipeItem *)item);
-}
-
 static void push_stream_clip(DisplayChannelClient* dcc, StreamAgent *agent)
 {
     StreamClipItem *item = __new_stream_clip(dcc, agent);
@@ -2523,13 +2498,20 @@ static void red_attach_stream(RedWorker *worker, Drawable *drawable, Stream *str
     stream->last_time = drawable->creation_time;
 
     WORKER_FOREACH_DCC(worker, item, dcc) {
-        StreamAgent *agent = &dcc->stream_agents[get_stream_id(worker, stream)];
+        StreamAgent *agent;
+        QRegion clip_in_draw_dest;
 
+        agent = &dcc->stream_agents[get_stream_id(worker, stream)];
         region_or(&agent->vis_region, &drawable->tree_item.base.rgn);
-        if (!region_is_equal(&agent->clip, &drawable->tree_item.base.rgn)) {
-            region_destroy(&agent->clip);
-            region_clone(&agent->clip, &drawable->tree_item.base.rgn);
-            push_stream_clip_by_drawable(dcc, agent, drawable);
+
+        region_init(&clip_in_draw_dest);
+        region_add(&clip_in_draw_dest, &drawable->red_drawable->bbox);
+        region_and(&clip_in_draw_dest, &agent->clip);
+
+        if (!region_is_equal(&clip_in_draw_dest, &drawable->tree_item.base.rgn)) {
+            region_remove(&agent->clip, &drawable->red_drawable->bbox);
+            region_or(&agent->clip, &drawable->tree_item.base.rgn);
+            push_stream_clip(dcc, agent);
         }
     }
 }
