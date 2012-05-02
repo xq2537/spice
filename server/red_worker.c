@@ -8133,8 +8133,8 @@ static inline int red_marshall_stream_data(RedChannelClient *rcc,
 
     SpiceMsgDisplayStreamData stream_data;
 
-    stream_data.id = get_stream_id(worker, stream);
-    stream_data.multi_media_time = drawable->red_drawable->mm_time;
+    stream_data.base.id = get_stream_id(worker, stream);
+    stream_data.base.multi_media_time = drawable->red_drawable->mm_time;
     stream_data.data_size = n;
     spice_marshall_msg_display_stream_data(base_marshaller, &stream_data);
     spice_marshaller_add_ref(base_marshaller,
