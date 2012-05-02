@@ -506,8 +506,8 @@ static void produce_command(void)
             path_progress(&path);
             break;
         case SIMPLE_UPDATE: {
-            QXLRect rect = {.left = 0, .right = SURF_WIDTH,
-                            .top = 0, .bottom = SURF_HEIGHT};
+            QXLRect rect = {.left = 0, .right = (target_surface == 0 ? test_width : SURF_WIDTH),
+                            .top = 0, .bottom = (target_surface == 0 ? test_height : SURF_HEIGHT)};
             qxl_worker->update_area(qxl_worker, target_surface, &rect, NULL, 0, 1);
             break;
         }
