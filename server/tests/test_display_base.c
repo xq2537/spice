@@ -498,6 +498,10 @@ static void produce_command(void)
         command->cb(command);
     }
     switch (command->command) {
+        case SLEEP:
+             printf("sleep %u seconds\n", command->sleep.secs);
+             sleep(command->sleep.secs);
+             break;
         case PATH_PROGRESS:
             path_progress(&path);
             break;

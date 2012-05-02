@@ -24,6 +24,7 @@ typedef enum {
     SIMPLE_UPDATE,
     DESTROY_PRIMARY,
     CREATE_PRIMARY,
+    SLEEP
 } CommandType;
 
 typedef struct CommandCreatePrimary {
@@ -45,6 +46,10 @@ typedef struct CommandDrawSolid {
     uint32_t surface_id;
 } CommandDrawSolid;
 
+typedef struct CommandSleep {
+    uint32_t secs;
+} CommandSleep;
+
 typedef struct Command Command;
 
 struct Command {
@@ -55,6 +60,7 @@ struct Command {
         CommandCreatePrimary create_primary;
         CommandDrawBitmap bitmap;
         CommandDrawSolid solid;
+        CommandSleep sleep;
     };
 };
 
