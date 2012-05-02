@@ -35,6 +35,8 @@ typedef struct CommandDrawBitmap {
     QXLRect bbox;
     uint8_t *bitmap;
     uint32_t surface_id;
+    uint32_t num_clip_rects;
+    QXLRect *clip_rects;
 } CommandDrawBitmap;
 
 typedef struct CommandDrawSolid {

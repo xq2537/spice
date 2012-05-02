@@ -43,6 +43,9 @@ static void test_spice_destroy_update(SimpleSpiceUpdate *update)
     if (!update) {
         return;
     }
+    if (update->drawable.clip.type != SPICE_CLIP_TYPE_NONE) {
+        free((uint8_t*)update->drawable.clip.data);
+    }
     free(update->bitmap);
     free(update);
 }
@@ -143,9 +146,12 @@ static void draw_pos(int t, int *x, int *y)
 #endif
 }
 
-/* bitmap is freeds, so it must be allocated with malloc */
+/* bitmap and rects are freed, so they must be allocated with malloc */
 SimpleSpiceUpdate *test_spice_create_update_from_bitmap(uint32_t surface_id,
-        QXLRect bbox, uint8_t *bitmap)
+                                                        QXLRect bbox,
+                                                        uint8_t *bitmap,
+                                                        uint32_t num_clip_rects,
+                                                        QXLRect *clip_rects)
 {
     SimpleSpiceUpdate *update;
     QXLDrawable *drawable;
@@ -163,7 +169,22 @@ SimpleSpiceUpdate *test_spice_create_update_from_bitmap(uint32_t surface_id,
     drawable->surface_id      = surface_id;
 
     drawable->bbox            = bbox;
-    drawable->clip.type       = SPICE_CLIP_TYPE_NONE;
+    if (num_clip_rects == 0) {
+        drawable->clip.type       = SPICE_CLIP_TYPE_NONE;
+    } else {
+        QXLClipRects *cmd_clip;
+
+        cmd_clip = calloc(sizeof(QXLClipRects) + num_clip_rects*sizeof(QXLRect), 1);
+        cmd_clip->num_rects = num_clip_rects;
+        cmd_clip->chunk.data_size = num_clip_rects*sizeof(QXLRect);
+        cmd_clip->chunk.prev_chunk = cmd_clip->chunk.next_chunk = 0;
+        memcpy(cmd_clip + 1, clip_rects, cmd_clip->chunk.data_size);
+
+        drawable->clip.type = SPICE_CLIP_TYPE_RECTS;
+        drawable->clip.data = (intptr_t)cmd_clip;
+
+        free(clip_rects);
+    }
     drawable->effect          = QXL_EFFECT_OPAQUE;
     simple_set_release_info(&drawable->release_info, (intptr_t)update);
     drawable->type            = QXL_DRAW_COPY;
@@ -209,7 +230,7 @@ static SimpleSpiceUpdate *test_spice_create_update_solid(uint32_t surface_id, QX
         *dst = color;
     }
 
-    return test_spice_create_update_from_bitmap(surface_id, bbox, bitmap);
+    return test_spice_create_update_from_bitmap(surface_id, bbox, bitmap, 0, NULL);
 }
 
 static SimpleSpiceUpdate *test_spice_create_update_draw(uint32_t surface_id, int t)
@@ -249,7 +270,7 @@ static SimpleSpiceUpdate *test_spice_create_update_draw(uint32_t surface_id, int
 
     bbox.left = left; bbox.top = top;
     bbox.right = left + bw; bbox.bottom = top + bh;
-    return test_spice_create_update_from_bitmap(surface_id, bbox, bitmap);
+    return test_spice_create_update_from_bitmap(surface_id, bbox, bitmap, 0, NULL);
 }
 
 static SimpleSpiceUpdate *test_spice_create_update_copy_bits(uint32_t surface_id)
@@ -512,7 +533,8 @@ static void produce_command(void)
                 break;
             case SIMPLE_DRAW_BITMAP:
                 update = test_spice_create_update_from_bitmap(command->bitmap.surface_id,
-                        command->bitmap.bbox, command->bitmap.bitmap);
+                        command->bitmap.bbox, command->bitmap.bitmap,
+                        command->bitmap.num_clip_rects, command->bitmap.clip_rects);
                 break;
             case SIMPLE_DRAW_SOLID:
                 update = test_spice_create_update_solid(command->solid.surface_id,
