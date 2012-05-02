@@ -2485,6 +2485,11 @@ static void red_display_release_stream_clip(RedWorker *worker, StreamClipItem *i
     }
 }
 
+static inline int get_stream_id(RedWorker *worker, Stream *stream)
+{
+    return (int)(stream - worker->streams_buf);
+}
+
 static void red_attach_stream(RedWorker *worker, Drawable *drawable, Stream *stream)
 {
     DisplayChannelClient *dcc;
@@ -2498,7 +2503,7 @@ static void red_attach_stream(RedWorker *worker, Drawable *drawable, Stream *str
     stream->last_time = drawable->creation_time;
 
     WORKER_FOREACH_DCC(worker, item, dcc) {
-        agent = &dcc->stream_agents[stream - worker->streams_buf];
+        agent = &dcc->stream_agents[get_stream_id(worker, stream)];
         if (!region_is_equal(&agent->vis_region, &drawable->tree_item.base.rgn)) {
             region_destroy(&agent->vis_region);
             region_clone(&agent->vis_region, &drawable->tree_item.base.rgn);
@@ -2516,7 +2521,7 @@ static void red_stop_stream(RedWorker *worker, Stream *stream)
     spice_assert(!stream->current);
     WORKER_FOREACH_DCC(worker, item, dcc) {
         StreamAgent *stream_agent;
-        stream_agent = &dcc->stream_agents[stream - worker->streams_buf];
+        stream_agent = &dcc->stream_agents[get_stream_id(worker, stream)];
         region_clear(&stream_agent->vis_region);
         spice_assert(!pipe_item_is_linked(&stream_agent->destroy_item));
         stream->refs++;
@@ -2578,7 +2583,7 @@ static void red_detach_streams_behind(RedWorker *worker, QRegion *region)
         item = ring_next(ring, item);
 
         WORKER_FOREACH_DCC(worker, dcc_ring_item, dcc) {
-            StreamAgent *agent = &dcc->stream_agents[stream - worker->streams_buf];
+            StreamAgent *agent = &dcc->stream_agents[get_stream_id(worker, stream)];
             if (region_intersects(&agent->vis_region, region)) {
                 region_clear(&agent->vis_region);
                 push_stream_clip(dcc, agent);
@@ -2628,7 +2633,7 @@ static void red_streams_update_clip(RedWorker *worker, Drawable *drawable)
         }
 
         WORKER_FOREACH_DCC(worker, dcc_ring_item, dcc) {
-            agent = &dcc->stream_agents[stream - worker->streams_buf];
+            agent = &dcc->stream_agents[get_stream_id(worker, stream)];
 
             if (region_intersects(&agent->vis_region, &drawable->tree_item.base.rgn)) {
                 region_exclude(&agent->vis_region, &drawable->tree_item.base.rgn);
@@ -2735,7 +2740,7 @@ static int get_minimal_bit_rate(RedWorker *worker, int width, int height)
 
 static void red_display_create_stream(DisplayChannelClient *dcc, Stream *stream)
 {
-    StreamAgent *agent = &dcc->stream_agents[stream - dcc->common.worker->streams_buf];
+    StreamAgent *agent = &dcc->stream_agents[get_stream_id(dcc->common.worker, stream)];
 
     stream->refs++;
     spice_assert(region_is_empty(&agent->vis_region));
@@ -2927,7 +2932,7 @@ static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream)
         return;
     }
 
-    index = stream - worker->streams_buf;
+    index = get_stream_id(worker, stream);
     DRAWABLE_FOREACH_DPI(stream->current, ring_item, dpi) {
         dcc = dpi->dcc;
         if (!display_channel_client_is_low_bandwidth(dcc)) {
@@ -8038,7 +8043,7 @@ static inline int red_marshall_stream_data(RedChannelClient *rcc,
         return FALSE;
     }
 
-    StreamAgent *agent = &dcc->stream_agents[stream - worker->streams_buf];
+    StreamAgent *agent = &dcc->stream_agents[get_stream_id(worker, stream)];
     uint64_t time_now = red_now();
     size_t outbuf_size;
     if (time_now - agent->last_send_time < (1000 * 1000 * 1000) / agent->fps) {
@@ -8063,7 +8068,7 @@ static inline int red_marshall_stream_data(RedChannelClient *rcc,
 
     SpiceMsgDisplayStreamData stream_data;
 
-    stream_data.id = stream - worker->streams_buf;
+    stream_data.id = get_stream_id(worker, stream);
     stream_data.multi_media_time = drawable->red_drawable->mm_time;
     stream_data.data_size = n;
     spice_marshall_msg_display_stream_data(base_marshaller, &stream_data);
@@ -8363,7 +8368,7 @@ static void red_display_marshall_stream_start(RedChannelClient *rcc,
     SpiceClipRects clip_rects;
 
     stream_create.surface_id = 0;
-    stream_create.id = agent - dcc->stream_agents;
+    stream_create.id = get_stream_id(dcc->common.worker, stream);
     stream_create.flags = stream->top_down ? SPICE_STREAM_FLAGS_TOP_DOWN : 0;
     stream_create.codec_type = SPICE_VIDEO_CODEC_TYPE_MJPEG;
 
@@ -8399,7 +8404,7 @@ static void red_display_marshall_stream_clip(RedChannelClient *rcc,
     red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_STREAM_CLIP, &item->base);
     SpiceMsgDisplayStreamClip stream_clip;
 
-    stream_clip.id = agent - dcc->stream_agents;
+    stream_clip.id = get_stream_id(dcc->common.worker, agent->stream);
     stream_clip.clip.type = item->clip_type;
     stream_clip.clip.rects = item->rects;
 
@@ -8413,7 +8418,7 @@ static void red_display_marshall_stream_end(RedChannelClient *rcc,
     SpiceMsgDisplayStreamDestroy destroy;
 
     red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_STREAM_DESTROY, NULL);
-    destroy.id = agent - dcc->stream_agents;
+    destroy.id = get_stream_id(dcc->common.worker, agent->stream);
 
     spice_marshall_msg_display_stream_destroy(base_marshaller, &destroy);
 }
