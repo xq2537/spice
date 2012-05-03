@@ -183,7 +183,7 @@ AC_DEFINE_UNQUOTED([POSIX_YIELD_FUNC],$posix_yield_func,[The POSIX RT yield func
 
 SPICE_REQUIRES=""
 
-if test "x$enable_gui" = "xyes"; then
+if test "x$enable_gui" = "xyes" && test "x$enable_client" = "xyes" ; then
     PKG_CHECK_MODULES(CEGUI06, CEGUI-0.6 >= 0.6.0 CEGUI-0.6 < 0.7.0,
     [
         AC_SUBST(CEGUI06_CFLAGS)
@@ -254,7 +254,7 @@ SPICE_REQUIRES+=" openssl"
 # AC_SUBST(GL_LIBS)
 # SPICE_REQUIRES+=" gl glu"
 
-if test "x$enable_opengl" = "xyes"; then
+if test "x$enable_opengl" = "xyes" && test "x$enable_client" = "xyes" ; then
    AC_CHECK_LIB(GL, glBlendFunc, GL_LIBS="$GL_LIBS -lGL", enable_opengl=no)
    AC_CHECK_LIB(GLU, gluSphere, GL_LIBS="$GL_LIBS -lGLU", enable_opengl=no)
    AC_DEFINE([USE_OPENGL], [1], [Define to build with OpenGL support])
@@ -269,11 +269,14 @@ AC_SUBST(GL_CFLAGS)
 AC_SUBST(GL_LIBS)
 SPICE_NONPKGCONFIG_LIBS+=" $GL_LIBS"
 
-if test "$red_target" = "x11"; then
+if test "x$red_target" = "xx11" && test "x$enable_client" = "xyes" ; then
 	PKG_CHECK_MODULES(XRANDR, xrandr)
 	PKG_CHECK_MODULES(XFIXES, xfixes)
+	PKG_CHECK_MODULES(MISC_X, x11 xext xrender)
 	AC_SUBST(XRANDR_CFLAGS)
 	AC_SUBST(XRANDR_LIBS)
+	AC_SUBST(MISC_X_CFLAGS)
+	AC_SUBST(MISC_X_LIBS)
 
 	PKG_CHECK_MODULES(XRANDR12,
 	        xrandr >= 1.2,
@@ -286,12 +289,6 @@ fi
 AM_CONDITIONAL([HAVE_XRANDR12], [test "x$have_xrandr12" = "xyes"])
 if test "x$have_xrandr12" = "xyes" ; then
   AC_DEFINE([HAVE_XRANDR12], [], [Define if we have XRANDR 12])
-fi
-
-if test "$red_target" = "x11"; then
-	PKG_CHECK_MODULES(MISC_X, x11 xext xrender)
-	AC_SUBST(MISC_X_CFLAGS)
-	AC_SUBST(MISC_X_LIBS)
 fi
 
 PKG_CHECK_MODULES(XINERAMA,
@@ -485,18 +482,18 @@ echo "
         python:                   ${PYTHON}
 
         Build Spice client:       ${enable_client}
-
+" ; if test "x$enable_client" == "xyes"; then echo "\
         Have XRANDR 1.2:          ${have_xrandr12}
 
         Have Xinerama:            ${have_xinerama}
-
-        Support tunneling:        ${enable_tunnel}
 
         Red target:               ${red_target}
 
         OpenGL:                   ${enable_opengl}
 
         GUI:                      ${enable_gui}
+" ; fi ; echo "\
+        Support tunneling:        ${enable_tunnel}
 
         Smartcard:                ${enable_smartcard}
 
