@@ -101,7 +101,6 @@ typedef struct {
 
   unsigned char ** outbuffer;	/* target buffer */
   size_t * outsize;
-  unsigned char * newbuffer;	/* newly allocated buffer */
   uint8_t * buffer;		/* start of buffer */
   size_t bufsize;
 } mem_destination_mgr;
@@ -125,9 +124,7 @@ static boolean empty_mem_output_buffer(j_compress_ptr cinfo)
 
   memcpy(nextbuffer, dest->buffer, dest->bufsize);
 
-  free(dest->newbuffer);
-
-  dest->newbuffer = nextbuffer;
+  free(dest->buffer);
 
   dest->pub.next_output_byte = nextbuffer + dest->bufsize;
   dest->pub.free_in_buffer = dest->bufsize;
@@ -180,12 +177,10 @@ spice_jpeg_mem_dest(j_compress_ptr cinfo,
   dest->pub.term_destination = term_mem_destination;
   dest->outbuffer = outbuffer;
   dest->outsize = outsize;
-  dest->newbuffer = NULL;
-
   if (*outbuffer == NULL || *outsize == 0) {
     /* Allocate initial buffer */
-    dest->newbuffer = *outbuffer = malloc(OUTPUT_BUF_SIZE);
-    if (dest->newbuffer == NULL)
+    *outbuffer = malloc(OUTPUT_BUF_SIZE);
+    if (*outbuffer == NULL)
       ERREXIT1(cinfo, JERR_OUT_OF_MEMORY, 10);
     *outsize = OUTPUT_BUF_SIZE;
   }
