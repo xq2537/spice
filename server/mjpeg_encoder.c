@@ -140,7 +140,7 @@ static void term_mem_destination(j_compress_ptr cinfo)
   mem_destination_mgr *dest = (mem_destination_mgr *) cinfo->dest;
 
   *dest->outbuffer = dest->buffer;
-  *dest->outsize = dest->bufsize - dest->pub.free_in_buffer;
+  *dest->outsize = dest->bufsize;
 }
 
 /*
