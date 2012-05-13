@@ -1695,13 +1695,12 @@ static inline void put_red_drawable(RedWorker *worker, RedDrawable *drawable, ui
 {
     QXLReleaseInfoExt release_info_ext;
 
-    if (self_bitmap) {
-        red_put_image(self_bitmap);
-    }
     if (--drawable->refs) {
         return;
     }
-
+    if (self_bitmap) {
+        red_put_image(self_bitmap);
+    }
     worker->red_drawable_count--;
     release_info_ext.group_id = group_id;
     release_info_ext.info = drawable->release_info;
