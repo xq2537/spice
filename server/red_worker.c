@@ -3867,8 +3867,8 @@ static inline void red_inc_surfaces_drawable_dependencies(RedWorker *worker, Dra
     }
 }
 
-static inline void red_process_drawable(RedWorker *worker, RedDrawable *drawable,
-                                        uint32_t group_id)
+static inline Drawable *red_process_drawable(RedWorker *worker, RedDrawable *drawable,
+                                             uint32_t group_id)
 {
     int surface_id;
     Drawable *item = get_drawable(worker, drawable->effect, drawable, group_id);
@@ -3931,7 +3931,7 @@ static inline void red_process_drawable(RedWorker *worker, RedDrawable *drawable
 #endif
     }
 cleanup:
-    release_drawable(worker, item);
+    return item;
 }
 
 static inline void red_create_surface(RedWorker *worker, uint32_t surface_id,uint32_t width,
@@ -4844,14 +4844,16 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
         switch (ext_cmd.cmd.type) {
         case QXL_CMD_DRAW: {
             RedDrawable *red_drawable = red_drawable_new(); // returns with 1 ref
+            Drawable *drawable;
 
             if (red_get_drawable(&worker->mem_slots, ext_cmd.group_id,
                                  red_drawable, ext_cmd.cmd.data, ext_cmd.flags)) {
                 break;
             }
-            red_process_drawable(worker, red_drawable, ext_cmd.group_id);
-            // release the red_drawable
+            drawable = red_process_drawable(worker, red_drawable, ext_cmd.group_id);
+            // release red_drawable first, it will not die because drawable holds a reference on it.
             put_red_drawable(worker, red_drawable, ext_cmd.group_id, NULL);
+            release_drawable(worker, drawable);
             break;
         }
         case QXL_CMD_UPDATE: {
