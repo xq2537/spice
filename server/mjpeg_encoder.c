@@ -26,6 +26,7 @@
 
 struct MJpegEncoder {
     uint8_t *row;
+    uint32_t row_size;
     int first_frame;
     int quality;
 
@@ -196,6 +197,8 @@ int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
 {
     encoder->cinfo.in_color_space   = JCS_RGB;
     encoder->cinfo.input_components = 3;
+    encoder->pixel_converter = NULL;
+
     switch (format) {
     case SPICE_BITMAP_FMT_32BIT:
     case SPICE_BITMAP_FMT_RGBA:
@@ -224,13 +227,16 @@ int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
         return FALSE;
     }
 
-    if ((encoder->pixel_converter != NULL) && (encoder->row == NULL)) {
+    if (encoder->pixel_converter != NULL) {
         unsigned int stride = width * 3;
         /* check for integer overflow */
         if (stride < width) {
             return FALSE;
         }
-        encoder->row = spice_malloc(stride);
+        if (encoder->row_size < stride) {
+            encoder->row = spice_realloc(encoder->row, stride);
+            encoder->row_size = stride;
+        }
     }
 
     spice_jpeg_mem_dest(&encoder->cinfo, dest, dest_len);
