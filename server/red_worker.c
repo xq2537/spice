@@ -3905,23 +3905,19 @@ static inline void red_process_drawable(RedWorker *worker, RedDrawable *drawable
     red_inc_surfaces_drawable_dependencies(worker, item);
 
     if (region_is_empty(&item->tree_item.base.rgn)) {
-        release_drawable(worker, item);
-        return;
+        goto cleanup;
     }
 
     if (!red_handle_self_bitmap(worker, item)) {
-        release_drawable(worker, item);
-        return;
+        goto cleanup;
     }
 
     if (!red_handle_depends_on_target_surface(worker, surface_id)) {
-        release_drawable(worker, item);
-        return;
+        goto cleanup;
     }
 
     if (!red_handle_surfaces_dependencies(worker, item)) {
-        release_drawable(worker, item);
-        return;
+        goto cleanup;
     }
 
     if (red_current_add_qxl(worker, &worker->surfaces[surface_id].current, item,
@@ -3934,6 +3930,7 @@ static inline void red_process_drawable(RedWorker *worker, RedDrawable *drawable
         red_draw_qxl_drawable(worker, item);
 #endif
     }
+cleanup:
     release_drawable(worker, item);
 }
 
