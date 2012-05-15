@@ -1690,12 +1690,12 @@ static RedDrawable *ref_red_drawable(RedDrawable *drawable)
 }
 
 
-static inline void put_red_drawable(RedWorker *worker, RedDrawable *drawable, uint32_t group_id,
-                                     SpiceImage *self_bitmap_image)
+static inline void put_red_drawable(RedWorker *worker, RedDrawable *red_drawable,
+                                    uint32_t group_id, SpiceImage *self_bitmap_image)
 {
     QXLReleaseInfoExt release_info_ext;
 
-    if (--drawable->refs) {
+    if (--red_drawable->refs) {
         return;
     }
     if (self_bitmap_image) {
@@ -1703,10 +1703,10 @@ static inline void put_red_drawable(RedWorker *worker, RedDrawable *drawable, ui
     }
     worker->red_drawable_count--;
     release_info_ext.group_id = group_id;
-    release_info_ext.info = drawable->release_info;
+    release_info_ext.info = red_drawable->release_info;
     worker->qxl->st->qif->release_resource(worker->qxl, release_info_ext);
-    red_put_drawable(drawable);
-    free(drawable);
+    red_put_drawable(red_drawable);
+    free(red_drawable);
 }
 
 static void remove_depended_item(DependItem *item)
