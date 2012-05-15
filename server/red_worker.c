@@ -570,7 +570,7 @@ struct RedGlzDrawable {
     RedDrawable *red_drawable;
     Drawable    *drawable;
     uint32_t     group_id;
-    SpiceImage  *self_bitmap;
+    SpiceImage  *self_bitmap_image;
     GlzDrawableInstanceItem instances_pool[MAX_GLZ_DRAWABLE_INSTANCES];
     Ring instances;
     uint8_t instances_count;
@@ -802,7 +802,7 @@ struct Drawable {
     int streamable;
     BitmapGradualType copy_bitmap_graduality;
     uint32_t group_id;
-    SpiceImage *self_bitmap;
+    SpiceImage *self_bitmap_image;
     DependItem depend_items[3];
 
     uint8_t *backed_surface_data;
@@ -1691,15 +1691,15 @@ static RedDrawable *ref_red_drawable(RedDrawable *drawable)
 
 
 static inline void put_red_drawable(RedWorker *worker, RedDrawable *drawable, uint32_t group_id,
-                                     SpiceImage *self_bitmap)
+                                     SpiceImage *self_bitmap_image)
 {
     QXLReleaseInfoExt release_info_ext;
 
     if (--drawable->refs) {
         return;
     }
-    if (self_bitmap) {
-        red_put_image(self_bitmap);
+    if (self_bitmap_image) {
+        red_put_image(self_bitmap_image);
     }
     worker->red_drawable_count--;
     release_info_ext.group_id = group_id;
@@ -1766,7 +1766,7 @@ static inline void release_drawable(RedWorker *worker, Drawable *drawable)
             ring_remove(item);
         }
         put_red_drawable(worker, drawable->red_drawable,
-                          drawable->group_id, drawable->self_bitmap);
+                          drawable->group_id, drawable->self_bitmap_image);
         free_drawable(worker, drawable);
         worker->drawable_count--;
     }
@@ -3725,7 +3725,7 @@ static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
         }
     }
 
-    drawable->self_bitmap = image;
+    drawable->self_bitmap_image = image;
     return TRUE;
 }
 
@@ -4147,8 +4147,8 @@ static void localize_bitmap(RedWorker *worker, SpiceImage **image_ptr, SpiceImag
 
     if (image == NULL) {
         spice_assert(drawable != NULL);
-        spice_assert(drawable->self_bitmap != NULL);
-        *image_ptr = drawable->self_bitmap;
+        spice_assert(drawable->self_bitmap_image != NULL);
+        *image_ptr = drawable->self_bitmap_image;
         return;
     }
 
@@ -5202,7 +5202,7 @@ static RedGlzDrawable *red_display_get_glz_drawable(DisplayChannelClient *dcc, D
     ret->red_drawable = ref_red_drawable(drawable->red_drawable);
     ret->drawable = drawable;
     ret->group_id = drawable->group_id;
-    ret->self_bitmap = drawable->self_bitmap;
+    ret->self_bitmap_image = drawable->self_bitmap_image;
     ret->instances_count = 0;
     ring_init(&ret->instances);
 
@@ -5269,7 +5269,7 @@ static void red_display_free_glz_drawable_instance(DisplayChannelClient *dcc,
             ring_remove(&glz_drawable->drawable_link);
         }
         put_red_drawable(worker, glz_drawable->red_drawable,
-                          glz_drawable->group_id, glz_drawable->self_bitmap);
+                          glz_drawable->group_id, glz_drawable->self_bitmap_image);
         worker->glz_drawable_count--;
         if (ring_item_is_linked(&glz_drawable->link)) {
             ring_remove(&glz_drawable->link);
@@ -6428,8 +6428,8 @@ static FillBitsType fill_bits(DisplayChannelClient *dcc, SpiceMarshaller *m,
     SpiceMarshaller *bitmap_palette_out, *lzplt_palette_out;
 
     if (simage == NULL) {
-        spice_assert(drawable->self_bitmap);
-        simage = drawable->self_bitmap;
+        spice_assert(drawable->self_bitmap_image);
+        simage = drawable->self_bitmap_image;
     }
 
     image.descriptor = simage->descriptor;
