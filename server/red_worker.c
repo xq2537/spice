@@ -3678,20 +3678,20 @@ static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
     RedSurface *surface;
     int bpp;
     int all_set;
+    RedDrawable *red_drawable = drawable->red_drawable;
 
-    if (!drawable->red_drawable->self_bitmap) {
+    if (!red_drawable->self_bitmap) {
         return TRUE;
     }
-
 
     surface = &worker->surfaces[drawable->surface_id];
 
     bpp = SPICE_SURFACE_FMT_DEPTH(surface->context.format) / 8;
 
-    width = drawable->red_drawable->self_bitmap_area.right
-            - drawable->red_drawable->self_bitmap_area.left;
-    height = drawable->red_drawable->self_bitmap_area.bottom
-            - drawable->red_drawable->self_bitmap_area.top;
+    width = red_drawable->self_bitmap_area.right
+            - red_drawable->self_bitmap_area.left;
+    height = red_drawable->self_bitmap_area.bottom
+            - red_drawable->self_bitmap_area.top;
     dest_stride = SPICE_ALIGN(width * bpp, 4);
 
     image = spice_new0(SpiceImage, 1);
@@ -3711,7 +3711,7 @@ static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
     image->u.bitmap.data->flags |= SPICE_CHUNKS_FLAGS_FREE;
 
     red_get_area(worker, drawable->surface_id,
-                 &drawable->red_drawable->self_bitmap_area, dest, dest_stride, TRUE);
+                 &red_drawable->self_bitmap_area, dest, dest_stride, TRUE);
 
     /* For 32bit non-primary surfaces we need to keep any non-zero
        high bytes as the surface may be used as source to an alpha_blend */
