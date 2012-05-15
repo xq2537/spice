@@ -49,7 +49,7 @@ void create_overlay(Command *command , int width, int height)
  * Upon the OVERLAY_FRAME-th, a drawable is created on top of a part of the stream,
  * and from then on, all the stream frames has a clipping that keeps this drawable
  * visible, and in addition a clipping_factor is subtracted from the right limit of their clipping.
- * If sized=TRUE, a higher frame than the original stream height is created every SIZED_INTERVAL.
+ * If sized=TRUE, a higher and wider frame than the original stream is created every SIZED_INTERVAL.
  * The sized frames can be distinguished by a change in the color of the top and bottom limits of the
  * surface.
  */
@@ -58,7 +58,8 @@ void create_clipped_frame(Command *command, int clipping_factor)
     static int count = 0;
     CommandDrawBitmap *cmd = &command->bitmap;
     int max_height = test_get_height();
-    int width = test_get_width();
+    int max_width = test_get_width();
+    int width;
     int height;
     int cur_line, end_line;
     uint32_t *dst;
@@ -75,11 +76,12 @@ void create_clipped_frame(Command *command, int clipping_factor)
     cmd->surface_id = 0;
 
     cmd->bbox.left = 0;
-    cmd->bbox.right = width;
+    cmd->bbox.right = max_width - 50;
     assert(max_height > 600);
     cmd->bbox.top = 50;
     cmd->bbox.bottom = max_height - 50;
     height = cmd->bbox.bottom  - cmd->bbox.top;
+    width = cmd->bbox.right - cmd->bbox.left;
     cur_line = (height/30)*(count % 30);
     end_line = cur_line + (height/30);
     if (end_line >= height || height - end_line < 8) {
@@ -90,7 +92,10 @@ void create_clipped_frame(Command *command, int clipping_factor)
 
         cmd->bbox.top = 0;
         cmd->bbox.bottom = max_height;
+        cmd->bbox.left = 0;
+        cmd->bbox.right = max_width;
         height = max_height;
+        width = max_width;
         cur_line += 50;
         end_line += 50;
     }
