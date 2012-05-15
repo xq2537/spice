@@ -31,6 +31,7 @@ typedef struct RedDrawable {
     uint8_t type;
     uint8_t self_bitmap;
     SpiceRect self_bitmap_area;
+    SpiceImage *self_bitmap_image;
     SpiceRect bbox;
     SpiceClip clip;
     uint32_t mm_time;

@@ -570,7 +570,6 @@ struct RedGlzDrawable {
     RedDrawable *red_drawable;
     Drawable    *drawable;
     uint32_t     group_id;
-    SpiceImage  *self_bitmap_image;
     GlzDrawableInstanceItem instances_pool[MAX_GLZ_DRAWABLE_INSTANCES];
     Ring instances;
     uint8_t instances_count;
@@ -802,7 +801,6 @@ struct Drawable {
     int streamable;
     BitmapGradualType copy_bitmap_graduality;
     uint32_t group_id;
-    SpiceImage *self_bitmap_image;
     DependItem depend_items[3];
 
     uint8_t *backed_surface_data;
@@ -1691,15 +1689,12 @@ static RedDrawable *ref_red_drawable(RedDrawable *drawable)
 
 
 static inline void put_red_drawable(RedWorker *worker, RedDrawable *red_drawable,
-                                    uint32_t group_id, SpiceImage *self_bitmap_image)
+                                    uint32_t group_id)
 {
     QXLReleaseInfoExt release_info_ext;
 
     if (--red_drawable->refs) {
         return;
-    }
-    if (self_bitmap_image) {
-        red_put_image(self_bitmap_image);
     }
     worker->red_drawable_count--;
     release_info_ext.group_id = group_id;
@@ -1765,8 +1760,7 @@ static inline void release_drawable(RedWorker *worker, Drawable *drawable)
             SPICE_CONTAINEROF(item, RedGlzDrawable, drawable_link)->drawable = NULL;
             ring_remove(item);
         }
-        put_red_drawable(worker, drawable->red_drawable,
-                          drawable->group_id, drawable->self_bitmap_image);
+        put_red_drawable(worker, drawable->red_drawable, drawable->group_id);
         free_drawable(worker, drawable);
         worker->drawable_count--;
     }
@@ -3725,7 +3719,7 @@ static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
         }
     }
 
-    drawable->self_bitmap_image = image;
+    red_drawable->self_bitmap_image = image;
     return TRUE;
 }
 
@@ -4147,8 +4141,8 @@ static void localize_bitmap(RedWorker *worker, SpiceImage **image_ptr, SpiceImag
 
     if (image == NULL) {
         spice_assert(drawable != NULL);
-        spice_assert(drawable->self_bitmap_image != NULL);
-        *image_ptr = drawable->self_bitmap_image;
+        spice_assert(drawable->red_drawable->self_bitmap_image != NULL);
+        *image_ptr = drawable->red_drawable->self_bitmap_image;
         return;
     }
 
@@ -4851,7 +4845,7 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
             }
             red_process_drawable(worker, red_drawable, ext_cmd.group_id);
             // release the red_drawable
-            put_red_drawable(worker, red_drawable, ext_cmd.group_id, NULL);
+            put_red_drawable(worker, red_drawable, ext_cmd.group_id);
             break;
         }
         case QXL_CMD_UPDATE: {
@@ -5202,7 +5196,6 @@ static RedGlzDrawable *red_display_get_glz_drawable(DisplayChannelClient *dcc, D
     ret->red_drawable = ref_red_drawable(drawable->red_drawable);
     ret->drawable = drawable;
     ret->group_id = drawable->group_id;
-    ret->self_bitmap_image = drawable->self_bitmap_image;
     ret->instances_count = 0;
     ring_init(&ret->instances);
 
@@ -5269,7 +5262,7 @@ static void red_display_free_glz_drawable_instance(DisplayChannelClient *dcc,
             ring_remove(&glz_drawable->drawable_link);
         }
         put_red_drawable(worker, glz_drawable->red_drawable,
-                          glz_drawable->group_id, glz_drawable->self_bitmap_image);
+                         glz_drawable->group_id);
         worker->glz_drawable_count--;
         if (ring_item_is_linked(&glz_drawable->link)) {
             ring_remove(&glz_drawable->link);
@@ -6428,8 +6421,8 @@ static FillBitsType fill_bits(DisplayChannelClient *dcc, SpiceMarshaller *m,
     SpiceMarshaller *bitmap_palette_out, *lzplt_palette_out;
 
     if (simage == NULL) {
-        spice_assert(drawable->self_bitmap_image);
-        simage = drawable->self_bitmap_image;
+        spice_assert(drawable->red_drawable->self_bitmap_image);
+        simage = drawable->red_drawable->self_bitmap_image;
     }
 
     image.descriptor = simage->descriptor;

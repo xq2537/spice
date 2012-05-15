@@ -1004,6 +1004,9 @@ int red_get_drawable(RedMemSlotInfo *slots, int group_id,
 void red_put_drawable(RedDrawable *red)
 {
     red_put_clip(&red->clip);
+    if (red->self_bitmap_image) {
+        red_put_image(red->self_bitmap_image);
+    }
     switch (red->type) {
     case QXL_DRAW_ALPHA_BLEND:
         red_put_alpha_blend(&red->u.alpha_blend);
