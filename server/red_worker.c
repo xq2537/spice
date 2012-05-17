@@ -2916,6 +2916,10 @@ static inline int __red_is_next_stream_frame(RedWorker *worker,
     RedDrawable *red_drawable;
     int is_frame_container = FALSE;
 
+    if (!candidate->streamable) {
+        return STREAM_FRAME_NONE;
+    }
+
     if (candidate->creation_time - other_time >
             (stream ? RED_STREAM_CONTINUS_MAX_DELTA : RED_STREAM_DETACTION_MAX_DELTA)) {
         return STREAM_FRAME_NONE;
