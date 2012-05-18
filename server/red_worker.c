@@ -445,8 +445,12 @@ struct RedCompressBuf {
     RedCompressBuf *send_next;
 };
 
-static const int BITMAP_FMT_IS_PLT[] = {0, 1, 1, 1, 1, 1, 0, 0, 0, 0};
-static const int BITMAP_FMP_BYTES_PER_PIXEL[] = {0, 0, 0, 0, 0, 1, 2, 3, 4, 4};
+static const int BITMAP_FMT_IS_PLT[] = {0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0};
+static const int BITMAP_FMP_BYTES_PER_PIXEL[] = {0, 0, 0, 0, 0, 1, 2, 3, 4, 4, 1};
+
+#define BITMAP_FMT_HAS_GRADUALITY(f)                                    \
+    (bitmap_fmt_is_rgb(f)        &&                                     \
+     ((f) != SPICE_BITMAP_FMT_8BIT_A))
 
 pthread_mutex_t cache_lock = PTHREAD_MUTEX_INITIALIZER;
 Ring pixmap_cache_list = {&pixmap_cache_list, &pixmap_cache_list};
@@ -3111,7 +3115,7 @@ static inline void red_update_copy_graduality(RedWorker* worker, Drawable *drawa
 
     bitmap = &drawable->red_drawable->u.copy.src_bitmap->u.bitmap;
 
-    if (!bitmap_fmt_is_rgb(bitmap->format) || _stride_is_extra(bitmap) ||
+    if (!BITMAP_FMT_HAS_GRADUALITY(bitmap->format) || _stride_is_extra(bitmap) ||
         (bitmap->data->flags & SPICE_CHUNKS_FLAGS_UNSTABLE)) {
         drawable->copy_bitmap_graduality = BITMAP_GRADUAL_NOT_AVAIL;
     } else  {
@@ -3671,6 +3675,8 @@ static int surface_format_to_image_type(uint32_t surface_format)
         return SPICE_BITMAP_FMT_32BIT;
     case SPICE_SURFACE_FMT_32_ARGB:
         return SPICE_BITMAP_FMT_RGBA;
+    case SPICE_SURFACE_FMT_8_A:
+        return SPICE_BITMAP_FMT_8BIT_A;
     default:
         spice_critical("Unsupported surface format");
     }
@@ -5882,7 +5888,8 @@ static const LzImageType MAP_BITMAP_FMT_TO_LZ_IMAGE_TYPE[] = {
     LZ_IMAGE_TYPE_RGB16,
     LZ_IMAGE_TYPE_RGB24,
     LZ_IMAGE_TYPE_RGB32,
-    LZ_IMAGE_TYPE_RGBA
+    LZ_IMAGE_TYPE_RGBA,
+    LZ_IMAGE_TYPE_A8
 };
 
 typedef struct compress_send_data_t {
@@ -6344,8 +6351,8 @@ static inline int red_compress_image(DisplayChannelClient *dcc,
                     quic_compress = FALSE;
                 } else {
                     if (drawable->copy_bitmap_graduality == BITMAP_GRADUAL_INVALID) {
-                        quic_compress = bitmap_fmt_is_rgb(src->format) &&
-                            (_get_bitmap_graduality_level(display_channel->common.worker, src,
+                        quic_compress = BITMAP_FMT_HAS_GRADUALITY(src->format) &&
+			    (_get_bitmap_graduality_level(display_channel->common.worker, src,
                                                           drawable->group_id) ==
                              BITMAP_GRADUAL_HIGH);
                     } else {
@@ -6379,7 +6386,7 @@ static inline int red_compress_image(DisplayChannelClient *dcc,
         int ret;
         if ((image_compression == SPICE_IMAGE_COMPRESS_AUTO_GLZ) ||
             (image_compression == SPICE_IMAGE_COMPRESS_GLZ)) {
-            glz = bitmap_fmt_is_rgb(src->format) && (
+            glz = BITMAP_FMT_HAS_GRADUALITY(src->format) && (
                     (src->x * src->y) < glz_enc_dictionary_get_size(
                         dcc->glz_dict->dict));
         } else if ((image_compression == SPICE_IMAGE_COMPRESS_AUTO_LZ) ||
@@ -8452,7 +8459,7 @@ static void red_marshall_image(RedChannelClient *rcc, SpiceMarshaller *m, ImageI
 
     if ((comp_mode == SPICE_IMAGE_COMPRESS_AUTO_LZ) ||
         (comp_mode == SPICE_IMAGE_COMPRESS_AUTO_GLZ)) {
-        if (bitmap_fmt_is_rgb(item->image_format)) {
+        if (BITMAP_FMT_HAS_GRADUALITY(item->image_format)) {
             if (!_stride_is_extra(&bitmap)) {
                 BitmapGradualType grad_level;
                 grad_level = _get_bitmap_graduality_level(display_channel->common.worker,
