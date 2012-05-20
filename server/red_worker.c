@@ -9773,6 +9773,9 @@ static CommonChannelClient *common_channel_client_create(int size,
     RedChannelClient *rcc =
         red_channel_client_create(size, &common->base, client, stream,
                                   num_common_caps, common_caps, num_caps, caps);
+    if (!rcc) {
+        return NULL;
+    }
     CommonChannelClient *common_cc = (CommonChannelClient*)rcc;
     common_cc->worker = common->worker;
     common_cc->id = common->worker->id;

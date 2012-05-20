@@ -500,6 +500,9 @@ static void smartcard_connect(RedChannel *channel, RedClient *client,
     rcc = red_channel_client_create(sizeof(RedChannelClient), channel, client, stream,
                                     num_common_caps, common_caps,
                                     num_caps, caps);
+    if (!rcc) {
+        return;
+    }
     red_channel_client_ack_zero_messages_window(rcc);
 }
 

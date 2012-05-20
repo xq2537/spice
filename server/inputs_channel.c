@@ -502,6 +502,9 @@ static void inputs_connect(RedChannel *channel, RedClient *client,
                                                           stream,
                                                           num_common_caps, common_caps,
                                                           num_caps, caps);
+    if (!icc) {
+        return;
+    }
     icc->motion_count = 0;
     inputs_pipe_add_init(&icc->base);
 }

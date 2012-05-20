@@ -975,6 +975,9 @@ static SndChannel *__new_channel(SndWorker *worker, int size, uint32_t channel_i
                                                               client,
                                                               num_common_caps, common_caps,
                                                               num_caps, caps);
+    if (!channel->channel_client) {
+        goto error2;
+    }
     return channel;
 
 error2:

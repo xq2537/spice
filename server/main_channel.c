@@ -998,7 +998,7 @@ static MainChannelClient *main_channel_client_create(MainChannel *main_chan, Red
                              red_channel_client_create(sizeof(MainChannelClient), &main_chan->base,
                                                        client, stream, num_common_caps,
                                                        common_caps, num_caps, caps);
-
+    spice_assert(mcc != NULL);
     mcc->connection_id = connection_id;
     mcc->bitrate_per_sec = ~0;
 #ifdef RED_STATISTICS
