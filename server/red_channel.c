@@ -40,6 +40,7 @@
 static void red_channel_client_event(int fd, int event, void *data);
 static void red_client_add_channel(RedClient *client, RedChannelClient *rcc);
 static void red_client_remove_channel(RedChannelClient *rcc);
+static RedChannelClient *red_client_get_channel(RedClient *client, int type, int id);
 static void red_channel_client_restore_main_sender(RedChannelClient *rcc);
 
 static uint32_t full_header_get_msg_size(SpiceDataHeaderOpaque *header)
@@ -514,13 +515,27 @@ int red_channel_client_test_remote_cap(RedChannelClient *rcc, uint32_t cap)
                           cap);
 }
 
+static int red_channle_client_pre_create_validate(RedChannel *channel, RedClient  *client)
+{
+    if (red_client_get_channel(client, channel->type, channel->id)) {
+        spice_printerr("Error client %p: duplicate channel type %d id %d",
+                       client, channel->type, channel->id);
+        return FALSE;
+    }
+    return TRUE;
+}
+
 RedChannelClient *red_channel_client_create(int size, RedChannel *channel, RedClient  *client,
                                             RedsStream *stream,
                                             int num_common_caps, uint32_t *common_caps,
                                             int num_caps, uint32_t *caps)
 {
-    RedChannelClient *rcc;
+    RedChannelClient *rcc = NULL;
 
+    pthread_mutex_lock(&client->lock);
+    if (!red_channle_client_pre_create_validate(channel, client)) {
+        goto error;
+    }
     spice_assert(stream && channel && size >= sizeof(RedChannelClient));
     rcc = spice_malloc0(size);
     rcc->stream = stream;
@@ -570,10 +585,12 @@ RedChannelClient *red_channel_client_create(int size, RedChannel *channel, RedCl
     rcc->id = channel->clients_num;
     red_channel_add_client(channel, rcc);
     red_client_add_channel(client, rcc);
+    pthread_mutex_unlock(&client->lock);
     return rcc;
 error:
     free(rcc);
     reds_stream_free(stream);
+    pthread_mutex_unlock(&client->lock);
     return NULL;
 }
 
@@ -1220,9 +1237,14 @@ RedChannelClient *red_channel_client_create_dummy(int size,
                                                   int num_common_caps, uint32_t *common_caps,
                                                   int num_caps, uint32_t *caps)
 {
-    RedChannelClient *rcc;
+    RedChannelClient *rcc = NULL;
 
     spice_assert(size >= sizeof(RedChannelClient));
+
+    pthread_mutex_lock(&client->lock);
+    if (!red_channle_client_pre_create_validate(channel, client)) {
+        goto error;
+    }
     rcc = spice_malloc0(size);
     rcc->client = client;
     rcc->channel = channel;
@@ -1241,7 +1263,11 @@ RedChannelClient *red_channel_client_create_dummy(int size,
     rcc->incoming.serial = 1;
 
     red_channel_add_client(channel, rcc);
+    pthread_mutex_unlock(&client->lock);
     return rcc;
+error:
+    pthread_mutex_unlock(&client->lock);
+    return NULL;
 }
 
 void red_channel_client_destroy_dummy(RedChannelClient *rcc)
@@ -1454,13 +1480,29 @@ void red_client_destroy(RedClient *client)
     free(client);
 }
 
+/* client->lock should be locked */
+static RedChannelClient *red_client_get_channel(RedClient *client, int type, int id)
+{
+    RingItem *link;
+    RedChannelClient *rcc;
+    RedChannelClient *ret = NULL;
+
+    RING_FOREACH(link, &client->channels) {
+        rcc = SPICE_CONTAINEROF(link, RedChannelClient, client_link);
+        if (rcc->channel->type == type && rcc->channel->id == id) {
+            ret = rcc;
+            break;
+        }
+    }
+    return ret;
+}
+
+/* client->lock should be locked */
 static void red_client_add_channel(RedClient *client, RedChannelClient *rcc)
 {
     spice_assert(rcc && client);
-    pthread_mutex_lock(&client->lock);
     ring_add(&client->channels, &rcc->client_link);
     client->channels_num++;
-    pthread_mutex_unlock(&client->lock);
 }
 
 MainChannelClient *red_client_get_main(RedClient *client) {
