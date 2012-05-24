@@ -1998,6 +1998,7 @@ static void red_clear_surface_drawables_from_pipe(DisplayChannelClient *dcc, int
         }
 
         if (depend_found) {
+            spice_debug("surface %d dependent item found %p, %p", surface_id, drawable, item);
             if (force) {
                 break;
             } else {
@@ -10334,16 +10335,13 @@ static void red_wait_outgoing_items(RedChannel *channel)
 /* TODO: more evil sync stuff. anything with the word wait in it's name. */
 static void red_wait_pipe_item_sent(RedChannelClient *rcc, PipeItem *item)
 {
-    RedChannel *channel = rcc->channel;
+    DrawablePipeItem *dpi;
     uint64_t end_time;
     int item_in_pipe;
 
-    if (!red_channel_client_blocked(rcc)) {
-        return;
-    }
-
     spice_printerr("");
-    channel->channel_cbs.hold_item(rcc, item);
+    dpi = SPICE_CONTAINEROF(item, DrawablePipeItem, dpi_pipe_item);
+    ref_drawable_pipe_item(dpi);
 
     end_time = red_now() + CHANNEL_PUSH_TIMEOUT;
 
@@ -10366,7 +10364,7 @@ static void red_wait_pipe_item_sent(RedChannelClient *rcc, PipeItem *item)
     } else {
         red_wait_outgoing_item(rcc);
     }
-    channel->channel_cbs.release_item(rcc, item, FALSE);
+    put_drawable_pipe_item(dpi);
 }
 
 static void surface_dirty_region_to_rects(RedSurface *surface,
