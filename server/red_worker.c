@@ -10364,9 +10364,7 @@ static void red_wait_pipe_item_sent(RedChannelClient *rcc, PipeItem *item)
         spice_printerr("timeout");
         red_channel_client_disconnect(rcc);
     } else {
-        if (red_channel_client_item_being_sent(rcc, item)) {
-            red_wait_outgoing_item(rcc);
-        }
+        red_wait_outgoing_item(rcc);
     }
     channel->channel_cbs.release_item(rcc, item, FALSE);
 }

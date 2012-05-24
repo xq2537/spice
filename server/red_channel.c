@@ -1374,25 +1374,6 @@ int red_channel_get_first_socket(RedChannel *channel)
                              RedChannelClient, channel_link)->stream->socket;
 }
 
-int red_channel_client_item_being_sent(RedChannelClient *rcc, PipeItem *item)
-{
-    return rcc->send_data.item == item;
-}
-
-int red_channel_item_being_sent(RedChannel *channel, PipeItem *item)
-{
-    RingItem *link;
-    RedChannelClient *rcc;
-
-    RING_FOREACH(link, &channel->clients) {
-        rcc = SPICE_CONTAINEROF(link, RedChannelClient, channel_link);
-        if (rcc->send_data.item == item) {
-            return TRUE;
-        }
-    }
-    return FALSE;
-}
-
 int red_channel_no_item_being_sent(RedChannel *channel)
 {
     RingItem *link;

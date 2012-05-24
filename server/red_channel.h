@@ -432,15 +432,6 @@ int red_channel_client_blocked(RedChannelClient *rcc);
 /* helper for channels that have complex logic that can possibly ready a send */
 int red_channel_client_send_message_pending(RedChannelClient *rcc);
 
-/* returns TRUE if item is being sent by one of the channel clients. This will
- * be true if someone called init_send_data but send has not completed (or perhaps
- * hasn't even begun, i.e. no one called begin_send_).
- * However, note that red_channel_client_init_send_data can also be called with
- * item==NULL, thus not all pipe items can be tracked.
- */
-int red_channel_item_being_sent(RedChannel *channel, PipeItem *item);
-int red_channel_client_item_being_sent(RedChannelClient *rcc, PipeItem *item);
-
 int red_channel_no_item_being_sent(RedChannel *channel);
 int red_channel_client_no_item_being_sent(RedChannelClient *rcc);
 
