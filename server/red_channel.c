@@ -305,6 +305,10 @@ static void red_peer_handle_outgoing(RedsStream *stream, OutgoingHandler *handle
 {
     ssize_t n;
 
+    if (!stream) {
+        return;
+    }
+
     if (handler->size == 0) {
         handler->vec = handler->vec_buf;
         handler->size = handler->cb->get_msg_size(handler->opaque);
