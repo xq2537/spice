@@ -225,6 +225,9 @@ struct RedChannelClient {
     RedChannel *channel;
     RedClient  *client;
     RedsStream *stream;
+
+    uint32_t refs;
+
     struct {
         uint32_t generation;
         uint32_t client_generation;
@@ -267,6 +270,8 @@ struct RedChannelClient {
 struct RedChannel {
     uint32_t type;
     uint32_t id;
+
+    uint32_t refs;
 
     RingItem link; // channels link for reds
 

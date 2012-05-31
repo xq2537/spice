@@ -43,6 +43,45 @@ static void red_client_remove_channel(RedChannelClient *rcc);
 static RedChannelClient *red_client_get_channel(RedClient *client, int type, int id);
 static void red_channel_client_restore_main_sender(RedChannelClient *rcc);
 
+/*
+ * Lifetime of RedChannel, RedChannelClient and RedClient:
+ * RedChannel is created and destroyed by the calls to
+ * red_channel_create.* and red_channel_destroy. The RedChannel resources
+ * are deallocated only after red_channel_destroy is called and no RedChannelClient
+ * refers to the channel.
+ * RedChannelClient is created and destroyed by the calls to red_channel_client_create
+ * and red_channel_client_destroy. RedChannelClient resources are deallocated only when
+ * its refs == 0. The reference count of RedChannelClient can be increased by routines
+ * that include calls that might destroy the red_channel_client. For example,
+ * red_peer_handle_incoming calls the handle_message proc of the channel, which
+ * might lead to destroying the client. However, after the call to handle_message,
+ * there is a call to the channel's release_msg_buf proc.
+ *
+ * Once red_channel_client_destroy is called, the RedChannelClient is disconnected and
+ * removed from the RedChannel clients list, but if rcc->refs != 0, it will still hold
+ * a reference to the Channel. The reason for this is that on the one hand RedChannel holds
+ * callbacks that may be still in use by RedChannel, and on the other hand,
+ * when an operation is performed on the list of clients that belongs to the channel,
+ * we don't want to execute it on the "to be destroyed" channel client.
+ *
+ * RedClient is created and destroyed by the calls to red_client_new and red_client_destroy.
+ * When it is destroyed, it also disconnects and destroys all the RedChannelClients that
+ * are associated with it. However, since part of these channel clients may still have
+ * other references, they will not be completely released, until they are dereferenced.
+ *
+ * Note: red_channel_client_destroy is not thread safe, and still it is called from
+ * red_client_destroy (from the client's thread). However, since before this call,
+ * red_client_destroy calls rcc->channel->client_cbs.disconnect(rcc), which is synchronous,
+ * we assume that if the channel is in another thread, it does no longer have references to
+ * this channel client.
+ * If a call to red_channel_client_destroy is made from another location, it must be called
+ * from the channel's thread.
+*/
+static void red_channel_ref(RedChannel *channel);
+static void red_channel_unref(RedChannel *channel);
+static void red_channel_client_ref(RedChannelClient *rcc);
+static void red_channel_client_unref(RedChannelClient *rcc);
+
 static uint32_t full_header_get_msg_size(SpiceDataHeaderOpaque *header)
 {
     return ((SpiceDataHeader *)header->data)->size;
@@ -245,7 +284,9 @@ static void red_peer_handle_incoming(RedsStream *stream, IncomingHandler *handle
 
 void red_channel_client_receive(RedChannelClient *rcc)
 {
+    red_channel_client_ref(rcc);
     red_peer_handle_incoming(rcc->stream, &rcc->incoming);
+    red_channel_client_unref(rcc);
 }
 
 void red_channel_receive(RedChannel *channel)
@@ -541,6 +582,7 @@ RedChannelClient *red_channel_client_create(int size, RedChannel *channel, RedCl
     rcc->stream = stream;
     rcc->channel = channel;
     rcc->client = client;
+    rcc->refs = 1;
     rcc->ack_data.messages_window = ~0;  // blocks send message (maybe use send_data.blocked +
                                              // block flags)
     rcc->ack_data.client_generation = ~0;
@@ -585,6 +627,7 @@ RedChannelClient *red_channel_client_create(int size, RedChannel *channel, RedCl
     rcc->id = channel->clients_num;
     red_channel_add_client(channel, rcc);
     red_client_add_channel(client, rcc);
+    red_channel_ref(channel);
     pthread_mutex_unlock(&client->lock);
     return rcc;
 error:
@@ -628,6 +671,7 @@ RedChannel *red_channel_create(int size,
     channel = spice_malloc0(size);
     channel->type = type;
     channel->id = id;
+    channel->refs = 1;
     channel->handle_acks = handle_acks;
     memcpy(&channel->channel_cbs, channel_cbs, sizeof(ChannelCbs));
 
@@ -693,6 +737,7 @@ RedChannel *red_channel_create_dummy(int size, uint32_t type, uint32_t id)
     channel = spice_malloc0(size);
     channel->type = type;
     channel->id = id;
+    channel->refs = 1;
     channel->core = &dummy_core;
     ring_init(&channel->clients);
     client_cbs.connect = red_channel_client_default_connect;
@@ -790,6 +835,50 @@ void red_channel_set_data(RedChannel *channel, void *data)
     channel->data = data;
 }
 
+static void red_channel_ref(RedChannel *channel)
+{
+    channel->refs++;
+}
+
+static void red_channel_unref(RedChannel *channel)
+{
+    if (!--channel->refs) {
+        if (channel->local_caps.num_common_caps) {
+            free(channel->local_caps.common_caps);
+        }
+
+        if (channel->local_caps.num_caps) {
+            free(channel->local_caps.caps);
+        }
+
+        free(channel);
+    }
+}
+
+static void red_channel_client_ref(RedChannelClient *rcc)
+{
+    rcc->refs++;
+}
+
+static void red_channel_client_unref(RedChannelClient *rcc)
+{
+    if (!--rcc->refs) {
+        if (rcc->send_data.main.marshaller) {
+            spice_marshaller_destroy(rcc->send_data.main.marshaller);
+        }
+
+        if (rcc->send_data.urgent.marshaller) {
+            spice_marshaller_destroy(rcc->send_data.urgent.marshaller);
+        }
+
+        red_channel_client_destroy_remote_caps(rcc);
+        if (rcc->channel) {
+            red_channel_unref(rcc->channel);
+        }
+        free(rcc);
+    }
+}
+
 void red_channel_client_destroy(RedChannelClient *rcc)
 {
     rcc->destroying = 1;
@@ -797,16 +886,7 @@ void red_channel_client_destroy(RedChannelClient *rcc)
         red_channel_client_disconnect(rcc);
     }
     red_client_remove_channel(rcc);
-    if (rcc->send_data.main.marshaller) {
-        spice_marshaller_destroy(rcc->send_data.main.marshaller);
-    }
-
-    if (rcc->send_data.urgent.marshaller) {
-        spice_marshaller_destroy(rcc->send_data.urgent.marshaller);
-    }
-
-    red_channel_client_destroy_remote_caps(rcc);
-    free(rcc);
+    red_channel_client_unref(rcc);
 }
 
 void red_channel_destroy(RedChannel *channel)
@@ -822,15 +902,7 @@ void red_channel_destroy(RedChannel *channel)
             SPICE_CONTAINEROF(link, RedChannelClient, channel_link));
     }
 
-    if (channel->local_caps.num_common_caps) {
-        free(channel->local_caps.common_caps);
-    }
-
-    if (channel->local_caps.num_caps) {
-        free(channel->local_caps.caps);
-    }
-
-    free(channel);
+    red_channel_unref(channel);
 }
 
 void red_channel_client_shutdown(RedChannelClient *rcc)
@@ -845,7 +917,9 @@ void red_channel_client_shutdown(RedChannelClient *rcc)
 
 void red_channel_client_send(RedChannelClient *rcc)
 {
+    red_channel_client_ref(rcc);
     red_peer_handle_outgoing(rcc->stream, &rcc->outgoing);
+    red_channel_client_unref(rcc);
 }
 
 void red_channel_send(RedChannel *channel)
@@ -886,7 +960,7 @@ void red_channel_client_push(RedChannelClient *rcc)
     } else {
         return;
     }
-
+    red_channel_client_ref(rcc);
     if (rcc->send_data.blocked) {
         red_channel_client_send(rcc);
     }
@@ -900,6 +974,7 @@ void red_channel_client_push(RedChannelClient *rcc)
         red_channel_client_send_item(rcc, pipe_item);
     }
     rcc->during_send = FALSE;
+    red_channel_client_unref(rcc);
 }
 
 void red_channel_push(RedChannel *channel)
@@ -997,12 +1072,14 @@ static void red_channel_client_event(int fd, int event, void *data)
 {
     RedChannelClient *rcc = (RedChannelClient *)data;
 
+    red_channel_client_ref(rcc);
     if (event & SPICE_WATCH_EVENT_READ) {
         red_channel_client_receive(rcc);
     }
     if (event & SPICE_WATCH_EVENT_WRITE) {
         red_channel_client_push(rcc);
     }
+    red_channel_client_unref(rcc);
 }
 
 void red_channel_client_init_send_data(RedChannelClient *rcc, uint16_t msg_type, PipeItem *item)
@@ -1246,8 +1323,10 @@ RedChannelClient *red_channel_client_create_dummy(int size,
         goto error;
     }
     rcc = spice_malloc0(size);
+    rcc->refs = 1;
     rcc->client = client;
     rcc->channel = channel;
+    red_channel_ref(channel);
     red_channel_client_set_remote_caps(rcc, num_common_caps, common_caps, num_caps, caps);
     if (red_channel_client_test_remote_common_cap(rcc, SPICE_COMMON_CAP_MINI_HEADER)) {
         rcc->incoming.header = mini_header_wrapper;
