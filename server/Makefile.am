@@ -40,6 +40,7 @@ libspice_server_la_LIBADD =						\
 	$(SLIRP_LIBS)							\
 	$(SSL_LIBS)							\
 	$(Z_LIBS)							\
+	$(SPICE_NONPKGCONFIG_LIBS)					\
 	$(NULL)
 
 libspice_server_la_SOURCES =			\
