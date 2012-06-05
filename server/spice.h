@@ -111,7 +111,7 @@ struct QXLRect;
 struct QXLWorker {
     uint32_t minor_version;
     uint32_t major_version;
-    /* These calls are deprecated. Pleaes use the spice_qxl_* calls instead */
+    /* These calls are deprecated. Please use the spice_qxl_* calls instead */
     void (*wakeup)(QXLWorker *worker);
     void (*oom)(QXLWorker *worker);
     void (*start)(QXLWorker *worker);
