@@ -560,7 +560,7 @@ int red_channel_client_test_remote_cap(RedChannelClient *rcc, uint32_t cap)
                           cap);
 }
 
-static int red_channle_client_pre_create_validate(RedChannel *channel, RedClient  *client)
+static int red_channel_client_pre_create_validate(RedChannel *channel, RedClient  *client)
 {
     if (red_client_get_channel(client, channel->type, channel->id)) {
         spice_printerr("Error client %p: duplicate channel type %d id %d",
@@ -578,7 +578,7 @@ RedChannelClient *red_channel_client_create(int size, RedChannel *channel, RedCl
     RedChannelClient *rcc = NULL;
 
     pthread_mutex_lock(&client->lock);
-    if (!red_channle_client_pre_create_validate(channel, client)) {
+    if (!red_channel_client_pre_create_validate(channel, client)) {
         goto error;
     }
     spice_assert(stream && channel && size >= sizeof(RedChannelClient));
@@ -1323,7 +1323,7 @@ RedChannelClient *red_channel_client_create_dummy(int size,
     spice_assert(size >= sizeof(RedChannelClient));
 
     pthread_mutex_lock(&client->lock);
-    if (!red_channle_client_pre_create_validate(channel, client)) {
+    if (!red_channel_client_pre_create_validate(channel, client)) {
         goto error;
     }
     rcc = spice_malloc0(size);
