@@ -189,5 +189,10 @@ typedef struct RedWorkerMessageDestroySurfaceWaitAsync {
 typedef struct RedWorkerMessageResetMemslots {
 } RedWorkerMessageResetMemslots;
 
+typedef struct RedWorkerMessageMonitorsConfigAsync {
+    RedWorkerMessageAsync base;
+    QXLPHYSICAL monitors_config;
+    int group_id;
+} RedWorkerMessageMonitorsConfigAsync;
 
 #endif

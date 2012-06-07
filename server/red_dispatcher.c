@@ -648,6 +648,21 @@ static void red_dispatcher_flush_surfaces_async(RedDispatcher *dispatcher, uint6
     dispatcher_send_message(&dispatcher->dispatcher, message, &payload);
 }
 
+static void red_dispatcher_monitors_config_async(RedDispatcher *dispatcher,
+                                                 QXLPHYSICAL monitors_config,
+                                                 int group_id,
+                                                 uint64_t cookie)
+{
+    RedWorkerMessageMonitorsConfigAsync payload;
+    RedWorkerMessage message = RED_WORKER_MESSAGE_MONITORS_CONFIG_ASYNC;
+
+    payload.base.cmd = async_command_alloc(dispatcher, message, cookie);
+    payload.monitors_config = monitors_config;
+    payload.group_id = group_id;
+
+    dispatcher_send_message(&dispatcher->dispatcher, message, &payload);
+}
+
 static void red_dispatcher_stop(RedDispatcher *dispatcher)
 {
     RedWorkerMessageStop payload;
@@ -908,6 +923,13 @@ void spice_qxl_flush_surfaces_async(QXLInstance *instance, uint64_t cookie)
     red_dispatcher_flush_surfaces_async(instance->st->dispatcher, cookie);
 }
 
+SPICE_GNUC_VISIBLE
+void spice_qxl_monitors_config_async(QXLInstance *instance, QXLPHYSICAL monitors_config,
+                                     int group_id, uint64_t cookie)
+{
+    red_dispatcher_monitors_config_async(instance->st->dispatcher, monitors_config, group_id, cookie);
+}
+
 void red_dispatcher_async_complete(struct RedDispatcher *dispatcher,
                                    AsyncCommand *async_command)
 {
@@ -934,6 +956,8 @@ void red_dispatcher_async_complete(struct RedDispatcher *dispatcher,
     case RED_WORKER_MESSAGE_DESTROY_SURFACE_WAIT_ASYNC:
         break;
     case RED_WORKER_MESSAGE_FLUSH_SURFACES_ASYNC:
+        break;
+    case RED_WORKER_MESSAGE_MONITORS_CONFIG_ASYNC:
         break;
     default:
         spice_warning("unexpected message %d", async_command->message);
@@ -1054,6 +1078,7 @@ RedDispatcher *red_dispatcher_init(QXLInstance *qxl)
         client_cbs.migrate = red_dispatcher_display_migrate;
         red_channel_register_client_cbs(display_channel, &client_cbs);
         red_channel_set_data(display_channel, red_dispatcher);
+        red_channel_set_cap(display_channel, SPICE_DISPLAY_CAP_MONITORS_CONFIG);
         reds_register_channel(display_channel);
     }
 

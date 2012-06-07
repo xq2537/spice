@@ -112,3 +112,7 @@ global:
 SPICE_SERVER_0.10.3 {
     spice_server_is_server_mouse;
 } SPICE_SERVER_0.10.2;
+
+SPICE_SERVER_0.10.4 {
+    spice_qxl_monitors_config_async;
+} SPICE_SERVER_0.10.3;
