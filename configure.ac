@@ -1,8 +1,26 @@
 AC_PREREQ([2.57])
 
+# Making releases:
+# 1. Increment SPICE_MICRO if no interface change has been done
+# 2. Increment SPICE_MINOR and zero SPICE_MICRO if new interfaces have been added,
+#    no changes to existing interfaces.
+# 3. Increment SPICE_MAJOR and zero both SPICE_MINOR and SPICE_MICRO if non
+#    backward compatible changes (interface changed or removed).
+#
+# Then change the libtool versions according to libtool manual:
+#  http://www.gnu.org/software/libtool/manual/html_node/Updating-version-info.html
+
 m4_define([SPICE_MAJOR], 0)
-m4_define([SPICE_MINOR], 10)
-m4_define([SPICE_MICRO], 1)
+m4_define([SPICE_MINOR], 11)
+m4_define([SPICE_MICRO], 0)
+m4_define([SPICE_CURRENT], [2])
+m4_define([SPICE_REVISION], [0])
+m4_define([SPICE_AGE], [1])
+
+# Note on the library name on linux (SONAME) produced by libtool (for reference, gleaned
+# from looking at libtool 2.4.2)
+#
+#  libspice-servver.so.current-age.age.revision
 
 AC_INIT(spice, [SPICE_MAJOR.SPICE_MINOR.SPICE_MICRO], [], spice)
 
@@ -33,7 +51,7 @@ AC_FUNC_ALLOCA
 
 AC_DEFINE([__STDC_FORMAT_MACROS],[],[Force definition of format macros for C++])
 
-SPICE_LT_VERSION=m4_format("%d:%d:%d", 1, 0, 2)
+SPICE_LT_VERSION=m4_format("%d:%d:%d", SPICE_CURRENT, SPICE_REVISION, SPICE_AGE)
 AC_SUBST(SPICE_LT_VERSION)
 
 # Check for the CPU we are using

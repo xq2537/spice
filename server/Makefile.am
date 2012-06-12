@@ -17,7 +17,7 @@ AM_CPPFLAGS =					\
 lib_LTLIBRARIES = libspice-server.la
 
 libspice_server_la_LDFLAGS =			\
-	-version-number $(SPICE_LT_VERSION)	\
+	-version-info $(SPICE_LT_VERSION)	\
 	-no-undefined				\
 	$(NULL)
 

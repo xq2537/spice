@@ -1,3 +1,36 @@
+Major changes in 0.11.0:
+========================
+* !Development Release!
+* 8817549..d905a1f
+* now using git submodules: spice-common and spice-protocol.
+* New spice protocol messages: (changes in spice-protocol, here for reference)
+ * SPICE_MSG_MAIN_NAME, SPICE_MSG_MAIN_UUID
+ * SPICE_MSG_DISPLAY_STREAM_DATA_SIZED
+* New corresponding caps: (changes in spice-protocol, here for reference)
+ * SPICE_MAIN_CAP_NAME_AND_UUID
+ * SPICE_DISPLAY_CAP_SIZED_STREAM.
+* Send name & uuid to capable clients
+* add support for frames of different sizes RHBZ #813826
+* server:
+ * support a pre-opened file descriptor
+ * Solaris support. Now using poll instead of epoll.
+ * Support IPV6 addresses in channel events RHBZ #788444
+ * other fixed RHBZ#: 787669, 787678, 819484
+* spicec
+ * alsa: use "default" instead of "hw:0,0"
+ * volume keys support RHBZ #552539
+ * other fixed RHBZ#: 78655, 804561, 641828
+* solaris, mingw & windows, 32 bit fixes.
+* enable server only build.
+* GNULIB manywarnings.m4 & warnings.m4 module added.
+* Many more bug fixes & code cleanups.
+* spice-protocol no longer external.
+* new server functions:
+ + spice_server_set_name
+ + spice_server_set_uuid
+ + spice_server_set_listen_socket_fd
+ + spice_server_is_server_mouse
+
 Major changes in 0.10.1:
 ========================
 * Mini header support
