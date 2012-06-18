@@ -309,10 +309,23 @@ if test "x$have_xrandr12" = "xyes" ; then
   AC_DEFINE([HAVE_XRANDR12], [], [Define if we have XRANDR 12])
 fi
 
-PKG_CHECK_MODULES(XINERAMA,
+# Add parameter for libXinerama
+AC_ARG_ENABLE([xinerama],
+    [AS_HELP_STRING([--disable-xinerama],
+        [disable Xinerama library @<:@default=no@:>@])])
+
+if test "x$enable_xinerama" != "xno"; then
+    PKG_CHECK_MODULES(XINERAMA,
         xinerama >= 1.0,
         have_xinerama=yes,
         have_xinerama=no)
+else
+    have_xinerama=no
+fi
+
+if test "x$enable_xinerama" = "xyes" && test "x$have_xinerama" = "xno"; then
+    AC_MSG_ERROR([Requested Xinerama library was not found])
+fi
 
 AM_CONDITIONAL([HAVE_XINERAMA], [test "x$have_xinerama" = "xyes"])
 if test "x$have_xinerama" = "xyes" ; then
