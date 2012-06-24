@@ -32,6 +32,10 @@
 #include "red_channel.h"
 #include "reds.h"
 
+/* todo: add flow control. i.e.,
+ * (a) limit the tokens available for the client
+ * (b) limit the tokens available for the server
+ */
 /* 64K should be enough for all but the largest writes + 32 bytes hdr */
 #define BUF_SIZE (64 * 1024 + 32)
 
@@ -50,9 +54,7 @@ typedef struct SpiceVmcState {
     SpiceCharDeviceState *chardev_st;
     SpiceCharDeviceInstance *chardev_sin;
     SpiceVmcPipeItem *pipe_item;
-    uint8_t *rcv_buf;
-    uint32_t rcv_buf_size;
-    int rcv_buf_in_use;
+    SpiceCharDeviceWriteBuffer *recv_from_client_buf;
 } SpiceVmcState;
 
 static SpiceVmcPipeItem *spicevmc_pipe_item_ref(SpiceVmcPipeItem *item)
@@ -204,23 +206,17 @@ static int spicevmc_red_channel_client_handle_message(RedChannelClient *rcc,
                                                       uint8_t *msg)
 {
     SpiceVmcState *state;
-    SpiceCharDeviceInstance *sin;
-    SpiceCharDeviceInterface *sif;
 
     state = SPICE_CONTAINEROF(rcc->channel, SpiceVmcState, channel);
-    sin = state->chardev_sin;
-    sif = SPICE_CONTAINEROF(sin->base.sif, SpiceCharDeviceInterface, base);
 
     if (type != SPICE_MSGC_SPICEVMC_DATA) {
         return red_channel_client_handle_message(rcc, size, type, msg);
     }
 
-    /*
-     * qemu spicevmc will consume everything we give it, no need for
-     * flow control checks (or to use a pipe).
-     */
-    sif->write(sin, msg, size);
-
+    spice_assert(state->recv_from_client_buf->buf == msg);
+    state->recv_from_client_buf->buf_used = size;
+    spice_char_device_write_buffer_add(state->chardev_st, state->recv_from_client_buf);
+    state->recv_from_client_buf = NULL;
     return TRUE;
 }
 
@@ -232,16 +228,16 @@ static uint8_t *spicevmc_red_channel_alloc_msg_rcv_buf(RedChannelClient *rcc,
 
     state = SPICE_CONTAINEROF(rcc->channel, SpiceVmcState, channel);
 
-    assert(!state->rcv_buf_in_use);
+    assert(!state->recv_from_client_buf);
 
-    if (size > state->rcv_buf_size) {
-        state->rcv_buf = spice_realloc(state->rcv_buf, size);
-        state->rcv_buf_size = size;
+    state->recv_from_client_buf = spice_char_device_write_buffer_get(state->chardev_st,
+                                                                     rcc->client,
+                                                                     size);
+    if (!state->recv_from_client_buf) {
+        spice_error("failed to allocate write buffer");
+        return NULL;
     }
-
-    state->rcv_buf_in_use = 1;
-
-    return state->rcv_buf;
+    return state->recv_from_client_buf->buf;
 }
 
 static void spicevmc_red_channel_release_msg_rcv_buf(RedChannelClient *rcc,
@@ -253,8 +249,10 @@ static void spicevmc_red_channel_release_msg_rcv_buf(RedChannelClient *rcc,
 
     state = SPICE_CONTAINEROF(rcc->channel, SpiceVmcState, channel);
 
-    /* NOOP, we re-use the buffer every time and only free it on destruction */
-    state->rcv_buf_in_use = 0;
+    if (state->recv_from_client_buf) { /* buffer wasn't pushed to device */
+        spice_char_device_write_buffer_release(state->chardev_st, state->recv_from_client_buf);
+        state->recv_from_client_buf = NULL;
+    }
 }
 
 static void spicevmc_red_channel_hold_pipe_item(RedChannelClient *rcc,
@@ -377,12 +375,13 @@ void spicevmc_device_disconnect(SpiceCharDeviceInstance *sin)
 
     state = (SpiceVmcState *)spice_char_device_state_opaque_get(sin->st);
 
+    if (state->recv_from_client_buf) {
+        spice_char_device_write_buffer_release(state->chardev_st, state->recv_from_client_buf);
+    }
     spice_char_device_state_destroy(sin->st);
     state->chardev_st = NULL;
 
     reds_unregister_channel(&state->channel);
-
     free(state->pipe_item);
-    free(state->rcv_buf);
     red_channel_destroy(&state->channel);
 }
