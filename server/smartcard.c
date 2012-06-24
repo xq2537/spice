@@ -107,7 +107,7 @@ void smartcard_char_device_wakeup(SpiceCharDeviceInstance *sin)
             continue;
         }
         smartcard_char_device_on_message_from_device(state, vheader);
-        remaining = state->buf_used - sizeof(VSCMsgHeader) > actual_length;
+        remaining = state->buf_used - sizeof(VSCMsgHeader) - actual_length;
         if (remaining > 0) {
             memcpy(state->buf, state->buf_pos, remaining);
         }
