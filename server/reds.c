@@ -172,6 +172,8 @@ typedef struct VDIPortState {
     Ring external_bufs;
     Ring internal_bufs;
     Ring write_queue;
+    SpiceCharDeviceWriteBuffer *recv_from_client_buf;
+    int recv_from_client_buf_pushed;
     AgentMsgFilter write_filter;
 
     /* read from agent */
@@ -1177,6 +1179,38 @@ void reds_on_main_agent_tokens(MainChannelClient *mcc, uint32_t num_tokens)
     spice_char_device_send_to_client_tokens_add(vdagent->st,
                                                 main_channel_client_get_base(mcc)->client,
                                                 num_tokens);
+}
+
+uint8_t *reds_get_agent_data_buffer(MainChannelClient *mcc, size_t size)
+{
+    VDIPortState *dev_state = &reds->agent_state;
+    RedClient *client;
+
+    if (!dev_state->base) {
+        return NULL;
+    }
+
+    spice_assert(dev_state->recv_from_client_buf == NULL);
+    client = main_channel_client_get_base(mcc)->client;
+    dev_state->recv_from_client_buf = spice_char_device_write_buffer_get(dev_state->base,
+                                                                         client,
+                                                                         size + sizeof(VDIChunkHeader));
+    dev_state->recv_from_client_buf_pushed = FALSE;
+    return dev_state->recv_from_client_buf->buf + sizeof(VDIChunkHeader);
+}
+
+void reds_release_agent_data_buffer(uint8_t *buf)
+{
+    VDIPortState *dev_state = &reds->agent_state;
+
+    spice_assert(buf == dev_state->recv_from_client_buf->buf + sizeof(VDIChunkHeader));
+
+    if (!dev_state->recv_from_client_buf_pushed) {
+        spice_char_device_write_buffer_release(reds->agent_state.base,
+                                               dev_state->recv_from_client_buf);
+    }
+    dev_state->recv_from_client_buf = NULL;
+    dev_state->recv_from_client_buf_pushed = FALSE;
 }
 
 void reds_on_main_agent_data(MainChannelClient *mcc, void *message, size_t size)

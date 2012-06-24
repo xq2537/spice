@@ -147,6 +147,8 @@ void reds_update_stat_value(uint32_t value);
 
 void reds_on_main_agent_start(MainChannelClient *mcc, uint32_t num_tokens);
 void reds_on_main_agent_tokens(MainChannelClient *mcc, uint32_t num_tokens);
+uint8_t *reds_get_agent_data_buffer(MainChannelClient *mcc, size_t size);
+void reds_release_agent_data_buffer(uint8_t *buf);
 void reds_on_main_agent_data(MainChannelClient *mcc, void *message, size_t size);
 void reds_on_main_migrate_connected(void); //should be called when all the clients
                                            // are connected to the target

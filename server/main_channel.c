@@ -902,8 +902,13 @@ static uint8_t *main_channel_alloc_msg_rcv_buf(RedChannelClient *rcc,
                                                uint32_t size)
 {
     MainChannel *main_chan = SPICE_CONTAINEROF(rcc->channel, MainChannel, base);
+    MainChannelClient *mcc = SPICE_CONTAINEROF(rcc, MainChannelClient, base);
 
-    return main_chan->recv_buf;
+    if (type == SPICE_MSGC_MAIN_AGENT_DATA) {
+        return reds_get_agent_data_buffer(mcc, size);
+    } else {
+        return main_chan->recv_buf;
+    }
 }
 
 static void main_channel_release_msg_rcv_buf(RedChannelClient *rcc,
@@ -911,6 +916,9 @@ static void main_channel_release_msg_rcv_buf(RedChannelClient *rcc,
                                                uint32_t size,
                                                uint8_t *msg)
 {
+    if (type == SPICE_MSGC_MAIN_AGENT_DATA) {
+        reds_release_agent_data_buffer(msg);
+    }
 }
 
 static int main_channel_config_socket(RedChannelClient *rcc)
