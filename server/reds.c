@@ -167,11 +167,6 @@ typedef struct VDIPortState {
     uint32_t plug_generation;
 
     /* write to agent */
-    uint32_t num_tokens;
-    uint32_t num_client_tokens;
-    Ring external_bufs;
-    Ring internal_bufs;
-    Ring write_queue;
     SpiceCharDeviceWriteBuffer *recv_from_client_buf;
     int recv_from_client_buf_pushed;
     AgentMsgFilter write_filter;
@@ -187,6 +182,16 @@ typedef struct VDIPortState {
 
     VDIChunkHeader vdi_chunk_header;
 } VDIPortState;
+
+/* messages that are addressed to the agent and are created in the server */
+typedef struct __attribute__ ((__packed__)) VDInternalBuf {
+    VDIChunkHeader chunk_header;
+    VDAgentMessage header;
+    union {
+        VDAgentMouseState mouse_state;
+    }
+    u;
+} VDInternalBuf;
 
 #ifdef RED_STATISTICS
 
@@ -241,8 +246,6 @@ typedef struct RedsState {
     MonitorMode monitor_mode;
     SpiceTimer *mig_timer;
     SpiceTimer *mm_timer;
-    SpiceTimer *vdi_port_write_timer;
-    int vdi_port_write_timer_started;
 
     SSL_CTX *ctx;
 
@@ -277,31 +280,6 @@ typedef struct RedLinkInfo {
     SpiceLinkAuthMechanism auth_mechanism;
     int skip_auth;
 } RedLinkInfo;
-
-typedef struct VDIPortBuf VDIPortBuf;
-struct  __attribute__ ((__packed__)) VDIPortBuf {
-    RingItem link;
-    uint8_t *now;
-    int write_len;
-    void (*free)(VDIPortBuf *buf);
-    VDIChunkHeader chunk_header; //start send from &chunk_header
-};
-
-typedef struct __attribute__ ((__packed__)) VDAgentExtBuf {
-    VDIPortBuf base;
-    uint8_t buf[SPICE_AGENT_MAX_DATA_SIZE];
-    VDIChunkHeader migrate_overflow;
-} VDAgentExtBuf;
-
-typedef struct __attribute__ ((__packed__)) VDInternalBuf {
-    VDIPortBuf base;
-    VDAgentMessage header;
-    union {
-        VDAgentMouseState mouse_state;
-    }
-    u;
-    VDIChunkHeader migrate_overflow;
-} VDInternalBuf;
 
 typedef struct RedSSLParameters {
     char keyfile_password[256];
@@ -607,15 +585,6 @@ static void reds_reset_vdp(void)
     VDIPortState *state = &reds->agent_state;
     SpiceCharDeviceInterface *sif;
 
-    while (!ring_is_empty(&state->write_queue)) {
-        VDIPortBuf *buf;
-        RingItem *item;
-
-        item = ring_get_tail(&state->write_queue);
-        ring_remove(item);
-        buf = (VDIPortBuf *)item;
-        buf->free(buf);
-    }
     state->read_state = VDI_PORT_READ_STATE_READ_HADER;
     state->recive_pos = (uint8_t *)&state->vdi_chunk_header;
     state->recive_len = sizeof(state->vdi_chunk_header);
@@ -784,73 +753,6 @@ static void reds_agent_remove(void)
     if (reds_main_channel_connected()) {
         main_channel_push_agent_disconnected(reds->main_channel);
     }
-}
-
-/* this will be fixed to handle multiple clients
-   in following patches */
-static void reds_push_tokens(MainChannelClient *mcc)
-{
-    reds->agent_state.num_client_tokens += reds->agent_state.num_tokens;
-    spice_assert(reds->agent_state.num_client_tokens <= REDS_AGENT_WINDOW_SIZE);
-    main_channel_client_push_agent_tokens(mcc, reds->agent_state.num_tokens);
-    reds->agent_state.num_tokens = 0;
-}
-
-static int write_to_vdi_port(void);
-
-static void vdi_port_write_timer_start(void)
-{
-    if (reds->vdi_port_write_timer_started) {
-        return;
-    }
-    reds->vdi_port_write_timer_started = TRUE;
-    core->timer_start(reds->vdi_port_write_timer,
-                      VDI_PORT_WRITE_RETRY_TIMEOUT);
-}
-
-static void vdi_port_write_retry(void *opaque)
-{
-    reds->vdi_port_write_timer_started = FALSE;
-    write_to_vdi_port();
-}
-
-static int write_to_vdi_port(void)
-{
-    VDIPortState *state = &reds->agent_state;
-    SpiceCharDeviceInterface *sif;
-    RingItem *ring_item;
-    VDIPortBuf *buf;
-    int total = 0;
-    int n;
-
-    if (!vdagent) {
-        return 0;
-    }
-
-    sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceCharDeviceInterface, base);
-    while (vdagent) {
-        if (!(ring_item = ring_get_tail(&state->write_queue))) {
-            break;
-        }
-        buf = (VDIPortBuf *)ring_item;
-        n = sif->write(vdagent, buf->now, buf->write_len);
-        if (n == 0) {
-            break;
-        }
-        total += n;
-        buf->write_len -= n;
-        if (!buf->write_len) {
-            ring_remove(ring_item);
-            buf->free(buf);
-            continue;
-        }
-        buf->now += n;
-    }
-    // Workaround for lack of proper sif write_possible callback (RHBZ 616772)
-    if (ring_item != NULL) {
-        vdi_port_write_timer_start();
-    }
-    return total;
 }
 
 /*******************************
@@ -1052,37 +954,38 @@ int reds_has_vdagent(void)
 
 void reds_handle_agent_mouse_event(const VDAgentMouseState *mouse_state)
 {
-    RingItem *ring_item;
-    VDInternalBuf *buf;
+    SpiceCharDeviceWriteBuffer *char_dev_buf;
+    VDInternalBuf *internal_buf;
+    uint32_t total_msg_size;
 
-    if (!inputs_inited()) {
+    if (!inputs_inited() || !reds->agent_state.base) {
         return;
     }
-    if (!(ring_item = ring_get_head(&reds->agent_state.internal_bufs))) {
+
+    total_msg_size = sizeof(VDIChunkHeader) + sizeof(VDAgentMessage) +
+                     sizeof(VDAgentMouseState);
+    char_dev_buf = spice_char_device_write_buffer_get(reds->agent_state.base,
+                                                      NULL,
+                                                      total_msg_size);
+
+    if (!char_dev_buf) {
         reds->pending_mouse_event = TRUE;
-        vdi_port_write_timer_start();
+
         return;
     }
     reds->pending_mouse_event = FALSE;
-    ring_remove(ring_item);
-    buf = (VDInternalBuf *)ring_item;
-    buf->base.now = (uint8_t *)&buf->base.chunk_header;
-    buf->base.write_len = sizeof(VDIChunkHeader) + sizeof(VDAgentMessage) +
-                          sizeof(VDAgentMouseState);
-    buf->u.mouse_state = *mouse_state;
-    ring_add(&reds->agent_state.write_queue, &buf->base.link);
-    write_to_vdi_port();
-}
 
-static void add_token(MainChannelClient *mcc)
-{
-    VDIPortState *state = &reds->agent_state;
+    internal_buf = (VDInternalBuf *)char_dev_buf->buf;
+    internal_buf->chunk_header.port = VDP_SERVER_PORT;
+    internal_buf->chunk_header.size = sizeof(VDAgentMessage) + sizeof(VDAgentMouseState);
+    internal_buf->header.protocol = VD_AGENT_PROTOCOL;
+    internal_buf->header.type = VD_AGENT_MOUSE_STATE;
+    internal_buf->header.opaque = 0;
+    internal_buf->header.size = sizeof(VDAgentMouseState);
+    internal_buf->u.mouse_state = *mouse_state;
 
-    /* this will be fixed to handle multiple clients
-       in following patches */
-    if (++state->num_tokens == REDS_TOKENS_TO_SEND) {
-        reds_push_tokens(mcc);
-    }
+    char_dev_buf->buf_used = total_msg_size;
+    spice_char_device_write_buffer_add(reds->agent_state.base, char_dev_buf);
 }
 
 int reds_num_of_channels(void)
@@ -1215,18 +1118,11 @@ void reds_release_agent_data_buffer(uint8_t *buf)
 
 void reds_on_main_agent_data(MainChannelClient *mcc, void *message, size_t size)
 {
-    // TODO - use mcc (and start tracking agent data per channel. probably just move the whole
-    // tokens accounting to mainchannel.
-    RingItem *ring_item;
-    VDAgentExtBuf *buf;
+    VDIPortState *dev_state = &reds->agent_state;
+    VDIChunkHeader *header;
     int res;
 
-    if (!reds->agent_state.num_client_tokens) {
-        spice_printerr("token violation");
-        reds_disconnect();
-        return;
-    }
-    --reds->agent_state.num_client_tokens;
+    spice_assert(message == reds->agent_state.recv_from_client_buf->buf + sizeof(VDIChunkHeader));
 
     res = agent_msg_filter_process_data(&reds->agent_state.write_filter,
                                         message, size);
@@ -1234,26 +1130,20 @@ void reds_on_main_agent_data(MainChannelClient *mcc, void *message, size_t size)
     case AGENT_MSG_FILTER_OK:
         break;
     case AGENT_MSG_FILTER_DISCARD:
-        add_token(mcc);
         return;
     case AGENT_MSG_FILTER_PROTO_ERROR:
         reds_disconnect();
         return;
     }
 
-    if (!(ring_item = ring_get_head(&reds->agent_state.external_bufs))) {
-        spice_printerr("no agent free bufs");
-        reds_disconnect();
-        return;
-    }
-    ring_remove(ring_item);
-    buf = (VDAgentExtBuf *)ring_item;
-    buf->base.now = (uint8_t *)&buf->base.chunk_header.port;
-    buf->base.write_len = size + sizeof(VDIChunkHeader);
-    buf->base.chunk_header.size = size;
-    memcpy(buf->buf, message, size);
-    ring_add(&reds->agent_state.write_queue, ring_item);
-    write_to_vdi_port();
+    // TODO - start tracking agent data per channel
+    header =  (VDIChunkHeader *)dev_state->recv_from_client_buf->buf;
+    header->port = VDP_CLIENT_PORT;
+    header->size = size;
+    reds->agent_state.recv_from_client_buf->buf_used = sizeof(VDIChunkHeader) + size;
+
+    dev_state->recv_from_client_buf_pushed = TRUE;
+    spice_char_device_write_buffer_add(reds->agent_state.base, dev_state->recv_from_client_buf);
 }
 
 void reds_on_main_migrate_connected(void)
@@ -1526,7 +1416,6 @@ static void reds_handle_main_link(RedLinkInfo *link)
     if (link_mess->connection_id == 0) {
         reds_send_link_result(link, SPICE_LINK_ERR_OK);
         while((connection_id = rand()) == 0);
-        reds->agent_state.num_tokens = 0;
         mig_target = FALSE;
     } else {
         // TODO: make sure link_mess->connection_id is the same
@@ -1564,8 +1453,6 @@ static void reds_handle_main_link(RedLinkInfo *link)
         reds->agent_state.plug_generation++;
     }
 
-    reds->agent_state.num_client_tokens = REDS_AGENT_WINDOW_SIZE;
-
     if (!mig_target) {
         main_channel_push_init(mcc, red_dispatcher_count(),
             reds->mouse_mode, reds->is_client_mouse_allowed,
@@ -1577,7 +1464,6 @@ static void reds_handle_main_link(RedLinkInfo *link)
             main_channel_push_uuid(mcc, spice_uuid);
 
         main_channel_client_start_net_test(mcc);
-        /* Now that we have a client, forward any pending agent data */
     } else {
         reds_mig_target_client_add(client);
     }
@@ -3501,38 +3387,11 @@ SPICE_GNUC_VISIBLE int spice_server_remove_interface(SpiceBaseInstance *sin)
     return 0;
 }
 
-static void free_external_agent_buff(VDIPortBuf *in_buf)
-{
-    VDIPortState *state = &reds->agent_state;
-    RedClient *random_client;
-
-    ring_add(&state->external_bufs, &in_buf->link);
-    /* this will be fixed to handle multiple clients
-       in following patches */
-    random_client = SPICE_CONTAINEROF(ring_get_tail(&reds->clients),
-                                      RedClient,
-                                      link);
-    add_token(red_client_get_main(random_client));
-}
-
-static void free_internal_agent_buff(VDIPortBuf *in_buf)
-{
-    VDIPortState *state = &reds->agent_state;
-
-    ring_add(&state->internal_bufs, &in_buf->link);
-    if (inputs_inited() && reds->pending_mouse_event) {
-        reds_handle_agent_mouse_event(inputs_get_mouse_state());
-    }
-}
-
 static void init_vd_agent_resources(void)
 {
     VDIPortState *state = &reds->agent_state;
     int i;
 
-    ring_init(&state->external_bufs);
-    ring_init(&state->internal_bufs);
-    ring_init(&state->write_queue);
     ring_init(&state->read_bufs);
     agent_msg_filter_init(&state->write_filter, agent_copypaste, TRUE);
     agent_msg_filter_init(&state->read_filter, agent_copypaste, TRUE);
@@ -3540,27 +3399,6 @@ static void init_vd_agent_resources(void)
     state->read_state = VDI_PORT_READ_STATE_READ_HADER;
     state->recive_pos = (uint8_t *)&state->vdi_chunk_header;
     state->recive_len = sizeof(state->vdi_chunk_header);
-
-    for (i = 0; i < REDS_AGENT_WINDOW_SIZE; i++) {
-        VDAgentExtBuf *buf = spice_new0(VDAgentExtBuf, 1);
-        ring_item_init(&buf->base.link);
-        buf->base.chunk_header.port = VDP_CLIENT_PORT;
-        buf->base.free = free_external_agent_buff;
-        ring_add(&reds->agent_state.external_bufs, &buf->base.link);
-    }
-
-    for (i = 0; i < REDS_NUM_INTERNAL_AGENT_MESSAGES; i++) {
-        VDInternalBuf *buf = spice_new0(VDInternalBuf, 1);
-        ring_item_init(&buf->base.link);
-        buf->base.free = free_internal_agent_buff;
-        buf->base.chunk_header.port = VDP_SERVER_PORT;
-        buf->base.chunk_header.size = sizeof(VDAgentMessage) + sizeof(VDAgentMouseState);
-        buf->header.protocol = VD_AGENT_PROTOCOL;
-        buf->header.type = VD_AGENT_MOUSE_STATE;
-        buf->header.opaque = 0;
-        buf->header.size = sizeof(VDAgentMouseState);
-        ring_add(&reds->agent_state.internal_bufs, &buf->base.link);
-    }
 
     for (i = 0; i < REDS_VDI_PORT_NUM_RECEIVE_BUFFS; i++) {
         VDIReadBuf *buf = spice_new0(VDIReadBuf, 1);
@@ -3592,11 +3430,6 @@ static int do_spice_init(SpiceCoreInterface *core_interface)
     if (!(reds->mig_timer = core->timer_add(migrate_timeout, NULL))) {
         spice_error("migration timer create failed");
     }
-    if (!(reds->vdi_port_write_timer = core->timer_add(vdi_port_write_retry, NULL)))
-    {
-        spice_error("vdi port write timer create failed");
-    }
-    reds->vdi_port_write_timer_started = FALSE;
 
 #ifdef RED_STATISTICS
     int shm_name_len;
