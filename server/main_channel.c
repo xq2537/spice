@@ -222,18 +222,13 @@ static PipeItem *main_ping_item_new(MainChannelClient *mcc, int size)
     return &item->base;
 }
 
-typedef struct MainTokensItemInfo {
-    uint32_t num_tokens;
-} MainTokensItemInfo;
-
-static PipeItem *main_tokens_item_new(RedChannelClient *rcc, void *data, int num)
+static PipeItem *main_agent_tokens_item_new(RedChannelClient *rcc, uint32_t num_tokens)
 {
     TokensPipeItem *item = spice_malloc(sizeof(TokensPipeItem));
-    MainTokensItemInfo *init = data;
 
     red_channel_pipe_item_init(rcc->channel, &item->base,
                                SPICE_MSG_MAIN_AGENT_TOKEN);
-    item->tokens = init->num_tokens;
+    item->tokens = num_tokens;
     return &item->base;
 }
 
@@ -422,13 +417,11 @@ static void main_channel_marshall_agent_disconnected(SpiceMarshaller *m)
     spice_marshall_msg_main_agent_disconnected(m, &disconnect);
 }
 
-// TODO: make this targeted (requires change to agent token accounting)
-void main_channel_push_tokens(MainChannel *main_chan, uint32_t num_tokens)
+void main_channel_client_push_agent_tokens(MainChannelClient *mcc, uint32_t num_tokens)
 {
-    MainTokensItemInfo init = {.num_tokens = num_tokens};
+    PipeItem *item = main_agent_tokens_item_new(&mcc->base, num_tokens);
 
-    red_channel_pipes_new_add_push(&main_chan->base,
-        main_tokens_item_new, &init);
+    red_channel_client_pipe_add_push(&mcc->base, item);
 }
 
 static void main_channel_marshall_tokens(SpiceMarshaller *m, uint32_t num_tokens)
@@ -828,19 +821,28 @@ static int main_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint
     MainChannelClient *mcc = SPICE_CONTAINEROF(rcc, MainChannelClient, base);
 
     switch (type) {
-    case SPICE_MSGC_MAIN_AGENT_START:
+    case SPICE_MSGC_MAIN_AGENT_START: {
+        SpiceMsgcMainAgentStart *tokens;
+
         spice_printerr("agent start");
         if (!main_chan) {
             return FALSE;
         }
-        reds_on_main_agent_start();
+        tokens = (SpiceMsgcMainAgentStart *)message;
+        reds_on_main_agent_start(mcc, tokens->num_tokens);
         break;
+    }
     case SPICE_MSGC_MAIN_AGENT_DATA: {
         reds_on_main_agent_data(mcc, message, size);
         break;
     }
-    case SPICE_MSGC_MAIN_AGENT_TOKEN:
+    case SPICE_MSGC_MAIN_AGENT_TOKEN: {
+        SpiceMsgcMainAgentTokens *tokens;
+
+        tokens = (SpiceMsgcMainAgentTokens *)message;
+        reds_on_main_agent_tokens(mcc, tokens->num_tokens);
         break;
+    }
     case SPICE_MSGC_MAIN_ATTACH_CHANNELS:
         main_channel_push_channels(mcc);
         break;

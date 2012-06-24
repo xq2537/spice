@@ -756,11 +756,13 @@ static void reds_agent_remove(void)
     }
 }
 
-static void reds_push_tokens(void)
+/* this will be fixed to handle multiple clients
+   in following patches */
+static void reds_push_tokens(MainChannelClient *mcc)
 {
     reds->agent_state.num_client_tokens += reds->agent_state.num_tokens;
     spice_assert(reds->agent_state.num_client_tokens <= REDS_AGENT_WINDOW_SIZE);
-    main_channel_push_tokens(reds->main_channel, reds->agent_state.num_tokens);
+    main_channel_client_push_agent_tokens(mcc, reds->agent_state.num_tokens);
     reds->agent_state.num_tokens = 0;
 }
 
@@ -998,12 +1000,14 @@ void reds_handle_agent_mouse_event(const VDAgentMouseState *mouse_state)
     write_to_vdi_port();
 }
 
-static void add_token(void)
+static void add_token(MainChannelClient *mcc)
 {
     VDIPortState *state = &reds->agent_state;
 
+    /* this will be fixed to handle multiple clients
+       in following patches */
     if (++state->num_tokens == REDS_TOKENS_TO_SEND) {
-        reds_push_tokens();
+        reds_push_tokens(mcc);
     }
 }
 
@@ -1011,6 +1015,7 @@ int reds_num_of_channels(void)
 {
     return reds ? reds->num_of_channels : 0;
 }
+
 
 int reds_num_of_clients(void)
 {
@@ -1059,12 +1064,20 @@ void reds_fill_channels(SpiceMsgChannels *channels_info)
     }
 }
 
-void reds_on_main_agent_start(void)
+void reds_on_main_agent_start(MainChannelClient *mcc, uint32_t num_tokens)
 {
     if (!vdagent) {
         return;
     }
     reds->agent_state.write_filter.discard_all = FALSE;
+}
+
+void reds_on_main_agent_tokens(MainChannelClient *mcc, uint32_t num_tokens)
+{
+    if (!vdagent) {
+        return;
+    }
+    spice_printerr("to be implemented");
 }
 
 void reds_on_main_agent_data(MainChannelClient *mcc, void *message, size_t size)
@@ -1088,7 +1101,7 @@ void reds_on_main_agent_data(MainChannelClient *mcc, void *message, size_t size)
     case AGENT_MSG_FILTER_OK:
         break;
     case AGENT_MSG_FILTER_DISCARD:
-        add_token();
+        add_token(mcc);
         return;
     case AGENT_MSG_FILTER_PROTO_ERROR:
         reds_disconnect();
@@ -3577,9 +3590,15 @@ SPICE_GNUC_VISIBLE int spice_server_remove_interface(SpiceBaseInstance *sin)
 static void free_external_agent_buff(VDIPortBuf *in_buf)
 {
     VDIPortState *state = &reds->agent_state;
+    RedClient *random_client;
 
     ring_add(&state->external_bufs, &in_buf->link);
-    add_token();
+    /* this will be fixed to handle multiple clients
+       in following patches */
+    random_client = SPICE_CONTAINEROF(ring_get_tail(&reds->clients),
+                                      RedClient,
+                                      link);
+    add_token(red_client_get_main(random_client));
 }
 
 static void free_internal_agent_buff(VDIPortBuf *in_buf)
