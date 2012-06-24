@@ -37,6 +37,8 @@
 
 typedef struct SpiceVmcPipeItem {
     PipeItem base;
+    uint32_t refs;
+
     /* writes which don't fit this will get split, this is not a problem */
     uint8_t buf[BUF_SIZE];
     uint32_t buf_used;
@@ -45,7 +47,7 @@ typedef struct SpiceVmcPipeItem {
 typedef struct SpiceVmcState {
     RedChannel channel; /* Must be the first item */
     RedChannelClient *rcc;
-    SpiceCharDeviceState chardev_st;
+    SpiceCharDeviceState *chardev_st;
     SpiceCharDeviceInstance *chardev_sin;
     SpiceVmcPipeItem *pipe_item;
     uint8_t *rcv_buf;
@@ -53,35 +55,95 @@ typedef struct SpiceVmcState {
     int rcv_buf_in_use;
 } SpiceVmcState;
 
-static void spicevmc_chardev_wakeup(SpiceCharDeviceInstance *sin)
+static SpiceVmcPipeItem *spicevmc_pipe_item_ref(SpiceVmcPipeItem *item)
 {
-    SpiceVmcState *state;
+    item->refs++;
+    return item;
+}
+
+static void spicevmc_pipe_item_unref(SpiceVmcPipeItem *item)
+{
+    if (!--item->refs) {
+        free(item);
+    }
+}
+
+SpiceCharDeviceMsgToClient *spicevmc_chardev_ref_msg_to_client(SpiceCharDeviceMsgToClient *msg,
+                                                               void *opaque)
+{
+    return spicevmc_pipe_item_ref((SpiceVmcPipeItem *)msg);
+}
+
+static void spicevmc_chardev_unref_msg_to_client(SpiceCharDeviceMsgToClient *msg,
+                                                 void *opaque)
+{
+    spicevmc_pipe_item_unref((SpiceVmcPipeItem *)msg);
+}
+
+static SpiceCharDeviceMsgToClient *spicevmc_chardev_read_msg_from_dev(SpiceCharDeviceInstance *sin,
+                                                                      void *opaque)
+{
+    SpiceVmcState *state = opaque;
     SpiceCharDeviceInterface *sif;
+    SpiceVmcPipeItem *msg_item;
     int n;
 
-    state = SPICE_CONTAINEROF(sin->st, SpiceVmcState, chardev_st);
     sif = SPICE_CONTAINEROF(sin->base.sif, SpiceCharDeviceInterface, base);
 
     if (!state->rcc) {
-        return;
+        return NULL;
     }
 
-    do {
-        if (!state->pipe_item) {
-            state->pipe_item = spice_malloc(sizeof(SpiceVmcPipeItem));
-            red_channel_pipe_item_init(&state->channel,
-                                       &state->pipe_item->base, 0);
-        }
+    if (!state->pipe_item) {
+        msg_item = spice_new0(SpiceVmcPipeItem, 1);
+        msg_item->refs = 1;
+        red_channel_pipe_item_init(&state->channel,
+                                       &msg_item->base, 0);
+    } else {
+        spice_assert(state->pipe_item->buf_used == 0);
+        msg_item = state->pipe_item;
+        state->pipe_item = NULL;
+    }
 
-        n = sif->read(sin, state->pipe_item->buf,
-                      sizeof(state->pipe_item->buf));
-        if (n > 0) {
-            state->pipe_item->buf_used = n;
-            red_channel_client_pipe_add_push(state->rcc,
-                                             &state->pipe_item->base);
-            state->pipe_item = NULL;
-        }
-    } while (n > 0);
+    n = sif->read(sin, msg_item->buf,
+                  sizeof(msg_item->buf));
+    if (n > 0) {
+        spice_debug("read from dev %d", n);
+        msg_item->buf_used = n;
+        return msg_item;
+    } else {
+        state->pipe_item = msg_item;
+        return NULL;
+    }
+}
+
+static void spicevmc_chardev_send_msg_to_client(SpiceCharDeviceMsgToClient *msg,
+                                                 RedClient *client,
+                                                 void *opaque)
+{
+    SpiceVmcState *state = opaque;
+    SpiceVmcPipeItem *vmc_msg = msg;
+
+    spice_assert(state->rcc->client == client);
+    spicevmc_pipe_item_ref(vmc_msg);
+    red_channel_client_pipe_add_push(state->rcc, &vmc_msg->base);
+}
+
+static void spicevmc_char_dev_send_tokens_to_client(RedClient *client,
+                                                    uint32_t tokens,
+                                                    void *opaque)
+{
+    spice_printerr("Not implemented!");
+}
+
+static void spicevmc_char_dev_remove_client(RedClient *client, void *opaque)
+{
+    SpiceVmcState *state = opaque;
+
+    spice_printerr("vmc state %p, client %p", state, client);
+    spice_assert(state->rcc && state->rcc->client == client);
+
+    red_channel_client_shutdown(state->rcc);
 }
 
 static int spicevmc_red_channel_client_config_socket(RedChannelClient *rcc)
@@ -115,6 +177,15 @@ static void spicevmc_red_channel_client_on_disconnect(RedChannelClient *rcc)
     state = SPICE_CONTAINEROF(rcc->channel, SpiceVmcState, channel);
     sin = state->chardev_sin;
     sif = SPICE_CONTAINEROF(sin->base.sif, SpiceCharDeviceInterface, base);
+
+    if (state->chardev_st) {
+        if (spice_char_device_client_exists(state->chardev_st, rcc->client)) {
+            spice_char_device_client_remove(state->chardev_st, rcc->client);
+        } else {
+            spice_printerr("client %p have already been removed from char dev %p",
+                           rcc->client, state->chardev_st);
+        }
+    }
 
     /* Don't destroy the rcc if it is already being destroyed, as then
        red_client_destroy/red_channel_client_destroy will already do this! */
@@ -206,7 +277,7 @@ static void spicevmc_red_channel_send_item(RedChannelClient *rcc,
 static void spicevmc_red_channel_release_pipe_item(RedChannelClient *rcc,
     PipeItem *item, int item_pushed)
 {
-    free(item);
+    spicevmc_pipe_item_unref((SpiceVmcPipeItem *)item);
 }
 
 static void spicevmc_connect(RedChannel *channel, RedClient *client,
@@ -240,6 +311,8 @@ static void spicevmc_connect(RedChannel *channel, RedClient *client,
     state->rcc = rcc;
     red_channel_client_ack_zero_messages_window(rcc);
 
+    spice_char_device_client_add(state->chardev_st, client, FALSE, 0, ~0, ~0);
+
     if (sif->state) {
         sif->state(sin, 1);
     }
@@ -250,13 +323,14 @@ static void spicevmc_migrate(RedChannelClient *rcc)
     /* NOOP */
 }
 
-void spicevmc_device_connect(SpiceCharDeviceInstance *sin,
-    uint8_t channel_type)
+SpiceCharDeviceState *spicevmc_device_connect(SpiceCharDeviceInstance *sin,
+                                              uint8_t channel_type)
 {
     static uint8_t id[256] = { 0, };
     SpiceVmcState *state;
     ChannelCbs channel_cbs = { NULL, };
     ClientCbs client_cbs = { NULL, };
+    SpiceCharDeviceCallbacks char_dev_cbs = {NULL, };
 
     channel_cbs.config_socket = spicevmc_red_channel_client_config_socket;
     channel_cbs.on_disconnect = spicevmc_red_channel_client_on_disconnect;
@@ -273,18 +347,27 @@ void spicevmc_device_connect(SpiceCharDeviceInstance *sin,
                                    spicevmc_red_channel_client_handle_message,
                                    &channel_cbs);
     red_channel_init_outgoing_messages_window(&state->channel);
-    state->chardev_st.wakeup = spicevmc_chardev_wakeup;
-    state->chardev_sin = sin;
-    state->rcv_buf = spice_malloc(BUF_SIZE);
-    state->rcv_buf_size = BUF_SIZE;
 
     client_cbs.connect = spicevmc_connect;
     client_cbs.migrate = spicevmc_migrate;
     red_channel_register_client_cbs(&state->channel, &client_cbs);
 
-    sin->st = &state->chardev_st;
+    char_dev_cbs.read_one_msg_from_device = spicevmc_chardev_read_msg_from_dev;
+    char_dev_cbs.ref_msg_to_client = spicevmc_chardev_ref_msg_to_client;
+    char_dev_cbs.unref_msg_to_client = spicevmc_chardev_unref_msg_to_client;
+    char_dev_cbs.send_msg_to_client = spicevmc_chardev_send_msg_to_client;
+    char_dev_cbs.send_tokens_to_client = spicevmc_char_dev_send_tokens_to_client;
+    char_dev_cbs.remove_client = spicevmc_char_dev_remove_client;
+
+    state->chardev_st = spice_char_device_state_create(sin,
+                                                       0, /* tokens interval */
+                                                       ~0, /* self tokens */
+                                                       &char_dev_cbs,
+                                                       state);
+    state->chardev_sin = sin;
 
     reds_register_channel(&state->channel);
+    return state->chardev_st;
 }
 
 /* Must be called from RedClient handling thread. */
@@ -292,7 +375,10 @@ void spicevmc_device_disconnect(SpiceCharDeviceInstance *sin)
 {
     SpiceVmcState *state;
 
-    state = SPICE_CONTAINEROF(sin->st, SpiceVmcState, chardev_st);
+    state = (SpiceVmcState *)spice_char_device_state_opaque_get(sin->st);
+
+    spice_char_device_state_destroy(sin->st);
+    state->chardev_st = NULL;
 
     reds_unregister_channel(&state->channel);
 

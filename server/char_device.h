@@ -208,8 +208,8 @@ void spice_char_device_write_buffer_release(SpiceCharDeviceState *dev,
 
 /* api for specific char devices */
 
-void spicevmc_device_connect(SpiceCharDeviceInstance *sin,
-                             uint8_t channel_type);
+SpiceCharDeviceState *spicevmc_device_connect(SpiceCharDeviceInstance *sin,
+                                              uint8_t channel_type);
 void spicevmc_device_disconnect(SpiceCharDeviceInstance *char_device);
 
 #endif // __CHAR_DEVICE_H__

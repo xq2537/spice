@@ -3206,7 +3206,7 @@ static int spice_server_char_device_add_interface(SpiceServer *s,
     }
 #endif
     else if (strcmp(char_device->subtype, SUBTYPE_USBREDIR) == 0) {
-        spicevmc_device_connect(char_device, SPICE_CHANNEL_USBREDIR);
+        dev_state = spicevmc_device_connect(char_device, SPICE_CHANNEL_USBREDIR);
     }
     if (dev_state) {
         spice_assert(char_device->st);
