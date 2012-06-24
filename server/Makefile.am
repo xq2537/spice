@@ -43,6 +43,7 @@ libspice_server_la_LIBADD =						\
 libspice_server_la_SOURCES =			\
 	agent-msg-filter.c			\
 	agent-msg-filter.h			\
+	char_device.c				\
 	char_device.h				\
 	demarshallers.h				\
 	glz_encoder.c				\
