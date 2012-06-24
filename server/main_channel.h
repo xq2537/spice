@@ -73,8 +73,8 @@ void main_channel_push_mouse_mode(MainChannel *main_chan, int current_mode, int 
 void main_channel_push_agent_connected(MainChannel *main_chan);
 void main_channel_push_agent_disconnected(MainChannel *main_chan);
 void main_channel_client_push_agent_tokens(MainChannelClient *mcc, uint32_t num_tokens);
-void main_channel_push_agent_data(MainChannel *main_chan, uint8_t* data, size_t len,
-           spice_marshaller_item_free_func free_data, void *opaque);
+void main_channel_client_push_agent_data(MainChannelClient *mcc, uint8_t* data, size_t len,
+                                         spice_marshaller_item_free_func free_data, void *opaque);
 void main_channel_client_start_net_test(MainChannelClient *mcc);
 // TODO: huge. Consider making a reds_* interface for these functions
 // and calling from main.

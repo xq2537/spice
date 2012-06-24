@@ -81,13 +81,8 @@ typedef struct TokensPipeItem {
     int tokens;
 } TokensPipeItem;
 
-typedef struct AgentDataPipeItemRefs {
-    int refs;
-} AgentDataPipeItemRefs;
-
 typedef struct AgentDataPipeItem {
     PipeItem base;
-    AgentDataPipeItemRefs *refs;
     uint8_t* data;
     size_t len;
     spice_marshaller_item_free_func free_data;
@@ -232,26 +227,18 @@ static PipeItem *main_agent_tokens_item_new(RedChannelClient *rcc, uint32_t num_
     return &item->base;
 }
 
-typedef struct MainAgentDataItemInfo {
-    uint8_t* data;
-    size_t len;
-    spice_marshaller_item_free_func free_data;
-    void *opaque;
-    AgentDataPipeItemRefs *refs;
-} MainAgentDataItemInfo;
-
-static PipeItem *main_agent_data_item_new(RedChannelClient *rcc, void *data, int num)
+static PipeItem *main_agent_data_item_new(RedChannelClient *rcc, uint8_t* data, size_t len,
+                                          spice_marshaller_item_free_func free_data,
+                                          void *opaque)
 {
-    MainAgentDataItemInfo *info = data;
     AgentDataPipeItem *item = spice_malloc(sizeof(AgentDataPipeItem));
 
     red_channel_pipe_item_init(rcc->channel, &item->base,
                                SPICE_MSG_MAIN_AGENT_DATA);
-    item->refs = info->refs;
-    item->data = info->data;
-    item->len = info->len;
-    item->free_data = info->free_data;
-    item->opaque = info->opaque;
+    item->data = data;
+    item->len = len;
+    item->free_data = free_data;
+    item->opaque = opaque;
     return &item->base;
 }
 
@@ -432,20 +419,13 @@ static void main_channel_marshall_tokens(SpiceMarshaller *m, uint32_t num_tokens
     spice_marshall_msg_main_agent_token(m, &tokens);
 }
 
-void main_channel_push_agent_data(MainChannel *main_chan, uint8_t* data, size_t len,
+void main_channel_client_push_agent_data(MainChannelClient *mcc, uint8_t* data, size_t len,
            spice_marshaller_item_free_func free_data, void *opaque)
 {
-    MainAgentDataItemInfo info = {
-        .data = data,
-        .len = len,
-        .free_data = free_data,
-        .opaque = opaque,
-        .refs = spice_malloc(sizeof(AgentDataPipeItemRefs)),
-    };
+    PipeItem *item;
 
-    info.refs->refs = main_chan->base.clients_num;
-    red_channel_pipes_new_add_push(&main_chan->base,
-        main_agent_data_item_new, &info);
+    item = main_agent_data_item_new(&mcc->base, data, len, free_data, opaque);
+    red_channel_client_pipe_add_push(&mcc->base, item);
 }
 
 static void main_channel_marshall_agent_data(SpiceMarshaller *m,
@@ -760,14 +740,10 @@ static void main_channel_release_pipe_item(RedChannelClient *rcc,
 {
     switch (base->type) {
         case SPICE_MSG_MAIN_AGENT_DATA: {
-            AgentDataPipeItem *data = (AgentDataPipeItem*)base;
-            if (!--data->refs->refs) {
-                spice_debug("SPICE_MSG_MAIN_AGENT_DATA %p %p, %d",
-                            data, data->refs, data->refs->refs);
-                free(data->refs);
+                AgentDataPipeItem *data = (AgentDataPipeItem *)base;
+
                 data->free_data(data->data, data->opaque);
-            }
-            break;
+                break;
         }
         default:
             break;
