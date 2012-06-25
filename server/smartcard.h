@@ -23,10 +23,10 @@
 // Maximal length of APDU
 #define APDUBufSize 270
 
-/** connect to smartcard interface, used by smartcard channel
- * returns -1 if failed, 0 if successfull
+/*
+ * connect to smartcard interface, used by smartcard channel
  */
-int smartcard_device_connect(SpiceCharDeviceInstance *char_device);
+SpiceCharDeviceState *smartcard_device_connect(SpiceCharDeviceInstance *char_device);
 void smartcard_device_disconnect(SpiceCharDeviceInstance *char_device);
 
 #endif // __SMART_CARD_H__

@@ -3200,7 +3200,7 @@ static int spice_server_char_device_add_interface(SpiceServer *s,
     }
 #ifdef USE_SMARTCARD
     else if (strcmp(char_device->subtype, SUBTYPE_SMARTCARD) == 0) {
-        if (smartcard_device_connect(char_device) == -1) {
+        if (!(dev_state = smartcard_device_connect(char_device))) {
             return -1;
         }
     }
@@ -3213,6 +3213,8 @@ static int spice_server_char_device_add_interface(SpiceServer *s,
         /* setting the char_device state to "started" for backward compatibily with
          * qemu releases that don't call spice api for start/stop (not implemented yet) */
         spice_char_device_start(char_device->st);
+    } else {
+        spice_error("failed to create device state for %s", char_device->subtype);
     }
     return 0;
 }
