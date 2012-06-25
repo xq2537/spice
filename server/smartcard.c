@@ -535,7 +535,7 @@ static void smartcard_init(void)
                                              &channel_cbs);
 
     if (!g_smartcard_channel) {
-        spice_error("failed to allocate Inputs Channel");
+        spice_error("failed to allocate Smartcard Channel");
     }
 
     client_cbs.connect = smartcard_connect;
