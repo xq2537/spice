@@ -3158,11 +3158,11 @@ static SpiceCharDeviceState *attach_to_red_agent(SpiceCharDeviceInstance *sin)
 
 SPICE_GNUC_VISIBLE void spice_server_char_device_wakeup(SpiceCharDeviceInstance* sin)
 {
-    if (sin->st->wakeup) {
-        sin->st->wakeup(sin);
-    } else {
-        spice_char_device_wakeup(sin->st);
+    if (!sin->st) {
+        spice_error("no SpiceCharDeviceState attached to instance %p", sin);
+        return;
     }
+    spice_char_device_wakeup(sin->st);
 }
 
 #define SUBTYPE_VDAGENT "vdagent"

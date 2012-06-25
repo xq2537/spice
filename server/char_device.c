@@ -43,6 +43,29 @@ struct SpiceCharDeviceClientState {
     uint32_t max_send_queue_size;
 };
 
+struct SpiceCharDeviceState {
+    int running;
+    uint32_t refs;
+
+    Ring write_queue;
+    Ring write_bufs_pool;
+    SpiceCharDeviceWriteBuffer *cur_write_buf;
+    uint8_t *cur_write_buf_pos;
+    SpiceTimer *write_to_dev_timer;
+    uint64_t num_self_tokens;
+
+    Ring clients; /* list of SpiceCharDeviceClientState */
+    uint32_t num_clients;
+
+    uint64_t client_tokens_interval; /* frequency of returning tokens to the client */
+    SpiceCharDeviceInstance *sin;
+
+    int during_read_from_device;
+
+    SpiceCharDeviceCallbacks cbs;
+    void *opaque;
+};
+
 enum {
     WRITE_BUFFER_ORIGIN_NONE,
     WRITE_BUFFER_ORIGIN_CLIENT,

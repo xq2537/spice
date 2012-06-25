@@ -109,34 +109,6 @@ typedef struct SpiceCharDeviceCallbacks {
 
 typedef struct SpiceCharDeviceState SpiceCharDeviceState;
 
-struct SpiceCharDeviceState {
-    int running;
-    uint32_t refs;
-
-    Ring write_queue;
-    Ring write_bufs_pool;
-    SpiceCharDeviceWriteBuffer *cur_write_buf;
-    uint8_t *cur_write_buf_pos;
-    SpiceTimer *write_to_dev_timer;
-    uint64_t num_self_tokens;
-
-    Ring clients;
-    uint32_t num_clients;
-
-    uint64_t client_tokens_interval; /* frequency of returning tokens to the client */
-    SpiceCharDeviceInstance *sin;
-
-    int during_read_from_device;
-
-    SpiceCharDeviceCallbacks cbs;
-    void *opaque;
-    /* tmp till all spice char devices will employ the new SpiceCharDeviceState
-     * implementation. Then, SpiceCharDeviceState will be moved to char_device.c and
-     * this callback will be removed */
-    void (*wakeup)(SpiceCharDeviceInstance *sin);
-};
-
-
 SpiceCharDeviceState *spice_char_device_state_create(SpiceCharDeviceInstance *sin,
                                                      uint32_t client_tokens_interval,
                                                      uint32_t self_tokens,
