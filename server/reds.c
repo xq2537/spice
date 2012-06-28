@@ -220,6 +220,11 @@ typedef struct RedsMigTargetClient {
     Ring pending_links;
 } RedsMigTargetClient;
 
+typedef struct SpiceCharDeviceStateItem {
+    RingItem link;
+    SpiceCharDeviceState *st;
+} SpiceCharDeviceStateItem;
+
 typedef struct RedsState {
     int listen_socket;
     int secure_listen_socket;
@@ -246,6 +251,8 @@ typedef struct RedsState {
     MonitorMode monitor_mode;
     SpiceTimer *mig_timer;
     SpiceTimer *mm_timer;
+
+    Ring char_devs_states; /* list of SpiceCharDeviceStateItem */
 
     SSL_CTX *ctx;
 
@@ -300,6 +307,8 @@ struct ChannelSecurityOptions {
 static void migrate_timeout(void *opaque);
 static RedsMigTargetClient* reds_mig_target_client_find(RedClient *client);
 static void reds_mig_target_client_free(RedsMigTargetClient *mig_client);
+static void reds_char_device_add_state(SpiceCharDeviceState *st);
+static void reds_char_device_remove_state(SpiceCharDeviceState *st);
 
 static ChannelSecurityOptions *channels_security = NULL;
 static int default_channel_security =
@@ -3189,12 +3198,45 @@ SPICE_GNUC_VISIBLE const char** spice_server_char_device_recognized_subtypes(voi
     return spice_server_char_device_recognized_subtypes_list;
 }
 
+static void reds_char_device_add_state(SpiceCharDeviceState *st)
+{
+    SpiceCharDeviceStateItem *item = spice_new0(SpiceCharDeviceStateItem, 1);
+
+    item->st = st;
+
+    ring_add(&reds->char_devs_states, &item->link);
+}
+
+static void reds_char_device_remove_state(SpiceCharDeviceState *st)
+{
+    RingItem *item;
+
+    RING_FOREACH(item, &reds->char_devs_states) {
+        SpiceCharDeviceStateItem *st_item;
+
+        st_item = SPICE_CONTAINEROF(item, SpiceCharDeviceStateItem, link);
+        if (st_item->st == st) {
+            ring_remove(item);
+            free(st_item);
+            return;
+        }
+    }
+    spice_error("char dev state not found %p", st);
+}
+
+void reds_on_char_device_state_destroy(SpiceCharDeviceState *dev)
+{
+    reds_char_device_remove_state(dev);
+}
+
 static int spice_server_char_device_add_interface(SpiceServer *s,
                                            SpiceBaseInstance *sin)
 {
     SpiceCharDeviceInstance* char_device =
             SPICE_CONTAINEROF(sin, SpiceCharDeviceInstance, base);
     SpiceCharDeviceState *dev_state = NULL;
+
+    spice_assert(s == reds);
 
     spice_info("CHAR_DEVICE %s", char_device->subtype);
     if (strcmp(char_device->subtype, SUBTYPE_VDAGENT) == 0) {
@@ -3219,6 +3261,7 @@ static int spice_server_char_device_add_interface(SpiceServer *s,
         /* setting the char_device state to "started" for backward compatibily with
          * qemu releases that don't call spice api for start/stop (not implemented yet) */
         spice_char_device_start(char_device->st);
+        reds_char_device_add_state(char_device->st);
     } else {
         spice_warning("failed to create device state for %s", char_device->subtype);
     }
@@ -3432,6 +3475,7 @@ static int do_spice_init(SpiceCoreInterface *core_interface)
     main_dispatcher_init(core);
     ring_init(&reds->channels);
     ring_init(&reds->mig_target_clients);
+    ring_init(&reds->char_devs_states);
 
     if (!(reds->mig_timer = core->timer_add(migrate_timeout, NULL))) {
         spice_error("migration timer create failed");

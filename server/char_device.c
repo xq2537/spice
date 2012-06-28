@@ -644,6 +644,7 @@ static void spice_char_device_state_unref(SpiceCharDeviceState *char_dev)
 
 void spice_char_device_state_destroy(SpiceCharDeviceState *char_dev)
 {
+    reds_on_char_device_state_destroy(char_dev);
     core->timer_remove(char_dev->write_to_dev_timer);
     write_buffers_queue_free(&char_dev->write_queue);
     write_buffers_queue_free(&char_dev->write_bufs_pool);
