@@ -53,6 +53,7 @@ typedef struct RedDrawable {
         SpiceBlackness blackness;
         SpiceInvers invers;
         SpiceWhiteness whiteness;
+        SpiceComposite composite;
     } u;
 } RedDrawable;
 

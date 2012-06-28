@@ -1254,6 +1254,8 @@ static inline void validate_surface(RedWorker *worker, uint32_t surface_id)
 {
     spice_warn_if(surface_id >= worker->n_surfaces);
     if (!worker->surfaces[surface_id].context.canvas) {
+        spice_warning("canvas address is %p for %d (and is NULL)\n",
+                   &(worker->surfaces[surface_id].context.canvas), surface_id);
         spice_warning("failed on %d", surface_id);
         spice_warn_if(!worker->surfaces[surface_id].context.canvas);
     }
@@ -1284,6 +1286,8 @@ static const char *draw_type_to_str(uint8_t type)
         return "QXL_DRAW_INVERS";
     case QXL_DRAW_ROP3:
         return "QXL_DRAW_ROP3";
+    case QXL_DRAW_COMPOSITE:
+        return "QXL_DRAW_COMPOSITE";
     case QXL_DRAW_STROKE:
         return "QXL_DRAW_STROKE";
     case QXL_DRAW_TEXT:
@@ -1319,6 +1323,7 @@ static void show_red_drawable(RedWorker *worker, RedDrawable *drawable, const ch
     case QXL_DRAW_WHITENESS:
     case QXL_DRAW_INVERS:
     case QXL_DRAW_ROP3:
+    case QXL_DRAW_COMPOSITE:
     case QXL_DRAW_STROKE:
     case QXL_DRAW_TEXT:
         break;
@@ -4345,6 +4350,16 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         localize_mask(worker, &rop3.mask, &img3);
         canvas->ops->draw_rop3(canvas, &drawable->red_drawable->bbox,
                                &clip, &rop3);
+        break;
+    }
+    case QXL_DRAW_COMPOSITE: {
+        SpiceComposite composite = drawable->red_drawable->u.composite;
+        SpiceImage src, mask;
+        localize_bitmap(worker, &composite.src_bitmap, &src, drawable);
+        if (composite.mask_bitmap)
+            localize_bitmap(worker, &composite.mask_bitmap, &mask, drawable);
+        canvas->ops->draw_composite(canvas, &drawable->red_drawable->bbox,
+                                    &clip, &composite);
         break;
     }
     case QXL_DRAW_STROKE: {
@@ -7679,6 +7694,89 @@ static void red_lossy_marshall_qxl_draw_rop3(RedWorker *worker,
     }
 }
 
+static void red_marshall_qxl_draw_composite(RedWorker *worker,
+                                     RedChannelClient *rcc,
+                                     SpiceMarshaller *base_marshaller,
+                                     DrawablePipeItem *dpi)
+{
+    Drawable *item = dpi->drawable;
+    DisplayChannelClient *dcc = RCC_TO_DCC(rcc);
+    RedDrawable *drawable = item->red_drawable;
+    SpiceMarshaller *src_bitmap_out;
+    SpiceMarshaller *mask_bitmap_out;
+    SpiceComposite composite;
+
+    red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_DRAW_COMPOSITE, &dpi->dpi_pipe_item);
+    fill_base(base_marshaller, item);
+    composite = drawable->u.composite;
+    spice_marshall_Composite(base_marshaller,
+                             &composite,
+                             &src_bitmap_out,
+                             &mask_bitmap_out);
+
+    fill_bits(dcc, src_bitmap_out, composite.src_bitmap, item, FALSE);
+    if (mask_bitmap_out) {
+        fill_bits(dcc, mask_bitmap_out, composite.mask_bitmap, item, FALSE);
+    }
+}
+
+static void red_lossy_marshall_qxl_draw_composite(RedWorker *worker,
+                                                  RedChannelClient *rcc,
+                                                  SpiceMarshaller *base_marshaller,
+                                                  DrawablePipeItem *dpi)
+{
+    Drawable *item = dpi->drawable;
+    DisplayChannelClient *dcc = RCC_TO_DCC(rcc);
+    RedDrawable *drawable = item->red_drawable;
+    int src_is_lossy;
+    BitmapData src_bitmap_data;
+    int mask_is_lossy;
+    BitmapData mask_bitmap_data;
+    int dest_is_lossy;
+    SpiceRect dest_lossy_area;
+
+    src_is_lossy = is_bitmap_lossy(rcc, drawable->u.composite.src_bitmap,
+                                   NULL, item, &src_bitmap_data);
+    mask_is_lossy = drawable->u.composite.mask_bitmap &&
+        is_bitmap_lossy(rcc, drawable->u.composite.mask_bitmap, NULL, item, &mask_bitmap_data);
+
+    dest_is_lossy = is_surface_area_lossy(dcc, drawable->surface_id,
+                                          &drawable->bbox, &dest_lossy_area);
+
+    if ((!src_is_lossy || (src_bitmap_data.type != BITMAP_DATA_TYPE_SURFACE))   &&
+        (!mask_is_lossy || (mask_bitmap_data.type != BITMAP_DATA_TYPE_SURFACE)) &&
+        !dest_is_lossy) {
+        red_marshall_qxl_draw_composite(worker, rcc, base_marshaller, dpi);
+        surface_lossy_region_update(worker, dcc, item, FALSE, FALSE);
+    }
+    else {
+        int resend_surface_ids[3];
+        SpiceRect *resend_areas[3];
+        int num_resend = 0;
+
+        if (src_is_lossy && (src_bitmap_data.type == BITMAP_DATA_TYPE_SURFACE)) {
+            resend_surface_ids[num_resend] = src_bitmap_data.id;
+            resend_areas[num_resend] = &src_bitmap_data.lossy_rect;
+            num_resend++;
+        }
+
+        if (mask_is_lossy && (mask_bitmap_data.type == BITMAP_DATA_TYPE_SURFACE)) {
+            resend_surface_ids[num_resend] = mask_bitmap_data.id;
+            resend_areas[num_resend] = &mask_bitmap_data.lossy_rect;
+            num_resend++;
+        }
+
+        if (dest_is_lossy) {
+            resend_surface_ids[num_resend] = item->surface_id;
+            resend_areas[num_resend] = &dest_lossy_area;
+            num_resend++;
+        }
+
+        red_add_lossless_drawable_dependencies(worker, rcc, item,
+                                               resend_surface_ids, resend_areas, num_resend);
+    }
+}
+
 static void red_marshall_qxl_draw_stroke(RedWorker *worker,
                                      RedChannelClient *rcc,
                                      SpiceMarshaller *base_marshaller,
@@ -7895,6 +7993,9 @@ static void red_lossy_marshall_qxl_drawable(RedWorker *worker, RedChannelClient 
     case QXL_DRAW_ROP3:
         red_lossy_marshall_qxl_draw_rop3(worker, rcc, base_marshaller, dpi);
         break;
+    case QXL_DRAW_COMPOSITE:
+        red_lossy_marshall_qxl_draw_composite(worker, rcc, base_marshaller, dpi);
+        break;
     case QXL_DRAW_STROKE:
         red_lossy_marshall_qxl_draw_stroke(worker, rcc, base_marshaller, dpi);
         break;
@@ -7948,6 +8049,9 @@ static inline void red_marshall_qxl_drawable(RedWorker *worker, RedChannelClient
         break;
     case QXL_DRAW_STROKE:
         red_marshall_qxl_draw_stroke(worker, rcc, m, dpi);
+        break;
+    case QXL_DRAW_COMPOSITE:
+        red_marshall_qxl_draw_composite(worker, rcc, m, dpi);
         break;
     case QXL_DRAW_TEXT:
         red_marshall_qxl_draw_text(worker, rcc, m, dpi);

@@ -120,7 +120,7 @@ unsigned long get_virt(RedMemSlotInfo *info, QXLPHYSICAL addr, uint32_t add_size
     slot_id = get_memslot_id(info, addr);
     if (slot_id > info->num_memslots) {
         print_memslots(info);
-        spice_critical("slot_id too big, addr=%" PRIx64, addr);
+        spice_critical("slot_id %d too big, addr=%" PRIx64, slot_id, addr);
         *error = 1;
         return 0;
     }
