@@ -528,4 +528,7 @@ int spice_server_migrate_end(SpiceServer *s, int completed);
 void spice_server_set_name(SpiceServer *s, const char *name);
 void spice_server_set_uuid(SpiceServer *s, const uint8_t uuid[16]);
 
+void spice_server_vm_start(SpiceServer *s);
+void spice_server_vm_stop(SpiceServer *s);
+
 #endif

@@ -252,6 +252,7 @@ typedef struct RedsState {
     SpiceTimer *mig_timer;
     SpiceTimer *mm_timer;
 
+    int vm_running;
     Ring char_devs_states; /* list of SpiceCharDeviceStateItem */
 
     SSL_CTX *ctx;
@@ -3260,7 +3261,9 @@ static int spice_server_char_device_add_interface(SpiceServer *s,
         spice_assert(char_device->st);
         /* setting the char_device state to "started" for backward compatibily with
          * qemu releases that don't call spice api for start/stop (not implemented yet) */
-        spice_char_device_start(char_device->st);
+        if (reds->vm_running) {
+            spice_char_device_start(char_device->st);
+        }
         reds_char_device_add_state(char_device->st);
     } else {
         spice_warning("failed to create device state for %s", char_device->subtype);
@@ -3476,6 +3479,7 @@ static int do_spice_init(SpiceCoreInterface *core_interface)
     ring_init(&reds->channels);
     ring_init(&reds->mig_target_clients);
     ring_init(&reds->char_devs_states);
+    reds->vm_running = TRUE; /* for backward compatibility */
 
     if (!(reds->mig_timer = core->timer_add(migrate_timeout, NULL))) {
         spice_error("migration timer create failed");
@@ -4023,6 +4027,34 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_switch(SpiceServer *s)
     reds->expect_migrate = FALSE;
     reds_mig_switch();
     return 0;
+}
+
+SPICE_GNUC_VISIBLE void spice_server_vm_start(SpiceServer *s)
+{
+    RingItem *item;
+
+    spice_assert(s == reds);
+    reds->vm_running = TRUE;
+    RING_FOREACH(item, &reds->char_devs_states) {
+        SpiceCharDeviceStateItem *st_item;
+
+        st_item = SPICE_CONTAINEROF(item, SpiceCharDeviceStateItem, link);
+        spice_char_device_start(st_item->st);
+    }
+}
+
+SPICE_GNUC_VISIBLE void spice_server_vm_stop(SpiceServer *s)
+{
+    RingItem *item;
+
+    spice_assert(s == reds);
+    reds->vm_running = FALSE;
+    RING_FOREACH(item, &reds->char_devs_states) {
+        SpiceCharDeviceStateItem *st_item;
+
+        st_item = SPICE_CONTAINEROF(item, SpiceCharDeviceStateItem, link);
+        spice_char_device_stop(st_item->st);
+    }
 }
 
 ssize_t reds_stream_read(RedsStream *s, void *buf, size_t nbyte)
