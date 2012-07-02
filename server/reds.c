@@ -254,6 +254,7 @@ typedef struct RedsState {
 
     int vm_running;
     Ring char_devs_states; /* list of SpiceCharDeviceStateItem */
+    int seamless_migration_enabled;
 
     SSL_CTX *ctx;
 
@@ -4057,6 +4058,14 @@ SPICE_GNUC_VISIBLE void spice_server_vm_stop(SpiceServer *s)
         spice_char_device_stop(st_item->st);
     }
     red_dispatcher_on_vm_stop();
+}
+
+SPICE_GNUC_VISIBLE void spice_server_set_seamless_migration(SpiceServer *s, int enable)
+{
+    spice_assert(s == reds);
+    /* seamless migration is not supported with multiple clients */
+    reds->seamless_migration_enabled = enable && !reds->allow_multiple_clients;
+    spice_debug("seamless migration enabled=%d", enable);
 }
 
 ssize_t reds_stream_read(RedsStream *s, void *buf, size_t nbyte)

@@ -527,6 +527,8 @@ int spice_server_migrate_connect(SpiceServer *s, const char* dest,
 int spice_server_migrate_start(SpiceServer *s);
 int spice_server_migrate_end(SpiceServer *s, int completed);
 
+void spice_server_set_seamless_migration(SpiceServer *s, int enable);
+
 void spice_server_set_name(SpiceServer *s, const char *name);
 void spice_server_set_uuid(SpiceServer *s, const uint8_t uuid[16]);
 
