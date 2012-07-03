@@ -107,8 +107,6 @@ typedef struct SpiceCharDeviceCallbacks {
     void (*remove_client)(RedClient *client, void *opaque);
 } SpiceCharDeviceCallbacks;
 
-typedef struct SpiceCharDeviceState SpiceCharDeviceState;
-
 SpiceCharDeviceState *spice_char_device_state_create(SpiceCharDeviceInstance *sin,
                                                      uint32_t client_tokens_interval,
                                                      uint32_t self_tokens,
