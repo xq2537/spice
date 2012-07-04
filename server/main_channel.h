@@ -98,8 +98,10 @@ void main_channel_migrate_switch(MainChannel *main_chan, RedsMigSpice *mig_targe
 
 /* semi seamless migration */
 
-/* returns the number of clients that we are waiting for their connection */
-int main_channel_migrate_connect(MainChannel *main_channel, RedsMigSpice *mig_target);
+/* returns the number of clients that we are waiting for their connection.
+ * try_seamless = 'true' when the seamless-migration=on in qemu command line */
+int main_channel_migrate_connect(MainChannel *main_channel, RedsMigSpice *mig_target,
+                                 int try_seamless);
 void main_channel_migrate_cancel_wait(MainChannel *main_chan);
 /* returns the number of clients for which SPICE_MSG_MAIN_MIGRATE_END was sent*/
 int main_channel_migrate_complete(MainChannel *main_chan, int success);

@@ -240,6 +240,8 @@ typedef struct RedsState {
     int mig_wait_disconnect;
     int mig_inprogress;
     int expect_migrate;
+    int src_do_seamless_migrate; /* per migration. Updated after the migration handshake
+                                    between the 2 servers */
     Ring mig_target_clients;
     int num_mig_target_clients;
     RedsMigSpice *mig_spice;
@@ -1163,8 +1165,9 @@ void reds_on_main_agent_data(MainChannelClient *mcc, void *message, size_t size)
     spice_char_device_write_buffer_add(reds->agent_state.base, dev_state->recv_from_client_buf);
 }
 
-void reds_on_main_migrate_connected(void)
+void reds_on_main_migrate_connected(int seamless)
 {
+    reds->src_do_seamless_migrate = seamless;
     if (reds->mig_wait_connect) {
         reds_mig_cleanup();
     }
@@ -3938,7 +3941,8 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_connect(SpiceServer *s, const char* 
     reds->expect_migrate = TRUE;
 
     /* main channel will take care of clients that are still during migration (at target)*/
-    if (main_channel_migrate_connect(reds->main_channel, reds->mig_spice)) {
+    if (main_channel_migrate_connect(reds->main_channel, reds->mig_spice,
+                                     reds->seamless_migration_enabled)) {
         reds_mig_started();
     } else {
         if (reds->num_clients == 0) {

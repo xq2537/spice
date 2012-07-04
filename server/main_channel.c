@@ -45,6 +45,7 @@
 #include "red_channel.h"
 #include "red_common.h"
 #include "reds.h"
+#include "migration_protocol.h"
 
 #define ZERO_BUF_SIZE 4096
 
@@ -135,6 +136,7 @@ struct MainChannelClient {
     int mig_wait_connect;
     int mig_connect_ok;
     int mig_wait_prev_complete;
+    int mig_wait_prev_try_seamless;
     int init_sent;
 };
 
@@ -576,24 +578,43 @@ static void main_channel_marshall_notify(SpiceMarshaller *m, NotifyPipeItem *ite
     spice_marshaller_add(m, item->mess, item->mess_len + 1);
 }
 
+static void main_channel_fill_migrate_dst_info(MainChannel *main_channel,
+                                               SpiceMigrationDstInfo *dst_info)
+{
+    RedsMigSpice *mig_dst = &main_channel->mig_target;
+    dst_info->port = mig_dst->port;
+    dst_info->sport = mig_dst->sport;
+    dst_info->host_size = strlen(mig_dst->host) + 1;
+    dst_info->host_data = (uint8_t *)mig_dst->host;
+    if (mig_dst->cert_subject) {
+        dst_info->cert_subject_size = strlen(mig_dst->cert_subject) + 1;
+        dst_info->cert_subject_data = (uint8_t *)mig_dst->cert_subject;
+    } else {
+        dst_info->cert_subject_size = 0;
+        dst_info->cert_subject_data = NULL;
+    }
+}
+
 static void main_channel_marshall_migrate_begin(SpiceMarshaller *m, RedChannelClient *rcc)
 {
     SpiceMsgMainMigrationBegin migrate;
     MainChannel *main_ch;
 
     main_ch = SPICE_CONTAINEROF(rcc->channel, MainChannel, base);
-    migrate.dst_info.port = main_ch->mig_target.port;
-    migrate.dst_info.sport = main_ch->mig_target.sport;
-    migrate.dst_info.host_size = strlen(main_ch->mig_target.host) + 1;
-    migrate.dst_info.host_data = (uint8_t *)main_ch->mig_target.host;
-    if (main_ch->mig_target.cert_subject) {
-        migrate.dst_info.cert_subject_size = strlen(main_ch->mig_target.cert_subject) + 1;
-        migrate.dst_info.cert_subject_data = (uint8_t *)main_ch->mig_target.cert_subject;
-    } else {
-        migrate.dst_info.cert_subject_size = 0;
-        migrate.dst_info.cert_subject_data = NULL;
-    }
+    main_channel_fill_migrate_dst_info(main_ch, &migrate.dst_info);
     spice_marshall_msg_main_migrate_begin(m, &migrate);
+}
+
+static void main_channel_marshall_migrate_begin_seamless(SpiceMarshaller *m,
+                                                         RedChannelClient *rcc)
+{
+    SpiceMsgMainMigrateBeginSeamless migrate_seamless;
+    MainChannel *main_ch;
+
+    main_ch = SPICE_CONTAINEROF(rcc->channel, MainChannel, base);
+    main_channel_fill_migrate_dst_info(main_ch, &migrate_seamless.dst_info);
+    migrate_seamless.src_mig_version = SPICE_MIGRATION_PROTOCOL_VERSION;
+    spice_marshall_msg_main_migrate_begin_seamless(m, &migrate_seamless);
 }
 
 void main_channel_push_migrate(MainChannel *main_chan)
@@ -728,6 +749,9 @@ static void main_channel_send_item(RedChannelClient *rcc, PipeItem *base)
         case SPICE_MSG_MAIN_MIGRATE_BEGIN:
             main_channel_marshall_migrate_begin(m, rcc);
             break;
+        case SPICE_MSG_MAIN_MIGRATE_BEGIN_SEAMLESS:
+            main_channel_marshall_migrate_begin_seamless(m, rcc);
+            break;
         case SPICE_MSG_MAIN_MULTI_MEDIA_TIME:
             main_channel_marshall_multi_media_time(m,
                 SPICE_CONTAINEROF(base, MultiMediaTimePipeItem, base));
@@ -766,17 +790,20 @@ static void main_channel_release_pipe_item(RedChannelClient *rcc,
     free(base);
 }
 
-void main_channel_client_handle_migrate_connected(MainChannelClient *mcc, int success)
+void main_channel_client_handle_migrate_connected(MainChannelClient *mcc,
+                                                  int success,
+                                                  int seamless)
 {
-    spice_printerr("client %p connected: %d", mcc->base.client, success);
+    spice_printerr("client %p connected: %d seamless %d", mcc->base.client, success, seamless);
     if (mcc->mig_wait_connect) {
         MainChannel *main_channel = SPICE_CONTAINEROF(mcc->base.channel, MainChannel, base);
 
         mcc->mig_wait_connect = FALSE;
         mcc->mig_connect_ok = success;
         spice_assert(main_channel->num_clients_mig_wait);
+        spice_assert(!seamless || main_channel->num_clients_mig_wait == 1);
         if (!--main_channel->num_clients_mig_wait) {
-            reds_on_main_migrate_connected();
+            reds_on_main_migrate_connected(seamless && success);
         }
     } else {
         if (success) {
@@ -800,7 +827,12 @@ void main_channel_client_handle_migrate_end(MainChannelClient *mcc)
     }
     red_client_migrate_complete(mcc->base.client);
     if (mcc->mig_wait_prev_complete) {
-        red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_BEGIN);
+
+        if (mcc->mig_wait_prev_try_seamless) {
+            red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_BEGIN_SEAMLESS);
+        } else {
+            red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_BEGIN);
+        }
         mcc->mig_wait_connect = TRUE;
         mcc->mig_wait_prev_complete = FALSE;
     }
@@ -838,10 +870,17 @@ static int main_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint
         main_channel_push_channels(mcc);
         break;
     case SPICE_MSGC_MAIN_MIGRATE_CONNECTED:
-        main_channel_client_handle_migrate_connected(mcc, TRUE);
+        main_channel_client_handle_migrate_connected(mcc,
+                                                     TRUE /* success */,
+                                                     FALSE /* seamless */);
+        break;
+    case SPICE_MSGC_MAIN_MIGRATE_CONNECTED_SEAMLESS:
+        main_channel_client_handle_migrate_connected(mcc,
+                                                     TRUE /* success */,
+                                                     TRUE /* seamless */);
         break;
     case SPICE_MSGC_MAIN_MIGRATE_CONNECT_ERROR:
-        main_channel_client_handle_migrate_connected(mcc, FALSE);
+        main_channel_client_handle_migrate_connected(mcc, FALSE, FALSE);
         break;
     case SPICE_MSGC_MAIN_MOUSE_MODE_REQUEST:
         reds_on_main_mouse_mode_request(message, size);
@@ -1095,12 +1134,9 @@ RedChannelClient* main_channel_client_get_base(MainChannelClient* mcc)
     return &mcc->base;
 }
 
-int main_channel_migrate_connect(MainChannel *main_channel, RedsMigSpice *mig_target)
+static int main_channel_connect_semi_seamless(MainChannel *main_channel)
 {
     RingItem *client_link;
-
-    main_channel_fill_mig_target(main_channel, mig_target);
-    main_channel->num_clients_mig_wait = 0;
 
     RING_FOREACH(client_link, &main_channel->base.clients) {
         MainChannelClient * mcc = SPICE_CONTAINEROF(client_link, MainChannelClient,
@@ -1110,6 +1146,7 @@ int main_channel_migrate_connect(MainChannel *main_channel, RedsMigSpice *mig_ta
             if (red_client_during_migrate_at_target(mcc->base.client)) {
                 spice_printerr("client %p: wait till previous migration completes", mcc->base.client);
                 mcc->mig_wait_prev_complete = TRUE;
+                mcc->mig_wait_prev_try_seamless = FALSE;
             } else {
                 red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_BEGIN);
                 mcc->mig_wait_connect = TRUE;
@@ -1119,6 +1156,60 @@ int main_channel_migrate_connect(MainChannel *main_channel, RedsMigSpice *mig_ta
         }
     }
     return main_channel->num_clients_mig_wait;
+}
+
+static int main_channel_connect_seamless(MainChannel *main_channel)
+{
+    RingItem *client_link;
+
+    spice_assert(main_channel->base.clients_num == 1);
+
+    RING_FOREACH(client_link, &main_channel->base.clients) {
+        MainChannelClient * mcc = SPICE_CONTAINEROF(client_link, MainChannelClient,
+                                                    base.channel_link);
+        spice_assert(red_channel_client_test_remote_cap(&mcc->base,
+                                                        SPICE_MAIN_CAP_SEAMLESS_MIGRATE));
+        if (red_client_during_migrate_at_target(mcc->base.client)) {
+           spice_printerr("client %p: wait till previous migration completes", mcc->base.client);
+           mcc->mig_wait_prev_complete = TRUE;
+           mcc->mig_wait_prev_try_seamless = TRUE;
+        } else {
+            red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_BEGIN_SEAMLESS);
+            mcc->mig_wait_connect = TRUE;
+        }
+        mcc->mig_connect_ok = FALSE;
+        main_channel->num_clients_mig_wait++;
+    }
+    return main_channel->num_clients_mig_wait;
+}
+
+int main_channel_migrate_connect(MainChannel *main_channel, RedsMigSpice *mig_target,
+                                 int try_seamless)
+{
+    main_channel_fill_mig_target(main_channel, mig_target);
+    main_channel->num_clients_mig_wait = 0;
+
+    if (!main_channel_is_connected(main_channel)) {
+        return 0;
+    }
+
+    if (!try_seamless) {
+        return main_channel_connect_semi_seamless(main_channel);
+    } else {
+        RingItem *client_item;
+        MainChannelClient *mcc;
+
+        client_item = ring_get_head(&main_channel->base.clients);
+        mcc = SPICE_CONTAINEROF(client_item, MainChannelClient, base.channel_link);
+
+        if (!red_channel_client_test_remote_cap(&mcc->base,
+                                                SPICE_MAIN_CAP_SEAMLESS_MIGRATE)) {
+            return main_channel_connect_semi_seamless(main_channel);
+        } else {
+            return main_channel_connect_seamless(main_channel);
+        }
+    }
+
 }
 
 void main_channel_migrate_cancel_wait(MainChannel *main_chan)
