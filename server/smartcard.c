@@ -52,7 +52,7 @@ typedef struct SmartCardChannelClient {
                            * or was it explicitly malloced */
 } SmartCardChannelClient;
 
-typedef struct SmartCardDeviceState {
+struct SmartCardDeviceState {
     SpiceCharDeviceState *chardev_st;
     uint32_t             reader_id;
     uint32_t             attached;
@@ -63,7 +63,7 @@ typedef struct SmartCardDeviceState {
     uint32_t             buf_used;
 
     SmartCardChannelClient    *scc; // client providing the remote card
-} SmartCardDeviceState;
+};
 
 enum {
     PIPE_ITEM_TYPE_ERROR=1,
