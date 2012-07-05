@@ -1130,46 +1130,46 @@ static void print_compress_stats(DisplayChannel *display_channel)
                        display_channel->zlib_glz_stat.comp_size :
                        display_channel->glz_stat.comp_size;
 
-    spice_debug("==> Compression stats for display %u", display_channel->common.id);
-    spice_debug("Method   \t  count  \torig_size(MB)\tenc_size(MB)\tenc_time(s)");
-    spice_debug("QUIC     \t%8d\t%13.2f\t%12.2f\t%12.2f",
+    spice_info("==> Compression stats for display %u", display_channel->common.id);
+    spice_info("Method   \t  count  \torig_size(MB)\tenc_size(MB)\tenc_time(s)");
+    spice_info("QUIC     \t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->quic_stat.count,
                stat_byte_to_mega(display_channel->quic_stat.orig_size),
                stat_byte_to_mega(display_channel->quic_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->quic_stat.total)
                );
-    spice_debug("GLZ      \t%8d\t%13.2f\t%12.2f\t%12.2f",
+    spice_info("GLZ      \t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->glz_stat.count,
                stat_byte_to_mega(display_channel->glz_stat.orig_size),
                stat_byte_to_mega(display_channel->glz_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->glz_stat.total)
                );
-    spice_debug("ZLIB GLZ \t%8d\t%13.2f\t%12.2f\t%12.2f",
+    spice_info("ZLIB GLZ \t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->zlib_glz_stat.count,
                stat_byte_to_mega(display_channel->zlib_glz_stat.orig_size),
                stat_byte_to_mega(display_channel->zlib_glz_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->zlib_glz_stat.total)
                );
-    spice_debug("LZ       \t%8d\t%13.2f\t%12.2f\t%12.2f",
+    spice_info("LZ       \t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->lz_stat.count,
                stat_byte_to_mega(display_channel->lz_stat.orig_size),
                stat_byte_to_mega(display_channel->lz_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->lz_stat.total)
                );
-    spice_debug("JPEG     \t%8d\t%13.2f\t%12.2f\t%12.2f",
+    spice_info("JPEG     \t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->jpeg_stat.count,
                stat_byte_to_mega(display_channel->jpeg_stat.orig_size),
                stat_byte_to_mega(display_channel->jpeg_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->jpeg_stat.total)
                );
-    spice_debug("JPEG-RGBA\t%8d\t%13.2f\t%12.2f\t%12.2f",
+    spice_info("JPEG-RGBA\t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->jpeg_alpha_stat.count,
                stat_byte_to_mega(display_channel->jpeg_alpha_stat.orig_size),
                stat_byte_to_mega(display_channel->jpeg_alpha_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->jpeg_alpha_stat.total)
                );
-    spice_debug("-------------------------------------------------------------------");
-    spice_debug("Total    \t%8d\t%13.2f\t%12.2f\t%12.2f",
+    spice_info("-------------------------------------------------------------------");
+    spice_info("Total    \t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->lz_stat.count + display_channel->glz_stat.count +
                                                 display_channel->quic_stat.count +
                                                 display_channel->jpeg_stat.count +
@@ -2106,7 +2106,7 @@ void __show_current(TreeItem *item, void *data)
 static void show_current(RedWorker *worker, Ring *ring)
 {
     if (ring_is_empty(ring)) {
-        spice_debug("TEST: TREE: EMPTY");
+        spice_info("TEST: TREE: EMPTY");
         return;
     }
     current_tree_for_each(ring, __show_current, NULL);
@@ -3331,7 +3331,7 @@ static void red_reset_stream_trace(RedWorker *worker)
         if (!stream->current) {
             red_stop_stream(worker, stream);
         } else {
-            spice_debug("attached stream");
+            spice_info("attached stream");
         }
     }
 
@@ -3585,17 +3585,17 @@ static inline int red_current_add_qxl(RedWorker *worker, Ring *ring, Drawable *d
 #ifdef RED_WORKER_STAT
     if ((++worker->add_count % 100) == 0) {
         stat_time_t total = worker->add_stat.total;
-        spice_debug("add with shadow count %u",
+        spice_info("add with shadow count %u",
                    worker->add_with_shadow_count);
         worker->add_with_shadow_count = 0;
-        spice_debug("add[%u] %f exclude[%u] %f __exclude[%u] %f",
+        spice_info("add[%u] %f exclude[%u] %f __exclude[%u] %f",
                    worker->add_stat.count,
                    stat_cpu_time_to_sec(total),
                    worker->exclude_stat.count,
                    stat_cpu_time_to_sec(worker->exclude_stat.total),
                    worker->__exclude_stat.count,
                    stat_cpu_time_to_sec(worker->__exclude_stat.total));
-        spice_debug("add %f%% exclude %f%% exclude2 %f%% __exclude %f%%",
+        spice_info("add %f%% exclude %f%% exclude2 %f%% __exclude %f%%",
                    (double)(total - worker->exclude_stat.total) / total * 100,
                    (double)(worker->exclude_stat.total) / total * 100,
                    (double)(worker->exclude_stat.total -
@@ -6319,7 +6319,7 @@ static inline int red_compress_image(DisplayChannelClient *dcc,
 
     if (quic_compress) {
 #ifdef COMPRESS_DEBUG
-        spice_debug("QUIC compress");
+        spice_info("QUIC compress");
 #endif
         // if bitmaps is picture-like, compress it using jpeg
         if (can_lossy && display_channel->enable_jpeg &&
@@ -6366,12 +6366,12 @@ static inline int red_compress_image(DisplayChannelClient *dcc,
             ret = red_lz_compress_image(dcc, dest, src, o_comp_data,
                                         drawable->group_id);
 #ifdef COMPRESS_DEBUG
-            spice_debug("LZ LOCAL compress");
+            spice_info("LZ LOCAL compress");
 #endif
         }
 #ifdef COMPRESS_DEBUG
         else {
-            spice_debug("LZ global compress fmt=%d", src->format);
+            spice_info("LZ global compress fmt=%d", src->format);
         }
 #endif
         return ret;
@@ -8731,7 +8731,7 @@ static void display_channel_send_item(RedChannelClient *rcc, PipeItem *pipe_item
         red_marshall_verb(rcc, ((VerbItem*)pipe_item)->verb);
         break;
     case PIPE_ITEM_TYPE_MIGRATE:
-        spice_debug("PIPE_ITEM_TYPE_MIGRATE");
+        spice_info("PIPE_ITEM_TYPE_MIGRATE");
         display_channel_marshall_migrate(rcc, m);
         break;
     case PIPE_ITEM_TYPE_MIGRATE_DATA:
@@ -8790,7 +8790,7 @@ static void cursor_channel_send_item(RedChannelClient *rcc, PipeItem *pipe_item)
         red_marshall_verb(rcc, ((VerbItem*)pipe_item)->verb);
         break;
     case PIPE_ITEM_TYPE_MIGRATE:
-        spice_debug("PIPE_ITEM_TYPE_MIGRATE");
+        spice_info("PIPE_ITEM_TYPE_MIGRATE");
         cursor_channel_marshall_migrate(rcc, m);
         break;
     case PIPE_ITEM_TYPE_CURSOR_INIT:
@@ -8896,7 +8896,7 @@ static void display_channel_client_on_disconnect(RedChannelClient *rcc)
     if (!rcc) {
         return;
     }
-    spice_debug(NULL);
+    spice_info(NULL);
     common = SPICE_CONTAINEROF(rcc->channel, CommonChannel, base);
     worker = common->worker;
     display_channel = (DisplayChannel *)rcc->channel;
@@ -9279,7 +9279,7 @@ static int display_channel_client_wait_for_init(DisplayChannelClient *dcc)
         if (dcc->pixmap_cache && dcc->glz_dict) {
             dcc->pixmap_cache_generation = dcc->pixmap_cache->generation;
             /* TODO: move common.id? if it's used for a per client structure.. */
-            spice_debug("creating encoder with id == %d", dcc->common.id);
+            spice_info("creating encoder with id == %d", dcc->common.id);
             dcc->glz = glz_encoder_create(dcc->common.id, dcc->glz_dict->dict, &dcc->glz_data.usr);
             if (!dcc->glz) {
                 spice_critical("create global lz failed");
@@ -9361,7 +9361,7 @@ static GlzSharedDictionary *red_create_glz_dictionary(DisplayChannelClient *dcc,
                                                             MAX_LZ_ENCODERS,
                                                             &dcc->glz_data.usr);
 #ifdef COMPRESS_DEBUG
-    spice_debug("Lz Window %d Size=%d", id, window_size);
+    spice_info("Lz Window %d Size=%d", id, window_size);
 #endif
     if (!glz_dict) {
         spice_critical("failed creating lz dictionary");
@@ -10014,7 +10014,7 @@ static void display_channel_create(RedWorker *worker, int migrate)
         return;
     }
 
-    spice_debug("create display channel");
+    spice_info("create display channel");
     if (!(worker->display_channel = (DisplayChannel *)__new_channel(
             worker, sizeof(*display_channel),
             SPICE_CHANNEL_DISPLAY, migrate,
@@ -10066,14 +10066,14 @@ static void handle_new_display_channel(RedWorker *worker, RedClient *client, Red
         return;
     }
     display_channel = worker->display_channel;
-    spice_debug("add display channel client");
+    spice_info("add display channel client");
     dcc = display_channel_client_create(&display_channel->common, client, stream,
                                         common_caps, num_common_caps,
                                         caps, num_caps);
     if (!dcc) {
         return;
     }
-    spice_debug("New display (client %p) dcc %p stream %p", client, dcc, stream);
+    spice_info("New display (client %p) dcc %p stream %p", client, dcc, stream);
     stream_buf_size = 32*1024;
     dcc->send_data.stream_outbuf = spice_malloc(stream_buf_size);
     dcc->send_data.stream_outbuf_size = stream_buf_size;
@@ -10100,8 +10100,8 @@ static void handle_new_display_channel(RedWorker *worker, RedClient *client, Red
                                                  SPICE_WAN_COMPRESSION_ALWAYS);
     }
 
-    spice_debug("jpeg %s", display_channel->enable_jpeg ? "enabled" : "disabled");
-    spice_debug("zlib-over-glz %s", display_channel->enable_zlib_glz_wrap ? "enabled" : "disabled");
+    spice_info("jpeg %s", display_channel->enable_jpeg ? "enabled" : "disabled");
+    spice_info("zlib-over-glz %s", display_channel->enable_zlib_glz_wrap ? "enabled" : "disabled");
 
     // todo: tune level according to bandwidth
     display_channel->zlib_level = ZLIB_DEFAULT_COMPRESSION_LEVEL;
@@ -10220,7 +10220,7 @@ static void cursor_channel_create(RedWorker *worker, int migrate)
     if (worker->cursor_channel != NULL) {
         return;
     }
-    spice_debug("create cursor channel");
+    spice_info("create cursor channel");
     worker->cursor_channel = (CursorChannel *)__new_channel(
         worker, sizeof(*worker->cursor_channel),
         SPICE_CHANNEL_CURSOR, migrate,
@@ -10247,7 +10247,7 @@ static void red_connect_cursor(RedWorker *worker, RedClient *client, RedsStream 
         return;
     }
     channel = worker->cursor_channel;
-    spice_debug("add cursor channel client");
+    spice_info("add cursor channel client");
     ccc = cursor_channel_create_rcc(&channel->common, client, stream,
                                     common_caps, num_common_caps,
                                     caps, num_caps);
@@ -10279,7 +10279,7 @@ static void red_wait_outgoing_item(RedChannelClient *rcc)
         return;
     }
     end_time = red_now() + DETACH_TIMEOUT;
-    spice_debug("blocked");
+    spice_info("blocked");
 
     do {
         usleep(DETACH_SLEEP_DURATION);
@@ -10316,7 +10316,7 @@ static void red_wait_outgoing_items(RedChannel *channel)
     }
 
     end_time = red_now() + DETACH_TIMEOUT;
-    spice_debug("blocked");
+    spice_info("blocked");
 
     do {
         usleep(DETACH_SLEEP_DURATION);
@@ -10339,7 +10339,7 @@ static void red_wait_pipe_item_sent(RedChannelClient *rcc, PipeItem *item)
     uint64_t end_time;
     int item_in_pipe;
 
-    spice_debug(NULL);
+    spice_info(NULL);
     dpi = SPICE_CONTAINEROF(item, DrawablePipeItem, dpi_pipe_item);
     ref_drawable_pipe_item(dpi);
 
@@ -10693,7 +10693,7 @@ void handle_dev_stop(void *opaque, void *payload)
 {
     RedWorker *worker = opaque;
 
-    spice_debug("stop");
+    spice_info("stop");
     spice_assert(worker->running);
     worker->running = FALSE;
     red_display_clear_glz_drawables(worker->display_channel);
@@ -10817,7 +10817,7 @@ void handle_dev_display_connect(void *opaque, void *payload)
     RedClient *client = msg->client;
     int migration = msg->migration;
 
-    spice_debug("connect");
+    spice_info("connect");
     handle_new_display_channel(worker, client, stream, migration,
                                msg->common_caps, msg->num_common_caps,
                                msg->caps, msg->num_caps);
@@ -10830,7 +10830,7 @@ void handle_dev_display_disconnect(void *opaque, void *payload)
     RedWorkerMessageDisplayDisconnect *msg = payload;
     RedChannelClient *rcc = msg->rcc;
 
-    spice_debug("disconnect display client");
+    spice_info("disconnect display client");
     spice_assert(rcc);
     red_channel_client_disconnect(rcc);
 }
@@ -10841,7 +10841,7 @@ void handle_dev_display_migrate(void *opaque, void *payload)
     RedWorker *worker = opaque;
 
     RedChannelClient *rcc = msg->rcc;
-    spice_debug("migrate display client");
+    spice_info("migrate display client");
     spice_assert(rcc);
     red_migrate_display(worker, rcc);
 }
@@ -10866,7 +10866,7 @@ void handle_dev_cursor_connect(void *opaque, void *payload)
     RedClient *client = msg->client;
     int migration = msg->migration;
 
-    spice_debug("cursor connect");
+    spice_info("cursor connect");
     red_connect_cursor(worker, client, stream, migration,
                        msg->common_caps, msg->num_common_caps,
                        msg->caps, msg->num_caps);
@@ -10879,7 +10879,7 @@ void handle_dev_cursor_disconnect(void *opaque, void *payload)
     RedWorkerMessageCursorDisconnect *msg = payload;
     RedChannelClient *rcc = msg->rcc;
 
-    spice_debug("disconnect cursor client");
+    spice_info("disconnect cursor client");
     spice_assert(rcc);
     red_channel_client_disconnect(rcc);
 }
@@ -10890,7 +10890,7 @@ void handle_dev_cursor_migrate(void *opaque, void *payload)
     RedWorker *worker = opaque;
     RedChannelClient *rcc = msg->rcc;
 
-    spice_debug("migrate cursor client");
+    spice_info("migrate cursor client");
     spice_assert(rcc);
     red_migrate_cursor(worker, rcc);
 }
@@ -10903,22 +10903,22 @@ void handle_dev_set_compression(void *opaque, void *payload)
     worker->image_compression = msg->image_compression;
     switch (worker->image_compression) {
     case SPICE_IMAGE_COMPRESS_AUTO_LZ:
-        spice_debug("ic auto_lz");
+        spice_info("ic auto_lz");
         break;
     case SPICE_IMAGE_COMPRESS_AUTO_GLZ:
-        spice_debug("ic auto_glz");
+        spice_info("ic auto_glz");
         break;
     case SPICE_IMAGE_COMPRESS_QUIC:
-        spice_debug("ic quic");
+        spice_info("ic quic");
         break;
     case SPICE_IMAGE_COMPRESS_LZ:
-        spice_debug("ic lz");
+        spice_info("ic lz");
         break;
     case SPICE_IMAGE_COMPRESS_GLZ:
-        spice_debug("ic glz");
+        spice_info("ic glz");
         break;
     case SPICE_IMAGE_COMPRESS_OFF:
-        spice_debug("ic off");
+        spice_info("ic off");
         break;
     default:
         spice_error("ic invalid");
@@ -10945,13 +10945,13 @@ void handle_dev_set_streaming_video(void *opaque, void *payload)
     spice_assert(worker->streaming_video != STREAM_VIDEO_INVALID);
     switch(worker->streaming_video) {
         case STREAM_VIDEO_ALL:
-            spice_debug("sv all");
+            spice_info("sv all");
             break;
         case STREAM_VIDEO_FILTER:
-            spice_debug("sv filter");
+            spice_info("sv filter");
             break;
         case STREAM_VIDEO_OFF:
-            spice_debug("sv off");
+            spice_info("sv off");
             break;
         default:
             spice_error("sv invalid");
@@ -10964,7 +10964,7 @@ void handle_dev_set_mouse_mode(void *opaque, void *payload)
     RedWorker *worker = opaque;
 
     worker->mouse_mode = msg->mode;
-    spice_debug("mouse mode %u", worker->mouse_mode);
+    spice_info("mouse mode %u", worker->mouse_mode);
 }
 
 void handle_dev_add_memslot_async(void *opaque, void *payload)
@@ -10992,7 +10992,7 @@ void handle_dev_loadvm_commands(void *opaque, void *payload)
     uint32_t count = msg->count;
     QXLCommandExt *ext = msg->ext;
 
-    spice_debug("loadvm_commands");
+    spice_info("loadvm_commands");
     for (i = 0 ; i < count ; ++i) {
         switch (ext[i].cmd.type) {
         case QXL_CMD_CURSOR:
@@ -11289,7 +11289,7 @@ SPICE_GNUC_NORETURN void *red_worker_main(void *arg)
 {
     RedWorker *worker = spice_malloc(sizeof(RedWorker));
 
-    spice_debug("begin");
+    spice_info("begin");
     spice_assert(MAX_PIPE_SIZE > WIDE_CLIENT_ACK_WINDOW &&
            MAX_PIPE_SIZE > NARROW_CLIENT_ACK_WINDOW); //ensure wakeup by ack message
 
