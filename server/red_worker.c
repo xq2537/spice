@@ -6132,22 +6132,22 @@ static int red_jpeg_compress_image(DisplayChannelClient *dcc, SpiceImage *dest,
         return TRUE;
     }
 
-     lz_data->data.bufs_head = jpeg_data->data.bufs_tail;
-     lz_data->data.bufs_tail = lz_data->data.bufs_head;
+    lz_data->data.bufs_head = jpeg_data->data.bufs_tail;
+    lz_data->data.bufs_tail = lz_data->data.bufs_head;
 
-     comp_head_filled = jpeg_size % sizeof(lz_data->data.bufs_head->buf);
-     comp_head_left = sizeof(lz_data->data.bufs_head->buf) - comp_head_filled;
-     lz_out_start_byte = ((uint8_t *)lz_data->data.bufs_head->buf) + comp_head_filled;
+    comp_head_filled = jpeg_size % sizeof(lz_data->data.bufs_head->buf);
+    comp_head_left = sizeof(lz_data->data.bufs_head->buf) - comp_head_filled;
+    lz_out_start_byte = ((uint8_t *)lz_data->data.bufs_head->buf) + comp_head_filled;
 
-     lz_data->data.dcc = dcc;
+    lz_data->data.dcc = dcc;
 
-     lz_data->data.u.lines_data.chunks = src->data;
-     lz_data->data.u.lines_data.stride = src->stride;
-     lz_data->data.u.lines_data.next = 0;
-     lz_data->data.u.lines_data.reverse = 0;
-     lz_data->usr.more_lines = lz_usr_more_lines;
+    lz_data->data.u.lines_data.chunks = src->data;
+    lz_data->data.u.lines_data.stride = src->stride;
+    lz_data->data.u.lines_data.next = 0;
+    lz_data->data.u.lines_data.reverse = 0;
+    lz_data->usr.more_lines = lz_usr_more_lines;
 
-     alpha_lz_size = lz_encode(lz, LZ_IMAGE_TYPE_XXXA, src->x, src->y,
+    alpha_lz_size = lz_encode(lz, LZ_IMAGE_TYPE_XXXA, src->x, src->y,
                                !!(src->flags & SPICE_BITMAP_FLAGS_TOP_DOWN),
                                NULL, 0, src->stride,
                                lz_out_start_byte,
@@ -7838,7 +7838,7 @@ static void red_lossy_marshall_qxl_drawable(RedWorker *worker, RedChannelClient 
     case QXL_DRAW_BLACKNESS:
         red_lossy_marshall_qxl_draw_blackness(worker, rcc, base_marshaller, dpi);
         break;
-     case QXL_DRAW_WHITENESS:
+    case QXL_DRAW_WHITENESS:
         red_lossy_marshall_qxl_draw_whiteness(worker, rcc, base_marshaller, dpi);
         break;
     case QXL_DRAW_INVERS:
