@@ -1130,46 +1130,46 @@ static void print_compress_stats(DisplayChannel *display_channel)
                        display_channel->zlib_glz_stat.comp_size :
                        display_channel->glz_stat.comp_size;
 
-    spice_printerr("==> Compression stats for display %u", display_channel->common.id);
-    spice_printerr("Method   \t  count  \torig_size(MB)\tenc_size(MB)\tenc_time(s)");
-    spice_printerr("QUIC     \t%8d\t%13.2f\t%12.2f\t%12.2f",
+    spice_debug("==> Compression stats for display %u", display_channel->common.id);
+    spice_debug("Method   \t  count  \torig_size(MB)\tenc_size(MB)\tenc_time(s)");
+    spice_debug("QUIC     \t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->quic_stat.count,
                stat_byte_to_mega(display_channel->quic_stat.orig_size),
                stat_byte_to_mega(display_channel->quic_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->quic_stat.total)
                );
-    spice_printerr("GLZ      \t%8d\t%13.2f\t%12.2f\t%12.2f",
+    spice_debug("GLZ      \t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->glz_stat.count,
                stat_byte_to_mega(display_channel->glz_stat.orig_size),
                stat_byte_to_mega(display_channel->glz_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->glz_stat.total)
                );
-    spice_printerr("ZLIB GLZ \t%8d\t%13.2f\t%12.2f\t%12.2f",
+    spice_debug("ZLIB GLZ \t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->zlib_glz_stat.count,
                stat_byte_to_mega(display_channel->zlib_glz_stat.orig_size),
                stat_byte_to_mega(display_channel->zlib_glz_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->zlib_glz_stat.total)
                );
-    spice_printerr("LZ       \t%8d\t%13.2f\t%12.2f\t%12.2f",
+    spice_debug("LZ       \t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->lz_stat.count,
                stat_byte_to_mega(display_channel->lz_stat.orig_size),
                stat_byte_to_mega(display_channel->lz_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->lz_stat.total)
                );
-    spice_printerr("JPEG     \t%8d\t%13.2f\t%12.2f\t%12.2f",
+    spice_debug("JPEG     \t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->jpeg_stat.count,
                stat_byte_to_mega(display_channel->jpeg_stat.orig_size),
                stat_byte_to_mega(display_channel->jpeg_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->jpeg_stat.total)
                );
-    spice_printerr("JPEG-RGBA\t%8d\t%13.2f\t%12.2f\t%12.2f",
+    spice_debug("JPEG-RGBA\t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->jpeg_alpha_stat.count,
                stat_byte_to_mega(display_channel->jpeg_alpha_stat.orig_size),
                stat_byte_to_mega(display_channel->jpeg_alpha_stat.comp_size),
                stat_cpu_time_to_sec(display_channel->jpeg_alpha_stat.total)
                );
-    spice_printerr("-------------------------------------------------------------------");
-    spice_printerr("Total    \t%8d\t%13.2f\t%12.2f\t%12.2f",
+    spice_debug("-------------------------------------------------------------------");
+    spice_debug("Total    \t%8d\t%13.2f\t%12.2f\t%12.2f",
                display_channel->lz_stat.count + display_channel->glz_stat.count +
                                                 display_channel->quic_stat.count +
                                                 display_channel->jpeg_stat.count +
@@ -1212,7 +1212,7 @@ static inline void validate_surface(RedWorker *worker, uint32_t surface_id)
 {
     spice_warn_if(surface_id >= worker->n_surfaces);
     if (!worker->surfaces[surface_id].context.canvas) {
-        spice_printerr("failed on %d", surface_id);
+        spice_error("failed on %d", surface_id);
         spice_warn_if(!worker->surfaces[surface_id].context.canvas);
     }
 }
@@ -1463,7 +1463,7 @@ static inline void red_pipes_add_drawable_after(RedWorker *worker,
     }
     if (num_other_linked != worker->display_channel->common.base.clients_num) {
         RingItem *worker_item;
-        spice_printerr("TODO: not O(n^2)");
+        spice_debug("TODO: not O(n^2)");
         WORKER_FOREACH_DCC(worker, worker_item, dcc) {
             int sent = 0;
             DRAWABLE_FOREACH_DPI(pos_after, dpi_link, dpi_pos_after) {
@@ -2106,7 +2106,7 @@ void __show_current(TreeItem *item, void *data)
 static void show_current(RedWorker *worker, Ring *ring)
 {
     if (ring_is_empty(ring)) {
-        spice_printerr("TEST: TREE: EMPTY");
+        spice_debug("TEST: TREE: EMPTY");
         return;
     }
     current_tree_for_each(ring, __show_current, NULL);
@@ -3331,7 +3331,7 @@ static void red_reset_stream_trace(RedWorker *worker)
         if (!stream->current) {
             red_stop_stream(worker, stream);
         } else {
-            spice_printerr("attached stream");
+            spice_debug("attached stream");
         }
     }
 
@@ -3422,7 +3422,7 @@ static inline int red_current_add(RedWorker *worker, Ring *ring, Drawable *drawa
                 if (!((DrawItem *)sibling)->container_root) {
                     container = __new_container(worker, (DrawItem *)sibling);
                     if (!container) {
-                        spice_printerr("create new container failed");
+                        spice_error("create new container failed");
                         region_destroy(&exclude_rgn);
                         return FALSE;
                     }
@@ -3585,17 +3585,17 @@ static inline int red_current_add_qxl(RedWorker *worker, Ring *ring, Drawable *d
 #ifdef RED_WORKER_STAT
     if ((++worker->add_count % 100) == 0) {
         stat_time_t total = worker->add_stat.total;
-        spice_printerr("add with shadow count %u",
+        spice_debug("add with shadow count %u",
                    worker->add_with_shadow_count);
         worker->add_with_shadow_count = 0;
-        spice_printerr("add[%u] %f exclude[%u] %f __exclude[%u] %f",
+        spice_debug("add[%u] %f exclude[%u] %f __exclude[%u] %f",
                    worker->add_stat.count,
                    stat_cpu_time_to_sec(total),
                    worker->exclude_stat.count,
                    stat_cpu_time_to_sec(worker->exclude_stat.total),
                    worker->__exclude_stat.count,
                    stat_cpu_time_to_sec(worker->__exclude_stat.total));
-        spice_printerr("add %f%% exclude %f%% exclude2 %f%% __exclude %f%%",
+        spice_debug("add %f%% exclude %f%% exclude2 %f%% __exclude %f%%",
                    (double)(total - worker->exclude_stat.total) / total * 100,
                    (double)(worker->exclude_stat.total) / total * 100,
                    (double)(worker->exclude_stat.total -
@@ -4321,7 +4321,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         break;
     }
     default:
-        spice_printerr("invalid type");
+        spice_error("invalid type");
     }
 }
 
@@ -4880,7 +4880,7 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
             }
 #ifdef DEBUG
             /* alert: accessing message.data is insecure */
-            spice_printerr("MESSAGE: %s", message.data);
+            spice_error("MESSAGE: %s", message.data);
 #endif
             release_info_ext.group_id = ext_cmd.group_id;
             release_info_ext.info = message.release_info;
@@ -5398,7 +5398,7 @@ quic_usr_error(QuicUsrContext *usr, const char *fmt, ...)
     va_start(ap, fmt);
     vsnprintf(usr_data->message_buf, sizeof(usr_data->message_buf), fmt, ap);
     va_end(ap);
-    spice_printerr("%s", usr_data->message_buf);
+    spice_critical("%s", usr_data->message_buf);
 
     longjmp(usr_data->jmp_env, 1);
 }
@@ -5412,7 +5412,7 @@ lz_usr_error(LzUsrContext *usr, const char *fmt, ...)
     va_start(ap, fmt);
     vsnprintf(usr_data->message_buf, sizeof(usr_data->message_buf), fmt, ap);
     va_end(ap);
-    spice_printerr("%s", usr_data->message_buf);
+    spice_critical("%s", usr_data->message_buf);
 
     longjmp(usr_data->jmp_env, 1);
 }
@@ -5440,7 +5440,7 @@ static SPICE_GNUC_PRINTF(2, 3) void quic_usr_warn(QuicUsrContext *usr, const cha
     va_start(ap, fmt);
     vsnprintf(usr_data->message_buf, sizeof(usr_data->message_buf), fmt, ap);
     va_end(ap);
-    spice_printerr("%s", usr_data->message_buf);
+    spice_warning("%s", usr_data->message_buf);
 }
 
 static SPICE_GNUC_PRINTF(2, 3) void lz_usr_warn(LzUsrContext *usr, const char *fmt, ...)
@@ -5451,7 +5451,7 @@ static SPICE_GNUC_PRINTF(2, 3) void lz_usr_warn(LzUsrContext *usr, const char *f
     va_start(ap, fmt);
     vsnprintf(usr_data->message_buf, sizeof(usr_data->message_buf), fmt, ap);
     va_end(ap);
-    spice_printerr("%s", usr_data->message_buf);
+    spice_warning("%s", usr_data->message_buf);
 }
 
 static SPICE_GNUC_PRINTF(2, 3) void glz_usr_warn(GlzEncoderUsrContext *usr, const char *fmt, ...)
@@ -5462,7 +5462,7 @@ static SPICE_GNUC_PRINTF(2, 3) void glz_usr_warn(GlzEncoderUsrContext *usr, cons
     va_start(ap, fmt);
     vsnprintf(usr_data->message_buf, sizeof(usr_data->message_buf), fmt, ap);
     va_end(ap);
-    spice_printerr("%s", usr_data->message_buf);
+    spice_warning("%s", usr_data->message_buf);
 }
 
 static void *quic_usr_malloc(QuicUsrContext *usr, int size)
@@ -5914,7 +5914,7 @@ static inline int red_glz_compress_image(DisplayChannelClient *dcc,
     zlib_data->data.bufs_head = zlib_data->data.bufs_tail;
 
     if (!zlib_data->data.bufs_head) {
-        spice_printerr("failed to allocate zlib compress buffer");
+        spice_error("failed to allocate zlib compress buffer");
         goto glz;
     }
 
@@ -6077,7 +6077,7 @@ static int red_jpeg_compress_image(DisplayChannelClient *dcc, SpiceImage *dest,
     jpeg_data->data.bufs_head = jpeg_data->data.bufs_tail;
 
     if (!jpeg_data->data.bufs_head) {
-        spice_printerr("failed to allocate compress buffer");
+        spice_error("failed to allocate compress buffer");
         return FALSE;
     }
 
@@ -6319,7 +6319,7 @@ static inline int red_compress_image(DisplayChannelClient *dcc,
 
     if (quic_compress) {
 #ifdef COMPRESS_DEBUG
-        spice_printerr("QUIC compress");
+        spice_debug("QUIC compress");
 #endif
         // if bitmaps is picture-like, compress it using jpeg
         if (can_lossy && display_channel->enable_jpeg &&
@@ -6366,12 +6366,12 @@ static inline int red_compress_image(DisplayChannelClient *dcc,
             ret = red_lz_compress_image(dcc, dest, src, o_comp_data,
                                         drawable->group_id);
 #ifdef COMPRESS_DEBUG
-            spice_printerr("LZ LOCAL compress");
+            spice_debug("LZ LOCAL compress");
 #endif
         }
 #ifdef COMPRESS_DEBUG
         else {
-            spice_printerr("LZ global compress fmt=%d", src->format);
+            spice_debug("LZ global compress fmt=%d", src->format);
         }
 #endif
         return ret;
@@ -8088,7 +8088,7 @@ static inline uint8_t *red_get_image_line(RedWorker *worker, SpiceChunks *chunks
     }
 
     if (chunk->len - *offset < stride) {
-        spice_printerr("bad chunk alignment");
+        spice_error("bad chunk alignment");
         return NULL;
     }
     ret = chunk->data + *offset;
@@ -8731,7 +8731,7 @@ static void display_channel_send_item(RedChannelClient *rcc, PipeItem *pipe_item
         red_marshall_verb(rcc, ((VerbItem*)pipe_item)->verb);
         break;
     case PIPE_ITEM_TYPE_MIGRATE:
-        spice_printerr("PIPE_ITEM_TYPE_MIGRATE");
+        spice_debug("PIPE_ITEM_TYPE_MIGRATE");
         display_channel_marshall_migrate(rcc, m);
         break;
     case PIPE_ITEM_TYPE_MIGRATE_DATA:
@@ -8790,7 +8790,7 @@ static void cursor_channel_send_item(RedChannelClient *rcc, PipeItem *pipe_item)
         red_marshall_verb(rcc, ((VerbItem*)pipe_item)->verb);
         break;
     case PIPE_ITEM_TYPE_MIGRATE:
-        spice_printerr("PIPE_ITEM_TYPE_MIGRATE");
+        spice_debug("PIPE_ITEM_TYPE_MIGRATE");
         cursor_channel_marshall_migrate(rcc, m);
         break;
     case PIPE_ITEM_TYPE_CURSOR_INIT:
@@ -8896,7 +8896,7 @@ static void display_channel_client_on_disconnect(RedChannelClient *rcc)
     if (!rcc) {
         return;
     }
-    spice_printerr("");
+    spice_debug(NULL);
     common = SPICE_CONTAINEROF(rcc->channel, CommonChannel, base);
     worker = common->worker;
     display_channel = (DisplayChannel *)rcc->channel;
@@ -9193,7 +9193,7 @@ static inline void flush_display_commands(RedWorker *worker)
             // TODO: MC: the whole timeout will break since it takes lowest timeout, should
             // do it client by client.
             if (red_now() >= end_time) {
-                spice_printerr("update timeout");
+                spice_warning("update timeout");
                 red_disconnect_all_display_TODO_remove_me(channel);
             } else {
                 sleep_count++;
@@ -9235,7 +9235,7 @@ static inline void flush_cursor_commands(RedWorker *worker)
             red_channel_receive(channel);
             red_channel_send(channel);
             if (red_now() >= end_time) {
-                spice_printerr("flush cursor timeout");
+                spice_warning("flush cursor timeout");
                 red_disconnect_cursor(channel);
             } else {
                 sleep_count++;
@@ -9279,7 +9279,7 @@ static int display_channel_client_wait_for_init(DisplayChannelClient *dcc)
         if (dcc->pixmap_cache && dcc->glz_dict) {
             dcc->pixmap_cache_generation = dcc->pixmap_cache->generation;
             /* TODO: move common.id? if it's used for a per client structure.. */
-            spice_printerr("creating encoder with id == %d", dcc->common.id);
+            spice_debug("creating encoder with id == %d", dcc->common.id);
             dcc->glz = glz_encoder_create(dcc->common.id, dcc->glz_dict->dict, &dcc->glz_data.usr);
             if (!dcc->glz) {
                 spice_critical("create global lz failed");
@@ -9287,7 +9287,7 @@ static int display_channel_client_wait_for_init(DisplayChannelClient *dcc)
             return TRUE;
         }
         if (red_now() > end_time) {
-            spice_printerr("timeout");
+            spice_warning("timeout");
             red_channel_client_disconnect(&dcc->common.base);
             break;
         }
@@ -9361,7 +9361,7 @@ static GlzSharedDictionary *red_create_glz_dictionary(DisplayChannelClient *dcc,
                                                             MAX_LZ_ENCODERS,
                                                             &dcc->glz_data.usr);
 #ifdef COMPRESS_DEBUG
-    spice_printerr("Lz Window %d Size=%d", id, window_size);
+    spice_debug("Lz Window %d Size=%d", id, window_size);
 #endif
     if (!glz_dict) {
         spice_critical("failed creating lz dictionary");
@@ -9556,7 +9556,7 @@ static int display_channel_handle_migrate_mark(RedChannelClient *rcc)
     RedChannel *channel = &display_channel->common.base;
 
     if (!display_channel->expect_migrate_mark) {
-        spice_printerr("unexpected");
+        spice_warning("unexpected");
         return FALSE;
     }
     display_channel->expect_migrate_mark = FALSE;
@@ -9570,12 +9570,12 @@ static uint64_t display_channel_handle_migrate_data_get_serial(
     DisplayChannelMigrateData *migrate_data = message;
 
     if (size < sizeof(*migrate_data)) {
-        spice_printerr("bad message size");
+        spice_warning("bad message size");
         return 0;
     }
     if (migrate_data->magic != DISPLAY_MIGRATE_DATA_MAGIC ||
         migrate_data->version != DISPLAY_MIGRATE_DATA_VERSION) {
-        spice_printerr("invalid content");
+        spice_warning("invalid content");
         return 0;
     }
     return migrate_data->message_serial;
@@ -9591,17 +9591,17 @@ static uint64_t display_channel_handle_migrate_data(RedChannelClient *rcc, uint3
     int i;
 
     if (size < sizeof(*migrate_data)) {
-        spice_printerr("bad message size");
+        spice_warning("bad message size");
         return FALSE;
     }
     migrate_data = (DisplayChannelMigrateData *)message;
     if (migrate_data->magic != DISPLAY_MIGRATE_DATA_MAGIC ||
         migrate_data->version != DISPLAY_MIGRATE_DATA_VERSION) {
-        spice_printerr("invalid content");
+        spice_warning("invalid content");
         return FALSE;
     }
     if (!display_channel->expect_migrate_data) {
-        spice_printerr("unexpected");
+        spice_warning("unexpected");
         return FALSE;
     }
     display_channel->expect_migrate_data = FALSE;
@@ -9646,7 +9646,7 @@ static int display_channel_handle_message(RedChannelClient *rcc, uint32_t size, 
     switch (type) {
     case SPICE_MSGC_DISPLAY_INIT:
         if (!dcc->expect_init) {
-            spice_printerr("unexpected SPICE_MSGC_DISPLAY_INIT");
+            spice_warning("unexpected SPICE_MSGC_DISPLAY_INIT");
             return FALSE;
         }
         dcc->expect_init = FALSE;
@@ -9665,12 +9665,12 @@ static int common_channel_config_socket(RedChannelClient *rcc)
     int delay_val;
 
     if ((flags = fcntl(stream->socket, F_GETFL)) == -1) {
-        spice_printerr("accept failed, %s", strerror(errno));
+        spice_warning("accept failed, %s", strerror(errno));
         return FALSE;
     }
 
     if (fcntl(stream->socket, F_SETFL, flags | O_NONBLOCK) == -1) {
-        spice_printerr("accept failed, %s", strerror(errno));
+        spice_warning("accept failed, %s", strerror(errno));
         return FALSE;
     }
 
@@ -9679,7 +9679,7 @@ static int common_channel_config_socket(RedChannelClient *rcc)
     if (setsockopt(stream->socket, IPPROTO_TCP, TCP_NODELAY, &delay_val,
                    sizeof(delay_val)) == -1) {
         if (errno != ENOTSUP) {
-            spice_printerr("setsockopt failed, %s", strerror(errno));
+            spice_warning("setsockopt failed, %s", strerror(errno));
         }
     }
     return TRUE;
@@ -9725,7 +9725,7 @@ static SpiceWatch *worker_watch_add(int fd, int event_mask, SpiceWatchFunc func,
         }
     }
     if (i == MAX_EVENT_SOURCES) {
-        spice_printerr("ERROR could not add a watch for channel type %u id %u",
+        spice_error("ERROR could not add a watch for channel type %u id %u",
                    rcc->channel->type, rcc->channel->id);
         return NULL;
     }
@@ -10014,7 +10014,7 @@ static void display_channel_create(RedWorker *worker, int migrate)
         return;
     }
 
-    spice_printerr("create display channel");
+    spice_debug("create display channel");
     if (!(worker->display_channel = (DisplayChannel *)__new_channel(
             worker, sizeof(*display_channel),
             SPICE_CHANNEL_DISPLAY, migrate,
@@ -10027,7 +10027,7 @@ static void display_channel_create(RedWorker *worker, int migrate)
             display_channel_handle_migrate_data,
             display_channel_handle_migrate_data_get_serial
             ))) {
-        spice_printerr("failed to create display channel");
+        spice_error("failed to create display channel");
         return;
     }
     display_channel = worker->display_channel;
@@ -10062,18 +10062,18 @@ static void handle_new_display_channel(RedWorker *worker, RedClient *client, Red
     int is_low_bandwidth = main_channel_client_is_low_bandwidth(red_client_get_main(client));
 
     if (!worker->display_channel) {
-        spice_printerr("Warning: Display channel was not created");
+        spice_warning("Display channel was not created");
         return;
     }
     display_channel = worker->display_channel;
-    spice_printerr("add display channel client");
+    spice_debug("add display channel client");
     dcc = display_channel_client_create(&display_channel->common, client, stream,
                                         common_caps, num_common_caps,
                                         caps, num_caps);
     if (!dcc) {
         return;
     }
-    spice_printerr("New display (client %p) dcc %p stream %p", client, dcc, stream);
+    spice_debug("New display (client %p) dcc %p stream %p", client, dcc, stream);
     stream_buf_size = 32*1024;
     dcc->send_data.stream_outbuf = spice_malloc(stream_buf_size);
     dcc->send_data.stream_outbuf_size = stream_buf_size;
@@ -10100,8 +10100,8 @@ static void handle_new_display_channel(RedWorker *worker, RedClient *client, Red
                                                  SPICE_WAN_COMPRESSION_ALWAYS);
     }
 
-    spice_printerr("jpeg %s", display_channel->enable_jpeg ? "enabled" : "disabled");
-    spice_printerr("zlib-over-glz %s", display_channel->enable_zlib_glz_wrap ? "enabled" : "disabled");
+    spice_debug("jpeg %s", display_channel->enable_jpeg ? "enabled" : "disabled");
+    spice_debug("zlib-over-glz %s", display_channel->enable_zlib_glz_wrap ? "enabled" : "disabled");
 
     // todo: tune level according to bandwidth
     display_channel->zlib_level = ZLIB_DEFAULT_COMPRESSION_LEVEL;
@@ -10220,7 +10220,7 @@ static void cursor_channel_create(RedWorker *worker, int migrate)
     if (worker->cursor_channel != NULL) {
         return;
     }
-    spice_printerr("create cursor channel");
+    spice_debug("create cursor channel");
     worker->cursor_channel = (CursorChannel *)__new_channel(
         worker, sizeof(*worker->cursor_channel),
         SPICE_CHANNEL_CURSOR, migrate,
@@ -10243,11 +10243,11 @@ static void red_connect_cursor(RedWorker *worker, RedClient *client, RedsStream 
     CursorChannelClient *ccc;
 
     if (worker->cursor_channel == NULL) {
-        spice_printerr("Warning: cursor channel was not created");
+        spice_warning("cursor channel was not created");
         return;
     }
     channel = worker->cursor_channel;
-    spice_printerr("add cursor channel client");
+    spice_debug("add cursor channel client");
     ccc = cursor_channel_create_rcc(&channel->common, client, stream,
                                     common_caps, num_common_caps,
                                     caps, num_caps);
@@ -10279,7 +10279,7 @@ static void red_wait_outgoing_item(RedChannelClient *rcc)
         return;
     }
     end_time = red_now() + DETACH_TIMEOUT;
-    spice_printerr("blocked");
+    spice_debug("blocked");
 
     do {
         usleep(DETACH_SLEEP_DURATION);
@@ -10288,7 +10288,7 @@ static void red_wait_outgoing_item(RedChannelClient *rcc)
     } while ((blocked = red_channel_client_blocked(rcc)) && red_now() < end_time);
 
     if (blocked) {
-        spice_printerr("timeout");
+        spice_warning("timeout");
         // TODO - shutting down the socket but we still need to trigger
         // disconnection. Right now we wait for main channel to error for that.
         red_channel_client_shutdown(rcc);
@@ -10316,7 +10316,7 @@ static void red_wait_outgoing_items(RedChannel *channel)
     }
 
     end_time = red_now() + DETACH_TIMEOUT;
-    spice_printerr("blocked");
+    spice_debug("blocked");
 
     do {
         usleep(DETACH_SLEEP_DURATION);
@@ -10325,7 +10325,7 @@ static void red_wait_outgoing_items(RedChannel *channel)
     } while ((blocked = red_channel_any_blocked(channel)) && red_now() < end_time);
 
     if (blocked) {
-        spice_printerr("timeout");
+        spice_warning("timeout");
         red_channel_apply_clients(channel, rcc_shutdown_if_blocked);
     } else {
         spice_assert(red_channel_no_item_being_sent(channel));
@@ -10339,7 +10339,7 @@ static void red_wait_pipe_item_sent(RedChannelClient *rcc, PipeItem *item)
     uint64_t end_time;
     int item_in_pipe;
 
-    spice_printerr("");
+    spice_debug(NULL);
     dpi = SPICE_CONTAINEROF(item, DrawablePipeItem, dpi_pipe_item);
     ref_drawable_pipe_item(dpi);
 
@@ -10359,7 +10359,7 @@ static void red_wait_pipe_item_sent(RedChannelClient *rcc, PipeItem *item)
     }
 
     if (item_in_pipe) {
-        spice_printerr("timeout");
+        spice_warning("timeout");
         red_channel_client_disconnect(rcc);
     } else {
         red_wait_outgoing_item(rcc);
@@ -10624,7 +10624,7 @@ static void dev_destroy_primary_surface(RedWorker *worker, uint32_t surface_id)
     spice_warn_if(surface_id != 0);
 
     if (!worker->surfaces[surface_id].context.canvas) {
-        spice_printerr("double destroy of primary surface");
+        spice_error("double destroy of primary surface");
         return;
     }
 
@@ -10693,7 +10693,7 @@ void handle_dev_stop(void *opaque, void *payload)
 {
     RedWorker *worker = opaque;
 
-    spice_printerr("stop");
+    spice_debug("stop");
     spice_assert(worker->running);
     worker->running = FALSE;
     red_display_clear_glz_drawables(worker->display_channel);
@@ -10817,7 +10817,7 @@ void handle_dev_display_connect(void *opaque, void *payload)
     RedClient *client = msg->client;
     int migration = msg->migration;
 
-    spice_printerr("connect");
+    spice_debug("connect");
     handle_new_display_channel(worker, client, stream, migration,
                                msg->common_caps, msg->num_common_caps,
                                msg->caps, msg->num_caps);
@@ -10830,7 +10830,7 @@ void handle_dev_display_disconnect(void *opaque, void *payload)
     RedWorkerMessageDisplayDisconnect *msg = payload;
     RedChannelClient *rcc = msg->rcc;
 
-    spice_printerr("disconnect display client");
+    spice_debug("disconnect display client");
     spice_assert(rcc);
     red_channel_client_disconnect(rcc);
 }
@@ -10841,7 +10841,7 @@ void handle_dev_display_migrate(void *opaque, void *payload)
     RedWorker *worker = opaque;
 
     RedChannelClient *rcc = msg->rcc;
-    spice_printerr("migrate display client");
+    spice_debug("migrate display client");
     spice_assert(rcc);
     red_migrate_display(worker, rcc);
 }
@@ -10866,7 +10866,7 @@ void handle_dev_cursor_connect(void *opaque, void *payload)
     RedClient *client = msg->client;
     int migration = msg->migration;
 
-    spice_printerr("cursor connect");
+    spice_debug("cursor connect");
     red_connect_cursor(worker, client, stream, migration,
                        msg->common_caps, msg->num_common_caps,
                        msg->caps, msg->num_caps);
@@ -10879,7 +10879,7 @@ void handle_dev_cursor_disconnect(void *opaque, void *payload)
     RedWorkerMessageCursorDisconnect *msg = payload;
     RedChannelClient *rcc = msg->rcc;
 
-    spice_printerr("disconnect cursor client");
+    spice_debug("disconnect cursor client");
     spice_assert(rcc);
     red_channel_client_disconnect(rcc);
 }
@@ -10890,7 +10890,7 @@ void handle_dev_cursor_migrate(void *opaque, void *payload)
     RedWorker *worker = opaque;
     RedChannelClient *rcc = msg->rcc;
 
-    spice_printerr("migrate cursor client");
+    spice_debug("migrate cursor client");
     spice_assert(rcc);
     red_migrate_cursor(worker, rcc);
 }
@@ -10903,25 +10903,25 @@ void handle_dev_set_compression(void *opaque, void *payload)
     worker->image_compression = msg->image_compression;
     switch (worker->image_compression) {
     case SPICE_IMAGE_COMPRESS_AUTO_LZ:
-        spice_printerr("ic auto_lz");
+        spice_debug("ic auto_lz");
         break;
     case SPICE_IMAGE_COMPRESS_AUTO_GLZ:
-        spice_printerr("ic auto_glz");
+        spice_debug("ic auto_glz");
         break;
     case SPICE_IMAGE_COMPRESS_QUIC:
-        spice_printerr("ic quic");
+        spice_debug("ic quic");
         break;
     case SPICE_IMAGE_COMPRESS_LZ:
-        spice_printerr("ic lz");
+        spice_debug("ic lz");
         break;
     case SPICE_IMAGE_COMPRESS_GLZ:
-        spice_printerr("ic glz");
+        spice_debug("ic glz");
         break;
     case SPICE_IMAGE_COMPRESS_OFF:
-        spice_printerr("ic off");
+        spice_debug("ic off");
         break;
     default:
-        spice_printerr("ic invalid");
+        spice_error("ic invalid");
     }
 #ifdef COMPRESS_STAT
     print_compress_stats(worker->display_channel);
@@ -10945,16 +10945,16 @@ void handle_dev_set_streaming_video(void *opaque, void *payload)
     spice_assert(worker->streaming_video != STREAM_VIDEO_INVALID);
     switch(worker->streaming_video) {
         case STREAM_VIDEO_ALL:
-            spice_printerr("sv all");
+            spice_debug("sv all");
             break;
         case STREAM_VIDEO_FILTER:
-            spice_printerr("sv filter");
+            spice_debug("sv filter");
             break;
         case STREAM_VIDEO_OFF:
-            spice_printerr("sv off");
+            spice_debug("sv off");
             break;
         default:
-            spice_printerr("sv invalid");
+            spice_error("sv invalid");
     }
 }
 
@@ -10964,7 +10964,7 @@ void handle_dev_set_mouse_mode(void *opaque, void *payload)
     RedWorker *worker = opaque;
 
     worker->mouse_mode = msg->mode;
-    spice_printerr("mouse mode %u", worker->mouse_mode);
+    spice_debug("mouse mode %u", worker->mouse_mode);
 }
 
 void handle_dev_add_memslot_async(void *opaque, void *payload)
@@ -10992,7 +10992,7 @@ void handle_dev_loadvm_commands(void *opaque, void *payload)
     uint32_t count = msg->count;
     QXLCommandExt *ext = msg->ext;
 
-    spice_printerr("loadvm_commands");
+    spice_debug("loadvm_commands");
     for (i = 0 ; i < count ; ++i) {
         switch (ext[i].cmd.type) {
         case QXL_CMD_CURSOR:
@@ -11000,8 +11000,8 @@ void handle_dev_loadvm_commands(void *opaque, void *payload)
             if (red_get_cursor_cmd(&worker->mem_slots, ext[i].group_id,
                                    cursor_cmd, ext[i].cmd.data)) {
                 /* XXX allow failure in loadvm? */
-                spice_printerr("failed loadvm command type (%d)",
-                               ext[i].cmd.type);
+                spice_error("failed loadvm command type (%d)",
+                            ext[i].cmd.type);
                 continue;
             }
             qxl_process_cursor(worker, cursor_cmd, ext[i].group_id);
@@ -11013,7 +11013,7 @@ void handle_dev_loadvm_commands(void *opaque, void *payload)
             red_process_surface(worker, surface_cmd, ext[i].group_id, TRUE);
             break;
         default:
-            spice_printerr("unhandled loadvm command type (%d)", ext[i].cmd.type);
+            spice_error("unhandled loadvm command type (%d)", ext[i].cmd.type);
             break;
         }
     }
@@ -11289,7 +11289,7 @@ SPICE_GNUC_NORETURN void *red_worker_main(void *arg)
 {
     RedWorker *worker = spice_malloc(sizeof(RedWorker));
 
-    spice_printerr("begin");
+    spice_debug("begin");
     spice_assert(MAX_PIPE_SIZE > WIDE_CLIENT_ACK_WINDOW &&
            MAX_PIPE_SIZE > NARROW_CLIENT_ACK_WINDOW); //ensure wakeup by ack message
 
