@@ -547,7 +547,7 @@ void reds_unregister_channel(RedChannel *channel)
         ring_remove(&channel->link);
         reds->num_of_channels--;
     } else {
-        spice_printerr("not found");
+        spice_error("not found");
     }
 }
 
@@ -634,7 +634,7 @@ void reds_client_disconnect(RedClient *client)
         return;
     }
 
-    spice_printerr("");
+    spice_info(NULL);
     /* disconnecting is set to prevent recursion because of the following:
      * main_channel_client_on_disconnect->
      *  reds_client_disconnect->red_client_destroy->main_channel...
@@ -683,7 +683,7 @@ static void reds_disconnect(void)
 {
     RingItem *link, *next;
 
-    spice_printerr("");
+    spice_info(NULL);
     RING_FOREACH_SAFE(link, next, &reds->clients) {
         reds_client_disconnect(SPICE_CONTAINEROF(link, RedClient, link));
     }
@@ -789,7 +789,7 @@ static int vdi_port_read_buf_process(int port, VDIReadBuf *buf)
     case VDP_SERVER_PORT:
         return FALSE;
     default:
-        spice_printerr("invalid port");
+        spice_error("invalid port");
         reds_agent_remove();
         return FALSE;
     }
@@ -1037,7 +1037,7 @@ void reds_fill_channels(SpiceMsgChannels *channels_info)
 
     channels_info->num_of_channels = used_channels;
     if (used_channels != reds->num_of_channels) {
-        spice_printerr("sent %d out of %d", used_channels, reds->num_of_channels);
+        spice_error("sent %d out of %d", used_channels, reds->num_of_channels);
     }
 }
 
@@ -1160,14 +1160,14 @@ void reds_on_main_mouse_mode_request(void *message, size_t size)
         if (reds->is_client_mouse_allowed) {
             reds_set_mouse_mode(SPICE_MOUSE_MODE_CLIENT);
         } else {
-            spice_printerr("client mouse is disabled");
+            spice_info("client mouse is disabled");
         }
         break;
     case SPICE_MOUSE_MODE_SERVER:
         reds_set_mouse_mode(SPICE_MOUSE_MODE_SERVER);
         break;
     default:
-        spice_printerr("unsupported mouse mode");
+        spice_error("unsupported mouse mode");
     }
 }
 
@@ -1249,12 +1249,12 @@ static int reds_send_link_ack(RedLinkInfo *link)
     ack.caps_offset = sizeof(SpiceLinkReply);
 
     if (!(link->tiTicketing.rsa = RSA_new())) {
-        spice_printerr("RSA nes failed");
+        spice_error("RSA nes failed");
         return FALSE;
     }
 
     if (!(bio = BIO_new(BIO_s_mem()))) {
-        spice_printerr("BIO new failed");
+        spice_error("BIO new failed");
         return FALSE;
     }
 
@@ -1297,9 +1297,9 @@ static int reds_send_link_error(RedLinkInfo *link, uint32_t error)
                                                                          sizeof(reply));
 }
 
-static void reds_show_new_channel(RedLinkInfo *link, int connection_id)
+static void reds_info_new_channel(RedLinkInfo *link, int connection_id)
 {
-    spice_printerr("channel %d:%d, connected successfully, over %s link",
+    spice_info("channel %d:%d, connected successfully, over %s link",
                link->link_mess->channel_type,
                link->link_mess->channel_id,
                link->stream->ssl == NULL ? "Non Secure" : "Secure");
@@ -1320,7 +1320,7 @@ static void reds_send_link_result(RedLinkInfo *link, uint32_t error)
 
 int reds_expects_link_id(uint32_t connection_id)
 {
-    spice_printerr("TODO: keep a list of connection_id's from migration, compare to them");
+    spice_info("TODO: keep a list of connection_id's from migration, compare to them");
     return 1;
 }
 
@@ -1329,7 +1329,7 @@ static void reds_mig_target_client_add(RedClient *client)
     RedsMigTargetClient *mig_client;
 
     spice_assert(reds);
-    spice_printerr("");
+    spice_info(NULL);
     mig_client = spice_malloc0(sizeof(RedsMigTargetClient));
     mig_client->client = client;
     ring_init(&mig_client->pending_links);
@@ -1405,7 +1405,7 @@ static void reds_handle_main_link(RedLinkInfo *link)
     MainChannelClient *mcc;
     int mig_target = FALSE;
 
-    spice_printerr("");
+    spice_info(NULL);
     spice_assert(reds->main_channel);
 
     link_mess = link->link_mess;
@@ -1429,7 +1429,7 @@ static void reds_handle_main_link(RedLinkInfo *link)
     reds->mig_wait_connect = FALSE;
     reds->mig_wait_disconnect = FALSE;
 
-    reds_show_new_channel(link, connection_id);
+    reds_info_new_channel(link, connection_id);
     stream = link->stream;
     reds_stream_remove_watch(stream);
     link->stream = NULL;
@@ -1444,7 +1444,7 @@ static void reds_handle_main_link(RedLinkInfo *link)
                             link_mess->num_common_caps,
                             link_mess->num_common_caps ? caps : NULL, link_mess->num_channel_caps,
                             link_mess->num_channel_caps ? caps + link_mess->num_common_caps : NULL);
-    spice_printerr("NEW Client %p mcc %p connect-id %d", client, mcc, connection_id);
+    spice_info("NEW Client %p mcc %p connect-id %d", client, mcc, connection_id);
     free(link_mess);
     red_client_set_main(client, mcc);
 
@@ -1534,11 +1534,11 @@ void reds_on_client_migrate_complete(RedClient *client)
     MainChannelClient *mcc;
     RingItem *item;
 
-    spice_printerr("%p", client);
+    spice_info("%p", client);
     mcc = red_client_get_main(client);
     mig_client = reds_mig_target_client_find(client);
     if (!mig_client) {
-        spice_printerr("Error: mig target client was not found");
+        spice_error("mig target client was not found");
         return;
     }
 
@@ -1556,10 +1556,10 @@ void reds_on_client_migrate_complete(RedClient *client)
         channel = reds_find_channel(mig_link->link_msg->channel_type,
                                     mig_link->link_msg->channel_id);
         if (!channel) {
-            spice_printerr("warning: client %p channel (%d, %d) (type, id) wasn't found",
-                       client,
-                       mig_link->link_msg->channel_type,
-                       mig_link->link_msg->channel_id);
+            spice_error("client %p channel (%d, %d) (type, id) wasn't found",
+                        client,
+                        mig_link->link_msg->channel_type,
+                        mig_link->link_msg->channel_id);
             continue;
         }
         reds_channel_do_link(channel, client, mig_link->link_msg, mig_link->stream);
@@ -1599,7 +1599,7 @@ static void reds_handle_other_links(RedLinkInfo *link)
     }
 
     reds_send_link_result(link, SPICE_LINK_ERR_OK);
-    reds_show_new_channel(link, link_mess->connection_id);
+    reds_info_new_channel(link, link_mess->connection_id);
     reds_stream_remove_watch(link->stream);
 
     mig_client = reds_mig_target_client_find(client);
@@ -1642,17 +1642,17 @@ static void reds_handle_ticket(void *opaque)
 
         if (strlen(taTicket.password) == 0) {
             reds_send_link_result(link, SPICE_LINK_ERR_PERMISSION_DENIED);
-            spice_printerr("Ticketing is enabled, but no password is set. "
-                       "please set a ticket first");
+            spice_error("Ticketing is enabled, but no password is set. "
+                        "please set a ticket first");
             reds_link_free(link);
             return;
         }
 
         if (expired || strncmp(password, taTicket.password, SPICE_MAX_PASSWORD_LENGTH) != 0) {
             if (expired) {
-                spice_printerr("Ticket has expired");
+                spice_error("Ticket has expired");
             } else {
-                spice_printerr("Invalid password");
+                spice_error("Invalid password");
             }
             reds_send_link_result(link, SPICE_LINK_ERR_PERMISSION_DENIED);
             reds_link_free(link);
@@ -1693,7 +1693,7 @@ static ssize_t reds_stream_sasl_write(RedsStream *s, const void *buf, size_t nby
                           (const char **)&s->sasl.encoded,
                           &s->sasl.encodedLength);
         if (err != SASL_OK) {
-            spice_printerr("sasl_encode error: %d", err);
+            spice_error("sasl_encode error: %d", err);
             return -1;
         }
 
@@ -1702,7 +1702,7 @@ static ssize_t reds_stream_sasl_write(RedsStream *s, const void *buf, size_t nby
         }
 
         if (!s->sasl.encoded) {
-            spice_printerr("sasl_encode didn't return a buffer!");
+            spice_error("sasl_encode didn't return a buffer!");
             return 0;
         }
 
@@ -1754,7 +1754,7 @@ static ssize_t reds_stream_sasl_read(RedsStream *s, uint8_t *buf, size_t nbyte)
                       (char *)encoded, n,
                       &decoded, &decodedlen);
     if (err != SASL_OK) {
-        spice_printerr("sasl_decode error: %d", err);
+        spice_error("sasl_decode error: %d", err);
         return -1;
     }
 
@@ -1836,8 +1836,8 @@ static char *addr_to_string(const char *format,
                            host, sizeof(host),
                            serv, sizeof(serv),
                            NI_NUMERICHOST | NI_NUMERICSERV)) != 0) {
-        spice_printerr("Cannot resolve address %d: %s",
-                   err, gai_strerror(err));
+        spice_error("Cannot resolve address %d: %s",
+                    err, gai_strerror(err));
         return NULL;
     }
 
@@ -1867,7 +1867,7 @@ static int auth_sasl_check_ssf(RedsSASL *sasl, int *runSSF)
     }
 
     ssf = *(const int *)val;
-    spice_printerr("negotiated an SSF of %d", ssf);
+    spice_info("negotiated an SSF of %d", ssf);
     if (ssf < 56) {
         return 0; /* 56 is good for Kerberos */
     }
@@ -1914,7 +1914,7 @@ static void reds_handle_auth_sasl_step(void *opaque)
         datalen--; /* Don't count NULL byte when passing to _start() */
     }
 
-    spice_printerr("Step using SASL Data %p (%d bytes)",
+    spice_info("Step using SASL Data %p (%d bytes)",
                clientdata, datalen);
     err = sasl_server_step(sasl->conn,
                            clientdata,
@@ -1923,18 +1923,18 @@ static void reds_handle_auth_sasl_step(void *opaque)
                            &serveroutlen);
     if (err != SASL_OK &&
         err != SASL_CONTINUE) {
-        spice_printerr("sasl step failed %d (%s)",
-                   err, sasl_errdetail(sasl->conn));
+        spice_error("sasl step failed %d (%s)",
+                    err, sasl_errdetail(sasl->conn));
         goto authabort;
     }
 
     if (serveroutlen > SASL_DATA_MAX_LEN) {
-        spice_printerr("sasl step reply data too long %d",
-                   serveroutlen);
+        spice_error("sasl step reply data too long %d",
+                    serveroutlen);
         goto authabort;
     }
 
-    spice_printerr("SASL return data %d bytes, %p", serveroutlen, serverout);
+    spice_info("SASL return data %d bytes, %p", serveroutlen, serverout);
 
     if (serveroutlen) {
         serveroutlen += 1;
@@ -1948,7 +1948,7 @@ static void reds_handle_auth_sasl_step(void *opaque)
     sync_write_u8(link->stream, err == SASL_CONTINUE ? 0 : 1);
 
     if (err == SASL_CONTINUE) {
-        spice_printerr("%s", "Authentication must continue (step)");
+        spice_info("%s", "Authentication must continue (step)");
         /* Wait for step length */
         obj->now = (uint8_t *)&sasl->len;
         obj->end = obj->now + sizeof(uint32_t);
@@ -1958,11 +1958,11 @@ static void reds_handle_auth_sasl_step(void *opaque)
         int ssf;
 
         if (auth_sasl_check_ssf(sasl, &ssf) == 0) {
-            spice_printerr("Authentication rejected for weak SSF");
+            spice_error("Authentication rejected for weak SSF");
             goto authreject;
         }
 
-        spice_printerr("Authentication successful");
+        spice_info("Authentication successful");
         sync_write_u32(link->stream, SPICE_LINK_ERR_OK); /* Accept auth */
 
         /*
@@ -1992,9 +1992,9 @@ static void reds_handle_auth_sasl_steplen(void *opaque)
     AsyncRead *obj = &link->asyc_read;
     RedsSASL *sasl = &link->stream->sasl;
 
-    spice_printerr("Got steplen %d", sasl->len);
+    spice_info("Got steplen %d", sasl->len);
     if (sasl->len > SASL_DATA_MAX_LEN) {
-        spice_printerr("Too much SASL data %d", sasl->len);
+        spice_error("Too much SASL data %d", sasl->len);
         reds_link_free(link);
         return;
     }
@@ -2044,8 +2044,8 @@ static void reds_handle_auth_sasl_start(void *opaque)
         datalen--; /* Don't count NULL byte when passing to _start() */
     }
 
-    spice_printerr("Start SASL auth with mechanism %s. Data %p (%d bytes)",
-              sasl->mechlist, clientdata, datalen);
+    spice_info("Start SASL auth with mechanism %s. Data %p (%d bytes)",
+               sasl->mechlist, clientdata, datalen);
     err = sasl_server_start(sasl->conn,
                             sasl->mechlist,
                             clientdata,
@@ -2054,18 +2054,18 @@ static void reds_handle_auth_sasl_start(void *opaque)
                             &serveroutlen);
     if (err != SASL_OK &&
         err != SASL_CONTINUE) {
-        spice_printerr("sasl start failed %d (%s)",
-                   err, sasl_errdetail(sasl->conn));
+        spice_error("sasl start failed %d (%s)",
+                    err, sasl_errdetail(sasl->conn));
         goto authabort;
     }
 
     if (serveroutlen > SASL_DATA_MAX_LEN) {
-        spice_printerr("sasl start reply data too long %d",
-                   serveroutlen);
+        spice_error("sasl start reply data too long %d",
+                    serveroutlen);
         goto authabort;
     }
 
-    spice_printerr("SASL return data %d bytes, %p", serveroutlen, serverout);
+    spice_info("SASL return data %d bytes, %p", serveroutlen, serverout);
 
     if (serveroutlen) {
         serveroutlen += 1;
@@ -2079,7 +2079,7 @@ static void reds_handle_auth_sasl_start(void *opaque)
     sync_write_u8(link->stream, err == SASL_CONTINUE ? 0 : 1);
 
     if (err == SASL_CONTINUE) {
-        spice_printerr("%s", "Authentication must continue (start)");
+        spice_info("%s", "Authentication must continue (start)");
         /* Wait for step length */
         obj->now = (uint8_t *)&sasl->len;
         obj->end = obj->now + sizeof(uint32_t);
@@ -2089,11 +2089,11 @@ static void reds_handle_auth_sasl_start(void *opaque)
         int ssf;
 
         if (auth_sasl_check_ssf(sasl, &ssf) == 0) {
-            spice_printerr("Authentication rejected for weak SSF");
+            spice_error("Authentication rejected for weak SSF");
             goto authreject;
         }
 
-        spice_printerr("Authentication successful");
+        spice_info("Authentication successful");
         sync_write_u32(link->stream, SPICE_LINK_ERR_OK); /* Accept auth */
 
         /*
@@ -2123,9 +2123,9 @@ static void reds_handle_auth_startlen(void *opaque)
     AsyncRead *obj = &link->asyc_read;
     RedsSASL *sasl = &link->stream->sasl;
 
-    spice_printerr("Got client start len %d", sasl->len);
+    spice_info("Got client start len %d", sasl->len);
     if (sasl->len > SASL_DATA_MAX_LEN) {
-        spice_printerr("Too much SASL data %d", sasl->len);
+        spice_error("Too much SASL data %d", sasl->len);
         reds_send_link_error(link, SPICE_LINK_ERR_INVALID_DATA);
         reds_link_free(link);
         return;
@@ -2150,24 +2150,24 @@ static void reds_handle_auth_mechname(void *opaque)
     RedsSASL *sasl = &link->stream->sasl;
 
     sasl->mechname[sasl->len] = '\0';
-    spice_printerr("Got client mechname '%s' check against '%s'",
+    spice_info("Got client mechname '%s' check against '%s'",
                sasl->mechname, sasl->mechlist);
 
     if (strncmp(sasl->mechlist, sasl->mechname, sasl->len) == 0) {
         if (sasl->mechlist[sasl->len] != '\0' &&
             sasl->mechlist[sasl->len] != ',') {
-            spice_printerr("One %d", sasl->mechlist[sasl->len]);
+            spice_info("One %d", sasl->mechlist[sasl->len]);
             reds_link_free(link);
             return;
         }
     } else {
         char *offset = strstr(sasl->mechlist, sasl->mechname);
-        spice_printerr("Two %p", offset);
+        spice_info("Two %p", offset);
         if (!offset) {
             reds_send_link_error(link, SPICE_LINK_ERR_INVALID_DATA);
             return;
         }
-        spice_printerr("Two '%s'", offset);
+        spice_info("Two '%s'", offset);
         if (offset[-1] != ',' ||
             (offset[sasl->len] != '\0'&&
              offset[sasl->len] != ',')) {
@@ -2179,7 +2179,7 @@ static void reds_handle_auth_mechname(void *opaque)
     free(sasl->mechlist);
     sasl->mechlist = spice_strdup(sasl->mechname);
 
-    spice_printerr("Validated mechname '%s'", sasl->mechname);
+    spice_info("Validated mechname '%s'", sasl->mechname);
 
     obj->now = (uint8_t *)&sasl->len;
     obj->end = obj->now + sizeof(uint32_t);
@@ -2196,14 +2196,14 @@ static void reds_handle_auth_mechlen(void *opaque)
     RedsSASL *sasl = &link->stream->sasl;
 
     if (sasl->len < 1 || sasl->len > 100) {
-        spice_printerr("Got bad client mechname len %d", sasl->len);
+        spice_error("Got bad client mechname len %d", sasl->len);
         reds_link_free(link);
         return;
     }
 
     sasl->mechname = spice_malloc(sasl->len + 1);
 
-    spice_printerr("Wait for client mechname");
+    spice_info("Wait for client mechname");
     obj->now = (uint8_t *)sasl->mechname;
     obj->end = obj->now + sasl->len;
     obj->done = reds_handle_auth_mechname;
@@ -2245,8 +2245,8 @@ static void reds_start_auth_sasl(RedLinkInfo *link)
     localAddr = remoteAddr = NULL;
 
     if (err != SASL_OK) {
-        spice_printerr("sasl context setup failed %d (%s)",
-                   err, sasl_errstring(err, NULL, NULL));
+        spice_error("sasl context setup failed %d (%s)",
+                    err, sasl_errstring(err, NULL, NULL));
         sasl->conn = NULL;
         goto error;
     }
@@ -2258,8 +2258,8 @@ static void reds_start_auth_sasl(RedLinkInfo *link)
         ssf = SSL_get_cipher_bits(link->stream->ssl, NULL);
         err = sasl_setprop(sasl->conn, SASL_SSF_EXTERNAL, &ssf);
         if (err != SASL_OK) {
-            spice_printerr("cannot set SASL external SSF %d (%s)",
-                       err, sasl_errstring(err, NULL, NULL));
+            spice_error("cannot set SASL external SSF %d (%s)",
+                        err, sasl_errstring(err, NULL, NULL));
             goto error_dispose;
         }
     } else {
@@ -2286,8 +2286,8 @@ static void reds_start_auth_sasl(RedLinkInfo *link)
 
     err = sasl_setprop(sasl->conn, SASL_SEC_PROPS, &secprops);
     if (err != SASL_OK) {
-        spice_printerr("cannot set SASL security props %d (%s)",
-                   err, sasl_errstring(err, NULL, NULL));
+        spice_error("cannot set SASL security props %d (%s)",
+                    err, sasl_errstring(err, NULL, NULL));
         goto error_dispose;
     }
 
@@ -2300,23 +2300,23 @@ static void reds_start_auth_sasl(RedLinkInfo *link)
                         NULL,
                         NULL);
     if (err != SASL_OK || mechlist == NULL) {
-        spice_printerr("cannot list SASL mechanisms %d (%s)",
-                   err, sasl_errdetail(sasl->conn));
+        spice_error("cannot list SASL mechanisms %d (%s)",
+                    err, sasl_errdetail(sasl->conn));
         goto error_dispose;
     }
 
-    spice_printerr("Available mechanisms for client: '%s'", mechlist);
+    spice_info("Available mechanisms for client: '%s'", mechlist);
 
     sasl->mechlist = spice_strdup(mechlist);
 
     mechlistlen = strlen(mechlist);
     if (!sync_write(link->stream, &mechlistlen, sizeof(uint32_t))
         || !sync_write(link->stream, sasl->mechlist, mechlistlen)) {
-        spice_printerr("SASL mechanisms write error");
+        spice_error("SASL mechanisms write error");
         goto error;
     }
 
-    spice_printerr("Wait for client mechname length");
+    spice_info("Wait for client mechname length");
     obj->now = (uint8_t *)&sasl->len;
     obj->end = obj->now + sizeof(uint32_t);
     obj->done = reds_handle_auth_mechlen;
@@ -2337,7 +2337,7 @@ static void reds_handle_auth_mechanism(void *opaque)
 {
     RedLinkInfo *link = (RedLinkInfo *)opaque;
 
-    spice_printerr("Auth method: %d", link->auth_mechanism.auth_mechanism);
+    spice_info("Auth method: %d", link->auth_mechanism.auth_mechanism);
 
     if (link->auth_mechanism.auth_mechanism == SPICE_COMMON_CAP_AUTH_SPICE
         && !sasl_enabled
@@ -2345,13 +2345,13 @@ static void reds_handle_auth_mechanism(void *opaque)
         reds_get_spice_ticket(link);
 #if HAVE_SASL
     } else if (link->auth_mechanism.auth_mechanism == SPICE_COMMON_CAP_AUTH_SASL) {
-        spice_printerr("Starting SASL");
+        spice_info("Starting SASL");
         reds_start_auth_sasl(link);
 #endif
     } else {
-        spice_printerr("Unknown auth method, disconnecting");
+        spice_error("Unknown auth method, disconnecting");
         if (sasl_enabled) {
-            spice_printerr("Your client doesn't handle SASL?");
+            spice_error("Your client doesn't handle SASL?");
         }
         reds_send_link_error(link, SPICE_LINK_ERR_INVALID_DATA);
         reds_link_free(link);
@@ -2388,10 +2388,10 @@ static void reds_handle_read_link_done(void *opaque)
 
     if (!reds_security_check(link)) {
         if (link->stream->ssl) {
-            spice_printerr("spice channels %d should not be encrypted", link_mess->channel_type);
+            spice_error("spice channels %d should not be encrypted", link_mess->channel_type);
             reds_send_link_error(link, SPICE_LINK_ERR_NEED_UNSECURED);
         } else {
-            spice_printerr("spice channels %d should be encrypted", link_mess->channel_type);
+            spice_error("spice channels %d should be encrypted", link_mess->channel_type);
             reds_send_link_error(link, SPICE_LINK_ERR_NEED_SECURED);
         }
         reds_link_free(link);
@@ -2405,11 +2405,11 @@ static void reds_handle_read_link_done(void *opaque)
 
     if (!auth_selection) {
         if (sasl_enabled && !link->skip_auth) {
-            spice_printerr("SASL enabled, but peer supports only spice authentication");
+            spice_error("SASL enabled, but peer supports only spice authentication");
             reds_send_link_error(link, SPICE_LINK_ERR_VERSION_MISMATCH);
             return;
         }
-        spice_printerr("Peer doesn't support AUTH selection");
+        spice_error("Peer doesn't support AUTH selection");
         reds_get_spice_ticket(link);
     } else {
         obj->now = (uint8_t *)&link->auth_mechanism;
@@ -2427,7 +2427,7 @@ static void reds_handle_link_error(void *opaque, int err)
     case EPIPE:
         break;
     default:
-        spice_printerr("%s", strerror(errno));
+        spice_error("%s", strerror(errno));
         break;
     }
     reds_link_free(link);
@@ -2450,7 +2450,7 @@ static void reds_handle_read_header_done(void *opaque)
             reds_send_link_error(link, SPICE_LINK_ERR_VERSION_MISMATCH);
         }
 
-        spice_printerr("version mismatch");
+        spice_error("version mismatch");
         reds_link_free(link);
         return;
     }
@@ -2459,7 +2459,7 @@ static void reds_handle_read_header_done(void *opaque)
 
     if (header->size < sizeof(SpiceLinkMess)) {
         reds_send_link_error(link, SPICE_LINK_ERR_INVALID_DATA);
-        spice_printerr("bad size %u", header->size);
+        spice_error("bad size %u", header->size);
         reds_link_free(link);
         return;
     }
@@ -2492,7 +2492,7 @@ static void reds_handle_ssl_accept(int fd, int event, void *data)
     if ((return_code = SSL_accept(link->stream->ssl)) != 1) {
         int ssl_error = SSL_get_error(link->stream->ssl, return_code);
         if (ssl_error != SSL_ERROR_WANT_READ && ssl_error != SSL_ERROR_WANT_WRITE) {
-            spice_printerr("SSL_accept failed, error=%d", ssl_error);
+            spice_error("SSL_accept failed, error=%d", ssl_error);
             reds_link_free(link);
         } else {
             if (ssl_error == SSL_ERROR_WANT_READ) {
@@ -2515,18 +2515,18 @@ static RedLinkInfo *reds_init_client_connection(int socket)
     int flags;
 
     if ((flags = fcntl(socket, F_GETFL)) == -1) {
-        spice_printerr("accept failed, %s", strerror(errno));
+        spice_error("accept failed, %s", strerror(errno));
         goto error;
     }
 
     if (fcntl(socket, F_SETFL, flags | O_NONBLOCK) == -1) {
-        spice_printerr("accept failed, %s", strerror(errno));
+        spice_error("accept failed, %s", strerror(errno));
         goto error;
     }
 
     if (setsockopt(socket, IPPROTO_TCP, TCP_NODELAY, &delay_val, sizeof(delay_val)) == -1) {
         if (errno != ENOTSUP) {
-            spice_printerr("setsockopt failed, %s", strerror(errno));
+            spice_error("setsockopt failed, %s", strerror(errno));
         }
     }
 
@@ -2576,13 +2576,13 @@ static RedLinkInfo *reds_init_client_ssl_connection(int socket)
 
     // Handle SSL handshaking
     if (!(sbio = BIO_new_socket(link->stream->socket, BIO_NOCLOSE))) {
-        spice_printerr("could not allocate ssl bio socket");
+        spice_error("could not allocate ssl bio socket");
         goto error;
     }
 
     link->stream->ssl = SSL_new(reds->ctx);
     if (!link->stream->ssl) {
-        spice_printerr("could not allocate ssl context");
+        spice_error("could not allocate ssl context");
         BIO_free(sbio);
         goto error;
     }
@@ -2610,7 +2610,7 @@ static RedLinkInfo *reds_init_client_ssl_connection(int socket)
     }
 
     ERR_print_errors_fp(stderr);
-    spice_printerr("SSL_accept failed, error=%d", ssl_error);
+    spice_error("SSL_accept failed, error=%d", ssl_error);
     SSL_free(link->stream->ssl);
 
 error:
@@ -2626,7 +2626,7 @@ static void reds_accept_ssl_connection(int fd, int event, void *data)
     int socket;
 
     if ((socket = accept(reds->secure_listen_socket, NULL, 0)) == -1) {
-        spice_printerr("accept failed, %s", strerror(errno));
+        spice_error("accept failed, %s", strerror(errno));
         return;
     }
 
@@ -2642,7 +2642,7 @@ static void reds_accept(int fd, int event, void *data)
     int socket;
 
     if ((socket = accept(reds->listen_socket, NULL, 0)) == -1) {
-        spice_printerr("accept failed, %s", strerror(errno));
+        spice_error("accept failed, %s", strerror(errno));
         return;
     }
 
@@ -2658,7 +2658,7 @@ SPICE_GNUC_VISIBLE int spice_server_add_client(SpiceServer *s, int socket, int s
 
     spice_assert(reds == s);
     if (!(link = reds_init_client_connection(socket))) {
-        spice_printerr("accept failed");
+        spice_error("accept failed");
         return -1;
     }
 
@@ -2731,8 +2731,8 @@ static int reds_init_socket(const char *addr, int portnr, int family)
         }
         close(slisten);
     }
-    spice_printerr("%s: binding socket to %s:%d failed", __FUNCTION__,
-               addr, portnr);
+    spice_error("%s: binding socket to %s:%d failed", __FUNCTION__,
+                addr, portnr);
     freeaddrinfo(res);
     return -1;
 
@@ -2884,7 +2884,7 @@ static void reds_init_ssl(void)
     /* Load our keys and certificates*/
     return_code = SSL_CTX_use_certificate_chain_file(reds->ctx, ssl_parameters.certs_file);
     if (return_code == 1) {
-        spice_printerr("Loaded certificates from %s", ssl_parameters.certs_file);
+        spice_info("Loaded certificates from %s", ssl_parameters.certs_file);
     } else {
         spice_error("Could not load certificates from %s", ssl_parameters.certs_file);
     }
@@ -2894,7 +2894,7 @@ static void reds_init_ssl(void)
     return_code = SSL_CTX_use_PrivateKey_file(reds->ctx, ssl_parameters.private_key_file,
                                               SSL_FILETYPE_PEM);
     if (return_code == 1) {
-        spice_printerr("Using private key from %s", ssl_parameters.private_key_file);
+        spice_info("Using private key from %s", ssl_parameters.private_key_file);
     } else {
         spice_error("Could not use private key file");
     }
@@ -2902,7 +2902,7 @@ static void reds_init_ssl(void)
     /* Load the CAs we trust*/
     return_code = SSL_CTX_load_verify_locations(reds->ctx, ssl_parameters.ca_certificate_file, 0);
     if (return_code == 1) {
-        spice_printerr("Loaded CA certificates from %s", ssl_parameters.ca_certificate_file);
+        spice_info("Loaded CA certificates from %s", ssl_parameters.ca_certificate_file);
     } else {
         spice_error("Could not use CA file %s", ssl_parameters.ca_certificate_file);
     }
@@ -2975,7 +2975,7 @@ enum {
 static inline void on_activating_ticketing(void)
 {
     if (!ticketing_enabled && reds_main_channel_connected()) {
-        spice_printerr("disconnecting");
+        spice_error("disconnecting");
         reds_disconnect();
     }
 }
@@ -3027,7 +3027,7 @@ static void reds_mig_release(void)
 
 static void reds_mig_started(void)
 {
-    spice_printerr("");
+    spice_info(NULL);
     spice_assert(reds->mig_spice);
 
     reds->mig_inprogress = TRUE;
@@ -3037,10 +3037,10 @@ static void reds_mig_started(void)
 
 static void reds_mig_finished(int completed)
 {
-    spice_printerr("");
+    spice_info(NULL);
 
     if (!reds_main_channel_connected()) {
-        spice_printerr("no peer connected");
+        spice_error("no peer connected");
         return;
     }
     reds->mig_inprogress = TRUE;
@@ -3057,7 +3057,7 @@ static void reds_mig_finished(int completed)
 static void reds_mig_switch(void)
 {
     if (!reds->mig_spice) {
-        spice_printerr("warning: reds_mig_switch called without migrate_info set");
+        spice_error("reds_mig_switch called without migrate_info set");
         return;
     }
     main_channel_migrate_switch(reds->main_channel, reds->mig_spice);
@@ -3066,7 +3066,7 @@ static void reds_mig_switch(void)
 
 static void migrate_timeout(void *opaque)
 {
-    spice_printerr("");
+    spice_info(NULL);
     spice_assert(reds->mig_wait_connect || reds->mig_wait_disconnect);
     if (reds->mig_wait_connect) {
         /* we will fall back to the switch host scheme when migration completes */
@@ -3190,10 +3190,10 @@ static int spice_server_char_device_add_interface(SpiceServer *s,
             SPICE_CONTAINEROF(sin, SpiceCharDeviceInstance, base);
     SpiceCharDeviceState *dev_state = NULL;
 
-    spice_printerr("CHAR_DEVICE %s", char_device->subtype);
+    spice_info("CHAR_DEVICE %s", char_device->subtype);
     if (strcmp(char_device->subtype, SUBTYPE_VDAGENT) == 0) {
         if (vdagent) {
-            spice_printerr("vdagent already attached");
+            spice_error("vdagent already attached");
             return -1;
         }
         dev_state = attach_to_red_agent(char_device);
@@ -3224,7 +3224,7 @@ static void spice_server_char_device_remove_interface(SpiceBaseInstance *sin)
     SpiceCharDeviceInstance* char_device =
             SPICE_CONTAINEROF(sin, SpiceCharDeviceInstance, base);
 
-    spice_printerr("remove CHAR_DEVICE %s", char_device->subtype);
+    spice_info("remove CHAR_DEVICE %s", char_device->subtype);
     if (strcmp(char_device->subtype, SUBTYPE_VDAGENT) == 0) {
         if (vdagent) {
             reds_agent_remove();
@@ -3249,20 +3249,20 @@ SPICE_GNUC_VISIBLE int spice_server_add_interface(SpiceServer *s,
     spice_assert(reds == s);
 
     if (strcmp(interface->type, SPICE_INTERFACE_KEYBOARD) == 0) {
-        spice_printerr("SPICE_INTERFACE_KEYBOARD");
+        spice_info("SPICE_INTERFACE_KEYBOARD");
         if (interface->major_version != SPICE_INTERFACE_KEYBOARD_MAJOR ||
             interface->minor_version > SPICE_INTERFACE_KEYBOARD_MINOR) {
-            spice_printerr("unsupported keyboard interface");
+            spice_error("unsupported keyboard interface");
             return -1;
         }
         if (inputs_set_keyboard(SPICE_CONTAINEROF(sin, SpiceKbdInstance, base)) != 0) {
             return -1;
         }
     } else if (strcmp(interface->type, SPICE_INTERFACE_MOUSE) == 0) {
-        spice_printerr("SPICE_INTERFACE_MOUSE");
+        spice_info("SPICE_INTERFACE_MOUSE");
         if (interface->major_version != SPICE_INTERFACE_MOUSE_MAJOR ||
             interface->minor_version > SPICE_INTERFACE_MOUSE_MINOR) {
-            spice_printerr("unsupported mouse interface");
+            spice_error("unsupported mouse interface");
             return -1;
         }
         if (inputs_set_mouse(SPICE_CONTAINEROF(sin, SpiceMouseInstance, base)) != 0) {
@@ -3271,10 +3271,10 @@ SPICE_GNUC_VISIBLE int spice_server_add_interface(SpiceServer *s,
     } else if (strcmp(interface->type, SPICE_INTERFACE_QXL) == 0) {
         QXLInstance *qxl;
 
-        spice_printerr("SPICE_INTERFACE_QXL");
+        spice_info("SPICE_INTERFACE_QXL");
         if (interface->major_version != SPICE_INTERFACE_QXL_MAJOR ||
             interface->minor_version > SPICE_INTERFACE_QXL_MINOR) {
-            spice_printerr("unsupported qxl interface");
+            spice_error("unsupported qxl interface");
             return -1;
         }
 
@@ -3284,10 +3284,10 @@ SPICE_GNUC_VISIBLE int spice_server_add_interface(SpiceServer *s,
         qxl->st->dispatcher = red_dispatcher_init(qxl);
 
     } else if (strcmp(interface->type, SPICE_INTERFACE_TABLET) == 0) {
-        spice_printerr("SPICE_INTERFACE_TABLET");
+        spice_info("SPICE_INTERFACE_TABLET");
         if (interface->major_version != SPICE_INTERFACE_TABLET_MAJOR ||
             interface->minor_version > SPICE_INTERFACE_TABLET_MINOR) {
-            spice_printerr("unsupported tablet interface");
+            spice_error("unsupported tablet interface");
             return -1;
         }
         if (inputs_set_tablet(SPICE_CONTAINEROF(sin, SpiceTabletInstance, base)) != 0) {
@@ -3299,19 +3299,19 @@ SPICE_GNUC_VISIBLE int spice_server_add_interface(SpiceServer *s,
         }
 
     } else if (strcmp(interface->type, SPICE_INTERFACE_PLAYBACK) == 0) {
-        spice_printerr("SPICE_INTERFACE_PLAYBACK");
+        spice_info("SPICE_INTERFACE_PLAYBACK");
         if (interface->major_version != SPICE_INTERFACE_PLAYBACK_MAJOR ||
             interface->minor_version > SPICE_INTERFACE_PLAYBACK_MINOR) {
-            spice_printerr("unsupported playback interface");
+            spice_error("unsupported playback interface");
             return -1;
         }
         snd_attach_playback(SPICE_CONTAINEROF(sin, SpicePlaybackInstance, base));
 
     } else if (strcmp(interface->type, SPICE_INTERFACE_RECORD) == 0) {
-        spice_printerr("SPICE_INTERFACE_RECORD");
+        spice_info("SPICE_INTERFACE_RECORD");
         if (interface->major_version != SPICE_INTERFACE_RECORD_MAJOR ||
             interface->minor_version > SPICE_INTERFACE_RECORD_MINOR) {
-            spice_printerr("unsupported record interface");
+            spice_error("unsupported record interface");
             return -1;
         }
         snd_attach_record(SPICE_CONTAINEROF(sin, SpiceRecordInstance, base));
@@ -3319,7 +3319,7 @@ SPICE_GNUC_VISIBLE int spice_server_add_interface(SpiceServer *s,
     } else if (strcmp(interface->type, SPICE_INTERFACE_CHAR_DEVICE) == 0) {
         if (interface->major_version != SPICE_INTERFACE_CHAR_DEVICE_MAJOR ||
             interface->minor_version > SPICE_INTERFACE_CHAR_DEVICE_MINOR) {
-            spice_printerr("unsupported char device interface");
+            spice_error("unsupported char device interface");
             return -1;
         }
         spice_server_char_device_add_interface(s, sin);
@@ -3327,33 +3327,33 @@ SPICE_GNUC_VISIBLE int spice_server_add_interface(SpiceServer *s,
     } else if (strcmp(interface->type, SPICE_INTERFACE_NET_WIRE) == 0) {
 #ifdef USE_TUNNEL
         SpiceNetWireInstance *net;
-        spice_printerr("SPICE_INTERFACE_NET_WIRE");
+        spice_info("SPICE_INTERFACE_NET_WIRE");
         if (red_tunnel) {
-            spice_printerr("net wire already attached");
+            spice_error("net wire already attached");
             return -1;
         }
         if (interface->major_version != SPICE_INTERFACE_NET_WIRE_MAJOR ||
             interface->minor_version > SPICE_INTERFACE_NET_WIRE_MINOR) {
-            spice_printerr("unsupported net wire interface");
+            spice_error("unsupported net wire interface");
             return -1;
         }
         net = SPICE_CONTAINEROF(sin, SpiceNetWireInstance, base);
         net->st = spice_new0(SpiceNetWireState, 1);
         red_tunnel = red_tunnel_attach(core, net);
 #else
-        spice_printerr("unsupported net wire interface");
+        spice_error("unsupported net wire interface");
         return -1;
 #endif
     } else if (strcmp(interface->type, SPICE_INTERFACE_MIGRATION) == 0) {
-        spice_printerr("SPICE_INTERFACE_MIGRATION");
+        spice_info("SPICE_INTERFACE_MIGRATION");
         if (migration_interface) {
-            spice_printerr("already have migration");
+            spice_error("already have migration");
             return -1;
         }
 
         if (interface->major_version != SPICE_INTERFACE_MIGRATION_MAJOR ||
             interface->minor_version > SPICE_INTERFACE_MIGRATION_MINOR) {
-            spice_printerr("unsupported migration interface");
+            spice_error("unsupported migration interface");
             return -1;
         }
         migration_interface = SPICE_CONTAINEROF(sin, SpiceMigrateInstance, base);
@@ -3368,17 +3368,15 @@ SPICE_GNUC_VISIBLE int spice_server_remove_interface(SpiceBaseInstance *sin)
     const SpiceBaseInterface *interface = sin->sif;
 
     if (strcmp(interface->type, SPICE_INTERFACE_TABLET) == 0) {
-        spice_printerr("remove SPICE_INTERFACE_TABLET");
+        spice_info("remove SPICE_INTERFACE_TABLET");
         inputs_detach_tablet(SPICE_CONTAINEROF(sin, SpiceTabletInstance, base));
         reds_update_mouse_mode();
     } else if (strcmp(interface->type, SPICE_INTERFACE_PLAYBACK) == 0) {
-        spice_printerr("remove SPICE_INTERFACE_PLAYBACK");
+        spice_info("remove SPICE_INTERFACE_PLAYBACK");
         snd_detach_playback(SPICE_CONTAINEROF(sin, SpicePlaybackInstance, base));
-
     } else if (strcmp(interface->type, SPICE_INTERFACE_RECORD) == 0) {
-        spice_printerr("remove SPICE_INTERFACE_RECORD");
+        spice_info("remove SPICE_INTERFACE_RECORD");
         snd_detach_record(SPICE_CONTAINEROF(sin, SpiceRecordInstance, base));
-
     } else if (strcmp(interface->type, SPICE_INTERFACE_CHAR_DEVICE) == 0) {
         spice_server_char_device_remove_interface(sin);
     } else {
@@ -3413,10 +3411,10 @@ const char *version_string = VERSION;
 
 static int do_spice_init(SpiceCoreInterface *core_interface)
 {
-    spice_printerr("starting %s", version_string);
+    spice_info("starting %s", version_string);
 
     if (core_interface->base.major_version != SPICE_INTERFACE_CORE_MAJOR) {
-        spice_printerr("bad core interface version");
+        spice_error("bad core interface version");
         goto err;
     }
     core = core_interface;
@@ -3486,7 +3484,7 @@ static int do_spice_init(SpiceCoreInterface *core_interface)
     reds->mouse_mode = SPICE_MOUSE_MODE_SERVER;
     reds->allow_multiple_clients = getenv(SPICE_DEBUG_ALLOW_MC_ENV) != NULL;
     if (reds->allow_multiple_clients) {
-        spice_printerr("spice: allowing multiple client connections");
+        spice_warning("spice: allowing multiple client connections (crashy)");
     }
     atexit(reds_exit);
     return 0;
@@ -3704,7 +3702,7 @@ SPICE_GNUC_VISIBLE int spice_server_set_jpeg_compression(SpiceServer *s, spice_w
 {
     spice_assert(reds == s);
     if (comp == SPICE_WAN_COMPRESSION_INVALID) {
-        spice_printerr("invalid jpeg state");
+        spice_error("invalid jpeg state");
         return -1;
     }
     // todo: support dynamically changing the state
@@ -3716,7 +3714,7 @@ SPICE_GNUC_VISIBLE int spice_server_set_zlib_glz_compression(SpiceServer *s, spi
 {
     spice_assert(reds == s);
     if (comp == SPICE_WAN_COMPRESSION_INVALID) {
-        spice_printerr("invalid zlib_glz state");
+        spice_error("invalid zlib_glz state");
         return -1;
     }
     // todo: support dynamically changing the state
@@ -3866,12 +3864,12 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_connect(SpiceServer *s, const char* 
 {
     SpiceMigrateInterface *sif;
 
-    spice_printerr("");
+    spice_info(NULL);
     spice_assert(migration_interface);
     spice_assert(reds == s);
 
     if (reds->expect_migrate) {
-        spice_printerr("warning: consecutive calls without migration. Canceling previous call");
+        spice_error("consecutive calls without migration. Canceling previous call");
         main_channel_migrate_complete(reds->main_channel, FALSE);
     }
 
@@ -3890,7 +3888,7 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_connect(SpiceServer *s, const char* 
     } else {
         if (reds->num_clients == 0) {
             reds_mig_release();
-            spice_printerr("no client connected");
+            spice_error("no client connected");
         }
         sif->migrate_connect_complete(migration_interface);
     }
@@ -3902,7 +3900,7 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_info(SpiceServer *s, const char* des
                                           int port, int secure_port,
                                           const char* cert_subject)
 {
-    spice_printerr("");
+    spice_info(NULL);
     spice_assert(!migration_interface);
     spice_assert(reds == s);
 
@@ -3915,7 +3913,7 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_info(SpiceServer *s, const char* des
 SPICE_GNUC_VISIBLE int spice_server_migrate_start(SpiceServer *s)
 {
     spice_assert(reds == s);
-    spice_printerr("");
+    spice_info(NULL);
     if (!reds->mig_spice) {
         return -1;
     }
@@ -3941,14 +3939,14 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_end(SpiceServer *s, int completed)
     SpiceMigrateInterface *sif;
     int ret = 0;
 
-    spice_printerr("");
+    spice_info(NULL);
 
     spice_assert(migration_interface);
     spice_assert(reds == s);
 
     sif = SPICE_CONTAINEROF(migration_interface->base.sif, SpiceMigrateInterface, base);
     if (!reds->expect_migrate && reds->num_clients) {
-        spice_printerr("spice_server_migrate_info was not called, disconnecting clients");
+        spice_error("spice_server_migrate_info was not called, disconnecting clients");
         reds_disconnect();
         ret = -1;
         goto complete;
@@ -3968,7 +3966,7 @@ complete:
 SPICE_GNUC_VISIBLE int spice_server_migrate_switch(SpiceServer *s)
 {
     spice_assert(reds == s);
-    spice_printerr("");
+    spice_info(NULL);
     if (!reds->num_clients) {
        return 0;
     }
@@ -4052,7 +4050,7 @@ void reds_stream_free(RedsStream *s)
     }
 
     reds_stream_remove_watch(s);
-    spice_printerr("close socket fd %d", s->socket);
+    spice_info("close socket fd %d", s->socket);
     close(s->socket);
 
     free(s);
