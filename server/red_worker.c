@@ -1212,7 +1212,7 @@ static inline void validate_surface(RedWorker *worker, uint32_t surface_id)
 {
     spice_warn_if(surface_id >= worker->n_surfaces);
     if (!worker->surfaces[surface_id].context.canvas) {
-        spice_error("failed on %d", surface_id);
+        spice_warning("failed on %d", surface_id);
         spice_warn_if(!worker->surfaces[surface_id].context.canvas);
     }
 }
@@ -3422,7 +3422,7 @@ static inline int red_current_add(RedWorker *worker, Ring *ring, Drawable *drawa
                 if (!((DrawItem *)sibling)->container_root) {
                     container = __new_container(worker, (DrawItem *)sibling);
                     if (!container) {
-                        spice_error("create new container failed");
+                        spice_warning("create new container failed");
                         region_destroy(&exclude_rgn);
                         return FALSE;
                     }
@@ -4321,7 +4321,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
         break;
     }
     default:
-        spice_error("invalid type");
+        spice_warning("invalid type");
     }
 }
 
@@ -4880,7 +4880,7 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
             }
 #ifdef DEBUG
             /* alert: accessing message.data is insecure */
-            spice_error("MESSAGE: %s", message.data);
+            spice_warning("MESSAGE: %s", message.data);
 #endif
             release_info_ext.group_id = ext_cmd.group_id;
             release_info_ext.info = message.release_info;
@@ -5914,7 +5914,7 @@ static inline int red_glz_compress_image(DisplayChannelClient *dcc,
     zlib_data->data.bufs_head = zlib_data->data.bufs_tail;
 
     if (!zlib_data->data.bufs_head) {
-        spice_error("failed to allocate zlib compress buffer");
+        spice_warning("failed to allocate zlib compress buffer");
         goto glz;
     }
 
@@ -6077,7 +6077,7 @@ static int red_jpeg_compress_image(DisplayChannelClient *dcc, SpiceImage *dest,
     jpeg_data->data.bufs_head = jpeg_data->data.bufs_tail;
 
     if (!jpeg_data->data.bufs_head) {
-        spice_error("failed to allocate compress buffer");
+        spice_warning("failed to allocate compress buffer");
         return FALSE;
     }
 
@@ -8088,7 +8088,7 @@ static inline uint8_t *red_get_image_line(RedWorker *worker, SpiceChunks *chunks
     }
 
     if (chunk->len - *offset < stride) {
-        spice_error("bad chunk alignment");
+        spice_warning("bad chunk alignment");
         return NULL;
     }
     ret = chunk->data + *offset;
@@ -9725,8 +9725,8 @@ static SpiceWatch *worker_watch_add(int fd, int event_mask, SpiceWatchFunc func,
         }
     }
     if (i == MAX_EVENT_SOURCES) {
-        spice_error("ERROR could not add a watch for channel type %u id %u",
-                   rcc->channel->type, rcc->channel->id);
+        spice_warning("could not add a watch for channel type %u id %u",
+                      rcc->channel->type, rcc->channel->id);
         return NULL;
     }
 
@@ -10027,7 +10027,7 @@ static void display_channel_create(RedWorker *worker, int migrate)
             display_channel_handle_migrate_data,
             display_channel_handle_migrate_data_get_serial
             ))) {
-        spice_error("failed to create display channel");
+        spice_warning("failed to create display channel");
         return;
     }
     display_channel = worker->display_channel;
@@ -10624,7 +10624,7 @@ static void dev_destroy_primary_surface(RedWorker *worker, uint32_t surface_id)
     spice_warn_if(surface_id != 0);
 
     if (!worker->surfaces[surface_id].context.canvas) {
-        spice_error("double destroy of primary surface");
+        spice_warning("double destroy of primary surface");
         return;
     }
 
@@ -10921,7 +10921,7 @@ void handle_dev_set_compression(void *opaque, void *payload)
         spice_info("ic off");
         break;
     default:
-        spice_error("ic invalid");
+        spice_warning("ic invalid");
     }
 #ifdef COMPRESS_STAT
     print_compress_stats(worker->display_channel);
@@ -10954,7 +10954,7 @@ void handle_dev_set_streaming_video(void *opaque, void *payload)
             spice_info("sv off");
             break;
         default:
-            spice_error("sv invalid");
+            spice_warning("sv invalid");
     }
 }
 
@@ -11000,8 +11000,8 @@ void handle_dev_loadvm_commands(void *opaque, void *payload)
             if (red_get_cursor_cmd(&worker->mem_slots, ext[i].group_id,
                                    cursor_cmd, ext[i].cmd.data)) {
                 /* XXX allow failure in loadvm? */
-                spice_error("failed loadvm command type (%d)",
-                            ext[i].cmd.type);
+                spice_warning("failed loadvm command type (%d)",
+                              ext[i].cmd.type);
                 continue;
             }
             qxl_process_cursor(worker, cursor_cmd, ext[i].group_id);
@@ -11013,7 +11013,7 @@ void handle_dev_loadvm_commands(void *opaque, void *payload)
             red_process_surface(worker, surface_cmd, ext[i].group_id, TRUE);
             break;
         default:
-            spice_error("unhandled loadvm command type (%d)", ext[i].cmd.type);
+            spice_warning("unhandled loadvm command type (%d)", ext[i].cmd.type);
             break;
         }
     }
