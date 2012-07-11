@@ -547,7 +547,7 @@ void reds_unregister_channel(RedChannel *channel)
         ring_remove(&channel->link);
         reds->num_of_channels--;
     } else {
-        spice_error("not found");
+        spice_warning("not found");
     }
 }
 
@@ -789,7 +789,7 @@ static int vdi_port_read_buf_process(int port, VDIReadBuf *buf)
     case VDP_SERVER_PORT:
         return FALSE;
     default:
-        spice_error("invalid port");
+        spice_warning("invalid port");
         reds_agent_remove();
         return FALSE;
     }
@@ -1037,7 +1037,7 @@ void reds_fill_channels(SpiceMsgChannels *channels_info)
 
     channels_info->num_of_channels = used_channels;
     if (used_channels != reds->num_of_channels) {
-        spice_error("sent %d out of %d", used_channels, reds->num_of_channels);
+        spice_warning("sent %d out of %d", used_channels, reds->num_of_channels);
     }
 }
 
@@ -1167,7 +1167,7 @@ void reds_on_main_mouse_mode_request(void *message, size_t size)
         reds_set_mouse_mode(SPICE_MOUSE_MODE_SERVER);
         break;
     default:
-        spice_error("unsupported mouse mode");
+        spice_warning("unsupported mouse mode");
     }
 }
 
@@ -1180,12 +1180,12 @@ typedef struct WriteQueueInfo {
 
 void reds_marshall_migrate_data_item(SpiceMarshaller *m, MainMigrateData *data)
 {
-    spice_error("not implemented");
+    spice_warning("not implemented");
 }
 
 void reds_on_main_receive_migrate_data(MainMigrateData *data, uint8_t *end)
 {
-    spice_error("not implemented");
+    spice_warning("not implemented");
 }
 
 static int sync_write(RedsStream *stream, const void *in_buf, size_t n)
@@ -1249,12 +1249,12 @@ static int reds_send_link_ack(RedLinkInfo *link)
     ack.caps_offset = sizeof(SpiceLinkReply);
 
     if (!(link->tiTicketing.rsa = RSA_new())) {
-        spice_error("RSA nes failed");
+        spice_warning("RSA nes failed");
         return FALSE;
     }
 
     if (!(bio = BIO_new(BIO_s_mem()))) {
-        spice_error("BIO new failed");
+        spice_warning("BIO new failed");
         return FALSE;
     }
 
@@ -1496,7 +1496,7 @@ static void openssl_init(RedLinkInfo *link)
     link->tiTicketing.bn = BN_new();
 
     if (!link->tiTicketing.bn) {
-        spice_error("OpenSSL BIGNUMS alloc failed");
+        spice_warning("OpenSSL BIGNUMS alloc failed");
     }
 
     BN_set_word(link->tiTicketing.bn, f4);
@@ -1538,7 +1538,7 @@ void reds_on_client_migrate_complete(RedClient *client)
     mcc = red_client_get_main(client);
     mig_client = reds_mig_target_client_find(client);
     if (!mig_client) {
-        spice_error("mig target client was not found");
+        spice_warning("mig target client was not found");
         return;
     }
 
@@ -1556,10 +1556,10 @@ void reds_on_client_migrate_complete(RedClient *client)
         channel = reds_find_channel(mig_link->link_msg->channel_type,
                                     mig_link->link_msg->channel_id);
         if (!channel) {
-            spice_error("client %p channel (%d, %d) (type, id) wasn't found",
-                        client,
-                        mig_link->link_msg->channel_type,
-                        mig_link->link_msg->channel_id);
+            spice_warning("client %p channel (%d, %d) (type, id) wasn't found",
+                          client,
+                          mig_link->link_msg->channel_type,
+                          mig_link->link_msg->channel_id);
             continue;
         }
         reds_channel_do_link(channel, client, mig_link->link_msg, mig_link->stream);
@@ -1642,7 +1642,7 @@ static void reds_handle_ticket(void *opaque)
 
         if (strlen(taTicket.password) == 0) {
             reds_send_link_result(link, SPICE_LINK_ERR_PERMISSION_DENIED);
-            spice_error("Ticketing is enabled, but no password is set. "
+            spice_warning("Ticketing is enabled, but no password is set. "
                         "please set a ticket first");
             reds_link_free(link);
             return;
@@ -1650,9 +1650,9 @@ static void reds_handle_ticket(void *opaque)
 
         if (expired || strncmp(password, taTicket.password, SPICE_MAX_PASSWORD_LENGTH) != 0) {
             if (expired) {
-                spice_error("Ticket has expired");
+                spice_warning("Ticket has expired");
             } else {
-                spice_error("Invalid password");
+                spice_warning("Invalid password");
             }
             reds_send_link_result(link, SPICE_LINK_ERR_PERMISSION_DENIED);
             reds_link_free(link);
@@ -1693,7 +1693,7 @@ static ssize_t reds_stream_sasl_write(RedsStream *s, const void *buf, size_t nby
                           (const char **)&s->sasl.encoded,
                           &s->sasl.encodedLength);
         if (err != SASL_OK) {
-            spice_error("sasl_encode error: %d", err);
+            spice_warning("sasl_encode error: %d", err);
             return -1;
         }
 
@@ -1702,7 +1702,7 @@ static ssize_t reds_stream_sasl_write(RedsStream *s, const void *buf, size_t nby
         }
 
         if (!s->sasl.encoded) {
-            spice_error("sasl_encode didn't return a buffer!");
+            spice_warning("sasl_encode didn't return a buffer!");
             return 0;
         }
 
@@ -1754,7 +1754,7 @@ static ssize_t reds_stream_sasl_read(RedsStream *s, uint8_t *buf, size_t nbyte)
                       (char *)encoded, n,
                       &decoded, &decodedlen);
     if (err != SASL_OK) {
-        spice_error("sasl_decode error: %d", err);
+        spice_warning("sasl_decode error: %d", err);
         return -1;
     }
 
@@ -1836,8 +1836,8 @@ static char *addr_to_string(const char *format,
                            host, sizeof(host),
                            serv, sizeof(serv),
                            NI_NUMERICHOST | NI_NUMERICSERV)) != 0) {
-        spice_error("Cannot resolve address %d: %s",
-                    err, gai_strerror(err));
+        spice_warning("Cannot resolve address %d: %s",
+                      err, gai_strerror(err));
         return NULL;
     }
 
@@ -1923,14 +1923,14 @@ static void reds_handle_auth_sasl_step(void *opaque)
                            &serveroutlen);
     if (err != SASL_OK &&
         err != SASL_CONTINUE) {
-        spice_error("sasl step failed %d (%s)",
-                    err, sasl_errdetail(sasl->conn));
+        spice_warning("sasl step failed %d (%s)",
+                      err, sasl_errdetail(sasl->conn));
         goto authabort;
     }
 
     if (serveroutlen > SASL_DATA_MAX_LEN) {
-        spice_error("sasl step reply data too long %d",
-                    serveroutlen);
+        spice_warning("sasl step reply data too long %d",
+                      serveroutlen);
         goto authabort;
     }
 
