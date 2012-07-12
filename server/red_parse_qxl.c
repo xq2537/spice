@@ -328,6 +328,10 @@ static SpiceChunks *red_get_image_data_chunked(RedMemSlotInfo *slots, int group_
     return data;
 }
 
+// This is based on SPICE_BITMAP_FMT_*, copied from server/red_worker.c
+// to avoid a possible unoptimization from making it non static.
+static const int BITMAP_FMT_IS_RGB[] = {0, 0, 0, 0, 0, 0, 1, 1, 1, 1};
+
 static SpiceImage *red_get_image(RedMemSlotInfo *slots, int group_id,
                                  QXLPHYSICAL addr, uint32_t flags)
 {
@@ -362,6 +366,11 @@ static SpiceImage *red_get_image(RedMemSlotInfo *slots, int group_id,
     switch (red->descriptor.type) {
     case SPICE_IMAGE_TYPE_BITMAP:
         red->u.bitmap.format = qxl->bitmap.format;
+        if (!bitmap_fmt_is_rgb(qxl->bitmap.format) && !qxl->bitmap.palette) {
+            spice_warning("guest error: missing palette on bitmap format=%d\n",
+                          red->u.bitmap.format);
+            return NULL;
+        }
         qxl_flags = qxl->bitmap.flags;
         if (qxl_flags & QXL_BITMAP_TOP_DOWN) {
             red->u.bitmap.flags = SPICE_BITMAP_FLAGS_TOP_DOWN;

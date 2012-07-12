@@ -6014,6 +6014,10 @@ static inline int red_lz_compress_image(DisplayChannelClient *dcc,
         o_comp_data->comp_buf = lz_data->data.bufs_head;
         o_comp_data->comp_buf_size = size;
     } else {
+        if (!src->palette) {
+            spice_warning("bad guest: missing palette\n");
+            return FALSE;
+        }
         dest->descriptor.type = SPICE_IMAGE_TYPE_LZ_PLT;
         dest->u.lz_plt.data_size = size;
         dest->u.lz_plt.flags = src->flags & SPICE_BITMAP_FLAGS_TOP_DOWN;
