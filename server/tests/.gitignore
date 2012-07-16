@@ -4,3 +4,4 @@ test_empty_success
 test_just_sockets_no_ssl
 test_fail_on_null_core_interface
 test_playback
+test_display_resolution_changes
