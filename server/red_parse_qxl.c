@@ -370,6 +370,10 @@ static SpiceImage *red_get_image(RedMemSlotInfo *slots, int group_id,
                           red->u.bitmap.format);
             return NULL;
         }
+        if (qxl->bitmap.x == 0 || qxl->bitmap.y == 0) {
+            spice_warning("guest error: zero area bitmap\n");
+            return NULL;
+        }
         qxl_flags = qxl->bitmap.flags;
         if (qxl_flags & QXL_BITMAP_TOP_DOWN) {
             red->u.bitmap.flags = SPICE_BITMAP_FLAGS_TOP_DOWN;
