@@ -4843,11 +4843,10 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
         case QXL_CMD_DRAW: {
             RedDrawable *red_drawable = red_drawable_new(); // returns with 1 ref
 
-            if (red_get_drawable(&worker->mem_slots, ext_cmd.group_id,
+            if (!red_get_drawable(&worker->mem_slots, ext_cmd.group_id,
                                  red_drawable, ext_cmd.cmd.data, ext_cmd.flags)) {
-                break;
+                red_process_drawable(worker, red_drawable, ext_cmd.group_id);
             }
-            red_process_drawable(worker, red_drawable, ext_cmd.group_id);
             // release the red_drawable
             put_red_drawable(worker, red_drawable, ext_cmd.group_id);
             break;
