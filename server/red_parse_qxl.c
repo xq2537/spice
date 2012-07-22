@@ -242,7 +242,6 @@ static SpicePath *red_get_path(RedMemSlotInfo *slots, int group_id,
     }
     /* Ensure guest didn't tamper with segment count */
     spice_assert(n_segments == red->num_segments);
-    return NULL;
 
     if (free_data) {
         free(data);
