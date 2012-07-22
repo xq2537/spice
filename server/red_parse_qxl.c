@@ -336,7 +336,8 @@ static SpiceImage *red_get_image(RedMemSlotInfo *slots, int group_id,
 {
     RedDataChunk chunks;
     QXLImage *qxl;
-    SpiceImage *red;
+    SpiceImage *red = NULL;
+    SpicePalette *rp = NULL;
     size_t bitmap_size, size;
     uint8_t qxl_flags;
     int error;
@@ -368,11 +369,11 @@ static SpiceImage *red_get_image(RedMemSlotInfo *slots, int group_id,
         if (!bitmap_fmt_is_rgb(qxl->bitmap.format) && !qxl->bitmap.palette) {
             spice_warning("guest error: missing palette on bitmap format=%d\n",
                           red->u.bitmap.format);
-            return NULL;
+            goto error;
         }
         if (qxl->bitmap.x == 0 || qxl->bitmap.y == 0) {
             spice_warning("guest error: zero area bitmap\n");
-            return NULL;
+            goto error;
         }
         qxl_flags = qxl->bitmap.flags;
         if (qxl_flags & QXL_BITMAP_TOP_DOWN) {
@@ -383,18 +384,17 @@ static SpiceImage *red_get_image(RedMemSlotInfo *slots, int group_id,
         red->u.bitmap.stride = qxl->bitmap.stride;
         if (qxl->bitmap.palette) {
             QXLPalette *qp;
-            SpicePalette *rp;
             int i, num_ents;
             qp = (QXLPalette *)get_virt(slots, qxl->bitmap.palette,
                                         sizeof(*qp), group_id, &error);
             if (error) {
-                return NULL;
+                goto error;
             }
             num_ents = qp->num_ents;
             if (!validate_virt(slots, (intptr_t)qp->ents,
                                get_memslot_id(slots, qxl->bitmap.palette),
                                num_ents * sizeof(qp->ents[0]), group_id)) {
-                return NULL;
+                goto error;
             }
             rp = spice_malloc_n_m(num_ents, sizeof(rp->ents[0]), sizeof(*rp));
             rp->unique   = qp->unique;
@@ -421,7 +421,7 @@ static SpiceImage *red_get_image(RedMemSlotInfo *slots, int group_id,
                                        &chunks, qxl->bitmap.data);
             spice_assert(size == bitmap_size);
             if (size != bitmap_size) {
-                return NULL;
+                goto error;
             }
             red->u.bitmap.data = red_get_image_data_chunked(slots, group_id,
                                                             &chunks);
@@ -441,7 +441,7 @@ static SpiceImage *red_get_image(RedMemSlotInfo *slots, int group_id,
                                        &chunks, (QXLDataChunk *)qxl->quic.data);
         spice_assert(size == red->u.quic.data_size);
         if (size != red->u.quic.data_size) {
-            return NULL;
+            goto error;
         }
         red->u.quic.data = red_get_image_data_chunked(slots, group_id,
                                                       &chunks);
@@ -451,6 +451,14 @@ static SpiceImage *red_get_image(RedMemSlotInfo *slots, int group_id,
         spice_error("unknown type %d", red->descriptor.type);
     }
     return red;
+error:
+    if (red) {
+        free(red);
+    }
+    if (rp) {
+        free(rp);
+    }
+    return NULL;
 }
 
 void red_put_image(SpiceImage *red)
