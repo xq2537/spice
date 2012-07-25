@@ -8552,7 +8552,7 @@ static void red_display_marshall_stream_start(RedChannelClient *rcc,
 
     agent->last_send_time = 0;
     spice_assert(stream);
-    red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_STREAM_CREATE, &agent->create_item);
+    red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_STREAM_CREATE, NULL);
     SpiceMsgDisplayStreamCreate stream_create;
     SpiceClipRects clip_rects;
 
@@ -9955,13 +9955,6 @@ static void display_channel_hold_pipe_item(RedChannelClient *rcc, PipeItem *item
     case PIPE_ITEM_TYPE_DRAW:
         ref_drawable_pipe_item(SPICE_CONTAINEROF(item, DrawablePipeItem, dpi_pipe_item));
         break;
-    case PIPE_ITEM_TYPE_STREAM_CREATE: {
-        StreamAgent *stream_agent = SPICE_CONTAINEROF(item, StreamAgent, create_item);
-        if (stream_agent->stream->current) {
-            stream_agent->stream->current->refs++;
-        }
-        break;
-    }
     case PIPE_ITEM_TYPE_STREAM_CLIP:
         ((StreamClipItem *)item)->refs++;
         break;
@@ -9985,13 +9978,6 @@ static void display_channel_client_release_item_after_push(DisplayChannelClient 
     case PIPE_ITEM_TYPE_DRAW:
         put_drawable_pipe_item(SPICE_CONTAINEROF(item, DrawablePipeItem, dpi_pipe_item));
         break;
-    case PIPE_ITEM_TYPE_STREAM_CREATE: {
-        StreamAgent *stream_agent = SPICE_CONTAINEROF(item, StreamAgent, create_item);
-        if (stream_agent->stream->current) {
-            release_drawable(worker, stream_agent->stream->current);
-        }
-        break;
-    }
     case PIPE_ITEM_TYPE_STREAM_CLIP:
         red_display_release_stream_clip(worker, (StreamClipItem *)item);
         break;
