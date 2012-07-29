@@ -4592,6 +4592,12 @@ static void red_update_area(RedWorker *worker, const SpiceRect *area, int surfac
 #endif
     spice_debug("surface %d: area ==>", surface_id);
     rect_debug(area);
+
+    spice_return_if_fail(surface_id >= 0 && surface_id < NUM_SURFACES);
+    spice_return_if_fail(area);
+    spice_return_if_fail(area->left >= 0 && area->top >= 0 &&
+                         area->left < area->right && area->top < area->bottom);
+
     surface = &worker->surfaces[surface_id];
 
     last = NULL;
