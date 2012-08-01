@@ -116,3 +116,10 @@ SPICE_SERVER_0.10.3 {
 SPICE_SERVER_0.10.4 {
     spice_qxl_monitors_config_async;
 } SPICE_SERVER_0.10.3;
+
+SPICE_SERVER_0.11.2 {
+global:
+    spice_server_vm_start;
+    spice_server_vm_stop;
+    spice_server_set_seamless_migration;
+} SPICE_SERVER_0.10.4;

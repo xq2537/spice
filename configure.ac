@@ -12,7 +12,7 @@ AC_PREREQ([2.57])
 
 m4_define([SPICE_MAJOR], 0)
 m4_define([SPICE_MINOR], 11)
-m4_define([SPICE_MICRO], 1)
+m4_define([SPICE_MICRO], 2)
 m4_define([SPICE_CURRENT], [3])
 m4_define([SPICE_REVISION], [0])
 m4_define([SPICE_AGE], [2])
