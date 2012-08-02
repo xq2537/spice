@@ -150,7 +150,8 @@ void spice_char_device_client_add(SpiceCharDeviceState *dev,
                                   int do_flow_control,
                                   uint32_t max_send_queue_size,
                                   uint32_t num_client_tokens,
-                                  uint32_t num_send_tokens);
+                                  uint32_t num_send_tokens,
+                                  int wait_for_migrate_data);
 
 void spice_char_device_client_remove(SpiceCharDeviceState *dev,
                                      RedClient *client);

@@ -1090,13 +1090,13 @@ void reds_fill_channels(SpiceMsgChannels *channels_info)
 void reds_on_main_agent_start(MainChannelClient *mcc, uint32_t num_tokens)
 {
     SpiceCharDeviceState *dev_state = reds->agent_state.base;
-    RedClient *client;
+    RedChannelClient *rcc;
 
     if (!vdagent) {
         return;
     }
     spice_assert(vdagent->st && vdagent->st == dev_state);
-    client = main_channel_client_get_base(mcc)->client;
+    rcc = main_channel_client_get_base(mcc);
     /*
      * Note that in older releases, send_tokens were set to ~0 on both client
      * and server. The server ignored the client given tokens.
@@ -1104,16 +1104,17 @@ void reds_on_main_agent_start(MainChannelClient *mcc, uint32_t num_tokens)
      * and vice versa, the sending from the server to the client won't have
      * flow control, but will have no other problem.
      */
-    if (!spice_char_device_client_exists(dev_state, client)) {
+    if (!spice_char_device_client_exists(dev_state, rcc->client)) {
         spice_char_device_client_add(dev_state,
-                                     client,
+                                     rcc->client,
                                      TRUE, /* flow control */
                                      REDS_VDI_PORT_NUM_RECEIVE_BUFFS,
                                      REDS_AGENT_WINDOW_SIZE,
-                                     num_tokens);
+                                     num_tokens,
+                                     red_channel_client_waits_for_migrate_data(rcc));
     } else {
         spice_char_device_send_to_client_tokens_set(dev_state,
-                                                    client,
+                                                    rcc->client,
                                                     num_tokens);
     }
     reds->agent_state.write_filter.discard_all = FALSE;

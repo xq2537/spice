@@ -326,7 +326,8 @@ static void smartcard_char_device_attach(SpiceCharDeviceInstance *char_device,
                                  FALSE, /* no flow control yet */
                                  0, /* send queue size */
                                  ~0,
-                                 ~0);
+                                 ~0,
+                                 red_channel_client_waits_for_migrate_data(&scc->base));
     scc->smartcard_state = st;
     write_buf = spice_char_device_write_buffer_get(st->chardev_st, NULL, sizeof(vheader));
     if (!write_buf) {

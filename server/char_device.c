@@ -45,6 +45,8 @@ struct SpiceCharDeviceClientState {
 
 struct SpiceCharDeviceState {
     int running;
+    int active; /* has read/write been performed since the device was started */
+    int wait_for_migrate_data;
     uint32_t refs;
 
     Ring write_queue;
@@ -268,7 +270,7 @@ static int spice_char_device_read_from_device(SpiceCharDeviceState *dev)
     uint64_t max_send_tokens;
     int did_read = FALSE;
 
-    if (!dev->running) {
+    if (!dev->running || dev->wait_for_migrate_data) {
         return FALSE;
     }
 
@@ -307,6 +309,7 @@ static int spice_char_device_read_from_device(SpiceCharDeviceState *dev)
     }
     dev->during_read_from_device = 0;
     spice_char_device_state_unref(dev);
+    dev->active = dev->active || did_read;
     return did_read;
 }
 
@@ -415,7 +418,7 @@ static int spice_char_device_write_to_device(SpiceCharDeviceState *dev)
     int total = 0;
     int n;
 
-    if (!dev->running) {
+    if (!dev->running || dev->wait_for_migrate_data) {
         return 0;
     }
 
@@ -462,6 +465,7 @@ static int spice_char_device_write_to_device(SpiceCharDeviceState *dev)
         spice_assert(ring_is_empty(&dev->write_queue));
     }
     spice_char_device_state_unref(dev);
+    dev->active = dev->active || total;
     return total;
 }
 
@@ -682,12 +686,16 @@ void spice_char_device_client_add(SpiceCharDeviceState *dev,
                                   int do_flow_control,
                                   uint32_t max_send_queue_size,
                                   uint32_t num_client_tokens,
-                                  uint32_t num_send_tokens)
+                                  uint32_t num_send_tokens,
+                                  int wait_for_migrate_data)
 {
     SpiceCharDeviceClientState *dev_client;
 
     spice_assert(dev);
     spice_assert(client);
+
+    spice_assert(!wait_for_migrate_data || (dev->num_clients == 0 && !dev->active));
+    dev->wait_for_migrate_data = wait_for_migrate_data;
 
     spice_debug("dev_state %p client %p", dev, client);
     dev_client = spice_new0(SpiceCharDeviceClientState, 1);
@@ -727,8 +735,12 @@ void spice_char_device_client_remove(SpiceCharDeviceState *dev,
         spice_error("client wasn't found");
         return;
     }
-
     spice_char_device_client_free(dev, dev_client);
+    if (dev->wait_for_migrate_data) {
+        spice_assert(dev->num_clients == 0);
+        dev->wait_for_migrate_data  = FALSE;
+        spice_char_device_read_from_device(dev);
+    }
 }
 
 int spice_char_device_client_exists(SpiceCharDeviceState *dev,
@@ -751,14 +763,16 @@ void spice_char_device_stop(SpiceCharDeviceState *dev)
 {
     spice_debug("dev_state %p", dev);
     dev->running = FALSE;
+    dev->active = FALSE;
     core->timer_cancel(dev->write_to_dev_timer);
 }
 
 void spice_char_device_reset(SpiceCharDeviceState *dev)
 {
     RingItem *client_item;
-    spice_char_device_stop(dev);
 
+    spice_char_device_stop(dev);
+    dev->wait_for_migrate_data = FALSE;
     spice_debug("dev_state %p", dev);
     while (!ring_is_empty(&dev->write_queue)) {
         RingItem *item = ring_get_tail(&dev->write_queue);
