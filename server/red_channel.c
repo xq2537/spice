@@ -461,6 +461,7 @@ static void red_channel_client_send_item(RedChannelClient *rcc, PipeItem *item)
     switch (item->type) {
         case PIPE_ITEM_TYPE_SET_ACK:
             red_channel_client_send_set_ack(rcc);
+            free(item);
             break;
         default:
             handled = FALSE;
