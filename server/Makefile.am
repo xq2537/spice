@@ -72,6 +72,7 @@ libspice_server_la_SOURCES =			\
 	red_dispatcher.h			\
 	main_dispatcher.c			\
 	main_dispatcher.h			\
+	migration_protocol.h		\
 	red_memslots.c				\
 	red_memslots.h				\
 	red_parse_qxl.c				\
