@@ -790,9 +790,9 @@ static void main_channel_release_pipe_item(RedChannelClient *rcc,
     free(base);
 }
 
-void main_channel_client_handle_migrate_connected(MainChannelClient *mcc,
-                                                  int success,
-                                                  int seamless)
+static void main_channel_client_handle_migrate_connected(MainChannelClient *mcc,
+                                                         int success,
+                                                         int seamless)
 {
     spice_printerr("client %p connected: %d seamless %d", mcc->base.client, success, seamless);
     if (mcc->mig_wait_connect) {
@@ -810,6 +810,18 @@ void main_channel_client_handle_migrate_connected(MainChannelClient *mcc,
             spice_printerr("client %p MIGRATE_CANCEL", mcc->base.client);
             red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_CANCEL);
         }
+    }
+}
+
+void main_channel_client_handle_migrate_dst_do_seamless(MainChannelClient *mcc,
+                                                        uint32_t src_version)
+{
+    if (reds_on_migrate_dst_set_seamless(mcc, src_version)) {
+        red_channel_client_pipe_add_type(&mcc->base,
+                                         SPICE_MSG_MAIN_MIGRATE_DST_SEAMLESS_ACK);
+    } else {
+        red_channel_client_pipe_add_type(&mcc->base,
+                                         SPICE_MSG_MAIN_MIGRATE_DST_SEAMLESS_NACK);
     }
 }
 
@@ -881,6 +893,10 @@ static int main_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint
         break;
     case SPICE_MSGC_MAIN_MIGRATE_CONNECT_ERROR:
         main_channel_client_handle_migrate_connected(mcc, FALSE, FALSE);
+        break;
+    case SPICE_MSGC_MAIN_MIGRATE_DST_DO_SEAMLESS:
+        main_channel_client_handle_migrate_dst_do_seamless(mcc,
+            ((SpiceMsgcMainMigrateDstDoSeamless *)message)->src_version);
         break;
     case SPICE_MSGC_MAIN_MOUSE_MODE_REQUEST:
         reds_on_main_mouse_mode_request(message, size);
@@ -1125,6 +1141,7 @@ MainChannel* main_channel_init(void)
                                         &channel_cbs);
     spice_assert(channel);
     red_channel_set_cap(channel, SPICE_MAIN_CAP_SEMI_SEAMLESS_MIGRATE);
+
     return (MainChannel *)channel;
 }
 

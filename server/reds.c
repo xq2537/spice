@@ -67,6 +67,7 @@
 #include "stat.h"
 #include "demarshallers.h"
 #include "char_device.h"
+#include "migration_protocol.h"
 #ifdef USE_TUNNEL
 #include "red_tunnel_worker.h"
 #endif
@@ -242,6 +243,8 @@ typedef struct RedsState {
     int expect_migrate;
     int src_do_seamless_migrate; /* per migration. Updated after the migration handshake
                                     between the 2 servers */
+    int dst_do_seamless_migrate; /* per migration. Updated after the migration handshake
+                                    between the 2 servers */
     Ring mig_target_clients;
     int num_mig_target_clients;
     RedsMigSpice *mig_spice;
@@ -256,7 +259,7 @@ typedef struct RedsState {
 
     int vm_running;
     Ring char_devs_states; /* list of SpiceCharDeviceStateItem */
-    int seamless_migration_enabled;
+    int seamless_migration_enabled; /* command line arg */
 
     SSL_CTX *ctx;
 
@@ -1548,26 +1551,28 @@ static void reds_channel_do_link(RedChannel *channel, RedClient *client,
                                 caps + link_msg->num_common_caps : NULL);
 }
 
-void reds_on_client_migrate_complete(RedClient *client)
+/*
+ * migration target side:
+ * In semi-seamless migration, we activate the channels only
+ * after migration is completed.
+ * In seamless migration, in order to keep the continuousness, and
+ * not lose any data, we activate the target channels before
+ * migration completes, as soon as we receive SPICE_MSGC_MAIN_MIGRATE_DST_DO_SEAMLESS
+ */
+static int reds_link_mig_target_channels(RedClient *client)
 {
     RedsMigTargetClient *mig_client;
-    MainChannelClient *mcc;
     RingItem *item;
 
     spice_info("%p", client);
-    mcc = red_client_get_main(client);
     mig_client = reds_mig_target_client_find(client);
     if (!mig_client) {
-        spice_warning("mig target client was not found");
-        return;
+        spice_info("Error: mig target client was not found");
+        return FALSE;
     }
 
-    // TODO: not doing net test. consider doing it on client_migrate_info
-    main_channel_push_init(mcc, red_dispatcher_count(),
-                           reds->mouse_mode, reds->is_client_mouse_allowed,
-                           reds_get_mm_time() - MM_TIME_DELTA,
-                           red_dispatcher_qxl_ram_size());
-
+    /* Each channel should check if we are during migration, and
+     * act accordingly. */
     RING_FOREACH(item, &mig_client->pending_links) {
         RedsMigPendingLink *mig_link;
         RedChannel *channel;
@@ -1586,6 +1591,40 @@ void reds_on_client_migrate_complete(RedClient *client)
     }
 
     reds_mig_target_client_free(mig_client);
+
+    return TRUE;
+}
+
+int reds_on_migrate_dst_set_seamless(MainChannelClient *mcc, uint32_t src_version)
+{
+    /* seamless migration is not supported with multiple clients*/
+    if (reds->allow_multiple_clients  || src_version > SPICE_MIGRATION_PROTOCOL_VERSION) {
+        reds->dst_do_seamless_migrate = FALSE;
+    } else {
+        RedClient *client;
+
+        client = main_channel_client_get_base(mcc)->client;
+        reds->dst_do_seamless_migrate = reds_link_mig_target_channels(client);
+        /* linking all the channels that have been connected before migration handshake */
+        reds->dst_do_seamless_migrate = reds_link_mig_target_channels(client);
+    }
+    return reds->dst_do_seamless_migrate;
+}
+
+/* semi seamless */
+void reds_on_client_migrate_complete(RedClient *client)
+{
+    MainChannelClient *mcc;
+
+    spice_info("%p", client);
+    mcc = red_client_get_main(client);
+
+    // TODO: not doing net test. consider doing it on client_migrate_info
+    main_channel_push_init(mcc, red_dispatcher_count(),
+                           reds->mouse_mode, reds->is_client_mouse_allowed,
+                           reds_get_mm_time() - MM_TIME_DELTA,
+                           red_dispatcher_qxl_ram_size());
+    reds_link_mig_target_channels(client);
 }
 
 static void reds_handle_other_links(RedLinkInfo *link)
@@ -1623,7 +1662,17 @@ static void reds_handle_other_links(RedLinkInfo *link)
     reds_stream_remove_watch(link->stream);
 
     mig_client = reds_mig_target_client_find(client);
-    if (red_client_during_migrate_at_target(client)) {
+    /*
+     * In semi-seamless migration, we activate the channels only
+     * after migration is completed. Since, the session starts almost from
+     * scratch we don't mind if we skip some messages in between the src session end and
+     * dst session start.
+     * In seamless migration, in order to keep the continuousness of the session, and
+     * in order not to lose any data, we activate the target channels before
+     * migration completes, as soon as we receive SPICE_MSGC_MAIN_MIGRATE_DST_DO_SEAMLESS.
+     * If a channel connects before receiving SPICE_MSGC_MAIN_MIGRATE_DST_DO_SEAMLESS,
+     * reds_on_migrate_dst_set_seamless will take care of activating it */
+    if (red_client_during_migrate_at_target(client) && !reds->dst_do_seamless_migrate) {
         spice_assert(mig_client);
         reds_mig_target_client_add_pending_link(mig_client, link_mess, link->stream);
     } else {
