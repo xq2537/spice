@@ -387,17 +387,24 @@ void spice_char_device_send_to_client_tokens_set(SpiceCharDeviceState *dev,
  * Writing to the device  *
 ***************************/
 
-static void spice_char_device_client_token_add(SpiceCharDeviceState *dev,
-                                               SpiceCharDeviceClientState *dev_client)
+static void spice_char_device_client_tokens_add(SpiceCharDeviceState *dev,
+                                                SpiceCharDeviceClientState *dev_client,
+                                                uint32_t num_tokens)
 {
     if (!dev_client->do_flow_control) {
         return;
     }
-    if (++dev_client->num_client_tokens_free == dev->client_tokens_interval) {
-        dev_client->num_client_tokens += dev->client_tokens_interval;
+    if (num_tokens > 1) {
+        spice_debug("#tokens > 1 (=%u)", num_tokens);
+    }
+    dev_client->num_client_tokens_free += num_tokens;
+    if (dev_client->num_client_tokens_free >= dev->client_tokens_interval) {
+        uint32_t tokens = dev_client->num_client_tokens_free;
+
+        dev_client->num_client_tokens += dev_client->num_client_tokens_free;
         dev_client->num_client_tokens_free = 0;
         dev->cbs.send_tokens_to_client(dev_client->client,
-                                       dev->client_tokens_interval,
+                                       tokens,
                                        dev->opaque);
     }
 }
@@ -466,8 +473,10 @@ static void spice_char_dev_write_retry(void *opaque)
     spice_char_device_write_to_device(dev);
 }
 
-SpiceCharDeviceWriteBuffer *spice_char_device_write_buffer_get(SpiceCharDeviceState *dev,
-                                                               RedClient *client, int size)
+static SpiceCharDeviceWriteBuffer *__spice_char_device_write_buffer_get(SpiceCharDeviceState *dev,
+                                                                        RedClient *client,
+                                                                        int size,
+                                                                        int migrated_data_tokens)
 {
     RingItem *item;
     SpiceCharDeviceWriteBuffer *ret;
@@ -494,14 +503,15 @@ SpiceCharDeviceWriteBuffer *spice_char_device_write_buffer_get(SpiceCharDeviceSt
     if (client) {
        SpiceCharDeviceClientState *dev_client = spice_char_device_client_find(dev, client);
        if (dev_client) {
-            if (dev_client->do_flow_control && !dev_client->num_client_tokens) {
+            if (!migrated_data_tokens &&
+                dev_client->do_flow_control && !dev_client->num_client_tokens) {
                 spice_printerr("token violation: dev %p client %p", dev, client);
                 spice_char_device_handle_client_overflow(dev_client);
                 goto error;
             }
             ret->origin = WRITE_BUFFER_ORIGIN_CLIENT;
             ret->client = client;
-            if (dev_client->do_flow_control) {
+            if (!migrated_data_tokens && dev_client->do_flow_control) {
                 dev_client->num_client_tokens--;
             }
         } else {
@@ -515,12 +525,19 @@ SpiceCharDeviceWriteBuffer *spice_char_device_write_buffer_get(SpiceCharDeviceSt
         dev->num_self_tokens--;
     }
 
+    ret->token_price = migrated_data_tokens ? migrated_data_tokens : 1;
     return ret;
 error:
     ring_add(&dev->write_bufs_pool, &ret->link);
     return NULL;
 }
 
+SpiceCharDeviceWriteBuffer *spice_char_device_write_buffer_get(SpiceCharDeviceState *dev,
+                                                               RedClient *client,
+                                                               int size)
+{
+   return  __spice_char_device_write_buffer_get(dev, client, size, 0);
+}
 void spice_char_device_write_buffer_add(SpiceCharDeviceState *dev,
                                         SpiceCharDeviceWriteBuffer *write_buf)
 {
@@ -541,6 +558,7 @@ void spice_char_device_write_buffer_release(SpiceCharDeviceState *dev,
                                             SpiceCharDeviceWriteBuffer *write_buf)
 {
     int buf_origin = write_buf->origin;
+    uint32_t buf_token_price = write_buf->token_price;
     RedClient *client = write_buf->client;
 
     spice_assert(!ring_item_is_linked(&write_buf->link));
@@ -561,16 +579,14 @@ void spice_char_device_write_buffer_release(SpiceCharDeviceState *dev,
         dev_client = spice_char_device_client_find(dev, client);
         /* when a client is removed, we remove all the buffers that are associated with it */
         spice_assert(dev_client);
-        spice_char_device_client_token_add(dev, dev_client);
+        spice_char_device_client_tokens_add(dev, dev_client, buf_token_price);
     } else if (buf_origin == WRITE_BUFFER_ORIGIN_SERVER) {
         dev->num_self_tokens++;
         if (dev->cbs.on_free_self_token) {
             dev->cbs.on_free_self_token(dev->opaque);
         }
     }
-
 }
-
 
 /********************************
  * char_device_state management *
