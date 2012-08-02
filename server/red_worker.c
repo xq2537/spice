@@ -253,7 +253,8 @@ enum {
     PIPE_ITEM_TYPE_DRAW = PIPE_ITEM_TYPE_CHANNEL_BASE,
     PIPE_ITEM_TYPE_INVAL_ONE,
     PIPE_ITEM_TYPE_CURSOR,
-    PIPE_ITEM_TYPE_MIGRATE,
+    PIPE_ITEM_TYPE_DISPLAY_MIGRATE, /* tmp. It will be substituted with
+                                       red_channel/PIPE_ITEM_TYPE_MIGRATE */
     PIPE_ITEM_TYPE_CURSOR_INIT,
     PIPE_ITEM_TYPE_IMAGE,
     PIPE_ITEM_TYPE_STREAM_CREATE,
@@ -8909,7 +8910,7 @@ static void display_channel_send_item(RedChannelClient *rcc, PipeItem *pipe_item
     case PIPE_ITEM_TYPE_VERB:
         red_marshall_verb(rcc, ((VerbItem*)pipe_item)->verb);
         break;
-    case PIPE_ITEM_TYPE_MIGRATE:
+    case PIPE_ITEM_TYPE_DISPLAY_MIGRATE:
         spice_info("PIPE_ITEM_TYPE_MIGRATE");
         display_channel_marshall_migrate(rcc, m);
         break;
@@ -8974,7 +8975,7 @@ static void cursor_channel_send_item(RedChannelClient *rcc, PipeItem *pipe_item)
     case PIPE_ITEM_TYPE_VERB:
         red_marshall_verb(rcc, ((VerbItem*)pipe_item)->verb);
         break;
-    case PIPE_ITEM_TYPE_MIGRATE:
+    case PIPE_ITEM_TYPE_DISPLAY_MIGRATE:
         spice_info("PIPE_ITEM_TYPE_MIGRATE");
         cursor_channel_marshall_migrate(rcc, m);
         break;
@@ -9122,7 +9123,7 @@ static void red_migrate_display(RedWorker *worker, RedChannelClient *rcc)
     // TODO: replace all worker->display_channel tests with
     // is_connected
     if (red_channel_client_is_connected(rcc)) {
-        red_pipe_add_verb(rcc, PIPE_ITEM_TYPE_MIGRATE);
+        red_pipe_add_verb(rcc, PIPE_ITEM_TYPE_DISPLAY_MIGRATE);
 //        red_pipes_add_verb(&worker->display_channel->common.base,
 //                           SPICE_MSG_DISPLAY_STREAM_DESTROY_ALL);
 //        red_channel_pipes_add_type(&worker->display_channel->common.base,
@@ -9767,7 +9768,7 @@ static uint64_t display_channel_handle_migrate_data_get_serial(
     return migrate_data->message_serial;
 }
 
-static uint64_t display_channel_handle_migrate_data(RedChannelClient *rcc, uint32_t size,
+static int display_channel_handle_migrate_data(RedChannelClient *rcc, uint32_t size,
                                                     void *message)
 {
     DisplayChannelMigrateData *migrate_data;
@@ -10016,6 +10017,7 @@ CursorChannelClient *cursor_channel_create_rcc(CommonChannel *common,
 }
 
 static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_type, int migrate,
+                                 int migration_flags,
                                  channel_disconnect_proc on_disconnect,
                                  channel_send_pipe_item_proc send_item,
                                  channel_hold_pipe_item_proc hold_item,
@@ -10046,7 +10048,8 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_t
                                         TRUE /* handle_acks */,
                                         spice_get_client_channel_parser(channel_type, NULL),
                                         handle_parsed,
-                                        &channel_cbs);
+                                        &channel_cbs,
+                                        migration_flags);
     common = (CommonChannel *)channel;
     if (!channel) {
         goto error;
@@ -10167,7 +10170,7 @@ static void display_channel_client_release_item_before_push(DisplayChannelClient
     }
     case PIPE_ITEM_TYPE_INVAL_ONE:
     case PIPE_ITEM_TYPE_VERB:
-    case PIPE_ITEM_TYPE_MIGRATE:
+    case PIPE_ITEM_TYPE_DISPLAY_MIGRATE:
     case PIPE_ITEM_TYPE_MIGRATE_DATA:
     case PIPE_ITEM_TYPE_PIXMAP_SYNC:
     case PIPE_ITEM_TYPE_PIXMAP_RESET:
@@ -10204,6 +10207,7 @@ static void display_channel_create(RedWorker *worker, int migrate)
     if (!(worker->display_channel = (DisplayChannel *)__new_channel(
             worker, sizeof(*display_channel),
             SPICE_CHANNEL_DISPLAY, migrate,
+            SPICE_MIGRATE_NEED_FLUSH | SPICE_MIGRATE_NEED_DATA_TRANSFER,
             display_channel_client_on_disconnect,
             display_channel_send_item,
             display_channel_hold_pipe_item,
@@ -10324,7 +10328,7 @@ static void red_migrate_cursor(RedWorker *worker, RedChannelClient *rcc)
         red_channel_client_pipe_add_type(rcc,
                                          PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
         red_channel_client_pipe_add_type(rcc,
-                                         PIPE_ITEM_TYPE_MIGRATE);
+                                         PIPE_ITEM_TYPE_DISPLAY_MIGRATE);
     }
 }
 
@@ -10363,7 +10367,7 @@ static void cursor_channel_client_release_item_before_push(CursorChannelClient *
     }
     case PIPE_ITEM_TYPE_INVAL_ONE:
     case PIPE_ITEM_TYPE_VERB:
-    case PIPE_ITEM_TYPE_MIGRATE:
+    case PIPE_ITEM_TYPE_DISPLAY_MIGRATE:
     case PIPE_ITEM_TYPE_CURSOR_INIT:
     case PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE:
         free(item);
@@ -10410,6 +10414,7 @@ static void cursor_channel_create(RedWorker *worker, int migrate)
     worker->cursor_channel = (CursorChannel *)__new_channel(
         worker, sizeof(*worker->cursor_channel),
         SPICE_CHANNEL_CURSOR, migrate,
+        0,
         cursor_channel_client_on_disconnect,
         cursor_channel_send_item,
         cursor_channel_hold_pipe_item,

@@ -551,7 +551,8 @@ void inputs_init(void)
                                     FALSE, /* handle_acks */
                                     spice_get_client_channel_parser(SPICE_CHANNEL_INPUTS, NULL),
                                     inputs_channel_handle_parsed,
-                                    &channel_cbs);
+                                    &channel_cbs,
+                                    0);
 
     if (!g_inputs_channel) {
         spice_error("failed to allocate Inputs Channel");

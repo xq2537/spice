@@ -679,6 +679,7 @@ static void smartcard_init(void)
 {
     ChannelCbs channel_cbs = { NULL, };
     ClientCbs client_cbs = { NULL, };
+    uint32_t migration_flags = SPICE_MIGRATE_NEED_FLUSH | SPICE_MIGRATE_NEED_DATA_TRANSFER;
 
     spice_assert(!g_smartcard_channel);
 
@@ -695,7 +696,8 @@ static void smartcard_init(void)
                                              FALSE /* migration - TODO?*/,
                                              FALSE /* handle_acks */,
                                              smartcard_channel_handle_message,
-                                             &channel_cbs);
+                                             &channel_cbs,
+                                             migration_flags);
 
     if (!g_smartcard_channel) {
         spice_error("failed to allocate Smartcard Channel");

@@ -343,7 +343,8 @@ SpiceCharDeviceState *spicevmc_device_connect(SpiceCharDeviceInstance *sin,
                                    FALSE /* migration - TODO? */,
                                    FALSE /* handle_acks */,
                                    spicevmc_red_channel_client_handle_message,
-                                   &channel_cbs);
+                                   &channel_cbs,
+                                   SPICE_MIGRATE_NEED_FLUSH | SPICE_MIGRATE_NEED_DATA_TRANSFER);
     red_channel_init_outgoing_messages_window(&state->channel);
 
     client_cbs.connect = spicevmc_connect;

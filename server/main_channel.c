@@ -475,7 +475,7 @@ static uint64_t main_channel_handle_migrate_data_get_serial(RedChannelClient *ba
     return data->serial;
 }
 
-static uint64_t main_channel_handle_migrate_data(RedChannelClient *base,
+static int main_channel_handle_migrate_data(RedChannelClient *base,
     uint32_t size, void *message)
 {
     MainChannelClient *mcc = SPICE_CONTAINEROF(base, MainChannelClient, base);
@@ -1138,7 +1138,8 @@ MainChannel* main_channel_init(void)
                                         FALSE, FALSE, /* handle_acks */
                                         spice_get_client_channel_parser(SPICE_CHANNEL_MAIN, NULL),
                                         main_channel_handle_parsed,
-                                        &channel_cbs);
+                                        &channel_cbs,
+                                        SPICE_MIGRATE_NEED_FLUSH | SPICE_MIGRATE_NEED_DATA_TRANSFER);
     spice_assert(channel);
     red_channel_set_cap(channel, SPICE_MAIN_CAP_SEMI_SEAMLESS_MIGRATE);
 

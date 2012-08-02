@@ -452,6 +452,20 @@ static void red_channel_client_send_set_ack(RedChannelClient *rcc)
     red_channel_client_begin_send_message(rcc);
 }
 
+static void red_channel_client_send_migrate(RedChannelClient *rcc)
+{
+    SpiceMsgMigrate migrate;
+
+    red_channel_client_init_send_data(rcc, SPICE_MSG_MIGRATE, NULL);
+    migrate.flags = rcc->channel->migration_flags;
+    spice_marshall_msg_migrate(rcc->send_data.marshaller, &migrate);
+    if (rcc->channel->migration_flags & SPICE_MIGRATE_NEED_FLUSH) {
+        rcc->wait_migrate_flush_mark = TRUE;
+    }
+
+    red_channel_client_begin_send_message(rcc);
+}
+
 static void red_channel_client_send_item(RedChannelClient *rcc, PipeItem *item)
 {
     int handled = TRUE;
@@ -461,6 +475,10 @@ static void red_channel_client_send_item(RedChannelClient *rcc, PipeItem *item)
     switch (item->type) {
         case PIPE_ITEM_TYPE_SET_ACK:
             red_channel_client_send_set_ack(rcc);
+            free(item);
+            break;
+        case PIPE_ITEM_TYPE_MIGRATE:
+            red_channel_client_send_migrate(rcc);
             free(item);
             break;
         default:
@@ -684,8 +702,9 @@ static void red_channel_client_default_disconnect(RedChannelClient *base)
     red_channel_client_disconnect(base);
 }
 
-static void red_channel_client_default_migrate(RedChannelClient *base)
+void red_channel_client_default_migrate(RedChannelClient *rcc)
 {
+    red_channel_client_pipe_add_type(rcc, PIPE_ITEM_TYPE_MIGRATE);
 }
 
 RedChannel *red_channel_create(int size,
@@ -693,7 +712,8 @@ RedChannel *red_channel_create(int size,
                                uint32_t type, uint32_t id,
                                int migrate, int handle_acks,
                                channel_handle_message_proc handle_message,
-                               ChannelCbs *channel_cbs)
+                               ChannelCbs *channel_cbs,
+                               uint32_t migration_flags)
 {
     RedChannel *channel;
     ClientCbs client_cbs = { NULL, };
@@ -701,11 +721,14 @@ RedChannel *red_channel_create(int size,
     spice_assert(size >= sizeof(*channel));
     spice_assert(channel_cbs->config_socket && channel_cbs->on_disconnect && handle_message &&
            channel_cbs->alloc_recv_buf && channel_cbs->release_item);
+    spice_assert(channel_cbs->handle_migrate_data ||
+                 !(migration_flags & SPICE_MIGRATE_NEED_DATA_TRANSFER));
     channel = spice_malloc0(size);
     channel->type = type;
     channel->id = id;
     channel->refs = 1;
     channel->handle_acks = handle_acks;
+    channel->migration_flags = migration_flags;
     memcpy(&channel->channel_cbs, channel_cbs, sizeof(ChannelCbs));
 
     channel->core = core;
@@ -801,12 +824,14 @@ RedChannel *red_channel_create_parser(int size,
                                int migrate, int handle_acks,
                                spice_parse_channel_func_t parser,
                                channel_handle_parsed_proc handle_parsed,
-                               ChannelCbs *channel_cbs)
+                               ChannelCbs *channel_cbs,
+                               uint32_t migration_flags)
 {
     RedChannel *channel = red_channel_create(size, core, type, id,
                                              migrate, handle_acks,
                                              do_nothing_handle_message,
-                                             channel_cbs);
+                                             channel_cbs,
+                                             migration_flags);
 
     if (channel == NULL) {
         return NULL;
@@ -1089,7 +1114,12 @@ int red_channel_client_handle_message(RedChannelClient *rcc, uint32_t size,
     case SPICE_MSGC_DISCONNECTING:
         break;
     case SPICE_MSGC_MIGRATE_FLUSH_MARK:
+        if (!rcc->wait_migrate_flush_mark) {
+            spice_error("unexpected flush mark");
+            return FALSE;
+        }
         red_channel_handle_migrate_flush_mark(rcc);
+        rcc->wait_migrate_flush_mark = FALSE;
         break;
     case SPICE_MSGC_MIGRATE_DATA:
         red_channel_handle_migrate_data(rcc, size, message);

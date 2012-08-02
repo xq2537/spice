@@ -142,6 +142,8 @@ typedef struct MainChannelClient MainChannelClient;
  * */
 enum {
     PIPE_ITEM_TYPE_SET_ACK=1,
+    PIPE_ITEM_TYPE_MIGRATE,
+
     PIPE_ITEM_TYPE_CHANNEL_BASE=101,
 };
 
@@ -168,7 +170,7 @@ typedef void (*channel_on_incoming_error_proc)(RedChannelClient *rcc);
 typedef void (*channel_on_outgoing_error_proc)(RedChannelClient *rcc);
 
 typedef int (*channel_handle_migrate_flush_mark_proc)(RedChannelClient *base);
-typedef uint64_t (*channel_handle_migrate_data_proc)(RedChannelClient *base,
+typedef int (*channel_handle_migrate_data_proc)(RedChannelClient *base,
                                                 uint32_t size, void *message);
 typedef uint64_t (*channel_handle_migrate_data_get_serial_proc)(RedChannelClient *base,
                                             uint32_t size, void *message);
@@ -265,6 +267,7 @@ struct RedChannelClient {
     RedChannelCapabilities remote_caps;
     int is_mini_header;
     int destroying;
+    int wait_migrate_flush_mark;
 };
 
 struct RedChannel {
@@ -296,6 +299,7 @@ struct RedChannel {
     ClientCbs client_cbs;
 
     RedChannelCapabilities local_caps;
+    uint32_t migration_flags;
 
     void *data;
 
@@ -313,7 +317,8 @@ RedChannel *red_channel_create(int size,
                                uint32_t type, uint32_t id,
                                int migrate, int handle_acks,
                                channel_handle_message_proc handle_message,
-                               ChannelCbs *channel_cbs);
+                               ChannelCbs *channel_cbs,
+                               uint32_t migration_flags);
 
 /* alternative constructor, meant for marshaller based (inputs,main) channels,
  * will become default eventually */
@@ -323,7 +328,8 @@ RedChannel *red_channel_create_parser(int size,
                                int migrate, int handle_acks,
                                spice_parse_channel_func_t parser,
                                channel_handle_parsed_proc handle_parsed,
-                               ChannelCbs *channel_cbs);
+                               ChannelCbs *channel_cbs,
+                               uint32_t migration_flags);
 
 void red_channel_register_client_cbs(RedChannel *channel, ClientCbs *client_cbs);
 // caps are freed when the channel is destroyed
@@ -349,6 +355,8 @@ void red_channel_client_destroy_dummy(RedChannelClient *rcc);
 
 int red_channel_is_connected(RedChannel *channel);
 int red_channel_client_is_connected(RedChannelClient *rcc);
+
+void red_channel_client_default_migrate(RedChannelClient *rcc);
 
 /*
  * the disconnect callback is called from the channel's thread,
