@@ -126,6 +126,9 @@ void spice_char_device_state_migrate_data_marshall(SpiceCharDeviceState *dev,
                                                   SpiceMarshaller *m);
 void spice_char_device_state_migrate_data_marshall_empty(SpiceMarshaller *m);
 
+int spice_char_device_state_restore(SpiceCharDeviceState *dev,
+                                    SpiceMigrateDataCharDevice *mig_data);
+
 /*
  * Resets write/read queues, and moves that state to being stopped.
  * This routine is a workaround for a bad tokens management in the vdagent

@@ -873,3 +873,52 @@ void spice_char_device_state_migrate_data_marshall(SpiceCharDeviceState *dev,
                 dev, *write_to_dev_size_ptr, *write_to_dev_tokens_ptr);
 }
 
+int spice_char_device_state_restore(SpiceCharDeviceState *dev,
+                                    SpiceMigrateDataCharDevice *mig_data)
+{
+    SpiceCharDeviceClientState *client_state;
+    uint32_t client_tokens_window;
+
+    spice_assert(dev->num_clients == 1 && dev->wait_for_migrate_data);
+
+    client_state = SPICE_CONTAINEROF(ring_get_tail(&dev->clients),
+                                     SpiceCharDeviceClientState,
+                                     link);
+    if (mig_data->version > SPICE_MIGRATE_DATA_CHAR_DEVICE_VERSION) {
+        spice_error("dev %p error: migration data version %u is bigger than self %u",
+                    dev, mig_data->version, SPICE_MIGRATE_DATA_CHAR_DEVICE_VERSION);
+        return FALSE;
+    }
+    spice_assert(!dev->cur_write_buf && ring_is_empty(&dev->write_queue));
+    spice_assert(mig_data->connected);
+
+    client_tokens_window = client_state->num_client_tokens; /* initial state of tokens */
+    client_state->num_client_tokens = mig_data->num_client_tokens;
+    /* assumption: client_tokens_window stays the same across severs */
+    client_state->num_client_tokens_free = client_tokens_window -
+                                           mig_data->num_client_tokens -
+                                           mig_data->write_num_client_tokens;
+    client_state->num_send_tokens = mig_data->num_send_tokens;
+
+    if (mig_data->write_size > 0) {
+        if (mig_data->write_num_client_tokens) {
+            dev->cur_write_buf = __spice_char_device_write_buffer_get(dev, client_state->client,
+                                                                      mig_data->write_size,
+                                                                      mig_data->write_num_client_tokens);
+        } else {
+            dev->cur_write_buf = __spice_char_device_write_buffer_get(dev, NULL, mig_data->write_size,
+                                                                      0);
+        }
+        /* the first write buffer contains all the data that was saved for migration */
+        memcpy(dev->cur_write_buf->buf,
+               ((uint8_t *)mig_data) + mig_data->write_data_ptr - sizeof(SpiceMigrateDataHeader),
+               mig_data->write_size);
+        dev->cur_write_buf->buf_used = mig_data->write_size;
+        dev->cur_write_buf_pos = dev->cur_write_buf->buf;
+    }
+    dev->wait_for_migrate_data = FALSE;
+    spice_char_device_write_to_device(dev);
+    spice_char_device_read_from_device(dev);
+    return TRUE;
+}
+
