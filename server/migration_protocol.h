@@ -31,6 +31,26 @@ typedef struct __attribute__ ((__packed__)) SpiceMigrateDataHeader {
     uint32_t version;
 } SpiceMigrateDataHeader;
 
+/* ********************
+ * Char device base
+ * *******************/
+
+/* increase the version of descendent char devices when this
+ * version is increased */
+#define SPICE_MIGRATE_DATA_CHAR_DEVICE_VERSION 1
+
+/* Should be the first field of any of the char_devices migration data (see write_data_ptr) */
+typedef struct __attribute__ ((__packed__)) SpiceMigrateDataCharDevice {
+    uint32_t version;
+    uint8_t connected;
+    uint32_t num_client_tokens;
+    uint32_t num_send_tokens;
+    uint32_t write_size; /* write to dev */
+    uint32_t write_num_client_tokens; /* how many messages from the client are part of the write_data */
+    uint32_t write_data_ptr; /* offset from
+                                SpiceMigrateDataCharDevice - sizeof(SpiceMigrateDataHeader) */
+} SpiceMigrateDataCharDevice;
+
 static inline int migration_protocol_validate_header(SpiceMigrateDataHeader *header,
                                                      uint32_t magic,
                                                      uint32_t version)
