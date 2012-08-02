@@ -291,20 +291,20 @@ void Migrate::start(const SpiceMsgMainMigrationBegin* migrate)
         _sport = old_migrate->sport ? old_migrate->sport : -1;;
         _auth_options = _client.get_host_auth_options();
     } else {
-        _host.assign((char *)migrate->host_data);
-        _port = migrate->port ? migrate->port : -1;
-        _sport = migrate->sport ? migrate->sport : -1;
+        _host.assign((char *)migrate->dst_info.host_data);
+        _port = migrate->dst_info.port ? migrate->dst_info.port : -1;
+        _sport = migrate->dst_info.sport ? migrate->dst_info.sport : -1;
         if ((peer_major == 1) || (peer_major == 2 && peer_minor < 1)) {
             _auth_options.type_flags = SPICE_SSL_VERIFY_OP_PUBKEY;
-            _auth_options.host_pubkey.assign(migrate->pub_key_data, migrate->pub_key_data +
-                                             migrate->pub_key_size);
+            _auth_options.host_pubkey.assign(migrate->dst_info.pub_key_data, migrate->dst_info.pub_key_data +
+                                             migrate->dst_info.pub_key_size);
         } else {
             _auth_options.type_flags = SPICE_SSL_VERIFY_OP_SUBJECT;
             _auth_options.CA_file =  _client.get_host_auth_options().CA_file;
-            if (migrate->cert_subject_size != 0) {
-                _auth_options.host_subject.assign(migrate->cert_subject_data,
-                                                  migrate->cert_subject_data +
-                                                  migrate->cert_subject_size);
+            if (migrate->dst_info.cert_subject_size != 0) {
+                _auth_options.host_subject.assign(migrate->dst_info.cert_subject_data,
+                                                  migrate->dst_info.cert_subject_data +
+                                                  migrate->dst_info.cert_subject_size);
             }
         }
     }

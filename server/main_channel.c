@@ -582,16 +582,16 @@ static void main_channel_marshall_migrate_begin(SpiceMarshaller *m, RedChannelCl
     MainChannel *main_ch;
 
     main_ch = SPICE_CONTAINEROF(rcc->channel, MainChannel, base);
-    migrate.port = main_ch->mig_target.port;
-    migrate.sport = main_ch->mig_target.sport;
-    migrate.host_size = strlen(main_ch->mig_target.host) + 1;
-    migrate.host_data = (uint8_t *)main_ch->mig_target.host;
+    migrate.dst_info.port = main_ch->mig_target.port;
+    migrate.dst_info.sport = main_ch->mig_target.sport;
+    migrate.dst_info.host_size = strlen(main_ch->mig_target.host) + 1;
+    migrate.dst_info.host_data = (uint8_t *)main_ch->mig_target.host;
     if (main_ch->mig_target.cert_subject) {
-        migrate.cert_subject_size = strlen(main_ch->mig_target.cert_subject) + 1;
-        migrate.cert_subject_data = (uint8_t *)main_ch->mig_target.cert_subject;
+        migrate.dst_info.cert_subject_size = strlen(main_ch->mig_target.cert_subject) + 1;
+        migrate.dst_info.cert_subject_data = (uint8_t *)main_ch->mig_target.cert_subject;
     } else {
-        migrate.cert_subject_size = 0;
-        migrate.cert_subject_data = NULL;
+        migrate.dst_info.cert_subject_size = 0;
+        migrate.dst_info.cert_subject_data = NULL;
     }
     spice_marshall_msg_main_migrate_begin(m, &migrate);
 }
