@@ -790,3 +790,72 @@ void spice_char_device_wakeup(SpiceCharDeviceState *dev)
     spice_char_device_read_from_device(dev);
 }
 
+/*************
+ * Migration *
+ * **********/
+
+void spice_char_device_state_migrate_data_marshall_empty(SpiceMarshaller *m)
+{
+    SpiceMigrateDataCharDevice mig_data;
+
+    memset(&mig_data, 0, sizeof(mig_data));
+    mig_data.version = SPICE_MIGRATE_DATA_CHAR_DEVICE_VERSION;
+    mig_data.connected = FALSE;
+    spice_marshaller_add_ref(m, (uint8_t *)&mig_data, sizeof(SpiceMigrateDataCharDevice));
+}
+
+void spice_char_device_state_migrate_data_marshall(SpiceCharDeviceState *dev,
+                                                   SpiceMarshaller *m)
+{
+    SpiceCharDeviceClientState *client_state;
+    RingItem *item;
+    uint32_t *write_to_dev_size_ptr;
+    uint32_t *write_to_dev_tokens_ptr;
+    SpiceMarshaller *m2;
+
+    /* multi-clients are not supported */
+    spice_assert(dev->num_clients == 1);
+    client_state = SPICE_CONTAINEROF(ring_get_tail(&dev->clients),
+                                     SpiceCharDeviceClientState,
+                                     link);
+    /* FIXME: if there were more than one client before the marshalling,
+     * it is possible that the send_queue_size > 0, and the send data
+     * should be migrated as well */
+    spice_assert(client_state->send_queue_size == 0);
+    spice_marshaller_add_uint32(m, SPICE_MIGRATE_DATA_CHAR_DEVICE_VERSION);
+    spice_marshaller_add_uint8(m, 1); /* connected */
+    spice_marshaller_add_uint32(m, client_state->num_client_tokens);
+    spice_marshaller_add_uint32(m, client_state->num_send_tokens);
+    write_to_dev_size_ptr = (uint32_t *)spice_marshaller_reserve_space(m, sizeof(uint32_t));
+    write_to_dev_tokens_ptr = (uint32_t *)spice_marshaller_reserve_space(m, sizeof(uint32_t));
+    *write_to_dev_size_ptr = 0;
+    *write_to_dev_tokens_ptr = 0;
+
+    m2 = spice_marshaller_get_ptr_submarshaller(m, 0);
+    if (dev->cur_write_buf) {
+        uint32_t buf_remaining = dev->cur_write_buf->buf + dev->cur_write_buf->buf_used -
+                                 dev->cur_write_buf_pos;
+
+        spice_marshaller_add_ref(m2, dev->cur_write_buf_pos, buf_remaining);
+        *write_to_dev_size_ptr += buf_remaining;
+        if (dev->cur_write_buf->origin == WRITE_BUFFER_ORIGIN_CLIENT) {
+            spice_assert(dev->cur_write_buf->client == client_state->client);
+            (*write_to_dev_tokens_ptr) += dev->cur_write_buf->token_price;
+        }
+    }
+
+    RING_FOREACH_REVERSED(item, &dev->write_queue) {
+        SpiceCharDeviceWriteBuffer *write_buf;
+
+        write_buf = SPICE_CONTAINEROF(item, SpiceCharDeviceWriteBuffer, link);
+        spice_marshaller_add_ref(m2, write_buf->buf, write_buf->buf_used);
+        *write_to_dev_size_ptr += write_buf->buf_used;
+        if (write_buf->origin == WRITE_BUFFER_ORIGIN_CLIENT) {
+            spice_assert(write_buf->client == client_state->client);
+            (*write_to_dev_tokens_ptr) += write_buf->token_price;
+        }
+    }
+    spice_debug("migration data dev %p: write_queue size %u tokens %u",
+                dev, *write_to_dev_size_ptr, *write_to_dev_tokens_ptr);
+}
+

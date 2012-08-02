@@ -3,6 +3,7 @@
 
 #include "spice.h"
 #include "red_channel.h"
+#include "migration_protocol.h"
 
 /*
  * Shared code for char devices, mainly for flow control.
@@ -120,6 +121,10 @@ void spice_char_device_state_destroy(SpiceCharDeviceState *dev);
 
 void *spice_char_device_state_opaque_get(SpiceCharDeviceState *dev);
 
+/* only one client is supported */
+void spice_char_device_state_migrate_data_marshall(SpiceCharDeviceState *dev,
+                                                  SpiceMarshaller *m);
+void spice_char_device_state_migrate_data_marshall_empty(SpiceMarshaller *m);
 
 /*
  * Resets write/read queues, and moves that state to being stopped.
