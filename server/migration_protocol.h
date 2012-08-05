@@ -18,6 +18,8 @@
 #ifndef _H_MIGRATION_PROTOCOL
 #define _H_MIGRATION_PROTOCOL
 
+#include <spice/vd_agent.h>
+
 /* ************************************************
  * src-server to dst-server migration data messages
  * ************************************************/
@@ -75,6 +77,37 @@ typedef struct __attribute__ ((__packed__)) SpiceMigrateDataSmartcard {
     uint32_t read_size; /* partial data read from dev */
     uint32_t read_data_ptr;
 } SpiceMigrateDataSmartcard;
+
+/* *********************************
+ * main channel (mainly guest agent)
+ * *********************************/
+#define SPICE_MIGRATE_DATA_MAIN_VERSION 1 /* NOTE: increase version when CHAR_DEVICE_VERSION
+                                             is increased */
+#define SPICE_MIGRATE_DATA_MAIN_MAGIC (*(uint32_t *)"MNMD")
+
+typedef struct __attribute__ ((__packed__)) SpiceMigrateDataMain {
+    SpiceMigrateDataCharDevice agent_base;
+    uint8_t client_agent_started; /* for discarding messages */
+
+    struct __attribute__ ((__packed__)) {
+        /* partial data read from device. Such data is stored only
+         * if the chunk header or the entire msg header haven't yet been read completely.
+         * Once the headers are read, partial reads of chunks can be sent as
+         * smaller chunks to the client, without the roundtrip overhead of migration data */
+        uint32_t chunk_header_size;
+        VDIChunkHeader chunk_header;
+        uint8_t msg_header_done;
+        uint32_t msg_header_partial_len;
+        uint32_t msg_header_ptr;
+        uint32_t msg_remaining;
+        uint8_t msg_filter_result;
+    } agent2client;
+
+    struct __attribute__ ((__packed__)) {
+        uint32_t msg_remaining;
+        uint8_t msg_filter_result;
+    } client2agent;
+} SpiceMigrateDataMain;
 
 static inline int migration_protocol_validate_header(SpiceMigrateDataHeader *header,
                                                      uint32_t magic,
