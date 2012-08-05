@@ -38,6 +38,11 @@
 #include "reds.h"
 #include "main_dispatcher.h"
 
+typedef struct EmptyMsgPipeItem {
+    PipeItem base;
+    int msg;
+} EmptyMsgPipeItem;
+
 static void red_channel_client_event(int fd, int event, void *data);
 static void red_client_add_channel(RedClient *client, RedChannelClient *rcc);
 static void red_client_remove_channel(RedChannelClient *rcc);
@@ -467,6 +472,15 @@ static void red_channel_client_send_migrate(RedChannelClient *rcc)
     red_channel_client_begin_send_message(rcc);
 }
 
+
+static void red_channel_client_send_empty_msg(RedChannelClient *rcc, PipeItem *base)
+{
+    EmptyMsgPipeItem *msg_pipe_item = SPICE_CONTAINEROF(base, EmptyMsgPipeItem, base);
+
+    red_channel_client_init_send_data(rcc, msg_pipe_item->msg, NULL);
+    red_channel_client_begin_send_message(rcc);
+}
+
 static void red_channel_client_send_item(RedChannelClient *rcc, PipeItem *item)
 {
     int handled = TRUE;
@@ -480,6 +494,10 @@ static void red_channel_client_send_item(RedChannelClient *rcc, PipeItem *item)
             break;
         case PIPE_ITEM_TYPE_MIGRATE:
             red_channel_client_send_migrate(rcc);
+            free(item);
+            break;
+        case PIPE_ITEM_TYPE_EMPTY_MSG:
+            red_channel_client_send_empty_msg(rcc, item);
             free(item);
             break;
         default:
@@ -1326,6 +1344,27 @@ void red_channel_pipes_add_type(RedChannel *channel, int pipe_item_type)
         red_channel_client_pipe_add_type(
             SPICE_CONTAINEROF(link, RedChannelClient, channel_link),
             pipe_item_type);
+    }
+}
+
+void red_channel_client_pipe_add_empty_msg(RedChannelClient *rcc, int msg_type)
+{
+    EmptyMsgPipeItem *item = spice_new(EmptyMsgPipeItem, 1);
+
+    red_channel_pipe_item_init(rcc->channel, &item->base, PIPE_ITEM_TYPE_EMPTY_MSG);
+    item->msg = msg_type;
+    red_channel_client_pipe_add(rcc, &item->base);
+    red_channel_client_push(rcc);
+}
+
+void red_channel_pipes_add_empty_msg(RedChannel *channel, int msg_type)
+{
+    RingItem *link;
+
+    RING_FOREACH(link, &channel->clients) {
+        red_channel_client_pipe_add_empty_msg(
+            SPICE_CONTAINEROF(link, RedChannelClient, channel_link),
+            msg_type);
     }
 }
 

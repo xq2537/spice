@@ -143,6 +143,7 @@ typedef struct MainChannelClient MainChannelClient;
 enum {
     PIPE_ITEM_TYPE_SET_ACK=1,
     PIPE_ITEM_TYPE_MIGRATE,
+    PIPE_ITEM_TYPE_EMPTY_MSG,
 
     PIPE_ITEM_TYPE_CHANNEL_BASE=101,
 };
@@ -437,6 +438,9 @@ void red_channel_client_pipe_add_tail(RedChannelClient *rcc, PipeItem *item);
 /* for types that use this routine -> the pipe item should be freed */
 void red_channel_client_pipe_add_type(RedChannelClient *rcc, int pipe_item_type);
 void red_channel_pipes_add_type(RedChannel *channel, int pipe_item_type);
+
+void red_channel_client_pipe_add_empty_msg(RedChannelClient *rcc, int msg_type);
+void red_channel_pipes_add_empty_msg(RedChannel *channel, int msg_type);
 
 void red_channel_client_ack_zero_messages_window(RedChannelClient *rcc);
 void red_channel_client_ack_set_client_window(RedChannelClient *rcc, int client_window);
