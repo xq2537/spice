@@ -500,31 +500,26 @@ static void main_channel_marshall_migrate_data_item(RedChannelClient *rcc,
     reds_marshall_migrate_data(m); // TODO: from reds split. ugly separation.
 }
 
-static uint64_t main_channel_handle_migrate_data_get_serial(RedChannelClient *base,
+static int main_channel_handle_migrate_data(RedChannelClient *rcc,
     uint32_t size, void *message)
 {
-    MainMigrateData *data = message;
+    MainChannelClient *mcc = SPICE_CONTAINEROF(rcc, MainChannelClient, base);
+    SpiceMigrateDataHeader *header = (SpiceMigrateDataHeader *)message;
 
-    if (size < sizeof(*data)) {
-        spice_printerr("bad message size");
-        return 0;
-    }
-    return data->serial;
-}
+    /* not supported with multi-clients */
+    spice_assert(rcc->channel->clients_num == 1);
 
-static int main_channel_handle_migrate_data(RedChannelClient *base,
-    uint32_t size, void *message)
-{
-    MainChannelClient *mcc = SPICE_CONTAINEROF(base, MainChannelClient, base);
-    MainMigrateData *data = message;
-
-    if (size < sizeof(*data)) {
-        spice_printerr("bad message size");
+    if (size < sizeof(SpiceMigrateDataHeader) + sizeof(SpiceMigrateDataMain)) {
+        spice_printerr("bad message size %u", size);
         return FALSE;
     }
-    mcc->ping_id = data->ping_id;
-    reds_on_main_receive_migrate_data(data, ((uint8_t*)message) + size);
-    return TRUE;
+    if (!migration_protocol_validate_header(header,
+                                            SPICE_MIGRATE_DATA_MAIN_MAGIC,
+                                            SPICE_MIGRATE_DATA_MAIN_VERSION)) {
+        spice_error("bad header");
+        return FALSE;
+    }
+    return reds_handle_migrate_data(mcc, (SpiceMigrateDataMain *)(header + 1), size);
 }
 
 void main_channel_push_init(MainChannelClient *mcc,
@@ -1173,7 +1168,6 @@ MainChannel* main_channel_init(void)
     channel_cbs.release_recv_buf = main_channel_release_msg_rcv_buf;
     channel_cbs.handle_migrate_flush_mark = main_channel_handle_migrate_flush_mark;
     channel_cbs.handle_migrate_data = main_channel_handle_migrate_data;
-    channel_cbs.handle_migrate_data_get_serial = main_channel_handle_migrate_data_get_serial;
 
     // TODO: set the migration flag of the channel
     channel = red_channel_create_parser(sizeof(MainChannel), core,

@@ -24,27 +24,6 @@
 #include "reds.h"
 #include "red_channel.h"
 
-/* This is a temporary measure for reds/main split - should not be in a header,
- * but private (although only reds.c includes main_channel.h) */
-struct MainMigrateData {
-    uint32_t version;
-    uint32_t serial;
-    uint32_t ping_id;
-
-    uint32_t agent_connected;
-    uint32_t client_agent_started;
-    uint32_t num_client_tokens;
-    uint32_t send_tokens;
-
-    uint32_t read_state;
-    VDIChunkHeader vdi_chunk_header;
-    uint32_t recive_len;
-    uint32_t message_recive_len;
-    uint32_t read_buf_len;
-
-    uint32_t write_queue_size;
-};
-
 // TODO: Defines used to calculate receive buffer size, and also by reds.c
 // other options: is to make a reds_main_consts.h, to duplicate defines.
 #define REDS_AGENT_WINDOW_SIZE 10

@@ -32,6 +32,7 @@
 #include "common/messages.h"
 #include "spice.h"
 #include "red_channel.h"
+#include "migration_protocol.h"
 
 #define SPICE_GNUC_VISIBLE __attribute__ ((visibility ("default")))
 
@@ -152,7 +153,8 @@ void reds_release_agent_data_buffer(uint8_t *buf);
 void reds_on_main_agent_data(MainChannelClient *mcc, void *message, size_t size);
 void reds_on_main_migrate_connected(int seamless); //should be called when all the clients
                                                    // are connected to the target
-void reds_on_main_receive_migrate_data(MainMigrateData *data, uint8_t *end);
+int reds_handle_migrate_data(MainChannelClient *mcc,
+                             SpiceMigrateDataMain *mig_data, uint32_t size);
 void reds_on_main_mouse_mode_request(void *message, size_t size);
 /* migration dest side: returns whether it can support seamless migration
  * with the given src migration protocol version */
