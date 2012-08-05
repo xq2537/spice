@@ -700,10 +700,6 @@ static void smartcard_connect_client(RedChannel *channel, RedClient *client,
     }
 }
 
-static void smartcard_migrate(RedChannelClient *rcc)
-{
-}
-
 SmartCardChannel *g_smartcard_channel;
 
 static void smartcard_init(void)
@@ -735,7 +731,6 @@ static void smartcard_init(void)
     }
 
     client_cbs.connect = smartcard_connect_client;
-    client_cbs.migrate = smartcard_migrate;
     red_channel_register_client_cbs(&g_smartcard_channel->base, &client_cbs);
 
     reds_register_channel(&g_smartcard_channel->base);
