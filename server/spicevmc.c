@@ -317,11 +317,6 @@ static void spicevmc_connect(RedChannel *channel, RedClient *client,
     }
 }
 
-static void spicevmc_migrate(RedChannelClient *rcc)
-{
-    /* NOOP */
-}
-
 SpiceCharDeviceState *spicevmc_device_connect(SpiceCharDeviceInstance *sin,
                                               uint8_t channel_type)
 {
@@ -349,7 +344,6 @@ SpiceCharDeviceState *spicevmc_device_connect(SpiceCharDeviceInstance *sin,
     red_channel_init_outgoing_messages_window(&state->channel);
 
     client_cbs.connect = spicevmc_connect;
-    client_cbs.migrate = spicevmc_migrate;
     red_channel_register_client_cbs(&state->channel, &client_cbs);
 
     char_dev_cbs.read_one_msg_from_device = spicevmc_chardev_read_msg_from_dev;
