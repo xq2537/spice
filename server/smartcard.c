@@ -66,7 +66,7 @@ struct SmartCardDeviceState {
 };
 
 enum {
-    PIPE_ITEM_TYPE_ERROR=1,
+    PIPE_ITEM_TYPE_ERROR = PIPE_ITEM_TYPE_CHANNEL_BASE,
     PIPE_ITEM_TYPE_MSG,
 };
 
