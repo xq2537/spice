@@ -206,10 +206,37 @@ static void spicevmc_red_channel_client_on_disconnect(RedChannelClient *rcc)
     }
 }
 
+static SpiceVmcState *spicevmc_red_channel_client_get_state(RedChannelClient *rcc)
+{
+    return SPICE_CONTAINEROF(rcc->channel, SpiceVmcState, channel);
+}
+
 static int spicevmc_channel_client_handle_migrate_flush_mark(RedChannelClient *rcc)
 {
     red_channel_client_pipe_add_type(rcc, PIPE_ITEM_TYPE_SPICEVMC_MIGRATE_DATA);
     return TRUE;
+}
+
+static int spicevmc_channel_client_handle_migrate_data(RedChannelClient *rcc,
+                                                       uint32_t size, void *message)
+{
+    SpiceMigrateDataHeader *header;
+    SpiceMigrateDataSpiceVmc *mig_data;
+    SpiceVmcState *state;
+
+    state = spicevmc_red_channel_client_get_state(rcc);
+
+    header = (SpiceMigrateDataHeader *)message;
+    mig_data = (SpiceMigrateDataSpiceVmc *)(header + 1);
+    spice_assert(size >= sizeof(SpiceMigrateDataHeader) + sizeof(SpiceMigrateDataSpiceVmc));
+
+    if (!migration_protocol_validate_header(header,
+                                            SPICE_MIGRATE_DATA_SPICEVMC_MAGIC,
+                                            SPICE_MIGRATE_DATA_SPICEVMC_VERSION)) {
+        spice_error("bad header");
+        return FALSE;
+    }
+    return spice_char_device_state_restore(state->chardev_st, &mig_data->base);
 }
 
 static int spicevmc_red_channel_client_handle_message(RedChannelClient *rcc,
@@ -219,8 +246,7 @@ static int spicevmc_red_channel_client_handle_message(RedChannelClient *rcc,
 {
     SpiceVmcState *state;
 
-    state = SPICE_CONTAINEROF(rcc->channel, SpiceVmcState, channel);
-
+    state = spicevmc_red_channel_client_get_state(rcc);
     if (type != SPICE_MSGC_SPICEVMC_DATA) {
         return red_channel_client_handle_message(rcc, size, type, msg);
     }
@@ -383,6 +409,7 @@ SpiceCharDeviceState *spicevmc_device_connect(SpiceCharDeviceInstance *sin,
     channel_cbs.alloc_recv_buf = spicevmc_red_channel_alloc_msg_rcv_buf;
     channel_cbs.release_recv_buf = spicevmc_red_channel_release_msg_rcv_buf;
     channel_cbs.handle_migrate_flush_mark = spicevmc_channel_client_handle_migrate_flush_mark;
+    channel_cbs.handle_migrate_data = spicevmc_channel_client_handle_migrate_data;
 
     state = (SpiceVmcState*)red_channel_create(sizeof(SpiceVmcState),
                                    core, channel_type, id[channel_type]++,
