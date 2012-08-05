@@ -31,6 +31,7 @@
 #include "char_device.h"
 #include "red_channel.h"
 #include "reds.h"
+#include "migration_protocol.h"
 
 /* todo: add flow control. i.e.,
  * (a) limit the tokens available for the client
@@ -56,6 +57,11 @@ typedef struct SpiceVmcState {
     SpiceVmcPipeItem *pipe_item;
     SpiceCharDeviceWriteBuffer *recv_from_client_buf;
 } SpiceVmcState;
+
+enum {
+    PIPE_ITEM_TYPE_SPICEVMC_DATA = PIPE_ITEM_TYPE_CHANNEL_BASE,
+    PIPE_ITEM_TYPE_SPICEVMC_MIGRATE_DATA,
+};
 
 static SpiceVmcPipeItem *spicevmc_pipe_item_ref(SpiceVmcPipeItem *item)
 {
@@ -100,7 +106,7 @@ static SpiceCharDeviceMsgToClient *spicevmc_chardev_read_msg_from_dev(SpiceCharD
         msg_item = spice_new0(SpiceVmcPipeItem, 1);
         msg_item->refs = 1;
         red_channel_pipe_item_init(&state->channel,
-                                       &msg_item->base, 0);
+                                   &msg_item->base, PIPE_ITEM_TYPE_SPICEVMC_DATA);
     } else {
         spice_assert(state->pipe_item->buf_used == 0);
         msg_item = state->pipe_item;
@@ -200,6 +206,12 @@ static void spicevmc_red_channel_client_on_disconnect(RedChannelClient *rcc)
     }
 }
 
+static int spicevmc_channel_client_handle_migrate_flush_mark(RedChannelClient *rcc)
+{
+    red_channel_client_pipe_add_type(rcc, PIPE_ITEM_TYPE_SPICEVMC_MIGRATE_DATA);
+    return TRUE;
+}
+
 static int spicevmc_red_channel_client_handle_message(RedChannelClient *rcc,
                                                       uint16_t type,
                                                       uint32_t size,
@@ -261,21 +273,58 @@ static void spicevmc_red_channel_hold_pipe_item(RedChannelClient *rcc,
     /* NOOP */
 }
 
-static void spicevmc_red_channel_send_item(RedChannelClient *rcc,
-    PipeItem *item)
+static void spicevmc_red_channel_send_data(RedChannelClient *rcc,
+                                           SpiceMarshaller *m,
+                                           PipeItem *item)
 {
     SpiceVmcPipeItem *i = SPICE_CONTAINEROF(item, SpiceVmcPipeItem, base);
-    SpiceMarshaller *m = red_channel_client_get_marshaller(rcc);
 
     red_channel_client_init_send_data(rcc, SPICE_MSG_SPICEVMC_DATA, item);
     spice_marshaller_add_ref(m, i->buf, i->buf_used);
+}
+
+static void spicevmc_red_channel_send_migrate_data(RedChannelClient *rcc,
+                                                   SpiceMarshaller *m,
+                                                   PipeItem *item)
+{
+    SpiceVmcState *state;
+
+    state = SPICE_CONTAINEROF(rcc->channel, SpiceVmcState, channel);
+    red_channel_client_init_send_data(rcc, SPICE_MSG_MIGRATE_DATA, item);
+    spice_marshaller_add_uint32(m, SPICE_MIGRATE_DATA_SPICEVMC_MAGIC);
+    spice_marshaller_add_uint32(m, SPICE_MIGRATE_DATA_SPICEVMC_VERSION);
+
+    spice_char_device_state_migrate_data_marshall(state->chardev_st, m);
+}
+
+static void spicevmc_red_channel_send_item(RedChannelClient *rcc,
+                                           PipeItem *item)
+{
+    SpiceMarshaller *m = red_channel_client_get_marshaller(rcc);
+
+    switch (item->type) {
+    case PIPE_ITEM_TYPE_SPICEVMC_DATA:
+        spicevmc_red_channel_send_data(rcc, m, item);
+        break;
+    case PIPE_ITEM_TYPE_SPICEVMC_MIGRATE_DATA:
+        spicevmc_red_channel_send_migrate_data(rcc, m, item);
+        break;
+    default:
+        spice_error("bad pipe item %d", item->type);
+        free(item);
+        return;
+    }
     red_channel_client_begin_send_message(rcc);
 }
 
 static void spicevmc_red_channel_release_pipe_item(RedChannelClient *rcc,
     PipeItem *item, int item_pushed)
 {
-    spicevmc_pipe_item_unref((SpiceVmcPipeItem *)item);
+    if (item->type == PIPE_ITEM_TYPE_SPICEVMC_DATA) {
+        spicevmc_pipe_item_unref((SpiceVmcPipeItem *)item);
+    } else {
+        free(item);
+    }
 }
 
 static void spicevmc_connect(RedChannel *channel, RedClient *client,
@@ -333,6 +382,7 @@ SpiceCharDeviceState *spicevmc_device_connect(SpiceCharDeviceInstance *sin,
     channel_cbs.release_item = spicevmc_red_channel_release_pipe_item;
     channel_cbs.alloc_recv_buf = spicevmc_red_channel_alloc_msg_rcv_buf;
     channel_cbs.release_recv_buf = spicevmc_red_channel_release_msg_rcv_buf;
+    channel_cbs.handle_migrate_flush_mark = spicevmc_channel_client_handle_migrate_flush_mark;
 
     state = (SpiceVmcState*)red_channel_create(sizeof(SpiceVmcState),
                                    core, channel_type, id[channel_type]++,
