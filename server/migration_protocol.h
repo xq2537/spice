@@ -51,6 +51,17 @@ typedef struct __attribute__ ((__packed__)) SpiceMigrateDataCharDevice {
                                 SpiceMigrateDataCharDevice - sizeof(SpiceMigrateDataHeader) */
 } SpiceMigrateDataCharDevice;
 
+/* ********
+ * spicevmc
+ * ********/
+
+#define SPICE_MIGRATE_DATA_SPICEVMC_VERSION 1 /* NOTE: increase version when CHAR_DEVICE_VERSION
+                                                 is increased */
+#define SPICE_MIGRATE_DATA_SPICEVMC_MAGIC (*(uint32_t *)"SVMD")
+typedef struct __attribute__ ((__packed__)) SpiceMigrateDataSpiceVmc {
+    SpiceMigrateDataCharDevice base;
+} SpiceMigrateDataSpiceVmc;
+
 static inline int migration_protocol_validate_header(SpiceMigrateDataHeader *header,
                                                      uint32_t magic,
                                                      uint32_t version)
