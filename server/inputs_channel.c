@@ -73,10 +73,9 @@ typedef struct InputsChannel {
 } InputsChannel;
 
 enum {
-    PIPE_ITEM_INPUTS_INIT = SPICE_MSG_INPUTS_INIT,
-    PIPE_ITEM_MOUSE_MOTION_ACK = SPICE_MSG_INPUTS_MOUSE_MOTION_ACK,
-    PIPE_ITEM_KEY_MODIFIERS = SPICE_MSG_INPUTS_KEY_MODIFIERS,
-    PIPE_ITEM_MIGRATE = SPICE_MSG_MIGRATE,
+    PIPE_ITEM_INPUTS_INIT = PIPE_ITEM_TYPE_CHANNEL_BASE,
+    PIPE_ITEM_MOUSE_MOTION_ACK,
+    PIPE_ITEM_KEY_MODIFIERS,
 };
 
 typedef struct InputsPipeItem {
@@ -252,33 +251,32 @@ static void inputs_channel_send_item(RedChannelClient *rcc, PipeItem *base)
 {
     SpiceMarshaller *m = red_channel_client_get_marshaller(rcc);
 
-    red_channel_client_init_send_data(rcc, base->type, base);
     switch (base->type) {
         case PIPE_ITEM_KEY_MODIFIERS:
         {
             SpiceMsgInputsKeyModifiers key_modifiers;
 
+            red_channel_client_init_send_data(rcc, SPICE_MSG_INPUTS_KEY_MODIFIERS, base);
             key_modifiers.modifiers =
                 SPICE_CONTAINEROF(base, KeyModifiersPipeItem, base)->modifiers;
             spice_marshall_msg_inputs_key_modifiers(m, &key_modifiers);
+            break;
         }
         case PIPE_ITEM_INPUTS_INIT:
         {
             SpiceMsgInputsInit inputs_init;
 
+            red_channel_client_init_send_data(rcc, SPICE_MSG_INPUTS_INIT, base);
             inputs_init.keyboard_modifiers =
                 SPICE_CONTAINEROF(base, InputsInitPipeItem, base)->modifiers;
             spice_marshall_msg_inputs_init(m, &inputs_init);
-        }
-        case PIPE_ITEM_MIGRATE:
-        {
-            SpiceMsgMigrate migrate;
-
-            migrate.flags = 0;
-            spice_marshall_msg_migrate(m, &migrate);
             break;
         }
+        case PIPE_ITEM_MOUSE_MOTION_ACK:
+            red_channel_client_init_send_data(rcc, SPICE_MSG_INPUTS_MOUSE_MOTION_ACK, base);
+            break;
         default:
+            spice_warning("invalid pipe iten %d", base->type);
             break;
     }
     red_channel_client_begin_send_message(rcc);
@@ -452,7 +450,7 @@ static void inputs_channel_on_disconnect(RedChannelClient *rcc)
 static void inputs_migrate(RedChannelClient *rcc)
 {
     spice_assert(g_inputs_channel == (InputsChannel *)rcc->channel);
-    red_channel_client_pipe_add_type(rcc, PIPE_ITEM_MIGRATE);
+    red_channel_client_pipe_add_type(rcc, PIPE_ITEM_TYPE_MIGRATE);
 }
 
 static void inputs_pipe_add_init(RedChannelClient *rcc)
