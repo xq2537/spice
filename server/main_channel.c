@@ -1160,10 +1160,17 @@ uint64_t main_channel_client_get_bitrate_per_sec(MainChannelClient *mcc)
     return mcc->bitrate_per_sec;
 }
 
+static void main_channel_client_migrate(RedChannelClient *rcc)
+{
+    reds_on_main_channel_migrate(SPICE_CONTAINEROF(rcc, MainChannelClient, base));
+    red_channel_client_default_migrate(rcc);
+}
+
 MainChannel* main_channel_init(void)
 {
     RedChannel *channel;
     ChannelCbs channel_cbs = { NULL, };
+    ClientCbs client_cbs = {NULL, };
 
     channel_cbs.config_socket = main_channel_config_socket;
     channel_cbs.on_disconnect = main_channel_client_on_disconnect;
@@ -1186,6 +1193,9 @@ MainChannel* main_channel_init(void)
                                         SPICE_MIGRATE_NEED_FLUSH | SPICE_MIGRATE_NEED_DATA_TRANSFER);
     spice_assert(channel);
     red_channel_set_cap(channel, SPICE_MAIN_CAP_SEMI_SEAMLESS_MIGRATE);
+
+    client_cbs.migrate = main_channel_client_migrate;
+    red_channel_register_client_cbs(channel, &client_cbs);
 
     return (MainChannel *)channel;
 }

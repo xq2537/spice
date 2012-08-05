@@ -901,7 +901,7 @@ RedChannel *red_channel_create_parser(int size,
 
 void red_channel_register_client_cbs(RedChannel *channel, ClientCbs *client_cbs)
 {
-    spice_assert(client_cbs->connect);
+    spice_assert(client_cbs->connect || channel->type == SPICE_CHANNEL_MAIN);
     channel->client_cbs.connect = client_cbs->connect;
 
     if (client_cbs->disconnect) {
