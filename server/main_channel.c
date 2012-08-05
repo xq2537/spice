@@ -496,13 +496,8 @@ static void main_channel_push_migrate_data_item(MainChannel *main_chan)
 static void main_channel_marshall_migrate_data_item(RedChannelClient *rcc,
                                                     SpiceMarshaller *m, PipeItem *item)
 {
-    MainMigrateData *data = (MainMigrateData *)
-                            spice_marshaller_reserve_space(m, sizeof(MainMigrateData));
-
     red_channel_client_init_send_data(rcc, SPICE_MSG_MIGRATE_DATA, item);
-    reds_marshall_migrate_data_item(m, data); // TODO: from reds split. ugly separation.
-    data->serial = red_channel_client_get_message_serial(rcc);
-    data->ping_id = SPICE_CONTAINEROF(rcc, MainChannelClient, base)->ping_id;
+    reds_marshall_migrate_data(m); // TODO: from reds split. ugly separation.
 }
 
 static uint64_t main_channel_handle_migrate_data_get_serial(RedChannelClient *base,
@@ -996,17 +991,13 @@ static int main_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint
 #endif
         break;
     }
-    case SPICE_MSGC_MIGRATE_FLUSH_MARK:
-        break;
-    case SPICE_MSGC_MIGRATE_DATA: {
-                }
     case SPICE_MSGC_DISCONNECTING:
         break;
     case SPICE_MSGC_MAIN_MIGRATE_END:
         main_channel_client_handle_migrate_end(mcc);
         break;
     default:
-        spice_printerr("unexpected type %d", type);
+        return red_channel_client_handle_message(rcc, size, type, message);
     }
     return TRUE;
 }
@@ -1046,6 +1037,7 @@ static void main_channel_hold_pipe_item(RedChannelClient *rcc, PipeItem *item)
 
 static int main_channel_handle_migrate_flush_mark(RedChannelClient *rcc)
 {
+    spice_debug(NULL);
     main_channel_push_migrate_data_item(SPICE_CONTAINEROF(rcc->channel,
                                         MainChannel, base));
     return TRUE;

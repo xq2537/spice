@@ -123,8 +123,6 @@ int agent_copypaste = TRUE;
 #define MIGRATE_TIMEOUT (1000 * 10) /* 10sec */
 #define MM_TIMER_GRANULARITY_MS (1000 / 30)
 #define MM_TIME_DELTA 400 /*ms*/
-#define VDI_PORT_WRITE_RETRY_TIMEOUT 100 /*ms*/
-
 
 typedef struct TicketAuthentication {
     char password[SPICE_MAX_PASSWORD_LENGTH];
@@ -166,6 +164,7 @@ enum {
 typedef struct VDIPortState {
     SpiceCharDeviceState *base;
     uint32_t plug_generation;
+    int client_agent_started;
 
     /* write to agent */
     SpiceCharDeviceWriteBuffer *recv_from_client_buf;
@@ -635,6 +634,7 @@ static void reds_reset_vdp(void)
        messages written by the client */
     state->write_filter.result = AGENT_MSG_FILTER_DISCARD;
     state->write_filter.discard_all = TRUE;
+    state->client_agent_started = FALSE;
 
     /* reseting and not destroying the state as a workaround for a bad
      * tokens management in the vdagent protocol:
@@ -1097,6 +1097,7 @@ void reds_on_main_agent_start(MainChannelClient *mcc, uint32_t num_tokens)
     }
     spice_assert(vdagent->st && vdagent->st == dev_state);
     rcc = main_channel_client_get_base(mcc);
+    reds->agent_state.client_agent_started = TRUE;
     /*
      * Note that in older releases, send_tokens were set to ~0 on both client
      * and server. The server ignored the client given tokens.
@@ -1263,16 +1264,83 @@ void reds_on_main_channel_migrate(MainChannelClient *mcc)
     }
 }
 
-#define MAIN_CHANNEL_MIG_DATA_VERSION 1
-
-typedef struct WriteQueueInfo {
-    uint32_t port;
-    uint32_t len;
-} WriteQueueInfo;
-
-void reds_marshall_migrate_data_item(SpiceMarshaller *m, MainMigrateData *data)
+void reds_marshall_migrate_data(SpiceMarshaller *m)
 {
-    spice_warning("not implemented");
+    SpiceMigrateDataMain mig_data;
+    VDIPortState *agent_state = &reds->agent_state;
+    SpiceMarshaller *m2;
+
+    memset(&mig_data, 0, sizeof(mig_data));
+    spice_marshaller_add_uint32(m, SPICE_MIGRATE_DATA_MAIN_MAGIC);
+    spice_marshaller_add_uint32(m, SPICE_MIGRATE_DATA_MAIN_VERSION);
+
+    if (!vdagent) {
+        spice_assert(!agent_state->base); /* MSG_AGENT_CONNECTED_TOKENS is supported by the client
+                                             (see spice_server_migrate_connect), so SpiceCharDeviceState
+                                             is destroyed when the agent is disconnected and
+                                             there is no need to track the client tokens
+                                             (see reds_reset_vdp) */
+        spice_char_device_state_migrate_data_marshall_empty(m);
+        spice_marshaller_add_ref(m,
+                                 (uint8_t *)&mig_data + sizeof(SpiceMigrateDataCharDevice),
+                                 sizeof(SpiceMigrateDataMain) - sizeof(SpiceMigrateDataCharDevice)
+                                 );
+        return;
+    }
+
+    spice_char_device_state_migrate_data_marshall(reds->agent_state.base, m);
+    spice_marshaller_add_uint8(m, reds->agent_state.client_agent_started);
+
+    mig_data.agent2client.chunk_header = agent_state->vdi_chunk_header;
+
+    /* agent to client partial msg */
+    if (agent_state->read_state == VDI_PORT_READ_STATE_READ_HEADER) {
+        mig_data.agent2client.chunk_header_size = agent_state->recive_pos -
+            (uint8_t *)&agent_state->vdi_chunk_header;
+
+        mig_data.agent2client.msg_header_done = FALSE;
+        mig_data.agent2client.msg_header_partial_len = 0;
+        spice_assert(!agent_state->read_filter.msg_data_to_read );
+    } else {
+        mig_data.agent2client.chunk_header_size = sizeof(VDIChunkHeader);
+        mig_data.agent2client.chunk_header.size = agent_state->message_recive_len;
+        if (agent_state->read_state == VDI_PORT_READ_STATE_READ_DATA) {
+            /* in the middle of reading the message header (see reds_on_main_channel_migrate) */
+            mig_data.agent2client.msg_header_done = FALSE;
+            mig_data.agent2client.msg_header_partial_len =
+                agent_state->recive_pos - agent_state->current_read_buf->data;
+            spice_assert(mig_data.agent2client.msg_header_partial_len < sizeof(VDAgentMessage));
+            spice_assert(!agent_state->read_filter.msg_data_to_read);
+        } else {
+            mig_data.agent2client.msg_header_done =  TRUE;
+            mig_data.agent2client.msg_remaining = agent_state->read_filter.msg_data_to_read;
+            mig_data.agent2client.msg_filter_result = agent_state->read_filter.result;
+        }
+    }
+    spice_marshaller_add_uint32(m, mig_data.agent2client.chunk_header_size);
+    spice_marshaller_add_ref(m,
+                             (uint8_t *)&mig_data.agent2client.chunk_header,
+                             sizeof(VDIChunkHeader));
+    spice_marshaller_add_uint8(m, mig_data.agent2client.msg_header_done);
+    spice_marshaller_add_uint32(m, mig_data.agent2client.msg_header_partial_len);
+    m2 = spice_marshaller_get_ptr_submarshaller(m, 0);
+    spice_marshaller_add_ref(m2, agent_state->current_read_buf->data,
+                             mig_data.agent2client.msg_header_partial_len);
+    spice_marshaller_add_uint32(m, mig_data.agent2client.msg_remaining);
+    spice_marshaller_add_uint8(m, mig_data.agent2client.msg_filter_result);
+
+    mig_data.client2agent.msg_remaining = agent_state->write_filter.msg_data_to_read;
+    mig_data.client2agent.msg_filter_result = agent_state->write_filter.result;
+    spice_marshaller_add_uint32(m, mig_data.client2agent.msg_remaining);
+    spice_marshaller_add_uint8(m, mig_data.client2agent.msg_filter_result);
+    spice_debug("from agent filter: discard all %d, wait_msg %u, msg_filter_result %d",
+                agent_state->read_filter.discard_all,
+                agent_state->read_filter.msg_data_to_read,
+                 agent_state->read_filter.result);
+    spice_debug("to agent filter: discard all %d, wait_msg %u, msg_filter_result %d",
+                agent_state->write_filter.discard_all,
+                agent_state->write_filter.msg_data_to_read,
+                 agent_state->write_filter.result);
 }
 
 void reds_on_main_receive_migrate_data(MainMigrateData *data, uint8_t *end)
@@ -4130,6 +4198,7 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_connect(SpiceServer *s, const char* 
                                                     const char* cert_subject)
 {
     SpiceMigrateInterface *sif;
+    int try_seamless;
 
     spice_info(NULL);
     spice_assert(migration_interface);
@@ -4149,9 +4218,20 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_connect(SpiceServer *s, const char* 
 
     reds->expect_migrate = TRUE;
 
+    /*
+     * seamless migration support was added to the client after the support in
+     * agent_connect_tokens, so there shouldn't be contradicition - if
+     * the client is capable of seamless migration, it is capbable of agent_connected_tokens.
+     * The demand for agent_connected_tokens support is in order to assure that if migration
+     * occured when the agent was not connected, the tokens state after migration will still
+     * be valid (see reds_reset_vdp for more details).
+     */
+    try_seamless = reds->seamless_migration_enabled &&
+                   red_channel_test_remote_cap(&reds->main_channel->base,
+                   SPICE_MAIN_CAP_AGENT_CONNECTED_TOKENS);
     /* main channel will take care of clients that are still during migration (at target)*/
     if (main_channel_migrate_connect(reds->main_channel, reds->mig_spice,
-                                     reds->seamless_migration_enabled)) {
+                                     try_seamless)) {
         reds_mig_started();
     } else {
         if (reds->num_clients == 0) {

@@ -135,7 +135,7 @@ void reds_client_disconnect(RedClient *client);
 
 // Temporary (?) for splitting main channel
 typedef struct MainMigrateData MainMigrateData;
-void reds_marshall_migrate_data_item(SpiceMarshaller *m, MainMigrateData *data);
+void reds_marshall_migrate_data(SpiceMarshaller *m);
 void reds_fill_channels(SpiceMsgChannels *channels_info);
 int reds_num_of_channels(void);
 int reds_num_of_clients(void);
