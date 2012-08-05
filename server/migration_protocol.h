@@ -62,6 +62,20 @@ typedef struct __attribute__ ((__packed__)) SpiceMigrateDataSpiceVmc {
     SpiceMigrateDataCharDevice base;
 } SpiceMigrateDataSpiceVmc;
 
+/* *********
+ * smartcard
+ * *********/
+
+#define SPICE_MIGRATE_DATA_SMARTCARD_VERSION 1 /* NOTE: increase version when CHAR_DEVICE_VERSION
+                                                  is increased */
+#define SPICE_MIGRATE_DATA_SMARTCARD_MAGIC (*(uint32_t *)"SCMD")
+typedef struct __attribute__ ((__packed__)) SpiceMigrateDataSmartcard {
+    SpiceMigrateDataCharDevice base;
+    uint8_t reader_added;
+    uint32_t read_size; /* partial data read from dev */
+    uint32_t read_data_ptr;
+} SpiceMigrateDataSmartcard;
+
 static inline int migration_protocol_validate_header(SpiceMigrateDataHeader *header,
                                                      uint32_t magic,
                                                      uint32_t version)
