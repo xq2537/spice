@@ -447,12 +447,6 @@ static void inputs_channel_on_disconnect(RedChannelClient *rcc)
     inputs_relase_keys();
 }
 
-static void inputs_migrate(RedChannelClient *rcc)
-{
-    spice_assert(g_inputs_channel == (InputsChannel *)rcc->channel);
-    red_channel_client_pipe_add_type(rcc, PIPE_ITEM_TYPE_MIGRATE);
-}
-
 static void inputs_pipe_add_init(RedChannelClient *rcc)
 {
     InputsInitPipeItem *item = spice_malloc(sizeof(InputsInitPipeItem));
@@ -557,7 +551,6 @@ void inputs_init(void)
     }
 
     client_cbs.connect = inputs_connect;
-    client_cbs.migrate = inputs_migrate;
     red_channel_register_client_cbs(&g_inputs_channel->base, &client_cbs);
 
     reds_register_channel(&g_inputs_channel->base);
