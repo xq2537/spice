@@ -158,7 +158,7 @@ static VDIReadBuf *vdi_port_read_buf_ref(VDIReadBuf *buf);
 static void vdi_port_read_buf_unref(VDIReadBuf *buf);
 
 enum {
-    VDI_PORT_READ_STATE_READ_HADER,
+    VDI_PORT_READ_STATE_READ_HEADER,
     VDI_PORT_READ_STATE_GET_BUFF,
     VDI_PORT_READ_STATE_READ_DATA,
 };
@@ -621,7 +621,7 @@ static void reds_reset_vdp(void)
     VDIPortState *state = &reds->agent_state;
     SpiceCharDeviceInterface *sif;
 
-    state->read_state = VDI_PORT_READ_STATE_READ_HADER;
+    state->read_state = VDI_PORT_READ_STATE_READ_HEADER;
     state->recive_pos = (uint8_t *)&state->vdi_chunk_header;
     state->recive_len = sizeof(state->vdi_chunk_header);
     state->message_recive_len = 0;
@@ -894,7 +894,7 @@ static SpiceCharDeviceMsgToClient *vdi_port_read_one_msg_from_device(SpiceCharDe
     sif = SPICE_CONTAINEROF(vdagent->base.sif, SpiceCharDeviceInterface, base);
     while (vdagent) {
         switch (state->read_state) {
-        case VDI_PORT_READ_STATE_READ_HADER:
+        case VDI_PORT_READ_STATE_READ_HEADER:
             n = sif->read(vdagent, state->recive_pos, state->recive_len);
             if (!n) {
                 return NULL;
@@ -929,7 +929,7 @@ static SpiceCharDeviceMsgToClient *vdi_port_read_one_msg_from_device(SpiceCharDe
             state->current_read_buf = NULL;
             state->recive_pos = NULL;
             if (state->message_recive_len == 0) {
-                state->read_state = VDI_PORT_READ_STATE_READ_HADER;
+                state->read_state = VDI_PORT_READ_STATE_READ_HEADER;
                 state->recive_pos = (uint8_t *)&state->vdi_chunk_header;
                 state->recive_len = sizeof(state->vdi_chunk_header);
             } else {
@@ -3616,7 +3616,7 @@ static void init_vd_agent_resources(void)
     agent_msg_filter_init(&state->write_filter, agent_copypaste, TRUE);
     agent_msg_filter_init(&state->read_filter, agent_copypaste, TRUE);
 
-    state->read_state = VDI_PORT_READ_STATE_READ_HADER;
+    state->read_state = VDI_PORT_READ_STATE_READ_HEADER;
     state->recive_pos = (uint8_t *)&state->vdi_chunk_header;
     state->recive_len = sizeof(state->vdi_chunk_header);
 
