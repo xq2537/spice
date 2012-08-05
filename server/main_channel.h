@@ -82,7 +82,6 @@ void main_channel_push_init(MainChannelClient *mcc, int display_channels_hint,
     int current_mouse_mode, int is_client_mouse_allowed, int multi_media_time,
     int ram_hint);
 void main_channel_push_notify(MainChannel *main_chan, uint8_t *mess, const int mess_len);
-void main_channel_push_migrate(MainChannel *main_chan);
 void main_channel_push_multi_media_time(MainChannel *main_chan, int time);
 int main_channel_getsockname(MainChannel *main_chan, struct sockaddr *sa, socklen_t *salen);
 int main_channel_getpeername(MainChannel *main_chan, struct sockaddr *sa, socklen_t *salen);

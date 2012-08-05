@@ -56,6 +56,25 @@
 
 static uint8_t zero_page[ZERO_BUF_SIZE] = {0};
 
+enum {
+    PIPE_ITEM_TYPE_MAIN_CHANNELS_LIST = PIPE_ITEM_TYPE_CHANNEL_BASE,
+    PIPE_ITEM_TYPE_MAIN_PING,
+    PIPE_ITEM_TYPE_MAIN_MOUSE_MODE,
+    PIPE_ITEM_TYPE_MAIN_AGENT_DISCONNECTED,
+    PIPE_ITEM_TYPE_MAIN_AGENT_TOKEN,
+    PIPE_ITEM_TYPE_MAIN_AGENT_DATA,
+    PIPE_ITEM_TYPE_MAIN_MIGRATE_DATA,
+    PIPE_ITEM_TYPE_MAIN_INIT,
+    PIPE_ITEM_TYPE_MAIN_NOTIFY,
+    PIPE_ITEM_TYPE_MAIN_MIGRATE_BEGIN,
+    PIPE_ITEM_TYPE_MAIN_MIGRATE_BEGIN_SEAMLESS,
+    PIPE_ITEM_TYPE_MAIN_MIGRATE_SWITCH_HOST,
+    PIPE_ITEM_TYPE_MAIN_MULTI_MEDIA_TIME,
+    PIPE_ITEM_TYPE_MAIN_NAME,
+    PIPE_ITEM_TYPE_MAIN_UUID,
+    PIPE_ITEM_TYPE_MAIN_AGENT_CONNECTED_TOKENS,
+};
+
 typedef struct RedsOutItem RedsOutItem;
 struct RedsOutItem {
     PipeItem base;
@@ -204,7 +223,7 @@ static PipeItem *main_mouse_mode_item_new(RedChannelClient *rcc, void *data, int
     MainMouseModeItemInfo *info = data;
 
     red_channel_pipe_item_init(rcc->channel, &item->base,
-                               SPICE_MSG_MAIN_MOUSE_MODE);
+                               PIPE_ITEM_TYPE_MAIN_MOUSE_MODE);
     item->current_mode = info->current_mode;
     item->is_client_mouse_allowed = info->is_client_mouse_allowed;
     return &item->base;
@@ -214,7 +233,7 @@ static PipeItem *main_ping_item_new(MainChannelClient *mcc, int size)
 {
     PingPipeItem *item = spice_malloc(sizeof(PingPipeItem));
 
-    red_channel_pipe_item_init(mcc->base.channel, &item->base, SPICE_MSG_PING);
+    red_channel_pipe_item_init(mcc->base.channel, &item->base, PIPE_ITEM_TYPE_MAIN_PING);
     item->size = size;
     return &item->base;
 }
@@ -224,7 +243,7 @@ static PipeItem *main_agent_tokens_item_new(RedChannelClient *rcc, uint32_t num_
     TokensPipeItem *item = spice_malloc(sizeof(TokensPipeItem));
 
     red_channel_pipe_item_init(rcc->channel, &item->base,
-                               SPICE_MSG_MAIN_AGENT_TOKEN);
+                               PIPE_ITEM_TYPE_MAIN_AGENT_TOKEN);
     item->tokens = num_tokens;
     return &item->base;
 }
@@ -236,7 +255,7 @@ static PipeItem *main_agent_data_item_new(RedChannelClient *rcc, uint8_t* data, 
     AgentDataPipeItem *item = spice_malloc(sizeof(AgentDataPipeItem));
 
     red_channel_pipe_item_init(rcc->channel, &item->base,
-                               SPICE_MSG_MAIN_AGENT_DATA);
+                               PIPE_ITEM_TYPE_MAIN_AGENT_DATA);
     item->data = data;
     item->len = len;
     item->free_data = free_data;
@@ -252,7 +271,7 @@ static PipeItem *main_init_item_new(MainChannelClient *mcc,
     InitPipeItem *item = spice_malloc(sizeof(InitPipeItem));
 
     red_channel_pipe_item_init(mcc->base.channel, &item->base,
-                               SPICE_MSG_MAIN_INIT);
+                               PIPE_ITEM_TYPE_MAIN_INIT);
     item->connection_id = connection_id;
     item->display_channels_hint = display_channels_hint;
     item->current_mouse_mode = current_mouse_mode;
@@ -267,7 +286,7 @@ static PipeItem *main_name_item_new(MainChannelClient *mcc, const char *name)
     NamePipeItem *item = spice_malloc(sizeof(NamePipeItem) + strlen(name) + 1);
 
     red_channel_pipe_item_init(mcc->base.channel, &item->base,
-                               SPICE_MSG_MAIN_NAME);
+                               PIPE_ITEM_TYPE_MAIN_NAME);
     item->msg.name_len = strlen(name) + 1;
     memcpy(&item->msg.name, name, item->msg.name_len);
 
@@ -279,7 +298,7 @@ static PipeItem *main_uuid_item_new(MainChannelClient *mcc, const uint8_t uuid[1
     UuidPipeItem *item = spice_malloc(sizeof(UuidPipeItem));
 
     red_channel_pipe_item_init(mcc->base.channel, &item->base,
-                               SPICE_MSG_MAIN_UUID);
+                               PIPE_ITEM_TYPE_MAIN_UUID);
     memcpy(item->msg.uuid, uuid, sizeof(item->msg.uuid));
 
     return &item->base;
@@ -296,7 +315,7 @@ static PipeItem *main_notify_item_new(RedChannelClient *rcc, void *data, int num
     NotifyPipeInfo *info = data;
 
     red_channel_pipe_item_init(rcc->channel, &item->base,
-                               SPICE_MSG_NOTIFY);
+                               PIPE_ITEM_TYPE_MAIN_NOTIFY);
     item->mess = info->mess;
     item->mess_len = info->mess_len;
     return &item->base;
@@ -309,7 +328,7 @@ static PipeItem *main_multi_media_time_item_new(
 
     item = spice_malloc(sizeof(MultiMediaTimePipeItem));
     red_channel_pipe_item_init(rcc->channel, &item->base,
-                               SPICE_MSG_MAIN_MULTI_MEDIA_TIME);
+                               PIPE_ITEM_TYPE_MAIN_MULTI_MEDIA_TIME);
     item->time = info->time;
     return &item->base;
 }
@@ -321,13 +340,16 @@ static void main_channel_push_channels(MainChannelClient *mcc)
                    "during migration");
         return;
     }
-    red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_CHANNELS_LIST);
+    red_channel_client_pipe_add_type(&mcc->base, PIPE_ITEM_TYPE_MAIN_CHANNELS_LIST);
 }
 
-static void main_channel_marshall_channels(SpiceMarshaller *m)
+static void main_channel_marshall_channels(RedChannelClient *rcc,
+                                           SpiceMarshaller *m,
+                                           PipeItem *item)
 {
     SpiceMsgChannels* channels_info;
 
+    red_channel_client_init_send_data(rcc, SPICE_MSG_MAIN_CHANNELS_LIST, item);
     channels_info = (SpiceMsgChannels *)spice_malloc(sizeof(SpiceMsgChannels)
                             + reds_num_of_channels() * sizeof(SpiceChannelId));
     reds_fill_channels(channels_info);
@@ -347,19 +369,24 @@ int main_channel_client_push_ping(MainChannelClient *mcc, int size)
     return TRUE;
 }
 
-static void main_channel_marshall_ping(SpiceMarshaller *m, int size, int ping_id)
+static void main_channel_marshall_ping(RedChannelClient *rcc,
+                                       SpiceMarshaller *m,
+                                       PingPipeItem *item)
 {
+    MainChannelClient *mcc = SPICE_CONTAINEROF(rcc, MainChannelClient, base);
     struct timespec time_space;
     SpiceMsgPing ping;
+    int size_left = item->size;
 
-    ping.id = ping_id;
+    red_channel_client_init_send_data(rcc, SPICE_MSG_PING, &item->base);
+    ping.id = ++(mcc->ping_id);
     clock_gettime(CLOCK_MONOTONIC, &time_space);
     ping.timestamp = time_space.tv_sec * 1000000LL + time_space.tv_nsec / 1000LL;
     spice_marshall_msg_ping(m, &ping);
 
-    while (size > 0) {
-        int now = MIN(ZERO_BUF_SIZE, size);
-        size -= now;
+    while (size_left > 0) {
+        int now = MIN(ZERO_BUF_SIZE, size_left);
+        size_left -= now;
         spice_marshaller_add_ref(m, zero_page, now);
     }
 }
@@ -376,44 +403,53 @@ void main_channel_push_mouse_mode(MainChannel *main_chan, int current_mode,
         main_mouse_mode_item_new, &info);
 }
 
-static void main_channel_marshall_mouse_mode(SpiceMarshaller *m, int current_mode,
-                                             int is_client_mouse_allowed)
+static void main_channel_marshall_mouse_mode(RedChannelClient *rcc,
+                                             SpiceMarshaller *m,
+                                             MouseModePipeItem *item)
 {
     SpiceMsgMainMouseMode mouse_mode;
+
+    red_channel_client_init_send_data(rcc, SPICE_MSG_MAIN_MOUSE_MODE, &item->base);
     mouse_mode.supported_modes = SPICE_MOUSE_MODE_SERVER;
-    if (is_client_mouse_allowed) {
+    if (item->is_client_mouse_allowed) {
         mouse_mode.supported_modes |= SPICE_MOUSE_MODE_CLIENT;
     }
-    mouse_mode.current_mode = current_mode;
+    mouse_mode.current_mode = item->current_mode;
     spice_marshall_msg_main_mouse_mode(m, &mouse_mode);
 }
 
 void main_channel_push_agent_connected(MainChannel *main_chan)
 {
     if (red_channel_test_remote_cap(&main_chan->base, SPICE_MAIN_CAP_AGENT_CONNECTED_TOKENS)) {
-        red_channel_pipes_add_type(&main_chan->base, SPICE_MSG_MAIN_AGENT_CONNECTED_TOKENS);
+        red_channel_pipes_add_type(&main_chan->base, PIPE_ITEM_TYPE_MAIN_AGENT_CONNECTED_TOKENS);
     } else {
-        red_channel_pipes_add_type(&main_chan->base, SPICE_MSG_MAIN_AGENT_CONNECTED);
+        red_channel_pipes_add_empty_msg(&main_chan->base, SPICE_MSG_MAIN_AGENT_CONNECTED);
     }
 }
 
-static void main_channel_marshall_agent_connected(SpiceMarshaller *m)
+static void main_channel_marshall_agent_connected(SpiceMarshaller *m,
+                                                  RedChannelClient *rcc,
+                                                  PipeItem *item)
 {
     SpiceMsgMainAgentConnectedTokens connected;
 
+    red_channel_client_init_send_data(rcc, SPICE_MSG_MAIN_AGENT_CONNECTED_TOKENS, item);
     connected.num_tokens = REDS_AGENT_WINDOW_SIZE;
     spice_marshall_msg_main_agent_connected_tokens(m, &connected);
 }
 
 void main_channel_push_agent_disconnected(MainChannel *main_chan)
 {
-    red_channel_pipes_add_type(&main_chan->base, SPICE_MSG_MAIN_AGENT_DISCONNECTED);
+    red_channel_pipes_add_type(&main_chan->base, PIPE_ITEM_TYPE_MAIN_AGENT_DISCONNECTED);
 }
 
-static void main_channel_marshall_agent_disconnected(SpiceMarshaller *m)
+static void main_channel_marshall_agent_disconnected(RedChannelClient *rcc,
+                                                     SpiceMarshaller *m,
+                                                     PipeItem *item)
 {
     SpiceMsgMainAgentDisconnect disconnect;
 
+    red_channel_client_init_send_data(rcc, SPICE_MSG_MAIN_AGENT_DISCONNECTED, item);
     disconnect.error_code = SPICE_LINK_ERR_OK;
     spice_marshall_msg_main_agent_disconnected(m, &disconnect);
 }
@@ -425,11 +461,13 @@ void main_channel_client_push_agent_tokens(MainChannelClient *mcc, uint32_t num_
     red_channel_client_pipe_add_push(&mcc->base, item);
 }
 
-static void main_channel_marshall_tokens(SpiceMarshaller *m, uint32_t num_tokens)
+static void main_channel_marshall_tokens(RedChannelClient *rcc,
+                                         SpiceMarshaller *m, TokensPipeItem *item)
 {
     SpiceMsgMainAgentTokens tokens;
 
-    tokens.num_tokens = num_tokens;
+    red_channel_client_init_send_data(rcc, SPICE_MSG_MAIN_AGENT_TOKEN, &item->base);
+    tokens.num_tokens = item->tokens;
     spice_marshall_msg_main_agent_token(m, &tokens);
 }
 
@@ -442,25 +480,29 @@ void main_channel_client_push_agent_data(MainChannelClient *mcc, uint8_t* data, 
     red_channel_client_pipe_add_push(&mcc->base, item);
 }
 
-static void main_channel_marshall_agent_data(SpiceMarshaller *m,
-                                  AgentDataPipeItem *item)
+static void main_channel_marshall_agent_data(RedChannelClient *rcc,
+                                             SpiceMarshaller *m,
+                                             AgentDataPipeItem *item)
 {
+    red_channel_client_init_send_data(rcc, SPICE_MSG_MAIN_AGENT_DATA, &item->base);
     spice_marshaller_add_ref(m, item->data, item->len);
 }
 
 static void main_channel_push_migrate_data_item(MainChannel *main_chan)
 {
-    red_channel_pipes_add_type(&main_chan->base, SPICE_MSG_MIGRATE_DATA);
+    red_channel_pipes_add_type(&main_chan->base, PIPE_ITEM_TYPE_MAIN_MIGRATE_DATA);
 }
 
-static void main_channel_marshall_migrate_data_item(SpiceMarshaller *m, int serial, int ping_id)
+static void main_channel_marshall_migrate_data_item(RedChannelClient *rcc,
+                                                    SpiceMarshaller *m, PipeItem *item)
 {
     MainMigrateData *data = (MainMigrateData *)
                             spice_marshaller_reserve_space(m, sizeof(MainMigrateData));
 
+    red_channel_client_init_send_data(rcc, SPICE_MSG_MIGRATE_DATA, item);
     reds_marshall_migrate_data_item(m, data); // TODO: from reds split. ugly separation.
-    data->serial = serial;
-    data->ping_id = ping_id;
+    data->serial = red_channel_client_get_message_serial(rcc);
+    data->ping_id = SPICE_CONTAINEROF(rcc, MainChannelClient, base)->ping_id;
 }
 
 static uint64_t main_channel_handle_migrate_data_get_serial(RedChannelClient *base,
@@ -503,11 +545,14 @@ void main_channel_push_init(MainChannelClient *mcc,
     red_channel_client_pipe_add_push(&mcc->base, item);
 }
 
-static void main_channel_marshall_init(SpiceMarshaller *m,
+static void main_channel_marshall_init(RedChannelClient *rcc,
+                                       SpiceMarshaller *m,
                                        InitPipeItem *item)
 {
     SpiceMsgMainInit init; // TODO - remove this copy, make InitPipeItem reuse SpiceMsgMainInit
 
+
+    red_channel_client_init_send_data(rcc, SPICE_MSG_MAIN_INIT, &item->base);
     init.session_id = item->connection_id;
     init.display_channels_hint = item->display_channels_hint;
     init.current_mouse_mode = item->current_mouse_mode;
@@ -565,10 +610,12 @@ static uint64_t get_time_stamp(void)
     return time_space.tv_sec * 1000 * 1000 * 1000 + time_space.tv_nsec;
 }
 
-static void main_channel_marshall_notify(SpiceMarshaller *m, NotifyPipeItem *item)
+static void main_channel_marshall_notify(RedChannelClient *rcc,
+                                         SpiceMarshaller *m, NotifyPipeItem *item)
 {
     SpiceMsgNotify notify;
 
+    red_channel_client_init_send_data(rcc, SPICE_MSG_NOTIFY, &item->base);
     notify.time_stamp = get_time_stamp(); // TODO - move to main_new_notify_item
     notify.severity = SPICE_NOTIFY_SEVERITY_WARN;
     notify.visibilty = SPICE_NOTIFY_VISIBILITY_HIGH;
@@ -595,39 +642,30 @@ static void main_channel_fill_migrate_dst_info(MainChannel *main_channel,
     }
 }
 
-static void main_channel_marshall_migrate_begin(SpiceMarshaller *m, RedChannelClient *rcc)
+static void main_channel_marshall_migrate_begin(SpiceMarshaller *m, RedChannelClient *rcc,
+                                                PipeItem *item)
 {
     SpiceMsgMainMigrationBegin migrate;
     MainChannel *main_ch;
 
+    red_channel_client_init_send_data(rcc, SPICE_MSG_MAIN_MIGRATE_BEGIN, item);
     main_ch = SPICE_CONTAINEROF(rcc->channel, MainChannel, base);
     main_channel_fill_migrate_dst_info(main_ch, &migrate.dst_info);
     spice_marshall_msg_main_migrate_begin(m, &migrate);
 }
 
 static void main_channel_marshall_migrate_begin_seamless(SpiceMarshaller *m,
-                                                         RedChannelClient *rcc)
+                                                         RedChannelClient *rcc,
+                                                         PipeItem *item)
 {
     SpiceMsgMainMigrateBeginSeamless migrate_seamless;
     MainChannel *main_ch;
 
+    red_channel_client_init_send_data(rcc, SPICE_MSG_MAIN_MIGRATE_BEGIN_SEAMLESS, item);
     main_ch = SPICE_CONTAINEROF(rcc->channel, MainChannel, base);
     main_channel_fill_migrate_dst_info(main_ch, &migrate_seamless.dst_info);
     migrate_seamless.src_mig_version = SPICE_MIGRATION_PROTOCOL_VERSION;
     spice_marshall_msg_main_migrate_begin_seamless(m, &migrate_seamless);
-}
-
-void main_channel_push_migrate(MainChannel *main_chan)
-{
-    red_channel_pipes_add_type(&main_chan->base, SPICE_MSG_MIGRATE);
-}
-
-static void main_channel_marshall_migrate(SpiceMarshaller *m)
-{
-    SpiceMsgMigrate migrate;
-
-    migrate.flags = SPICE_MIGRATE_NEED_FLUSH | SPICE_MIGRATE_NEED_DATA_TRANSFER;
-    spice_marshall_msg_migrate(m, &migrate);
 }
 
 void main_channel_push_multi_media_time(MainChannel *main_chan, int time)
@@ -656,15 +694,17 @@ static void main_channel_fill_mig_target(MainChannel *main_channel, RedsMigSpice
 void main_channel_migrate_switch(MainChannel *main_chan, RedsMigSpice *mig_target)
 {
     main_channel_fill_mig_target(main_chan, mig_target);
-    red_channel_pipes_add_type(&main_chan->base, SPICE_MSG_MAIN_MIGRATE_SWITCH_HOST);
+    red_channel_pipes_add_type(&main_chan->base, PIPE_ITEM_TYPE_MAIN_MIGRATE_SWITCH_HOST);
 }
 
-static void main_channel_marshall_migrate_switch(SpiceMarshaller *m, RedChannelClient *rcc)
+static void main_channel_marshall_migrate_switch(SpiceMarshaller *m, RedChannelClient *rcc,
+                                                 PipeItem *item)
 {
     SpiceMsgMainMigrationSwitchHost migrate;
     MainChannel *main_ch;
 
     spice_printerr("");
+    red_channel_client_init_send_data(rcc, SPICE_MSG_MAIN_MIGRATE_SWITCH_HOST, item);
     main_ch = SPICE_CONTAINEROF(rcc->channel, MainChannel, base);
     migrate.port = main_ch->mig_target.port;
     migrate.sport = main_ch->mig_target.sport;
@@ -680,11 +720,13 @@ static void main_channel_marshall_migrate_switch(SpiceMarshaller *m, RedChannelC
     spice_marshall_msg_main_migrate_switch_host(m, &migrate);
 }
 
-static void main_channel_marshall_multi_media_time(SpiceMarshaller *m,
-    MultiMediaTimePipeItem *item)
+static void main_channel_marshall_multi_media_time(RedChannelClient *rcc,
+                                                   SpiceMarshaller *m,
+                                                   MultiMediaTimePipeItem *item)
 {
     SpiceMsgMainMultiMediaTime time_mes;
 
+    red_channel_client_init_send_data(rcc, SPICE_MSG_MAIN_MULTI_MEDIA_TIME, &item->base);
     time_mes.time = item->time;
     spice_marshall_msg_main_multi_media_time(m, &time_mes);
 }
@@ -701,72 +743,68 @@ static void main_channel_send_item(RedChannelClient *rcc, PipeItem *base)
         main_channel_release_pipe_item(rcc, base, FALSE);
         return;
     }
-    red_channel_client_init_send_data(rcc, base->type, base);
+
     switch (base->type) {
-        case SPICE_MSG_MAIN_CHANNELS_LIST:
-            main_channel_marshall_channels(m);
+        case PIPE_ITEM_TYPE_MAIN_CHANNELS_LIST:
+            main_channel_marshall_channels(rcc, m, base);
             break;
-        case SPICE_MSG_PING:
-            main_channel_marshall_ping(m,
-                SPICE_CONTAINEROF(base, PingPipeItem, base)->size, ++(mcc->ping_id));
+        case PIPE_ITEM_TYPE_MAIN_PING:
+            main_channel_marshall_ping(rcc, m,
+                SPICE_CONTAINEROF(base, PingPipeItem, base));
             break;
-        case SPICE_MSG_MAIN_MOUSE_MODE:
+        case PIPE_ITEM_TYPE_MAIN_MOUSE_MODE:
             {
                 MouseModePipeItem *item =
                     SPICE_CONTAINEROF(base, MouseModePipeItem, base);
-                main_channel_marshall_mouse_mode(m,
-                    item->current_mode, item->is_client_mouse_allowed);
+                main_channel_marshall_mouse_mode(rcc, m, item);
                 break;
             }
-        case SPICE_MSG_MAIN_AGENT_DISCONNECTED:
-            main_channel_marshall_agent_disconnected(m);
+        case PIPE_ITEM_TYPE_MAIN_AGENT_DISCONNECTED:
+            main_channel_marshall_agent_disconnected(rcc, m, base);
             break;
-        case SPICE_MSG_MAIN_AGENT_TOKEN:
-            main_channel_marshall_tokens(m,
-                SPICE_CONTAINEROF(base, TokensPipeItem, base)->tokens);
+        case PIPE_ITEM_TYPE_MAIN_AGENT_TOKEN:
+            main_channel_marshall_tokens(rcc, m,
+                SPICE_CONTAINEROF(base, TokensPipeItem, base));
             break;
-        case SPICE_MSG_MAIN_AGENT_DATA:
-            main_channel_marshall_agent_data(m,
+        case PIPE_ITEM_TYPE_MAIN_AGENT_DATA:
+            main_channel_marshall_agent_data(rcc, m,
                 SPICE_CONTAINEROF(base, AgentDataPipeItem, base));
             break;
-        case SPICE_MSG_MIGRATE_DATA:
-            main_channel_marshall_migrate_data_item(m,
-                red_channel_client_get_message_serial(rcc),
-                mcc->ping_id);
+        case PIPE_ITEM_TYPE_MAIN_MIGRATE_DATA:
+            main_channel_marshall_migrate_data_item(rcc, m, base);
             break;
-        case SPICE_MSG_MAIN_INIT:
+        case PIPE_ITEM_TYPE_MAIN_INIT:
             mcc->init_sent = TRUE;
-            main_channel_marshall_init(m,
+            main_channel_marshall_init(rcc, m,
                 SPICE_CONTAINEROF(base, InitPipeItem, base));
             break;
-        case SPICE_MSG_NOTIFY:
-            main_channel_marshall_notify(m,
+        case PIPE_ITEM_TYPE_MAIN_NOTIFY:
+            main_channel_marshall_notify(rcc, m,
                 SPICE_CONTAINEROF(base, NotifyPipeItem, base));
             break;
-        case SPICE_MSG_MIGRATE:
-            main_channel_marshall_migrate(m);
+        case PIPE_ITEM_TYPE_MAIN_MIGRATE_BEGIN:
+            main_channel_marshall_migrate_begin(m, rcc, base);
             break;
-        case SPICE_MSG_MAIN_MIGRATE_BEGIN:
-            main_channel_marshall_migrate_begin(m, rcc);
+        case PIPE_ITEM_TYPE_MAIN_MIGRATE_BEGIN_SEAMLESS:
+            main_channel_marshall_migrate_begin_seamless(m, rcc, base);
             break;
-        case SPICE_MSG_MAIN_MIGRATE_BEGIN_SEAMLESS:
-            main_channel_marshall_migrate_begin_seamless(m, rcc);
-            break;
-        case SPICE_MSG_MAIN_MULTI_MEDIA_TIME:
-            main_channel_marshall_multi_media_time(m,
+        case PIPE_ITEM_TYPE_MAIN_MULTI_MEDIA_TIME:
+            main_channel_marshall_multi_media_time(rcc, m,
                 SPICE_CONTAINEROF(base, MultiMediaTimePipeItem, base));
             break;
-        case SPICE_MSG_MAIN_MIGRATE_SWITCH_HOST:
-            main_channel_marshall_migrate_switch(m, rcc);
+        case PIPE_ITEM_TYPE_MAIN_MIGRATE_SWITCH_HOST:
+            main_channel_marshall_migrate_switch(m, rcc, base);
             break;
-        case SPICE_MSG_MAIN_NAME:
+        case PIPE_ITEM_TYPE_MAIN_NAME:
+            red_channel_client_init_send_data(rcc, SPICE_MSG_MAIN_NAME, base);
             spice_marshall_msg_main_name(m, &SPICE_CONTAINEROF(base, NamePipeItem, base)->msg);
             break;
-        case SPICE_MSG_MAIN_UUID:
+        case PIPE_ITEM_TYPE_MAIN_UUID:
+            red_channel_client_init_send_data(rcc, SPICE_MSG_MAIN_UUID, base);
             spice_marshall_msg_main_uuid(m, &SPICE_CONTAINEROF(base, UuidPipeItem, base)->msg);
             break;
-        case SPICE_MSG_MAIN_AGENT_CONNECTED_TOKENS:
-            main_channel_marshall_agent_connected(m);
+        case PIPE_ITEM_TYPE_MAIN_AGENT_CONNECTED_TOKENS:
+            main_channel_marshall_agent_connected(m, rcc, base);
             break;
         default:
             break;
@@ -778,7 +816,7 @@ static void main_channel_release_pipe_item(RedChannelClient *rcc,
     PipeItem *base, int item_pushed)
 {
     switch (base->type) {
-        case SPICE_MSG_MAIN_AGENT_DATA: {
+        case PIPE_ITEM_TYPE_MAIN_AGENT_DATA: {
                 AgentDataPipeItem *data = (AgentDataPipeItem *)base;
 
                 data->free_data(data->data, data->opaque);
@@ -808,7 +846,7 @@ static void main_channel_client_handle_migrate_connected(MainChannelClient *mcc,
     } else {
         if (success) {
             spice_printerr("client %p MIGRATE_CANCEL", mcc->base.client);
-            red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_CANCEL);
+            red_channel_client_pipe_add_empty_msg(&mcc->base, SPICE_MSG_MAIN_MIGRATE_CANCEL);
         }
     }
 }
@@ -817,11 +855,11 @@ void main_channel_client_handle_migrate_dst_do_seamless(MainChannelClient *mcc,
                                                         uint32_t src_version)
 {
     if (reds_on_migrate_dst_set_seamless(mcc, src_version)) {
-        red_channel_client_pipe_add_type(&mcc->base,
-                                         SPICE_MSG_MAIN_MIGRATE_DST_SEAMLESS_ACK);
+        red_channel_client_pipe_add_empty_msg(&mcc->base,
+                                             SPICE_MSG_MAIN_MIGRATE_DST_SEAMLESS_ACK);
     } else {
-        red_channel_client_pipe_add_type(&mcc->base,
-                                         SPICE_MSG_MAIN_MIGRATE_DST_SEAMLESS_NACK);
+        red_channel_client_pipe_add_empty_msg(&mcc->base,
+                                              SPICE_MSG_MAIN_MIGRATE_DST_SEAMLESS_NACK);
     }
 }
 
@@ -845,9 +883,10 @@ void main_channel_migrate_dst_complete(MainChannelClient *mcc)
     if (mcc->mig_wait_prev_complete) {
         if (mcc->mig_wait_prev_try_seamless) {
             spice_assert(mcc->base.channel->clients_num == 1);
-            red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_BEGIN_SEAMLESS);
+            red_channel_client_pipe_add_type(&mcc->base,
+                                             PIPE_ITEM_TYPE_MAIN_MIGRATE_BEGIN_SEAMLESS);
         } else {
-            red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_BEGIN);
+            red_channel_client_pipe_add_type(&mcc->base, PIPE_ITEM_TYPE_MAIN_MIGRATE_BEGIN);
         }
         mcc->mig_wait_connect = TRUE;
         mcc->mig_wait_prev_complete = FALSE;
@@ -1171,7 +1210,8 @@ static int main_channel_connect_semi_seamless(MainChannel *main_channel)
                 mcc->mig_wait_prev_complete = TRUE;
                 mcc->mig_wait_prev_try_seamless = FALSE;
             } else {
-                red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_BEGIN);
+                red_channel_client_pipe_add_type(&mcc->base,
+                                                 PIPE_ITEM_TYPE_MAIN_MIGRATE_BEGIN);
                 mcc->mig_wait_connect = TRUE;
             }
             mcc->mig_connect_ok = FALSE;
@@ -1197,7 +1237,8 @@ static int main_channel_connect_seamless(MainChannel *main_channel)
            mcc->mig_wait_prev_complete = TRUE;
            mcc->mig_wait_prev_try_seamless = TRUE;
         } else {
-            red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_BEGIN_SEAMLESS);
+            red_channel_client_pipe_add_type(&mcc->base,
+                                             PIPE_ITEM_TYPE_MAIN_MIGRATE_BEGIN_SEAMLESS);
             mcc->mig_wait_connect = TRUE;
         }
         mcc->mig_connect_ok = FALSE;
@@ -1275,16 +1316,16 @@ int main_channel_migrate_src_complete(MainChannel *main_chan, int success)
         if (semi_seamless_support && mcc->mig_connect_ok) {
             if (success) {
                 spice_printerr("client %p MIGRATE_END", mcc->base.client);
-                red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_END);
+                red_channel_client_pipe_add_empty_msg(&mcc->base, SPICE_MSG_MAIN_MIGRATE_END);
                 semi_seamless_count++;
             } else {
                 spice_printerr("client %p MIGRATE_CANCEL", mcc->base.client);
-                red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_CANCEL);
+                red_channel_client_pipe_add_empty_msg(&mcc->base, SPICE_MSG_MAIN_MIGRATE_CANCEL);
             }
         } else {
             if (success) {
                 spice_printerr("client %p SWITCH_HOST", mcc->base.client);
-                red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_SWITCH_HOST);
+                red_channel_client_pipe_add_type(&mcc->base, PIPE_ITEM_TYPE_MAIN_MIGRATE_SWITCH_HOST);
             }
         }
         mcc->mig_connect_ok = FALSE;
