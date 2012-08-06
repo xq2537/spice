@@ -219,15 +219,20 @@ static void snd_disconnect_channel(SndChannel *channel)
     SndWorker *worker;
 
     if (!channel) {
+        spice_debug("not connected");
         return;
     }
-    channel->cleanup(channel);
-    worker = channel->worker;
-    red_channel_client_disconnect(worker->connection->channel_client);
-    core->watch_remove(channel->stream->watch);
-    channel->stream->watch = NULL;
-    reds_stream_free(channel->stream);
-    spice_marshaller_destroy(channel->send_data.marshaller);
+    spice_debug("%p", channel);
+    if (channel->stream) {
+        channel->cleanup(channel);
+        worker = channel->worker;
+        red_channel_client_disconnect(worker->connection->channel_client);
+        core->watch_remove(channel->stream->watch);
+        channel->stream->watch = NULL;
+        reds_stream_free(channel->stream);
+        channel->stream = NULL;
+        spice_marshaller_destroy(channel->send_data.marshaller);
+    }
     snd_channel_put(channel);
 }
 
@@ -992,13 +997,15 @@ static void snd_disconnect_channel_client(RedChannelClient *rcc)
 {
     SndWorker *worker;
 
+    spice_debug(NULL);
     spice_assert(rcc->channel);
     spice_assert(rcc->channel->data);
     worker = (SndWorker *)rcc->channel->data;
 
-    spice_assert(worker->connection->channel_client == rcc);
-    snd_disconnect_channel(worker->connection);
-    spice_assert(worker->connection == NULL);
+    if (worker->connection) {
+        spice_assert(worker->connection->channel_client == rcc);
+        snd_disconnect_channel(worker->connection);
+    }
 }
 
 static void snd_set_command(SndChannel *channel, uint32_t command)
