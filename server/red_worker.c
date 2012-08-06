@@ -253,8 +253,6 @@ enum {
     PIPE_ITEM_TYPE_DRAW = PIPE_ITEM_TYPE_CHANNEL_BASE,
     PIPE_ITEM_TYPE_INVAL_ONE,
     PIPE_ITEM_TYPE_CURSOR,
-    PIPE_ITEM_TYPE_DISPLAY_MIGRATE, /* tmp. It will be substituted with
-                                       red_channel/PIPE_ITEM_TYPE_MIGRATE */
     PIPE_ITEM_TYPE_CURSOR_INIT,
     PIPE_ITEM_TYPE_IMAGE,
     PIPE_ITEM_TYPE_STREAM_CREATE,
@@ -630,7 +628,6 @@ struct DisplayChannelClient {
     CommonChannelClient common;
 
     int expect_init;
-    int expect_migrate_mark;
     int expect_migrate_data;
 
     PixmapCache *pixmap_cache;
@@ -673,7 +670,6 @@ struct DisplayChannel {
 
     // only required for one client, can be the first (or choose it by speed
     // and keep a pointer to it here?)
-    int expect_migrate_mark;
     int expect_migrate_data;
 
     int enable_jpeg;
@@ -8413,18 +8409,6 @@ static inline void red_marshall_inval(RedChannelClient *rcc,
     spice_marshall_msg_cursor_inval_one(base_marshaller, &inval_one);
 }
 
-static void display_channel_marshall_migrate(RedChannelClient *rcc,
-    SpiceMarshaller *base_marshaller)
-{
-    DisplayChannel *display_channel = SPICE_CONTAINEROF(rcc->channel, DisplayChannel, common.base);
-    SpiceMsgMigrate migrate;
-
-    red_channel_client_init_send_data(rcc, SPICE_MSG_MIGRATE, NULL);
-    migrate.flags = SPICE_MIGRATE_NEED_FLUSH | SPICE_MIGRATE_NEED_DATA_TRANSFER;
-    spice_marshall_msg_migrate(base_marshaller, &migrate);
-    display_channel->expect_migrate_mark = TRUE;
-}
-
 static void display_channel_marshall_migrate_data(RedChannelClient *rcc,
                                                   SpiceMarshaller *base_marshaller)
 {
@@ -8755,17 +8739,6 @@ static void red_marshall_cursor_init(RedChannelClient *rcc, SpiceMarshaller *bas
     add_buf_from_info(base_marshaller, &info);
 }
 
-static void cursor_channel_marshall_migrate(RedChannelClient *rcc,
-                                            SpiceMarshaller *base_marshaller)
-{
-    SpiceMsgMigrate migrate;
-
-    red_channel_client_init_send_data(rcc, SPICE_MSG_MIGRATE, NULL);
-    migrate.flags = 0;
-
-    spice_marshall_msg_migrate(base_marshaller, &migrate);
-}
-
 static void red_marshall_cursor(RedChannelClient *rcc,
                    SpiceMarshaller *m, CursorPipeItem *cursor_pipe_item)
 {
@@ -8910,10 +8883,6 @@ static void display_channel_send_item(RedChannelClient *rcc, PipeItem *pipe_item
     case PIPE_ITEM_TYPE_VERB:
         red_marshall_verb(rcc, ((VerbItem*)pipe_item)->verb);
         break;
-    case PIPE_ITEM_TYPE_DISPLAY_MIGRATE:
-        spice_info("PIPE_ITEM_TYPE_MIGRATE");
-        display_channel_marshall_migrate(rcc, m);
-        break;
     case PIPE_ITEM_TYPE_MIGRATE_DATA:
         display_channel_marshall_migrate_data(rcc, m);
         break;
@@ -8974,10 +8943,6 @@ static void cursor_channel_send_item(RedChannelClient *rcc, PipeItem *pipe_item)
         break;
     case PIPE_ITEM_TYPE_VERB:
         red_marshall_verb(rcc, ((VerbItem*)pipe_item)->verb);
-        break;
-    case PIPE_ITEM_TYPE_DISPLAY_MIGRATE:
-        spice_info("PIPE_ITEM_TYPE_MIGRATE");
-        cursor_channel_marshall_migrate(rcc, m);
         break;
     case PIPE_ITEM_TYPE_CURSOR_INIT:
         red_reset_cursor_cache(rcc);
@@ -9120,14 +9085,9 @@ void red_disconnect_all_display_TODO_remove_me(RedChannel *channel)
 
 static void red_migrate_display(RedWorker *worker, RedChannelClient *rcc)
 {
-    // TODO: replace all worker->display_channel tests with
-    // is_connected
     if (red_channel_client_is_connected(rcc)) {
-        red_pipe_add_verb(rcc, PIPE_ITEM_TYPE_DISPLAY_MIGRATE);
-//        red_pipes_add_verb(&worker->display_channel->common.base,
-//                           SPICE_MSG_DISPLAY_STREAM_DESTROY_ALL);
-//        red_channel_pipes_add_type(&worker->display_channel->common.base,
-//                                   PIPE_ITEM_TYPE_MIGRATE);
+        red_pipe_add_verb(rcc, SPICE_MSG_DISPLAY_STREAM_DESTROY_ALL);
+        red_channel_client_default_migrate(rcc);
     }
 }
 
@@ -9742,11 +9702,6 @@ static int display_channel_handle_migrate_mark(RedChannelClient *rcc)
     DisplayChannel *display_channel = SPICE_CONTAINEROF(rcc->channel, DisplayChannel, common.base);
     RedChannel *channel = &display_channel->common.base;
 
-    if (!display_channel->expect_migrate_mark) {
-        spice_warning("unexpected");
-        return FALSE;
-    }
-    display_channel->expect_migrate_mark = FALSE;
     red_channel_pipes_add_type(channel, PIPE_ITEM_TYPE_MIGRATE_DATA);
     return TRUE;
 }
@@ -10170,7 +10125,6 @@ static void display_channel_client_release_item_before_push(DisplayChannelClient
     }
     case PIPE_ITEM_TYPE_INVAL_ONE:
     case PIPE_ITEM_TYPE_VERB:
-    case PIPE_ITEM_TYPE_DISPLAY_MIGRATE:
     case PIPE_ITEM_TYPE_MIGRATE_DATA:
     case PIPE_ITEM_TYPE_PIXMAP_SYNC:
     case PIPE_ITEM_TYPE_PIXMAP_RESET:
@@ -10323,12 +10277,10 @@ static void red_disconnect_cursor(RedChannel *channel)
 
 static void red_migrate_cursor(RedWorker *worker, RedChannelClient *rcc)
 {
-//    if (cursor_is_connected(worker)) {
     if (red_channel_client_is_connected(rcc)) {
         red_channel_client_pipe_add_type(rcc,
                                          PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE);
-        red_channel_client_pipe_add_type(rcc,
-                                         PIPE_ITEM_TYPE_DISPLAY_MIGRATE);
+        red_channel_client_default_migrate(rcc);
     }
 }
 
@@ -10367,7 +10319,6 @@ static void cursor_channel_client_release_item_before_push(CursorChannelClient *
     }
     case PIPE_ITEM_TYPE_INVAL_ONE:
     case PIPE_ITEM_TYPE_VERB:
-    case PIPE_ITEM_TYPE_DISPLAY_MIGRATE:
     case PIPE_ITEM_TYPE_CURSOR_INIT:
     case PIPE_ITEM_TYPE_INVAL_CURSOR_CACHE:
         free(item);
