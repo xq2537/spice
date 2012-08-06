@@ -157,6 +157,7 @@ struct MainChannelClient {
     int mig_wait_prev_complete;
     int mig_wait_prev_try_seamless;
     int init_sent;
+    int seamless_mig_dst;
 };
 
 enum NetTestStage {
@@ -726,14 +727,17 @@ static void main_channel_send_item(RedChannelClient *rcc, PipeItem *base)
     MainChannelClient *mcc = SPICE_CONTAINEROF(rcc, MainChannelClient, base);
     SpiceMarshaller *m = red_channel_client_get_marshaller(rcc);
 
-    if (!mcc->init_sent && base->type != SPICE_MSG_MAIN_INIT) {
+    /* In semi-seamless migration (dest side), the connection is started from scratch, and
+     * we ignore any pipe item that arrives before the INIT msg is sent.
+     * For seamless we don't send INIT, and the connection continues from the same place
+     * it stopped on the src side. */
+    if (!mcc->init_sent && !mcc->seamless_mig_dst && base->type != PIPE_ITEM_TYPE_MAIN_INIT) {
         spice_printerr("Init msg for client %p was not sent yet "
-                   "(client is probably during migration). Ignoring msg type %d",
+                       "(client is probably during semi-seamless migration). Ignoring msg type %d",
                    rcc->client, base->type);
         main_channel_release_pipe_item(rcc, base, FALSE);
         return;
     }
-
     switch (base->type) {
         case PIPE_ITEM_TYPE_MAIN_CHANNELS_LIST:
             main_channel_marshall_channels(rcc, m, base);
@@ -845,6 +849,7 @@ void main_channel_client_handle_migrate_dst_do_seamless(MainChannelClient *mcc,
                                                         uint32_t src_version)
 {
     if (reds_on_migrate_dst_set_seamless(mcc, src_version)) {
+        mcc->seamless_mig_dst = TRUE;
         red_channel_client_pipe_add_empty_msg(&mcc->base,
                                              SPICE_MSG_MAIN_MIGRATE_DST_SEAMLESS_ACK);
     } else {
