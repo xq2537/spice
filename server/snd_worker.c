@@ -169,16 +169,6 @@ struct SpiceRecordState {
     SpiceVolumeState volume;
 };
 
-#define RECORD_MIG_VERSION 1
-
-typedef struct __attribute__ ((__packed__)) RecordMigrateData {
-    uint32_t version;
-    uint64_t serial;
-    uint32_t start_time;
-    uint32_t mode;
-    uint32_t mode_time;
-} RecordMigrateData;
-
 typedef struct RecordChannel {
     SndChannel base;
     uint32_t samples[RECORD_SAMPLES_SIZE];
@@ -404,17 +394,6 @@ static int snd_record_handle_message(SndChannel *channel, size_t size, uint32_t 
     }
     case SPICE_MSGC_DISCONNECTING:
         break;
-    case SPICE_MSGC_MIGRATE_DATA: {
-        RecordMigrateData* mig_data = (RecordMigrateData *)message;
-        if (mig_data->version != RECORD_MIG_VERSION) {
-            spice_printerr("invalid mig version");
-            break;
-        }
-        record_channel->mode = mig_data->mode;
-        record_channel->mode_time = mig_data->mode_time;
-        record_channel->start_time = mig_data->start_time;
-        break;
-    }
     default:
         spice_printerr("invalid message type %u", type);
         return FALSE;
@@ -551,18 +530,23 @@ static int snd_begin_send_message(SndChannel *channel)
     return snd_send_data(channel);
 }
 
-
-static int snd_playback_send_migrate(PlaybackChannel *channel)
+static int snd_channel_send_migrate(SndChannel *channel)
 {
     SpiceMsgMigrate migrate;
 
-    if (!snd_reset_send_data((SndChannel *)channel, SPICE_MSG_MIGRATE)) {
+    if (!snd_reset_send_data(channel, SPICE_MSG_MIGRATE)) {
         return FALSE;
     }
+    spice_debug(NULL);
     migrate.flags = 0;
-    spice_marshall_msg_migrate(channel->base.send_data.marshaller, &migrate);
+    spice_marshall_msg_migrate(channel->send_data.marshaller, &migrate);
 
-    return snd_begin_send_message((SndChannel *)channel);
+    return snd_begin_send_message(channel);
+}
+
+static int snd_playback_send_migrate(PlaybackChannel *channel)
+{
+    return snd_channel_send_migrate(&channel->base);
 }
 
 static int snd_send_volume(SndChannel *channel, SpiceVolumeState *st, int msg)
@@ -732,41 +716,11 @@ static int snd_record_send_mute(RecordChannel *record_channel)
 
 static int snd_record_send_migrate(RecordChannel *record_channel)
 {
-    SndChannel *channel = (SndChannel *)record_channel;
-    SpiceMsgMigrate migrate;
-    SpiceDataHeaderOpaque *header;
-    RecordMigrateData *data;
-
-    if (!snd_reset_send_data(channel, SPICE_MSG_MIGRATE)) {
-        return FALSE;
-    }
-
-    header = &channel->channel_client->send_data.header;
-    migrate.flags = SPICE_MIGRATE_NEED_DATA_TRANSFER;
-    spice_marshall_msg_migrate(channel->send_data.marshaller, &migrate);
-
-    header->data = spice_marshaller_reserve_space(channel->send_data.marshaller, header->header_size);
-    header->set_msg_size(header, sizeof(RecordMigrateData));
-    header->set_msg_type(header, SPICE_MSG_MIGRATE_DATA);
-    ++channel->send_data.serial;
-    if (!channel->channel_client->is_mini_header) {
-        header->set_msg_serial(header, channel->send_data.serial);
-        header->set_msg_sub_list(header, 0);
-    }
-
-    data = (RecordMigrateData *)spice_marshaller_reserve_space(channel->send_data.marshaller,
-                                                               sizeof(RecordMigrateData));
-    data->version = RECORD_MIG_VERSION;
-    data->serial = channel->send_data.serial;
-    data->start_time = record_channel->start_time;
-    data->mode = record_channel->mode;
-    data->mode_time = record_channel->mode_time;
-
-    channel->send_data.size = spice_marshaller_get_total_size(channel->send_data.marshaller);
-    header->set_msg_size(header, channel->send_data.size - header->header_size -
-                         header->header_size - sizeof(*data));
-
-    return snd_send_data(channel);
+    /* No need for migration data: if recording has started before migration,
+     * the client receives RECORD_STOP from the src before the migration completion
+     * notification (when the vm is stopped).
+     * Afterwards, when the vm starts on the dest, the client receives RECORD_START. */
+    return snd_channel_send_migrate(&record_channel->base);
 }
 
 static int snd_playback_send_write(PlaybackChannel *playback_channel)
@@ -1238,6 +1192,7 @@ static void snd_record_migrate_channel_client(RedChannelClient *rcc)
 {
     SndWorker *worker;
 
+    spice_debug(NULL);
     spice_assert(rcc->channel);
     spice_assert(rcc->channel->data);
     worker = (SndWorker *)rcc->channel->data;
@@ -1444,6 +1399,7 @@ static void snd_playback_migrate_channel_client(RedChannelClient *rcc)
     spice_assert(rcc->channel);
     spice_assert(rcc->channel->data);
     worker = (SndWorker *)rcc->channel->data;
+    spice_debug(NULL);
 
     if (worker->connection) {
         spice_assert(worker->connection->channel_client == rcc);
