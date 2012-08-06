@@ -79,6 +79,7 @@
 #include "red_dispatcher.h"
 #include "dispatcher.h"
 #include "main_channel.h"
+#include "migration_protocol.h"
 
 //#define COMPRESS_STAT
 //#define DUMP_BITMAP
@@ -8409,20 +8410,56 @@ static inline void red_marshall_inval(RedChannelClient *rcc,
     spice_marshall_msg_cursor_inval_one(base_marshaller, &inval_one);
 }
 
+static void display_channel_marshall_migrate_data_surfaces(DisplayChannelClient *dcc,
+                                                           SpiceMarshaller *m,
+                                                           int lossy)
+{
+    SpiceMarshaller *m2 = spice_marshaller_get_ptr_submarshaller(m, 0);
+    uint32_t *num_surfaces_created;
+    uint32_t i;
+
+    num_surfaces_created = (uint32_t *)spice_marshaller_reserve_space(m2, sizeof(uint32_t));
+    *num_surfaces_created = 0;
+    for (i = 0; i < NUM_SURFACES; i++) {
+        SpiceRect lossy_rect;
+        SpiceMigrateDataRect lossy_rect_marshall;
+        if (!dcc->surface_client_created[i]) {
+            continue;
+        }
+        spice_marshaller_add_uint32(m2, i);
+        (*num_surfaces_created)++;
+
+        if (!lossy) {
+            continue;
+        }
+        region_extents(&dcc->surface_client_lossy_region[i], &lossy_rect);
+        lossy_rect_marshall.left = lossy_rect.left;
+        lossy_rect_marshall.top = lossy_rect.top;
+        lossy_rect_marshall.right = lossy_rect.right;
+        lossy_rect_marshall.bottom = lossy_rect.bottom;
+        spice_marshaller_add_ref(m2, (uint8_t *)&lossy_rect_marshall, sizeof(lossy_rect_marshall));
+    }
+}
+
 static void display_channel_marshall_migrate_data(RedChannelClient *rcc,
                                                   SpiceMarshaller *base_marshaller)
 {
+    DisplayChannel *display_channel;
     DisplayChannelClient *dcc = RCC_TO_DCC(rcc);
-    DisplayChannelMigrateData display_data;
+    SpiceMigrateDataDisplay display_data;
+
+    display_channel = SPICE_CONTAINEROF(rcc->channel, DisplayChannel, common.base);
 
     red_channel_client_init_send_data(rcc, SPICE_MSG_MIGRATE_DATA, NULL);
+    spice_marshaller_add_uint32(base_marshaller, SPICE_MIGRATE_DATA_DISPLAY_MAGIC);
+    spice_marshaller_add_uint32(base_marshaller, SPICE_MIGRATE_DATA_DISPLAY_VERSION);
 
     spice_assert(dcc->pixmap_cache);
-    display_data.magic = DISPLAY_MIGRATE_DATA_MAGIC;
-    spice_assert(MAX_CACHE_CLIENTS == 4); //MIGRATE_DATA_VERSION dependent
-    display_data.version = DISPLAY_MIGRATE_DATA_VERSION;
+    spice_assert(MIGRATE_DATA_DISPLAY_MAX_CACHE_CLIENTS == 4 &&
+                 MIGRATE_DATA_DISPLAY_MAX_CACHE_CLIENTS == MAX_CACHE_CLIENTS);
 
     display_data.message_serial = red_channel_client_get_message_serial(rcc);
+    display_data.low_bandwidth_setting = display_channel_client_is_low_bandwidth(dcc);
 
     display_data.pixmap_cache_freezer = pixmap_cache_freeze(dcc->pixmap_cache);
     display_data.pixmap_cache_id = dcc->pixmap_cache->id;
@@ -8434,11 +8471,14 @@ static void display_channel_marshall_migrate_data(RedChannelClient *rcc,
     red_freeze_glz(dcc);
     display_data.glz_dict_id = dcc->glz_dict->id;
     glz_enc_dictionary_get_restore_data(dcc->glz_dict->dict,
-                                        &display_data.glz_dict_restore_data,
+                                        &display_data.glz_dict_data,
                                         &dcc->glz_data.usr);
 
+    /* all data besided the surfaces ref */
     spice_marshaller_add_ref(base_marshaller,
-                             (uint8_t *)&display_data, sizeof(display_data));
+                             (uint8_t *)&display_data, sizeof(display_data) - sizeof(uint32_t));
+    display_channel_marshall_migrate_data_surfaces(dcc, base_marshaller,
+                                                   display_channel->enable_jpeg);
 }
 
 static void display_channel_marshall_pixmap_sync(RedChannelClient *rcc,
