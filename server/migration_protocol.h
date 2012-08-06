@@ -19,6 +19,7 @@
 #define _H_MIGRATION_PROTOCOL
 
 #include <spice/vd_agent.h>
+#include "glz_encoder_dictionary.h"
 
 /* ************************************************
  * src-server to dst-server migration data messages
@@ -108,6 +109,78 @@ typedef struct __attribute__ ((__packed__)) SpiceMigrateDataMain {
         uint8_t msg_filter_result;
     } client2agent;
 } SpiceMigrateDataMain;
+
+/* ****************
+ * display channel
+ * ***************/
+
+#define SPICE_MIGRATE_DATA_DISPLAY_VERSION 1
+#define SPICE_MIGRATE_DATA_DISPLAY_MAGIC (*(uint32_t *)"DCMD")
+
+/*
+ * TODO: store the cache and dictionary data only in one channel (the
+ *       freezer).
+ * TODO: optimizations: don't send surfaces information if it will be faster
+ *       to resend the surfaces on-demand.
+ * */
+#define MIGRATE_DATA_DISPLAY_MAX_CACHE_CLIENTS 4
+
+typedef struct __attribute__ ((__packed__)) SpiceMigrateDataDisplay {
+    uint64_t message_serial;
+    uint8_t low_bandwidth_setting;
+
+    /*
+     * Synchronizing the shared pixmap cache.
+     * For now, the cache is not migrated, and instead, we reset it and send
+     * SPICE_MSG_DISPLAY_INVAL_ALL_PIXMAPS to the client.
+     * In order to keep the client and server caches consistent:
+     * The channel which freezed the cache on the src side, unfreezes it
+     * on the dest side, and increases its generation (see 'reset' in red_client_shared_cach.h).
+     * In order to enforce that images that are added to the cache by other channels
+     * will reach the client only after SPICE_MSG_DISPLAY_INVAL_ALL_PIXMAPS,
+     * we send SPICE_MSG_WAIT_FOR_CHANNELS
+     * (see the generation mismatch handling in 'add' in red_client_shared_cach.h).
+     */
+    uint8_t pixmap_cache_id;
+    int64_t pixmap_cache_size;
+    uint8_t pixmap_cache_freezer;
+    uint64_t pixmap_cache_clients[MIGRATE_DATA_DISPLAY_MAX_CACHE_CLIENTS];
+
+    uint8_t glz_dict_id;
+    GlzEncDictRestoreData glz_dict_data;
+
+    uint32_t surfaces_at_client_ptr; /* reference to MigrateDisplaySurfacesAtClientLossless/Lossy.
+                                        Lossy: when jpeg-wan-compression(qemu cmd line)=always
+                                        or when jpeg-wan-compression=auto,
+                                        and low_bandwidth_setting=TRUE */
+
+} SpiceMigrateDataDisplay;
+
+typedef struct __attribute__ ((__packed__)) SpiceMigrateDataRect {
+    int32_t left;
+    int32_t top;
+    int32_t right;
+    int32_t bottom;
+} SpiceMigrateDataRect;
+
+typedef struct __attribute__ ((__packed__)) MigrateDisplaySurfaceLossless {
+    uint32_t id;
+} MigrateDisplaySurfaceLossless;
+
+typedef struct __attribute__ ((__packed__)) MigrateDisplaySurfaceLossy {
+    uint32_t id;
+    SpiceMigrateDataRect lossy_rect;
+} MigrateDisplaySurfaceLossy;
+
+typedef struct __attribute__ ((__packed__)) MigrateDisplaySurfacesAtClientLossless {
+    uint32_t num_surfaces;
+    MigrateDisplaySurfaceLossless surfaces[0];
+} MigrateDisplaySurfacesAtClientLossless;
+
+typedef struct __attribute__ ((__packed__)) MigrateDisplaySurfacesAtClientLossy {
+    uint32_t num_surfaces;
+    MigrateDisplaySurfaceLossy surfaces[0];
+} MigrateDisplaySurfacesAtClientLossy;
 
 static inline int migration_protocol_validate_header(SpiceMigrateDataHeader *header,
                                                      uint32_t magic,
