@@ -539,7 +539,6 @@ void inputs_init(void)
                                     sizeof(InputsChannel),
                                     core,
                                     SPICE_CHANNEL_INPUTS, 0,
-                                    FALSE, // TODO: set migration?
                                     FALSE, /* handle_acks */
                                     spice_get_client_channel_parser(SPICE_CHANNEL_INPUTS, NULL),
                                     inputs_channel_handle_parsed,

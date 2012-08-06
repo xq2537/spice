@@ -768,7 +768,7 @@ void red_channel_client_default_migrate(RedChannelClient *rcc)
 RedChannel *red_channel_create(int size,
                                SpiceCoreInterface *core,
                                uint32_t type, uint32_t id,
-                               int migrate, int handle_acks,
+                               int handle_acks,
                                channel_handle_message_proc handle_message,
                                ChannelCbs *channel_cbs,
                                uint32_t migration_flags)
@@ -790,7 +790,6 @@ RedChannel *red_channel_create(int size,
     memcpy(&channel->channel_cbs, channel_cbs, sizeof(ChannelCbs));
 
     channel->core = core;
-    channel->migrate = migrate;
     ring_init(&channel->clients);
 
     // TODO: send incoming_cb as parameters instead of duplicating?
@@ -879,14 +878,14 @@ static int do_nothing_handle_message(RedChannelClient *rcc,
 RedChannel *red_channel_create_parser(int size,
                                SpiceCoreInterface *core,
                                uint32_t type, uint32_t id,
-                               int migrate, int handle_acks,
+                               int handle_acks,
                                spice_parse_channel_func_t parser,
                                channel_handle_parsed_proc handle_parsed,
                                ChannelCbs *channel_cbs,
                                uint32_t migration_flags)
 {
     RedChannel *channel = red_channel_create(size, core, type, id,
-                                             migrate, handle_acks,
+                                             handle_acks,
                                              do_nothing_handle_message,
                                              channel_cbs,
                                              migration_flags);

@@ -97,7 +97,6 @@ struct SndChannel {
     int blocked;
 
     uint32_t command;
-    int migrate;
     uint32_t ack_generation;
     uint32_t client_ack_generation;
     uint32_t out_messages;
@@ -923,7 +922,6 @@ static SndChannel *__new_channel(SndWorker *worker, int size, uint32_t channel_i
         goto error2;
     }
 
-    channel->migrate = migrate;
     channel->send_messages = send_messages;
     channel->handle_message = handle_message;
     channel->on_message_done = on_message_done;
@@ -1101,7 +1099,7 @@ static void on_new_playback_channel(SndWorker *worker)
     spice_assert(playback_channel);
 
     snd_set_command((SndChannel *)playback_channel, SND_PLAYBACK_MODE_MASK);
-    if (!playback_channel->base.migrate && playback_channel->base.active) {
+    if (playback_channel->base.active) {
         snd_set_command((SndChannel *)playback_channel, SND_PLAYBACK_CTRL_MASK);
     }
     snd_set_command((SndChannel *)playback_channel, SND_PLAYBACK_VOLUME_MASK);
@@ -1318,10 +1316,8 @@ static void on_new_record_channel(SndWorker *worker)
     spice_assert(record_channel);
 
     snd_set_command((SndChannel *)record_channel, SND_RECORD_VOLUME_MASK);
-    if (!record_channel->base.migrate) {
-        if (record_channel->base.active) {
-            snd_set_command((SndChannel *)record_channel, SND_RECORD_CTRL_MASK);
-        }
+    if (record_channel->base.active) {
+        snd_set_command((SndChannel *)record_channel, SND_RECORD_CTRL_MASK);
     }
 }
 

@@ -1172,7 +1172,7 @@ MainChannel* main_channel_init(void)
     // TODO: set the migration flag of the channel
     channel = red_channel_create_parser(sizeof(MainChannel), core,
                                         SPICE_CHANNEL_MAIN, 0,
-                                        FALSE, FALSE, /* handle_acks */
+                                        FALSE, /* handle_acks */
                                         spice_get_client_channel_parser(SPICE_CHANNEL_MAIN, NULL),
                                         main_channel_handle_parsed,
                                         &channel_cbs,

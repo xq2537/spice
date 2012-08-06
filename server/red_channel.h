@@ -284,7 +284,6 @@ struct RedChannel {
     RingItem link; // channels link for reds
 
     SpiceCoreInterface *core;
-    int migrate;
     int handle_acks;
 
     // RedChannel will hold only connected channel clients (logic - when pushing pipe item to all channel clients, there
@@ -320,7 +319,7 @@ struct RedChannel {
 RedChannel *red_channel_create(int size,
                                SpiceCoreInterface *core,
                                uint32_t type, uint32_t id,
-                               int migrate, int handle_acks,
+                               int handle_acks,
                                channel_handle_message_proc handle_message,
                                ChannelCbs *channel_cbs,
                                uint32_t migration_flags);
@@ -330,7 +329,7 @@ RedChannel *red_channel_create(int size,
 RedChannel *red_channel_create_parser(int size,
                                SpiceCoreInterface *core,
                                uint32_t type, uint32_t id,
-                               int migrate, int handle_acks,
+                               int handle_acks,
                                spice_parse_channel_func_t parser,
                                channel_handle_parsed_proc handle_parsed,
                                ChannelCbs *channel_cbs,

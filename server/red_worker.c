@@ -10076,7 +10076,7 @@ CursorChannelClient *cursor_channel_create_rcc(CommonChannel *common,
     return ccc;
 }
 
-static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_type, int migrate,
+static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_type,
                                  int migration_flags,
                                  channel_disconnect_proc on_disconnect,
                                  channel_send_pipe_item_proc send_item,
@@ -10104,7 +10104,6 @@ static RedChannel *__new_channel(RedWorker *worker, int size, uint32_t channel_t
 
     channel = red_channel_create_parser(size, &worker_core,
                                         channel_type, worker->id,
-                                        migrate,
                                         TRUE /* handle_acks */,
                                         spice_get_client_channel_parser(channel_type, NULL),
                                         handle_parsed,
@@ -10265,7 +10264,7 @@ static void display_channel_create(RedWorker *worker, int migrate)
     spice_info("create display channel");
     if (!(worker->display_channel = (DisplayChannel *)__new_channel(
             worker, sizeof(*display_channel),
-            SPICE_CHANNEL_DISPLAY, migrate,
+            SPICE_CHANNEL_DISPLAY,
             SPICE_MIGRATE_NEED_FLUSH | SPICE_MIGRATE_NEED_DATA_TRANSFER,
             display_channel_client_on_disconnect,
             display_channel_send_item,
@@ -10470,7 +10469,7 @@ static void cursor_channel_create(RedWorker *worker, int migrate)
     spice_info("create cursor channel");
     worker->cursor_channel = (CursorChannel *)__new_channel(
         worker, sizeof(*worker->cursor_channel),
-        SPICE_CHANNEL_CURSOR, migrate,
+        SPICE_CHANNEL_CURSOR,
         0,
         cursor_channel_client_on_disconnect,
         cursor_channel_send_item,

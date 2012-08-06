@@ -842,7 +842,6 @@ static void smartcard_init(void)
 
     g_smartcard_channel = (SmartCardChannel*)red_channel_create(sizeof(SmartCardChannel),
                                              core, SPICE_CHANNEL_SMARTCARD, 0,
-                                             FALSE /* migration - TODO?*/,
                                              FALSE /* handle_acks */,
                                              smartcard_channel_handle_message,
                                              &channel_cbs,
