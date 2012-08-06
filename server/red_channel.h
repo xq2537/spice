@@ -228,6 +228,8 @@ struct RedChannelClient {
     RedChannel *channel;
     RedClient  *client;
     RedsStream *stream;
+    int dummy;
+    int dummy_connected;
 
     uint32_t refs;
 
@@ -353,8 +355,6 @@ RedChannelClient *red_channel_client_create_dummy(int size,
                                                   RedClient  *client,
                                                   int num_common_caps, uint32_t *common_caps,
                                                   int num_caps, uint32_t *caps);
-void red_channel_client_destroy_dummy(RedChannelClient *rcc);
-
 
 int red_channel_is_connected(RedChannel *channel);
 int red_channel_client_is_connected(RedChannelClient *rcc);

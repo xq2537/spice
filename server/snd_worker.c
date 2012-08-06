@@ -223,7 +223,7 @@ static void snd_disconnect_channel(SndChannel *channel)
     }
     channel->cleanup(channel);
     worker = channel->worker;
-    red_channel_client_destroy_dummy(worker->connection->channel_client);
+    red_channel_client_disconnect(worker->connection->channel_client);
     core->watch_remove(channel->stream->watch);
     channel->stream->watch = NULL;
     reds_stream_free(channel->stream);

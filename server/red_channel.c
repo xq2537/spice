@@ -998,9 +998,7 @@ static void red_channel_client_unref(RedChannelClient *rcc)
 void red_channel_client_destroy(RedChannelClient *rcc)
 {
     rcc->destroying = 1;
-    if (red_channel_client_is_connected(rcc)) {
-        red_channel_client_disconnect(rcc);
-    }
+    red_channel_client_disconnect(rcc);
     red_client_remove_channel(rcc);
     red_channel_client_unref(rcc);
 }
@@ -1370,7 +1368,11 @@ void red_channel_pipes_add_empty_msg(RedChannel *channel, int msg_type)
 
 int red_channel_client_is_connected(RedChannelClient *rcc)
 {
-    return rcc->stream != NULL;
+    if (!rcc->dummy) {
+        return rcc->stream != NULL;
+    } else {
+        return rcc->dummy_connected;
+    }
 }
 
 int red_channel_is_connected(RedChannel *channel)
@@ -1429,10 +1431,23 @@ static void red_client_remove_channel(RedChannelClient *rcc)
     pthread_mutex_unlock(&rcc->client->lock);
 }
 
+static void red_channel_client_disconnect_dummy(RedChannelClient *rcc)
+{
+    spice_assert(rcc->dummy);
+    if (ring_item_is_linked(&rcc->channel_link)) {
+        red_channel_remove_client(rcc);
+    }
+    rcc->dummy_connected = FALSE;
+}
+
 void red_channel_client_disconnect(RedChannelClient *rcc)
 {
     spice_printerr("%p (channel %p type %d id %d)", rcc, rcc->channel,
                                                 rcc->channel->type, rcc->channel->id);
+    if (rcc->dummy) {
+        red_channel_client_disconnect_dummy(rcc);
+        return;
+    }
     if (!red_channel_client_is_connected(rcc)) {
         return;
     }
@@ -1490,20 +1505,17 @@ RedChannelClient *red_channel_client_create_dummy(int size,
 
     rcc->incoming.header.data = rcc->incoming.header_buf;
     rcc->incoming.serial = 1;
+    ring_init(&rcc->pipe);
 
+    rcc->dummy = TRUE;
+    rcc->dummy_connected = TRUE;
     red_channel_add_client(channel, rcc);
+    red_client_add_channel(client, rcc);
     pthread_mutex_unlock(&client->lock);
     return rcc;
 error:
     pthread_mutex_unlock(&client->lock);
     return NULL;
-}
-
-void red_channel_client_destroy_dummy(RedChannelClient *rcc)
-{
-    red_channel_remove_client(rcc);
-    red_channel_client_destroy_remote_caps(rcc);
-    free(rcc);
 }
 
 void red_channel_apply_clients(RedChannel *channel, channel_client_callback cb)
