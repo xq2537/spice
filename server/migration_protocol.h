@@ -182,6 +182,18 @@ typedef struct __attribute__ ((__packed__)) MigrateDisplaySurfacesAtClientLossy 
     MigrateDisplaySurfaceLossy surfaces[0];
 } MigrateDisplaySurfacesAtClientLossy;
 
+/* ****************
+ * inputs channel
+ * ***************/
+
+#define SPICE_MIGRATE_DATA_INPUTS_VERSION 1
+#define SPICE_MIGRATE_DATA_INPUTS_MAGIC (*(uint32_t *)"ICMD")
+
+
+typedef struct __attribute__ ((__packed__)) SpiceMigrateDataInputs {
+    uint16_t motion_count;
+} SpiceMigrateDataInputs;
+
 static inline int migration_protocol_validate_header(SpiceMigrateDataHeader *header,
                                                      uint32_t magic,
                                                      uint32_t version)
