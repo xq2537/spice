@@ -560,6 +560,34 @@ int red_channel_client_test_remote_cap(RedChannelClient *rcc, uint32_t cap)
                           cap);
 }
 
+int red_channel_test_remote_common_cap(RedChannel *channel, uint32_t cap)
+{
+    RingItem *link;
+
+    RING_FOREACH(link, &channel->clients) {
+        RedChannelClient *rcc = SPICE_CONTAINEROF(link, RedChannelClient, channel_link);
+
+        if (!red_channel_client_test_remote_common_cap(rcc, cap)) {
+            return FALSE;
+        }
+    }
+    return TRUE;
+}
+
+int red_channel_test_remote_cap(RedChannel *channel, uint32_t cap)
+{
+    RingItem *link;
+
+    RING_FOREACH(link, &channel->clients) {
+        RedChannelClient *rcc = SPICE_CONTAINEROF(link, RedChannelClient, channel_link);
+
+        if (!red_channel_client_test_remote_cap(rcc, cap)) {
+            return FALSE;
+        }
+    }
+    return TRUE;
+}
+
 static int red_channel_client_pre_create_validate(RedChannel *channel, RedClient  *client)
 {
     if (red_client_get_channel(client, channel->type, channel->id)) {

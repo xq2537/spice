@@ -363,6 +363,10 @@ void red_channel_destroy(RedChannel *channel);
 int red_channel_client_test_remote_common_cap(RedChannelClient *rcc, uint32_t cap);
 int red_channel_client_test_remote_cap(RedChannelClient *rcc, uint32_t cap);
 
+/* return true if all the channel clients support the cap */
+int red_channel_test_remote_common_cap(RedChannel *channel, uint32_t cap);
+int red_channel_test_remote_cap(RedChannel *channel, uint32_t cap);
+
 /* shutdown is the only safe thing to do out of the client/channel
  * thread. It will not touch the rings, just shutdown the socket.
  * It should be followed by some way to gurantee a disconnection. */
