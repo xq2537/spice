@@ -388,7 +388,19 @@ static void main_channel_marshall_mouse_mode(SpiceMarshaller *m, int current_mod
 
 void main_channel_push_agent_connected(MainChannel *main_chan)
 {
-    red_channel_pipes_add_type(&main_chan->base, SPICE_MSG_MAIN_AGENT_CONNECTED);
+    if (red_channel_test_remote_cap(&main_chan->base, SPICE_MAIN_CAP_AGENT_CONNECTED_TOKENS)) {
+        red_channel_pipes_add_type(&main_chan->base, SPICE_MSG_MAIN_AGENT_CONNECTED_TOKENS);
+    } else {
+        red_channel_pipes_add_type(&main_chan->base, SPICE_MSG_MAIN_AGENT_CONNECTED);
+    }
+}
+
+static void main_channel_marshall_agent_connected(SpiceMarshaller *m)
+{
+    SpiceMsgMainAgentConnectedTokens connected;
+
+    connected.num_tokens = REDS_AGENT_WINDOW_SIZE;
+    spice_marshall_msg_main_agent_connected_tokens(m, &connected);
 }
 
 void main_channel_push_agent_disconnected(MainChannel *main_chan)
@@ -728,6 +740,9 @@ static void main_channel_send_item(RedChannelClient *rcc, PipeItem *base)
             break;
         case SPICE_MSG_MAIN_UUID:
             spice_marshall_msg_main_uuid(m, &SPICE_CONTAINEROF(base, UuidPipeItem, base)->msg);
+            break;
+        case SPICE_MSG_MAIN_AGENT_CONNECTED_TOKENS:
+            main_channel_marshall_agent_connected(m);
             break;
         default:
             break;
