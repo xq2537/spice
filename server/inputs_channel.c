@@ -37,6 +37,7 @@
 #include "reds.h"
 #include "red_channel.h"
 #include "inputs_channel.h"
+#include "migration_protocol.h"
 
 // TODO: RECEIVE_BUF_SIZE used to be the same for inputs_channel and main_channel
 // since it was defined once in reds.c which contained both.
@@ -76,6 +77,7 @@ enum {
     PIPE_ITEM_INPUTS_INIT = PIPE_ITEM_TYPE_CHANNEL_BASE,
     PIPE_ITEM_MOUSE_MOTION_ACK,
     PIPE_ITEM_KEY_MODIFIERS,
+    PIPE_ITEM_MIGRATE_DATA,
 };
 
 typedef struct InputsPipeItem {
@@ -241,6 +243,19 @@ static PipeItem *inputs_key_modifiers_item_new(
     return &item->base;
 }
 
+static void inputs_channel_send_migrate_data(RedChannelClient *rcc,
+                                             SpiceMarshaller *m,
+                                             PipeItem *item)
+{
+    InputsChannelClient *icc = SPICE_CONTAINEROF(rcc, InputsChannelClient, base);
+
+    red_channel_client_init_send_data(rcc, SPICE_MSG_MIGRATE_DATA, item);
+
+    spice_marshaller_add_uint32(m, SPICE_MIGRATE_DATA_INPUTS_MAGIC);
+    spice_marshaller_add_uint32(m, SPICE_MIGRATE_DATA_INPUTS_VERSION);
+    spice_marshaller_add_uint32(m, icc->motion_count);
+}
+
 static void inputs_channel_release_pipe_item(RedChannelClient *rcc,
     PipeItem *base, int item_pushed)
 {
@@ -274,6 +289,9 @@ static void inputs_channel_send_item(RedChannelClient *rcc, PipeItem *base)
         }
         case PIPE_ITEM_MOUSE_MOTION_ACK:
             red_channel_client_init_send_data(rcc, SPICE_MSG_INPUTS_MOUSE_MOTION_ACK, base);
+            break;
+        case PIPE_ITEM_MIGRATE_DATA:
+            inputs_channel_send_migrate_data(rcc, m, base);
             break;
         default:
             spice_warning("invalid pipe iten %d", base->type);
@@ -423,8 +441,7 @@ static int inputs_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, ui
     case SPICE_MSGC_DISCONNECTING:
         break;
     default:
-        spice_printerr("unexpected type %d", type);
-        return FALSE;
+        return red_channel_client_handle_message(rcc, size, type, message);
     }
     return TRUE;
 }
@@ -520,6 +537,33 @@ static void key_modifiers_sender(void *opaque)
     inputs_push_keyboard_modifiers(kbd_get_leds(keyboard));
 }
 
+static int inputs_channel_handle_migrate_flush_mark(RedChannelClient *rcc)
+{
+    red_channel_client_pipe_add_type(rcc, PIPE_ITEM_MIGRATE_DATA);
+    return TRUE;
+}
+
+static int inputs_channel_handle_migrate_data(RedChannelClient *rcc,
+                                              uint32_t size,
+                                              void *message)
+{
+    InputsChannelClient *icc = SPICE_CONTAINEROF(rcc, InputsChannelClient, base);
+    SpiceMigrateDataHeader *header;
+    SpiceMigrateDataInputs *mig_data;
+
+    header = (SpiceMigrateDataHeader *)message;
+    mig_data = (SpiceMigrateDataInputs *)(header + 1);
+
+    if (!migration_protocol_validate_header(header,
+                                            SPICE_MIGRATE_DATA_INPUTS_MAGIC,
+                                            SPICE_MIGRATE_DATA_INPUTS_VERSION)) {
+        spice_error("bad header");
+        return FALSE;
+    }
+    icc->motion_count = mig_data->motion_count;
+    return TRUE;
+}
+
 void inputs_init(void)
 {
     ChannelCbs channel_cbs = { NULL, };
@@ -534,6 +578,8 @@ void inputs_init(void)
     channel_cbs.release_item = inputs_channel_release_pipe_item;
     channel_cbs.alloc_recv_buf = inputs_channel_alloc_msg_rcv_buf;
     channel_cbs.release_recv_buf = inputs_channel_release_msg_rcv_buf;
+    channel_cbs.handle_migrate_data = inputs_channel_handle_migrate_data;
+    channel_cbs.handle_migrate_flush_mark = inputs_channel_handle_migrate_flush_mark;
 
     g_inputs_channel = (InputsChannel *)red_channel_create_parser(
                                     sizeof(InputsChannel),
@@ -543,7 +589,7 @@ void inputs_init(void)
                                     spice_get_client_channel_parser(SPICE_CHANNEL_INPUTS, NULL),
                                     inputs_channel_handle_parsed,
                                     &channel_cbs,
-                                    0);
+                                    SPICE_MIGRATE_NEED_FLUSH | SPICE_MIGRATE_NEED_DATA_TRANSFER);
 
     if (!g_inputs_channel) {
         spice_error("failed to allocate Inputs Channel");
