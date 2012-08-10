@@ -650,6 +650,8 @@ DisplayChannel::DisplayChannel(RedClient& client, uint32_t id,
     get_process_loop().add_trigger(_interrupt_update);
 
     set_draw_handlers();
+
+    set_capability(SPICE_DISPLAY_CAP_COMPOSITE);
 }
 
 DisplayChannel::~DisplayChannel()
@@ -692,6 +694,8 @@ void DisplayChannel::set_draw_handlers()
                          &DisplayChannel::handle_draw_transparent);
     handler->set_handler(SPICE_MSG_DISPLAY_DRAW_ALPHA_BLEND,
                          &DisplayChannel::handle_draw_alpha_blend);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_COMPOSITE,
+                         &DisplayChannel::handle_draw_composite);
     handler->set_handler(SPICE_MSG_DISPLAY_STREAM_DATA, &DisplayChannel::handle_stream_data);
 }
 
@@ -712,6 +716,7 @@ void DisplayChannel::clear_draw_handlers()
     handler->set_handler(SPICE_MSG_DISPLAY_DRAW_TEXT, NULL);
     handler->set_handler(SPICE_MSG_DISPLAY_DRAW_TRANSPARENT, NULL);
     handler->set_handler(SPICE_MSG_DISPLAY_DRAW_ALPHA_BLEND, NULL);
+    handler->set_handler(SPICE_MSG_DISPLAY_DRAW_COMPOSITE, NULL);
     handler->set_handler(SPICE_MSG_DISPLAY_STREAM_DATA, NULL);
 }
 
@@ -1733,6 +1738,14 @@ void DisplayChannel::handle_draw_alpha_blend(RedPeer::InMessage* message)
     SpiceMsgDisplayDrawAlphaBlend* alpha_blend = (SpiceMsgDisplayDrawAlphaBlend*)message->data();
     canvas = _surfaces_cache[alpha_blend->base.surface_id];
     DRAW(alpha_blend);
+}
+
+void DisplayChannel::handle_draw_composite(RedPeer::InMessage* message)
+{
+    Canvas *canvas;
+    SpiceMsgDisplayDrawComposite* composite = (SpiceMsgDisplayDrawComposite*)message->data();
+    canvas = _surfaces_cache[composite->base.surface_id];
+    DRAW(composite);
 }
 
 void DisplayChannel::streams_time()

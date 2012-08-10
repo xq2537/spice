@@ -114,6 +114,13 @@ void Canvas::draw_alpha_blend(SpiceMsgDisplayDrawAlphaBlend& alpha_blend, int si
     touched_bbox(&alpha_blend.base.box);
 }
 
+void Canvas::draw_composite(SpiceMsgDisplayDrawComposite& composite, int size)
+{
+    begin_draw(composite.base, size, sizeof(SpiceMsgDisplayDrawComposite));
+    _canvas->ops->draw_composite(_canvas, &composite.base.box, &composite.base.clip, &composite.data);
+    touched_bbox(&composite.base.box);
+}
+
 void Canvas::copy_bits(SpiceMsgDisplayCopyBits& copy, int size)
 {
     begin_draw(copy.base, size, sizeof(SpiceMsgDisplayCopyBits));

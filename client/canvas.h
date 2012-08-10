@@ -304,6 +304,7 @@ public:
     void draw_invers(SpiceMsgDisplayDrawInvers& invers, int size);
     void draw_rop3(SpiceMsgDisplayDrawRop3& rop3, int size);
     void draw_stroke(SpiceMsgDisplayDrawStroke& stroke, int size);
+    void draw_composite(SpiceMsgDisplayDrawComposite& composite, int size);
 
     void put_image(
 #ifdef WIN32

@@ -173,6 +173,7 @@ private:
     void handle_draw_text(RedPeer::InMessage* message);
     void handle_draw_transparent(RedPeer::InMessage* message);
     void handle_draw_alpha_blend(RedPeer::InMessage* message);
+    void handle_draw_composite(RedPeer::InMessage* message);
 
     void on_streams_trigger();
     virtual void on_update_completion(uint64_t mark);
