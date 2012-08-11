@@ -831,7 +831,9 @@ static void vdi_port_read_buf_unref(VDIReadBuf *buf)
         ring was empty. So we call it again so it can complete its work if
         necessary. Note that since we can be called from spice_char_device_wakeup
         this can cause recursion, but we have protection for that */
-        spice_char_device_wakeup(reds->agent_state.base);
+        if (reds->agent_state.base) {
+            spice_char_device_wakeup(reds->agent_state.base);
+        }
     }
 }
 
