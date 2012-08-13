@@ -64,13 +64,14 @@ struct SpiceTabletState {
 
 typedef struct InputsChannelClient {
     RedChannelClient base;
-    uint32_t motion_count;
+    uint16_t motion_count;
 } InputsChannelClient;
 
 typedef struct InputsChannel {
     RedChannel base;
     uint8_t recv_buf[RECEIVE_BUF_SIZE];
     VDAgentMouseState mouse_state;
+    int src_during_migrate;
 } InputsChannel;
 
 enum {
@@ -249,11 +250,12 @@ static void inputs_channel_send_migrate_data(RedChannelClient *rcc,
 {
     InputsChannelClient *icc = SPICE_CONTAINEROF(rcc, InputsChannelClient, base);
 
+    g_inputs_channel->src_during_migrate = FALSE;
     red_channel_client_init_send_data(rcc, SPICE_MSG_MIGRATE_DATA, item);
 
     spice_marshaller_add_uint32(m, SPICE_MIGRATE_DATA_INPUTS_MAGIC);
     spice_marshaller_add_uint32(m, SPICE_MIGRATE_DATA_INPUTS_VERSION);
-    spice_marshaller_add_uint32(m, icc->motion_count);
+    spice_marshaller_add_uint16(m, icc->motion_count);
 }
 
 static void inputs_channel_release_pipe_item(RedChannelClient *rcc,
@@ -328,8 +330,10 @@ static int inputs_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, ui
     case SPICE_MSGC_INPUTS_MOUSE_MOTION: {
         SpiceMsgcMouseMotion *mouse_motion = (SpiceMsgcMouseMotion *)buf;
 
-        if (++icc->motion_count % SPICE_INPUT_MOTION_ACK_BUNCH == 0) {
+        if (++icc->motion_count % SPICE_INPUT_MOTION_ACK_BUNCH == 0 &&
+            !g_inputs_channel->src_during_migrate) {
             red_channel_client_pipe_add_type(rcc, PIPE_ITEM_MOUSE_MOTION_ACK);
+            icc->motion_count = 0;
         }
         if (mouse && reds_get_mouse_mode() == SPICE_MOUSE_MODE_SERVER) {
             SpiceMouseInterface *sif;
@@ -343,8 +347,10 @@ static int inputs_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, ui
     case SPICE_MSGC_INPUTS_MOUSE_POSITION: {
         SpiceMsgcMousePosition *pos = (SpiceMsgcMousePosition *)buf;
 
-        if (++icc->motion_count % SPICE_INPUT_MOTION_ACK_BUNCH == 0) {
+        if (++icc->motion_count % SPICE_INPUT_MOTION_ACK_BUNCH == 0 &&
+            !g_inputs_channel->src_during_migrate) {
             red_channel_client_pipe_add_type(rcc, PIPE_ITEM_MOUSE_MOTION_ACK);
+            icc->motion_count = 0;
         }
         if (reds_get_mouse_mode() != SPICE_MOUSE_MODE_CLIENT) {
             break;
@@ -518,9 +524,16 @@ static void inputs_connect(RedChannel *channel, RedClient *client,
     inputs_pipe_add_init(&icc->base);
 }
 
+static void inputs_migrate(RedChannelClient *rcc)
+{
+    g_inputs_channel->src_during_migrate = TRUE;
+    red_channel_client_default_migrate(rcc);
+}
+
 static void inputs_push_keyboard_modifiers(uint8_t modifiers)
 {
-    if (!g_inputs_channel || !red_channel_is_connected(&g_inputs_channel->base)) {
+    if (!g_inputs_channel || !red_channel_is_connected(&g_inputs_channel->base)||
+        g_inputs_channel->src_during_migrate) {
         return;
     }
     red_channel_pipes_new_add_push(&g_inputs_channel->base,
@@ -560,7 +573,13 @@ static int inputs_channel_handle_migrate_data(RedChannelClient *rcc,
         spice_error("bad header");
         return FALSE;
     }
+    key_modifiers_sender(NULL);
     icc->motion_count = mig_data->motion_count;
+
+    for (; icc->motion_count >= SPICE_INPUT_MOTION_ACK_BUNCH;
+           icc->motion_count -= SPICE_INPUT_MOTION_ACK_BUNCH) {
+        red_channel_client_pipe_add_type(rcc, PIPE_ITEM_MOUSE_MOTION_ACK);
+    }
     return TRUE;
 }
 
@@ -596,6 +615,7 @@ void inputs_init(void)
     }
 
     client_cbs.connect = inputs_connect;
+    client_cbs.migrate = inputs_migrate;
     red_channel_register_client_cbs(&g_inputs_channel->base, &client_cbs);
 
     reds_register_channel(&g_inputs_channel->base);
