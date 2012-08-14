@@ -27,7 +27,7 @@
 
 /* increase the version when the version of any
  * of the migration data messages is increased */
-#define SPICE_MIGRATION_PROTOCOL_VERSION ~0
+#define SPICE_MIGRATION_PROTOCOL_VERSION 1
 
 typedef struct __attribute__ ((__packed__)) SpiceMigrateDataHeader {
     uint32_t magic;

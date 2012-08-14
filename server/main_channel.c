@@ -1184,6 +1184,7 @@ MainChannel* main_channel_init(void)
                                         SPICE_MIGRATE_NEED_FLUSH | SPICE_MIGRATE_NEED_DATA_TRANSFER);
     spice_assert(channel);
     red_channel_set_cap(channel, SPICE_MAIN_CAP_SEMI_SEAMLESS_MIGRATE);
+    red_channel_set_cap(channel, SPICE_MAIN_CAP_SEAMLESS_MIGRATE);
 
     client_cbs.migrate = main_channel_client_migrate;
     red_channel_register_client_cbs(channel, &client_cbs);
