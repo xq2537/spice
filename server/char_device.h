@@ -148,13 +148,13 @@ void spice_char_device_reset(SpiceCharDeviceState *dev);
 
 /* max_send_queue_size = how many messages we can read from the device and enqueue for this client,
  * when we have tokens for other clients and no tokens for this one */
-void spice_char_device_client_add(SpiceCharDeviceState *dev,
-                                  RedClient *client,
-                                  int do_flow_control,
-                                  uint32_t max_send_queue_size,
-                                  uint32_t num_client_tokens,
-                                  uint32_t num_send_tokens,
-                                  int wait_for_migrate_data);
+int spice_char_device_client_add(SpiceCharDeviceState *dev,
+                                 RedClient *client,
+                                 int do_flow_control,
+                                 uint32_t max_send_queue_size,
+                                 uint32_t num_client_tokens,
+                                 uint32_t num_send_tokens,
+                                 int wait_for_migrate_data);
 
 void spice_char_device_client_remove(SpiceCharDeviceState *dev,
                                      RedClient *client);

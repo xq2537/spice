@@ -339,17 +339,25 @@ static void smartcard_char_device_attach_client(SpiceCharDeviceInstance *char_de
                                                 SmartCardChannelClient *scc)
 {
     SmartCardDeviceState *st = spice_char_device_state_opaque_get(char_device->st);
+    int client_added;
 
     spice_assert(!scc->smartcard_state && !st->scc);
     st->scc = scc;
-    spice_char_device_client_add(st->chardev_st,
-                                 scc->base.client,
-                                 FALSE, /* no flow control yet */
-                                 0, /* send queue size */
-                                 ~0,
-                                 ~0,
-                                 red_channel_client_waits_for_migrate_data(&scc->base));
     scc->smartcard_state = st;
+    client_added = spice_char_device_client_add(st->chardev_st,
+                                                scc->base.client,
+                                                FALSE, /* no flow control yet */
+                                                0, /* send queue size */
+                                                ~0,
+                                                ~0,
+                                                red_channel_client_waits_for_migrate_data(
+                                                    &scc->base));
+    if (!client_added) {
+        spice_warning("failed");
+        st->scc = NULL;
+        scc->smartcard_state = NULL;
+        red_channel_client_disconnect(&scc->base);
+    }
 }
 
 static void smartcard_char_device_notify_reader_remove(SmartCardDeviceState *st)

@@ -1111,13 +1111,21 @@ void reds_on_main_agent_start(MainChannelClient *mcc, uint32_t num_tokens)
      * flow control, but will have no other problem.
      */
     if (!spice_char_device_client_exists(dev_state, rcc->client)) {
-        spice_char_device_client_add(dev_state,
-                                     rcc->client,
-                                     TRUE, /* flow control */
-                                     REDS_VDI_PORT_NUM_RECEIVE_BUFFS,
-                                     REDS_AGENT_WINDOW_SIZE,
-                                     num_tokens,
-                                     red_channel_client_waits_for_migrate_data(rcc));
+        int client_added;
+
+        client_added = spice_char_device_client_add(dev_state,
+                                                    rcc->client,
+                                                    TRUE, /* flow control */
+                                                    REDS_VDI_PORT_NUM_RECEIVE_BUFFS,
+                                                    REDS_AGENT_WINDOW_SIZE,
+                                                    num_tokens,
+                                                    red_channel_client_waits_for_migrate_data(rcc));
+
+        if (!client_added) {
+            spice_warning("failed to add client to agent");
+            reds_client_disconnect(rcc->client);
+            return;
+        }
     } else {
         spice_char_device_send_to_client_tokens_set(dev_state,
                                                     rcc->client,
@@ -3580,13 +3588,21 @@ static SpiceCharDeviceState *attach_to_red_agent(SpiceCharDeviceInstance *sin)
     } else {
        spice_debug("waiting for migration data");
         if (!spice_char_device_client_exists(reds->agent_state.base, reds_get_client())) {
-            spice_char_device_client_add(reds->agent_state.base,
-                                         reds_get_client(),
-                                         TRUE, /* flow control */
-                                         REDS_VDI_PORT_NUM_RECEIVE_BUFFS,
-                                         REDS_AGENT_WINDOW_SIZE,
-                                         ~0,
-                                         TRUE);
+            int client_added;
+
+            client_added = spice_char_device_client_add(reds->agent_state.base,
+                                                        reds_get_client(),
+                                                        TRUE, /* flow control */
+                                                        REDS_VDI_PORT_NUM_RECEIVE_BUFFS,
+                                                        REDS_AGENT_WINDOW_SIZE,
+                                                        ~0,
+                                                        TRUE);
+
+            if (!client_added) {
+                spice_warning("failed to add client to agent");
+                reds_disconnect();
+            }
+
         }
     }
     return state->base;

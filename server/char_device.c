@@ -681,20 +681,25 @@ void spice_char_device_state_destroy(SpiceCharDeviceState *char_dev)
     spice_char_device_state_unref(char_dev);
 }
 
-void spice_char_device_client_add(SpiceCharDeviceState *dev,
-                                  RedClient *client,
-                                  int do_flow_control,
-                                  uint32_t max_send_queue_size,
-                                  uint32_t num_client_tokens,
-                                  uint32_t num_send_tokens,
-                                  int wait_for_migrate_data)
+int spice_char_device_client_add(SpiceCharDeviceState *dev,
+                                 RedClient *client,
+                                 int do_flow_control,
+                                 uint32_t max_send_queue_size,
+                                 uint32_t num_client_tokens,
+                                 uint32_t num_send_tokens,
+                                 int wait_for_migrate_data)
 {
     SpiceCharDeviceClientState *dev_client;
 
     spice_assert(dev);
     spice_assert(client);
 
-    spice_assert(!wait_for_migrate_data || (dev->num_clients == 0 && !dev->active));
+    if (wait_for_migrate_data && (dev->num_clients > 0 || dev->active)) {
+        spice_warning("can't restore device %p from migration data. The device "
+                      "has already been active", dev);
+        return FALSE;
+    }
+
     dev->wait_for_migrate_data = wait_for_migrate_data;
 
     spice_debug("dev_state %p client %p", dev, client);
@@ -721,6 +726,7 @@ void spice_char_device_client_add(SpiceCharDeviceState *dev,
     dev->num_clients++;
     /* Now that we have a client, forward any pending device data */
     spice_char_device_wakeup(dev);
+    return TRUE;
 }
 
 void spice_char_device_client_remove(SpiceCharDeviceState *dev,
