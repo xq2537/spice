@@ -4111,7 +4111,7 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_connect(SpiceServer *s, const char* 
     } else {
         if (reds->num_clients == 0) {
             reds_mig_release();
-            spice_error("no client connected");
+            spice_info("no client connected");
         }
         sif->migrate_connect_complete(migration_interface);
     }
@@ -4169,7 +4169,7 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_end(SpiceServer *s, int completed)
 
     sif = SPICE_CONTAINEROF(migration_interface->base.sif, SpiceMigrateInterface, base);
     if (completed && !reds->expect_migrate && reds->num_clients) {
-        spice_error("spice_server_migrate_info was not called, disconnecting clients");
+        spice_warning("spice_server_migrate_info was not called, disconnecting clients");
         reds_disconnect();
         ret = -1;
         goto complete;
