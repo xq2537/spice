@@ -7,6 +7,8 @@
 #include "red_common.h"
 #include "dispatcher.h"
 #include "main_dispatcher.h"
+#include "red_channel.h"
+#include "reds.h"
 
 /*
  * Main Dispatcher
@@ -37,6 +39,7 @@ MainDispatcher main_dispatcher;
 
 enum {
     MAIN_DISPATCHER_CHANNEL_EVENT = 0,
+    MAIN_DISPATCHER_MIGRATE_SEAMLESS_DST_COMPLETE,
 
     MAIN_DISPATCHER_NUM_MESSAGES
 };
@@ -45,6 +48,10 @@ typedef struct MainDispatcherChannelEventMessage {
     int event;
     SpiceChannelEventInfo *info;
 } MainDispatcherChannelEventMessage;
+
+typedef struct MainDispatcherMigrateSeamlessDstCompleteMessage {
+    RedClient *client;
+} MainDispatcherMigrateSeamlessDstCompleteMessage;
 
 /* channel_event - calls core->channel_event, must be done in main thread */
 static void main_dispatcher_self_handle_channel_event(
@@ -80,6 +87,28 @@ void main_dispatcher_channel_event(int event, SpiceChannelEventInfo *info)
                             &msg);
 }
 
+
+static void main_dispatcher_handle_migrate_complete(void *opaque,
+                                                    void *payload)
+{
+    MainDispatcherMigrateSeamlessDstCompleteMessage *mig_complete = payload;
+
+    reds_on_client_seamless_migrate_complete(mig_complete->client);
+}
+
+void main_dispatcher_seamless_migrate_dst_complete(RedClient *client)
+{
+    MainDispatcherMigrateSeamlessDstCompleteMessage msg;
+
+    if (pthread_self() == main_dispatcher.base.self) {
+        reds_on_client_seamless_migrate_complete(client);
+        return;
+    }
+
+    msg.client = client;
+    dispatcher_send_message(&main_dispatcher.base, MAIN_DISPATCHER_MIGRATE_SEAMLESS_DST_COMPLETE,
+                            &msg);
+}
 static void dispatcher_handle_read(int fd, int event, void *opaque)
 {
     Dispatcher *dispatcher = opaque;
@@ -97,4 +126,7 @@ void main_dispatcher_init(SpiceCoreInterface *core)
     dispatcher_register_handler(&main_dispatcher.base, MAIN_DISPATCHER_CHANNEL_EVENT,
                                 main_dispatcher_handle_channel_event,
                                 sizeof(MainDispatcherChannelEventMessage), 0 /* no ack */);
+    dispatcher_register_handler(&main_dispatcher.base, MAIN_DISPATCHER_MIGRATE_SEAMLESS_DST_COMPLETE,
+                                main_dispatcher_handle_migrate_complete,
+                                sizeof(MainDispatcherMigrateSeamlessDstCompleteMessage), 0 /* no ack */);
 }

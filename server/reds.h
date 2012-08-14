@@ -157,7 +157,8 @@ void reds_on_main_mouse_mode_request(void *message, size_t size);
 /* migration dest side: returns whether it can support seamless migration
  * with the given src migration protocol version */
 int reds_on_migrate_dst_set_seamless(MainChannelClient *mcc, uint32_t src_version);
-void reds_on_client_migrate_complete(RedClient *client);
+void reds_on_client_semi_seamless_migrate_complete(RedClient *client);
+void reds_on_client_seamless_migrate_complete(RedClient *client);
 void reds_on_char_device_state_destroy(SpiceCharDeviceState *dev);
 
 #endif

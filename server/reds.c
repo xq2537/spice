@@ -1440,6 +1440,21 @@ static void reds_mig_target_client_disconnect_all(void)
     }
 }
 
+static int reds_find_client(RedClient *client)
+{
+    RingItem *item;
+
+    RING_FOREACH(item, &reds->clients) {
+        RedClient *list_client;
+
+        list_client = SPICE_CONTAINEROF(item, RedClient, link);
+        if (list_client == client) {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
 // TODO: now that main is a separate channel this should
 // actually be joined with reds_handle_other_links, become reds_handle_link
 static void reds_handle_main_link(RedLinkInfo *link)
@@ -1625,18 +1640,26 @@ int reds_on_migrate_dst_set_seamless(MainChannelClient *mcc, uint32_t src_versio
     if (reds->allow_multiple_clients  || src_version > SPICE_MIGRATION_PROTOCOL_VERSION) {
         reds->dst_do_seamless_migrate = FALSE;
     } else {
-        RedClient *client;
+        RedChannelClient *rcc = main_channel_client_get_base(mcc);
 
-        client = main_channel_client_get_base(mcc)->client;
-        reds->dst_do_seamless_migrate = reds_link_mig_target_channels(client);
+        red_client_set_migration_seamless(rcc->client);
         /* linking all the channels that have been connected before migration handshake */
-        reds->dst_do_seamless_migrate = reds_link_mig_target_channels(client);
+        reds->dst_do_seamless_migrate = reds_link_mig_target_channels(rcc->client);
     }
     return reds->dst_do_seamless_migrate;
 }
 
-/* semi seamless */
-void reds_on_client_migrate_complete(RedClient *client)
+void reds_on_client_seamless_migrate_complete(RedClient *client)
+{
+    spice_debug(NULL);
+    if (!reds_find_client(client)) {
+        spice_info("client no longer exists");
+        return;
+    }
+    main_channel_migrate_dst_complete(red_client_get_main(client));
+}
+
+void reds_on_client_semi_seamless_migrate_complete(RedClient *client)
 {
     MainChannelClient *mcc;
 
@@ -1649,6 +1672,7 @@ void reds_on_client_migrate_complete(RedClient *client)
                            reds_get_mm_time() - MM_TIME_DELTA,
                            red_dispatcher_qxl_ram_size());
     reds_link_mig_target_channels(client);
+    main_channel_migrate_dst_complete(mcc);
 }
 
 static void reds_handle_other_links(RedLinkInfo *link)
@@ -3202,7 +3226,7 @@ static void reds_mig_finished(int completed)
     if (reds->src_do_seamless_migrate && completed) {
         reds_migrate_channels_seamless();
     } else {
-        main_channel_migrate_complete(reds->main_channel, completed);
+        main_channel_migrate_src_complete(reds->main_channel, completed);
     }
 
     if (completed) {
@@ -4067,8 +4091,8 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_connect(SpiceServer *s, const char* 
     spice_assert(reds == s);
 
     if (reds->expect_migrate) {
-        spice_error("consecutive calls without migration. Canceling previous call");
-        main_channel_migrate_complete(reds->main_channel, FALSE);
+        spice_info("consecutive calls without migration. Canceling previous call");
+        main_channel_migrate_src_complete(reds->main_channel, FALSE);
     }
 
     sif = SPICE_CONTAINEROF(migration_interface->base.sif, SpiceMigrateInterface, base);

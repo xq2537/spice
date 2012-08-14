@@ -36,6 +36,7 @@
 #include "stat.h"
 #include "red_channel.h"
 #include "reds.h"
+#include "main_dispatcher.h"
 
 static void red_channel_client_event(int fd, int event, void *data);
 static void red_client_add_channel(RedClient *client, RedChannelClient *rcc);
@@ -688,6 +689,45 @@ error:
     return NULL;
 }
 
+static void red_channel_client_seamless_migration_done(RedChannelClient *rcc)
+{
+    rcc->wait_migrate_data = FALSE;
+
+    pthread_mutex_lock(&rcc->client->lock);
+    rcc->client->num_migrated_channels--;
+
+    /* we assume we always have at least one channel who has migration data transfer,
+     * otherwise, this flag will never be set back to FALSE*/
+    if (!rcc->client->num_migrated_channels) {
+        rcc->client->during_target_migrate = FALSE;
+        rcc->client->seamless_migrate = FALSE;
+        /* migration completion might have been triggered from a different thread
+         * than the main thread */
+        main_dispatcher_seamless_migrate_dst_complete(rcc->client);
+    }
+    pthread_mutex_unlock(&rcc->client->lock);
+}
+
+int red_channel_client_waits_for_migrate_data(RedChannelClient *rcc)
+{
+    return rcc->wait_migrate_data;
+}
+
+int red_channel_waits_for_migrate_data(RedChannel *channel)
+{
+    RedChannelClient *rcc;
+    if (!red_channel_is_connected(channel)) {
+        return FALSE;
+    }
+
+    if (channel->clients_num > 1) {
+        return FALSE;
+    }
+    spice_assert(channel->clients_num == 1);
+    rcc = SPICE_CONTAINEROF(ring_get_head(&channel->clients), RedChannelClient, channel_link);
+    return red_channel_client_waits_for_migrate_data(rcc);
+}
+
 static void red_channel_client_default_connect(RedChannel *channel, RedClient *client,
                                                RedsStream *stream,
                                                int migration,
@@ -1085,13 +1125,21 @@ static void red_channel_handle_migrate_flush_mark(RedChannelClient *rcc)
 // So need to make all the handlers work with per channel/client data (what data exactly?)
 static void red_channel_handle_migrate_data(RedChannelClient *rcc, uint32_t size, void *message)
 {
+    spice_debug("channel type %d id %d rcc %p size %u",
+                rcc->channel->type, rcc->channel->id, rcc, size);
     if (!rcc->channel->channel_cbs.handle_migrate_data) {
         return;
     }
-    spice_assert(red_channel_client_get_message_serial(rcc) == 0);
-    red_channel_client_set_message_serial(rcc,
-        rcc->channel->channel_cbs.handle_migrate_data_get_serial(rcc, size, message));
+    if (!red_channel_client_waits_for_migrate_data(rcc)) {
+        spice_error("unexcpected");
+        return;
+    }
+    if (rcc->channel->channel_cbs.handle_migrate_data_get_serial) {
+        red_channel_client_set_message_serial(rcc,
+            rcc->channel->channel_cbs.handle_migrate_data_get_serial(rcc, size, message));
+    }
     rcc->channel->channel_cbs.handle_migrate_data(rcc, size, message);
+    red_channel_client_seamless_migration_done(rcc);
 }
 
 int red_channel_client_handle_message(RedChannelClient *rcc, uint32_t size,
@@ -1555,9 +1603,36 @@ RedClient *red_client_new(int migrated)
     ring_init(&client->channels);
     pthread_mutex_init(&client->lock, NULL);
     client->thread_id = pthread_self();
-    client->migrated = migrated;
+    client->during_target_migrate = migrated;
 
     return client;
+}
+
+/* client mutex should be locked before this call */
+static void red_channel_client_set_migration_seamless(RedChannelClient *rcc)
+{
+    spice_assert(rcc->client->during_target_migrate && rcc->client->seamless_migrate);
+
+    if (rcc->channel->migration_flags & SPICE_MIGRATE_NEED_DATA_TRANSFER) {
+        rcc->wait_migrate_data = TRUE;
+        rcc->client->num_migrated_channels++;
+    }
+    spice_debug("channel type %d id %d rcc %p wait data %d", rcc->channel->type, rcc->channel->id, rcc,
+        rcc->wait_migrate_data);
+}
+
+void red_client_set_migration_seamless(RedClient *client) // dest
+{
+    RingItem *link;
+    pthread_mutex_lock(&client->lock);
+    client->seamless_migrate = TRUE;
+    /* update channel clients that got connected before the migration
+     * type was set. red_client_add_channel will handle newer channel clients */
+    RING_FOREACH(link, &client->channels) {
+        RedChannelClient *rcc = SPICE_CONTAINEROF(link, RedChannelClient, client_link);
+        red_channel_client_set_migration_seamless(rcc);
+    }
+    pthread_mutex_unlock(&client->lock);
 }
 
 void red_client_migrate(RedClient *client)
@@ -1625,6 +1700,9 @@ static void red_client_add_channel(RedClient *client, RedChannelClient *rcc)
 {
     spice_assert(rcc && client);
     ring_add(&client->channels, &rcc->client_link);
+    if (client->during_target_migrate && client->seamless_migrate) {
+        red_channel_client_set_migration_seamless(rcc);
+    }
     client->channels_num++;
 }
 
@@ -1636,16 +1714,27 @@ void red_client_set_main(RedClient *client, MainChannelClient *mcc) {
     client->mcc = mcc;
 }
 
-void red_client_migrate_complete(RedClient *client)
+void red_client_semi_seamless_migrate_complete(RedClient *client)
 {
-    spice_assert(client->migrated);
-    client->migrated = FALSE;
-    reds_on_client_migrate_complete(client);
+    pthread_mutex_lock(&client->lock);
+    if (!client->during_target_migrate || client->seamless_migrate) {
+        spice_error("unexpected");
+        pthread_mutex_unlock(&client->lock);
+        return;
+    }
+    client->during_target_migrate = FALSE;
+    pthread_mutex_unlock(&client->lock);
+    reds_on_client_semi_seamless_migrate_complete(client);
 }
 
+/* should be called only from the main thread */
 int red_client_during_migrate_at_target(RedClient *client)
 {
-    return client->migrated;
+    int ret;
+    pthread_mutex_lock(&client->lock);
+    ret = client->during_target_migrate;
+    pthread_mutex_unlock(&client->lock);
+    return ret;
 }
 
 /*

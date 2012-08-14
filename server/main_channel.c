@@ -837,10 +837,14 @@ void main_channel_client_handle_migrate_end(MainChannelClient *mcc)
                    "client does not support semi-seamless migration");
             return;
     }
-    red_client_migrate_complete(mcc->base.client);
-    if (mcc->mig_wait_prev_complete) {
+    red_client_semi_seamless_migrate_complete(mcc->base.client);
+}
 
+void main_channel_migrate_dst_complete(MainChannelClient *mcc)
+{
+    if (mcc->mig_wait_prev_complete) {
         if (mcc->mig_wait_prev_try_seamless) {
+            spice_assert(mcc->base.channel->clients_num == 1);
             red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_BEGIN_SEAMLESS);
         } else {
             red_channel_client_pipe_add_type(&mcc->base, SPICE_MSG_MAIN_MIGRATE_BEGIN);
@@ -849,6 +853,7 @@ void main_channel_client_handle_migrate_end(MainChannelClient *mcc)
         mcc->mig_wait_prev_complete = FALSE;
     }
 }
+
 static int main_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint16_t type,
                                       void *message)
 {
@@ -1248,7 +1253,7 @@ void main_channel_migrate_cancel_wait(MainChannel *main_chan)
     main_chan->num_clients_mig_wait = 0;
 }
 
-int main_channel_migrate_complete(MainChannel *main_chan, int success)
+int main_channel_migrate_src_complete(MainChannel *main_chan, int success)
 {
     RingItem *client_link;
     int semi_seamless_count = 0;

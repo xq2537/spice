@@ -267,6 +267,8 @@ struct RedChannelClient {
     RedChannelCapabilities remote_caps;
     int is_mini_header;
     int destroying;
+
+    int wait_migrate_data;
     int wait_migrate_flush_mark;
 };
 
@@ -357,6 +359,11 @@ int red_channel_is_connected(RedChannel *channel);
 int red_channel_client_is_connected(RedChannelClient *rcc);
 
 void red_channel_client_default_migrate(RedChannelClient *rcc);
+int red_channel_client_waits_for_migrate_data(RedChannelClient *rcc);
+/* seamless migration is supported for only one client. This routine
+ * checks if the only channel client associated with channel is
+ * waiting for migration data */
+int red_channel_waits_for_migrate_data(RedChannel *channel);
 
 /*
  * the disconnect callback is called from the channel's thread,
@@ -513,14 +520,31 @@ struct RedClient {
     pthread_t thread_id;
 
     int disconnecting;
-    int migrated;
+    /* Note that while semi-seamless migration is conducted by the main thread, seamless migration
+     * involves all channels, and thus the related varaibles can be accessed from different
+     * threads */
+    int during_target_migrate; /* if seamless=TRUE, migration_target is turned off when all
+                                  the clients received their migration data. Otherwise (semi-seamless),
+                                  it is turned off, when red_client_semi_seamless_migrate_complete
+                                  is called */
+    int seamless_migrate;
+    int num_migrated_channels; /* for seamless - number of channels that wait for migrate data*/
 };
 
 RedClient *red_client_new(int migrated);
+
 MainChannelClient *red_client_get_main(RedClient *client);
 // main should be set once before all the other channels are created
 void red_client_set_main(RedClient *client, MainChannelClient *mcc);
-void red_client_migrate_complete(RedClient *client);
+
+/* called when the migration handshake results in seamless migration (dst side).
+ * By default we assume semi-seamless */
+void red_client_set_migration_seamless(RedClient *client);
+void red_client_semi_seamless_migrate_complete(RedClient *client); /* dst side */
+/* TRUE if the migration is seamless and there are still channels that wait from migration data.
+ * Or, during semi-seamless migration, and the main channel still waits for MIGRATE_END
+ * from the client.
+ * Note: Call it only from the main thread */
 int red_client_during_migrate_at_target(RedClient *client);
 
 void red_client_migrate(RedClient *client);
