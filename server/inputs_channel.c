@@ -26,6 +26,7 @@
 #include <errno.h>
 #include <spice/macros.h>
 #include <spice/vd_agent.h>
+#include <spice/protocol.h>
 
 #include "common/marshaller.h"
 #include "common/messages.h"
@@ -327,6 +328,14 @@ static int inputs_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, ui
         }
         break;
     }
+    case SPICE_MSGC_INPUTS_KEY_SCANCODE: {
+        uint32_t i;
+        uint8_t *code = (uint8_t *)buf;
+        for (i = 0; i < size; i++) {
+            kbd_push_scan(keyboard, code[i]);
+        }
+        break;
+    }
     case SPICE_MSGC_INPUTS_MOUSE_MOTION: {
         SpiceMsgcMouseMotion *mouse_motion = (SpiceMsgcMouseMotion *)buf;
 
@@ -618,6 +627,7 @@ void inputs_init(void)
     client_cbs.migrate = inputs_migrate;
     red_channel_register_client_cbs(&g_inputs_channel->base, &client_cbs);
 
+    red_channel_set_cap(&g_inputs_channel->base, SPICE_INPUTS_CAP_KEY_SCANCODE);
     reds_register_channel(&g_inputs_channel->base);
 
     if (!(key_modifiers_timer = core->timer_add(key_modifiers_sender, NULL))) {
