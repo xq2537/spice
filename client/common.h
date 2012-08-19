@@ -31,6 +31,7 @@
 #endif
 
 #include <stdio.h>
+#include <stdarg.h>
 #include <string>
 #include <vector>
 #include <map>
