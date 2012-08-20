@@ -4041,6 +4041,7 @@ SPICE_GNUC_VISIBLE void spice_server_vm_start(SpiceServer *s)
         st_item = SPICE_CONTAINEROF(item, SpiceCharDeviceStateItem, link);
         spice_char_device_start(st_item->st);
     }
+    red_dispatcher_on_vm_start();
 }
 
 SPICE_GNUC_VISIBLE void spice_server_vm_stop(SpiceServer *s)
@@ -4055,6 +4056,7 @@ SPICE_GNUC_VISIBLE void spice_server_vm_stop(SpiceServer *s)
         st_item = SPICE_CONTAINEROF(item, SpiceCharDeviceStateItem, link);
         spice_char_device_stop(st_item->st);
     }
+    red_dispatcher_on_vm_stop();
 }
 
 ssize_t reds_stream_read(RedsStream *s, void *buf, size_t nbyte)

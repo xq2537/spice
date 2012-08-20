@@ -27,6 +27,8 @@ void red_dispatcher_set_mm_time(uint32_t);
 void red_dispatcher_on_ic_change(void);
 void red_dispatcher_on_sv_change(void);
 void red_dispatcher_set_mouse_mode(uint32_t mode);
+void red_dispatcher_on_vm_stop(void);
+void red_dispatcher_on_vm_start(void);
 int red_dispatcher_count(void);
 int red_dispatcher_add_renderer(const char *name);
 uint32_t red_dispatcher_qxl_ram_size(void);

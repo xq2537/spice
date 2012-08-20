@@ -762,6 +762,28 @@ void red_dispatcher_set_mouse_mode(uint32_t mode)
     }
 }
 
+void red_dispatcher_on_vm_stop(void)
+{
+    RedDispatcher *now = dispatchers;
+
+    spice_debug(NULL);
+    while (now) {
+        red_dispatcher_stop(now);
+        now = now->next;
+    }
+}
+
+void red_dispatcher_on_vm_start(void)
+{
+    RedDispatcher *now = dispatchers;
+
+    spice_debug(NULL);
+    while (now) {
+        red_dispatcher_start(now);
+        now = now->next;
+    }
+}
+
 int red_dispatcher_count(void)
 {
     RedDispatcher *now = dispatchers;

@@ -134,8 +134,10 @@ struct QXLWorker {
 
 void spice_qxl_wakeup(QXLInstance *instance);
 void spice_qxl_oom(QXLInstance *instance);
-void spice_qxl_start(QXLInstance *instance);
-void spice_qxl_stop(QXLInstance *instance);
+void spice_qxl_start(QXLInstance *instance); /* deprecated since 0.11.2
+                                                spice_server_vm_start replaces it */
+void spice_qxl_stop(QXLInstance *instance);  /* deprecated since 0.11.2
+                                                spice_server_vm_stop replaces it */
 void spice_qxl_update_area(QXLInstance *instance, uint32_t surface_id,
                    struct QXLRect *area, struct QXLRect *dirty_rects,
                    uint32_t num_dirty_rects, uint32_t clear_dirty_region);
