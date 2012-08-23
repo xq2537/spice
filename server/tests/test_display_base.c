@@ -18,11 +18,8 @@
 
 #define MEM_SLOT_GROUP_ID 0
 
-#define MAX_HEIGHT 2048
-#define MAX_WIDTH 2048
-static uint8_t g_primary_surface[MAX_HEIGHT * MAX_WIDTH * 4];
-int g_primary_height;
-int g_primary_width;
+#define NOTIFY_DISPLAY_BATCH (SINGLE_PART/2)
+#define NOTIFY_CURSOR_BATCH 10
 
 /* Parts cribbed from spice-display.h/.c/qxl.c */
 
@@ -135,14 +132,14 @@ static void path_progress(Path *path)
 
 Path path;
 
-static void draw_pos(int t, int *x, int *y)
+static void draw_pos(Test *test, int t, int *x, int *y)
 {
 #ifdef CIRCLE
-    *y = g_primary_height/2 + (g_primary_height/3)*cos(t*2*M_PI/angle_parts);
-    *x = g_primary_width/2 + (g_primary_width/3)*sin(t*2*M_PI/angle_parts);
+    *y = test->primary_height/2 + (test->primary_height/3)*cos(t*2*M_PI/angle_parts);
+    *x = test->primary_width/2 + (test->primary_width/3)*sin(t*2*M_PI/angle_parts);
 #else
-    *y = g_primary_height*(t % SINGLE_PART)/SINGLE_PART;
-    *x = ((g_primary_width/SINGLE_PART)*(t / SINGLE_PART)) % g_primary_width;
+    *y = test->primary_height*(t % SINGLE_PART)/SINGLE_PART;
+    *x = ((test->primary_width/SINGLE_PART)*(t / SINGLE_PART)) % test->primary_width;
 #endif
 }
 
@@ -233,7 +230,7 @@ static SimpleSpiceUpdate *test_spice_create_update_solid(uint32_t surface_id, QX
     return test_spice_create_update_from_bitmap(surface_id, bbox, bitmap, 0, NULL);
 }
 
-static SimpleSpiceUpdate *test_spice_create_update_draw(uint32_t surface_id, int t)
+static SimpleSpiceUpdate *test_spice_create_update_draw(Test *test, uint32_t surface_id, int t)
 {
     int top, left;
     uint8_t *dst;
@@ -242,7 +239,7 @@ static SimpleSpiceUpdate *test_spice_create_update_draw(uint32_t surface_id, int
     int i;
     QXLRect bbox;
 
-    draw_pos(t, &left, &top);
+    draw_pos(test, t, &left, &top);
     if ((t % angle_parts) == 0) {
         c_i++;
     }
@@ -255,7 +252,7 @@ static SimpleSpiceUpdate *test_spice_create_update_draw(uint32_t surface_id, int
 
     unique++;
 
-    bw       = g_primary_width/SINGLE_PART;
+    bw       = test->primary_width/SINGLE_PART;
     bh       = 48;
 
     bitmap = dst = malloc(bw * bh * 4);
@@ -273,7 +270,7 @@ static SimpleSpiceUpdate *test_spice_create_update_draw(uint32_t surface_id, int
     return test_spice_create_update_from_bitmap(surface_id, bbox, bitmap, 0, NULL);
 }
 
-static SimpleSpiceUpdate *test_spice_create_update_copy_bits(uint32_t surface_id)
+static SimpleSpiceUpdate *test_spice_create_update_copy_bits(Test *test, uint32_t surface_id)
 {
     SimpleSpiceUpdate *update;
     QXLDrawable *drawable;
@@ -286,7 +283,7 @@ static SimpleSpiceUpdate *test_spice_create_update_copy_bits(uint32_t surface_id
     update   = calloc(sizeof(*update), 1);
     drawable = &update->drawable;
 
-    bw       = g_primary_width/SINGLE_PART;
+    bw       = test->primary_width/SINGLE_PART;
     bh       = 48;
     bbox.right = bbox.left + bw;
     bbox.bottom = bbox.top + bh;
@@ -342,11 +339,10 @@ static SimpleSurfaceCmd *destroy_surface(int surface_id)
     return simple_cmd;
 }
 
-static QXLWorker *qxl_worker = NULL;
-
-static void create_primary_surface(QXLWorker *worker, uint32_t width,
+static void create_primary_surface(Test *test, uint32_t width,
                                    uint32_t height)
 {
+    QXLWorker *qxl_worker = test->qxl_worker;
     QXLDevSurfaceCreate surface = { 0, };
 
     ASSERT(height <= MAX_HEIGHT);
@@ -355,30 +351,20 @@ static void create_primary_surface(QXLWorker *worker, uint32_t width,
     ASSERT(width > 0);
 
     surface.format     = SPICE_SURFACE_FMT_32_xRGB;
-    surface.width      = g_primary_width = width;
-    surface.height     = g_primary_height = height;
+    surface.width      = test->primary_width = width;
+    surface.height     = test->primary_height = height;
     surface.stride     = -width * 4; /* negative? */
     surface.mouse_mode = TRUE; /* unused by red_worker */
     surface.flags      = 0;
     surface.type       = 0;    /* unused by red_worker */
     surface.position   = 0;    /* unused by red_worker */
-    surface.mem        = (uint64_t)&g_primary_surface;
+    surface.mem        = (uint64_t)&test->primary_surface;
     surface.group_id   = MEM_SLOT_GROUP_ID;
 
-    test_width = width;
-    test_height = height;
+    test->width = width;
+    test->height = height;
 
     qxl_worker->create_primary_surface(qxl_worker, 0, &surface);
-}
-
-uint32_t test_get_width(void)
-{
-    return test_width;
-}
-
-uint32_t test_get_height(void)
-{
-    return test_height;
 }
 
 QXLDevMemSlot slot = {
@@ -393,16 +379,21 @@ QXLDevMemSlot slot = {
 
 static void attache_worker(QXLInstance *qin, QXLWorker *_qxl_worker)
 {
-    static int count = 0;
-    if (++count > 1) {
-        printf("%s ignored\n", __func__);
+    Test *test = SPICE_CONTAINEROF(qin, Test, qxl_instance);
+
+    if (test->qxl_worker) {
+        if (test->qxl_worker != _qxl_worker)
+            printf("%s ignored, %p is set, ignoring new %p\n", __func__,
+                   test->qxl_worker, _qxl_worker);
+        else
+            printf("%s ignored, redundant\n", __func__);
         return;
     }
     printf("%s\n", __func__);
-    qxl_worker = _qxl_worker;
-    qxl_worker->add_memslot(qxl_worker, &slot);
-    create_primary_surface(qxl_worker, DEFAULT_WIDTH, DEFAULT_HEIGHT);
-    qxl_worker->start(qxl_worker);
+    test->qxl_worker = _qxl_worker;
+    test->qxl_worker->add_memslot(test->qxl_worker, &slot);
+    create_primary_surface(test, DEFAULT_WIDTH, DEFAULT_HEIGHT);
+    test->qxl_worker->start(test->qxl_worker);
 }
 
 static void set_compression_level(QXLInstance *qin, int level)
@@ -427,16 +418,6 @@ static void get_init_info(QXLInstance *qin, QXLDevInitInfo *info)
     info->n_surfaces = MAX_SURFACE_NUM;
 }
 
-#define NOTIFY_DISPLAY_BATCH (SINGLE_PART/2)
-#define NOTIFY_CURSOR_BATCH 10
-
-int cursor_notify = NOTIFY_CURSOR_BATCH;
-
-#define SURF_WIDTH 320
-#define SURF_HEIGHT 240
-uint8_t g_secondary_surface[SURF_WIDTH * SURF_HEIGHT * 4];
-int has_secondary;
-
 // We shall now have a ring of commands, so that we can update
 // it from a separate thread - since get_command is called from
 // the worker thread, and we need to sometimes do an update_area,
@@ -452,13 +433,13 @@ struct QXLCommandExt* commands[1024];
 static void push_command(QXLCommandExt *ext)
 {
     ASSERT(commands_end - commands_start < COMMANDS_SIZE);
-    commands[commands_end%COMMANDS_SIZE] = ext;
+    commands[commands_end % COMMANDS_SIZE] = ext;
     commands_end++;
 }
 
 static struct QXLCommandExt *get_simple_command(void)
 {
-    struct QXLCommandExt *ret = commands[commands_start%COMMANDS_SIZE];
+    struct QXLCommandExt *ret = commands[commands_start % COMMANDS_SIZE];
     ASSERT(commands_start < commands_end);
     commands_start++;
     return ret;
@@ -479,23 +460,21 @@ static int get_command(QXLInstance *qin, struct QXLCommandExt *ext)
     return TRUE;
 }
 
-static Command *g_commands = NULL;
-static int g_num_commands = 0;
-
-static void produce_command(void)
+static void produce_command(Test *test)
 {
-    static int target_surface = 0;
-    static int cmd_index = 0;
     Command *command;
+    QXLWorker *qxl_worker = test->qxl_worker;
 
-    if (has_secondary)
-        target_surface = 1;
+    ASSERT(qxl_worker);
 
-    ASSERT(g_num_commands);
+    if (test->has_secondary)
+        test->target_surface = 1;
 
-    command = &g_commands[cmd_index];
+    ASSERT(test->num_commands);
+
+    command = &test->commands[test->cmd_index];
     if (command->cb) {
-        command->cb(command);
+        command->cb(test, command);
     }
     switch (command->command) {
         case SLEEP:
@@ -506,9 +485,13 @@ static void produce_command(void)
             path_progress(&path);
             break;
         case SIMPLE_UPDATE: {
-            QXLRect rect = {.left = 0, .right = (target_surface == 0 ? test_width : SURF_WIDTH),
-                            .top = 0, .bottom = (target_surface == 0 ? test_height : SURF_HEIGHT)};
-            qxl_worker->update_area(qxl_worker, target_surface, &rect, NULL, 0, 1);
+            QXLRect rect = {
+                .left = 0,
+                .right = (test->target_surface == 0 ? test_width : SURF_WIDTH),
+                .top = 0,
+                .bottom = (test->target_surface == 0 ? test_height : SURF_HEIGHT)
+            };
+            qxl_worker->update_area(qxl_worker, test->target_surface, &rect, NULL, 0, 1);
             break;
         }
 
@@ -530,10 +513,10 @@ static void produce_command(void)
 
             switch (command->command) {
             case SIMPLE_COPY_BITS:
-                update = test_spice_create_update_copy_bits(0);
+                update = test_spice_create_update_copy_bits(test, 0);
                 break;
             case SIMPLE_DRAW:
-                update = test_spice_create_update_draw(0, path.t);
+                update = test_spice_create_update_draw(test, 0, path.t);
                 break;
             case SIMPLE_DRAW_BITMAP:
                 update = test_spice_create_update_from_bitmap(command->bitmap.surface_id,
@@ -551,19 +534,19 @@ static void produce_command(void)
 
         case SIMPLE_CREATE_SURFACE: {
             SimpleSurfaceCmd *update;
-            target_surface = MAX_SURFACE_NUM - 1;
-            update = create_surface(target_surface, SURF_WIDTH, SURF_HEIGHT,
-                                    g_secondary_surface);
+            test->target_surface = MAX_SURFACE_NUM - 1;
+            update = create_surface(test->target_surface, SURF_WIDTH, SURF_HEIGHT,
+                                    test->secondary_surface);
             push_command(&update->ext);
-            has_secondary = 1;
+            test->has_secondary = 1;
             break;
         }
 
         case SIMPLE_DESTROY_SURFACE: {
             SimpleSurfaceCmd *update;
-            has_secondary = 0;
-            update = destroy_surface(target_surface);
-            target_surface = 0;
+            test->has_secondary = 0;
+            update = destroy_surface(test->target_surface);
+            test->target_surface = 0;
             push_command(&update->ext);
             break;
         }
@@ -573,33 +556,33 @@ static void produce_command(void)
             break;
 
         case CREATE_PRIMARY:
-            create_primary_surface(qxl_worker, command->create_primary.width, command->create_primary.height);
+            create_primary_surface(test,
+                    command->create_primary.width, command->create_primary.height);
             break;
     }
-    cmd_index = (cmd_index + 1) % g_num_commands;
+    test->cmd_index = (test->cmd_index + 1) % test->num_commands;
 }
-
-SpiceTimer *wakeup_timer;
-int wakeup_ms = 50;
-SpiceCoreInterface *g_core;
 
 static int req_cmd_notification(QXLInstance *qin)
 {
-    g_core->timer_start(wakeup_timer, wakeup_ms);
+    Test *test = SPICE_CONTAINEROF(qin, Test, qxl_instance);
+
+    test->core->timer_start(test->wakeup_timer, test->wakeup_ms);
     return TRUE;
 }
 
 static void do_wakeup(void *opaque)
 {
+    Test *test = opaque;
     int notify;
-    cursor_notify = NOTIFY_CURSOR_BATCH;
 
+    test->cursor_notify = NOTIFY_CURSOR_BATCH;
     for (notify = NOTIFY_DISPLAY_BATCH; notify > 0;--notify) {
-        produce_command();
+        produce_command(test);
     }
 
-    g_core->timer_start(wakeup_timer, wakeup_ms);
-    qxl_worker->wakeup(qxl_worker);
+    test->core->timer_start(test->wakeup_timer, test->wakeup_ms);
+    test->qxl_worker->wakeup(test->qxl_worker);
 }
 
 static void release_resource(QXLInstance *qin, struct QXLReleaseInfoExt release_info)
@@ -657,17 +640,18 @@ static void cursor_init()
 
 static int get_cursor_command(QXLInstance *qin, struct QXLCommandExt *ext)
 {
+    Test *test = SPICE_CONTAINEROF(qin, Test, qxl_instance);
     static int color = 0;
     static int set = 1;
     static int x = 0, y = 0;
     QXLCursorCmd *cursor_cmd;
     QXLCommandExt *cmd;
 
-    if (!cursor_notify) {
+    if (!test->cursor_notify) {
         return FALSE;
     }
 
-    cursor_notify--;
+    test->cursor_notify--;
     cmd = calloc(sizeof(QXLCommandExt), 1);
     cursor_cmd = calloc(sizeof(QXLCursorCmd), 1);
 
@@ -684,8 +668,8 @@ static int get_cursor_command(QXLInstance *qin, struct QXLCommandExt *ext)
         set = 0;
     } else {
         cursor_cmd->type = QXL_CURSOR_MOVE;
-        cursor_cmd->u.position.x = x++ % g_primary_width;
-        cursor_cmd->u.position.y = y++ % g_primary_height;
+        cursor_cmd->u.position.x = x++ % test->primary_width;
+        cursor_cmd->u.position.y = y++ % test->primary_height;
     }
 
     cmd->cmd.data = (unsigned long)cursor_cmd;
@@ -736,45 +720,45 @@ QXLInterface display_sif = {
     .flush_resources = flush_resources,
 };
 
-QXLInstance display_sin = {
-    .base = {
-        .sif = &display_sif.base,
-    },
-    .id = 0,
-};
-
 /* interface for tests */
-void test_add_display_interface(SpiceServer *server)
+void test_add_display_interface(Test* test)
 {
-    spice_server_add_interface(server, &display_sin.base);
+    spice_server_add_interface(test->server, &test->qxl_instance.base);
 }
 
-void test_set_simple_command_list(int *simple_commands, int num_commands)
+void test_set_simple_command_list(Test *test, int *simple_commands, int num_commands)
 {
     int i;
 
     /* FIXME: leaks */
-    g_commands = malloc(sizeof(*g_commands) * num_commands);
-    memset(g_commands, 0, sizeof(*g_commands) * num_commands);
-    g_num_commands = num_commands;
+    test->commands = malloc(sizeof(*test->commands) * num_commands);
+    memset(test->commands, 0, sizeof(*test->commands) * num_commands);
+    test->num_commands = num_commands;
     for (i = 0 ; i < num_commands; ++i) {
-        g_commands[i].command = simple_commands[i];
+        test->commands[i].command = simple_commands[i];
     }
 }
 
-void test_set_command_list(Command *commands, int num_commands)
+void test_set_command_list(Test *test, Command *commands, int num_commands)
 {
-    g_commands = commands;
-    g_num_commands = num_commands;
+    test->commands = commands;
+    test->num_commands = num_commands;
 }
 
 
-SpiceServer* test_init(SpiceCoreInterface *core)
+Test *test_new(SpiceCoreInterface *core)
 {
     int port = 5912;
+    Test *test = spice_new0(Test, 1);
     SpiceServer* server = spice_server_new();
-    g_core = core;
 
+    test->qxl_instance.base.sif = &display_sif.base;
+    test->qxl_instance.id = 0;
+
+    test->core = core;
+    test->server = server;
+    test->wakeup_ms = 50;
+    test->cursor_notify = NOTIFY_CURSOR_BATCH;
     // some common initialization for all display tests
     printf("TESTER: listening on port %d (unsecure)\n", port);
     spice_server_set_port(server, port);
@@ -783,11 +767,9 @@ SpiceServer* test_init(SpiceCoreInterface *core)
 
     cursor_init();
     path_init(&path, 0, angle_parts);
-    memset(g_primary_surface, 0, sizeof(g_primary_surface));
-    memset(g_secondary_surface, 0, sizeof(g_secondary_surface));
-    has_secondary = 0;
-    wakeup_timer = core->timer_add(do_wakeup, NULL);
-    return server;
+    test->has_secondary = 0;
+    test->wakeup_timer = core->timer_add(do_wakeup, test);
+    return test;
 }
 
 void init_automated()

@@ -51,10 +51,11 @@ typedef struct CommandSleep {
 } CommandSleep;
 
 typedef struct Command Command;
+typedef struct Test Test;
 
 struct Command {
     CommandType command;
-    void (*cb)(Command *command);
+    void (*cb)(Test *test, Command *command);
     void *cb_opaque;
     union {
         CommandCreatePrimary create_primary;
@@ -64,10 +65,47 @@ struct Command {
     };
 };
 
-void test_set_simple_command_list(int *command, int num_commands);
-void test_set_command_list(Command *command, int num_commands);
-void test_add_display_interface(SpiceServer *server);
-SpiceServer* test_init(SpiceCoreInterface* core);
+#define MAX_HEIGHT 2048
+#define MAX_WIDTH 2048
+
+#define SURF_WIDTH 320
+#define SURF_HEIGHT 240
+
+struct Test {
+    SpiceCoreInterface *core;
+    SpiceServer *server;
+
+    QXLInstance qxl_instance;
+    QXLWorker *qxl_worker;
+
+    uint8_t primary_surface[MAX_HEIGHT * MAX_WIDTH * 4];
+    int primary_height;
+    int primary_width;
+
+    SpiceTimer *wakeup_timer;
+    int wakeup_ms;
+
+    int cursor_notify;
+
+    uint8_t secondary_surface[SURF_WIDTH * SURF_HEIGHT * 4];
+    int has_secondary;
+
+    // Current mode (set by create_primary)
+    int width;
+    int height;
+
+    // qxl scripted rendering commands and io
+    Command *commands;
+    int num_commands;
+    int cmd_index;
+
+    int target_surface;
+};
+
+void test_set_simple_command_list(Test *test, int *command, int num_commands);
+void test_set_command_list(Test *test, Command *command, int num_commands);
+void test_add_display_interface(Test *test);
+Test* test_new(SpiceCoreInterface* core);
 
 uint32_t test_get_width(void);
 uint32_t test_get_height(void);

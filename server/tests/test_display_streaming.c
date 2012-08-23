@@ -16,7 +16,7 @@
 static int sized;
 static int render_last_frame;
 
-void create_overlay(Command *command , int width, int height)
+static void create_overlay(Command *command , int width, int height)
 {
     CommandDrawBitmap *cmd = &command->bitmap;
     uint32_t *dst;
@@ -53,12 +53,12 @@ void create_overlay(Command *command , int width, int height)
  * The sized frames can be distinguished by a change in the color of the top and bottom limits of the
  * surface.
  */
-void create_clipped_frame(Command *command, int clipping_factor)
+static void create_clipped_frame(Test *test, Command *command, int clipping_factor)
 {
     static int count = 0;
     CommandDrawBitmap *cmd = &command->bitmap;
-    int max_height = test_get_height();
-    int max_width = test_get_width();
+    int max_height = test->height;
+    int max_width = test->width;
     int width;
     int height;
     int cur_line, end_line;
@@ -142,17 +142,17 @@ void create_clipped_frame(Command *command, int clipping_factor)
     }
 }
 
-void create_frame1(Command *command)
+static void create_frame1(Test *test, Command *command)
 {
-    create_clipped_frame(command, 0);
+    create_clipped_frame(test, command, 0);
 }
 
-void create_frame2(Command *command)
+void create_frame2(Test *test, Command *command)
 {
-    create_clipped_frame(command, 200);
+    create_clipped_frame(test, command, 200);
 }
 
-typedef void (*create_frame_cb)(Command *command);
+typedef void (*create_frame_cb)(Test *test, Command *command);
 
 
 /*
@@ -198,14 +198,15 @@ static void get_commands(Command **commands, int *num_commands)
     get_stream_commands((*commands) + NUM_COMMANDS, NUM_COMMANDS, create_frame2);
 }
 
-SpiceCoreInterface *core;
-SpiceServer *server;
 
 int main(int argc, char **argv)
 {
+    SpiceCoreInterface *core;
     Command *commands;
     int num_commands;
     int i;
+    Test *test;
+
     spice_test_config_parse_args(argc, argv);
     sized = 0;
     for (i = 1 ; i < argc; ++i) {
@@ -220,11 +221,11 @@ int main(int argc, char **argv)
     srand(time(NULL));
     // todo: add args list of test numbers with explenations
     core = basic_event_loop_init();
-    server = test_init(core);
-    spice_server_set_streaming_video(server, SPICE_STREAM_VIDEO_ALL);
-    test_add_display_interface(server);
+    test = test_new(core);
+    spice_server_set_streaming_video(test->server, SPICE_STREAM_VIDEO_ALL);
+    test_add_display_interface(test);
     get_commands(&commands, &num_commands);
-    test_set_command_list(commands, num_commands);
+    test_set_command_list(test, commands, num_commands);
     basic_event_loop_mainloop();
     free(commands);
     return 0;

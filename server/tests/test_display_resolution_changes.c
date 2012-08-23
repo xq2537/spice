@@ -7,8 +7,6 @@
 #include <stdlib.h>
 #include "test_display_base.h"
 
-SpiceServer *server;
-SpiceCoreInterface *core;
 SpiceTimer *ping_timer;
 
 void show_channels(SpiceServer *server);
@@ -17,13 +15,14 @@ int ping_ms = 100;
 
 void pinger(void *opaque)
 {
+    Test *test = opaque;
     // show_channels is not thread safe - fails if disconnections / connections occur
     //show_channels(server);
 
-    core->timer_start(ping_timer, ping_ms);
+    test->core->timer_start(ping_timer, ping_ms);
 }
 
-void set_primary_params(Command *command)
+void set_primary_params(Test *test, Command *command)
 {
 #if 0
     static int toggle = 0;
@@ -51,13 +50,16 @@ static Command commands[] = {
 
 int main(void)
 {
-    core = basic_event_loop_init();
-    server = test_init(core);
-    //spice_server_set_image_compression(server, SPICE_IMAGE_COMPRESS_OFF);
-    test_add_display_interface(server);
-    test_set_command_list(commands, COUNT(commands));
+    SpiceCoreInterface *core;
+    Test *test;
 
-    ping_timer = core->timer_add(pinger, NULL);
+    core = basic_event_loop_init();
+    test = test_new(core);
+    //spice_server_set_image_compression(server, SPICE_IMAGE_COMPRESS_OFF);
+    test_add_display_interface(test);
+    test_set_command_list(test, commands, COUNT(commands));
+
+    ping_timer = core->timer_add(pinger, test);
     core->timer_start(ping_timer, ping_ms);
 
     basic_event_loop_mainloop();
