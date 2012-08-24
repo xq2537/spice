@@ -10344,6 +10344,23 @@ static void handle_new_display_channel(RedWorker *worker, RedClient *client, Red
     spice_info("jpeg %s", display_channel->enable_jpeg ? "enabled" : "disabled");
     spice_info("zlib-over-glz %s", display_channel->enable_zlib_glz_wrap ? "enabled" : "disabled");
 
+    if (worker->qxl->st->qif->set_client_capabilities) {
+        RedChannelClient *rcc = (RedChannelClient *)dcc;
+        uint8_t caps[58] = { 0 };
+
+#define SET_CAP(a,c)                                                    \
+        ((a)[(c) / 8] |= (1 << ((c) % 8)))
+
+        if (red_channel_client_test_remote_cap(rcc, SPICE_DISPLAY_CAP_SIZED_STREAM))
+            SET_CAP(caps, SPICE_DISPLAY_CAP_SIZED_STREAM);
+        if (red_channel_client_test_remote_cap(rcc, SPICE_DISPLAY_CAP_MONITORS_CONFIG))
+            SET_CAP(caps, SPICE_DISPLAY_CAP_MONITORS_CONFIG);
+        if (red_channel_client_test_remote_cap(rcc, SPICE_DISPLAY_CAP_COMPOSITE))
+            SET_CAP(caps, SPICE_DISPLAY_CAP_COMPOSITE);
+
+        worker->qxl->st->qif->set_client_capabilities(worker->qxl, TRUE, caps);
+    }
+    
     // todo: tune level according to bandwidth
     display_channel->zlib_level = ZLIB_DEFAULT_COMPRESSION_LEVEL;
     red_display_client_init_streams(dcc);
@@ -11198,9 +11215,16 @@ void handle_dev_display_disconnect(void *opaque, void *payload)
 {
     RedWorkerMessageDisplayDisconnect *msg = payload;
     RedChannelClient *rcc = msg->rcc;
+    RedWorker *worker = opaque;
 
     spice_info("disconnect display client");
     spice_assert(rcc);
+
+    if (worker->qxl->st->qif->set_client_capabilities) {
+        uint8_t caps[58] = { 0 };
+        worker->qxl->st->qif->set_client_capabilities(worker->qxl, FALSE, caps);
+    }
+
     red_channel_client_disconnect(rcc);
 }
 

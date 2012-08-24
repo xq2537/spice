@@ -239,6 +239,9 @@ struct QXLInterface {
     void (*update_area_complete)(QXLInstance *qin, uint32_t surface_id,
                                  struct QXLRect *updated_rects,
                                  uint32_t num_updated_rects);
+    void (*set_client_capabilities)(QXLInstance *qin,
+				    uint8_t client_present,
+				    uint8_t caps[58]);
 };
 
 struct QXLInstance {
