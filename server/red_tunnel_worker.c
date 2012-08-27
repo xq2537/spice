@@ -70,8 +70,7 @@
 typedef struct TunnelWorker TunnelWorker;
 
 enum {
-    PIPE_ITEM_TYPE_MIGRATE = PIPE_ITEM_TYPE_CHANNEL_BASE,
-    PIPE_ITEM_TYPE_MIGRATE_DATA,
+    PIPE_ITEM_TYPE_MIGRATE_DATA = PIPE_ITEM_TYPE_CHANNEL_BASE,
     PIPE_ITEM_TYPE_TUNNEL_INIT,
     PIPE_ITEM_TYPE_SERVICE_IP_MAP,
     PIPE_ITEM_TYPE_SOCKET_OPEN,
@@ -490,7 +489,6 @@ struct TunnelChannelClient {
     TunnelWorker *worker;
     int mig_inprogress;
     int expect_migrate_mark;
-    int expect_migrate_data;
 
     int tunnel_error;
 
@@ -973,7 +971,7 @@ SPICE_GNUC_VISIBLE void spice_server_net_wire_recv_packet(SpiceNetWireInstance *
     TunnelWorker *worker = sin->st->worker;
     spice_assert(worker);
 
-    if (worker->channel_client && worker->channel_client->base.channel->migrate) {
+    if (worker->channel_client && worker->channel_client->mig_inprogress) {
         return; // during migration and the tunnel state hasn't been restored yet.
     }
 
@@ -1416,7 +1414,7 @@ static int tunnel_channel_handle_socket_connect_ack(TunnelChannelClient *channel
 #ifdef DEBUG_NETWORK
     spice_printerr("TUNNEL_DBG");
 #endif
-    if (channel->mig_inprogress || channel->base.channel->migrate) {
+    if (channel->mig_inprogress) {
         sckt->mig_client_status_msg = SPICE_MSGC_TUNNEL_SOCKET_OPEN_ACK;
         sckt->mig_open_ack_tokens = tokens;
         return TRUE;
@@ -1449,7 +1447,7 @@ static int tunnel_channel_handle_socket_connect_nack(TunnelChannelClient *channe
 #ifdef DEBUG_NETWORK
     PRINT_SCKT(sckt);
 #endif
-    if (channel->mig_inprogress || channel->base.channel->migrate) {
+    if (channel->mig_inprogress) {
         sckt->mig_client_status_msg = SPICE_MSGC_TUNNEL_SOCKET_OPEN_NACK;
         return TRUE;
     }
@@ -1474,7 +1472,7 @@ static int tunnel_channel_handle_socket_fin(TunnelChannelClient *channel, RedSoc
 #ifdef DEBUG_NETWORK
     PRINT_SCKT(sckt);
 #endif
-    if (channel->mig_inprogress || channel->base.channel->migrate) {
+    if (channel->mig_inprogress) {
         sckt->mig_client_status_msg = SPICE_MSGC_TUNNEL_SOCKET_FIN;
         return TRUE;
     }
@@ -1512,7 +1510,7 @@ static int tunnel_channel_handle_socket_closed(TunnelChannelClient *channel, Red
     PRINT_SCKT(sckt);
 #endif
 
-    if (channel->mig_inprogress || channel->base.channel->migrate) {
+    if (channel->mig_inprogress) {
         sckt->mig_client_status_msg = SPICE_MSGC_TUNNEL_SOCKET_CLOSED;
         return TRUE;
     }
@@ -1558,7 +1556,7 @@ static int tunnel_channel_handle_socket_closed_ack(TunnelChannelClient *channel,
 #ifdef DEBUG_NETWORK
     PRINT_SCKT(sckt);
 #endif
-    if (channel->mig_inprogress || channel->base.channel->migrate) {
+    if (channel->mig_inprogress) {
         sckt->mig_client_status_msg = SPICE_MSGC_TUNNEL_SOCKET_CLOSED_ACK;
         return TRUE;
     }
@@ -1596,7 +1594,7 @@ static int tunnel_channel_handle_socket_receive_data(TunnelChannelClient *channe
         __tunnel_worker_free_socket_rcv_buf(sckt->worker, recv_data);
         return (!CHECK_TUNNEL_ERROR(channel));
     } else if ((sckt->in_data.num_buffers == MAX_SOCKET_IN_BUFFERS) &&
-               !channel->mig_inprogress && !channel->base.channel->migrate) {
+               !channel->mig_inprogress) {
         spice_printerr("socket in buffers overflow, socket will be closed"
                    " (local_port=%d, service_id=%d)",
                    ntohs(sckt->local_port), sckt->far_service->id);
@@ -2174,7 +2172,7 @@ static uint64_t tunnel_channel_handle_migrate_data_get_serial(RedChannelClient *
     return migrate_data->message_serial;
 }
 
-static uint64_t tunnel_channel_handle_migrate_data(RedChannelClient *base,
+static int tunnel_channel_handle_migrate_data(RedChannelClient *base,
                                               uint32_t size, void *msg)
 {
     TunnelChannelClient *channel = SPICE_CONTAINEROF(base, TunnelChannelClient, base);
@@ -2187,11 +2185,6 @@ static uint64_t tunnel_channel_handle_migrate_data(RedChannelClient *base,
         spice_printerr("bad message size");
         goto error;
     }
-    if (!channel->expect_migrate_data) {
-        spice_printerr("unexpected");
-        goto error;
-    }
-    channel->expect_migrate_data = FALSE;
 
     if (migrate_data->magic != TUNNEL_MIGRATE_DATA_MAGIC ||
         migrate_data->version != TUNNEL_MIGRATE_DATA_VERSION) {
@@ -2228,7 +2221,7 @@ static uint64_t tunnel_channel_handle_migrate_data(RedChannelClient *base,
     }
 
     // activate channel
-    channel->base.channel->migrate = FALSE;
+    channel->mig_inprogress = FALSE;
     red_channel_init_outgoing_messages_window(channel->base.channel);
 
     tunnel_channel_activate_migrated_sockets(channel);
@@ -2348,21 +2341,6 @@ static int tunnel_channel_handle_message(RedChannelClient *rcc, uint16_t type,
 /********************************/
 /* outgoing msgs
 ********************************/
-
-static void tunnel_channel_marshall_migrate(RedChannelClient *rcc, SpiceMarshaller *m, PipeItem *item)
-{
-    TunnelChannelClient *tunnel_channel;
-
-    spice_assert(rcc);
-    tunnel_channel = SPICE_CONTAINEROF(rcc->channel, TunnelChannelClient, base);
-    tunnel_channel->send_data.u.migrate.flags =
-        SPICE_MIGRATE_NEED_FLUSH | SPICE_MIGRATE_NEED_DATA_TRANSFER;
-    tunnel_channel->expect_migrate_mark = TRUE;
-    red_channel_client_init_send_data(rcc, SPICE_MSG_MIGRATE, item);
-    spice_marshaller_add_ref(m,
-        (uint8_t*)&tunnel_channel->send_data.u.migrate,
-        sizeof(SpiceMsgMigrate));
-}
 
 static int __tunnel_channel_marshall_process_bufs_migrate_data(TunnelChannelClient *channel,
                                     SpiceMarshaller *m, TunneledBufferProcessQueue *queue)
@@ -2844,9 +2822,6 @@ static void tunnel_channel_send_item(RedChannelClient *rcc, PipeItem *item)
         break;
     case PIPE_ITEM_TYPE_SOCKET_TOKEN:
         tunnel_channel_marshall_socket_token(rcc, m, item);
-        break;
-    case PIPE_ITEM_TYPE_MIGRATE:
-        tunnel_channel_marshall_migrate(rcc, m, item);
         break;
     case PIPE_ITEM_TYPE_MIGRATE_DATA:
         tunnel_channel_marshall_migrate_data(rcc, m, item);
@@ -3420,13 +3395,11 @@ static void tunnel_channel_client_on_disconnect(RedChannelClient *rcc)
 
 /* interface for reds */
 
-static void on_new_tunnel_channel(TunnelChannelClient *tcc)
+static void on_new_tunnel_channel(TunnelChannelClient *tcc, int migration)
 {
     red_channel_client_push_set_ack(&tcc->base);
 
-    if (tcc->base.channel->migrate) {
-        tcc->expect_migrate_data = TRUE;
-    } else {
+    if (!migration) {
         red_channel_init_outgoing_messages_window(tcc->base.channel);
         red_channel_client_pipe_add_type(&tcc->base, PIPE_ITEM_TYPE_TUNNEL_INIT);
     }
@@ -3446,7 +3419,7 @@ static void handle_tunnel_channel_link(RedChannel *channel, RedClient *client,
     TunnelWorker *worker = (TunnelWorker *)channel->data;
 
     if (worker->channel_client) {
-        spice_error("tunnel does not support multiple client");
+        spice_error("tunnel does not support multiple clients");
     }
 
     tcc = (TunnelChannelClient*)red_channel_client_create(sizeof(TunnelChannelClient),
@@ -3459,12 +3432,13 @@ static void handle_tunnel_channel_link(RedChannel *channel, RedClient *client,
     tcc->worker->channel_client = tcc;
     net_slirp_set_net_interface(&worker->tunnel_interface.base);
 
-    on_new_tunnel_channel(tcc);
+    on_new_tunnel_channel(tcc, migration);
 }
 
 static void handle_tunnel_channel_client_migrate(RedChannelClient *rcc)
 {
     TunnelChannelClient *tunnel_channel;
+
 #ifdef DEBUG_NETWORK
     spice_printerr("TUNNEL_DBG: MIGRATE STARTED");
 #endif
@@ -3472,7 +3446,7 @@ static void handle_tunnel_channel_client_migrate(RedChannelClient *rcc)
     spice_assert(tunnel_channel == tunnel_channel->worker->channel_client);
     tunnel_channel->mig_inprogress = TRUE;
     net_slirp_freeze();
-    red_channel_client_pipe_add_type(rcc, PIPE_ITEM_TYPE_MIGRATE);
+    red_channel_client_default_migrate(rcc);
 }
 
 static void red_tunnel_channel_create(TunnelWorker *worker)
@@ -3495,10 +3469,10 @@ static void red_tunnel_channel_create(TunnelWorker *worker)
     channel = red_channel_create(sizeof(RedChannel),
                                  worker->core_interface,
                                  SPICE_CHANNEL_TUNNEL, 0,
-                                 FALSE, // TODO: handle migration=TRUE
                                  TRUE,
                                  tunnel_channel_handle_message,
-                                 &channel_cbs);
+                                 &channel_cbs,
+                                 SPICE_MIGRATE_NEED_FLUSH | SPICE_MIGRATE_NEED_DATA_TRANSFER);
     if (!channel) {
         return;
     }
