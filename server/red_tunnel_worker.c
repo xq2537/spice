@@ -488,7 +488,6 @@ struct TunnelChannelClient {
     RedChannelClient base;
     TunnelWorker *worker;
     int mig_inprogress;
-    int expect_migrate_mark;
 
     int tunnel_error;
 
@@ -1753,11 +1752,6 @@ static int tunnel_channel_handle_migrate_mark(RedChannelClient *base)
     int num_sockets_saved = 0;
     RedSocket *sckt;
 
-    if (!channel->expect_migrate_mark) {
-        spice_printerr("unexpected");
-        return FALSE;
-    }
-    channel->expect_migrate_mark = FALSE;
     migrate_item = spice_new0(TunnelMigrateItem, 1);
     migrate_item->base.type = PIPE_ITEM_TYPE_MIGRATE_DATA;
 
