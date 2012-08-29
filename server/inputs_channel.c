@@ -541,7 +541,7 @@ static void inputs_migrate(RedChannelClient *rcc)
 
 static void inputs_push_keyboard_modifiers(uint8_t modifiers)
 {
-    if (!g_inputs_channel || !red_channel_is_connected(&g_inputs_channel->base)||
+    if (!g_inputs_channel || !red_channel_is_connected(&g_inputs_channel->base) ||
         g_inputs_channel->src_during_migrate) {
         return;
     }
