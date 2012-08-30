@@ -119,7 +119,7 @@ struct SharedDictionary {
 #endif
 
     uint64_t last_image_id;
-    uint32_t max_encdoers;
+    uint32_t max_encoders;
     pthread_mutex_t lock;
     pthread_rwlock_t rw_alloc_lock;
     GlzEncoderUsrContext       *cur_usr; // each encoder has other context.

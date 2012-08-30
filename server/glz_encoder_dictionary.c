@@ -62,7 +62,7 @@ static int glz_dictionary_window_create(SharedDictionary *dict, uint32_t size)
     dict->window.segs_quota = INIT_IMAGE_SEGS_NUM;
 
     dict->window.encoders_heads = (uint32_t *)dict->cur_usr->malloc(dict->cur_usr,
-                                                            sizeof(uint32_t) * dict->max_encdoers);
+                                                            sizeof(uint32_t) * dict->max_encoders);
 
     if (!dict->window.encoders_heads) {
         dict->cur_usr->free(dict->cur_usr, dict->window.segs);
@@ -101,7 +101,7 @@ static void glz_dictionary_window_reset(SharedDictionary *dict)
     dict->window.used_segs_tail = NULL_IMAGE_SEG_ID;
 
     // reset encoders heads
-    for (i = 0; i < dict->max_encdoers; i++) {
+    for (i = 0; i < dict->max_encoders; i++) {
         dict->window.encoders_heads[i] = NULL_IMAGE_SEG_ID;
     }
 
@@ -156,7 +156,7 @@ GlzEncDictContext *glz_enc_dictionary_create(uint32_t size, uint32_t max_encoder
 
     dict->cur_usr = usr;
     dict->last_image_id = 0;
-    dict->max_encdoers = max_encoders;
+    dict->max_encoders = max_encoders;
 
     pthread_mutex_init(&dict->lock, NULL);
     pthread_rwlock_init(&dict->rw_alloc_lock, NULL);
@@ -184,7 +184,7 @@ void glz_enc_dictionary_get_restore_data(GlzEncDictContext *opaque_dict,
     GLZ_ASSERT(dict->cur_usr, out_data);
 
     out_data->last_image_id = dict->last_image_id;
-    out_data->max_encoders = dict->max_encdoers;
+    out_data->max_encoders = dict->max_encoders;
     out_data->size = dict->window.size_limit;
 }
 
@@ -426,7 +426,7 @@ static WindowImage *glz_dictionary_window_get_new_head(SharedDictionary *dict, i
 static INLINE int glz_dictionary_is_in_use(SharedDictionary *dict)
 {
     uint32_t i = 0;
-    for (i = 0; i < dict->max_encdoers; i++) {
+    for (i = 0; i < dict->max_encoders; i++) {
         if (dict->window.encoders_heads[i] != NULL_IMAGE_SEG_ID) {
             return TRUE;
         }
@@ -603,7 +603,7 @@ void glz_dictionary_post_encode(uint32_t encoder_id, GlzEncoderUsrContext *usr,
 
     GLZ_ASSERT(dict->cur_usr, dict->window.encoders_heads[encoder_id] != NULL_IMAGE_SEG_ID);
     // get the earliest head in use (not including this encoder head)
-    for (i = 0; i < dict->max_encdoers; i++) {
+    for (i = 0; i < dict->max_encoders; i++) {
         if (i != encoder_id) {
             if (IMAGE_SEG_IS_EARLIER(dict, dict->window.encoders_heads[i], early_head_seg)) {
                 early_head_seg = dict->window.encoders_heads[i];
