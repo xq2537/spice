@@ -8442,7 +8442,7 @@ static void display_channel_marshall_migrate_data(RedChannelClient *rcc,
 {
     DisplayChannel *display_channel;
     DisplayChannelClient *dcc = RCC_TO_DCC(rcc);
-    SpiceMigrateDataDisplay display_data;
+    SpiceMigrateDataDisplay display_data = {0,};
 
     display_channel = SPICE_CONTAINEROF(rcc->channel, DisplayChannel, common.base);
 
@@ -8471,8 +8471,8 @@ static void display_channel_marshall_migrate_data(RedChannelClient *rcc,
                                         &dcc->glz_data.usr);
 
     /* all data besided the surfaces ref */
-    spice_marshaller_add_ref(base_marshaller,
-                             (uint8_t *)&display_data, sizeof(display_data) - sizeof(uint32_t));
+    spice_marshaller_add(base_marshaller,
+                         (uint8_t *)&display_data, sizeof(display_data) - sizeof(uint32_t));
     display_channel_marshall_migrate_data_surfaces(dcc, base_marshaller,
                                                    display_channel->enable_jpeg);
 }
