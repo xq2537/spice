@@ -9828,9 +9828,9 @@ static int display_channel_handle_migrate_data(RedChannelClient *rcc, uint32_t s
         spice_error("bad header");
         return FALSE;
     }
-    /* size is set to -1 in order to keep the cache freezed till the original
-     * channel client that freezed the cache on the src size receive the migrate
-     * data and unfreeze the cache by setting its size > 0 and by triggering
+    /* size is set to -1 in order to keep the cache frozen until the original
+     * channel client that froze the cache on the src size receives the migrate
+     * data and unfreezes the cache by setting its size > 0 and by triggering
      * pixmap_cache_reset */
     dcc->pixmap_cache = red_get_pixmap_cache(dcc->common.base.client,
                                              migrate_data->pixmap_cache_id, -1);
@@ -9890,6 +9890,7 @@ static int display_channel_handle_message(RedChannelClient *rcc, uint32_t size, 
                                           void *message)
 {
     DisplayChannelClient *dcc = RCC_TO_DCC(rcc);
+
     switch (type) {
     case SPICE_MSGC_DISPLAY_INIT:
         if (!dcc->expect_init) {

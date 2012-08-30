@@ -734,6 +734,7 @@ int red_channel_client_waits_for_migrate_data(RedChannelClient *rcc)
 int red_channel_waits_for_migrate_data(RedChannel *channel)
 {
     RedChannelClient *rcc;
+
     if (!red_channel_is_connected(channel)) {
         return FALSE;
     }
