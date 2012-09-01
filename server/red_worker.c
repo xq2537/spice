@@ -10362,6 +10362,8 @@ static void handle_new_display_channel(RedWorker *worker, RedClient *client, Red
             SET_CAP(caps, SPICE_DISPLAY_CAP_MONITORS_CONFIG);
         if (red_channel_client_test_remote_cap(rcc, SPICE_DISPLAY_CAP_COMPOSITE))
             SET_CAP(caps, SPICE_DISPLAY_CAP_COMPOSITE);
+        if (red_channel_client_test_remote_cap(rcc, SPICE_DISPLAY_CAP_A8_SURFACE))
+            SET_CAP(caps, SPICE_DISPLAY_CAP_A8_SURFACE);
 
         worker->qxl->st->qif->set_client_capabilities(worker->qxl, TRUE, caps);
     }
