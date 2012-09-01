@@ -9478,6 +9478,11 @@ static void on_new_display_channel_client(DisplayChannelClient *dcc)
     }
     red_channel_client_ack_zero_messages_window(&dcc->common.base);
     if (worker->surfaces[0].context.canvas) {
+        int ring_is_empty;
+
+        while (red_process_commands(worker, MAX_PIPE_SIZE, &ring_is_empty)) {
+        }
+        
         red_current_flush(worker, 0);
         push_new_primary_surface(dcc);
         red_push_surface_image(dcc, 0);
