@@ -652,6 +652,7 @@ DisplayChannel::DisplayChannel(RedClient& client, uint32_t id,
     set_draw_handlers();
 
     set_capability(SPICE_DISPLAY_CAP_COMPOSITE);
+    set_capability(SPICE_DISPLAY_CAP_A8_SURFACE);
 }
 
 DisplayChannel::~DisplayChannel()
