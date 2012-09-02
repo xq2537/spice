@@ -34,6 +34,14 @@ noinst_PROGRAMS =						\
 	test_playback						\
 	test_display_resolution_changes		\
 	test_two_servers					\
+	test_vdagent						\
+	$(NULL)
+
+test_vdagent_SOURCES =		\
+	$(COMMON_BASE)				\
+	test_display_base.c			\
+	test_display_base.h			\
+	test_vdagent.c		\
 	$(NULL)
 
 test_display_streaming_SOURCES =		\
