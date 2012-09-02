@@ -1,3 +1,29 @@
+Major changes in 0.11.3:
+========================
+* !Development Release!
+* This entry contains all 0.11.0 .. 0.11.3 changes.
+* Support seamless migration: no loss of in transit messages. Still not
+  supported for agent, smartcard and usb.
+* Support a new rendering message, Composite, for much improved linux guest
+  performance.
+* Support arbitrary resolution & multiple monitors on a single display channel.
+* Improved keyboard handling under network latency with new
+  SPICE_MSGC_INPUTS_KEY_SCANCODE message.
+* New libspice-server.so symbols:
+ spice_server_set_seamless_migration
+ spice_server_vm_stop
+ spice_server_vm_start
+ spice_qxl_monitors_config_async
+* New capabilities:
+ SPICE_DISPLAY_CAP_COMPOSITE
+ SPICE_DISPLAY_CAP_MONITORS_CONFIG
+ SPICE_INPUTS_CAP_KEY_SCANCODE
+ SPICE_MAIN_CAP_AGENT_CONNECTED_TOKENS
+ SPICE_MAIN_CAP_SEAMLESS_MIGRATE
+* Misc:
+ * char_device.c: Introducing shared flow control code for char devices
+ * Enable build without client, cegui and slirp.
+
 Major changes in 0.11.0:
 ========================
 * !Development Release!
