@@ -6361,7 +6361,7 @@ static inline int red_compress_image(DisplayChannelClient *dcc,
                 } else {
                     if (drawable->copy_bitmap_graduality == BITMAP_GRADUAL_INVALID) {
                         quic_compress = BITMAP_FMT_HAS_GRADUALITY(src->format) &&
-			    (_get_bitmap_graduality_level(display_channel->common.worker, src,
+                            (_get_bitmap_graduality_level(display_channel->common.worker, src,
                                                           drawable->group_id) ==
                              BITMAP_GRADUAL_HIGH);
                     } else {
