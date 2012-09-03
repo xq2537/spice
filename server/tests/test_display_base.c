@@ -491,7 +491,9 @@ static void produce_command(Test *test)
                 .top = 0,
                 .bottom = (test->target_surface == 0 ? test_height : SURF_HEIGHT)
             };
-            qxl_worker->update_area(qxl_worker, test->target_surface, &rect, NULL, 0, 1);
+            if (rect.right > 0 && rect.bottom > 0) {
+                qxl_worker->update_area(qxl_worker, test->target_surface, &rect, NULL, 0, 1);
+            }
             break;
         }
 
