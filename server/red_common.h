@@ -25,6 +25,7 @@
 #include "common/mem.h"
 #include "common/spice_common.h"
 #include "common/messages.h"
+#include "common/lz_common.h"
 
 #include "spice.h"
 
@@ -35,13 +36,28 @@ enum {
     STREAM_VIDEO_FILTER
 };
 
+static const LzImageType MAP_BITMAP_FMT_TO_LZ_IMAGE_TYPE[] = {
+    LZ_IMAGE_TYPE_INVALID,
+    LZ_IMAGE_TYPE_PLT1_LE,
+    LZ_IMAGE_TYPE_PLT1_BE,
+    LZ_IMAGE_TYPE_PLT4_LE,
+    LZ_IMAGE_TYPE_PLT4_BE,
+    LZ_IMAGE_TYPE_PLT8,
+    LZ_IMAGE_TYPE_RGB16,
+    LZ_IMAGE_TYPE_RGB24,
+    LZ_IMAGE_TYPE_RGB32,
+    LZ_IMAGE_TYPE_RGBA,
+    LZ_IMAGE_TYPE_A8
+};
+
 static inline int bitmap_fmt_is_rgb(uint8_t fmt)
 {
     static const int BITMAP_FMT_IS_RGB[SPICE_BITMAP_FMT_ENUM_END] =
                                         {0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
 
     if (fmt >= SPICE_BITMAP_FMT_ENUM_END) {
-        spice_warning("fmt >= SPICE_BITMAP_FMT_ENUM_END");
+        spice_warning("fmt >= SPICE_BITMAP_FMT_ENUM_END; %d >= %d",
+                      fmt, SPICE_BITMAP_FMT_ENUM_END);
         return 0;
     }
     return BITMAP_FMT_IS_RGB[fmt];

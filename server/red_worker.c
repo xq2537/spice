@@ -5887,27 +5887,12 @@ static inline int _stride_is_extra(SpiceBitmap *bitmap)
     return 0;
 }
 
-static const LzImageType MAP_BITMAP_FMT_TO_LZ_IMAGE_TYPE[] = {
-    LZ_IMAGE_TYPE_INVALID,
-    LZ_IMAGE_TYPE_PLT1_LE,
-    LZ_IMAGE_TYPE_PLT1_BE,
-    LZ_IMAGE_TYPE_PLT4_LE,
-    LZ_IMAGE_TYPE_PLT4_BE,
-    LZ_IMAGE_TYPE_PLT8,
-    LZ_IMAGE_TYPE_RGB16,
-    LZ_IMAGE_TYPE_RGB24,
-    LZ_IMAGE_TYPE_RGB32,
-    LZ_IMAGE_TYPE_RGBA,
-    LZ_IMAGE_TYPE_A8
-};
-
 typedef struct compress_send_data_t {
     void*    comp_buf;
     uint32_t comp_buf_size;
     SpicePalette *lzplt_palette;
     int is_lossy;
 } compress_send_data_t;
-
 
 static inline int red_glz_compress_image(DisplayChannelClient *dcc,
                                          SpiceImage *dest, SpiceBitmap *src, Drawable *drawable,

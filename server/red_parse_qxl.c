@@ -21,6 +21,7 @@
 
 #include <stdbool.h>
 #include <inttypes.h>
+#include "common/lz_common.h"
 #include "red_common.h"
 #include "red_memslots.h"
 #include "red_parse_qxl.h"
@@ -327,6 +328,19 @@ static SpiceChunks *red_get_image_data_chunked(RedMemSlotInfo *slots, int group_
     return data;
 }
 
+static int bitmap_consistent(SpiceBitmap *bitmap)
+{
+    int type = MAP_BITMAP_FMT_TO_LZ_IMAGE_TYPE[bitmap->format];
+    int bpp = RGB_BYTES_PER_PIXEL[type];
+
+    if (bitmap->stride < bitmap->x * bpp) {
+        spice_error("image stride too small for width: %d < %d * %d\n",
+                    bitmap->stride, bitmap->x, bpp);
+        return FALSE;
+    }
+    return TRUE;
+}
+
 // This is based on SPICE_BITMAP_FMT_*, copied from server/red_worker.c
 // to avoid a possible unoptimization from making it non static.
 static const int BITMAP_FMT_IS_RGB[] = {0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
@@ -382,6 +396,9 @@ static SpiceImage *red_get_image(RedMemSlotInfo *slots, int group_id,
         red->u.bitmap.x      = qxl->bitmap.x;
         red->u.bitmap.y      = qxl->bitmap.y;
         red->u.bitmap.stride = qxl->bitmap.stride;
+        if (!bitmap_consistent(&red->u.bitmap)) {
+            goto error;
+        }
         if (qxl->bitmap.palette) {
             QXLPalette *qp;
             int i, num_ents;
