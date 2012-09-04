@@ -328,14 +328,35 @@ static SpiceChunks *red_get_image_data_chunked(RedMemSlotInfo *slots, int group_
     return data;
 }
 
+static const char *bitmap_format_to_string(int format)
+{
+    switch (format) {
+    case SPICE_BITMAP_FMT_INVALID: return "SPICE_BITMAP_FMT_INVALID";
+    case SPICE_BITMAP_FMT_1BIT_LE: return "SPICE_BITMAP_FMT_1BIT_LE";
+    case SPICE_BITMAP_FMT_1BIT_BE: return "SPICE_BITMAP_FMT_1BIT_BE";
+    case SPICE_BITMAP_FMT_4BIT_LE: return "SPICE_BITMAP_FMT_4BIT_LE";
+    case SPICE_BITMAP_FMT_4BIT_BE: return "SPICE_BITMAP_FMT_4BIT_BE";
+    case SPICE_BITMAP_FMT_8BIT: return "SPICE_BITMAP_FMT_8BIT";
+    case SPICE_BITMAP_FMT_16BIT: return "SPICE_BITMAP_FMT_16BIT";
+    case SPICE_BITMAP_FMT_24BIT: return "SPICE_BITMAP_FMT_24BIT";
+    case SPICE_BITMAP_FMT_32BIT: return "SPICE_BITMAP_FMT_32BIT";
+    case SPICE_BITMAP_FMT_RGBA: return "SPICE_BITMAP_FMT_RGBA";
+    case SPICE_BITMAP_FMT_8BIT_A: return "SPICE_BITMAP_FMT_8BIT_A";
+    }
+    return "unknown";
+}
+
+static const int MAP_BITMAP_FMT_TO_BITS_PER_PIXEL[] = {0, 1, 1, 4, 4, 8, 16, 24, 32, 32, 8};
+
 static int bitmap_consistent(SpiceBitmap *bitmap)
 {
-    int type = MAP_BITMAP_FMT_TO_LZ_IMAGE_TYPE[bitmap->format];
-    int bpp = RGB_BYTES_PER_PIXEL[type];
+    int bpp = MAP_BITMAP_FMT_TO_BITS_PER_PIXEL[bitmap->format];
 
-    if (bitmap->stride < bitmap->x * bpp) {
-        spice_error("image stride too small for width: %d < %d * %d\n",
-                    bitmap->stride, bitmap->x, bpp);
+    if (bitmap->stride < bitmap->x * ((bpp + 7) / 8)) {
+        spice_error("image stride too small for width: %d < %d * (%d + 7) / 8 (%s=%d)\n",
+                    bitmap->stride, bitmap->x, bpp,
+                    bitmap_format_to_string(bitmap->format),
+                    bitmap->format);
         return FALSE;
     }
     return TRUE;
