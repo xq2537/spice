@@ -123,3 +123,7 @@ global:
     spice_server_vm_stop;
     spice_server_set_seamless_migration;
 } SPICE_SERVER_0.10.4;
+
+SPICE_SERVER_0.11.4 {
+    spice_server_set_exit_on_disconnect;
+} SPICE_SERVER_0.11.2;

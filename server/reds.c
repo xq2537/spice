@@ -119,6 +119,7 @@ void *red_tunnel = NULL;
 #endif
 int agent_mouse = TRUE;
 int agent_copypaste = TRUE;
+static bool exit_on_disconnect = FALSE;
 
 #define MIGRATE_TIMEOUT (1000 * 10) /* 10sec */
 #define MM_TIMER_GRANULARITY_MS (1000 / 30)
@@ -672,6 +673,12 @@ static int reds_main_channel_connected(void)
 void reds_client_disconnect(RedClient *client)
 {
     RedsMigTargetClient *mig_client;
+
+    if (exit_on_disconnect)
+    {
+        spice_info("Exiting server because of client disconnect.\n");
+        exit(0);
+    }
 
     if (!client || client->disconnecting) {
         return;
@@ -4058,6 +4065,13 @@ SPICE_GNUC_VISIBLE int spice_server_set_listen_socket_fd(SpiceServer *s, int lis
 {
     spice_assert(reds == s);
     spice_listen_socket_fd = listen_fd;
+    return 0;
+}
+
+SPICE_GNUC_VISIBLE int spice_server_set_exit_on_disconnect(SpiceServer *s, int flag)
+{
+    spice_assert(reds == s);
+    exit_on_disconnect = !!flag;
     return 0;
 }
 
