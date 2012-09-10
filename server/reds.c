@@ -234,6 +234,15 @@ typedef struct SpiceCharDeviceStateItem {
     SpiceCharDeviceState *st;
 } SpiceCharDeviceStateItem;
 
+/* Intermediate state for on going monitors config message from a single
+ * client, being passed to the guest */
+typedef struct RedsClientMonitorsConfig {
+    MainChannelClient *mcc;
+    uint8_t *buffer;
+    int buffer_size;
+    int buffer_pos;
+} RedsClientMonitorsConfig;
+
 typedef struct RedsState {
     int listen_socket;
     int secure_listen_socket;
@@ -284,6 +293,8 @@ typedef struct RedsState {
 #endif
     int peer_minor_version;
     int allow_multiple_clients;
+
+    RedsClientMonitorsConfig client_monitors_config;
 } RedsState;
 
 static RedsState *reds = NULL;
@@ -1184,6 +1195,41 @@ void reds_release_agent_data_buffer(uint8_t *buf)
     dev_state->recv_from_client_buf_pushed = FALSE;
 }
 
+static void reds_client_monitors_config_cleanup(void)
+{
+    RedsClientMonitorsConfig *cmc = &reds->client_monitors_config;
+
+    cmc->buffer_size = cmc->buffer_pos = 0;
+    free(cmc->buffer);
+    cmc->buffer = NULL;
+    cmc->mcc = NULL;
+}
+
+static void reds_on_main_agent_monitors_config(
+        MainChannelClient *mcc, void *message, size_t size)
+{
+    VDAgentMessage *msg_header;
+    VDAgentMonitorsConfig *monitors_config;
+    RedsClientMonitorsConfig *cmc = &reds->client_monitors_config;
+
+    cmc->buffer_size += size;
+    cmc->buffer = realloc(cmc->buffer, cmc->buffer_size);
+    spice_assert(cmc->buffer);
+    cmc->mcc = mcc;
+    memcpy(cmc->buffer + cmc->buffer_pos, message, size);
+    cmc->buffer_pos += size;
+    msg_header = (VDAgentMessage *)cmc->buffer;
+    if (sizeof(VDAgentMessage) > cmc->buffer_size ||
+            msg_header->size > cmc->buffer_size - sizeof(VDAgentMessage)) {
+        spice_debug("not enough data yet. %d\n", cmc->buffer_size);
+        return;
+    }
+    monitors_config = (VDAgentMonitorsConfig *)(cmc->buffer + sizeof(*msg_header));
+    spice_debug("%s: %d\n", __func__, monitors_config->num_of_monitors);
+    red_dispatcher_client_monitors_config(monitors_config);
+    reds_client_monitors_config_cleanup();
+}
+
 void reds_on_main_agent_data(MainChannelClient *mcc, void *message, size_t size)
 {
     VDIPortState *dev_state = &reds->agent_state;
@@ -1199,11 +1245,13 @@ void reds_on_main_agent_data(MainChannelClient *mcc, void *message, size_t size)
         break;
     case AGENT_MSG_FILTER_DISCARD:
         return;
+    case AGENT_MSG_FILTER_MONITORS_CONFIG:
+        reds_on_main_agent_monitors_config(mcc, message, size);
+        return;
     case AGENT_MSG_FILTER_PROTO_ERROR:
         reds_disconnect();
         return;
     }
-
     // TODO - start tracking agent data per channel
     header =  (VDIChunkHeader *)dev_state->recv_from_client_buf->buf;
     header->port = VDP_CLIENT_PORT;
@@ -3980,6 +4028,9 @@ static int do_spice_init(SpiceCoreInterface *core_interface)
     inputs_init();
 
     reds->mouse_mode = SPICE_MOUSE_MODE_SERVER;
+
+    reds_client_monitors_config_cleanup();
+
     reds->allow_multiple_clients = getenv(SPICE_DEBUG_ALLOW_MC_ENV) != NULL;
     if (reds->allow_multiple_clients) {
         spice_warning("spice: allowing multiple client connections (crashy)");

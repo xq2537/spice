@@ -24,6 +24,7 @@
 #include <string.h>
 #include "red_common.h"
 #include "agent-msg-filter.h"
+#include "red_dispatcher.h"
 
 void agent_msg_filter_init(struct AgentMsgFilter *filter,
     int copy_paste, int discard_all)
@@ -78,6 +79,13 @@ data_to_read:
                 filter->result = AGENT_MSG_FILTER_OK;
             } else {
                 filter->result = AGENT_MSG_FILTER_DISCARD;
+            }
+            break;
+        case VD_AGENT_MONITORS_CONFIG:
+            if (red_dispatcher_use_client_monitors_config()) {
+                filter->result = AGENT_MSG_FILTER_MONITORS_CONFIG;
+            } else {
+                filter->result = AGENT_MSG_FILTER_OK;
             }
             break;
         default:
