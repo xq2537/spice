@@ -83,6 +83,22 @@ extern spice_wan_compression_t zlib_glz_state;
 
 static RedDispatcher *dispatchers = NULL;
 
+static int red_dispatcher_version_check(int major, int minor)
+{
+    if (num_active_workers > 0) {
+        RedDispatcher *now = dispatchers;
+        while (now) {
+            if (now->base.major_version != major ||
+                now->base.minor_version < minor) {
+                return FALSE;
+            }
+            now = now->next;
+        }
+        return TRUE;
+    }
+    return FALSE;
+}
+
 static void red_dispatcher_set_display_peer(RedChannel *channel, RedClient *client,
                                             RedsStream *stream, int migration,
                                             int num_common_caps, uint32_t *common_caps, int num_caps,
@@ -293,6 +309,39 @@ static void red_dispatcher_update_area(RedDispatcher *dispatcher, uint32_t surfa
     dispatcher_send_message(&dispatcher->dispatcher,
                             RED_WORKER_MESSAGE_UPDATE,
                             &payload);
+}
+
+int red_dispatcher_use_client_monitors_config(void)
+{
+    RedDispatcher *now = dispatchers;
+
+    if (num_active_workers == 0) {
+        return FALSE;
+    }
+
+    for (; now ; now = now->next) {
+        if (!red_dispatcher_version_check(3, 3) ||
+            !now->qxl->st->qif->client_monitors_config ||
+            !now->qxl->st->qif->client_monitors_config(now->qxl, NULL)) {
+            return FALSE;
+        }
+    }
+    return TRUE;
+}
+
+void red_dispatcher_client_monitors_config(VDAgentMonitorsConfig *monitors_config)
+{
+    RedDispatcher *now = dispatchers;
+
+    while (now) {
+        if (!now->qxl->st->qif->client_monitors_config ||
+            !now->qxl->st->qif->client_monitors_config(now->qxl,
+                                                       monitors_config)) {
+            spice_warning("spice bug: QXLInterface::client_monitors_config"
+                          " failed/missing unexpectedly\n");
+        }
+        now = now->next;
+    }
 }
 
 static AsyncCommand *async_command_alloc(RedDispatcher *dispatcher,

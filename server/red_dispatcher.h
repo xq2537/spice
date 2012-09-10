@@ -18,6 +18,8 @@
 #ifndef _H_RED_DISPATCHER
 #define _H_RED_DISPATCHER
 
+#include "red_channel.h"
+
 struct RedChannelClient;
 typedef struct AsyncCommand AsyncCommand;
 
@@ -35,6 +37,8 @@ uint32_t red_dispatcher_qxl_ram_size(void);
 int red_dispatcher_qxl_count(void);
 void red_dispatcher_async_complete(struct RedDispatcher *, AsyncCommand *);
 struct Dispatcher *red_dispatcher_get_dispatcher(struct RedDispatcher *);
+int red_dispatcher_use_client_monitors_config(void);
+void red_dispatcher_client_monitors_config(VDAgentMonitorsConfig *monitors_config);
 
 typedef struct RedWorkerMessageDisplayConnect {
     RedClient * client;
