@@ -12,10 +12,10 @@ AC_PREREQ([2.57])
 
 m4_define([SPICE_MAJOR], 0)
 m4_define([SPICE_MINOR], 11)
-m4_define([SPICE_MICRO], 4)
-m4_define([SPICE_CURRENT], [5])
+m4_define([SPICE_MICRO], 5)
+m4_define([SPICE_CURRENT], [6])
 m4_define([SPICE_REVISION], [0])
-m4_define([SPICE_AGE], [4])
+m4_define([SPICE_AGE], [5])
 
 # Note on the library name on linux (SONAME) produced by libtool (for reference, gleaned
 # from looking at libtool 2.4.2)
