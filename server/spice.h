@@ -21,6 +21,7 @@
 #include <stdint.h>
 #include <sys/socket.h>
 #include <spice/qxl_dev.h>
+#include <spice/vd_agent.h>
 
 #define SPICE_SERVER_VERSION 0x000b04 /* release 0.11.4 */
 
@@ -96,7 +97,7 @@ struct SpiceCoreInterface {
 
 #define SPICE_INTERFACE_QXL "qxl"
 #define SPICE_INTERFACE_QXL_MAJOR 3
-#define SPICE_INTERFACE_QXL_MINOR 2
+#define SPICE_INTERFACE_QXL_MINOR 3
 typedef struct QXLInterface QXLInterface;
 typedef struct QXLInstance QXLInstance;
 typedef struct QXLState QXLState;
@@ -240,8 +241,13 @@ struct QXLInterface {
                                  struct QXLRect *updated_rects,
                                  uint32_t num_updated_rects);
     void (*set_client_capabilities)(QXLInstance *qin,
-				    uint8_t client_present,
-				    uint8_t caps[58]);
+                                    uint8_t client_present,
+                                    uint8_t caps[58]);
+    /* returns 1 if the interface is supported, 0 otherwise.
+     * if monitors_config is NULL nothing is done except reporting the
+     * return code. */
+    int (*client_monitors_config)(QXLInstance *qin,
+                                  VDAgentMonitorsConfig *monitors_config);
 };
 
 struct QXLInstance {
