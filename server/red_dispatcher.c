@@ -91,7 +91,7 @@ static void red_dispatcher_set_display_peer(RedChannel *channel, RedClient *clie
     RedWorkerMessageDisplayConnect payload;
     RedDispatcher *dispatcher;
 
-    spice_printerr("");
+    spice_debug("%s", "");
     dispatcher = (RedDispatcher *)channel->data;
     payload.client = client;
     payload.stream = stream;
