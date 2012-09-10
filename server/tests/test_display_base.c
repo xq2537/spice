@@ -10,6 +10,7 @@
 #include <sys/types.h>
 #include <getopt.h>
 
+#include "spice.h"
 #include <spice/qxl_dev.h>
 
 #include "test_display_base.h"
@@ -700,6 +701,11 @@ static int flush_resources(QXLInstance *qin)
     return TRUE;
 }
 
+static void client_monitors_config(QXLInstance *qin, VDAgentMonitorsConfig *monitors_config)
+{
+    printf("%s: %d\n", __func__, monitors_config->num_of_monitors);
+}
+
 QXLInterface display_sif = {
     .base = {
         .type = SPICE_INTERFACE_QXL,
@@ -720,12 +726,52 @@ QXLInterface display_sif = {
     .req_cursor_notification = req_cursor_notification,
     .notify_update = notify_update,
     .flush_resources = flush_resources,
+    .client_monitors_config = client_monitors_config,
 };
 
 /* interface for tests */
 void test_add_display_interface(Test* test)
 {
     spice_server_add_interface(test->server, &test->qxl_instance.base);
+}
+
+static int vmc_write(SpiceCharDeviceInstance *sin, const uint8_t *buf, int len)
+{
+    printf("%s: %d\n", __func__, len);
+    return len;
+}
+
+static int vmc_read(SpiceCharDeviceInstance *sin, uint8_t *buf, int len)
+{
+    printf("%s: %d\n", __func__, len);
+    return 0;
+}
+
+static void vmc_state(SpiceCharDeviceInstance *sin, int connected)
+{
+    printf("%s: %d\n", __func__, connected);
+}
+
+static SpiceCharDeviceInterface vdagent_sif = {
+    .base.type          = SPICE_INTERFACE_CHAR_DEVICE,
+    .base.description   = "test spice virtual channel char device",
+    .base.major_version = SPICE_INTERFACE_CHAR_DEVICE_MAJOR,
+    .base.minor_version = SPICE_INTERFACE_CHAR_DEVICE_MINOR,
+    .state              = vmc_state,
+    .write              = vmc_write,
+    .read               = vmc_read,
+};
+
+SpiceCharDeviceInstance vdagent_sin = {
+    .base = {
+        .sif = &vdagent_sif.base,
+    },
+    .subtype = "vdagent",
+};
+
+void test_add_agent_interface(SpiceServer *server)
+{
+    spice_server_add_interface(server, &vdagent_sin.base);
 }
 
 void test_set_simple_command_list(Test *test, int *simple_commands, int num_commands)

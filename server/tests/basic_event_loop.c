@@ -115,7 +115,7 @@ static void watch_remove(SpiceWatch *watch)
 
 static void channel_event(int event, SpiceChannelEventInfo *info)
 {
-    DPRINTF(0, "channel event con, type, id, event: %ld, %d, %d, %d\n",
+    DPRINTF(0, "channel event con, type, id, event: %ld, %d, %d, %d",
             info->connection_id, info->type, info->id, event);
 }
 
