@@ -10349,7 +10349,9 @@ static void handle_new_display_channel(RedWorker *worker, RedClient *client, Red
     spice_info("jpeg %s", display_channel->enable_jpeg ? "enabled" : "disabled");
     spice_info("zlib-over-glz %s", display_channel->enable_zlib_glz_wrap ? "enabled" : "disabled");
 
-    if (worker->qxl->st->qif->set_client_capabilities) {
+    if (worker->qxl->st->qif->base.major_version == 3 &&
+        worker->qxl->st->qif->base.minor_version >= 2 &&
+        worker->qxl->st->qif->set_client_capabilities) {
         RedChannelClient *rcc = (RedChannelClient *)dcc;
         uint8_t caps[58] = { 0 };
 
@@ -11227,7 +11229,9 @@ void handle_dev_display_disconnect(void *opaque, void *payload)
     spice_info("disconnect display client");
     spice_assert(rcc);
 
-    if (worker->qxl->st->qif->set_client_capabilities) {
+    if (worker->qxl->st->qif->base.major_version == 3 &&
+        worker->qxl->st->qif->base.minor_version >= 2 &&
+        worker->qxl->st->qif->set_client_capabilities) {
         uint8_t caps[58] = { 0 };
         worker->qxl->st->qif->set_client_capabilities(worker->qxl, FALSE, caps);
     }
