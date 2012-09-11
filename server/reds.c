@@ -1859,7 +1859,7 @@ static void openssl_init(RedLinkInfo *link)
     link->tiTicketing.bn = BN_new();
 
     if (!link->tiTicketing.bn) {
-        spice_warning("OpenSSL BIGNUMS alloc failed");
+        spice_error("OpenSSL BIGNUMS alloc failed");
     }
 
     BN_set_word(link->tiTicketing.bn, f4);
