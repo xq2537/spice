@@ -3349,7 +3349,9 @@ static int reds_init_ssl(void)
 
     SSL_CTX_set_session_id_context(reds->ctx, (const unsigned char *)"SPICE", 5);
     if (strlen(ssl_parameters.ciphersuite) > 0) {
-        SSL_CTX_set_cipher_list(reds->ctx, ssl_parameters.ciphersuite);
+        if (!SSL_CTX_set_cipher_list(reds->ctx, ssl_parameters.ciphersuite)) {
+            return -1;
+        }
     }
 
     openssl_thread_setup();
