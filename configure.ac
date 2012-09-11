@@ -59,9 +59,9 @@ AC_SUBST(SPICE_LT_VERSION)
 
 # Check for the CPU we are using
 #
-AC_MSG_CHECKING(for x86 or x86-64 platform)
+AC_MSG_CHECKING(for x86, x86-64 or armv6+ platform)
 case $host_cpu in
-  i386|i486|i586|i686|i786|k6|k7|arm|armv7)
+  i386|i486|i586|i686|i786|k6|k7|armv6|armv6l|armv6hl|armv7|armv7l|armv7hl)
 	variant=32
         ;;
   x86_64)
