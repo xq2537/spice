@@ -3176,6 +3176,7 @@ static int reds_init_net(void)
                                              reds_accept, NULL);
         if (reds->listen_watch == NULL) {
             spice_warning("set fd handle failed");
+            return -1;
         }
     }
 
@@ -3190,6 +3191,7 @@ static int reds_init_net(void)
                                                     reds_accept_ssl_connection, NULL);
         if (reds->secure_listen_watch == NULL) {
             spice_warning("set fd handle failed");
+            return -1;
         }
     }
 
@@ -3200,6 +3202,7 @@ static int reds_init_net(void)
                                              reds_accept, NULL);
         if (reds->listen_watch == NULL) {
             spice_warning("set fd handle failed");
+            return -1;
         }
     }
     return 0;
