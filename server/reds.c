@@ -3208,25 +3208,30 @@ static int reds_init_net(void)
     return 0;
 }
 
-static void load_dh_params(SSL_CTX *ctx, char *file)
+static int load_dh_params(SSL_CTX *ctx, char *file)
 {
     DH *ret = 0;
     BIO *bio;
 
     if ((bio = BIO_new_file(file, "r")) == NULL) {
         spice_warning("Could not open DH file");
+        return -1;
     }
 
     ret = PEM_read_bio_DHparams(bio, NULL, NULL, NULL);
+    BIO_free(bio);
     if (ret == 0) {
         spice_warning("Could not read DH params");
+        return -1;
     }
 
-    BIO_free(bio);
 
     if (SSL_CTX_set_tmp_dh(ctx, ret) < 0) {
         spice_warning("Could not set DH params");
+        return -1;
     }
+
+    return 0;
 }
 
 /*The password code is not thread safe*/
@@ -3337,7 +3342,9 @@ static int reds_init_ssl(void)
 #endif
 
     if (strlen(ssl_parameters.dh_key_file) > 0) {
-        load_dh_params(reds->ctx, ssl_parameters.dh_key_file);
+        if (load_dh_params(reds->ctx, ssl_parameters.dh_key_file) < 0) {
+            return -1;
+        }
     }
 
     SSL_CTX_set_session_id_context(reds->ctx, (const unsigned char *)"SPICE", 5);
