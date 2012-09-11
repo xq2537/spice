@@ -3275,7 +3275,7 @@ static void openssl_thread_setup(void)
     CRYPTO_set_locking_callback(pthreads_locking_callback);
 }
 
-static void reds_init_ssl(void)
+static int reds_init_ssl(void)
 {
 #if OPENSSL_VERSION_NUMBER >= 0x10000000L
     const SSL_METHOD *ssl_method;
@@ -3294,6 +3294,7 @@ static void reds_init_ssl(void)
     reds->ctx = SSL_CTX_new(ssl_method);
     if (!reds->ctx) {
         spice_warning("Could not allocate new SSL context");
+        return -1;
     }
 
     /* Limit connection to TLSv1 only */
@@ -3308,6 +3309,7 @@ static void reds_init_ssl(void)
         spice_info("Loaded certificates from %s", ssl_parameters.certs_file);
     } else {
         spice_warning("Could not load certificates from %s", ssl_parameters.certs_file);
+        return -1;
     }
 
     SSL_CTX_set_default_passwd_cb(reds->ctx, ssl_password_cb);
@@ -3318,6 +3320,7 @@ static void reds_init_ssl(void)
         spice_info("Using private key from %s", ssl_parameters.private_key_file);
     } else {
         spice_warning("Could not use private key file");
+        return -1;
     }
 
     /* Load the CAs we trust*/
@@ -3326,6 +3329,7 @@ static void reds_init_ssl(void)
         spice_info("Loaded CA certificates from %s", ssl_parameters.ca_certificate_file);
     } else {
         spice_warning("Could not use CA file %s", ssl_parameters.ca_certificate_file);
+        return -1;
     }
 
 #if (OPENSSL_VERSION_NUMBER < 0x00905100L)
@@ -3347,6 +3351,8 @@ static void reds_init_ssl(void)
     STACK *cmp_stack = SSL_COMP_get_compression_methods();
     sk_zero(cmp_stack);
 #endif
+
+    return 0;
 }
 
 static void reds_exit(void)
