@@ -3776,6 +3776,7 @@ static int spice_server_char_device_add_interface(SpiceServer *s,
         reds_char_device_add_state(char_device->st);
     } else {
         spice_warning("failed to create device state for %s", char_device->subtype);
+        return -1;
     }
     return 0;
 }
