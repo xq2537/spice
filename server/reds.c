@@ -4021,7 +4021,9 @@ static int do_spice_init(SpiceCoreInterface *core_interface)
         goto err;
     }
     if (reds->secure_listen_socket != -1) {
-        reds_init_ssl();
+        if (reds_init_ssl() < 0) {
+            goto err;
+        }
     }
 #if HAVE_SASL
     int saslerr;
