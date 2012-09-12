@@ -1208,7 +1208,7 @@ void reds_on_main_agent_data(MainChannelClient *mcc, void *message, size_t size)
     header =  (VDIChunkHeader *)dev_state->recv_from_client_buf->buf;
     header->port = VDP_CLIENT_PORT;
     header->size = size;
-    reds->agent_state.recv_from_client_buf->buf_used = sizeof(VDIChunkHeader) + size;
+    dev_state->recv_from_client_buf->buf_used = sizeof(VDIChunkHeader) + size;
 
     dev_state->recv_from_client_buf_pushed = TRUE;
     spice_char_device_write_buffer_add(reds->agent_state.base, dev_state->recv_from_client_buf);
