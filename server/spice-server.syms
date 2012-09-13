@@ -110,10 +110,12 @@ global:
 } SPICE_SERVER_0.10.1;
 
 SPICE_SERVER_0.10.3 {
+global:
     spice_server_is_server_mouse;
 } SPICE_SERVER_0.10.2;
 
 SPICE_SERVER_0.10.4 {
+global:
     spice_qxl_monitors_config_async;
 } SPICE_SERVER_0.10.3;
 
@@ -125,5 +127,6 @@ global:
 } SPICE_SERVER_0.10.4;
 
 SPICE_SERVER_0.11.4 {
+global:
     spice_server_set_exit_on_disconnect;
 } SPICE_SERVER_0.11.2;
