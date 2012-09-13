@@ -195,7 +195,6 @@ static SndChannel *snd_channel_get(SndChannel *channel)
 static SndChannel *snd_channel_put(SndChannel *channel)
 {
     if (!--channel->refs) {
-        channel->worker->connection = NULL;
         free(channel);
         spice_printerr("sound channel freed");
         return NULL;
@@ -223,6 +222,7 @@ static void snd_disconnect_channel(SndChannel *channel)
         spice_marshaller_destroy(channel->send_data.marshaller);
     }
     snd_channel_put(channel);
+    channel->worker->connection = NULL;
 }
 
 static void snd_playback_free_frame(PlaybackChannel *playback_channel, AudioFrame *frame)
