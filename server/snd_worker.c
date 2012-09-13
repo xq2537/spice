@@ -122,10 +122,14 @@ struct SndChannel {
     snd_channel_cleanup_channel_proc cleanup;
 };
 
+struct PlaybackChannel;
+typedef struct PlaybackChannel PlaybackChannel;
+
 typedef struct AudioFrame AudioFrame;
 struct AudioFrame {
     uint32_t time;
     uint32_t samples[FRAME_SIZE];
+    PlaybackChannel *channel;
     AudioFrame *next;
 };
 
@@ -227,6 +231,7 @@ static void snd_disconnect_channel(SndChannel *channel)
 
 static void snd_playback_free_frame(PlaybackChannel *playback_channel, AudioFrame *frame)
 {
+    frame->channel = playback_channel;
     frame->next = playback_channel->free_frames;
     playback_channel->free_frames = frame;
 }
@@ -1067,14 +1072,16 @@ SPICE_GNUC_VISIBLE void spice_server_playback_get_buffer(SpicePlaybackInstance *
 
 SPICE_GNUC_VISIBLE void spice_server_playback_put_samples(SpicePlaybackInstance *sin, uint32_t *samples)
 {
-    SndChannel *channel = sin->st->worker.connection;
-    PlaybackChannel *playback_channel = SPICE_CONTAINEROF(channel, PlaybackChannel, base);
+    PlaybackChannel *playback_channel;
     AudioFrame *frame;
 
-    if (!channel) {
+    if (!sin->st->worker.connection) {
         return;
     }
-    if (!snd_channel_put(channel)) {
+
+    frame = SPICE_CONTAINEROF(samples, AudioFrame, samples);
+    playback_channel = frame->channel;
+    if (!snd_channel_put(&playback_channel->base) || !playback_channel->base.worker->connection) {
         /* lost last reference, channel has been destroyed previously */
         return;
     }
@@ -1083,7 +1090,6 @@ SPICE_GNUC_VISIBLE void spice_server_playback_put_samples(SpicePlaybackInstance 
     if (playback_channel->pending_frame) {
         snd_playback_free_frame(playback_channel, playback_channel->pending_frame);
     }
-    frame = SPICE_CONTAINEROF(samples, AudioFrame, samples);
     frame->time = reds_get_mm_time();
     red_dispatcher_set_mm_time(frame->time);
     playback_channel->pending_frame = frame;
