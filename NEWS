@@ -1,3 +1,15 @@
+Major changes in 0.12.0:
+========================
+* Stable Release
+* support setting client monitor configuration via device
+ QXLInterface::client_monitors_config
+* support notifying guest of client capabilities
+ QXLInterface::set_client_capabilities
+* new capability for A8 Surface support
+* Enable build on armv6+
+* Option to quit server after first client disconnects
+ spice_server_set_exit_on_disconnect
+
 Major changes in 0.11.3:
 ========================
 * !Development Release!

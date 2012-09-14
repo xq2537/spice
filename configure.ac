@@ -11,8 +11,8 @@ AC_PREREQ([2.57])
 #  http://www.gnu.org/software/libtool/manual/html_node/Updating-version-info.html
 
 m4_define([SPICE_MAJOR], 0)
-m4_define([SPICE_MINOR], 11)
-m4_define([SPICE_MICRO], 5)
+m4_define([SPICE_MINOR], 12)
+m4_define([SPICE_MICRO], 0)
 m4_define([SPICE_CURRENT], [6])
 m4_define([SPICE_REVISION], [0])
 m4_define([SPICE_AGE], [5])
