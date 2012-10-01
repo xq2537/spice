@@ -122,7 +122,6 @@ struct SndChannel {
     snd_channel_cleanup_channel_proc cleanup;
 };
 
-struct PlaybackChannel;
 typedef struct PlaybackChannel PlaybackChannel;
 
 typedef struct AudioFrame AudioFrame;
@@ -133,7 +132,7 @@ struct AudioFrame {
     AudioFrame *next;
 };
 
-typedef struct PlaybackChannel {
+struct PlaybackChannel {
     SndChannel base;
     AudioFrame frames[3];
     AudioFrame *free_frames;
@@ -145,7 +144,7 @@ typedef struct PlaybackChannel {
     struct {
         uint8_t celt_buf[CELT_COMPRESSED_FRAME_BYTES];
     } send_data;
-} PlaybackChannel;
+};
 
 struct SndWorker {
     RedChannel *base_channel;
