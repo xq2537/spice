@@ -214,9 +214,9 @@ static void snd_disconnect_channel(SndChannel *channel)
         return;
     }
     spice_debug("%p", channel);
+    worker = channel->worker;
     if (channel->stream) {
         channel->cleanup(channel);
-        worker = channel->worker;
         red_channel_client_disconnect(worker->connection->channel_client);
         core->watch_remove(channel->stream->watch);
         channel->stream->watch = NULL;
@@ -225,7 +225,7 @@ static void snd_disconnect_channel(SndChannel *channel)
         spice_marshaller_destroy(channel->send_data.marshaller);
     }
     snd_channel_put(channel);
-    channel->worker->connection = NULL;
+    worker->connection = NULL;
 }
 
 static void snd_playback_free_frame(PlaybackChannel *playback_channel, AudioFrame *frame)
