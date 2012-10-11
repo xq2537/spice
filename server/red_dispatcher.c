@@ -83,20 +83,13 @@ extern spice_wan_compression_t zlib_glz_state;
 
 static RedDispatcher *dispatchers = NULL;
 
-static int red_dispatcher_version_check(int major, int minor)
+static int red_dispatcher_check_qxl_version(RedDispatcher *rd, int major, int minor)
 {
-    if (num_active_workers > 0) {
-        RedDispatcher *now = dispatchers;
-        while (now) {
-            if (now->base.major_version != major ||
-                now->base.minor_version < minor) {
-                return FALSE;
-            }
-            now = now->next;
-        }
-        return TRUE;
-    }
-    return FALSE;
+    int qxl_major = rd->qxl->st->qif->base.major_version;
+    int qxl_minor = rd->qxl->st->qif->base.minor_version;
+
+    return ((qxl_major > major) ||
+            ((qxl_major == major) && (qxl_minor >= minor)));
 }
 
 static void red_dispatcher_set_display_peer(RedChannel *channel, RedClient *client,
@@ -320,7 +313,7 @@ int red_dispatcher_use_client_monitors_config(void)
     }
 
     for (; now ; now = now->next) {
-        if (!red_dispatcher_version_check(3, 3) ||
+        if (!red_dispatcher_check_qxl_version(now, 3, 3) ||
             !now->qxl->st->qif->client_monitors_config ||
             !now->qxl->st->qif->client_monitors_config(now->qxl, NULL)) {
             return FALSE;
