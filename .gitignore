@@ -24,3 +24,5 @@ Makefile.in
 spice-server.pc
 stamp-h1
 INSTALL
+.version
+.tarball-version
