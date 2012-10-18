@@ -309,6 +309,7 @@ static int inputs_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, ui
     InputsChannel *inputs_channel = (InputsChannel *)rcc->channel;
     InputsChannelClient *icc = (InputsChannelClient *)rcc;
     uint8_t *buf = (uint8_t *)message;
+    uint32_t i;
 
     spice_assert(g_inputs_channel == inputs_channel);
     switch (type) {
@@ -321,15 +322,16 @@ static int inputs_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, ui
     }
     case SPICE_MSGC_INPUTS_KEY_UP: {
         SpiceMsgcKeyDown *key_down = (SpiceMsgcKeyDown *)buf;
-        uint8_t *now = (uint8_t *)&key_down->code;
-        uint8_t *end = now + sizeof(key_down->code);
-        for (; now < end && *now; now++) {
-            kbd_push_scan(keyboard, *now);
+        for (i = 0; i < 4; i++) {
+            uint8_t code = (key_down->code >> (i * 8)) & 0xff;
+            if (code == 0) {
+                break;
+            }
+            kbd_push_scan(keyboard, code);
         }
         break;
     }
     case SPICE_MSGC_INPUTS_KEY_SCANCODE: {
-        uint32_t i;
         uint8_t *code = (uint8_t *)buf;
         for (i = 0; i < size; i++) {
             kbd_push_scan(keyboard, code[i]);
