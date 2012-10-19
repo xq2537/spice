@@ -703,7 +703,11 @@ static int flush_resources(QXLInstance *qin)
 
 static void client_monitors_config(QXLInstance *qin, VDAgentMonitorsConfig *monitors_config)
 {
-    printf("%s: %d\n", __func__, monitors_config->num_of_monitors);
+    if (!monitors_config) {
+        printf("%s: NULL monitors_config\n", __func__);
+    } else {
+        printf("%s: %d\n", __func__, monitors_config->num_of_monitors);
+    }
 }
 
 QXLInterface display_sif = {
