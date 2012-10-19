@@ -234,6 +234,7 @@ if test "x$enable_smartcard" = "xyes"; then
     SMARTCARD_CFLAGS="$CAC_CARD_CFLAGS"
     AC_SUBST(SMARTCARD_LIBS)
     AC_SUBST(SMARTCARD_CFLAGS)
+    SPICE_REQUIRES+=" libcacard >= 0.1.2"
 fi
 
 
