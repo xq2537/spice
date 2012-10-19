@@ -74,8 +74,15 @@
 #ifdef USE_SMARTCARD
 #include "smartcard.h"
 #endif
+#if USE_LIBWEBSOCKETS
+#include "reds_websockets.h"
+#endif
 
 #include "reds-private.h"
+
+static VDIReadBuf *vdi_port_read_buf_get(void);
+static VDIReadBuf *vdi_port_read_buf_ref(VDIReadBuf *buf);
+static void vdi_port_read_buf_unref(VDIReadBuf *buf);
 
 SpiceCoreInterface *core = NULL;
 static SpiceCharDeviceInstance *vdagent = NULL;
@@ -99,6 +106,10 @@ static TicketAuthentication taTicket;
 
 static int spice_port = -1;
 static int spice_secure_port = -1;
+#if USE_LIBWEBSOCKETS
+static int spice_ws_port = -1;
+static int spice_wss_port = -1;
+#endif
 static int spice_listen_socket_fd = -1;
 static char spice_addr[256];
 static int spice_family = PF_UNSPEC;
@@ -126,26 +137,6 @@ int agent_copypaste = TRUE;
 static bool exit_on_disconnect = FALSE;
 
 static RedsState *reds = NULL;
-
-typedef struct AsyncRead {
-    RedsStream *stream;
-    void *opaque;
-    uint8_t *now;
-    uint8_t *end;
-    void (*done)(void *opaque);
-    void (*error)(void *opaque, int err);
-} AsyncRead;
-
-typedef struct RedLinkInfo {
-    RedsStream *stream;
-    AsyncRead asyc_read;
-    SpiceLinkHeader link_header;
-    SpiceLinkMess *link_mess;
-    int mess_pos;
-    TicketInfo tiTicketing;
-    SpiceLinkAuthMechanism auth_mechanism;
-    int skip_auth;
-} RedLinkInfo;
 
 typedef struct RedSSLParameters {
     char keyfile_password[256];
@@ -2718,7 +2709,7 @@ static void reds_handle_read_header_done(void *opaque)
     async_read_handler(0, 0, &link->asyc_read);
 }
 
-static void reds_handle_new_link(RedLinkInfo *link)
+void reds_handle_new_link(RedLinkInfo *link)
 {
     AsyncRead *obj = &link->asyc_read;
     obj->opaque = link;
@@ -2882,7 +2873,6 @@ static void reds_accept_ssl_connection(int fd, int event, void *data)
     }
 }
 
-
 static void reds_accept(int fd, int event, void *data)
 {
     int socket;
@@ -2896,25 +2886,33 @@ static void reds_accept(int fd, int event, void *data)
         close(socket);
 }
 
+RedLinkInfo *spice_server_add_client_create_link(SpiceServer *s, int socket, int skip_auth)
+{
+    RedLinkInfo *link;
+
+    spice_assert(reds == s);
+    if (!(link = reds_init_client_connection(socket))) {
+        spice_warning("accept failed");
+        return NULL;
+    }
+
+    link->skip_auth = skip_auth;
+    return link;
+}
 
 SPICE_GNUC_VISIBLE int spice_server_add_client(SpiceServer *s, int socket, int skip_auth)
 {
     RedLinkInfo *link;
     RedsStream *stream;
 
-    spice_assert(reds == s);
-    if (!(link = reds_init_client_connection(socket))) {
-        spice_warning("accept failed");
+    link = spice_server_add_client_create_link(s, socket, skip_auth);
+    if (!link) {
         return -1;
     }
-
-    link->skip_auth = skip_auth;
-
     stream = link->stream;
     stream->read = stream_read_cb;
     stream->write = stream_write_cb;
     stream->writev = stream_writev_cb;
-
     reds_handle_new_link(link);
     return 0;
 }
@@ -3033,6 +3031,12 @@ static int reds_init_net(void)
             return -1;
         }
     }
+
+#if USE_LIBWEBSOCKETS
+    if (spice_ws_port != -1 || spice_wss_port != -1) {
+        reds_init_websocket(reds, spice_addr, spice_ws_port, spice_wss_port);
+    }
+#endif
     return 0;
 }
 
@@ -3947,6 +3951,27 @@ SPICE_GNUC_VISIBLE int spice_server_set_port(SpiceServer *s, int port)
     }
     spice_port = port;
     return 0;
+}
+
+
+SPICE_GNUC_VISIBLE int spice_server_set_ws_ports(SpiceServer *s, int ws_port, int wss_port)
+{
+#if USE_LIBWEBSOCKETS
+    spice_assert(reds == s);
+    if ((ws_port < 1 || ws_port > 0xffff) && (wss_port < 1 || wss_port > 0xffff)) {
+        return -1;
+    }
+    if (ws_port > 0 && ws_port < 0xffff) {
+        spice_ws_port = ws_port;
+    }
+    if (wss_port > 0 && wss_port < 0xffff) {
+        spice_wss_port = wss_port;
+    }
+    return 0;
+#else
+    fprintf(stderr, "libwebsockets is unsupported in this spice build\n");
+    return -1;
+#endif
 }
 
 SPICE_GNUC_VISIBLE void spice_server_set_addr(SpiceServer *s, const char *addr, int flags)

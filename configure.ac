@@ -160,6 +160,14 @@ AC_ARG_ENABLE(automated_tests,
 AS_IF([test x"$enable_automated_tests" != "xno"], [enable_automated_tests="yes"])
 AM_CONDITIONAL(SUPPORT_AUTOMATED_TESTS, test "x$enable_automated_tests" != "xno")
 
+AC_ARG_ENABLE(libwebsockets,
+[  --enable-libwebsockets    Enable websockets server support (no need for proxy)],,
+[enable_libwebsockets="no"])
+AS_IF([test x"enable_libwebsockets" != "xyes"], [enable_websockets="no"])
+AM_CONDITIONAL(SUPPORT_LIBWEBSOCKETS, test "x$enable_websockets" = "xyes")
+if test "x$enable_libwebsockets" = "xyes"; then
+   AC_DEFINE([USE_LIBWEBSOCKETS], [1], [Define if supporting websocket connections])
+fi
 
 dnl =========================================================================
 dnl Check deps
@@ -237,6 +245,12 @@ if test "x$enable_smartcard" = "xyes"; then
     SPICE_REQUIRES+=" libcacard >= 0.1.2"
 fi
 
+if test "x$enable_libwebsockets" = "xyes"; then
+    PKG_CHECK_MODULES(LIBWEBSOCKETS, libwebsockets >= 0.0.3)
+    AC_SUBST(LIBWEBSOCKETS_LIBS)
+    AC_SUBST(LIBWEBSOCKETS_CFLAGS)
+    SPICE_REQUIRES+=" libwebsockets >= 0.0.3"
+fi
 
 PKG_CHECK_MODULES(PIXMAN, pixman-1 >= 0.17.7)
 AC_SUBST(PIXMAN_CFLAGS)
@@ -536,6 +550,8 @@ echo "
         SASL support:             ${enable_sasl}
 
         Automated tests:          ${enable_automated_tests}
+
+        libwebsockets:            ${enable_libwebsockets}
 "
 
 if test $os_win32 == "yes" ; then
