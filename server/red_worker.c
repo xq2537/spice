@@ -128,6 +128,29 @@
 
 typedef int64_t red_time_t;
 
+#define VALIDATE_SURFACE_RET(worker, surface_id) \
+    if (!validate_surface(worker, surface_id)) { \
+        rendering_incorrect(__func__); \
+        return; \
+    }
+
+#define VALIDATE_SURFACE_RETVAL(worker, surface_id, ret) \
+    if (!validate_surface(worker, surface_id)) { \
+        rendering_incorrect(__func__); \
+        return ret; \
+    }
+
+#define VALIDATE_SURFACE_BREAK(worker, surface_id) \
+    if (!validate_surface(worker, surface_id)) { \
+        rendering_incorrect(__func__); \
+        break; \
+    }
+
+static void rendering_incorrect(const char *msg)
+{
+    spice_warning("rendering incorrect from now on: %s", msg);
+}
+
 static inline red_time_t timespec_to_red_time(struct timespec *time)
 {
     return time->tv_sec * (1000 * 1000 * 1000) + time->tv_nsec;
@@ -1231,7 +1254,7 @@ static inline void __validate_surface(RedWorker *worker, uint32_t surface_id)
     spice_warn_if(surface_id >= worker->n_surfaces);
 }
 
-static inline void validate_surface(RedWorker *worker, uint32_t surface_id)
+static inline int validate_surface(RedWorker *worker, uint32_t surface_id)
 {
     spice_warn_if(surface_id >= worker->n_surfaces);
     if (!worker->surfaces[surface_id].context.canvas) {
@@ -1239,7 +1262,9 @@ static inline void validate_surface(RedWorker *worker, uint32_t surface_id)
                    &(worker->surfaces[surface_id].context.canvas), surface_id);
         spice_warning("failed on %d", surface_id);
         spice_warn_if(!worker->surfaces[surface_id].context.canvas);
+        return 0;
     }
+    return 1;
 }
 
 static const char *draw_type_to_str(uint8_t type)
@@ -3782,7 +3807,8 @@ static void free_one_drawable(RedWorker *worker, int force_glz_free)
 }
 
 static Drawable *get_drawable(RedWorker *worker, uint8_t effect, RedDrawable *red_drawable,
-                              uint32_t group_id) {
+                              uint32_t group_id)
+{
     Drawable *drawable;
     struct timespec time;
     int x;
@@ -3812,11 +3838,11 @@ static Drawable *get_drawable(RedWorker *worker, uint8_t effect, RedDrawable *re
     drawable->group_id = group_id;
 
     drawable->surface_id = red_drawable->surface_id;
-    validate_surface(worker, drawable->surface_id);
+    VALIDATE_SURFACE_RETVAL(worker, drawable->surface_id, NULL)
     for (x = 0; x < 3; ++x) {
         drawable->surfaces_dest[x] = red_drawable->surfaces_dest[x];
         if (drawable->surfaces_dest[x] != -1) {
-            validate_surface(worker, drawable->surfaces_dest[x]);
+            VALIDATE_SURFACE_RETVAL(worker, drawable->surfaces_dest[x], NULL)
         }
     }
     ring_init(&drawable->pipes);
@@ -3903,7 +3929,10 @@ static inline void red_process_drawable(RedWorker *worker, RedDrawable *drawable
     int surface_id;
     Drawable *item = get_drawable(worker, drawable->effect, drawable, group_id);
 
-    spice_assert(item);
+    if (!item) {
+        rendering_incorrect("failed to get_drawable");
+        return;
+    }
 
     surface_id = item->surface_id;
 
@@ -4022,7 +4051,7 @@ static SpiceCanvas *image_surfaces_get(SpiceImageSurfaces *surfaces,
     RedWorker *worker;
 
     worker = SPICE_CONTAINEROF(surfaces, RedWorker, image_surfaces);
-    validate_surface(worker, surface_id);
+    VALIDATE_SURFACE_RETVAL(worker, surface_id, NULL);
 
     return worker->surfaces[surface_id].context.canvas;
 }
@@ -4913,7 +4942,10 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
                                    &update, ext_cmd.cmd.data)) {
                 break;
             }
-            validate_surface(worker, update.surface_id);
+            if (!validate_surface(worker, update.surface_id)) {
+                rendering_incorrect("QXL_CMD_UPDATE");
+                break;
+            }
             red_update_area(worker, &update.area, update.surface_id);
             worker->qxl->st->qif->notify_update(worker->qxl, update.update_id);
             release_info_ext.group_id = ext_cmd.group_id;
@@ -6509,7 +6541,10 @@ static FillBitsType fill_bits(DisplayChannelClient *dcc, SpiceMarshaller *m,
         RedSurface *surface;
 
         surface_id = simage->u.surface.surface_id;
-        validate_surface(worker, surface_id);
+        if (!validate_surface(worker, surface_id)) {
+            rendering_incorrect("SPICE_IMAGE_TYPE_SURFACE");
+            return FILL_BITS_TYPE_SURFACE;
+        }
 
         surface = &worker->surfaces[surface_id];
         image.descriptor.type = SPICE_IMAGE_TYPE_SURFACE;
@@ -6668,7 +6703,7 @@ static int is_surface_area_lossy(DisplayChannelClient *dcc, uint32_t surface_id,
     QRegion lossy_region;
     RedWorker *worker = dcc->common.worker;
 
-    validate_surface(worker, surface_id);
+    VALIDATE_SURFACE_RETVAL(worker, surface_id, FALSE);
     surface = &worker->surfaces[surface_id];
     surface_lossy_region = &dcc->surface_client_lossy_region[surface_id];
 
@@ -10671,7 +10706,7 @@ void handle_dev_update_async(void *opaque, void *payload)
 
     spice_assert(worker->running);
 
-    validate_surface(worker, surface_id);
+    VALIDATE_SURFACE_RET(worker, surface_id);
     red_update_area(worker, &rect, surface_id);
     if (!worker->qxl->st->qif->update_area_complete) {
         return;
@@ -10707,8 +10742,11 @@ void handle_dev_update(void *opaque, void *payload)
 
     spice_assert(worker->running);
 
-    validate_surface(worker, surface_id);
-    red_update_area(worker, rect, surface_id);
+    if (validate_surface(worker, surface_id)) {
+        red_update_area(worker, rect, surface_id);
+    } else {
+        rendering_incorrect(__func__);
+    }
     free(rect);
 
     surface_dirty_region_to_rects(surface, qxl_dirty_rects, num_dirty_rects,
