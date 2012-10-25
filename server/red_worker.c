@@ -9270,9 +9270,6 @@ static inline void red_create_surface(RedWorker *worker, uint32_t surface_id, ui
     RedSurface *surface = &worker->surfaces[surface_id];
     uint32_t i;
 
-    if (stride >= 0) {
-        spice_critical("Untested path stride >= 0");
-    }
     spice_warn_if(surface->context.canvas);
 
     surface->context.canvas_draws_on_surface = FALSE;
