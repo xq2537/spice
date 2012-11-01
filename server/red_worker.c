@@ -997,6 +997,7 @@ typedef struct RedWorker {
 #endif
 
     int driver_has_monitors_config;
+    int set_client_capabilities_pending;
 } RedWorker;
 
 typedef enum {
@@ -10327,6 +10328,48 @@ static void display_channel_create(RedWorker *worker, int migrate)
     stat_compress_init(&display_channel->jpeg_alpha_stat, jpeg_alpha_stat_name);
 }
 
+static void guest_set_client_capabilities(RedWorker *worker)
+{
+    int i;
+    DisplayChannelClient *dcc;
+    RedChannelClient *rcc;
+    RingItem *link;
+    uint8_t caps[58] = { 0 };
+    int caps_available[] = {
+        SPICE_DISPLAY_CAP_SIZED_STREAM,
+        SPICE_DISPLAY_CAP_MONITORS_CONFIG,
+        SPICE_DISPLAY_CAP_COMPOSITE,
+        SPICE_DISPLAY_CAP_A8_SURFACE,
+    };
+
+#define SET_CAP(a,c)                                                    \
+        ((a)[(c) / 8] |= (1 << ((c) % 8)))
+
+#define CLEAR_CAP(a,c)                                                  \
+        ((a)[(c) / 8] &= ~(1 << ((c) % 8)))
+
+    if (!worker->running) {
+        worker->set_client_capabilities_pending = 1;
+        return;
+    }
+    if (worker->display_channel->common.base.clients_num == 0) {
+        worker->qxl->st->qif->set_client_capabilities(worker->qxl, FALSE, caps);
+    } else {
+        // Take least common denominator
+        for (i = 0 ; i < sizeof(caps_available) / sizeof(caps_available[0]); ++i) {
+            SET_CAP(caps, caps_available[i]);
+        }
+        DCC_FOREACH(link, dcc, &worker->display_channel->common.base) {
+            rcc = (RedChannelClient *)dcc;
+            for (i = 0 ; i < sizeof(caps_available) / sizeof(caps_available[0]); ++i) {
+                if (!red_channel_client_test_remote_cap(rcc, caps_available[i]))
+                    CLEAR_CAP(caps, caps_available[i]);
+            }
+        }
+        worker->qxl->st->qif->set_client_capabilities(worker->qxl, TRUE, caps);
+    }
+    worker->set_client_capabilities_pending = 0;
+}
 
 static void handle_new_display_channel(RedWorker *worker, RedClient *client, RedsStream *stream,
                                        int migrate,
@@ -10384,22 +10427,7 @@ static void handle_new_display_channel(RedWorker *worker, RedClient *client, Red
     if (worker->qxl->st->qif->base.major_version == 3 &&
         worker->qxl->st->qif->base.minor_version >= 2 &&
         worker->qxl->st->qif->set_client_capabilities) {
-        RedChannelClient *rcc = (RedChannelClient *)dcc;
-        uint8_t caps[58] = { 0 };
-
-#define SET_CAP(a,c)                                                    \
-        ((a)[(c) / 8] |= (1 << ((c) % 8)))
-
-        if (red_channel_client_test_remote_cap(rcc, SPICE_DISPLAY_CAP_SIZED_STREAM))
-            SET_CAP(caps, SPICE_DISPLAY_CAP_SIZED_STREAM);
-        if (red_channel_client_test_remote_cap(rcc, SPICE_DISPLAY_CAP_MONITORS_CONFIG))
-            SET_CAP(caps, SPICE_DISPLAY_CAP_MONITORS_CONFIG);
-        if (red_channel_client_test_remote_cap(rcc, SPICE_DISPLAY_CAP_COMPOSITE))
-            SET_CAP(caps, SPICE_DISPLAY_CAP_COMPOSITE);
-        if (red_channel_client_test_remote_cap(rcc, SPICE_DISPLAY_CAP_A8_SURFACE))
-            SET_CAP(caps, SPICE_DISPLAY_CAP_A8_SURFACE);
-
-        worker->qxl->st->qif->set_client_capabilities(worker->qxl, TRUE, caps);
+        guest_set_client_capabilities(worker);
     }
     
     // todo: tune level according to bandwidth
@@ -11146,6 +11174,7 @@ void handle_dev_start(void *opaque, void *payload)
         worker->display_channel->common.during_target_migrate = FALSE;
     }
     worker->running = TRUE;
+    guest_set_client_capabilities(worker);
 }
 
 void handle_dev_wakeup(void *opaque, void *payload)
@@ -11267,8 +11296,7 @@ void handle_dev_display_disconnect(void *opaque, void *payload)
     if (worker->qxl->st->qif->base.major_version == 3 &&
         worker->qxl->st->qif->base.minor_version >= 2 &&
         worker->qxl->st->qif->set_client_capabilities) {
-        uint8_t caps[58] = { 0 };
-        worker->qxl->st->qif->set_client_capabilities(worker->qxl, FALSE, caps);
+        guest_set_client_capabilities(worker);
     }
 
     red_channel_client_disconnect(rcc);
