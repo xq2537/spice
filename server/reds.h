@@ -65,20 +65,6 @@ typedef struct RedsSASL {
 } RedsSASL;
 #endif
 
-#ifdef USE_LIBWEBSOCKETS
-typedef struct RedsWebSocket {
-    struct libwebsocket_context *context;
-    struct libwebsocket *wsi;
-    SpiceWatch *watch;
-    int fd;
-    unsigned events;
-    /* buffer of available data to read, always starts at offset 0 to data_avail - 1. */
-    unsigned char *data;
-    unsigned data_len;
-    unsigned data_avail;
-} RedsWebSocket;
-#endif
-
 struct RedsStream {
     int socket;
     SpiceWatch *watch;
@@ -87,9 +73,6 @@ struct RedsStream {
        receive may return data afterward. check the flag before calling receive*/
     int shutdown;
     SSL *ssl;
-#ifdef USE_LIBWEBSOCKETS
-    RedsWebSocket *ws;
-#endif
 
 #if HAVE_SASL
     RedsSASL sasl;

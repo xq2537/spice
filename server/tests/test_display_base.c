@@ -701,14 +701,13 @@ static int flush_resources(QXLInstance *qin)
     return TRUE;
 }
 
-static int client_monitors_config(QXLInstance *qin, VDAgentMonitorsConfig *monitors_config)
+static void client_monitors_config(QXLInstance *qin, VDAgentMonitorsConfig *monitors_config)
 {
     if (!monitors_config) {
         printf("%s: NULL monitors_config\n", __func__);
     } else {
         printf("%s: %d\n", __func__, monitors_config->num_of_monitors);
     }
-    return 0;
 }
 
 QXLInterface display_sif = {
@@ -816,7 +815,6 @@ Test *test_new(SpiceCoreInterface *core)
     printf("TESTER: listening on port %d (unsecure)\n", port);
     spice_server_set_port(server, port);
     spice_server_set_noauth(server);
-    spice_server_set_ws_ports(test->server, 5959, -1);
     spice_server_init(server, core);
 
     cursor_init();

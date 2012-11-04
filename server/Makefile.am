@@ -10,7 +10,6 @@ AM_CPPFLAGS =					\
 	$(SLIRP_CFLAGS)				\
 	$(SMARTCARD_CFLAGS)			\
 	$(SSL_CFLAGS)				\
-	$(LIBWEBSOCKETS_CFLAGS)		\
 	$(VISIBILITY_HIDDEN_CFLAGS)		\
 	$(WARN_CFLAGS)				\
 	$(NULL)
@@ -39,7 +38,6 @@ libspice_server_la_LIBADD =						\
 	$(SLIRP_LIBS)							\
 	$(SSL_LIBS)							\
 	$(Z_LIBS)							\
-	$(LIBWEBSOCKETS_LIBS)				\
 	$(NULL)
 
 libspice_server_la_SOURCES =			\
@@ -94,13 +92,6 @@ libspice_server_la_SOURCES =			\
 	zlib_encoder.c				\
 	zlib_encoder.h				\
 	$(NULL)
-
-if SUPPORT_WEBSOCKETS
-libspice_server_la_SOURCES +=  \
-	reds_websockets.c				\
-	reds_websockets.h				\
-	$(NULL)
-endif
 
 if SUPPORT_TUNNEL
 libspice_server_la_SOURCES +=	\

@@ -4,16 +4,6 @@
 #include <time.h>
 
 #include <spice/protocol.h>
-#include <spice/stats.h>
-
-#if USE_LIBWEBSOCKETS
-#include <libwebsockets.h>
-#endif
-
-#include "reds.h"
-#include "char_device.h"
-#include "agent-msg-filter.h"
-#include "main_channel.h"
 
 #define MIGRATE_TIMEOUT (1000 * 10) /* 10sec */
 #define MM_TIMER_GRANULARITY_MS (1000 / 30)
@@ -43,6 +33,10 @@ typedef struct VDIReadBuf {
     int len;
     uint8_t data[SPICE_AGENT_MAX_DATA_SIZE];
 } VDIReadBuf;
+
+static VDIReadBuf *vdi_port_read_buf_get(void);
+static VDIReadBuf *vdi_port_read_buf_ref(VDIReadBuf *buf);
+static void vdi_port_read_buf_unref(VDIReadBuf *buf);
 
 enum {
     VDI_PORT_READ_STATE_READ_HEADER,
@@ -131,19 +125,9 @@ typedef struct RedsClientMonitorsConfig {
     int buffer_pos;
 } RedsClientMonitorsConfig;
 
-#ifdef USE_LIBWEBSOCKETS
-#define REDS_MAX_WEBSOCKETS 32
-#endif
-
 typedef struct RedsState {
     int listen_socket;
     int secure_listen_socket;
-#ifdef USE_LIBWEBSOCKETS
-	struct libwebsocket_context *ws_context;
-    RedsWebSocket ws[REDS_MAX_WEBSOCKETS];
-    int ws_in_service_fd;
-    int ws_count;
-#endif
     SpiceWatch *listen_watch;
     SpiceWatch *secure_listen_watch;
     VDIPortState agent_state;
@@ -194,28 +178,5 @@ typedef struct RedsState {
 
     RedsClientMonitorsConfig client_monitors_config;
 } RedsState;
-
-typedef struct AsyncRead {
-    RedsStream *stream;
-    void *opaque;
-    uint8_t *now;
-    uint8_t *end;
-    void (*done)(void *opaque);
-    void (*error)(void *opaque, int err);
-} AsyncRead;
-
-typedef struct RedLinkInfo {
-    RedsStream *stream;
-    AsyncRead asyc_read;
-    SpiceLinkHeader link_header;
-    SpiceLinkMess *link_mess;
-    int mess_pos;
-    TicketInfo tiTicketing;
-    SpiceLinkAuthMechanism auth_mechanism;
-    int skip_auth;
-} RedLinkInfo;
-
-RedLinkInfo *spice_server_add_client_create_link(SpiceServer *s, int socket, int skip_auth);
-void reds_handle_new_link(RedLinkInfo *link);
 
 #endif

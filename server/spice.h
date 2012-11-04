@@ -434,13 +434,6 @@ void spice_server_destroy(SpiceServer *s);
 int spice_server_set_compat_version(SpiceServer *s,
                                     spice_compat_version_t version);
 int spice_server_set_port(SpiceServer *s, int port);
-
-/* @ws_port: -1 for don't set, otherwise in [1,65535] port to listen
- *           for unencrypted websocket connections.
- * @wss_port: -1 for don't set, otherwise in [1,65535] port to listen
- *           for encrypted websocket connections.
- */
-int spice_server_set_ws_ports(SpiceServer *s, int ws_port, int wss_port);
 void spice_server_set_addr(SpiceServer *s, const char *addr, int flags);
 int spice_server_set_listen_socket_fd(SpiceServer *s, int listen_fd);
 int spice_server_set_exit_on_disconnect(SpiceServer *s, int flag);
