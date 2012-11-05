@@ -921,7 +921,6 @@ typedef struct RedWorker {
     RedSurface surfaces[NUM_SURFACES];
     uint32_t n_surfaces;
     SpiceImageSurfaces image_surfaces;
-    uint32_t primary_surface_generation;
 
     MonitorsConfig *monitors_config;
 
@@ -9766,23 +9765,12 @@ static uint64_t display_channel_handle_migrate_data_get_serial(
     return migrate_data->message_serial;
 }
 
-static int display_channel_client_restore_surface(DisplayChannelClient *dcc, uint32_t surface_id)
+static void display_channel_client_restore_surface(DisplayChannelClient *dcc, uint32_t surface_id)
 {
-    if (surface_id == 0) {
-        if (dcc->common.worker->primary_surface_generation <= 1) {
-            dcc->surface_client_created[surface_id] = TRUE;
-            return TRUE;
-        } else {
-            /* red_create_surface_item already updated the client */
-            return FALSE;
-        }
-    } else {
-        /* we don't process commands till we receive the migration data, thus,
-         * we should have not created any off-screen surface */
-        spice_assert(!dcc->surface_client_created[surface_id]);
-        dcc->surface_client_created[surface_id] = TRUE;
-        return TRUE;
-    }
+    /* we don't process commands till we receive the migration data, thus,
+     * we should have not sent any surface to the client. */
+    spice_assert(!dcc->surface_client_created[surface_id]);
+    dcc->surface_client_created[surface_id] = TRUE;
 }
 
 static void display_channel_client_restore_surfaces_lossless(DisplayChannelClient *dcc,
@@ -9806,21 +9794,19 @@ static void display_channel_client_restore_surfaces_lossy(DisplayChannelClient *
     spice_debug(NULL);
     for (i = 0; i < mig_surfaces->num_surfaces; i++) {
         uint32_t surface_id = mig_surfaces->surfaces[i].id;
+        SpiceMigrateDataRect *mig_lossy_rect;
+        SpiceRect lossy_rect;
 
-        if (display_channel_client_restore_surface(dcc, surface_id)) {
-            SpiceMigrateDataRect *mig_lossy_rect;
-            SpiceRect lossy_rect;
+        display_channel_client_restore_surface(dcc, surface_id);
+        spice_assert(dcc->surface_client_created[surface_id]);
 
-            spice_assert(dcc->surface_client_created[surface_id]);
-
-            mig_lossy_rect = &mig_surfaces->surfaces[i].lossy_rect;
-            lossy_rect.left = mig_lossy_rect->left;
-            lossy_rect.top = mig_lossy_rect->top;
-            lossy_rect.right = mig_lossy_rect->right;
-            lossy_rect.bottom = mig_lossy_rect->bottom;
-            region_init(&dcc->surface_client_lossy_region[surface_id]);
-            region_add(&dcc->surface_client_lossy_region[surface_id], &lossy_rect);
-        }
+        mig_lossy_rect = &mig_surfaces->surfaces[i].lossy_rect;
+        lossy_rect.left = mig_lossy_rect->left;
+        lossy_rect.top = mig_lossy_rect->top;
+        lossy_rect.right = mig_lossy_rect->right;
+        lossy_rect.bottom = mig_lossy_rect->bottom;
+        region_init(&dcc->surface_client_lossy_region[surface_id]);
+        region_add(&dcc->surface_client_lossy_region[surface_id], &lossy_rect);
     }
 }
 static int display_channel_handle_migrate_data(RedChannelClient *rcc, uint32_t size,
@@ -11041,11 +11027,6 @@ static void dev_create_primary_surface(RedWorker *worker, uint32_t surface_id,
         line_0 -= (int32_t)(surface.stride * (surface.height -1));
     }
 
-    if (!worker->display_channel->common.during_target_migrate) {
-        worker->primary_surface_generation++;
-    } else {
-         worker->primary_surface_generation = 1;
-    }
     red_create_surface(worker, 0, surface.width, surface.height, surface.stride, surface.format,
                        line_0, surface.flags & QXL_SURF_FLAG_KEEP_DATA, TRUE);
     set_monitors_config_to_primary(worker);
