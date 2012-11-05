@@ -102,6 +102,7 @@
 #define CHANNEL_PUSH_SLEEP_DURATION 10000 //micro
 
 #define DISPLAY_CLIENT_TIMEOUT 15000000000ULL //nano
+#define DISPLAY_CLIENT_MIGRATE_DATA_TIMEOUT 10000000000ULL //nano, 10 sec
 #define DISPLAY_CLIENT_RETRY_INTERVAL 10000 //micro
 
 #define DISPLAY_FREE_LIST_DEFAULT_SIZE 128
@@ -4892,13 +4893,7 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
     int n = 0;
     uint64_t start = red_now();
 
-    /* we don't process the command ring if we are at the migration target and we
-     * are expecting migration data. The migration data includes the list
-     * of surfaces that are held by the client. We need to have it before
-     * processing commands in order not to render and send surfaces unnecessarily
-     */
-    if (!worker->running || (worker->display_channel &&
-        red_channel_waits_for_migrate_data(&worker->display_channel->common.base))) {
+    if (!worker->running) {
         *ring_is_empty = TRUE;
         return n;
     }
@@ -11162,6 +11157,37 @@ void handle_dev_stop(void *opaque, void *payload)
     red_wait_outgoing_items(&worker->cursor_channel->common.base);
 }
 
+static int display_channel_wait_for_migrate_data(DisplayChannel *display)
+{
+    uint64_t end_time = red_now() + DISPLAY_CLIENT_MIGRATE_DATA_TIMEOUT;
+    RedChannel *channel = &display->common.base;
+    RedChannelClient *rcc;
+
+    spice_debug(NULL);
+    spice_assert(channel->clients_num == 1);
+
+    rcc = SPICE_CONTAINEROF(ring_get_head(&channel->clients), RedChannelClient, channel_link);
+    spice_assert(red_channel_client_waits_for_migrate_data(rcc));
+
+    for (;;) {
+        red_channel_client_receive(rcc);
+        if (!red_channel_client_is_connected(rcc)) {
+            break;
+        }
+
+        if (!red_channel_client_waits_for_migrate_data(rcc)) {
+            return TRUE;
+        }
+        if (red_now() > end_time) {
+            spice_warning("timeout");
+            red_channel_client_disconnect(rcc);
+            break;
+        }
+        usleep(DISPLAY_CLIENT_RETRY_INTERVAL);
+    }
+    return FALSE;
+}
+
 void handle_dev_start(void *opaque, void *payload)
 {
     RedWorker *worker = opaque;
@@ -11172,6 +11198,9 @@ void handle_dev_start(void *opaque, void *payload)
     }
     if (worker->display_channel) {
         worker->display_channel->common.during_target_migrate = FALSE;
+        if (red_channel_waits_for_migrate_data(&worker->display_channel->common.base)) {
+            display_channel_wait_for_migrate_data(worker->display_channel);
+        }
     }
     worker->running = TRUE;
     guest_set_client_capabilities(worker);
