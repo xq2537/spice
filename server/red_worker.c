@@ -10323,6 +10323,12 @@ static void guest_set_client_capabilities(RedWorker *worker)
         SPICE_DISPLAY_CAP_A8_SURFACE,
     };
 
+    if (worker->qxl->st->qif->base.major_version < 3 ||
+        (worker->qxl->st->qif->base.major_version == 3 &&
+        worker->qxl->st->qif->base.minor_version < 2) ||
+        !worker->qxl->st->qif->set_client_capabilities) {
+        return;
+    }
 #define SET_CAP(a,c)                                                    \
         ((a)[(c) / 8] |= (1 << ((c) % 8)))
 
@@ -10405,11 +10411,7 @@ static void handle_new_display_channel(RedWorker *worker, RedClient *client, Red
     spice_info("jpeg %s", display_channel->enable_jpeg ? "enabled" : "disabled");
     spice_info("zlib-over-glz %s", display_channel->enable_zlib_glz_wrap ? "enabled" : "disabled");
 
-    if (worker->qxl->st->qif->base.major_version == 3 &&
-        worker->qxl->st->qif->base.minor_version >= 2 &&
-        worker->qxl->st->qif->set_client_capabilities) {
-        guest_set_client_capabilities(worker);
-    }
+    guest_set_client_capabilities(worker);
     
     // todo: tune level according to bandwidth
     display_channel->zlib_level = ZLIB_DEFAULT_COMPRESSION_LEVEL;
@@ -11303,11 +11305,7 @@ void handle_dev_display_disconnect(void *opaque, void *payload)
     spice_info("disconnect display client");
     spice_assert(rcc);
 
-    if (worker->qxl->st->qif->base.major_version == 3 &&
-        worker->qxl->st->qif->base.minor_version >= 2 &&
-        worker->qxl->st->qif->set_client_capabilities) {
-        guest_set_client_capabilities(worker);
-    }
+    guest_set_client_capabilities(worker);
 
     red_channel_client_disconnect(rcc);
 }
