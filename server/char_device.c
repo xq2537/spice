@@ -816,12 +816,14 @@ void spice_char_device_wakeup(SpiceCharDeviceState *dev)
 
 void spice_char_device_state_migrate_data_marshall_empty(SpiceMarshaller *m)
 {
-    SpiceMigrateDataCharDevice mig_data;
+    SpiceMigrateDataCharDevice *mig_data;
 
-    memset(&mig_data, 0, sizeof(mig_data));
-    mig_data.version = SPICE_MIGRATE_DATA_CHAR_DEVICE_VERSION;
-    mig_data.connected = FALSE;
-    spice_marshaller_add_ref(m, (uint8_t *)&mig_data, sizeof(SpiceMigrateDataCharDevice));
+    spice_debug(NULL);
+    mig_data = (SpiceMigrateDataCharDevice *)spice_marshaller_reserve_space(m,
+                                                                            sizeof(*mig_data));
+    memset(mig_data, 0, sizeof(*mig_data));
+    mig_data->version = SPICE_MIGRATE_DATA_CHAR_DEVICE_VERSION;
+    mig_data->connected = FALSE;
 }
 
 void spice_char_device_state_migrate_data_marshall(SpiceCharDeviceState *dev,
