@@ -8433,7 +8433,7 @@ static void display_channel_marshall_migrate_data_surfaces(DisplayChannelClient 
     *num_surfaces_created = 0;
     for (i = 0; i < NUM_SURFACES; i++) {
         SpiceRect lossy_rect;
-        SpiceMigrateDataRect lossy_rect_marshall;
+
         if (!dcc->surface_client_created[i]) {
             continue;
         }
@@ -8444,11 +8444,10 @@ static void display_channel_marshall_migrate_data_surfaces(DisplayChannelClient 
             continue;
         }
         region_extents(&dcc->surface_client_lossy_region[i], &lossy_rect);
-        lossy_rect_marshall.left = lossy_rect.left;
-        lossy_rect_marshall.top = lossy_rect.top;
-        lossy_rect_marshall.right = lossy_rect.right;
-        lossy_rect_marshall.bottom = lossy_rect.bottom;
-        spice_marshaller_add_ref(m2, (uint8_t *)&lossy_rect_marshall, sizeof(lossy_rect_marshall));
+        spice_marshaller_add_int32(m2, lossy_rect.left);
+        spice_marshaller_add_int32(m2, lossy_rect.top);
+        spice_marshaller_add_int32(m2, lossy_rect.right);
+        spice_marshaller_add_int32(m2, lossy_rect.bottom);
     }
 }
 
