@@ -73,6 +73,7 @@ typedef struct SpiceCharDeviceWriteBuffer {
     uint32_t buf_size;
     uint32_t buf_used;
     uint32_t token_price;
+    uint32_t refs;
 } SpiceCharDeviceWriteBuffer;
 
 typedef void SpiceCharDeviceMsgToClient;

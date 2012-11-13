@@ -86,6 +86,14 @@ typedef struct SpiceCharDeviceMsgToClientItem {
     SpiceCharDeviceMsgToClient *msg;
 } SpiceCharDeviceMsgToClientItem;
 
+static void spice_char_device_write_buffer_free(SpiceCharDeviceWriteBuffer *buf)
+{
+    if (--buf->refs == 0) {
+        free(buf->buf);
+        free(buf);
+    }
+}
+
 static void write_buffers_queue_free(Ring *write_queue)
 {
     while (!ring_is_empty(write_queue)) {
@@ -94,18 +102,21 @@ static void write_buffers_queue_free(Ring *write_queue)
 
         ring_remove(item);
         buf = SPICE_CONTAINEROF(item, SpiceCharDeviceWriteBuffer, link);
-        free(buf->buf);
-        free(buf);
+        spice_char_device_write_buffer_free(buf);
     }
 }
 
 static void spice_char_device_write_buffer_pool_add(SpiceCharDeviceState *dev,
                                                     SpiceCharDeviceWriteBuffer *buf)
 {
-    buf->buf_used = 0;
-    buf->origin = WRITE_BUFFER_ORIGIN_NONE;
-    buf->client = NULL;
-    ring_add(&dev->write_bufs_pool, &buf->link);
+    if (buf->refs == 1) {
+        buf->buf_used = 0;
+        buf->origin = WRITE_BUFFER_ORIGIN_NONE;
+        buf->client = NULL;
+        ring_add(&dev->write_bufs_pool, &buf->link);
+    } else {
+        --buf->refs;
+    }
 }
 
 static void spice_char_device_client_send_queue_free(SpiceCharDeviceState *dev,
@@ -530,6 +541,7 @@ static SpiceCharDeviceWriteBuffer *__spice_char_device_write_buffer_get(SpiceCha
     }
 
     ret->token_price = migrated_data_tokens ? migrated_data_tokens : 1;
+    ret->refs = 1;
     return ret;
 error:
     ring_add(&dev->write_bufs_pool, &ret->link);
@@ -542,6 +554,15 @@ SpiceCharDeviceWriteBuffer *spice_char_device_write_buffer_get(SpiceCharDeviceSt
 {
    return  __spice_char_device_write_buffer_get(dev, client, size, 0);
 }
+
+static SpiceCharDeviceWriteBuffer *spice_char_device_write_buffer_ref(SpiceCharDeviceWriteBuffer *write_buf)
+{
+    spice_assert(write_buf);
+
+    write_buf->refs++;
+    return write_buf;
+}
+
 void spice_char_device_write_buffer_add(SpiceCharDeviceState *dev,
                                         SpiceCharDeviceWriteBuffer *write_buf)
 {
@@ -677,7 +698,7 @@ void spice_char_device_state_destroy(SpiceCharDeviceState *char_dev)
         spice_char_device_client_free(char_dev, dev_client);
     }
     char_dev->running = FALSE;
- 
+
     spice_char_device_state_unref(char_dev);
 }
 
@@ -826,6 +847,13 @@ void spice_char_device_state_migrate_data_marshall_empty(SpiceMarshaller *m)
     mig_data->connected = FALSE;
 }
 
+static void migrate_data_marshaller_write_buffer_free(uint8_t *data, void *opaque)
+{
+    SpiceCharDeviceWriteBuffer *write_buf = (SpiceCharDeviceWriteBuffer *)opaque;
+
+    spice_char_device_write_buffer_free(write_buf);
+}
+
 void spice_char_device_state_migrate_data_marshall(SpiceCharDeviceState *dev,
                                                    SpiceMarshaller *m)
 {
@@ -857,8 +885,10 @@ void spice_char_device_state_migrate_data_marshall(SpiceCharDeviceState *dev,
     if (dev->cur_write_buf) {
         uint32_t buf_remaining = dev->cur_write_buf->buf + dev->cur_write_buf->buf_used -
                                  dev->cur_write_buf_pos;
-
-        spice_marshaller_add_ref(m2, dev->cur_write_buf_pos, buf_remaining);
+        spice_marshaller_add_ref_full(m2, dev->cur_write_buf_pos, buf_remaining,
+                                      migrate_data_marshaller_write_buffer_free,
+                                      spice_char_device_write_buffer_ref(dev->cur_write_buf)
+                                      );
         *write_to_dev_size_ptr += buf_remaining;
         if (dev->cur_write_buf->origin == WRITE_BUFFER_ORIGIN_CLIENT) {
             spice_assert(dev->cur_write_buf->client == client_state->client);
@@ -870,7 +900,10 @@ void spice_char_device_state_migrate_data_marshall(SpiceCharDeviceState *dev,
         SpiceCharDeviceWriteBuffer *write_buf;
 
         write_buf = SPICE_CONTAINEROF(item, SpiceCharDeviceWriteBuffer, link);
-        spice_marshaller_add_ref(m2, write_buf->buf, write_buf->buf_used);
+        spice_marshaller_add_ref_full(m2, write_buf->buf, write_buf->buf_used,
+                                      migrate_data_marshaller_write_buffer_free,
+                                      spice_char_device_write_buffer_ref(write_buf)
+                                      );
         *write_to_dev_size_ptr += write_buf->buf_used;
         if (write_buf->origin == WRITE_BUFFER_ORIGIN_CLIENT) {
             spice_assert(write_buf->client == client_state->client);
