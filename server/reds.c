@@ -1171,16 +1171,20 @@ void reds_marshall_migrate_data(SpiceMarshaller *m)
     spice_marshaller_add_uint32(m, SPICE_MIGRATE_DATA_MAIN_VERSION);
 
     if (!vdagent) {
+        uint8_t *null_agent_mig_data;
+
         spice_assert(!agent_state->base); /* MSG_AGENT_CONNECTED_TOKENS is supported by the client
                                              (see spice_server_migrate_connect), so SpiceCharDeviceState
                                              is destroyed when the agent is disconnected and
                                              there is no need to track the client tokens
                                              (see reds_reset_vdp) */
         spice_char_device_state_migrate_data_marshall_empty(m);
-        spice_marshaller_add_ref(m,
-                                 (uint8_t *)&mig_data + sizeof(SpiceMigrateDataCharDevice),
-                                 sizeof(SpiceMigrateDataMain) - sizeof(SpiceMigrateDataCharDevice)
-                                 );
+        null_agent_mig_data = spice_marshaller_reserve_space(m,
+                                                             sizeof(SpiceMigrateDataMain) -
+                                                             sizeof(SpiceMigrateDataCharDevice));
+        memset(null_agent_mig_data,
+               0,
+               sizeof(SpiceMigrateDataMain) - sizeof(SpiceMigrateDataCharDevice));
         return;
     }
 
@@ -1196,7 +1200,7 @@ void reds_marshall_migrate_data(SpiceMarshaller *m)
 
         mig_data.agent2client.msg_header_done = FALSE;
         mig_data.agent2client.msg_header_partial_len = 0;
-        spice_assert(!agent_state->read_filter.msg_data_to_read );
+        spice_assert(!agent_state->read_filter.msg_data_to_read);
     } else {
         mig_data.agent2client.chunk_header_size = sizeof(VDIChunkHeader);
         mig_data.agent2client.chunk_header.size = agent_state->message_recive_len;
@@ -1214,14 +1218,14 @@ void reds_marshall_migrate_data(SpiceMarshaller *m)
         }
     }
     spice_marshaller_add_uint32(m, mig_data.agent2client.chunk_header_size);
-    spice_marshaller_add_ref(m,
-                             (uint8_t *)&mig_data.agent2client.chunk_header,
-                             sizeof(VDIChunkHeader));
+    spice_marshaller_add(m,
+                         (uint8_t *)&mig_data.agent2client.chunk_header,
+                         sizeof(VDIChunkHeader));
     spice_marshaller_add_uint8(m, mig_data.agent2client.msg_header_done);
     spice_marshaller_add_uint32(m, mig_data.agent2client.msg_header_partial_len);
     m2 = spice_marshaller_get_ptr_submarshaller(m, 0);
-    spice_marshaller_add_ref(m2, agent_state->current_read_buf->data,
-                             mig_data.agent2client.msg_header_partial_len);
+    spice_marshaller_add(m2, agent_state->current_read_buf->data,
+                         mig_data.agent2client.msg_header_partial_len);
     spice_marshaller_add_uint32(m, mig_data.agent2client.msg_remaining);
     spice_marshaller_add_uint8(m, mig_data.agent2client.msg_filter_result);
 
