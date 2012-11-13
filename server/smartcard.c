@@ -508,7 +508,7 @@ static void smartcard_channel_send_migrate_data(RedChannelClient *rcc,
         spice_marshaller_add_uint8(m, state->reader_added);
         spice_marshaller_add_uint32(m, state->buf_used);
         m2 = spice_marshaller_get_ptr_submarshaller(m, 0);
-        spice_marshaller_add_ref(m2, state->buf, state->buf_used);
+        spice_marshaller_add(m2, state->buf, state->buf_used);
         spice_debug("reader added %d partial read size %u", state->reader_added, state->buf_used);
     }
 }
