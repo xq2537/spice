@@ -2068,7 +2068,6 @@ static void red_clear_surface_drawables_from_pipe(DisplayChannelClient *dcc, int
 }
 
 static void red_wait_outgoing_item(RedChannelClient *rcc);
-static void red_wait_outgoing_items(RedChannel *channel);
 
 static void red_clear_surface_drawables_from_pipes(RedWorker *worker, int surface_id,
     int force, int wait_for_outgoing_item)
@@ -10605,37 +10604,39 @@ static void red_wait_outgoing_item(RedChannelClient *rcc)
     }
 }
 
-static void rcc_shutdown_if_blocked(RedChannelClient *rcc)
+static void rcc_shutdown_if_pending_send(RedChannelClient *rcc)
 {
-    if (red_channel_client_blocked(rcc)) {
+    if (red_channel_client_blocked(rcc) || rcc->pipe_size > 0) {
         red_channel_client_shutdown(rcc);
     } else {
         spice_assert(red_channel_client_no_item_being_sent(rcc));
     }
 }
 
-static void red_wait_outgoing_items(RedChannel *channel)
+static void red_wait_all_sent(RedChannel *channel)
 {
     uint64_t end_time;
-    int blocked;
-
-    if (!red_channel_any_blocked(channel)) {
-        return;
-    }
+    uint32_t max_pipe_size;
+    int blocked = FALSE;
 
     end_time = red_now() + DETACH_TIMEOUT;
-    spice_info("blocked");
 
-    do {
+    red_channel_push(channel);
+    while (((max_pipe_size = red_channel_max_pipe_size(channel)) || 
+           (blocked = red_channel_any_blocked(channel))) &&
+           red_now() < end_time) {
+        spice_debug("pipe-size %u blocked %d", max_pipe_size, blocked);
         usleep(DETACH_SLEEP_DURATION);
         red_channel_receive(channel);
         red_channel_send(channel);
-    } while ((blocked = red_channel_any_blocked(channel)) && red_now() < end_time);
+        red_channel_push(channel);
+    }
 
-    if (blocked) {
-        spice_warning("timeout");
-        red_channel_apply_clients(channel, rcc_shutdown_if_blocked);
-    } else {
+    if (max_pipe_size || blocked) {
+        spice_printerr("timeout: pending out messages exist (pipe-size %u, blocked %d)",
+                       max_pipe_size, blocked);
+        red_channel_apply_clients(channel, rcc_shutdown_if_pending_send);
+    } else { 
         spice_assert(red_channel_no_item_being_sent(channel));
     }
 }
@@ -10843,7 +10844,7 @@ static inline void red_cursor_reset(RedWorker *worker)
         if (!worker->cursor_channel->common.during_target_migrate) {
             red_pipes_add_verb(&worker->cursor_channel->common.base, SPICE_MSG_CURSOR_RESET);
         }
-        red_wait_outgoing_items(&worker->cursor_channel->common.base);
+        red_wait_all_sent(&worker->cursor_channel->common.base);
     }
 }
 
@@ -11108,8 +11109,6 @@ static void dev_flush_surfaces(RedWorker *worker)
 {
     flush_all_qxl_commands(worker);
     flush_all_surfaces(worker);
-    red_wait_outgoing_items(&worker->display_channel->common.base);
-    red_wait_outgoing_items(&worker->cursor_channel->common.base);
 }
 
 void handle_dev_flush_surfaces(void *opaque, void *payload)
@@ -11135,8 +11134,13 @@ void handle_dev_stop(void *opaque, void *payload)
     worker->running = FALSE;
     red_display_clear_glz_drawables(worker->display_channel);
     flush_all_surfaces(worker);
-    red_wait_outgoing_items(&worker->display_channel->common.base);
-    red_wait_outgoing_items(&worker->cursor_channel->common.base);
+    /* todo: when the waiting is expected to take long (slow connection and
+     * overloaded pipe), don't wait, and in case of migration, 
+     * purge the pipe, send destroy_all_surfaces
+     * to the client (there is no such message right now), and start
+     * from scratch on the destination side */
+    red_wait_all_sent(&worker->display_channel->common.base);
+    red_wait_all_sent(&worker->cursor_channel->common.base);
 }
 
 static int display_channel_wait_for_migrate_data(DisplayChannel *display)
