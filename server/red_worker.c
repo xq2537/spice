@@ -1597,12 +1597,24 @@ static uint8_t *common_alloc_recv_buf(RedChannelClient *rcc, uint16_t type, uint
 {
     CommonChannel *common = SPICE_CONTAINEROF(rcc->channel, CommonChannel, base);
 
+    /* SPICE_MSGC_MIGRATE_DATA is the only client message whose size is dynamic */
+    if (type == SPICE_MSGC_MIGRATE_DATA) {
+        return spice_malloc(size);
+    }
+
+    if (size > RECIVE_BUF_SIZE) {
+        spice_critical("unexpected message size %u (max is %d)", size, RECIVE_BUF_SIZE);
+        return NULL;
+    }
     return common->recv_buf;
 }
 
 static void common_release_recv_buf(RedChannelClient *rcc, uint16_t type, uint32_t size,
                                     uint8_t* msg)
 {
+    if (type == SPICE_MSGC_MIGRATE_DATA) {
+        free(msg);
+    }
 }
 
 #define CLIENT_PIXMAPS_CACHE
