@@ -689,6 +689,9 @@ void spice_char_device_state_destroy(SpiceCharDeviceState *char_dev)
     core->timer_remove(char_dev->write_to_dev_timer);
     write_buffers_queue_free(&char_dev->write_queue);
     write_buffers_queue_free(&char_dev->write_bufs_pool);
+    if (char_dev->cur_write_buf) {
+        spice_char_device_write_buffer_free(char_dev->cur_write_buf);
+    }
 
     while (!ring_is_empty(&char_dev->clients)) {
         RingItem *item = ring_get_tail(&char_dev->clients);
