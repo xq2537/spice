@@ -238,6 +238,9 @@ if test "x$enable_smartcard" = "xyes"; then
 fi
 
 
+PKG_CHECK_MODULES([GLIB2], [glib-2.0 >= 2.22])
+SPICE_REQUIRES+=" glib-2.0 >= 2.22"
+
 PKG_CHECK_MODULES(PIXMAN, pixman-1 >= 0.17.7)
 AC_SUBST(PIXMAN_CFLAGS)
 AC_SUBST(PIXMAN_LIBS)
