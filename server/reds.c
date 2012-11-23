@@ -2994,8 +2994,6 @@ static int reds_init_socket(const char *addr, int portnr, int family)
     static const int on=1, off=0;
     struct addrinfo ai,*res,*e;
     char port[33];
-    char uaddr[INET6_ADDRSTRLEN+1];
-    char uport[33];
     int slisten,rc;
 
     memset(&ai,0, sizeof(ai));
@@ -3012,9 +3010,6 @@ static int reds_init_socket(const char *addr, int portnr, int family)
     }
 
     for (e = res; e != NULL; e = e->ai_next) {
-        getnameinfo((struct sockaddr*)e->ai_addr,e->ai_addrlen,
-                    uaddr,INET6_ADDRSTRLEN, uport,32,
-                    NI_NUMERICHOST | NI_NUMERICSERV);
         slisten = socket(e->ai_family, e->ai_socktype, e->ai_protocol);
         if (slisten < 0) {
             continue;
@@ -3029,6 +3024,16 @@ static int reds_init_socket(const char *addr, int portnr, int family)
         }
 #endif
         if (bind(slisten, e->ai_addr, e->ai_addrlen) == 0) {
+            char uaddr[INET6_ADDRSTRLEN+1];
+            char uport[33];
+            rc = getnameinfo((struct sockaddr*)e->ai_addr,e->ai_addrlen,
+                             uaddr,INET6_ADDRSTRLEN, uport,32,
+                             NI_NUMERICHOST | NI_NUMERICSERV);
+            if (rc == 0) {
+                spice_info("bound to %s:%s", uaddr, uport);
+            } else {
+                spice_info("cannot resolve address spice-server is bound to");
+            }
             goto listen;
         }
         close(slisten);
