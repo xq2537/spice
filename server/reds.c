@@ -3981,7 +3981,7 @@ SPICE_GNUC_VISIBLE int spice_server_set_port(SpiceServer *s, int port)
 SPICE_GNUC_VISIBLE void spice_server_set_addr(SpiceServer *s, const char *addr, int flags)
 {
     spice_assert(reds == s);
-    strncpy(spice_addr, addr, sizeof(spice_addr));
+    strncpy(spice_addr, addr, sizeof(spice_addr)-1);
     if (flags & SPICE_ADDR_FLAG_IPV4_ONLY) {
         spice_family = PF_INET;
     }
@@ -4072,7 +4072,7 @@ SPICE_GNUC_VISIBLE int spice_server_set_ticket(SpiceServer *s,
         taTicket.expiration_time = now + lifetime;
     }
     if (passwd != NULL) {
-        strncpy(taTicket.password, passwd, sizeof(taTicket.password));
+        strncpy(taTicket.password, passwd, sizeof(taTicket.password)-1);
     } else {
         memset(taTicket.password, 0, sizeof(taTicket.password));
         taTicket.expiration_time = 0;
