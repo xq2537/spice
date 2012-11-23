@@ -47,6 +47,8 @@
 #include <sasl/sasl.h>
 #endif
 
+#include <glib.h>
+
 #include <spice/protocol.h>
 #include <spice/vd_agent.h>
 #include <spice/stats.h>
@@ -352,7 +354,7 @@ StatNodeRef stat_add_node(StatNodeRef parent, const char *name, int visible)
     spice_assert(!(node->flags & SPICE_STAT_NODE_FLAG_ENABLED));
     node->value = 0;
     node->flags = SPICE_STAT_NODE_FLAG_ENABLED | (visible ? SPICE_STAT_NODE_FLAG_VISIBLE : 0);
-    strncpy(node->name, name, sizeof(node->name));
+    g_strlcpy(node->name, name, sizeof(node->name));
     insert_stat_node(parent, ref);
     pthread_mutex_unlock(&reds->stat_lock);
     return ref;
@@ -3982,7 +3984,7 @@ SPICE_GNUC_VISIBLE int spice_server_set_port(SpiceServer *s, int port)
 SPICE_GNUC_VISIBLE void spice_server_set_addr(SpiceServer *s, const char *addr, int flags)
 {
     spice_assert(reds == s);
-    strncpy(spice_addr, addr, sizeof(spice_addr)-1);
+    g_strlcpy(spice_addr, addr, sizeof(spice_addr));
     if (flags & SPICE_ADDR_FLAG_IPV4_ONLY) {
         spice_family = PF_INET;
     }
@@ -4073,7 +4075,7 @@ SPICE_GNUC_VISIBLE int spice_server_set_ticket(SpiceServer *s,
         taTicket.expiration_time = now + lifetime;
     }
     if (passwd != NULL) {
-        strncpy(taTicket.password, passwd, sizeof(taTicket.password)-1);
+        g_strlcpy(taTicket.password, passwd, sizeof(taTicket.password));
     } else {
         memset(taTicket.password, 0, sizeof(taTicket.password));
         taTicket.expiration_time = 0;
@@ -4097,24 +4099,24 @@ SPICE_GNUC_VISIBLE int spice_server_set_tls(SpiceServer *s, int port,
     memset(&ssl_parameters, 0, sizeof(ssl_parameters));
 
     spice_secure_port = port;
-    strncpy(ssl_parameters.ca_certificate_file, ca_cert_file,
-            sizeof(ssl_parameters.ca_certificate_file)-1);
-    strncpy(ssl_parameters.certs_file, certs_file,
-            sizeof(ssl_parameters.certs_file)-1);
-    strncpy(ssl_parameters.private_key_file, private_key_file,
-            sizeof(ssl_parameters.private_key_file)-1);
+    g_strlcpy(ssl_parameters.ca_certificate_file, ca_cert_file,
+              sizeof(ssl_parameters.ca_certificate_file));
+    g_strlcpy(ssl_parameters.certs_file, certs_file,
+              sizeof(ssl_parameters.certs_file));
+    g_strlcpy(ssl_parameters.private_key_file, private_key_file,
+              sizeof(ssl_parameters.private_key_file));
 
     if (key_passwd) {
-        strncpy(ssl_parameters.keyfile_password, key_passwd,
-                sizeof(ssl_parameters.keyfile_password)-1);
+        g_strlcpy(ssl_parameters.keyfile_password, key_passwd,
+                  sizeof(ssl_parameters.keyfile_password));
     }
     if (ciphersuite) {
-        strncpy(ssl_parameters.ciphersuite, ciphersuite,
-                sizeof(ssl_parameters.ciphersuite)-1);
+        g_strlcpy(ssl_parameters.ciphersuite, ciphersuite,
+                  sizeof(ssl_parameters.ciphersuite));
     }
     if (dh_key_file) {
-        strncpy(ssl_parameters.dh_key_file, dh_key_file,
-                sizeof(ssl_parameters.dh_key_file)-1);
+        g_strlcpy(ssl_parameters.dh_key_file, dh_key_file,
+                  sizeof(ssl_parameters.dh_key_file));
     }
     return 0;
 }
