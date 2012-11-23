@@ -2973,6 +2973,7 @@ static int reds_init_socket(const char *addr, int portnr, int family)
     if (rc != 0) {
         spice_warning("getaddrinfo(%s,%s): %s", addr, port,
                       gai_strerror(rc));
+        return -1;
     }
 
     for (e = res; e != NULL; e = e->ai_next) {
