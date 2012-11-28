@@ -8607,20 +8607,20 @@ static void red_marshall_image(RedChannelClient *rcc, SpiceMarshaller *m, ImageI
 
     comp_mode = display_channel->common.worker->image_compression;
 
-    if ((comp_mode == SPICE_IMAGE_COMPRESS_AUTO_LZ) ||
-        (comp_mode == SPICE_IMAGE_COMPRESS_AUTO_GLZ)) {
+    if (((comp_mode == SPICE_IMAGE_COMPRESS_AUTO_LZ) ||
+        (comp_mode == SPICE_IMAGE_COMPRESS_AUTO_GLZ)) && !_stride_is_extra(&bitmap)) {
+
         if (BITMAP_FMT_HAS_GRADUALITY(item->image_format)) {
-            if (!_stride_is_extra(&bitmap)) {
-                BitmapGradualType grad_level;
-                grad_level = _get_bitmap_graduality_level(display_channel->common.worker,
-                                                          &bitmap,
-                                                          worker->mem_slots.internal_groupslot_id);
-                if (grad_level == BITMAP_GRADUAL_HIGH) {
-                    // if we use lz for alpha, the stride can't be extra
-                    lossy_comp = display_channel->enable_jpeg && item->can_lossy;
-                } else {
-                    lz_comp = TRUE;
-                }
+            BitmapGradualType grad_level;
+
+            grad_level = _get_bitmap_graduality_level(display_channel->common.worker,
+                                                      &bitmap,
+                                                      worker->mem_slots.internal_groupslot_id);
+            if (grad_level == BITMAP_GRADUAL_HIGH) {
+                // if we use lz for alpha, the stride can't be extra
+                lossy_comp = display_channel->enable_jpeg && item->can_lossy;
+            } else {
+                lz_comp = TRUE;
             }
         } else {
             lz_comp = TRUE;
