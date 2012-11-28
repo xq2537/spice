@@ -5065,7 +5065,7 @@ static ImageItem *red_add_surface_area_image(DisplayChannelClient *dcc, int surf
     width = area->right - area->left;
     height = area->bottom - area->top;
     bpp = SPICE_SURFACE_FMT_DEPTH(surface->context.format) / 8;
-    stride = SPICE_ALIGN(width * bpp, 4);
+    stride = width * bpp;
 
     item = (ImageItem *)spice_malloc_n_m(height, stride, sizeof(ImageItem));
 
