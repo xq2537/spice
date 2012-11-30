@@ -474,7 +474,11 @@ static void reds_reset_vdp(void)
     /* Reset read filter to start with clean state when the agent reconnects */
     agent_msg_filter_init(&state->read_filter, agent_copypaste, TRUE);
     /* Throw away pending chunks from the current (if any) and future
-       messages written by the client */
+     * messages written by the client.
+     * TODO: client should clear its agent messages queue when the agent
+     * is disconnect. Currently, when and agent gets disconnected and reconnected,
+     * messeges that were directed to the previous instance of the agent continues
+     * to be sent from the client. This TODO will require server, protocol, and client changes */
     state->write_filter.result = AGENT_MSG_FILTER_DISCARD;
     state->write_filter.discard_all = TRUE;
     state->client_agent_started = FALSE;
@@ -996,8 +1000,15 @@ uint8_t *reds_get_agent_data_buffer(MainChannelClient *mcc, size_t size)
     VDIPortState *dev_state = &reds->agent_state;
     RedClient *client;
 
-    if (!dev_state->base) {
-        return NULL;
+    if (!dev_state->client_agent_started) {
+        /*
+         * agent got disconnected, and possibly got reconnected, but we still can receive
+         * msgs that are addressed to the agent's old instance, in case they were
+         * sent by the client before it received the AGENT_DISCONNECTED msg.
+         * In such case, we will receive and discard the msgs (reds_reset_vdp takes care
+         * of setting state->write_filter.result = AGENT_MSG_FILTER_DISCARD).
+         */
+        return spice_malloc(size);
     }
 
     spice_assert(dev_state->recv_from_client_buf == NULL);
@@ -1013,8 +1024,12 @@ void reds_release_agent_data_buffer(uint8_t *buf)
 {
     VDIPortState *dev_state = &reds->agent_state;
 
-    spice_assert(buf == dev_state->recv_from_client_buf->buf + sizeof(VDIChunkHeader));
+    if (!dev_state->recv_from_client_buf) {
+        free(buf);
+        return;
+    }
 
+    spice_assert(buf == dev_state->recv_from_client_buf->buf + sizeof(VDIChunkHeader));
     if (!dev_state->recv_from_client_buf_pushed) {
         spice_char_device_write_buffer_release(reds->agent_state.base,
                                                dev_state->recv_from_client_buf);
@@ -1064,8 +1079,6 @@ void reds_on_main_agent_data(MainChannelClient *mcc, void *message, size_t size)
     VDIChunkHeader *header;
     int res;
 
-    spice_assert(message == reds->agent_state.recv_from_client_buf->buf + sizeof(VDIChunkHeader));
-
     res = agent_msg_filter_process_data(&reds->agent_state.write_filter,
                                         message, size);
     switch (res) {
@@ -1080,6 +1093,9 @@ void reds_on_main_agent_data(MainChannelClient *mcc, void *message, size_t size)
         reds_disconnect();
         return;
     }
+
+    spice_assert(reds->agent_state.recv_from_client_buf);
+    spice_assert(message == reds->agent_state.recv_from_client_buf->buf + sizeof(VDIChunkHeader));
     // TODO - start tracking agent data per channel
     header =  (VDIChunkHeader *)dev_state->recv_from_client_buf->buf;
     header->port = VDP_CLIENT_PORT;
