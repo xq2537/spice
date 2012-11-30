@@ -3541,6 +3541,7 @@ SPICE_GNUC_VISIBLE void spice_server_char_device_wakeup(SpiceCharDeviceInstance*
 #define SUBTYPE_VDAGENT "vdagent"
 #define SUBTYPE_SMARTCARD "smartcard"
 #define SUBTYPE_USBREDIR "usbredir"
+#define SUBTYPE_PORT "port"
 
 const char *spice_server_char_device_recognized_subtypes_list[] = {
     SUBTYPE_VDAGENT,
@@ -3614,6 +3615,10 @@ static int spice_server_char_device_add_interface(SpiceServer *s,
     else if (strcmp(char_device->subtype, SUBTYPE_USBREDIR) == 0) {
         dev_state = spicevmc_device_connect(char_device, SPICE_CHANNEL_USBREDIR);
     }
+    else if (strcmp(char_device->subtype, SUBTYPE_PORT) == 0) {
+        dev_state = spicevmc_device_connect(char_device, SPICE_CHANNEL_PORT);
+    }
+
     if (dev_state) {
         spice_assert(char_device->st);
         /* setting the char_device state to "started" for backward compatibily with
@@ -3645,9 +3650,13 @@ static void spice_server_char_device_remove_interface(SpiceBaseInstance *sin)
         smartcard_device_disconnect(char_device);
     }
 #endif
-    else if (strcmp(char_device->subtype, SUBTYPE_USBREDIR) == 0) {
+    else if (strcmp(char_device->subtype, SUBTYPE_USBREDIR) == 0 ||
+             strcmp(char_device->subtype, SUBTYPE_PORT) == 0) {
         spicevmc_device_disconnect(char_device);
+    } else {
+        spice_warning("failed to remove char device %s", char_device->subtype);
     }
+
     char_device->st = NULL;
 }
 

@@ -388,7 +388,7 @@ void spice_server_record_set_mute(SpiceRecordInstance *sin, uint8_t mute);
 
 #define SPICE_INTERFACE_CHAR_DEVICE "char_device"
 #define SPICE_INTERFACE_CHAR_DEVICE_MAJOR 1
-#define SPICE_INTERFACE_CHAR_DEVICE_MINOR 1
+#define SPICE_INTERFACE_CHAR_DEVICE_MINOR 2
 typedef struct SpiceCharDeviceInterface SpiceCharDeviceInterface;
 typedef struct SpiceCharDeviceInstance SpiceCharDeviceInstance;
 typedef struct SpiceCharDeviceState SpiceCharDeviceState;
@@ -399,15 +399,18 @@ struct SpiceCharDeviceInterface {
     void (*state)(SpiceCharDeviceInstance *sin, int connected);
     int (*write)(SpiceCharDeviceInstance *sin, const uint8_t *buf, int len);
     int (*read)(SpiceCharDeviceInstance *sin, uint8_t *buf, int len);
+    void (*event)(SpiceCharDeviceInstance *sin, uint8_t event);
 };
 
 struct SpiceCharDeviceInstance {
     SpiceBaseInstance base;
     const char* subtype;
     SpiceCharDeviceState *st;
+    const char* portname;
 };
 
 void spice_server_char_device_wakeup(SpiceCharDeviceInstance *sin);
+void spice_server_port_event(SpiceCharDeviceInstance *char_device, uint8_t event);
 const char** spice_server_char_device_recognized_subtypes(void);
 
 /* spice server setup */

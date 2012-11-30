@@ -130,3 +130,8 @@ SPICE_SERVER_0.11.4 {
 global:
     spice_server_set_exit_on_disconnect;
 } SPICE_SERVER_0.11.2;
+
+SPICE_SERVER_0.12.2 {
+global:
+    spice_server_port_event;
+} SPICE_SERVER_0.11.4;

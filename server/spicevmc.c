@@ -28,6 +28,8 @@
 #include <netinet/in.h> // IPPROTO_TCP
 #include <netinet/tcp.h> // TCP_NODELAY
 
+#include "common/generated_server_marshallers.h"
+
 #include "char_device.h"
 #include "red_channel.h"
 #include "reds.h"
@@ -56,11 +58,25 @@ typedef struct SpiceVmcState {
     SpiceCharDeviceInstance *chardev_sin;
     SpiceVmcPipeItem *pipe_item;
     SpiceCharDeviceWriteBuffer *recv_from_client_buf;
+    uint8_t port_opened;
 } SpiceVmcState;
+
+typedef struct PortInitPipeItem {
+    PipeItem base;
+    char* name;
+    uint8_t opened;
+} PortInitPipeItem;
+
+typedef struct PortEventPipeItem {
+    PipeItem base;
+    uint8_t event;
+} PortEventPipeItem;
 
 enum {
     PIPE_ITEM_TYPE_SPICEVMC_DATA = PIPE_ITEM_TYPE_CHANNEL_BASE,
     PIPE_ITEM_TYPE_SPICEVMC_MIGRATE_DATA,
+    PIPE_ITEM_TYPE_PORT_INIT,
+    PIPE_ITEM_TYPE_PORT_EVENT,
 };
 
 static SpiceVmcPipeItem *spicevmc_pipe_item_ref(SpiceVmcPipeItem *item)
@@ -135,6 +151,27 @@ static void spicevmc_chardev_send_msg_to_client(SpiceCharDeviceMsgToClient *msg,
     spice_assert(state->rcc->client == client);
     spicevmc_pipe_item_ref(vmc_msg);
     red_channel_client_pipe_add_push(state->rcc, &vmc_msg->base);
+}
+
+static void spicevmc_port_send_init(RedChannelClient *rcc)
+{
+    SpiceVmcState *state = SPICE_CONTAINEROF(rcc->channel, SpiceVmcState, channel);
+    SpiceCharDeviceInstance *sin = state->chardev_sin;
+    PortInitPipeItem *item = spice_malloc(sizeof(PortInitPipeItem));
+
+    red_channel_pipe_item_init(rcc->channel, &item->base, PIPE_ITEM_TYPE_PORT_INIT);
+    item->name = strdup(sin->portname);
+    item->opened = state->port_opened;
+    red_channel_client_pipe_add_push(rcc, &item->base);
+}
+
+static void spicevmc_port_send_event(RedChannelClient *rcc, uint8_t event)
+{
+    PortEventPipeItem *item = spice_malloc(sizeof(PortEventPipeItem));
+
+    red_channel_pipe_item_init(rcc->channel, &item->base, PIPE_ITEM_TYPE_PORT_EVENT);
+    item->event = event;
+    red_channel_client_pipe_add_push(rcc, &item->base);
 }
 
 static void spicevmc_char_dev_send_tokens_to_client(RedClient *client,
@@ -245,16 +282,32 @@ static int spicevmc_red_channel_client_handle_message(RedChannelClient *rcc,
                                                       uint8_t *msg)
 {
     SpiceVmcState *state;
+    SpiceCharDeviceInstance *sin;
+    SpiceCharDeviceInterface *sif;
 
     state = spicevmc_red_channel_client_get_state(rcc);
-    if (type != SPICE_MSGC_SPICEVMC_DATA) {
+    sin = state->chardev_sin;
+    sif = SPICE_CONTAINEROF(sin->base.sif, SpiceCharDeviceInterface, base);
+
+    switch (type) {
+    case SPICE_MSGC_SPICEVMC_DATA:
+        spice_assert(state->recv_from_client_buf->buf == msg);
+        state->recv_from_client_buf->buf_used = size;
+        spice_char_device_write_buffer_add(state->chardev_st, state->recv_from_client_buf);
+        state->recv_from_client_buf = NULL;
+        break;
+    case SPICE_MSGC_PORT_EVENT:
+        if (size != sizeof(uint8_t)) {
+            spice_warning("bad port event message size");
+            return FALSE;
+        }
+        if (sif->base.minor_version >= 2 && sif->event != NULL)
+            sif->event(sin, *msg);
+        break;
+    default:
         return red_channel_client_handle_message(rcc, size, type, msg);
     }
 
-    spice_assert(state->recv_from_client_buf->buf == msg);
-    state->recv_from_client_buf->buf_used = size;
-    spice_char_device_write_buffer_add(state->chardev_st, state->recv_from_client_buf);
-    state->recv_from_client_buf = NULL;
     return TRUE;
 }
 
@@ -266,16 +319,23 @@ static uint8_t *spicevmc_red_channel_alloc_msg_rcv_buf(RedChannelClient *rcc,
 
     state = SPICE_CONTAINEROF(rcc->channel, SpiceVmcState, channel);
 
-    assert(!state->recv_from_client_buf);
+    switch (type) {
+    case SPICE_MSGC_SPICEVMC_DATA:
+        assert(!state->recv_from_client_buf);
 
-    state->recv_from_client_buf = spice_char_device_write_buffer_get(state->chardev_st,
-                                                                     rcc->client,
-                                                                     size);
-    if (!state->recv_from_client_buf) {
-        spice_error("failed to allocate write buffer");
-        return NULL;
+        state->recv_from_client_buf = spice_char_device_write_buffer_get(state->chardev_st,
+                                                                         rcc->client,
+                                                                         size);
+        if (!state->recv_from_client_buf) {
+            spice_error("failed to allocate write buffer");
+            return NULL;
+        }
+        return state->recv_from_client_buf->buf;
+
+    default:
+        return spice_malloc(size);
     }
-    return state->recv_from_client_buf->buf;
+
 }
 
 static void spicevmc_red_channel_release_msg_rcv_buf(RedChannelClient *rcc,
@@ -287,9 +347,15 @@ static void spicevmc_red_channel_release_msg_rcv_buf(RedChannelClient *rcc,
 
     state = SPICE_CONTAINEROF(rcc->channel, SpiceVmcState, channel);
 
-    if (state->recv_from_client_buf) { /* buffer wasn't pushed to device */
-        spice_char_device_write_buffer_release(state->chardev_st, state->recv_from_client_buf);
-        state->recv_from_client_buf = NULL;
+    switch (type) {
+    case SPICE_MSGC_SPICEVMC_DATA:
+        if (state->recv_from_client_buf) { /* buffer wasn't pushed to device */
+            spice_char_device_write_buffer_release(state->chardev_st, state->recv_from_client_buf);
+            state->recv_from_client_buf = NULL;
+        }
+        break;
+    default:
+        free(msg);
     }
 }
 
@@ -323,6 +389,32 @@ static void spicevmc_red_channel_send_migrate_data(RedChannelClient *rcc,
     spice_char_device_state_migrate_data_marshall(state->chardev_st, m);
 }
 
+static void spicevmc_red_channel_send_port_init(RedChannelClient *rcc,
+                                                SpiceMarshaller *m,
+                                                PipeItem *item)
+{
+    PortInitPipeItem *i = SPICE_CONTAINEROF(item, PortInitPipeItem, base);
+    SpiceMsgPortInit init;
+
+    red_channel_client_init_send_data(rcc, SPICE_MSG_PORT_INIT, item);
+    init.name = (uint8_t *)i->name;
+    init.name_size = strlen(i->name) + 1;
+    init.opened = i->opened;
+    spice_marshall_msg_port_init(m, &init);
+}
+
+static void spicevmc_red_channel_send_port_event(RedChannelClient *rcc,
+                                                 SpiceMarshaller *m,
+                                                 PipeItem *item)
+{
+    PortEventPipeItem *i = SPICE_CONTAINEROF(item, PortEventPipeItem, base);
+    SpiceMsgPortEvent event;
+
+    red_channel_client_init_send_data(rcc, SPICE_MSG_PORT_EVENT, item);
+    event.event = i->event;
+    spice_marshall_msg_port_event(m, &event);
+}
+
 static void spicevmc_red_channel_send_item(RedChannelClient *rcc,
                                            PipeItem *item)
 {
@@ -334,6 +426,12 @@ static void spicevmc_red_channel_send_item(RedChannelClient *rcc,
         break;
     case PIPE_ITEM_TYPE_SPICEVMC_MIGRATE_DATA:
         spicevmc_red_channel_send_migrate_data(rcc, m, item);
+        break;
+    case PIPE_ITEM_TYPE_PORT_INIT:
+        spicevmc_red_channel_send_port_init(rcc, m, item);
+        break;
+    case PIPE_ITEM_TYPE_PORT_EVENT:
+        spicevmc_red_channel_send_port_event(rcc, m, item);
         break;
     default:
         spice_error("bad pipe item %d", item->type);
@@ -383,6 +481,10 @@ static void spicevmc_connect(RedChannel *channel, RedClient *client,
     }
     state->rcc = rcc;
     red_channel_client_ack_zero_messages_window(rcc);
+
+    if (strcmp(sin->subtype, "port") == 0) {
+        spicevmc_port_send_init(rcc);
+    }
 
     if (!spice_char_device_client_add(state->chardev_st, client, FALSE, 0, ~0, ~0,
                                       red_channel_client_waits_for_migrate_data(rcc))) {
@@ -460,4 +562,22 @@ void spicevmc_device_disconnect(SpiceCharDeviceInstance *sin)
     reds_unregister_channel(&state->channel);
     free(state->pipe_item);
     red_channel_destroy(&state->channel);
+}
+
+SPICE_GNUC_VISIBLE void spice_server_port_event(SpiceCharDeviceInstance *sin, uint8_t event)
+{
+    SpiceVmcState *state;
+
+    state = (SpiceVmcState *)spice_char_device_state_opaque_get(sin->st);
+    if (event == SPICE_PORT_EVENT_OPENED) {
+        state->port_opened = TRUE;
+    } else if (event == SPICE_PORT_EVENT_CLOSED) {
+        state->port_opened = FALSE;
+    }
+
+    if (state->rcc == NULL) {
+        return;
+    }
+
+    spicevmc_port_send_event(state->rcc, event);
 }
