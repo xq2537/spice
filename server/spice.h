@@ -23,7 +23,7 @@
 #include <spice/qxl_dev.h>
 #include <spice/vd_agent.h>
 
-#define SPICE_SERVER_VERSION 0x000c01 /* release 0.12.1 */
+#define SPICE_SERVER_VERSION 0x000c02 /* release 0.12.2 */
 
 /* interface base type */
 
