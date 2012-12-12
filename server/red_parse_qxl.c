@@ -367,7 +367,7 @@ static int bitmap_consistent(SpiceBitmap *bitmap)
 static const int BITMAP_FMT_IS_RGB[] = {0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
 
 static SpiceImage *red_get_image(RedMemSlotInfo *slots, int group_id,
-                                 QXLPHYSICAL addr, uint32_t flags)
+                                 QXLPHYSICAL addr, uint32_t flags, int is_mask)
 {
     RedDataChunk chunks;
     QXLImage *qxl;
@@ -401,7 +401,7 @@ static SpiceImage *red_get_image(RedMemSlotInfo *slots, int group_id,
     switch (red->descriptor.type) {
     case SPICE_IMAGE_TYPE_BITMAP:
         red->u.bitmap.format = qxl->bitmap.format;
-        if (!bitmap_fmt_is_rgb(qxl->bitmap.format) && !qxl->bitmap.palette) {
+        if (!bitmap_fmt_is_rgb(qxl->bitmap.format) && !qxl->bitmap.palette && !is_mask) {
             spice_warning("guest error: missing palette on bitmap format=%d\n",
                           red->u.bitmap.format);
             goto error;
@@ -529,8 +529,7 @@ static void red_get_brush_ptr(RedMemSlotInfo *slots, int group_id,
         }
         break;
     case SPICE_BRUSH_TYPE_PATTERN:
-        red->u.pattern.pat = red_get_image(slots, group_id, qxl->u.pattern.pat, flags);
-        red_get_point_ptr(&red->u.pattern.pos, &qxl->u.pattern.pos);
+        red->u.pattern.pat = red_get_image(slots, group_id, qxl->u.pattern.pat, flags, FALSE);
         break;
     }
 }
@@ -549,7 +548,7 @@ static void red_get_qmask_ptr(RedMemSlotInfo *slots, int group_id,
 {
     red->flags  = qxl->flags;
     red_get_point_ptr(&red->pos, &qxl->pos);
-    red->bitmap = red_get_image(slots, group_id, qxl->bitmap, flags);
+    red->bitmap = red_get_image(slots, group_id, qxl->bitmap, flags, TRUE);
 }
 
 static void red_put_qmask(SpiceQMask *red)
@@ -574,7 +573,7 @@ static void red_put_fill(SpiceFill *red)
 static void red_get_opaque_ptr(RedMemSlotInfo *slots, int group_id,
                                SpiceOpaque *red, QXLOpaque *qxl, uint32_t flags)
 {
-    red->src_bitmap     = red_get_image(slots, group_id, qxl->src_bitmap, flags);
+    red->src_bitmap     = red_get_image(slots, group_id, qxl->src_bitmap, flags, FALSE);
    red_get_rect_ptr(&red->src_area, &qxl->src_area);
    red_get_brush_ptr(slots, group_id, &red->brush, &qxl->brush, flags);
    red->rop_descriptor = qxl->rop_descriptor;
@@ -592,7 +591,7 @@ static void red_put_opaque(SpiceOpaque *red)
 static int red_get_copy_ptr(RedMemSlotInfo *slots, int group_id,
                             SpiceCopy *red, QXLCopy *qxl, uint32_t flags)
 {
-    red->src_bitmap      = red_get_image(slots, group_id, qxl->src_bitmap, flags);
+    red->src_bitmap      = red_get_image(slots, group_id, qxl->src_bitmap, flags, FALSE);
     if (!red->src_bitmap) {
         return 1;
     }
@@ -612,7 +611,7 @@ static void red_put_copy(SpiceCopy *red)
 static void red_get_blend_ptr(RedMemSlotInfo *slots, int group_id,
                              SpiceBlend *red, QXLBlend *qxl, uint32_t flags)
 {
-    red->src_bitmap      = red_get_image(slots, group_id, qxl->src_bitmap, flags);
+    red->src_bitmap      = red_get_image(slots, group_id, qxl->src_bitmap, flags, FALSE);
    red_get_rect_ptr(&red->src_area, &qxl->src_area);
    red->rop_descriptor  = qxl->rop_descriptor;
    red->scale_mode      = qxl->scale_mode;
@@ -629,7 +628,7 @@ static void red_get_transparent_ptr(RedMemSlotInfo *slots, int group_id,
                                     SpiceTransparent *red, QXLTransparent *qxl,
                                     uint32_t flags)
 {
-    red->src_bitmap      = red_get_image(slots, group_id, qxl->src_bitmap, flags);
+    red->src_bitmap      = red_get_image(slots, group_id, qxl->src_bitmap, flags, FALSE);
    red_get_rect_ptr(&red->src_area, &qxl->src_area);
    red->src_color       = qxl->src_color;
    red->true_color      = qxl->true_color;
@@ -646,7 +645,7 @@ static void red_get_alpha_blend_ptr(RedMemSlotInfo *slots, int group_id,
 {
     red->alpha_flags = qxl->alpha_flags;
     red->alpha       = qxl->alpha;
-    red->src_bitmap  = red_get_image(slots, group_id, qxl->src_bitmap, flags);
+    red->src_bitmap  = red_get_image(slots, group_id, qxl->src_bitmap, flags, FALSE);
     red_get_rect_ptr(&red->src_area, &qxl->src_area);
 }
 
@@ -655,7 +654,7 @@ static void red_get_alpha_blend_ptr_compat(RedMemSlotInfo *slots, int group_id,
                                            uint32_t flags)
 {
     red->alpha       = qxl->alpha;
-    red->src_bitmap  = red_get_image(slots, group_id, qxl->src_bitmap, flags);
+    red->src_bitmap  = red_get_image(slots, group_id, qxl->src_bitmap, flags, FALSE);
     red_get_rect_ptr(&red->src_area, &qxl->src_area);
 }
 
@@ -690,12 +689,12 @@ static void red_get_composite_ptr(RedMemSlotInfo *slots, int group_id,
 {
     red->flags = qxl->flags;
 
-    red->src_bitmap = red_get_image(slots, group_id, qxl->src, flags);
+    red->src_bitmap = red_get_image(slots, group_id, qxl->src, flags, FALSE);
     if (get_transform(slots, group_id, qxl->src_transform, &red->src_transform))
         red->flags |= SPICE_COMPOSITE_HAS_SRC_TRANSFORM;
     
     if (qxl->mask) {
-        red->mask_bitmap = red_get_image(slots, group_id, qxl->mask, flags);
+        red->mask_bitmap = red_get_image(slots, group_id, qxl->mask, flags, FALSE);
         red->flags |= SPICE_COMPOSITE_HAS_MASK;
         if (get_transform(slots, group_id, qxl->mask_transform, &red->mask_transform))
             red->flags |= SPICE_COMPOSITE_HAS_MASK_TRANSFORM;
@@ -718,7 +717,7 @@ static void red_put_composite(SpiceComposite *red)
 static void red_get_rop3_ptr(RedMemSlotInfo *slots, int group_id,
                              SpiceRop3 *red, QXLRop3 *qxl, uint32_t flags)
 {
-   red->src_bitmap = red_get_image(slots, group_id, qxl->src_bitmap, flags);
+   red->src_bitmap = red_get_image(slots, group_id, qxl->src_bitmap, flags, FALSE);
    red_get_rect_ptr(&red->src_area, &qxl->src_area);
    red_get_brush_ptr(slots, group_id, &red->brush, &qxl->brush, flags);
    red->rop3       = qxl->rop3;
