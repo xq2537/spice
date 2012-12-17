@@ -10342,7 +10342,8 @@ static void guest_set_client_capabilities(RedWorker *worker)
         worker->set_client_capabilities_pending = 1;
         return;
     }
-    if (worker->display_channel->common.base.clients_num == 0) {
+    if ((worker->display_channel == NULL) ||
+        (worker->display_channel->common.base.clients_num == 0)) {
         worker->qxl->st->qif->set_client_capabilities(worker->qxl, FALSE, caps);
     } else {
         // Take least common denominator
