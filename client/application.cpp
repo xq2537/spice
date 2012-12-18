@@ -2265,6 +2265,7 @@ bool Application::process_cmd_line(int argc, char** argv, bool &full_screen)
         SPICE_OPT_DISABLE_DISPLAY_EFFECTS,
         SPICE_OPT_CONTROLLER,
         SPICE_OPT_TITLE,
+        SPICE_OPT_HOTKEYS,
 #ifdef USE_SMARTCARD
         SPICE_OPT_SMARTCARD,
         SPICE_OPT_NOSMARTCARD,
@@ -2335,6 +2336,9 @@ bool Application::process_cmd_line(int argc, char** argv, bool &full_screen)
     parser.add(SPICE_OPT_CONTROLLER, "controller", "enable external controller");
 
     parser.add(SPICE_OPT_TITLE, "title", "set window title", "title", true, 't');
+    parser.add(SPICE_OPT_HOTKEYS, "hotkeys", "Set hotkey keybindings",
+               "toggle-fullscreen=shift+f11,release-cursor=shift+f12,etc.",
+               true);
 
 #ifdef USE_SMARTCARD
     parser.add(SPICE_OPT_SMARTCARD, "smartcard", "enable smartcard channel");
@@ -2459,6 +2463,9 @@ bool Application::process_cmd_line(int argc, char** argv, bool &full_screen)
             return true;
         case SPICE_OPT_TITLE:
             set_title(val);
+            break;
+        case SPICE_OPT_HOTKEYS:
+            set_hotkeys(val);
             break;
 #ifdef USE_SMARTCARD
         case SPICE_OPT_SMARTCARD:
