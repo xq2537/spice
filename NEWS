@@ -1,3 +1,13 @@
+Major changes in 0.12.2:
+========================
+* Stable Release
+* Skipped 0.12.1, it existed in git but was never released
+* spice-server now requires glib2 (like qemu does)
+* More robust ssl error and certificate handling
+* Added support for websockets
+* Tons of seamless migration bugfixes
+* Also some none seamless migration bugfixes
+
 Major changes in 0.12.0:
 ========================
 * Stable Release
