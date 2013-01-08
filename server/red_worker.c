@@ -2646,7 +2646,7 @@ static inline void red_display_detach_stream_gracefully(DisplayChannelClient *dc
             spice_debug("stream %d: upgrade by linked drawable. sized %d, box ==>",
                         stream_id, stream->current->sized_stream != NULL);
             rect_debug(&stream->current->red_drawable->bbox);
-            return;
+            goto clear_vis_region;
         }
         spice_debug("stream %d: upgrade by drawable. sized %d, box ==>",
                     stream_id, stream->current->sized_stream != NULL);
@@ -2680,7 +2680,8 @@ static inline void red_display_detach_stream_gracefully(DisplayChannelClient *dc
         }
         red_add_surface_area_image(dcc, 0, &upgrade_area, NULL, FALSE);
     }
-
+clear_vis_region:
+    region_clear(&agent->vis_region);
 }
 
 static inline void red_detach_stream_gracefully(RedWorker *worker, Stream *stream,
