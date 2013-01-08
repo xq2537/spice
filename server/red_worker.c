@@ -1022,6 +1022,8 @@ static void red_current_flush(RedWorker *worker, int surface_id);
 #else
 static void red_draw_drawable(RedWorker *worker, Drawable *item);
 static void red_update_area(RedWorker *worker, const SpiceRect *area, int surface_id);
+static void red_update_area_till(RedWorker *worker, const SpiceRect *area, int surface_id,
+                                 Drawable *last);
 #endif
 static void red_release_cursor(RedWorker *worker, CursorItem *cursor);
 static inline void release_drawable(RedWorker *worker, Drawable *item);
@@ -2615,7 +2617,9 @@ static int red_display_drawable_is_in_pipe(DisplayChannelClient *dcc, Drawable *
  * after red_display_detach_stream_gracefully is called for all the display channel clients,
  * red_detach_stream should be called. See comment (1).
  */
-static inline void red_display_detach_stream_gracefully(DisplayChannelClient *dcc, Stream *stream)
+static inline void red_display_detach_stream_gracefully(DisplayChannelClient *dcc,
+                                                        Stream *stream,
+                                                        Drawable *update_area_limit)
 {
     int stream_id = get_stream_id(dcc->common.worker, stream);
     StreamAgent *agent = &dcc->stream_agents[stream_id];
@@ -2669,27 +2673,41 @@ static inline void red_display_detach_stream_gracefully(DisplayChannelClient *dc
         spice_debug("stream %d: upgrade by screenshot. has current %d. box ==>",
                     stream_id, stream->current != NULL);
         rect_debug(&upgrade_area);
-        red_update_area(dcc->common.worker, &upgrade_area, 0);
+        if (update_area_limit) {
+            red_update_area_till(dcc->common.worker, &upgrade_area, 0, update_area_limit);
+        } else {
+            red_update_area(dcc->common.worker, &upgrade_area, 0);
+        }
         red_add_surface_area_image(dcc, 0, &upgrade_area, NULL, FALSE);
     }
 
 }
 
-static inline void red_detach_stream_gracefully(RedWorker *worker, Stream *stream)
+static inline void red_detach_stream_gracefully(RedWorker *worker, Stream *stream,
+                                                Drawable *update_area_limit)
 {
     RingItem *item;
     DisplayChannelClient *dcc;
 
     WORKER_FOREACH_DCC(worker, item, dcc) {
-        red_display_detach_stream_gracefully(dcc, stream);
+        red_display_detach_stream_gracefully(dcc, stream, update_area_limit);
     }
     if (stream->current) {
         red_detach_stream(worker, stream, TRUE);
     }
 }
 
-// region should be a primary surface region
-static void red_detach_streams_behind(RedWorker *worker, QRegion *region)
+/*
+ * region  : a primary surface region. Streams that intersects with the given
+ *           region will be detached.
+ * drawable: If detaching the stream is triggered by the addition of a new drawable
+ *           that is dependent on the given region, and the drawable is already a part
+ *           of the "current tree", the drawable parameter should be set with
+ *           this drawable, otherwise, it should be NULL. Then, if detaching the stream
+ *           involves sending an upgrade image to the client, this drawable won't be rendered
+ *           (see red_display_detach_stream_gracefully).
+ */
+static void red_detach_streams_behind(RedWorker *worker, QRegion *region, Drawable *drawable)
 {
     Ring *ring = &worker->streams;
     RingItem *item = ring_get_head(ring);
@@ -2706,7 +2724,7 @@ static void red_detach_streams_behind(RedWorker *worker, QRegion *region)
             StreamAgent *agent = &dcc->stream_agents[get_stream_id(worker, stream)];
 
             if (region_intersects(&agent->vis_region, region)) {
-                red_display_detach_stream_gracefully(dcc, stream);
+                red_display_detach_stream_gracefully(dcc, stream, drawable);
                 detach_stream = 1;
                 spice_debug("stream %d", get_stream_id(worker, stream));
             }
@@ -2798,7 +2816,7 @@ static inline void red_handle_streams_timout(RedWorker *worker)
         Stream *stream = SPICE_CONTAINEROF(item, Stream, link);
         item = ring_next(ring, item);
         if (now >= (stream->last_time + RED_STREAM_TIMOUT)) {
-            red_detach_stream_gracefully(worker, stream);
+            red_detach_stream_gracefully(worker, stream, NULL);
             red_stop_stream(worker, stream);
         }
     }
@@ -3507,13 +3525,24 @@ static inline int red_current_add(RedWorker *worker, Ring *ring, Drawable *drawa
         exclude_region(worker, ring, exclude_base, &exclude_rgn, NULL, drawable);
         red_use_stream_trace(worker, drawable);
         red_streams_update_visible_region(worker, drawable);
+        /*
+         * Performing the insertion after exclude_region for
+         * safety (todo: Not sure if exclude_region can affect the drawable
+         * if it is added to the tree before calling exclude_region).
+         */
+        __current_add_drawable(worker, drawable, ring);
     } else {
+        /*
+         * red_detach_streams_behind can affect the current tree since it may
+         * trigger calls to update_area. Thus, the drawable should be added to the tree
+         * before calling red_detach_streams_behind
+         */
+        __current_add_drawable(worker, drawable, ring);
         if (drawable->surface_id == 0) {
-            red_detach_streams_behind(worker, &drawable->tree_item.base.rgn);
+            red_detach_streams_behind(worker, &drawable->tree_item.base.rgn, drawable);
         }
     }
     region_destroy(&exclude_rgn);
-    __current_add_drawable(worker, drawable, ring);
     stat_add(&worker->add_stat, start_time);
     return TRUE;
 }
@@ -3567,7 +3596,7 @@ static inline int red_current_add_with_shadow(RedWorker *worker, Ring *ring, Dra
 
     // only primary surface streams are supported
     if (is_primary_surface(worker, item->surface_id)) {
-        red_detach_streams_behind(worker, &shadow->base.rgn);
+        red_detach_streams_behind(worker, &shadow->base.rgn, NULL);
     }
     ring_add(ring, &shadow->base.siblings_link);
     __current_add_drawable(worker, item, ring);
@@ -3579,7 +3608,7 @@ static inline int red_current_add_with_shadow(RedWorker *worker, Ring *ring, Dra
         red_streams_update_visible_region(worker, item);
     } else {
         if (item->surface_id == 0) {
-            red_detach_streams_behind(worker, &item->tree_item.base.rgn);
+            red_detach_streams_behind(worker, &item->tree_item.base.rgn, item);
         }
     }
     stat_add(&worker->add_stat, start_time);
@@ -3911,7 +3940,7 @@ static inline int red_handle_surfaces_dependencies(RedWorker *worker, Drawable *
                 QRegion depend_region;
                 region_init(&depend_region);
                 region_add(&depend_region, &drawable->red_drawable->surfaces_rects[x]);
-                red_detach_streams_behind(worker, &depend_region);
+                red_detach_streams_behind(worker, &depend_region, NULL);
             }
         }
     }
