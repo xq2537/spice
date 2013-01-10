@@ -10951,7 +10951,6 @@ static void worker_update_monitors_config(RedWorker *worker,
 {
     int heads_size;
     MonitorsConfig *monitors_config;
-    int real_count = 0;
     int i;
 
     if (worker->monitors_config) {
@@ -10968,19 +10967,7 @@ static void worker_update_monitors_config(RedWorker *worker,
                     dev_monitors_config->heads[i].width,
                     dev_monitors_config->heads[i].height);
     }
-
-    // Ignore any empty sized monitors at the end of the config.
-    // 4: {w1,h1},{w2,h2},{0,0},{0,0} -> 2: {w1,h1},{w2,h2}
-    for (i = dev_monitors_config->count ; i > 0 ; --i) {
-        if (dev_monitors_config->heads[i - 1].width > 0 &&
-            dev_monitors_config->heads[i - 1].height > 0) {
-            real_count = i;
-            break;
-        }
-    }
-    heads_size = real_count * sizeof(QXLHead);
-    spice_debug("new working monitor config (count: %d, real: %d)",
-                dev_monitors_config->count, real_count);
+    heads_size = dev_monitors_config->count * sizeof(QXLHead);
     worker->monitors_config = monitors_config =
         spice_malloc(sizeof(*monitors_config) + heads_size);
     monitors_config->refs = 1;
