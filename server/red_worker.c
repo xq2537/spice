@@ -1239,8 +1239,7 @@ static void monitors_config_decref(MonitorsConfig *monitors_config)
         return;
     }
 
-    spice_debug("removing worker monitors config");
-    monitors_config->worker->monitors_config = NULL;
+    spice_debug("freeing monitors config");
     free(monitors_config);
 }
 
