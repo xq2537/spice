@@ -3169,13 +3169,19 @@ static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream)
     index = get_stream_id(worker, stream);
     DRAWABLE_FOREACH_DPI(stream->current, ring_item, dpi) {
         dcc = dpi->dcc;
-        if (!display_channel_client_is_low_bandwidth(dcc)) {
-            continue;
-        }
         agent = &dcc->stream_agents[index];
 
+        if (!dcc->use_mjpeg_encoder_rate_control &&
+            !display_channel_client_is_low_bandwidth(dcc)) {
+            continue;
+        }
+
         if (pipe_item_is_linked(&dpi->dpi_pipe_item)) {
-            ++agent->drops;
+            if (dcc->use_mjpeg_encoder_rate_control) {
+                mjpeg_encoder_notify_server_frame_drop(agent->mjpeg_encoder);
+            } else {
+                ++agent->drops;
+            }
         }
     }
 
@@ -3184,11 +3190,14 @@ static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream)
         double drop_factor;
 
         agent = &dcc->stream_agents[index];
+
+        if (dcc->use_mjpeg_encoder_rate_control) {
+            continue;
+        }
         if (agent->frames / agent->fps < FPS_TEST_INTERVAL) {
             agent->frames++;
             continue;
         }
-
         drop_factor = ((double)agent->frames - (double)agent->drops) /
             (double)agent->frames;
         spice_debug("stream %d: #frames %u #drops %u", index, agent->frames, agent->drops);
