@@ -846,6 +846,8 @@ struct Drawable {
 
     int surface_id;
     int surfaces_dest[3];
+
+    uint32_t process_commands_generation;
 };
 
 typedef struct _Drawable _Drawable;
@@ -997,6 +999,7 @@ typedef struct RedWorker {
     ZlibData zlib_data;
     ZlibEncoder *zlib;
 
+    uint32_t process_commands_generation;
 #ifdef PIPE_DEBUG
     uint32_t last_id;
 #endif
@@ -3152,7 +3155,7 @@ static int display_channel_client_is_low_bandwidth(DisplayChannelClient *dcc)
         red_client_get_main(red_channel_client_get_client(&dcc->common.base)));
 }
 
-static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream)
+static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream, Drawable *new_frame)
 {
     DrawablePipeItem *dpi;
     DisplayChannelClient *dcc;
@@ -3163,6 +3166,11 @@ static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream)
     spice_assert(stream->current);
 
     if (!display_is_connected(worker)) {
+        return;
+    }
+
+    if (new_frame->process_commands_generation == stream->current->process_commands_generation) {
+        spice_debug("ignoring drop, same process_commands_generation as previous frame");
         return;
     }
 
@@ -3299,7 +3307,7 @@ static inline void red_stream_maintenance(RedWorker *worker, Drawable *candidate
                                                        stream,
                                                        TRUE);
         if (is_next_frame != STREAM_FRAME_NONE) {
-            pre_stream_item_swap(worker, stream);
+            pre_stream_item_swap(worker, stream, candidate);
             red_detach_stream(worker, stream, FALSE);
             prev->streamable = FALSE; //prevent item trace
             red_attach_stream(worker, candidate, stream);
@@ -3452,7 +3460,7 @@ static inline void red_use_stream_trace(RedWorker *worker, Drawable *drawable)
         if (is_next_frame != STREAM_FRAME_NONE) {
             if (stream->current) {
                 stream->current->streamable = FALSE; //prevent item trace
-                pre_stream_item_swap(worker, stream);
+                pre_stream_item_swap(worker, stream, drawable);
                 red_detach_stream(worker, stream, FALSE);
             }
             red_attach_stream(worker, drawable, stream);
@@ -3965,6 +3973,7 @@ static Drawable *get_drawable(RedWorker *worker, uint8_t effect, RedDrawable *re
     ring_init(&drawable->pipes);
     ring_init(&drawable->glz_ring);
 
+    drawable->process_commands_generation = worker->process_commands_generation;
     return drawable;
 }
 
@@ -5013,6 +5022,7 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
         return n;
     }
 
+    worker->process_commands_generation++;
     *ring_is_empty = FALSE;
     while (!display_is_connected(worker) ||
            // TODO: change to average pipe size?
