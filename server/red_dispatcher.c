@@ -1143,6 +1143,7 @@ RedDispatcher *red_dispatcher_init(QXLInstance *qxl)
         red_channel_register_client_cbs(display_channel, &client_cbs);
         red_channel_set_data(display_channel, red_dispatcher);
         red_channel_set_cap(display_channel, SPICE_DISPLAY_CAP_MONITORS_CONFIG);
+        red_channel_set_cap(display_channel, SPICE_DISPLAY_CAP_STREAM_REPORT);
         reds_register_channel(display_channel);
     }
 

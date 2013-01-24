@@ -117,6 +117,9 @@
 #define RED_STREAM_MIN_SIZE (96 * 96)
 #define RED_STREAM_INPUT_FPS_TIMEOUT (5 * 1000) // 5 sec
 #define RED_STREAM_CHANNEL_CAPACITY 0.8
+/* the client's stream report frequency is the minimum of the 2 values below */
+#define RED_STREAM_CLIENT_REPORT_WINDOW 5 // #frames
+#define RED_STREAM_CLIENT_REPORT_TIMEOUT 1000 // milliseconds
 
 #define FPS_TEST_INTERVAL 1
 #define MAX_FPS 30
@@ -292,6 +295,7 @@ enum {
     PIPE_ITEM_TYPE_CREATE_SURFACE,
     PIPE_ITEM_TYPE_DESTROY_SURFACE,
     PIPE_ITEM_TYPE_MONITORS_CONFIG,
+    PIPE_ITEM_TYPE_STREAM_ACTIVATE_REPORT,
 };
 
 typedef struct VerbItem {
@@ -350,6 +354,11 @@ typedef struct MonitorsConfigItem {
     PipeItem pipe_item;
     MonitorsConfig *monitors_config;
 } MonitorsConfigItem;
+
+typedef struct StreamActivateReportItem {
+    PipeItem pipe_item;
+    uint32_t stream_id;
+} StreamActivateReportItem;
 
 typedef struct CursorItem {
     uint32_t group_id;
@@ -459,6 +468,8 @@ typedef struct StreamAgent {
     int frames;
     int drops;
     int fps;
+
+    uint32_t report_id;
 } StreamAgent;
 
 typedef struct StreamClipItem {
@@ -2917,6 +2928,17 @@ static void red_display_create_stream(DisplayChannelClient *dcc, Stream *stream)
         agent->mjpeg_encoder = mjpeg_encoder_new(FALSE, 0, NULL, NULL);
     }
     red_channel_client_pipe_add(&dcc->common.base, &agent->create_item);
+
+    if (red_channel_client_test_remote_cap(&dcc->common.base, SPICE_DISPLAY_CAP_STREAM_REPORT)) {
+        StreamActivateReportItem *report_pipe_item = spice_malloc0(sizeof(*report_pipe_item));
+
+        agent->report_id = rand();
+        red_channel_pipe_item_init(dcc->common.base.channel, &report_pipe_item->pipe_item,
+                                   PIPE_ITEM_TYPE_STREAM_ACTIVATE_REPORT);
+        report_pipe_item->stream_id = get_stream_id(dcc->common.worker, stream);
+        red_channel_client_pipe_add(&dcc->common.base, &report_pipe_item->pipe_item);
+    }
+
 }
 
 static void red_stream_input_fps_timer_cb(void *opaque)
@@ -3007,7 +3029,8 @@ static void red_display_client_init_streams(DisplayChannelClient *dcc)
         red_channel_pipe_item_init(channel, &agent->create_item, PIPE_ITEM_TYPE_STREAM_CREATE);
         red_channel_pipe_item_init(channel, &agent->destroy_item, PIPE_ITEM_TYPE_STREAM_DESTROY);
     }
-    dcc->use_mjpeg_encoder_rate_control = TRUE;
+    dcc->use_mjpeg_encoder_rate_control =
+        red_channel_client_test_remote_cap(&dcc->common.base, SPICE_DISPLAY_CAP_STREAM_REPORT);
 }
 
 static void red_display_destroy_streams_agents(DisplayChannelClient *dcc)
@@ -9000,6 +9023,22 @@ static void red_marshall_monitors_config(RedChannelClient *rcc, SpiceMarshaller 
     free(msg);
 }
 
+static void red_marshall_stream_activate_report(RedChannelClient *rcc,
+                                                SpiceMarshaller *base_marshaller,
+                                                uint32_t stream_id)
+{
+    DisplayChannelClient *dcc = RCC_TO_DCC(rcc);
+    StreamAgent *agent = &dcc->stream_agents[stream_id];
+    SpiceMsgDisplayStreamActivateReport msg;
+
+    red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_STREAM_ACTIVATE_REPORT, NULL);
+    msg.stream_id = stream_id;
+    msg.unique_id = agent->report_id;
+    msg.max_window_size = RED_STREAM_CLIENT_REPORT_WINDOW;
+    msg.timeout_ms = RED_STREAM_CLIENT_REPORT_TIMEOUT;
+    spice_marshall_msg_display_stream_activate_report(base_marshaller, &msg);
+}
+
 static void display_channel_send_item(RedChannelClient *rcc, PipeItem *pipe_item)
 {
     SpiceMarshaller *m = red_channel_client_get_marshaller(rcc);
@@ -9068,6 +9107,13 @@ static void display_channel_send_item(RedChannelClient *rcc, PipeItem *pipe_item
         MonitorsConfigItem *monconf_item = SPICE_CONTAINEROF(pipe_item,
                                                              MonitorsConfigItem, pipe_item);
         red_marshall_monitors_config(rcc, m, monconf_item->monitors_config);
+        break;
+    }
+    case PIPE_ITEM_TYPE_STREAM_ACTIVATE_REPORT: {
+        StreamActivateReportItem *report_item = SPICE_CONTAINEROF(pipe_item,
+                                                                  StreamActivateReportItem,
+                                                                  pipe_item);
+        red_marshall_stream_activate_report(rcc, m, report_item->stream_id);
         break;
     }
     default:
@@ -10010,6 +10056,37 @@ static int display_channel_handle_migrate_data(RedChannelClient *rcc, uint32_t s
     return TRUE;
 }
 
+static int display_channel_handle_stream_report(DisplayChannelClient *dcc,
+                                                SpiceMsgcDisplayStreamReport *stream_report)
+{
+    StreamAgent *stream_agent;
+
+    if (stream_report->stream_id >= NUM_STREAMS) {
+        spice_warning("stream_report: invalid stream id %u", stream_report->stream_id);
+        return FALSE;
+    }
+    stream_agent = &dcc->stream_agents[stream_report->stream_id];
+    if (!stream_agent->mjpeg_encoder) {
+        spice_info("stream_report: no encoder for stream id %u."
+                    "Probably the stream has been destroyed", stream_report->stream_id);
+        return TRUE;
+    }
+
+    if (stream_report->unique_id != stream_agent->report_id) {
+        spice_warning("local reoprt-id (%u) != msg report-id (%u)",
+                      stream_agent->report_id, stream_report->unique_id);
+        return TRUE;
+    }
+    mjpeg_encoder_client_stream_report(stream_agent->mjpeg_encoder,
+                                       stream_report->num_frames,
+                                       stream_report->num_drops,
+                                       stream_report->start_frame_mm_time,
+                                       stream_report->end_frame_mm_time,
+                                       stream_report->last_frame_delay,
+                                       stream_report->audio_delay);
+    return TRUE;
+}
+
 static int display_channel_handle_message(RedChannelClient *rcc, uint32_t size, uint16_t type,
                                           void *message)
 {
@@ -10023,6 +10100,9 @@ static int display_channel_handle_message(RedChannelClient *rcc, uint32_t size, 
         }
         dcc->expect_init = FALSE;
         return display_channel_init(dcc, (SpiceMsgcDisplayInit *)message);
+    case SPICE_MSGC_DISPLAY_STREAM_REPORT:
+        return display_channel_handle_stream_report(dcc,
+                                                    (SpiceMsgcDisplayStreamReport *)message);
     default:
         return red_channel_client_handle_message(rcc, size, type, message);
     }
@@ -10372,6 +10452,7 @@ static void display_channel_client_release_item_before_push(DisplayChannelClient
     case PIPE_ITEM_TYPE_PIXMAP_SYNC:
     case PIPE_ITEM_TYPE_PIXMAP_RESET:
     case PIPE_ITEM_TYPE_INVAL_PALLET_CACHE:
+    case PIPE_ITEM_TYPE_STREAM_ACTIVATE_REPORT:
         free(item);
         break;
     default:
@@ -10541,7 +10622,7 @@ static void handle_new_display_channel(RedWorker *worker, RedClient *client, Red
     spice_info("zlib-over-glz %s", display_channel->enable_zlib_glz_wrap ? "enabled" : "disabled");
 
     guest_set_client_capabilities(worker);
-    
+
     // todo: tune level according to bandwidth
     display_channel->zlib_level = ZLIB_DEFAULT_COMPRESSION_LEVEL;
     red_display_client_init_streams(dcc);
@@ -11909,6 +11990,7 @@ static void red_init(RedWorker *worker, WorkerInitData *init_data)
     if (!spice_timer_queue_create()) {
         spice_error("failed to create timer queue");
     }
+    srand(time(NULL));
 
     message = RED_WORKER_MESSAGE_READY;
     write_message(worker->channel, &message);
