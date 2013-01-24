@@ -3118,22 +3118,30 @@ static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream)
         if (pipe_item_is_linked(&dpi->dpi_pipe_item)) {
             ++agent->drops;
         }
+    }
 
+
+    WORKER_FOREACH_DCC(worker, ring_item, dcc) {
+        double drop_factor;
+
+        agent = &dcc->stream_agents[index];
         if (agent->frames / agent->fps < FPS_TEST_INTERVAL) {
             agent->frames++;
-            return;
+            continue;
         }
 
-        double drop_factor = ((double)agent->frames - (double)agent->drops) /
-                             (double)agent->frames;
-
+        drop_factor = ((double)agent->frames - (double)agent->drops) /
+            (double)agent->frames;
+        spice_debug("stream %d: #frames %u #drops %u", index, agent->frames, agent->drops);
         if (drop_factor == 1) {
             if (agent->fps < MAX_FPS) {
                 agent->fps++;
+                spice_debug("stream %d: fps++ %u", index, agent->fps);
             }
         } else if (drop_factor < 0.9) {
             if (agent->fps > 1) {
                 agent->fps--;
+                spice_debug("stream %d: fps--%u", index, agent->fps);
             }
         }
         agent->frames = 1;
