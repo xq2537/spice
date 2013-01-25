@@ -1,5 +1,5 @@
-#ifndef MAIN_DISPATCHER_H
-#define MAIN_DISPATCHER_H
+#ifndef DISPATCHER_H
+#define DISPATCHER_H
 
 #include <spice.h>
 
@@ -103,4 +103,4 @@ int dispatcher_get_recv_fd(Dispatcher *);
  */
 void dispatcher_set_opaque(Dispatcher *dispatcher, void *opaque);
 
-#endif //MAIN_DISPATCHER_H
+#endif //DISPATCHER_H

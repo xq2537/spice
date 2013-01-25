@@ -2,6 +2,7 @@
 #define MAIN_DISPATCHER_H
 
 #include <spice.h>
+#include "red_channel.h"
 
 void main_dispatcher_channel_event(int event, SpiceChannelEventInfo *info);
 void main_dispatcher_seamless_migrate_dst_complete(RedClient *client);
