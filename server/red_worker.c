@@ -81,6 +81,7 @@
 #include "main_channel.h"
 #include "migration_protocol.h"
 #include "spice_timer_queue.h"
+#include "main_dispatcher.h"
 
 //#define COMPRESS_STAT
 //#define DUMP_BITMAP
@@ -470,6 +471,7 @@ typedef struct StreamAgent {
     int fps;
 
     uint32_t report_id;
+    uint32_t client_required_latency;
 } StreamAgent;
 
 typedef struct StreamClipItem {
@@ -690,6 +692,7 @@ struct DisplayChannelClient {
 
     StreamAgent stream_agents[NUM_STREAMS];
     int use_mjpeg_encoder_rate_control;
+    uint32_t streams_max_latency;
 };
 
 struct DisplayChannel {
@@ -2901,6 +2904,55 @@ static uint32_t red_stream_mjpeg_encoder_get_source_fps(void *opaque)
     return agent->stream->input_fps;
 }
 
+static void red_display_update_streams_max_latency(DisplayChannelClient *dcc, StreamAgent *remove_agent)
+{
+    uint32_t new_max_latency = 0;
+    int i;
+
+    if (dcc->streams_max_latency != remove_agent->client_required_latency) {
+        return;
+    }
+
+    dcc->streams_max_latency = 0;
+    if (dcc->common.worker->stream_count == 1) {
+        return;
+    }
+    for (i = 0; i < NUM_STREAMS; i++) {
+        StreamAgent *other_agent = &dcc->stream_agents[i];
+        if (other_agent == remove_agent || !other_agent->mjpeg_encoder) {
+            continue;
+        }
+        if (other_agent->client_required_latency > new_max_latency) {
+            new_max_latency = other_agent->client_required_latency;
+        }
+    }
+    dcc->streams_max_latency = new_max_latency;
+}
+
+static void red_display_stream_agent_stop(DisplayChannelClient *dcc, StreamAgent *agent)
+{
+    red_display_update_streams_max_latency(dcc, agent);
+    if (agent->mjpeg_encoder) {
+        mjpeg_encoder_destroy(agent->mjpeg_encoder);
+        agent->mjpeg_encoder = NULL;
+    }
+}
+
+static void red_stream_update_client_playback_latency(void *opaque, uint32_t delay_ms)
+{
+    StreamAgent *agent = opaque;
+    DisplayChannelClient *dcc = agent->dcc;
+
+    red_display_update_streams_max_latency(dcc, agent);
+
+    agent->client_required_latency = delay_ms;
+    if (delay_ms > agent->dcc->streams_max_latency) {
+         agent->dcc->streams_max_latency = delay_ms;
+    }
+    spice_debug("reseting client latency: %u", agent->dcc->streams_max_latency);
+    main_dispatcher_set_mm_time_latency(agent->dcc->common.base.client, agent->dcc->streams_max_latency);
+}
+
 static void red_display_create_stream(DisplayChannelClient *dcc, Stream *stream)
 {
     StreamAgent *agent = &dcc->stream_agents[get_stream_id(dcc->common.worker, stream)];
@@ -2924,6 +2976,7 @@ static void red_display_create_stream(DisplayChannelClient *dcc, Stream *stream)
 
         mjpeg_cbs.get_roundtrip_ms = red_stream_mjpeg_encoder_get_roundtrip;
         mjpeg_cbs.get_source_fps = red_stream_mjpeg_encoder_get_source_fps;
+        mjpeg_cbs.update_client_playback_delay = red_stream_update_client_playback_latency;
 
         initial_bit_rate = red_stream_get_initial_bit_rate(dcc, stream);
         agent->mjpeg_encoder = mjpeg_encoder_new(TRUE, initial_bit_rate, &mjpeg_cbs, agent);
@@ -8895,11 +8948,7 @@ static void red_display_marshall_stream_end(RedChannelClient *rcc,
 
     red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_STREAM_DESTROY, NULL);
     destroy.id = get_stream_id(dcc->common.worker, agent->stream);
-
-    if (agent->mjpeg_encoder) {
-        mjpeg_encoder_destroy(agent->mjpeg_encoder);
-        agent->mjpeg_encoder = NULL;
-    }
+    red_display_stream_agent_stop(dcc, agent);
     spice_marshall_msg_display_stream_destroy(base_marshaller, &destroy);
 }
 
