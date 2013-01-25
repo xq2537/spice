@@ -58,6 +58,7 @@ enum PlaybackeCommand {
     SND_PLAYBACK_CTRL,
     SND_PLAYBACK_PCM,
     SND_PLAYBACK_VOLUME,
+    SND_PLAYBACK_LATENCY,
 };
 
 enum RecordCommand {
@@ -71,6 +72,7 @@ enum RecordCommand {
 #define SND_PLAYBACK_CTRL_MASK (1 << SND_PLAYBACK_CTRL)
 #define SND_PLAYBACK_PCM_MASK (1 << SND_PLAYBACK_PCM)
 #define SND_PLAYBACK_VOLUME_MASK (1 << SND_PLAYBACK_VOLUME)
+#define SND_PLAYBACK_LATENCY_MASK ( 1 << SND_PLAYBACK_LATENCY)
 
 #define SND_RECORD_MIGRATE_MASK (1 << SND_RECORD_MIGRATE)
 #define SND_RECORD_CTRL_MASK (1 << SND_RECORD_CTRL)
@@ -144,6 +146,7 @@ struct PlaybackChannel {
     struct {
         uint8_t celt_buf[CELT_COMPRESSED_FRAME_BYTES];
     } send_data;
+    uint32_t latency;
 };
 
 struct SndWorker {
@@ -610,6 +613,20 @@ static int snd_playback_send_mute(PlaybackChannel *playback_channel)
     return snd_send_mute(channel, &st->volume, SPICE_MSG_PLAYBACK_MUTE);
 }
 
+static int snd_playback_send_latency(PlaybackChannel *playback_channel)
+{
+    SndChannel *channel = &playback_channel->base;
+    SpiceMsgPlaybackLatency latency_msg;
+
+    spice_debug("latency %u", playback_channel->latency);
+    if (!snd_reset_send_data(channel, SPICE_MSG_PLAYBACK_LATENCY)) {
+        return FALSE;
+    }
+    latency_msg.latency_ms = playback_channel->latency;
+    spice_marshall_msg_playback_latency(channel->send_data.marshaller, &latency_msg);
+
+    return snd_begin_send_message(channel);
+}
 static int snd_playback_send_start(PlaybackChannel *playback_channel)
 {
     SndChannel *channel = (SndChannel *)playback_channel;
@@ -818,6 +835,12 @@ static void snd_playback_send(void* data)
                 return;
             }
             channel->command &= ~SND_PLAYBACK_MIGRATE_MASK;
+        }
+        if (channel->command & SND_PLAYBACK_LATENCY_MASK) {
+            if (!snd_playback_send_latency(playback_channel)) {
+                return;
+            }
+            channel->command &= ~SND_PLAYBACK_LATENCY_MASK;
         }
     }
 }
@@ -1096,6 +1119,27 @@ SPICE_GNUC_VISIBLE void spice_server_playback_put_samples(SpicePlaybackInstance 
     snd_playback_send(&playback_channel->base);
 }
 
+void snd_set_playback_latency(RedClient *client, uint32_t latency)
+{
+    SndWorker *now = workers;
+
+    for (; now; now = now->next) {
+        if (now->base_channel->type == SPICE_CHANNEL_PLAYBACK && now->connection &&
+            now->connection->channel_client->client == client) {
+
+            if (red_channel_client_test_remote_cap(now->connection->channel_client,
+                SPICE_PLAYBACK_CAP_LATENCY)) {
+                PlaybackChannel* playback = (PlaybackChannel*)now->connection;
+
+                playback->latency = latency;
+                snd_set_command(now->connection, SND_PLAYBACK_LATENCY_MASK);
+                snd_playback_send(now->connection);
+            } else {
+                spice_debug("client doesn't not support SPICE_PLAYBACK_CAP_LATENCY");
+            }
+        }
+    }
+}
 static void on_new_playback_channel(SndWorker *worker)
 {
     PlaybackChannel *playback_channel =
