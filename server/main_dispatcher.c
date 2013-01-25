@@ -40,6 +40,7 @@ MainDispatcher main_dispatcher;
 enum {
     MAIN_DISPATCHER_CHANNEL_EVENT = 0,
     MAIN_DISPATCHER_MIGRATE_SEAMLESS_DST_COMPLETE,
+    MAIN_DISPATCHER_SET_MM_TIME_LATENCY,
 
     MAIN_DISPATCHER_NUM_MESSAGES
 };
@@ -52,6 +53,11 @@ typedef struct MainDispatcherChannelEventMessage {
 typedef struct MainDispatcherMigrateSeamlessDstCompleteMessage {
     RedClient *client;
 } MainDispatcherMigrateSeamlessDstCompleteMessage;
+
+typedef struct MainDispatcherMmTimeLatencyMessage {
+    RedClient *client;
+    uint32_t latency;
+} MainDispatcherMmTimeLatencyMessage;
 
 /* channel_event - calls core->channel_event, must be done in main thread */
 static void main_dispatcher_self_handle_channel_event(
@@ -96,6 +102,13 @@ static void main_dispatcher_handle_migrate_complete(void *opaque,
     reds_on_client_seamless_migrate_complete(mig_complete->client);
 }
 
+static void main_dispatcher_handle_mm_time_latency(void *opaque,
+                                                   void *payload)
+{
+    MainDispatcherMmTimeLatencyMessage *msg = payload;
+    reds_set_client_mm_time_latency(msg->client, msg->latency);
+}
+
 void main_dispatcher_seamless_migrate_dst_complete(RedClient *client)
 {
     MainDispatcherMigrateSeamlessDstCompleteMessage msg;
@@ -109,6 +122,22 @@ void main_dispatcher_seamless_migrate_dst_complete(RedClient *client)
     dispatcher_send_message(&main_dispatcher.base, MAIN_DISPATCHER_MIGRATE_SEAMLESS_DST_COMPLETE,
                             &msg);
 }
+
+void main_dispatcher_set_mm_time_latency(RedClient *client, uint32_t latency)
+{
+    MainDispatcherMmTimeLatencyMessage msg;
+
+    if (pthread_self() == main_dispatcher.base.self) {
+        reds_set_client_mm_time_latency(client, latency);
+        return;
+    }
+
+    msg.client = client;
+    msg.latency = latency;
+    dispatcher_send_message(&main_dispatcher.base, MAIN_DISPATCHER_SET_MM_TIME_LATENCY,
+                            &msg);
+}
+
 static void dispatcher_handle_read(int fd, int event, void *opaque)
 {
     Dispatcher *dispatcher = opaque;
@@ -129,4 +158,7 @@ void main_dispatcher_init(SpiceCoreInterface *core)
     dispatcher_register_handler(&main_dispatcher.base, MAIN_DISPATCHER_MIGRATE_SEAMLESS_DST_COMPLETE,
                                 main_dispatcher_handle_migrate_complete,
                                 sizeof(MainDispatcherMigrateSeamlessDstCompleteMessage), 0 /* no ack */);
+    dispatcher_register_handler(&main_dispatcher.base, MAIN_DISPATCHER_SET_MM_TIME_LATENCY,
+                                main_dispatcher_handle_mm_time_latency,
+                                sizeof(MainDispatcherMmTimeLatencyMessage), 0 /* no ack */);
 }

@@ -3031,6 +3031,29 @@ listen:
     return slisten;
 }
 
+static void reds_send_mm_time(void)
+{
+    main_channel_push_multi_media_time(reds->main_channel,
+                                       reds_get_mm_time() - reds->mm_time_latency);
+}
+
+void reds_set_client_mm_time_latency(RedClient *client, uint32_t latency)
+{
+    // TODO: multi-client support for mm_time
+    if (reds->mm_timer_enabled) {
+        // TODO: consider network latency
+        if (latency > reds->mm_time_latency) {
+            reds->mm_time_latency = latency;
+            reds_send_mm_time();
+        } else {
+            spice_debug("new latency %u is smaller than existing %u",
+                        latency, reds->mm_time_latency);
+        }
+    } else {
+        snd_set_playback_latency(client, latency);
+    }
+}
+
 static int reds_init_net(void)
 {
     if (spice_port != -1) {
@@ -3463,12 +3486,15 @@ void reds_enable_mm_timer(void)
     if (!reds_main_channel_connected()) {
         return;
     }
-    main_channel_push_multi_media_time(reds->main_channel, reds_get_mm_time() - MM_TIME_DELTA);
+    reds->mm_timer_enabled = TRUE;
+    reds->mm_time_latency = MM_TIME_DELTA;
+    reds_send_mm_time();
 }
 
 void reds_disable_mm_timer(void)
 {
     core->timer_cancel(reds->mm_timer);
+    reds->mm_timer_enabled = FALSE;
 }
 
 static void mm_timer_proc(void *opaque)

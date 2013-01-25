@@ -177,6 +177,8 @@ typedef struct RedsState {
     int allow_multiple_clients;
 
     RedsClientMonitorsConfig client_monitors_config;
+    int mm_timer_enabled;
+    uint32_t mm_time_latency;
 } RedsState;
 
 #endif
