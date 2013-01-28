@@ -449,6 +449,20 @@ struct Stream {
     uint32_t input_fps;
 };
 
+#define STREAM_STATS
+#ifdef STREAM_STATS
+typedef struct StreamStats {
+   uint64_t num_drops_pipe;
+   uint64_t num_drops_fps;
+   uint64_t num_frames_sent;
+   uint64_t num_input_frames;
+   uint64_t size_sent;
+
+   uint64_t start;
+   uint64_t end;
+} StreamStats;
+#endif
+
 typedef struct StreamAgent {
     QRegion vis_region; /* the part of the surface area that is currently occupied by video
                            fragments */
@@ -472,6 +486,9 @@ typedef struct StreamAgent {
 
     uint32_t report_id;
     uint32_t client_required_latency;
+#ifdef STREAM_STATS
+    StreamStats stats;
+#endif
 } StreamAgent;
 
 typedef struct StreamClipItem {
@@ -2599,7 +2616,38 @@ static void red_attach_stream(RedWorker *worker, Drawable *drawable, Stream *str
             region_or(&agent->clip, &drawable->tree_item.base.rgn);
             push_stream_clip(dcc, agent);
         }
+#ifdef STREAM_STATS
+        agent->stats.num_input_frames++;
+#endif
     }
+}
+
+static void red_print_stream_stats(DisplayChannelClient *dcc, StreamAgent *agent)
+{
+#ifdef STREAM_STATS
+    StreamStats *stats = &agent->stats;
+    double passed_mm_time = (stats->end - stats->start) / 1000.0;
+
+    spice_debug("stream %ld (%dx%d): #frames-in %lu, #in-avg-fps %.2f, #frames-sent %lu, "
+                "#drops %lu (pipe %lu, fps %lu), avg_fps %.2f, "
+                "ratio(#frames-out/#frames-in) %.2f, "
+                "passed-mm-time %.2f (sec), size-total %.2f (MB), size-per-sec %.2f (Mbps), "
+                "size-per-frame %.2f (KBpf)",
+                agent - dcc->stream_agents, agent->stream->width, agent->stream->height,
+                stats->num_input_frames,
+                stats->num_input_frames / passed_mm_time,
+                stats->num_frames_sent,
+                stats->num_drops_pipe +
+                stats->num_drops_fps,
+                stats->num_drops_pipe,
+                stats->num_drops_fps,
+                stats->num_frames_sent / passed_mm_time,
+                (stats->num_frames_sent + 0.0) / stats->num_input_frames,
+                passed_mm_time,
+                stats->size_sent / 1024.0 / 1024.0,
+                ((stats->size_sent * 8.0) / (1024.0 * 1024)) / passed_mm_time,
+                stats->size_sent / 1000.0 / stats->num_frames_sent);
+#endif
 }
 
 static void red_stop_stream(RedWorker *worker, Stream *stream)
@@ -2629,6 +2677,7 @@ static void red_stop_stream(RedWorker *worker, Stream *stream)
         }
         stream->refs++;
         red_channel_client_pipe_add(&dcc->common.base, &stream_agent->destroy_item);
+        red_print_stream_stats(dcc, stream_agent);
     }
     worker->streams_size_total -= stream->width * stream->height;
     ring_remove(&stream->link);
@@ -3027,7 +3076,12 @@ static void red_display_create_stream(DisplayChannelClient *dcc, Stream *stream)
         report_pipe_item->stream_id = get_stream_id(dcc->common.worker, stream);
         red_channel_client_pipe_add(&dcc->common.base, &report_pipe_item->pipe_item);
     }
-
+#ifdef STREAM_STATS
+    memset(&agent->stats, 0, sizeof(StreamStats));
+    if (stream->current) {
+        agent->stats.start = stream->current->red_drawable->mm_time;
+    }
+#endif
 }
 
 static void red_stream_input_fps_timer_cb(void *opaque)
@@ -3271,6 +3325,9 @@ static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream, Drawa
         }
 
         if (pipe_item_is_linked(&dpi->dpi_pipe_item)) {
+#ifdef STREAM_STATS
+            agent->stats.num_drops_pipe++;
+#endif
             if (dcc->use_mjpeg_encoder_rate_control) {
                 mjpeg_encoder_notify_server_frame_drop(agent->mjpeg_encoder);
             } else {
@@ -8551,6 +8608,9 @@ static inline int red_marshall_stream_data(RedChannelClient *rcc,
     if (!dcc->use_mjpeg_encoder_rate_control) {
         if (time_now - agent->last_send_time < (1000 * 1000 * 1000) / agent->fps) {
             agent->frames--;
+#ifdef STREAM_STATS
+            agent->stats.num_drops_fps++;
+#endif
             return TRUE;
         }
     }
@@ -8564,6 +8624,9 @@ static inline int red_marshall_stream_data(RedChannelClient *rcc,
     switch (ret) {
     case MJPEG_ENCODER_FRAME_DROP:
         spice_assert(dcc->use_mjpeg_encoder_rate_control);
+#ifdef STREAM_STATS
+        agent->stats.num_drops_fps++;
+#endif
         return TRUE;
     case MJPEG_ENCODER_FRAME_UNSUPPORTED:
         return FALSE;
@@ -8610,6 +8673,12 @@ static inline int red_marshall_stream_data(RedChannelClient *rcc,
     spice_marshaller_add_ref(base_marshaller,
                              dcc->send_data.stream_outbuf, n);
     agent->last_send_time = time_now;
+#ifdef STREAM_STATS
+    agent->stats.num_frames_sent++;
+    agent->stats.size_sent += n;
+    agent->stats.end = drawable->red_drawable->mm_time;
+#endif
+
     return TRUE;
 }
 

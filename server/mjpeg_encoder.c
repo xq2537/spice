@@ -167,6 +167,10 @@ struct MJpegEncoder {
     MJpegEncoderRateControl rate_control;
     MJpegEncoderRateControlCbs cbs;
     void *cbs_opaque;
+
+    /* stats */
+    uint64_t avg_quality;
+    uint32_t num_frames;
 };
 
 static inline void mjpeg_encoder_reset_quality(MJpegEncoder *encoder,
@@ -214,6 +218,7 @@ MJpegEncoder *mjpeg_encoder_new(int bit_rate_control, uint64_t starting_bit_rate
 
 void mjpeg_encoder_destroy(MJpegEncoder *encoder)
 {
+    spice_debug("avg-quality %.2f", (double)encoder->avg_quality / encoder->num_frames);
     jpeg_destroy_compress(&encoder->cinfo);
     free(encoder->row);
     free(encoder);
@@ -815,6 +820,8 @@ int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
     jpeg_set_quality(&encoder->cinfo, quality, TRUE);
     jpeg_start_compress(&encoder->cinfo, encoder->first_frame);
 
+    encoder->num_frames++;
+    encoder->avg_quality += quality;
     return MJPEG_ENCODER_FRAME_ENCODE_START;
 }
 
