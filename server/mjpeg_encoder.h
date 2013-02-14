@@ -23,7 +23,21 @@
 
 typedef struct MJpegEncoder MJpegEncoder;
 
-MJpegEncoder *mjpeg_encoder_new(void);
+/*
+ * Callbacks required for controling and adjusting
+ * the stream bit rate:
+ * get_roundtrip_ms: roundtrip time in milliseconds
+ * get_source_fps: the input frame rate (#frames per second), i.e.,
+ * the rate of frames arriving from the guest to spice-server,
+ * before any drops.
+ */
+typedef struct MJpegEncoderRateControlCbs {
+    uint32_t (*get_roundtrip_ms)(void *opaque);
+    uint32_t (*get_source_fps)(void *opaque);
+} MJpegEncoderRateControlCbs;
+
+MJpegEncoder *mjpeg_encoder_new(int bit_rate_control, uint64_t starting_bit_rate,
+                                MJpegEncoderRateControlCbs *cbs, void *opaque);
 void mjpeg_encoder_destroy(MJpegEncoder *encoder);
 
 uint8_t mjpeg_encoder_get_bytes_per_pixel(MJpegEncoder *encoder);
@@ -38,6 +52,16 @@ int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
 int mjpeg_encoder_encode_scanline(MJpegEncoder *encoder, uint8_t *src_pixels,
                                   size_t image_width);
 size_t mjpeg_encoder_end_frame(MJpegEncoder *encoder);
+
+/*
+ * bit rate control
+ */
+
+/*
+ * The recommended output frame rate (per second) for the
+ * current available bit rate.
+ */
+uint32_t mjpeg_encoder_get_fps(MJpegEncoder *encoder);
 
 
 #endif

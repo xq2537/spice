@@ -2887,7 +2887,7 @@ static void red_display_create_stream(DisplayChannelClient *dcc, Stream *stream)
     agent->drops = 0;
     agent->fps = MAX_FPS;
     reset_rate(dcc, agent);
-    agent->mjpeg_encoder = mjpeg_encoder_new();
+    agent->mjpeg_encoder = mjpeg_encoder_new(FALSE, 0, NULL, NULL);
     red_channel_client_pipe_add(&dcc->common.base, &agent->create_item);
 }
 
