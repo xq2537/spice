@@ -35,7 +35,23 @@ static const int mjpeg_quality_samples[MJPEG_QUALITY_SAMPLE_NUM] = {20, 30, 40, 
 #define MJPEG_IMPROVE_QUALITY_FPS_STRICT_TH 10
 #define MJPEG_IMPROVE_QUALITY_FPS_PERMISSIVE_TH 5
 
+#define MJPEG_AVERAGE_SIZE_WINDOW 3
+
+enum {
+    MJPEG_QUALITY_EVAL_TYPE_SET,
+    MJPEG_QUALITY_EVAL_TYPE_UPGRADE,
+    MJPEG_QUALITY_EVAL_TYPE_DOWNGRADE,
+};
+
+enum {
+    MJPEG_QUALITY_EVAL_REASON_SIZE_CHANGE,
+    MJPEG_QUALITY_EVAL_REASON_RATE_CHANGE,
+};
+
 typedef struct MJpegEncoderQualityEval {
+    int type;
+    int reason;
+
     uint64_t encoded_size_by_quality[MJPEG_QUALITY_SAMPLE_NUM];
     /* lower limit for the current evaluation round */
     int min_quality_id;
@@ -52,7 +68,7 @@ typedef struct MJpegEncoderQualityEval {
  * Adjusting the stream jpeg quality and frame rate (fps):
  * When during_quality_eval=TRUE, we compress different frames with different
  * jpeg quality. By considering (1) the resulting compression ratio, and (2) the available
- * bit rate, we evaulate the max frame frequency for the stream with the given quality,
+ * bit rate, we evaluate the max frame frequency for the stream with the given quality,
  * and we choose the highest quality that will allow a reasonable frame rate.
  * during_quality_eval is set for new streams and can also be set any time we want
  * to re-evaluate the stream parameters (e.g., when the bit rate and/or
@@ -65,8 +81,13 @@ typedef struct MJpegEncoderRateControl {
     uint64_t byte_rate;
     int quality_id;
     uint32_t fps;
+    /* the encoded frame size which the quality and the fps evaluation was based upon */
+    uint64_t base_enc_size;
 
     uint64_t last_enc_size;
+
+    uint64_t sum_recent_enc_size;
+    uint32_t num_recent_enc_frames;
 } MJpegEncoderRateControl;
 
 struct MJpegEncoder {
@@ -86,7 +107,10 @@ struct MJpegEncoder {
     void *cbs_opaque;
 };
 
-static inline void mjpeg_encoder_reset_quality(MJpegEncoder *encoder, int quality_id, uint32_t fps);
+static inline void mjpeg_encoder_reset_quality(MJpegEncoder *encoder,
+                                               int quality_id,
+                                               uint32_t fps,
+                                               uint64_t frame_enc_size);
 static uint32_t get_max_fps(uint64_t frame_size, uint64_t bytes_per_sec);
 
 MJpegEncoder *mjpeg_encoder_new(int bit_rate_control, uint64_t starting_bit_rate,
@@ -104,10 +128,12 @@ MJpegEncoder *mjpeg_encoder_new(int bit_rate_control, uint64_t starting_bit_rate
     if (bit_rate_control) {
         enc->cbs = *cbs;
         enc->cbs_opaque = opaque;
-        mjpeg_encoder_reset_quality(enc, MJPEG_QUALITY_SAMPLE_NUM / 2, 5);
+        mjpeg_encoder_reset_quality(enc, MJPEG_QUALITY_SAMPLE_NUM / 2, 5, 0);
         enc->rate_control.during_quality_eval = TRUE;
+        enc->rate_control.quality_eval_data.type = MJPEG_QUALITY_EVAL_TYPE_SET;
+        enc->rate_control.quality_eval_data.reason = MJPEG_QUALITY_EVAL_REASON_RATE_CHANGE;
     } else {
-        mjpeg_encoder_reset_quality(enc, MJPEG_LEGACY_STATIC_QUALITY_ID, MJPEG_MAX_FPS);
+        mjpeg_encoder_reset_quality(enc, MJPEG_LEGACY_STATIC_QUALITY_ID, MJPEG_MAX_FPS, 0);
     }
 
     enc->cinfo.err = jpeg_std_error(&enc->jerr);
@@ -275,7 +301,10 @@ static uint32_t get_max_fps(uint64_t frame_size, uint64_t bytes_per_sec)
     return fps;
 }
 
-static inline void mjpeg_encoder_reset_quality(MJpegEncoder *encoder, int quality_id, uint32_t fps)
+static inline void mjpeg_encoder_reset_quality(MJpegEncoder *encoder,
+                                               int quality_id,
+                                               uint32_t fps,
+                                               uint64_t frame_enc_size)
 {
     MJpegEncoderRateControl *rate_control = &encoder->rate_control;
 
@@ -284,12 +313,18 @@ static inline void mjpeg_encoder_reset_quality(MJpegEncoder *encoder, int qualit
     if (rate_control->quality_id != quality_id) {
         rate_control->last_enc_size = 0;
     }
+
     rate_control->quality_id = quality_id;
     memset(&rate_control->quality_eval_data, 0, sizeof(MJpegEncoderQualityEval));
     rate_control->quality_eval_data.max_quality_id = MJPEG_QUALITY_SAMPLE_NUM - 1;
     rate_control->quality_eval_data.max_quality_fps = MJPEG_MAX_FPS;
+
     rate_control->fps = MAX(MJPEG_MIN_FPS, fps);
     rate_control->fps = MIN(MJPEG_MAX_FPS, rate_control->fps);
+    rate_control->base_enc_size = frame_enc_size;
+
+    rate_control->sum_recent_enc_size = 0;
+    rate_control->num_recent_enc_frames = 0;
 }
 
 #define QUALITY_WAS_EVALUATED(encoder, quality) \
@@ -428,21 +463,57 @@ complete_sample:
     if (final_quality_id == quality_eval->max_quality_id) {
         final_fps = MIN(final_fps, quality_eval->max_quality_fps);
     }
-    mjpeg_encoder_reset_quality(encoder, final_quality_id, final_fps);
+    mjpeg_encoder_reset_quality(encoder, final_quality_id, final_fps, final_quality_enc_size);
+    rate_control->sum_recent_enc_size = final_quality_enc_size;
+    rate_control->num_recent_enc_frames = 1;
 
     spice_debug("MJpeg quality sample end %p: quality %d fps %d",
                 encoder, mjpeg_quality_samples[rate_control->quality_id], rate_control->fps);
 }
 
+static void mjpeg_encoder_quality_eval_set_upgrade(MJpegEncoder *encoder,
+                                                   int reason,
+                                                   uint32_t min_quality_id,
+                                                   uint32_t min_quality_fps)
+{
+    MJpegEncoderQualityEval *quality_eval = &encoder->rate_control.quality_eval_data;
+
+    encoder->rate_control.during_quality_eval = TRUE;
+    quality_eval->type = MJPEG_QUALITY_EVAL_TYPE_UPGRADE;
+    quality_eval->reason = reason;
+    quality_eval->min_quality_id = min_quality_id;
+    quality_eval->min_quality_fps = min_quality_fps;
+}
+
+static void mjpeg_encoder_quality_eval_set_downgrade(MJpegEncoder *encoder,
+                                                     int reason,
+                                                     uint32_t max_quality_id,
+                                                     uint32_t max_quality_fps)
+{
+    MJpegEncoderQualityEval *quality_eval = &encoder->rate_control.quality_eval_data;
+
+    encoder->rate_control.during_quality_eval = TRUE;
+    quality_eval->type = MJPEG_QUALITY_EVAL_TYPE_DOWNGRADE;
+    quality_eval->reason = reason;
+    quality_eval->max_quality_id = max_quality_id;
+    quality_eval->max_quality_fps = max_quality_fps;
+}
+
 static void mjpeg_encoder_adjust_params_to_bit_rate(MJpegEncoder *encoder)
 {
     MJpegEncoderRateControl *rate_control;
+    MJpegEncoderQualityEval *quality_eval;
+    uint64_t new_avg_enc_size;
+    uint32_t new_fps;
+    uint32_t latency = 0;
+    uint32_t src_fps;
 
     if (!encoder->rate_control_is_active) {
         return;
     }
 
     rate_control = &encoder->rate_control;
+    quality_eval = &rate_control->quality_eval_data;
 
     if (!rate_control->last_enc_size) {
         spice_debug("missing sample size");
@@ -450,8 +521,59 @@ static void mjpeg_encoder_adjust_params_to_bit_rate(MJpegEncoder *encoder)
     }
 
     if (rate_control->during_quality_eval) {
-        MJpegEncoderQualityEval *quality_eval = &rate_control->quality_eval_data;
         quality_eval->encoded_size_by_quality[rate_control->quality_id] = rate_control->last_enc_size;
+        mjpeg_encoder_eval_quality(encoder);
+        return;
+    }
+
+    spice_assert(rate_control->num_recent_enc_frames);
+
+    if (rate_control->num_recent_enc_frames < MJPEG_AVERAGE_SIZE_WINDOW &&
+        rate_control->num_recent_enc_frames < rate_control->fps) {
+        return;
+    }
+
+    latency = mjpeg_encoder_get_latency(encoder);
+    new_avg_enc_size = rate_control->sum_recent_enc_size /
+                       rate_control->num_recent_enc_frames;
+    new_fps = get_max_fps(new_avg_enc_size, rate_control->byte_rate);
+
+    spice_debug("cur-fps=%u new-fps=%u (new/old=%.2f) |"
+                "bit-rate=%.2f (Mbps) latency=%u (ms) quality=%d |"
+                " new-size-avg %lu , base-size %lu, (new/old=%.2f) ",
+                rate_control->fps, new_fps, ((double)new_fps)/rate_control->fps,
+                ((double)rate_control->byte_rate*8)/1024/1024,
+                latency,
+                mjpeg_quality_samples[rate_control->quality_id],
+                new_avg_enc_size, rate_control->base_enc_size,
+                rate_control->base_enc_size ?
+                    ((double)new_avg_enc_size) / rate_control->base_enc_size :
+                    1);
+
+     src_fps = encoder->cbs.get_source_fps(encoder->cbs_opaque);
+
+    /*
+     * The ratio between the new_fps and the current fps reflects the changes
+     * in latency and frame size. When the change passes a threshold,
+     * we re-evaluate the quality and frame rate.
+     */
+    if (new_fps > rate_control->fps &&
+        (rate_control->fps < src_fps || rate_control->quality_id < MJPEG_QUALITY_SAMPLE_NUM - 1)) {
+        spice_debug("mjpeg %p FPS CHANGE >> :  re-evaluating params", encoder);
+        mjpeg_encoder_quality_eval_set_upgrade(encoder, MJPEG_QUALITY_EVAL_REASON_SIZE_CHANGE,
+                                               rate_control->quality_id, /* fps has improved -->
+                                                                            don't allow stream quality
+                                                                            to deteriorate */
+                                               rate_control->fps);
+    } else if (new_fps < rate_control->fps && new_fps < src_fps) {
+        spice_debug("mjpeg %p FPS CHANGE << : re-evaluating params", encoder);
+        mjpeg_encoder_quality_eval_set_downgrade(encoder, MJPEG_QUALITY_EVAL_REASON_SIZE_CHANGE,
+                                                 rate_control->quality_id,
+                                                 rate_control->fps);
+    }
+
+    if (rate_control->during_quality_eval) {
+        quality_eval->encoded_size_by_quality[rate_control->quality_id] = new_avg_enc_size;
         mjpeg_encoder_eval_quality(encoder);
     }
 }
@@ -551,12 +673,21 @@ int mjpeg_encoder_encode_scanline(MJpegEncoder *encoder, uint8_t *src_pixels,
 size_t mjpeg_encoder_end_frame(MJpegEncoder *encoder)
 {
     mem_destination_mgr *dest = (mem_destination_mgr *) encoder->cinfo.dest;
+    MJpegEncoderRateControl *rate_control = &encoder->rate_control;
 
     jpeg_finish_compress(&encoder->cinfo);
 
     encoder->first_frame = FALSE;
-    encoder->rate_control.last_enc_size = dest->pub.next_output_byte - dest->buffer;
+    rate_control->last_enc_size = dest->pub.next_output_byte - dest->buffer;
 
+    if (!rate_control->during_quality_eval) {
+        if (rate_control->num_recent_enc_frames >= MJPEG_AVERAGE_SIZE_WINDOW) {
+            rate_control->num_recent_enc_frames = 0;
+            rate_control->sum_recent_enc_size = 0;
+        }
+        rate_control->sum_recent_enc_size += rate_control->last_enc_size;
+        rate_control->num_recent_enc_frames++;
+    }
     return encoder->rate_control.last_enc_size;
 }
 
