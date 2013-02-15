@@ -8392,7 +8392,8 @@ static inline int red_marshall_stream_data(RedChannelClient *rcc,
     if (!mjpeg_encoder_start_frame(agent->mjpeg_encoder, image->u.bitmap.format,
                                    width, height,
                                    &dcc->send_data.stream_outbuf,
-                                   &outbuf_size)) {
+                                   &outbuf_size,
+                                   drawable->red_drawable->mm_time)) {
         return FALSE;
     }
     if (!encode_frame(dcc, &drawable->red_drawable->u.copy.src_area,

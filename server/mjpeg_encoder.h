@@ -48,7 +48,8 @@ uint8_t mjpeg_encoder_get_bytes_per_pixel(MJpegEncoder *encoder);
  */
 int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
                               int width, int height,
-                              uint8_t **dest, size_t *dest_len);
+                              uint8_t **dest, size_t *dest_len,
+                              uint32_t frame_mm_time);
 int mjpeg_encoder_encode_scanline(MJpegEncoder *encoder, uint8_t *src_pixels,
                                   size_t image_width);
 size_t mjpeg_encoder_end_frame(MJpegEncoder *encoder);
@@ -63,5 +64,24 @@ size_t mjpeg_encoder_end_frame(MJpegEncoder *encoder);
  */
 uint32_t mjpeg_encoder_get_fps(MJpegEncoder *encoder);
 
-
+/*
+ * Data that should be periodically obtained from the client. The report contains:
+ * num_frames         : the number of frames that reached the client during the time
+ *                      the report is referring to.
+ * num_drops          : the part of the above frames that was dropped by the client due to
+ *                      late arrival time.
+ * start_frame_mm_time: the mm_time of the first frame included in the report
+ * end_frame_mm_time  : the mm_time of the last_frame included in the report
+ * end_frame_delay    : (end_frame_mm_time - client_mm_time)
+ * audio delay        : the latency of the audio playback.
+ *                      If there is no audio playback, set it to MAX_UINT.
+ *
+ */
+void mjpeg_encoder_client_stream_report(MJpegEncoder *encoder,
+                                        uint32_t num_frames,
+                                        uint32_t num_drops,
+                                        uint32_t start_frame_mm_time,
+                                        uint32_t end_frame_mm_time,
+                                        int32_t end_frame_delay,
+                                        uint32_t audio_delay);
 #endif

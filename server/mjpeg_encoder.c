@@ -37,6 +37,17 @@ static const int mjpeg_quality_samples[MJPEG_QUALITY_SAMPLE_NUM] = {20, 30, 40, 
 
 #define MJPEG_AVERAGE_SIZE_WINDOW 3
 
+#define MJPEG_BIT_RATE_EVAL_MIN_NUM_FRAMES 3
+#define MJPEG_LOW_FPS_RATE_TH 3
+
+/*
+ * acting on positive client reports only if enough frame mm time
+ * has passed since the last bit rate change and the report.
+ * time
+ */
+#define MJPEG_CLIENT_POSITIVE_REPORT_TIMEOUT 2000
+#define MJPEG_CLIENT_POSITIVE_REPORT_STRICT_TIMEOUT 3000
+
 enum {
     MJPEG_QUALITY_EVAL_TYPE_SET,
     MJPEG_QUALITY_EVAL_TYPE_UPGRADE,
@@ -64,6 +75,22 @@ typedef struct MJpegEncoderQualityEval {
     int max_sampled_fps_quality_id;
 } MJpegEncoderQualityEval;
 
+typedef struct MJpegEncoderClientState {
+    int max_video_latency;
+    uint32_t max_audio_latency;
+} MJpegEncoderClientState;
+
+typedef struct MJpegEncoderBitRateInfo {
+    uint64_t change_start_time;
+    uint64_t last_frame_time;
+    uint32_t change_start_mm_time;
+    int was_upgraded;
+
+    /* gathering data about the frames that
+     * were encoded since the last bit rate change*/
+    uint32_t num_enc_frames;
+    uint64_t sum_enc_size;
+} MJpegEncoderBitRateInfo;
 /*
  * Adjusting the stream jpeg quality and frame rate (fps):
  * When during_quality_eval=TRUE, we compress different frames with different
@@ -77,6 +104,8 @@ typedef struct MJpegEncoderQualityEval {
 typedef struct MJpegEncoderRateControl {
     int during_quality_eval;
     MJpegEncoderQualityEval quality_eval_data;
+    MJpegEncoderBitRateInfo bit_rate_info;
+    MJpegEncoderClientState client_state;
 
     uint64_t byte_rate;
     int quality_id;
@@ -580,8 +609,10 @@ static void mjpeg_encoder_adjust_params_to_bit_rate(MJpegEncoder *encoder)
 
 int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
                               int width, int height,
-                              uint8_t **dest, size_t *dest_len)
+                              uint8_t **dest, size_t *dest_len,
+                              uint32_t frame_mm_time)
 {
+    MJpegEncoderBitRateInfo *bit_rate_info;
     uint32_t quality;
 
     mjpeg_encoder_adjust_params_to_bit_rate(encoder);
@@ -632,6 +663,23 @@ int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
 
     spice_jpeg_mem_dest(&encoder->cinfo, dest, dest_len);
 
+    if (!encoder->rate_control.during_quality_eval ||
+        encoder->rate_control.quality_eval_data.reason == MJPEG_QUALITY_EVAL_REASON_SIZE_CHANGE) {
+        struct timespec time;
+        uint64_t now;
+
+        clock_gettime(CLOCK_MONOTONIC, &time);
+        now = ((uint64_t) time.tv_sec) * 1000000000 + time.tv_nsec;
+
+        bit_rate_info = &encoder->rate_control.bit_rate_info;
+
+        if (!bit_rate_info->change_start_time) {
+            bit_rate_info->change_start_time = now;
+            bit_rate_info->change_start_mm_time = frame_mm_time;
+        }
+        bit_rate_info->last_frame_time = now;
+    }
+
     encoder->cinfo.image_width      = width;
     encoder->cinfo.image_height     = height;
     jpeg_set_defaults(&encoder->cinfo);
@@ -680,13 +728,19 @@ size_t mjpeg_encoder_end_frame(MJpegEncoder *encoder)
     encoder->first_frame = FALSE;
     rate_control->last_enc_size = dest->pub.next_output_byte - dest->buffer;
 
-    if (!rate_control->during_quality_eval) {
-        if (rate_control->num_recent_enc_frames >= MJPEG_AVERAGE_SIZE_WINDOW) {
-            rate_control->num_recent_enc_frames = 0;
-            rate_control->sum_recent_enc_size = 0;
+    if (!rate_control->during_quality_eval ||
+        rate_control->quality_eval_data.reason == MJPEG_QUALITY_EVAL_REASON_SIZE_CHANGE) {
+
+        if (!rate_control->during_quality_eval) {
+            if (rate_control->num_recent_enc_frames >= MJPEG_AVERAGE_SIZE_WINDOW) {
+                rate_control->num_recent_enc_frames = 0;
+                rate_control->sum_recent_enc_size = 0;
+            }
+            rate_control->sum_recent_enc_size += rate_control->last_enc_size;
+            rate_control->num_recent_enc_frames++;
         }
-        rate_control->sum_recent_enc_size += rate_control->last_enc_size;
-        rate_control->num_recent_enc_frames++;
+        rate_control->bit_rate_info.sum_enc_size += encoder->rate_control.last_enc_size;
+        rate_control->bit_rate_info.num_enc_frames++;
     }
     return encoder->rate_control.last_enc_size;
 }
@@ -697,4 +751,320 @@ uint32_t mjpeg_encoder_get_fps(MJpegEncoder *encoder)
         spice_warning("bit rate control is not active");
     }
     return encoder->rate_control.fps;
+}
+
+static void mjpeg_encoder_quality_eval_stop(MJpegEncoder *encoder)
+{
+    MJpegEncoderRateControl *rate_control = &encoder->rate_control;
+    uint32_t quality_id;
+    uint32_t fps;
+
+    if (!rate_control->during_quality_eval) {
+        return;
+    }
+    switch (rate_control->quality_eval_data.type) {
+    case MJPEG_QUALITY_EVAL_TYPE_UPGRADE:
+        quality_id = rate_control->quality_eval_data.min_quality_id;
+        fps = rate_control->quality_eval_data.min_quality_fps;
+        break;
+    case MJPEG_QUALITY_EVAL_TYPE_DOWNGRADE:
+        quality_id = rate_control->quality_eval_data.max_quality_id;
+        fps = rate_control->quality_eval_data.max_quality_fps;
+        break;
+    case MJPEG_QUALITY_EVAL_TYPE_SET:
+        quality_id = MJPEG_QUALITY_SAMPLE_NUM / 2;
+        fps = MJPEG_MAX_FPS / 2;
+        break;
+    default:
+        spice_warning("unexected");
+        return;
+    }
+    mjpeg_encoder_reset_quality(encoder, quality_id, fps, 0);
+    spice_debug("during quality evaluation: canceling."
+                "reset quality to %d fps %d",
+                mjpeg_quality_samples[rate_control->quality_id], rate_control->fps);
+}
+
+static void mjpeg_encoder_decrease_bit_rate(MJpegEncoder *encoder)
+{
+    MJpegEncoderRateControl *rate_control = &encoder->rate_control;
+    MJpegEncoderBitRateInfo *bit_rate_info = &rate_control->bit_rate_info;
+    uint64_t measured_byte_rate;
+    uint32_t measured_fps;
+    uint64_t decrease_size;
+
+    mjpeg_encoder_quality_eval_stop(encoder);
+
+    rate_control->client_state.max_video_latency = 0;
+    rate_control->client_state.max_audio_latency = 0;
+
+    if (bit_rate_info->num_enc_frames > MJPEG_BIT_RATE_EVAL_MIN_NUM_FRAMES ||
+        bit_rate_info->num_enc_frames > rate_control->fps) {
+        double duration_sec;
+
+        duration_sec = (bit_rate_info->last_frame_time - bit_rate_info->change_start_time);
+        duration_sec /= (1000.0 * 1000.0 * 1000.0);
+        measured_byte_rate = bit_rate_info->sum_enc_size / duration_sec;
+        measured_fps = bit_rate_info->num_enc_frames / duration_sec;
+        decrease_size = bit_rate_info->sum_enc_size / bit_rate_info->num_enc_frames;
+        spice_debug("bit rate esitimation %.2f (Mbps) fps %u",
+                    measured_byte_rate*8/1024.0/1024,
+                    measured_fps);
+    } else {
+        measured_byte_rate = rate_control->byte_rate;
+        measured_fps = rate_control->fps;
+        decrease_size = measured_byte_rate/measured_fps;
+        spice_debug("bit rate not re-estimated %.2f (Mbps) fps %u",
+                    measured_byte_rate*8/1024.0/1024,
+                    measured_fps);
+    }
+
+    measured_byte_rate = MIN(rate_control->byte_rate, measured_byte_rate);
+
+    if (decrease_size >=  measured_byte_rate) {
+        decrease_size = measured_byte_rate / 2;
+    }
+
+    rate_control->byte_rate = measured_byte_rate - decrease_size;
+    bit_rate_info->change_start_time = 0;
+    bit_rate_info->change_start_mm_time = 0;
+    bit_rate_info->last_frame_time = 0;
+    bit_rate_info->num_enc_frames = 0;
+    bit_rate_info->sum_enc_size = 0;
+    bit_rate_info->was_upgraded = FALSE;
+
+    spice_debug("decrease bit rate %.2f (Mbps)", rate_control->byte_rate * 8 / 1024.0/1024.0);
+    mjpeg_encoder_quality_eval_set_downgrade(encoder,
+                                             MJPEG_QUALITY_EVAL_REASON_RATE_CHANGE,
+                                             rate_control->quality_id,
+                                             rate_control->fps);
+}
+
+static void mjpeg_encoder_handle_negative_client_stream_report(MJpegEncoder *encoder,
+                                                               uint32_t report_end_frame_mm_time)
+{
+    MJpegEncoderRateControl *rate_control = &encoder->rate_control;
+
+    spice_debug(NULL);
+
+    if ((rate_control->bit_rate_info.change_start_mm_time > report_end_frame_mm_time ||
+        !rate_control->bit_rate_info.change_start_mm_time) &&
+         !rate_control->bit_rate_info.was_upgraded) {
+        spice_debug("ignoring, a downgrade has already occurred later to the report time");
+        return;
+    }
+
+    mjpeg_encoder_decrease_bit_rate(encoder);
+}
+
+static void mjpeg_encoder_increase_bit_rate(MJpegEncoder *encoder)
+{
+    MJpegEncoderRateControl *rate_control = &encoder->rate_control;
+    MJpegEncoderBitRateInfo *bit_rate_info = &rate_control->bit_rate_info;
+    uint64_t measured_byte_rate;
+    uint32_t measured_fps;
+    uint64_t increase_size;
+
+
+    if (bit_rate_info->num_enc_frames > MJPEG_BIT_RATE_EVAL_MIN_NUM_FRAMES ||
+        bit_rate_info->num_enc_frames > rate_control->fps) {
+        uint64_t avg_frame_size;
+        double duration_sec;
+
+        duration_sec = (bit_rate_info->last_frame_time - bit_rate_info->change_start_time);
+        duration_sec /= (1000.0 * 1000.0 * 1000.0);
+        measured_byte_rate = bit_rate_info->sum_enc_size / duration_sec;
+        measured_fps = bit_rate_info->num_enc_frames / duration_sec;
+        avg_frame_size = bit_rate_info->sum_enc_size / bit_rate_info->num_enc_frames;
+        spice_debug("bit rate esitimation %.2f (Mbps) defined %.2f"
+                    " fps %u avg-frame-size=%.2f (KB)",
+                    measured_byte_rate*8/1024.0/1024,
+                    rate_control->byte_rate*8/1024.0/1024,
+                    measured_fps,
+                    avg_frame_size/1024.0);
+        increase_size = avg_frame_size;
+    } else {
+        spice_debug("not enough samples for measuring the bit rate. no change");
+        return;
+    }
+
+
+    mjpeg_encoder_quality_eval_stop(encoder);
+
+    if (measured_byte_rate + increase_size < rate_control->byte_rate) {
+        spice_debug("measured byte rate is small: not upgrading, just re-evaluating");
+    } else {
+        rate_control->byte_rate = MIN(measured_byte_rate, rate_control->byte_rate) + increase_size;
+    }
+
+    bit_rate_info->change_start_time = 0;
+    bit_rate_info->change_start_mm_time = 0;
+    bit_rate_info->last_frame_time = 0;
+    bit_rate_info->num_enc_frames = 0;
+    bit_rate_info->sum_enc_size = 0;
+    bit_rate_info->was_upgraded = TRUE;
+
+    spice_debug("increase bit rate %.2f (Mbps)", rate_control->byte_rate * 8 / 1024.0/1024.0);
+    mjpeg_encoder_quality_eval_set_upgrade(encoder,
+                                           MJPEG_QUALITY_EVAL_REASON_RATE_CHANGE,
+                                           rate_control->quality_id,
+                                           rate_control->fps);
+}
+static void mjpeg_encoder_handle_positive_client_stream_report(MJpegEncoder *encoder,
+                                                               uint32_t report_start_frame_mm_time)
+{
+    MJpegEncoderRateControl *rate_control = &encoder->rate_control;
+    MJpegEncoderBitRateInfo *bit_rate_info = &rate_control->bit_rate_info;
+    int stable_client_mm_time;
+    int timeout;
+
+    if (rate_control->during_quality_eval &&
+        rate_control->quality_eval_data.reason == MJPEG_QUALITY_EVAL_REASON_RATE_CHANGE) {
+        spice_debug("during quality evaluation (rate change). ignoring report");
+        return;
+    }
+
+    if ((rate_control->fps > MJPEG_IMPROVE_QUALITY_FPS_STRICT_TH ||
+         rate_control->fps >= encoder->cbs.get_source_fps(encoder->cbs_opaque)) &&
+         rate_control->quality_id > MJPEG_QUALITY_SAMPLE_NUM / 2) {
+        timeout = MJPEG_CLIENT_POSITIVE_REPORT_STRICT_TIMEOUT;
+    } else {
+        timeout = MJPEG_CLIENT_POSITIVE_REPORT_TIMEOUT;
+    }
+
+    stable_client_mm_time = (int)report_start_frame_mm_time - bit_rate_info->change_start_mm_time;
+
+    if (!bit_rate_info->change_start_mm_time || stable_client_mm_time < timeout) {
+        /* assessing the stability of the current setting and only then
+         * respond to the report */
+        spice_debug("no drops, but not enough time has passed for assessing"
+                    "the playback stability since the last bit rate change");
+        return;
+    }
+    mjpeg_encoder_increase_bit_rate(encoder);
+}
+
+/*
+ * the video playback jitter buffer should be at least (send_time*2 + net_latency) for
+ * preventing underflow
+ */
+static uint32_t get_min_required_playback_delay(uint64_t frame_enc_size,
+                                                uint64_t byte_rate,
+                                                uint32_t latency)
+{
+    uint32_t one_frame_time;
+
+    if (!frame_enc_size || !byte_rate) {
+        return latency;
+    }
+    one_frame_time = (frame_enc_size*1000)/byte_rate;
+
+    return one_frame_time*2 + latency;
+}
+
+#define MJPEG_PLAYBACK_LATENCY_DECREASE_FACTOR 0.5
+#define MJPEG_VIDEO_VS_AUDIO_LATENCY_FACTOR 1.25
+#define MJPEG_VIDEO_DELAY_TH -15
+
+void mjpeg_encoder_client_stream_report(MJpegEncoder *encoder,
+                                        uint32_t num_frames,
+                                        uint32_t num_drops,
+                                        uint32_t start_frame_mm_time,
+                                        uint32_t end_frame_mm_time,
+                                        int32_t end_frame_delay,
+                                        uint32_t audio_delay)
+{
+    MJpegEncoderRateControl *rate_control = &encoder->rate_control;
+    MJpegEncoderClientState *client_state = &rate_control->client_state;
+    uint64_t avg_enc_size = 0;
+    uint32_t min_playback_delay;
+
+    spice_debug("client report: #frames %u, #drops %d, duration %u video-delay %d audio-delay %u",
+                num_frames, num_drops,
+                end_frame_mm_time - start_frame_mm_time,
+                end_frame_delay, audio_delay);
+
+    if (!encoder->rate_control_is_active) {
+        spice_debug("rate control was not activated: ignoring");
+        return;
+    }
+    if (rate_control->during_quality_eval) {
+        if (rate_control->quality_eval_data.type == MJPEG_QUALITY_EVAL_TYPE_DOWNGRADE &&
+            rate_control->quality_eval_data.reason == MJPEG_QUALITY_EVAL_REASON_RATE_CHANGE) {
+            spice_debug("during rate downgrade evaluation");
+            return;
+        }
+    }
+
+    if (rate_control->num_recent_enc_frames) {
+        avg_enc_size = rate_control->sum_recent_enc_size /
+                       rate_control->num_recent_enc_frames;
+    }
+    spice_debug("recent size avg %.2f (KB)", avg_enc_size / 1024.0);
+    min_playback_delay = get_min_required_playback_delay(avg_enc_size, rate_control->byte_rate,
+                                                         mjpeg_encoder_get_latency(encoder));
+    spice_debug("min-delay %u client-delay %d", min_playback_delay, end_frame_delay);
+
+    /*
+     * If the audio latency has decreased (since the start of the current
+     * sequence of positive reports), and the video latency is bigger, slow down
+     * the video rate
+     */
+    if (end_frame_delay > 0 &&
+        audio_delay < MJPEG_PLAYBACK_LATENCY_DECREASE_FACTOR*client_state->max_audio_latency &&
+        end_frame_delay > MJPEG_VIDEO_VS_AUDIO_LATENCY_FACTOR*audio_delay) {
+        spice_debug("video_latency >> audio_latency && audio_latency << max (%u)",
+                    client_state->max_audio_latency);
+        mjpeg_encoder_handle_negative_client_stream_report(encoder,
+                                                           end_frame_mm_time);
+        return;
+    }
+
+    if (end_frame_delay < MJPEG_VIDEO_DELAY_TH) {
+        mjpeg_encoder_handle_negative_client_stream_report(encoder,
+                                                           end_frame_mm_time);
+    } else {
+        int is_video_delay_small = FALSE;
+        double major_delay_decrease_thresh;
+        double medium_delay_decrease_thresh;
+
+        client_state->max_video_latency = MAX(end_frame_delay, client_state->max_video_latency);
+        client_state->max_audio_latency = MAX(audio_delay, client_state->max_audio_latency);
+
+        if (min_playback_delay > end_frame_delay) {
+            uint32_t src_fps = encoder->cbs.get_source_fps(encoder->cbs_opaque);
+            /*
+             * if the stream is at its highest rate, we can't estimate the "real"
+             * network bit rate and the min_playback_delay
+             */
+            if (rate_control->quality_id != MJPEG_QUALITY_SAMPLE_NUM - 1 ||
+                rate_control->fps < MIN(src_fps, MJPEG_MAX_FPS)) {
+                is_video_delay_small = TRUE;
+            }
+        }
+
+        medium_delay_decrease_thresh = client_state->max_video_latency;
+        medium_delay_decrease_thresh *= MJPEG_PLAYBACK_LATENCY_DECREASE_FACTOR;
+
+        major_delay_decrease_thresh = medium_delay_decrease_thresh;
+        major_delay_decrease_thresh *= MJPEG_PLAYBACK_LATENCY_DECREASE_FACTOR;
+        /*
+         * since the bit rate and the required latency are only evaluation based on the
+         * reports we got till now, we assume that the latency is too low only if it
+         * was higher during the time that passed since the last report that resulted
+         * in a bit rate decrement. If we find that the latency has decreased, it might
+         * suggest that the stream bit rate is too high.
+         */
+        if ((end_frame_delay < medium_delay_decrease_thresh &&
+            is_video_delay_small) || end_frame_delay < major_delay_decrease_thresh) {
+            spice_debug("downgrade due to short video delay (last=%u, past-max=%u",
+                end_frame_delay, client_state->max_video_latency);
+            mjpeg_encoder_handle_negative_client_stream_report(encoder,
+                                                               end_frame_mm_time);
+        } else if (!num_drops) {
+            mjpeg_encoder_handle_positive_client_stream_report(encoder,
+                                                               start_frame_mm_time);
+
+        }
+    }
 }
