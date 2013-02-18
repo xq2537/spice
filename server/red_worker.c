@@ -10140,6 +10140,7 @@ static CommonChannelClient *common_channel_client_create(int size,
                                                          RedClient *client,
                                                          RedsStream *stream,
                                                          int mig_target,
+                                                         int monitor_latency,
                                                          uint32_t *common_caps,
                                                          int num_common_caps,
                                                          uint32_t *caps,
@@ -10147,7 +10148,7 @@ static CommonChannelClient *common_channel_client_create(int size,
 {
     MainChannelClient *mcc = red_client_get_main(client);
     RedChannelClient *rcc =
-        red_channel_client_create(size, &common->base, client, stream, FALSE,
+        red_channel_client_create(size, &common->base, client, stream, monitor_latency,
                                   num_common_caps, common_caps, num_caps, caps);
     if (!rcc) {
         return NULL;
@@ -10175,6 +10176,7 @@ DisplayChannelClient *display_channel_client_create(CommonChannel *common,
         (DisplayChannelClient*)common_channel_client_create(
             sizeof(DisplayChannelClient), common, client, stream,
             mig_target,
+            TRUE,
             common_caps, num_common_caps,
             caps, num_caps);
 
@@ -10196,6 +10198,7 @@ CursorChannelClient *cursor_channel_create_rcc(CommonChannel *common,
         (CursorChannelClient*)common_channel_client_create(
             sizeof(CursorChannelClient), common, client, stream,
             mig_target,
+            FALSE,
             common_caps,
             num_common_caps,
             caps,
