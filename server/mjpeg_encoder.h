@@ -84,4 +84,14 @@ void mjpeg_encoder_client_stream_report(MJpegEncoder *encoder,
                                         uint32_t end_frame_mm_time,
                                         int32_t end_frame_delay,
                                         uint32_t audio_delay);
+
+/*
+ * Notify the encoder each time a frame is dropped due to pipe
+ * congestion.
+ * We can deduce the client state by the frame dropping rate in the server.
+ * Monitoring the frame drops can help in fine tuning the playback parameters
+ * when the client reports are delayed.
+ */
+void mjpeg_encoder_notify_server_frame_drop(MJpegEncoder *encoder);
+
 #endif

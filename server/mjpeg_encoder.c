@@ -40,6 +40,9 @@ static const int mjpeg_quality_samples[MJPEG_QUALITY_SAMPLE_NUM] = {20, 30, 40, 
 #define MJPEG_BIT_RATE_EVAL_MIN_NUM_FRAMES 3
 #define MJPEG_LOW_FPS_RATE_TH 3
 
+#define MJPEG_SERVER_STATUS_EVAL_FPS_INTERVAL 1
+#define MJPEG_SERVER_STATUS_DOWNGRADE_DROP_FACTOR_TH 0.1
+
 /*
  * acting on positive client reports only if enough frame mm time
  * has passed since the last bit rate change and the report.
@@ -80,6 +83,11 @@ typedef struct MJpegEncoderClientState {
     uint32_t max_audio_latency;
 } MJpegEncoderClientState;
 
+typedef struct MJpegEncoderServerState {
+    uint32_t num_frames_encoded;
+    uint32_t num_frames_dropped;
+} MJpegEncoderServerState;
+
 typedef struct MJpegEncoderBitRateInfo {
     uint64_t change_start_time;
     uint64_t last_frame_time;
@@ -106,6 +114,7 @@ typedef struct MJpegEncoderRateControl {
     MJpegEncoderQualityEval quality_eval_data;
     MJpegEncoderBitRateInfo bit_rate_info;
     MJpegEncoderClientState client_state;
+    MJpegEncoderServerState server_state;
 
     uint64_t byte_rate;
     int quality_id;
@@ -141,6 +150,7 @@ static inline void mjpeg_encoder_reset_quality(MJpegEncoder *encoder,
                                                uint32_t fps,
                                                uint64_t frame_enc_size);
 static uint32_t get_max_fps(uint64_t frame_size, uint64_t bytes_per_sec);
+static void mjpeg_encoder_process_server_drops(MJpegEncoder *encoder);
 
 MJpegEncoder *mjpeg_encoder_new(int bit_rate_control, uint64_t starting_bit_rate,
                                 MJpegEncoderRateControlCbs *cbs, void *opaque)
@@ -343,6 +353,10 @@ static inline void mjpeg_encoder_reset_quality(MJpegEncoder *encoder,
         rate_control->last_enc_size = 0;
     }
 
+
+    if (rate_control->quality_eval_data.reason == MJPEG_QUALITY_EVAL_REASON_RATE_CHANGE) {
+        memset(&rate_control->server_state, 0, sizeof(MJpegEncoderServerState));
+    }
     rate_control->quality_id = quality_id;
     memset(&rate_control->quality_eval_data, 0, sizeof(MJpegEncoderQualityEval));
     rate_control->quality_eval_data.max_quality_id = MJPEG_QUALITY_SAMPLE_NUM - 1;
@@ -532,7 +546,7 @@ static void mjpeg_encoder_adjust_params_to_bit_rate(MJpegEncoder *encoder)
 {
     MJpegEncoderRateControl *rate_control;
     MJpegEncoderQualityEval *quality_eval;
-    uint64_t new_avg_enc_size;
+    uint64_t new_avg_enc_size = 0;
     uint32_t new_fps;
     uint32_t latency = 0;
     uint32_t src_fps;
@@ -559,7 +573,7 @@ static void mjpeg_encoder_adjust_params_to_bit_rate(MJpegEncoder *encoder)
 
     if (rate_control->num_recent_enc_frames < MJPEG_AVERAGE_SIZE_WINDOW &&
         rate_control->num_recent_enc_frames < rate_control->fps) {
-        return;
+        goto end;
     }
 
     latency = mjpeg_encoder_get_latency(encoder);
@@ -600,10 +614,12 @@ static void mjpeg_encoder_adjust_params_to_bit_rate(MJpegEncoder *encoder)
                                                  rate_control->quality_id,
                                                  rate_control->fps);
     }
-
+end:
     if (rate_control->during_quality_eval) {
         quality_eval->encoded_size_by_quality[rate_control->quality_id] = new_avg_enc_size;
         mjpeg_encoder_eval_quality(encoder);
+    } else {
+        mjpeg_encoder_process_server_drops(encoder);
     }
 }
 
@@ -612,10 +628,31 @@ int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
                               uint8_t **dest, size_t *dest_len,
                               uint32_t frame_mm_time)
 {
-    MJpegEncoderBitRateInfo *bit_rate_info;
     uint32_t quality;
 
-    mjpeg_encoder_adjust_params_to_bit_rate(encoder);
+    if (encoder->rate_control_is_active) {
+        MJpegEncoderRateControl *rate_control = &encoder->rate_control;
+        struct timespec time;
+        uint64_t now;
+
+        clock_gettime(CLOCK_MONOTONIC, &time);
+        now = ((uint64_t) time.tv_sec) * 1000000000 + time.tv_nsec;
+
+        mjpeg_encoder_adjust_params_to_bit_rate(encoder);
+
+        if (!rate_control->during_quality_eval ||
+            rate_control->quality_eval_data.reason == MJPEG_QUALITY_EVAL_REASON_SIZE_CHANGE) {
+            MJpegEncoderBitRateInfo *bit_rate_info;
+
+            bit_rate_info = &encoder->rate_control.bit_rate_info;
+
+            if (!bit_rate_info->change_start_time) {
+                bit_rate_info->change_start_time = now;
+                bit_rate_info->change_start_mm_time = frame_mm_time;
+            }
+            bit_rate_info->last_frame_time = now;
+        }
+    }
 
     encoder->cinfo.in_color_space   = JCS_RGB;
     encoder->cinfo.input_components = 3;
@@ -662,23 +699,6 @@ int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
     }
 
     spice_jpeg_mem_dest(&encoder->cinfo, dest, dest_len);
-
-    if (!encoder->rate_control.during_quality_eval ||
-        encoder->rate_control.quality_eval_data.reason == MJPEG_QUALITY_EVAL_REASON_SIZE_CHANGE) {
-        struct timespec time;
-        uint64_t now;
-
-        clock_gettime(CLOCK_MONOTONIC, &time);
-        now = ((uint64_t) time.tv_sec) * 1000000000 + time.tv_nsec;
-
-        bit_rate_info = &encoder->rate_control.bit_rate_info;
-
-        if (!bit_rate_info->change_start_time) {
-            bit_rate_info->change_start_time = now;
-            bit_rate_info->change_start_mm_time = frame_mm_time;
-        }
-        bit_rate_info->last_frame_time = now;
-    }
 
     encoder->cinfo.image_width      = width;
     encoder->cinfo.image_height     = height;
@@ -727,6 +747,7 @@ size_t mjpeg_encoder_end_frame(MJpegEncoder *encoder)
 
     encoder->first_frame = FALSE;
     rate_control->last_enc_size = dest->pub.next_output_byte - dest->buffer;
+    rate_control->server_state.num_frames_encoded++;
 
     if (!rate_control->during_quality_eval ||
         rate_control->quality_eval_data.reason == MJPEG_QUALITY_EVAL_REASON_SIZE_CHANGE) {
@@ -1067,4 +1088,42 @@ void mjpeg_encoder_client_stream_report(MJpegEncoder *encoder,
 
         }
     }
+}
+
+void mjpeg_encoder_notify_server_frame_drop(MJpegEncoder *encoder)
+{
+    encoder->rate_control.server_state.num_frames_dropped++;
+    mjpeg_encoder_process_server_drops(encoder);
+}
+
+/*
+ * decrease the bit rate if the drop rate on the sever side exceeds a pre defined
+ * threshold.
+ */
+static void mjpeg_encoder_process_server_drops(MJpegEncoder *encoder)
+{
+    MJpegEncoderServerState *server_state = &encoder->rate_control.server_state;
+    uint32_t num_frames_total;
+    double drop_factor;
+    uint32_t fps;
+
+    fps = MIN(encoder->rate_control.fps, encoder->cbs.get_source_fps(encoder->cbs_opaque));
+    if (server_state->num_frames_encoded < fps * MJPEG_SERVER_STATUS_EVAL_FPS_INTERVAL) {
+        return;
+    }
+
+    num_frames_total = server_state->num_frames_dropped + server_state->num_frames_encoded;
+    drop_factor = ((double)server_state->num_frames_dropped) / num_frames_total;
+
+    spice_debug("#drops %u total %u fps %u src-fps %u",
+                server_state->num_frames_dropped,
+                num_frames_total,
+                encoder->rate_control.fps,
+                encoder->cbs.get_source_fps(encoder->cbs_opaque));
+
+    if (drop_factor > MJPEG_SERVER_STATUS_DOWNGRADE_DROP_FACTOR_TH) {
+        mjpeg_encoder_decrease_bit_rate(encoder);
+    }
+    server_state->num_frames_encoded = 0;
+    server_state->num_frames_dropped = 0;
 }
