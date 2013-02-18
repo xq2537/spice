@@ -51,6 +51,12 @@ static const int mjpeg_quality_samples[MJPEG_QUALITY_SAMPLE_NUM] = {20, 30, 40, 
 #define MJPEG_CLIENT_POSITIVE_REPORT_TIMEOUT 2000
 #define MJPEG_CLIENT_POSITIVE_REPORT_STRICT_TIMEOUT 3000
 
+/*
+ * avoid interrupting the playback when there are temporary
+ * incidents of instability (with respect to server and client drops)
+ */
+#define MJPEG_MAX_CLIENT_PLAYBACK_DELAY 5000 // 5 sec
+
 enum {
     MJPEG_QUALITY_EVAL_TYPE_SET,
     MJPEG_QUALITY_EVAL_TYPE_UPGRADE,
@@ -151,6 +157,9 @@ static inline void mjpeg_encoder_reset_quality(MJpegEncoder *encoder,
                                                uint64_t frame_enc_size);
 static uint32_t get_max_fps(uint64_t frame_size, uint64_t bytes_per_sec);
 static void mjpeg_encoder_process_server_drops(MJpegEncoder *encoder);
+static uint32_t get_min_required_playback_delay(uint64_t frame_enc_size,
+                                                uint64_t byte_rate,
+                                                uint32_t latency);
 
 MJpegEncoder *mjpeg_encoder_new(int bit_rate_control, uint64_t starting_bit_rate,
                                 MJpegEncoderRateControlCbs *cbs, void *opaque)
@@ -512,6 +521,14 @@ complete_sample:
 
     spice_debug("MJpeg quality sample end %p: quality %d fps %d",
                 encoder, mjpeg_quality_samples[rate_control->quality_id], rate_control->fps);
+    if (encoder->cbs.update_client_playback_delay) {
+        uint32_t latency = mjpeg_encoder_get_latency(encoder);
+        uint32_t min_delay = get_min_required_playback_delay(final_quality_enc_size,
+                                                             rate_control->byte_rate,
+                                                             latency);
+
+        encoder->cbs.update_client_playback_delay(encoder->cbs_opaque, min_delay);
+    }
 }
 
 static void mjpeg_encoder_quality_eval_set_upgrade(MJpegEncoder *encoder,
@@ -974,13 +991,15 @@ static uint32_t get_min_required_playback_delay(uint64_t frame_enc_size,
                                                 uint32_t latency)
 {
     uint32_t one_frame_time;
+    uint32_t min_delay;
 
     if (!frame_enc_size || !byte_rate) {
         return latency;
     }
     one_frame_time = (frame_enc_size*1000)/byte_rate;
 
-    return one_frame_time*2 + latency;
+    min_delay = MIN(one_frame_time*2 + latency, MJPEG_MAX_CLIENT_PLAYBACK_DELAY);
+    return min_delay;
 }
 
 #define MJPEG_PLAYBACK_LATENCY_DECREASE_FACTOR 0.5
@@ -999,6 +1018,7 @@ void mjpeg_encoder_client_stream_report(MJpegEncoder *encoder,
     MJpegEncoderClientState *client_state = &rate_control->client_state;
     uint64_t avg_enc_size = 0;
     uint32_t min_playback_delay;
+    int is_video_delay_small = FALSE;
 
     spice_debug("client report: #frames %u, #drops %d, duration %u video-delay %d audio-delay %u",
                 num_frames, num_drops,
@@ -1026,6 +1046,23 @@ void mjpeg_encoder_client_stream_report(MJpegEncoder *encoder,
                                                          mjpeg_encoder_get_latency(encoder));
     spice_debug("min-delay %u client-delay %d", min_playback_delay, end_frame_delay);
 
+    if (min_playback_delay > end_frame_delay) {
+        uint32_t src_fps = encoder->cbs.get_source_fps(encoder->cbs_opaque);
+        /*
+        * if the stream is at its highest rate, we can't estimate the "real"
+        * network bit rate and the min_playback_delay
+        */
+        if (rate_control->quality_id != MJPEG_QUALITY_SAMPLE_NUM - 1 ||
+            rate_control->fps < MIN(src_fps, MJPEG_MAX_FPS) || end_frame_delay < 0) {
+            is_video_delay_small = TRUE;
+            if (encoder->cbs.update_client_playback_delay) {
+                encoder->cbs.update_client_playback_delay(encoder->cbs_opaque,
+                                                          min_playback_delay);
+            }
+        }
+    }
+
+
     /*
      * If the audio latency has decreased (since the start of the current
      * sequence of positive reports), and the video latency is bigger, slow down
@@ -1045,24 +1082,11 @@ void mjpeg_encoder_client_stream_report(MJpegEncoder *encoder,
         mjpeg_encoder_handle_negative_client_stream_report(encoder,
                                                            end_frame_mm_time);
     } else {
-        int is_video_delay_small = FALSE;
         double major_delay_decrease_thresh;
         double medium_delay_decrease_thresh;
 
         client_state->max_video_latency = MAX(end_frame_delay, client_state->max_video_latency);
         client_state->max_audio_latency = MAX(audio_delay, client_state->max_audio_latency);
-
-        if (min_playback_delay > end_frame_delay) {
-            uint32_t src_fps = encoder->cbs.get_source_fps(encoder->cbs_opaque);
-            /*
-             * if the stream is at its highest rate, we can't estimate the "real"
-             * network bit rate and the min_playback_delay
-             */
-            if (rate_control->quality_id != MJPEG_QUALITY_SAMPLE_NUM - 1 ||
-                rate_control->fps < MIN(src_fps, MJPEG_MAX_FPS)) {
-                is_video_delay_small = TRUE;
-            }
-        }
 
         medium_delay_decrease_thresh = client_state->max_video_latency;
         medium_delay_decrease_thresh *= MJPEG_PLAYBACK_LATENCY_DECREASE_FACTOR;

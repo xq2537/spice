@@ -34,6 +34,7 @@ typedef struct MJpegEncoder MJpegEncoder;
 typedef struct MJpegEncoderRateControlCbs {
     uint32_t (*get_roundtrip_ms)(void *opaque);
     uint32_t (*get_source_fps)(void *opaque);
+    void (*update_client_playback_delay)(void *opaque, uint32_t delay_ms);
 } MJpegEncoderRateControlCbs;
 
 MJpegEncoder *mjpeg_encoder_new(int bit_rate_control, uint64_t starting_bit_rate,
