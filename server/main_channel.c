@@ -1086,7 +1086,7 @@ static MainChannelClient *main_channel_client_create(MainChannel *main_chan, Red
 {
     MainChannelClient *mcc = (MainChannelClient*)
                              red_channel_client_create(sizeof(MainChannelClient), &main_chan->base,
-                                                       client, stream, num_common_caps,
+                                                       client, stream, FALSE, num_common_caps,
                                                        common_caps, num_caps, caps);
     spice_assert(mcc != NULL);
     mcc->connection_id = connection_id;

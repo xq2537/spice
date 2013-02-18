@@ -10113,7 +10113,7 @@ static CommonChannelClient *common_channel_client_create(int size,
 {
     MainChannelClient *mcc = red_client_get_main(client);
     RedChannelClient *rcc =
-        red_channel_client_create(size, &common->base, client, stream,
+        red_channel_client_create(size, &common->base, client, stream, FALSE,
                                   num_common_caps, common_caps, num_caps, caps);
     if (!rcc) {
         return NULL;

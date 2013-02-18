@@ -532,6 +532,7 @@ static void inputs_connect(RedChannel *channel, RedClient *client,
                                                           channel,
                                                           client,
                                                           stream,
+                                                          FALSE,
                                                           num_common_caps, common_caps,
                                                           num_caps, caps);
     if (!icc) {

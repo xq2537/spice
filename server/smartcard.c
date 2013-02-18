@@ -805,6 +805,7 @@ static void smartcard_connect_client(RedChannel *channel, RedClient *client,
                                                               channel,
                                                               client,
                                                               stream,
+                                                              FALSE,
                                                               num_common_caps, common_caps,
                                                               num_caps, caps);
 
