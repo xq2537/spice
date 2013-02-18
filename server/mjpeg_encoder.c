@@ -651,9 +651,15 @@ int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
         MJpegEncoderRateControl *rate_control = &encoder->rate_control;
         struct timespec time;
         uint64_t now;
+        uint64_t interval;
 
         clock_gettime(CLOCK_MONOTONIC, &time);
         now = ((uint64_t) time.tv_sec) * 1000000000 + time.tv_nsec;
+        interval = (now - rate_control->bit_rate_info.last_frame_time);
+
+        if (interval < (1000*1000*1000) / rate_control->fps) {
+            return MJPEG_ENCODER_FRAME_DROP;
+        }
 
         mjpeg_encoder_adjust_params_to_bit_rate(encoder);
 
@@ -700,14 +706,14 @@ int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
         break;
     default:
         spice_warning("unsupported format %d", format);
-        return FALSE;
+        return MJPEG_ENCODER_FRAME_UNSUPPORTED;
     }
 
     if (encoder->pixel_converter != NULL) {
         unsigned int stride = width * 3;
         /* check for integer overflow */
         if (stride < width) {
-            return FALSE;
+            return MJPEG_ENCODER_FRAME_UNSUPPORTED;
         }
         if (encoder->row_size < stride) {
             encoder->row = spice_realloc(encoder->row, stride);
@@ -725,7 +731,7 @@ int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
     jpeg_set_quality(&encoder->cinfo, quality, TRUE);
     jpeg_start_compress(&encoder->cinfo, encoder->first_frame);
 
-    return TRUE;
+    return MJPEG_ENCODER_FRAME_ENCODE_START;
 }
 
 int mjpeg_encoder_encode_scanline(MJpegEncoder *encoder, uint8_t *src_pixels,
@@ -781,14 +787,6 @@ size_t mjpeg_encoder_end_frame(MJpegEncoder *encoder)
         rate_control->bit_rate_info.num_enc_frames++;
     }
     return encoder->rate_control.last_enc_size;
-}
-
-uint32_t mjpeg_encoder_get_fps(MJpegEncoder *encoder)
-{
-    if (!encoder->rate_control_is_active) {
-        spice_warning("bit rate control is not active");
-    }
-    return encoder->rate_control.fps;
 }
 
 static void mjpeg_encoder_quality_eval_stop(MJpegEncoder *encoder)

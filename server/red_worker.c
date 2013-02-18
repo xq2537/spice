@@ -8352,6 +8352,7 @@ static inline int red_marshall_stream_data(RedChannelClient *rcc,
     RedWorker *worker = dcc->common.worker;
     int n;
     int width, height;
+    int ret;
 
     if (!stream) {
         spice_assert(drawable->sized_stream);
@@ -8389,13 +8390,24 @@ static inline int red_marshall_stream_data(RedChannelClient *rcc,
     }
 
     outbuf_size = dcc->send_data.stream_outbuf_size;
-    if (!mjpeg_encoder_start_frame(agent->mjpeg_encoder, image->u.bitmap.format,
-                                   width, height,
-                                   &dcc->send_data.stream_outbuf,
-                                   &outbuf_size,
-                                   drawable->red_drawable->mm_time)) {
+    ret = mjpeg_encoder_start_frame(agent->mjpeg_encoder, image->u.bitmap.format,
+                                    width, height,
+                                    &dcc->send_data.stream_outbuf,
+                                    &outbuf_size,
+                                    drawable->red_drawable->mm_time);
+    switch (ret) {
+    case MJPEG_ENCODER_FRAME_DROP:
+        spice_warning("mjpeg rate control is not supported yet");
+        return TRUE;
+    case MJPEG_ENCODER_FRAME_UNSUPPORTED:
+        return FALSE;
+    case MJPEG_ENCODER_FRAME_ENCODE_START:
+        break;
+    default:
+        spice_error("bad return value (%d) from mjpeg_encoder_start_frame", ret);
         return FALSE;
     }
+
     if (!encode_frame(dcc, &drawable->red_drawable->u.copy.src_area,
                       &image->u.bitmap, stream)) {
         return FALSE;

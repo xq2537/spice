@@ -21,6 +21,12 @@
 
 #include "red_common.h"
 
+enum {
+    MJPEG_ENCODER_FRAME_UNSUPPORTED = -1,
+    MJPEG_ENCODER_FRAME_DROP,
+    MJPEG_ENCODER_FRAME_ENCODE_START,
+};
+
 typedef struct MJpegEncoder MJpegEncoder;
 
 /*
@@ -44,8 +50,15 @@ void mjpeg_encoder_destroy(MJpegEncoder *encoder);
 uint8_t mjpeg_encoder_get_bytes_per_pixel(MJpegEncoder *encoder);
 
 /*
- * *dest must be either NULL or allocated by malloc, since it might be freed
+ * dest must be either NULL or allocated by malloc, since it might be freed
  * during the encoding, if its size is too small.
+ *
+ * return:
+ *  MJPEG_ENCODER_FRAME_UNSUPPORTED : frame cannot be encoded
+ *  MJPEG_ENCODER_FRAME_DROP        : frame should be dropped. This value can only be returned
+ *                                    if mjpeg rate control is active.
+ *  MJPEG_ENCODER_FRAME_ENCODE_START: frame encoding started. Continue with
+ *                                    mjpeg_encoder_encode_scanline.
  */
 int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
                               int width, int height,
@@ -58,12 +71,6 @@ size_t mjpeg_encoder_end_frame(MJpegEncoder *encoder);
 /*
  * bit rate control
  */
-
-/*
- * The recommended output frame rate (per second) for the
- * current available bit rate.
- */
-uint32_t mjpeg_encoder_get_fps(MJpegEncoder *encoder);
 
 /*
  * Data that should be periodically obtained from the client. The report contains:
