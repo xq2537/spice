@@ -51,6 +51,8 @@ static const int mjpeg_quality_samples[MJPEG_QUALITY_SAMPLE_NUM] = {20, 30, 40, 
 #define MJPEG_CLIENT_POSITIVE_REPORT_TIMEOUT 2000
 #define MJPEG_CLIENT_POSITIVE_REPORT_STRICT_TIMEOUT 3000
 
+#define MJPEG_ADJUST_FPS_TIMEOUT 500
+
 /*
  * avoid interrupting the playback when there are temporary
  * incidents of instability (with respect to server and client drops)
@@ -105,6 +107,7 @@ typedef struct MJpegEncoderBitRateInfo {
     uint32_t num_enc_frames;
     uint64_t sum_enc_size;
 } MJpegEncoderBitRateInfo;
+
 /*
  * Adjusting the stream jpeg quality and frame rate (fps):
  * When during_quality_eval=TRUE, we compress different frames with different
@@ -125,6 +128,10 @@ typedef struct MJpegEncoderRateControl {
     uint64_t byte_rate;
     int quality_id;
     uint32_t fps;
+    double adjusted_fps;
+    uint64_t adjusted_fps_start_time;
+    uint64_t adjusted_fps_num_frames;
+
     /* the encoded frame size which the quality and the fps evaluation was based upon */
     uint64_t base_enc_size;
 
@@ -132,6 +139,7 @@ typedef struct MJpegEncoderRateControl {
 
     uint64_t sum_recent_enc_size;
     uint32_t num_recent_enc_frames;
+
 } MJpegEncoderRateControl;
 
 struct MJpegEncoder {
@@ -355,13 +363,13 @@ static inline void mjpeg_encoder_reset_quality(MJpegEncoder *encoder,
                                                uint64_t frame_enc_size)
 {
     MJpegEncoderRateControl *rate_control = &encoder->rate_control;
+    double fps_ratio;
 
     rate_control->during_quality_eval = FALSE;
 
     if (rate_control->quality_id != quality_id) {
         rate_control->last_enc_size = 0;
     }
-
 
     if (rate_control->quality_eval_data.reason == MJPEG_QUALITY_EVAL_REASON_RATE_CHANGE) {
         memset(&rate_control->server_state, 0, sizeof(MJpegEncoderServerState));
@@ -371,8 +379,17 @@ static inline void mjpeg_encoder_reset_quality(MJpegEncoder *encoder,
     rate_control->quality_eval_data.max_quality_id = MJPEG_QUALITY_SAMPLE_NUM - 1;
     rate_control->quality_eval_data.max_quality_fps = MJPEG_MAX_FPS;
 
+    if (rate_control->adjusted_fps) {
+        fps_ratio = rate_control->adjusted_fps / rate_control->fps;
+    } else {
+        fps_ratio = 1.5;
+    }
     rate_control->fps = MAX(MJPEG_MIN_FPS, fps);
     rate_control->fps = MIN(MJPEG_MAX_FPS, rate_control->fps);
+    rate_control->adjusted_fps = rate_control->fps*fps_ratio;
+    spice_debug("adjusted-fps-ratio=%.2f adjusted-fps=%.2f", fps_ratio, rate_control->adjusted_fps);
+    rate_control->adjusted_fps_start_time = 0;
+    rate_control->adjusted_fps_num_frames = 0;
     rate_control->base_enc_size = frame_enc_size;
 
     rate_control->sum_recent_enc_size = 0;
@@ -640,6 +657,54 @@ end:
     }
 }
 
+/*
+ * The actual frames distribution does not necessarily fit the condition "at least
+ * one frame every (1000/rate_contorl->fps) milliseconds".
+ * For keeping the average fps close to the defined fps, we periodically
+ * measure the current average fps, and modify rate_control->adjusted_fps accordingly.
+ * Then, we use (1000/rate_control->adjusted_fps) as the interval between frames.
+ */
+static void mjpeg_encoder_adjust_fps(MJpegEncoder *encoder, uint64_t now)
+{
+    MJpegEncoderRateControl *rate_control = &encoder->rate_control;
+    uint64_t adjusted_fps_time_passed;
+
+    if (!encoder->rate_control_is_active) {
+        return;
+    }
+    adjusted_fps_time_passed = (now - rate_control->adjusted_fps_start_time) / 1000 / 1000;
+
+    if (!rate_control->during_quality_eval &&
+        adjusted_fps_time_passed > MJPEG_ADJUST_FPS_TIMEOUT &&
+        adjusted_fps_time_passed > 1000 / rate_control->adjusted_fps) {
+        double avg_fps;
+        double fps_ratio;
+
+        avg_fps = ((double)rate_control->adjusted_fps_num_frames*1000) /
+                  adjusted_fps_time_passed;
+        spice_debug("#frames-adjust=%lu #adjust-time=%lu avg-fps=%.2f",
+                    rate_control->adjusted_fps_num_frames, adjusted_fps_time_passed, avg_fps);
+        spice_debug("defined=%u old-adjusted=%.2f", rate_control->fps, rate_control->adjusted_fps);
+        fps_ratio = avg_fps / rate_control->fps;
+        if (avg_fps + 0.5 < rate_control->fps &&
+            encoder->cbs.get_source_fps(encoder->cbs_opaque) > avg_fps) {
+            double new_adjusted_fps = avg_fps ?
+                                               (rate_control->adjusted_fps/fps_ratio) :
+                                               rate_control->adjusted_fps * 2;
+
+            rate_control->adjusted_fps = MIN(rate_control->fps*2, new_adjusted_fps);
+            spice_debug("new-adjusted-fps=%.2f", rate_control->adjusted_fps);
+        } else if (rate_control->fps + 0.5 < avg_fps) {
+            double new_adjusted_fps = rate_control->adjusted_fps / fps_ratio;
+
+            rate_control->adjusted_fps = MAX(rate_control->fps, new_adjusted_fps);
+            spice_debug("new-adjusted-fps=%.2f", rate_control->adjusted_fps);
+        }
+        rate_control->adjusted_fps_start_time = now;
+        rate_control->adjusted_fps_num_frames = 0;
+    }
+}
+
 int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
                               int width, int height,
                               uint8_t **dest, size_t *dest_len,
@@ -655,9 +720,14 @@ int mjpeg_encoder_start_frame(MJpegEncoder *encoder, SpiceBitmapFmt format,
 
         clock_gettime(CLOCK_MONOTONIC, &time);
         now = ((uint64_t) time.tv_sec) * 1000000000 + time.tv_nsec;
+
+        if (!rate_control->adjusted_fps_start_time) {
+            rate_control->adjusted_fps_start_time = now;
+        }
+        mjpeg_encoder_adjust_fps(encoder, now);
         interval = (now - rate_control->bit_rate_info.last_frame_time);
 
-        if (interval < (1000*1000*1000) / rate_control->fps) {
+        if (interval < (1000*1000*1000) / rate_control->adjusted_fps) {
             return MJPEG_ENCODER_FRAME_DROP;
         }
 
@@ -782,6 +852,7 @@ size_t mjpeg_encoder_end_frame(MJpegEncoder *encoder)
             }
             rate_control->sum_recent_enc_size += rate_control->last_enc_size;
             rate_control->num_recent_enc_frames++;
+            rate_control->adjusted_fps_num_frames++;
         }
         rate_control->bit_rate_info.sum_enc_size += encoder->rate_control.last_enc_size;
         rate_control->bit_rate_info.num_enc_frames++;
