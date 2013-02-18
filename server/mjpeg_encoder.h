@@ -102,4 +102,6 @@ void mjpeg_encoder_client_stream_report(MJpegEncoder *encoder,
  */
 void mjpeg_encoder_notify_server_frame_drop(MJpegEncoder *encoder);
 
+uint64_t mjpeg_encoder_get_bit_rate(MJpegEncoder *encoder);
+
 #endif

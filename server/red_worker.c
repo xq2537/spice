@@ -693,6 +693,7 @@ struct DisplayChannelClient {
     StreamAgent stream_agents[NUM_STREAMS];
     int use_mjpeg_encoder_rate_control;
     uint32_t streams_max_latency;
+    uint64_t streams_max_bit_rate;
 };
 
 struct DisplayChannel {
@@ -2616,6 +2617,16 @@ static void red_stop_stream(RedWorker *worker, Stream *stream)
         region_clear(&stream_agent->vis_region);
         region_clear(&stream_agent->clip);
         spice_assert(!pipe_item_is_linked(&stream_agent->destroy_item));
+        if (stream_agent->mjpeg_encoder && dcc->use_mjpeg_encoder_rate_control) {
+            uint64_t stream_bit_rate = mjpeg_encoder_get_bit_rate(stream_agent->mjpeg_encoder);
+
+            if (stream_bit_rate > dcc->streams_max_bit_rate) {
+                spice_debug("old max-bit-rate=%.2f new=%.2f",
+                dcc->streams_max_bit_rate / 8.0 / 1024.0 / 1024.0,
+                stream_bit_rate / 8.0 / 1024.0 / 1024.0);
+                dcc->streams_max_bit_rate = stream_bit_rate;
+            }
+        }
         stream->refs++;
         red_channel_client_pipe_add(&dcc->common.base, &stream_agent->destroy_item);
     }
@@ -2874,10 +2885,13 @@ static uint64_t red_stream_get_initial_bit_rate(DisplayChannelClient *dcc,
     mcc = red_client_get_main(dcc->common.base.client);
     max_bit_rate = main_channel_client_get_bitrate_per_sec(mcc);
 
+    if (max_bit_rate > dcc->streams_max_bit_rate) {
+        dcc->streams_max_bit_rate = max_bit_rate;
+    }
 
     /* dividing the available bandwidth among the active streams, and saving
      * (1-RED_STREAM_CHANNEL_CAPACITY) of it for other messages */
-    return (RED_STREAM_CHANNEL_CAPACITY * max_bit_rate *
+    return (RED_STREAM_CHANNEL_CAPACITY * dcc->streams_max_bit_rate *
            stream->width * stream->height) / dcc->common.worker->streams_size_total;
 }
 

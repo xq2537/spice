@@ -1247,3 +1247,8 @@ static void mjpeg_encoder_process_server_drops(MJpegEncoder *encoder)
     server_state->num_frames_encoded = 0;
     server_state->num_frames_dropped = 0;
 }
+
+uint64_t mjpeg_encoder_get_bit_rate(MJpegEncoder *encoder)
+{
+    return encoder->rate_control.byte_rate * 8;
+}
