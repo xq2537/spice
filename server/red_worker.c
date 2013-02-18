@@ -116,13 +116,10 @@
 #define RED_STREAM_FRAMES_RESET_CONDITION 100
 #define RED_STREAM_MIN_SIZE (96 * 96)
 #define RED_STREAM_INPUT_FPS_TIMEOUT (5 * 1000) // 5 sec
+#define RED_STREAM_CHANNEL_CAPACITY 0.8
 
 #define FPS_TEST_INTERVAL 1
 #define MAX_FPS 30
-
-//best bit rate per pixel base on 13000000 bps for frame size 720x576 pixels and 25 fps
-#define BEST_BIT_RATE_PER_PIXEL 38
-#define WORST_BIT_RATE_PER_PIXEL 4
 
 #define RED_COMPRESS_BUF_SIZE (1024 * 64)
 
@@ -415,6 +412,9 @@ typedef struct ImageItem {
 
 typedef struct Drawable Drawable;
 
+typedef struct DisplayChannel DisplayChannel;
+typedef struct DisplayChannelClient DisplayChannelClient;
+
 enum {
     STREAM_FRAME_NONE,
     STREAM_FRAME_NATIVE,
@@ -432,7 +432,6 @@ struct Stream {
     int top_down;
     Stream *next;
     RingItem link;
-    int bit_rate;
 
     SpiceTimer *input_fps_timer;
     uint32_t num_input_frames;
@@ -455,6 +454,7 @@ typedef struct StreamAgent {
     Stream *stream;
     uint64_t last_send_time;
     MJpegEncoder *mjpeg_encoder;
+    DisplayChannelClient *dcc;
 
     int frames;
     int drops;
@@ -525,9 +525,6 @@ typedef struct FreeList {
     uint64_t sync[MAX_CACHE_CLIENTS];
     WaitForChannels wait;
 } FreeList;
-
-typedef struct DisplayChannel DisplayChannel;
-typedef struct DisplayChannelClient DisplayChannelClient;
 
 typedef struct  {
     DisplayChannelClient *dcc;
@@ -681,6 +678,7 @@ struct DisplayChannelClient {
     QRegion surface_client_lossy_region[NUM_SURFACES];
 
     StreamAgent stream_agents[NUM_STREAMS];
+    int use_mjpeg_encoder_rate_control;
 };
 
 struct DisplayChannel {
@@ -974,6 +972,7 @@ typedef struct RedWorker {
     Ring streams;
     ItemTrace items_trace[NUM_TRACE_ITEMS];
     uint32_t next_item_trace;
+    uint64_t streams_size_total;
 
     QuicData quic_data;
     QuicContext *quic;
@@ -1049,7 +1048,6 @@ static int red_display_free_some_independent_glz_drawables(DisplayChannelClient 
 static void red_display_free_glz_drawable(DisplayChannelClient *dcc, RedGlzDrawable *drawable);
 static ImageItem *red_add_surface_area_image(DisplayChannelClient *dcc, int surface_id,
                                              SpiceRect *area, PipeItem *pos, int can_lossy);
-static void reset_rate(DisplayChannelClient *dcc, StreamAgent *stream_agent);
 static BitmapGradualType _get_bitmap_graduality_level(RedWorker *worker, SpiceBitmap *bitmap,
                                                       uint32_t group_id);
 static inline int _stride_is_extra(SpiceBitmap *bitmap);
@@ -2604,6 +2602,7 @@ static void red_stop_stream(RedWorker *worker, Stream *stream)
         stream->refs++;
         red_channel_client_pipe_add(&dcc->common.base, &stream_agent->destroy_item);
     }
+    worker->streams_size_total -= stream->width * stream->height;
     ring_remove(&stream->link);
     red_release_stream(worker, stream);
 }
@@ -2849,38 +2848,43 @@ static inline Stream *red_alloc_stream(RedWorker *worker)
     return stream;
 }
 
-static int get_bit_rate(DisplayChannelClient *dcc,
-    int width, int height)
+static uint64_t red_stream_get_initial_bit_rate(DisplayChannelClient *dcc,
+                                                Stream *stream)
 {
-    uint64_t bit_rate = width * height * BEST_BIT_RATE_PER_PIXEL;
+    uint64_t max_bit_rate;
     MainChannelClient *mcc;
-    int is_low_bandwidth = 0;
 
-    if (dcc) {
-        mcc = red_client_get_main(dcc->common.base.client);
-        is_low_bandwidth = main_channel_client_is_low_bandwidth(mcc);
-    }
+    mcc = red_client_get_main(dcc->common.base.client);
+    max_bit_rate = main_channel_client_get_bitrate_per_sec(mcc);
 
-    if (is_low_bandwidth) {
-        bit_rate = MIN(main_channel_client_get_bitrate_per_sec(mcc) * 70 / 100, bit_rate);
-        bit_rate = MAX(bit_rate, width * height * WORST_BIT_RATE_PER_PIXEL);
-    }
-    return bit_rate;
+
+    /* dividing the available bandwidth among the active streams, and saving
+     * (1-RED_STREAM_CHANNEL_CAPACITY) of it for other messages */
+    return (RED_STREAM_CHANNEL_CAPACITY * max_bit_rate *
+           stream->width * stream->height) / dcc->common.worker->streams_size_total;
 }
 
-static int get_minimal_bit_rate(RedWorker *worker, int width, int height)
+static uint32_t red_stream_mjpeg_encoder_get_roundtrip(void *opaque)
 {
-    RingItem *item;
-    DisplayChannelClient *dcc;
-    int ret = INT_MAX;
+    StreamAgent *agent = opaque;
+    int roundtrip;
 
-    WORKER_FOREACH_DCC(worker, item, dcc) {
-        int bit_rate = get_bit_rate(dcc, width, height);
-        if (bit_rate < ret) {
-            ret = bit_rate;
-        }
+    spice_assert(agent);
+    roundtrip = red_channel_client_get_roundtrip_ms(&agent->dcc->common.base);
+    if (roundtrip < 0) {
+        MainChannelClient *mcc = red_client_get_main(agent->dcc->common.base.client);
+        roundtrip = main_channel_client_get_roundtrip_ms(mcc);
     }
-    return ret;
+
+    return roundtrip;
+}
+
+static uint32_t red_stream_mjpeg_encoder_get_source_fps(void *opaque)
+{
+    StreamAgent *agent = opaque;
+
+    spice_assert(agent);
+    return agent->stream->input_fps;
 }
 
 static void red_display_create_stream(DisplayChannelClient *dcc, Stream *stream)
@@ -2898,8 +2902,20 @@ static void red_display_create_stream(DisplayChannelClient *dcc, Stream *stream)
     }
     agent->drops = 0;
     agent->fps = MAX_FPS;
-    reset_rate(dcc, agent);
-    agent->mjpeg_encoder = mjpeg_encoder_new(FALSE, 0, NULL, NULL);
+    agent->dcc = dcc;
+
+    if (dcc->use_mjpeg_encoder_rate_control) {
+        MJpegEncoderRateControlCbs mjpeg_cbs;
+        uint64_t initial_bit_rate;
+
+        mjpeg_cbs.get_roundtrip_ms = red_stream_mjpeg_encoder_get_roundtrip;
+        mjpeg_cbs.get_source_fps = red_stream_mjpeg_encoder_get_source_fps;
+
+        initial_bit_rate = red_stream_get_initial_bit_rate(dcc, stream);
+        agent->mjpeg_encoder = mjpeg_encoder_new(TRUE, initial_bit_rate, &mjpeg_cbs, agent);
+    } else {
+        agent->mjpeg_encoder = mjpeg_encoder_new(FALSE, 0, NULL, NULL);
+    }
     red_channel_client_pipe_add(&dcc->common.base, &agent->create_item);
 }
 
@@ -2929,8 +2945,6 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
     RingItem *dcc_ring_item;
     Stream *stream;
     SpiceRect* src_rect;
-    int stream_width;
-    int stream_height;
 
     spice_assert(!drawable->stream);
 
@@ -2940,8 +2954,6 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
 
     spice_assert(drawable->red_drawable->type == QXL_DRAW_COPY);
     src_rect = &drawable->red_drawable->u.copy.src_area;
-    stream_width = src_rect->right - src_rect->left;
-    stream_height = src_rect->bottom - src_rect->top;
 
     ring_add(&worker->streams, &stream->link);
     stream->current = drawable;
@@ -2950,7 +2962,6 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
     stream->height = src_rect->bottom - src_rect->top;
     stream->dest_area = drawable->red_drawable->bbox;
     stream->refs = 1;
-    stream->bit_rate = get_minimal_bit_rate(worker, stream_width, stream_height);
     SpiceBitmap *bitmap = &drawable->red_drawable->u.copy.src_bitmap->u.bitmap;
     stream->top_down = !!(bitmap->flags & SPICE_BITMAP_FLAGS_TOP_DOWN);
     drawable->stream = stream;
@@ -2960,13 +2971,14 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
     stream->num_input_frames = 0;
     stream->input_fps_timer_start = red_now();
     stream->input_fps = MAX_FPS;
+    worker->streams_size_total += stream->width * stream->height;
+    worker->stream_count++;
     WORKER_FOREACH_DCC(worker, dcc_ring_item, dcc) {
         red_display_create_stream(dcc, stream);
     }
-    worker->stream_count++;
     spice_debug("stream %d %dx%d (%d, %d) (%d, %d)", (int)(stream - worker->streams_buf), stream->width,
-    stream->height, stream->dest_area.left, stream->dest_area.top,
-    stream->dest_area.right, stream->dest_area.bottom);
+                stream->height, stream->dest_area.left, stream->dest_area.top,
+                stream->dest_area.right, stream->dest_area.bottom);
     return;
 }
 
@@ -2995,6 +3007,7 @@ static void red_display_client_init_streams(DisplayChannelClient *dcc)
         red_channel_pipe_item_init(channel, &agent->create_item, PIPE_ITEM_TYPE_STREAM_CREATE);
         red_channel_pipe_item_init(channel, &agent->destroy_item, PIPE_ITEM_TYPE_STREAM_DESTROY);
     }
+    dcc->use_mjpeg_encoder_rate_control = TRUE;
 }
 
 static void red_display_destroy_streams_agents(DisplayChannelClient *dcc)
@@ -3108,19 +3121,6 @@ static inline int red_is_next_stream_frame(RedWorker *worker, const Drawable *ca
                                       &prev->red_drawable->bbox, prev->creation_time,
                                       prev->stream,
                                       FALSE);
-}
-
-static void reset_rate(DisplayChannelClient *dcc, StreamAgent *stream_agent)
-{
-    Stream *stream = stream_agent->stream;
-    int rate;
-
-    rate = get_bit_rate(dcc, stream->width, stream->height);
-    if (rate == stream->bit_rate) {
-        return;
-    }
-
-    /* MJpeg has no rate limiting anyway, so do nothing */
 }
 
 static int display_channel_client_is_low_bandwidth(DisplayChannelClient *dcc)
@@ -8419,9 +8419,12 @@ static inline int red_marshall_stream_data(RedChannelClient *rcc,
     StreamAgent *agent = &dcc->stream_agents[get_stream_id(worker, stream)];
     uint64_t time_now = red_now();
     size_t outbuf_size;
-    if (time_now - agent->last_send_time < (1000 * 1000 * 1000) / agent->fps) {
-        agent->frames--;
-        return TRUE;
+
+    if (!dcc->use_mjpeg_encoder_rate_control) {
+        if (time_now - agent->last_send_time < (1000 * 1000 * 1000) / agent->fps) {
+            agent->frames--;
+            return TRUE;
+        }
     }
 
     outbuf_size = dcc->send_data.stream_outbuf_size;
@@ -8432,7 +8435,7 @@ static inline int red_marshall_stream_data(RedChannelClient *rcc,
                                     drawable->red_drawable->mm_time);
     switch (ret) {
     case MJPEG_ENCODER_FRAME_DROP:
-        spice_warning("mjpeg rate control is not supported yet");
+        spice_assert(dcc->use_mjpeg_encoder_rate_control);
         return TRUE;
     case MJPEG_ENCODER_FRAME_UNSUPPORTED:
         return FALSE;

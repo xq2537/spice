@@ -1150,6 +1150,11 @@ uint64_t main_channel_client_get_bitrate_per_sec(MainChannelClient *mcc)
     return mcc->bitrate_per_sec;
 }
 
+uint64_t main_channel_client_get_roundtrip_ms(MainChannelClient *mcc)
+{
+    return mcc->latency / 1000;
+}
+
 static void main_channel_client_migrate(RedChannelClient *rcc)
 {
     reds_on_main_channel_migrate(SPICE_CONTAINEROF(rcc, MainChannelClient, base));
