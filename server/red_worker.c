@@ -2879,19 +2879,38 @@ static inline Stream *red_alloc_stream(RedWorker *worker)
 static uint64_t red_stream_get_initial_bit_rate(DisplayChannelClient *dcc,
                                                 Stream *stream)
 {
-    uint64_t max_bit_rate;
     MainChannelClient *mcc;
+    char *env_bit_rate_str;
+    uint64_t bit_rate = 0;
 
     mcc = red_client_get_main(dcc->common.base.client);
-    max_bit_rate = main_channel_client_get_bitrate_per_sec(mcc);
+    env_bit_rate_str = getenv("SPICE_BIT_RATE");
+    if (env_bit_rate_str != NULL) {
+        double env_bit_rate;
 
-    if (max_bit_rate > dcc->streams_max_bit_rate) {
-        dcc->streams_max_bit_rate = max_bit_rate;
+        errno = 0;
+        env_bit_rate = strtod(env_bit_rate_str, NULL);
+        if (errno == 0) {
+            bit_rate = env_bit_rate * 1024 * 1024;
+        } else {
+            spice_warning("error parsing SPICE_BIT_RATE: %s", strerror(errno));
+        }
     }
 
+    if (!bit_rate) {
+        bit_rate = main_channel_client_get_bitrate_per_sec(mcc);
+
+        if (bit_rate > dcc->streams_max_bit_rate) {
+            dcc->streams_max_bit_rate = bit_rate;
+        } else {
+            bit_rate = dcc->streams_max_bit_rate;
+        }
+    }
+
+    spice_debug("base-bit-rate %.2f (Mbps)", bit_rate / 1024.0 /1024.0);
     /* dividing the available bandwidth among the active streams, and saving
      * (1-RED_STREAM_CHANNEL_CAPACITY) of it for other messages */
-    return (RED_STREAM_CHANNEL_CAPACITY * dcc->streams_max_bit_rate *
+    return (RED_STREAM_CHANNEL_CAPACITY * bit_rate *
            stream->width * stream->height) / dcc->common.worker->streams_size_total;
 }
 
