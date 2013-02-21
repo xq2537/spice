@@ -59,6 +59,15 @@ static const int mjpeg_quality_samples[MJPEG_QUALITY_SAMPLE_NUM] = {20, 30, 40, 
  */
 #define MJPEG_MAX_CLIENT_PLAYBACK_DELAY 5000 // 5 sec
 
+/*
+ * The stream starts after lossless frames were sent to the client,
+ * and without rate control (except for pipe congestion). Thus, on the beginning
+ * of the stream, we might observe frame drops on the client and server side which
+ * are not necessarily related to mis-estimation of the bit rate, and we would
+ * like to wait till the stream stabilizes.
+ */
+#define MJPEG_WARMUP_TIME 3000L // 3 sec
+
 enum {
     MJPEG_QUALITY_EVAL_TYPE_SET,
     MJPEG_QUALITY_EVAL_TYPE_UPGRADE,
@@ -140,6 +149,7 @@ typedef struct MJpegEncoderRateControl {
     uint64_t sum_recent_enc_size;
     uint32_t num_recent_enc_frames;
 
+    uint64_t warmup_start_time;
 } MJpegEncoderRateControl;
 
 struct MJpegEncoder {
@@ -182,12 +192,16 @@ MJpegEncoder *mjpeg_encoder_new(int bit_rate_control, uint64_t starting_bit_rate
     enc->rate_control_is_active = bit_rate_control;
     enc->rate_control.byte_rate = starting_bit_rate / 8;
     if (bit_rate_control) {
+        struct timespec time;
+
+        clock_gettime(CLOCK_MONOTONIC, &time);
         enc->cbs = *cbs;
         enc->cbs_opaque = opaque;
         mjpeg_encoder_reset_quality(enc, MJPEG_QUALITY_SAMPLE_NUM / 2, 5, 0);
         enc->rate_control.during_quality_eval = TRUE;
         enc->rate_control.quality_eval_data.type = MJPEG_QUALITY_EVAL_TYPE_SET;
         enc->rate_control.quality_eval_data.reason = MJPEG_QUALITY_EVAL_REASON_RATE_CHANGE;
+        enc->rate_control.warmup_start_time = ((uint64_t) time.tv_sec) * 1000000000 + time.tv_nsec;
     } else {
         mjpeg_encoder_reset_quality(enc, MJPEG_LEGACY_STATIC_QUALITY_ID, MJPEG_MAX_FPS, 0);
     }
@@ -904,6 +918,19 @@ static void mjpeg_encoder_decrease_bit_rate(MJpegEncoder *encoder)
 
     rate_control->client_state.max_video_latency = 0;
     rate_control->client_state.max_audio_latency = 0;
+    if (rate_control->warmup_start_time) {
+        struct timespec time;
+        uint64_t now;
+
+        clock_gettime(CLOCK_MONOTONIC, &time);
+        now = ((uint64_t) time.tv_sec) * 1000000000 + time.tv_nsec;
+        if (now - rate_control->warmup_start_time < MJPEG_WARMUP_TIME*1000*1000) {
+            spice_debug("during warmup. ignoring");
+            return;
+        } else {
+            rate_control->warmup_start_time = 0;
+        }
+    }
 
     if (bit_rate_info->num_enc_frames > MJPEG_BIT_RATE_EVAL_MIN_NUM_FRAMES ||
         bit_rate_info->num_enc_frames > rate_control->fps) {
