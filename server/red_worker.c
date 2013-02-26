@@ -8570,6 +8570,7 @@ static inline int red_marshall_stream_data(RedChannelClient *rcc,
     Stream *stream = drawable->stream;
     SpiceImage *image;
     RedWorker *worker = dcc->common.worker;
+    uint32_t frame_mm_time;
     int n;
     int width, height;
     int ret;
@@ -8615,12 +8616,16 @@ static inline int red_marshall_stream_data(RedChannelClient *rcc,
         }
     }
 
+    /* workaround for vga streams */
+    frame_mm_time =  drawable->red_drawable->mm_time ?
+                        drawable->red_drawable->mm_time :
+                        reds_get_mm_time();
     outbuf_size = dcc->send_data.stream_outbuf_size;
     ret = mjpeg_encoder_start_frame(agent->mjpeg_encoder, image->u.bitmap.format,
                                     width, height,
                                     &dcc->send_data.stream_outbuf,
                                     &outbuf_size,
-                                    drawable->red_drawable->mm_time);
+                                    frame_mm_time);
     switch (ret) {
     case MJPEG_ENCODER_FRAME_DROP:
         spice_assert(dcc->use_mjpeg_encoder_rate_control);
@@ -8650,7 +8655,7 @@ static inline int red_marshall_stream_data(RedChannelClient *rcc,
         red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_STREAM_DATA, NULL);
 
         stream_data.base.id = get_stream_id(worker, stream);
-        stream_data.base.multi_media_time = drawable->red_drawable->mm_time;
+        stream_data.base.multi_media_time = frame_mm_time;
         stream_data.data_size = n;
 
         spice_marshall_msg_display_stream_data(base_marshaller, &stream_data);
@@ -8660,7 +8665,7 @@ static inline int red_marshall_stream_data(RedChannelClient *rcc,
         red_channel_client_init_send_data(rcc, SPICE_MSG_DISPLAY_STREAM_DATA_SIZED, NULL);
 
         stream_data.base.id = get_stream_id(worker, stream);
-        stream_data.base.multi_media_time = drawable->red_drawable->mm_time;
+        stream_data.base.multi_media_time = frame_mm_time;
         stream_data.data_size = n;
         stream_data.width = width;
         stream_data.height = height;
@@ -8676,7 +8681,7 @@ static inline int red_marshall_stream_data(RedChannelClient *rcc,
 #ifdef STREAM_STATS
     agent->stats.num_frames_sent++;
     agent->stats.size_sent += n;
-    agent->stats.end = drawable->red_drawable->mm_time;
+    agent->stats.end = frame_mm_time;
 #endif
 
     return TRUE;
