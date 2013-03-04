@@ -497,7 +497,6 @@ static SpiceCharDeviceWriteBuffer *__spice_char_device_write_buffer_get(SpiceCha
     SpiceCharDeviceWriteBuffer *ret;
 
     if (!client && !dev->num_self_tokens) {
-        spice_printerr("internal buf is not available");
         return NULL;
     }
 
