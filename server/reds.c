@@ -563,7 +563,29 @@ void reds_client_disconnect(RedClient *client)
    // TODO: we need to handle agent properly for all clients!!!! (e.g., cut and paste, how? Maybe throw away messages
    // if we are in the middle of one from another client)
     if (reds->num_clients == 0) {
-       /* Reset write filter to start with clean state on client reconnect */
+        /* Let the agent know the client is disconnected */
+        if (reds->agent_state.base) {
+            SpiceCharDeviceWriteBuffer *char_dev_buf;
+            VDInternalBuf *internal_buf;
+            uint32_t total_msg_size;
+
+            total_msg_size = sizeof(VDIChunkHeader) + sizeof(VDAgentMessage);
+            char_dev_buf = spice_char_device_write_buffer_get_server_no_token(
+                               reds->agent_state.base, total_msg_size);
+            char_dev_buf->buf_used = total_msg_size;
+            internal_buf = (VDInternalBuf *)char_dev_buf->buf;
+            internal_buf->chunk_header.port = VDP_SERVER_PORT;
+            internal_buf->chunk_header.size = sizeof(VDAgentMessage);
+            internal_buf->header.protocol = VD_AGENT_PROTOCOL;
+            internal_buf->header.type = VD_AGENT_CLIENT_DISCONNECTED;
+            internal_buf->header.opaque = 0;
+            internal_buf->header.size = 0;
+
+            spice_char_device_write_buffer_add(reds->agent_state.base,
+                                               char_dev_buf);
+        }
+
+        /* Reset write filter to start with clean state on client reconnect */
         agent_msg_filter_init(&reds->agent_state.write_filter, agent_copypaste,
                               TRUE);
 
