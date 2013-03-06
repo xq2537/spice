@@ -181,6 +181,9 @@ void spice_char_device_send_to_client_tokens_set(SpiceCharDeviceState *dev,
 
 SpiceCharDeviceWriteBuffer *spice_char_device_write_buffer_get(SpiceCharDeviceState *dev,
                                                                RedClient *client, int size);
+SpiceCharDeviceWriteBuffer *spice_char_device_write_buffer_get_server_no_token(
+    SpiceCharDeviceState *dev, int size);
+
 /* Either add the buffer to the write queue or release it */
 void spice_char_device_write_buffer_add(SpiceCharDeviceState *dev,
                                         SpiceCharDeviceWriteBuffer *write_buf);
