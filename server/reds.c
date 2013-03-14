@@ -1749,8 +1749,7 @@ static void reds_channel_do_link(RedChannel *channel, RedClient *client,
 
     if (link_msg->channel_type == SPICE_CHANNEL_INPUTS && !stream->ssl) {
         const char *mess = "keyboard channel is insecure";
-        const int mess_len = strlen(mess);
-        main_channel_push_notify(reds->main_channel, (uint8_t*)mess, mess_len);
+        main_channel_push_notify(reds->main_channel, mess);
     }
 
     caps = (uint32_t *)((uint8_t *)link_msg + link_msg->caps_offset);

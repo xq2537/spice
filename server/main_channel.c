@@ -131,8 +131,7 @@ typedef struct UuidPipeItem {
 
 typedef struct NotifyPipeItem {
     PipeItem base;
-    uint8_t *mess;
-    int mess_len;
+    char *msg;
 } NotifyPipeItem;
 
 typedef struct MultiMediaTimePipeItem {
@@ -305,20 +304,14 @@ static PipeItem *main_uuid_item_new(MainChannelClient *mcc, const uint8_t uuid[1
     return &item->base;
 }
 
-typedef struct NotifyPipeInfo {
-    uint8_t *mess;
-    int mess_len;
-} NotifyPipeInfo;
-
 static PipeItem *main_notify_item_new(RedChannelClient *rcc, void *data, int num)
 {
     NotifyPipeItem *item = spice_malloc(sizeof(NotifyPipeItem));
-    NotifyPipeInfo *info = data;
+    const char *msg = data;
 
     red_channel_pipe_item_init(rcc->channel, &item->base,
                                PIPE_ITEM_TYPE_MAIN_NOTIFY);
-    item->mess = info->mess;
-    item->mess_len = info->mess_len;
+    item->msg = spice_strdup(msg);
     return &item->base;
 }
 
@@ -583,15 +576,10 @@ void main_channel_push_uuid(MainChannelClient *mcc, const uint8_t uuid[16])
 }
 
 // TODO - some notifications are new client only (like "keyboard is insecure" on startup)
-void main_channel_push_notify(MainChannel *main_chan, uint8_t *mess, const int mess_len)
+void main_channel_push_notify(MainChannel *main_chan, const char *msg)
 {
-    NotifyPipeInfo info = {
-        .mess = mess,
-        .mess_len = mess_len,
-    };
-
     red_channel_pipes_new_add_push(&main_chan->base,
-        main_notify_item_new, &info);
+        main_notify_item_new, (void *)msg);
 }
 
 static uint64_t get_time_stamp(void)
@@ -611,9 +599,9 @@ static void main_channel_marshall_notify(RedChannelClient *rcc,
     notify.severity = SPICE_NOTIFY_SEVERITY_WARN;
     notify.visibilty = SPICE_NOTIFY_VISIBILITY_HIGH;
     notify.what = SPICE_WARN_GENERAL;
-    notify.message_len = item->mess_len;
+    notify.message_len = strlen(item->msg);
     spice_marshall_msg_notify(m, &notify);
-    spice_marshaller_add(m, item->mess, item->mess_len + 1);
+    spice_marshaller_add(m, (uint8_t *)item->msg, notify.message_len + 1);
 }
 
 static void main_channel_fill_migrate_dst_info(MainChannel *main_channel,
@@ -814,6 +802,11 @@ static void main_channel_release_pipe_item(RedChannelClient *rcc,
                 AgentDataPipeItem *data = (AgentDataPipeItem *)base;
 
                 data->free_data(data->data, data->opaque);
+                break;
+        }
+        case PIPE_ITEM_TYPE_MAIN_NOTIFY: {
+                NotifyPipeItem *data = (NotifyPipeItem *)base;
+                free(data->msg);
                 break;
         }
         default:
