@@ -522,7 +522,7 @@ static void inputs_connect(RedChannel *channel, RedClient *client,
     spice_assert(g_inputs_channel);
     spice_assert(channel == &g_inputs_channel->base);
 
-    if (!stream->ssl) {
+    if (!stream->ssl && !red_client_during_migrate_at_target(client)) {
         main_channel_client_push_notify(red_client_get_main(client),
                                         "keyboard channel is insecure");
     }
