@@ -575,11 +575,16 @@ void main_channel_push_uuid(MainChannelClient *mcc, const uint8_t uuid[16])
     red_channel_client_pipe_add_push(&mcc->base, item);
 }
 
-// TODO - some notifications are new client only (like "keyboard is insecure" on startup)
 void main_channel_push_notify(MainChannel *main_chan, const char *msg)
 {
     red_channel_pipes_new_add_push(&main_chan->base,
         main_notify_item_new, (void *)msg);
+}
+
+void main_channel_client_push_notify(MainChannelClient *mcc, const char *msg)
+{
+    PipeItem *item = main_notify_item_new(&mcc->base, (void *)msg, 1);
+    red_channel_client_pipe_add_push(&mcc->base, item);
 }
 
 static uint64_t get_time_stamp(void)
