@@ -438,7 +438,7 @@ static int spice_char_device_write_to_device(SpiceCharDeviceState *dev)
     core->timer_cancel(dev->write_to_dev_timer);
 
     sif = SPICE_CONTAINEROF(dev->sin->base.sif, SpiceCharDeviceInterface, base);
-    while (1) {
+    while (dev->running) {
         uint32_t write_len;
 
         if (!dev->cur_write_buf) {
@@ -454,9 +454,6 @@ static int spice_char_device_write_to_device(SpiceCharDeviceState *dev)
         write_len = dev->cur_write_buf->buf + dev->cur_write_buf->buf_used -
                     dev->cur_write_buf_pos;
         n = sif->write(dev->sin, dev->cur_write_buf_pos, write_len);
-        if (!dev->running) {
-            break;
-        }
         if (n <= 0) {
             break;
         }
