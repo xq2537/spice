@@ -468,10 +468,13 @@ static int spice_char_device_write_to_device(SpiceCharDeviceState *dev)
         dev->cur_write_buf_pos += n;
     }
     /* retry writing as long as the write queue is not empty */
-    if (dev->cur_write_buf) {
-        core->timer_start(dev->write_to_dev_timer, CHAR_DEVICE_WRITE_TO_TIMEOUT);
-    } else {
-        spice_assert(ring_is_empty(&dev->write_queue));
+    if (dev->running) {
+        if (dev->cur_write_buf) {
+            core->timer_start(dev->write_to_dev_timer,
+                              CHAR_DEVICE_WRITE_TO_TIMEOUT);
+        } else {
+            spice_assert(ring_is_empty(&dev->write_queue));
+        }
     }
     spice_char_device_state_unref(dev);
     dev->active = dev->active || total;
