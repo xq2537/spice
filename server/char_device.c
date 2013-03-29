@@ -320,8 +320,10 @@ static int spice_char_device_read_from_device(SpiceCharDeviceState *dev)
         max_send_tokens--;
     }
     dev->during_read_from_device = 0;
+    if (dev->running) {
+        dev->active = dev->active || did_read;
+    }
     spice_char_device_state_unref(dev);
-    dev->active = dev->active || did_read;
     return did_read;
 }
 
@@ -475,9 +477,9 @@ static int spice_char_device_write_to_device(SpiceCharDeviceState *dev)
         } else {
             spice_assert(ring_is_empty(&dev->write_queue));
         }
+        dev->active = dev->active || total;
     }
     spice_char_device_state_unref(dev);
-    dev->active = dev->active || total;
     return total;
 }
 
