@@ -1100,6 +1100,7 @@ static void on_new_playback_channel(SndWorker *worker)
 {
     PlaybackChannel *playback_channel =
         SPICE_CONTAINEROF(worker->connection, PlaybackChannel, base);
+    SpicePlaybackState *st = SPICE_CONTAINEROF(worker, SpicePlaybackState, worker);
 
     spice_assert(playback_channel);
 
@@ -1107,7 +1108,9 @@ static void on_new_playback_channel(SndWorker *worker)
     if (playback_channel->base.active) {
         snd_set_command((SndChannel *)playback_channel, SND_PLAYBACK_CTRL_MASK);
     }
-    snd_set_command((SndChannel *)playback_channel, SND_PLAYBACK_VOLUME_MASK);
+    if (st->volume.volume_nchannels) {
+        snd_set_command((SndChannel *)playback_channel, SND_PLAYBACK_VOLUME_MASK);
+    }
     if (playback_channel->base.active) {
         reds_disable_mm_timer();
     }
