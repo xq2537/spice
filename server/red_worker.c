@@ -2965,7 +2965,7 @@ static void red_display_client_init_streams(DisplayChannelClient *dcc)
     }
 }
 
-static void red_display_destroy_streams(DisplayChannelClient *dcc)
+static void red_display_destroy_streams_agents(DisplayChannelClient *dcc)
 {
     int i;
 
@@ -9149,7 +9149,7 @@ static void display_channel_client_on_disconnect(RedChannelClient *rcc)
     free(dcc->send_data.stream_outbuf);
     red_display_reset_compress_buf(dcc);
     free(dcc->send_data.free_list.res);
-    red_display_destroy_streams(dcc);
+    red_display_destroy_streams_agents(dcc);
 
     // this was the last channel client
     if (!red_channel_is_connected(rcc->channel)) {
