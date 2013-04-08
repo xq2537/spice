@@ -9171,10 +9171,33 @@ void red_disconnect_all_display_TODO_remove_me(RedChannel *channel)
     red_channel_apply_clients(channel, red_channel_client_disconnect);
 }
 
+static void red_destroy_streams(RedWorker *worker)
+{
+    RingItem *stream_item;
+
+    spice_debug(NULL);
+    while ((stream_item = ring_get_head(&worker->streams))) {
+        Stream *stream = SPICE_CONTAINEROF(stream_item, Stream, link);
+
+        red_detach_stream_gracefully(worker, stream, NULL);
+        red_stop_stream(worker, stream);
+    }
+}
+
 static void red_migrate_display(RedWorker *worker, RedChannelClient *rcc)
 {
+    /* We need to stop the streams, and to send upgrade_items to the client.
+     * Otherwise, (1) the client might display lossy regions that we don't track
+     * (streams are not part of the migration data) (2) streams_timeout may occur
+     * after the MIGRATE message has been sent. This can result in messages
+     * being sent to the client after MSG_MIGRATE and before MSG_MIGRATE_DATA (e.g.,
+     * STREAM_CLIP, STREAM_DESTROY, DRAW_COPY)
+     * No message besides MSG_MIGRATE_DATA should be sent after MSG_MIGRATE.
+     * Notice that red_destroy_streams won't lead to any dev ram changes, since
+     * handle_dev_stop already took care of releasing all the dev ram resources.
+     */
+    red_destroy_streams(worker);
     if (red_channel_client_is_connected(rcc)) {
-        red_pipe_add_verb(rcc, SPICE_MSG_DISPLAY_STREAM_DESTROY_ALL);
         red_channel_client_default_migrate(rcc);
     }
 }
