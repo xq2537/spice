@@ -984,7 +984,7 @@ SPICE_GNUC_VISIBLE void spice_server_playback_set_volume(SpicePlaybackInstance *
     free(st->volume);
     st->volume = spice_memdup(volume, sizeof(uint16_t) * nchannels);
 
-    if (!channel)
+    if (!channel || nchannels == 0)
         return;
 
     snd_playback_send_volume(playback_channel);
@@ -1222,7 +1222,7 @@ SPICE_GNUC_VISIBLE void spice_server_record_set_volume(SpiceRecordInstance *sin,
     free(st->volume);
     st->volume = spice_memdup(volume, sizeof(uint16_t) * nchannels);
 
-    if (!channel)
+    if (!channel || nchannels == 0)
         return;
 
     snd_record_send_volume(record_channel);
@@ -1321,9 +1321,13 @@ SPICE_GNUC_VISIBLE uint32_t spice_server_record_get_samples(SpiceRecordInstance 
 static void on_new_record_channel(SndWorker *worker)
 {
     RecordChannel *record_channel = (RecordChannel *)worker->connection;
+    SpiceRecordState *st = SPICE_CONTAINEROF(worker, SpiceRecordState, worker);
+
     spice_assert(record_channel);
 
-    snd_set_command((SndChannel *)record_channel, SND_RECORD_VOLUME_MASK);
+    if (st->volume.volume_nchannels) {
+        snd_set_command((SndChannel *)record_channel, SND_RECORD_VOLUME_MASK);
+    }
     if (record_channel->base.active) {
         snd_set_command((SndChannel *)record_channel, SND_RECORD_CTRL_MASK);
     }
