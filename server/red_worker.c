@@ -11864,6 +11864,13 @@ void handle_dev_reset_memslots(void *opaque, void *payload)
     red_memslot_info_reset(&worker->mem_slots);
 }
 
+void handle_dev_driver_unload(void *opaque, void *payload)
+{
+    RedWorker *worker = opaque;
+
+    worker->driver_has_monitors_config = 0;
+}
+
 void handle_dev_loadvm_commands(void *opaque, void *payload)
 {
     RedWorkerMessageLoadvmCommands *msg = payload;
@@ -12087,6 +12094,11 @@ static void register_callbacks(Dispatcher *dispatcher)
                                 handle_dev_monitors_config_async,
                                 sizeof(RedWorkerMessageMonitorsConfigAsync),
                                 DISPATCHER_ASYNC);
+    dispatcher_register_handler(dispatcher,
+                                RED_WORKER_MESSAGE_DRIVER_UNLOAD,
+                                handle_dev_driver_unload,
+                                sizeof(RedWorkerMessageDriverUnload),
+                                DISPATCHER_NONE);
 }
 
 

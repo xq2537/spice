@@ -705,6 +705,15 @@ static void red_dispatcher_monitors_config_async(RedDispatcher *dispatcher,
     dispatcher_send_message(&dispatcher->dispatcher, message, &payload);
 }
 
+static void red_dispatcher_driver_unload(RedDispatcher *dispatcher)
+{
+    RedWorkerMessageDriverUnload payload;
+
+    dispatcher_send_message(&dispatcher->dispatcher,
+                            RED_WORKER_MESSAGE_DRIVER_UNLOAD,
+                            &payload);
+}
+
 static void red_dispatcher_stop(RedDispatcher *dispatcher)
 {
     RedWorkerMessageStop payload;
@@ -992,6 +1001,12 @@ void spice_qxl_monitors_config_async(QXLInstance *instance, QXLPHYSICAL monitors
                                      int group_id, uint64_t cookie)
 {
     red_dispatcher_monitors_config_async(instance->st->dispatcher, monitors_config, group_id, cookie);
+}
+
+SPICE_GNUC_VISIBLE
+void spice_qxl_driver_unload(QXLInstance *instance)
+{
+    red_dispatcher_driver_unload(instance->st->dispatcher);
 }
 
 void red_dispatcher_async_complete(struct RedDispatcher *dispatcher,

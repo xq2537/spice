@@ -23,7 +23,7 @@
 #include <spice/qxl_dev.h>
 #include <spice/vd_agent.h>
 
-#define SPICE_SERVER_VERSION 0x000c02 /* release 0.12.2 */
+#define SPICE_SERVER_VERSION 0x000c03 /* release 0.12.3 */
 
 /* interface base type */
 
@@ -167,6 +167,8 @@ void spice_qxl_flush_surfaces_async(QXLInstance *instance, uint64_t cookie);
 /* since spice 0.12.0 */
 void spice_qxl_monitors_config_async(QXLInstance *instance, QXLPHYSICAL monitors_config,
                                      int group_id, uint64_t cookie);
+/* since spice 0.12.3 */
+void spice_qxl_driver_unload(QXLInstance *instance);
 
 typedef struct QXLDrawArea {
     uint8_t *buf;

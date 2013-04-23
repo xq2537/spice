@@ -201,4 +201,7 @@ typedef struct RedWorkerMessageMonitorsConfigAsync {
     int group_id;
 } RedWorkerMessageMonitorsConfigAsync;
 
+typedef struct RedWorkerMessageDriverUnload {
+} RedWorkerMessageDriverUnload;
+
 #endif
