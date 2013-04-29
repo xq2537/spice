@@ -52,7 +52,7 @@
 
 #define RECORD_SAMPLES_SIZE (SND_RECEIVE_BUF_SIZE >> 2)
 
-enum PlaybackeCommand {
+enum PlaybackCommand {
     SND_PLAYBACK_MIGRATE,
     SND_PLAYBACK_MODE,
     SND_PLAYBACK_CTRL,
