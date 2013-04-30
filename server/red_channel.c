@@ -576,6 +576,9 @@ static void red_channel_client_release_item(RedChannelClient *rcc, PipeItem *ite
 
     switch (item->type) {
         case PIPE_ITEM_TYPE_SET_ACK:
+        case PIPE_ITEM_TYPE_EMPTY_MSG:
+        case PIPE_ITEM_TYPE_MIGRATE:
+        case PIPE_ITEM_TYPE_PING:
             free(item);
             break;
         default:
