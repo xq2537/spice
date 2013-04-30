@@ -172,6 +172,7 @@ static void reds_mig_cleanup_wait_disconnect(void);
 static void reds_mig_remove_wait_disconnect_client(RedClient *client);
 static void reds_char_device_add_state(SpiceCharDeviceState *st);
 static void reds_char_device_remove_state(SpiceCharDeviceState *st);
+static void reds_send_mm_time(void);
 
 static ChannelSecurityOptions *channels_security = NULL;
 static int default_channel_security =
@@ -1360,6 +1361,14 @@ int reds_handle_migrate_data(MainChannelClient *mcc, SpiceMigrateDataMain *mig_d
 {
     VDIPortState *agent_state = &reds->agent_state;
 
+    /*
+     * Now that the client has switched to the target server, if main_channel
+     * controls the mm-time, we update the client's mm-time.
+     * (MSG_MAIN_INIT is not sent for a migrating connection)
+     */
+    if (reds->mm_timer_enabled) {
+        reds_send_mm_time();
+    }
     if (mig_data->agent_base.connected) {
         if (agent_state->base) { // agent was attached before migration data has arrived
             if (!vdagent) {
@@ -3033,6 +3042,10 @@ listen:
 
 static void reds_send_mm_time(void)
 {
+    if (!reds_main_channel_connected()) {
+        return;
+    }
+    spice_debug(NULL);
     main_channel_push_multi_media_time(reds->main_channel,
                                        reds_get_mm_time() - reds->mm_time_latency);
 }
@@ -3483,9 +3496,6 @@ void reds_update_mm_timer(uint32_t mm_time)
 void reds_enable_mm_timer(void)
 {
     core->timer_start(reds->mm_timer, MM_TIMER_GRANULARITY_MS);
-    if (!reds_main_channel_connected()) {
-        return;
-    }
     reds->mm_timer_enabled = TRUE;
     reds->mm_time_latency = MM_TIME_DELTA;
     reds_send_mm_time();
@@ -3927,7 +3937,7 @@ static int do_spice_init(SpiceCoreInterface *core_interface)
     if (!(reds->mm_timer = core->timer_add(mm_timer_proc, NULL))) {
         spice_error("mm timer create failed");
     }
-    core->timer_start(reds->mm_timer, MM_TIMER_GRANULARITY_MS);
+    reds_enable_mm_timer();
 
     if (reds_init_net() < 0) {
         goto err;
