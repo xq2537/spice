@@ -805,7 +805,9 @@ RedChannelClient *red_channel_client_create(int size, RedChannel *channel, RedCl
     if (monitor_latency) {
         rcc->latency_monitor.timer = channel->core->timer_add(
             red_channel_client_ping_timer, rcc);
-        red_channel_client_start_ping_timer(rcc, PING_TEST_IDLE_NET_TIMEOUT_MS);
+        if (!client->during_target_migrate) {
+            red_channel_client_start_ping_timer(rcc, PING_TEST_IDLE_NET_TIMEOUT_MS);
+        }
         rcc->latency_monitor.roundtrip = -1;
     }
 
@@ -832,6 +834,9 @@ static void red_channel_client_seamless_migration_done(RedChannelClient *rcc)
         /* migration completion might have been triggered from a different thread
          * than the main thread */
         main_dispatcher_seamless_migrate_dst_complete(rcc->client);
+        if (rcc->latency_monitor.timer) {
+            red_channel_client_start_ping_timer(rcc, PING_TEST_IDLE_NET_TIMEOUT_MS);
+        }
     }
     pthread_mutex_unlock(&rcc->client->lock);
 }
@@ -2004,6 +2009,8 @@ void red_client_set_main(RedClient *client, MainChannelClient *mcc) {
 
 void red_client_semi_seamless_migrate_complete(RedClient *client)
 {
+    RingItem *link;
+
     pthread_mutex_lock(&client->lock);
     if (!client->during_target_migrate || client->seamless_migrate) {
         spice_error("unexpected");
@@ -2011,6 +2018,13 @@ void red_client_semi_seamless_migrate_complete(RedClient *client)
         return;
     }
     client->during_target_migrate = FALSE;
+    RING_FOREACH(link, &client->channels) {
+        RedChannelClient *rcc = SPICE_CONTAINEROF(link, RedChannelClient, client_link);
+
+        if (rcc->latency_monitor.timer) {
+            red_channel_client_start_ping_timer(rcc, PING_TEST_IDLE_NET_TIMEOUT_MS);
+        }
+    }
     pthread_mutex_unlock(&client->lock);
     reds_on_client_semi_seamless_migrate_complete(client);
 }
