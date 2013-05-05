@@ -3102,8 +3102,6 @@ static void red_stream_input_fps_timer_cb(void *opaque)
     stream->input_fps_timer_start = now;
 }
 
-/* TODO: we create the stream even if dcc is NULL, i.e. no client - or
- * maybe we can't reach this function in that case? question: do we want to? */
 static void red_create_stream(RedWorker *worker, Drawable *drawable)
 {
     DisplayChannelClient *dcc;
