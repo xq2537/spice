@@ -164,6 +164,7 @@ enum NetTestStage {
     NET_TEST_STAGE_WARMUP,
     NET_TEST_STAGE_LATENCY,
     NET_TEST_STAGE_RATE,
+    NET_TEST_STAGE_COMPLETE,
 };
 
 static void main_channel_release_pipe_item(RedChannelClient *rcc,
@@ -962,6 +963,7 @@ static int main_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint
                 if (roundtrip <= mcc->latency) {
                     // probably high load on client or server result with incorrect values
                     mcc->latency = 0;
+                    mcc->net_test_stage = NET_TEST_STAGE_INVALID;
                     spice_printerr("net test: invalid values, latency %" PRIu64
                                " roundtrip %" PRIu64 ". assuming high"
                                "bandwidth", mcc->latency, roundtrip);
@@ -969,18 +971,19 @@ static int main_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, uint
                 }
                 mcc->bitrate_per_sec = (uint64_t)(NET_TEST_BYTES * 8) * 1000000
                                         / (roundtrip - mcc->latency);
+                mcc->net_test_stage = NET_TEST_STAGE_COMPLETE;
                 spice_printerr("net test: latency %f ms, bitrate %"PRIu64" bps (%f Mbps)%s",
                            (double)mcc->latency / 1000,
                            mcc->bitrate_per_sec,
                            (double)mcc->bitrate_per_sec / 1024 / 1024,
                            main_channel_client_is_low_bandwidth(mcc) ? " LOW BANDWIDTH" : "");
-                mcc->net_test_stage = NET_TEST_STAGE_INVALID;
                 break;
             default:
                 spice_printerr("invalid net test stage, ping id %d test id %d stage %d",
                            ping->id,
                            mcc->net_test_id,
                            mcc->net_test_stage);
+                mcc->net_test_stage = NET_TEST_STAGE_INVALID;
             }
             break;
         }
@@ -1137,6 +1140,11 @@ void main_channel_close(MainChannel *main_chan)
     if (main_chan && (socketfd = red_channel_get_first_socket(&main_chan->base)) != -1) {
         close(socketfd);
     }
+}
+
+int main_channel_client_is_network_info_initialized(MainChannelClient *mcc)
+{
+    return mcc->net_test_stage == NET_TEST_STAGE_COMPLETE;
 }
 
 int main_channel_client_is_low_bandwidth(MainChannelClient *mcc)

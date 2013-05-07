@@ -67,9 +67,15 @@ int main_channel_getsockname(MainChannel *main_chan, struct sockaddr *sa, sockle
 int main_channel_getpeername(MainChannel *main_chan, struct sockaddr *sa, socklen_t *salen);
 uint32_t main_channel_client_get_link_id(MainChannelClient *mcc);
 
+/*
+ * return TRUE if network test had been completed successfully.
+ * If FALSE, bitrate_per_sec is set to MAX_UINT64 and the roundtrip is set to 0
+ */
+int main_channel_client_is_network_info_initialized(MainChannelClient *mcc);
 int main_channel_client_is_low_bandwidth(MainChannelClient *mcc);
 uint64_t main_channel_client_get_bitrate_per_sec(MainChannelClient *mcc);
 uint64_t main_channel_client_get_roundtrip_ms(MainChannelClient *mcc);
+
 int main_channel_is_connected(MainChannel *main_chan);
 RedChannelClient* main_channel_client_get_base(MainChannelClient* mcc);
 
