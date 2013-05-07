@@ -328,6 +328,17 @@ struct RedChannel {
 #endif
 };
 
+/*
+ * When an error occurs over a channel, we treat it as a warning
+ * for spice-server and shutdown the channel.
+ */
+#define spice_channel_client_error(rcc, format, ...)                                     \
+    do {                                                                                 \
+        spice_warning("rcc %p type %u id %u: " format, rcc,                              \
+                    rcc->channel->type, rcc->channel->id, ## __VA_ARGS__);               \
+        red_channel_client_shutdown(rcc);                                                \
+    } while (0)
+
 /* if one of the callbacks should cause disconnect, use red_channel_shutdown and don't
  * explicitly destroy the channel */
 RedChannel *red_channel_create(int size,
