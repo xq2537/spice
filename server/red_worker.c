@@ -10199,6 +10199,9 @@ static int display_channel_handle_migrate_data(RedChannelClient *rcc, uint32_t s
     } else {
         spice_critical("restoring global lz dictionary failed");
     }
+
+    dcc->common.is_low_bandwidth = migrate_data->low_bandwidth_setting;
+
     if (migrate_data->low_bandwidth_setting) {
         red_channel_client_ack_set_client_window(rcc, WIDE_CLIENT_ACK_WINDOW);
         if (dcc->common.worker->jpeg_state == SPICE_WAN_COMPRESSION_AUTO) {
