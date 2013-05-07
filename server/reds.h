@@ -111,10 +111,14 @@ typedef struct RedsMigSpice {
     int sport;
 } RedsMigSpice;
 
+/* any thread */
 ssize_t reds_stream_read(RedsStream *s, void *buf, size_t nbyte);
 ssize_t reds_stream_write(RedsStream *s, const void *buf, size_t nbyte);
 ssize_t reds_stream_writev(RedsStream *s, const struct iovec *iov, int iovcnt);
 void reds_stream_free(RedsStream *s);
+
+/* main thread only */
+void reds_handle_channel_event(int event, SpiceChannelEventInfo *info);
 
 void reds_disable_mm_timer(void);
 void reds_enable_mm_timer(void);

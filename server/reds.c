@@ -189,11 +189,20 @@ static ChannelSecurityOptions *find_channel_security(int id)
     return now;
 }
 
-static void reds_stream_channel_event(RedsStream *s, int event)
+static void reds_stream_push_channel_event(RedsStream *s, int event)
+{
+    main_dispatcher_channel_event(event, s->info);
+}
+
+void reds_handle_channel_event(int event, SpiceChannelEventInfo *info)
 {
     if (core->base.minor_version < 3 || core->channel_event == NULL)
         return;
-    main_dispatcher_channel_event(event, s->info);
+
+    core->channel_event(event, info);
+    if (event == SPICE_CHANNEL_EVENT_DISCONNECTED) {
+        free(info);
+    }
 }
 
 static ssize_t stream_write_cb(RedsStream *s, const void *buf, size_t size)
@@ -1524,7 +1533,7 @@ static void reds_info_new_channel(RedLinkInfo *link, int connection_id)
     link->stream->info->connection_id = connection_id;
     link->stream->info->type = link->link_mess->channel_type;
     link->stream->info->id   = link->link_mess->channel_id;
-    reds_stream_channel_event(link->stream, SPICE_CHANNEL_EVENT_INITIALIZED);
+    reds_stream_push_channel_event(link->stream, SPICE_CHANNEL_EVENT_INITIALIZED);
 }
 
 static void reds_send_link_result(RedLinkInfo *link, uint32_t error)
@@ -2845,7 +2854,7 @@ static RedLinkInfo *reds_init_client_connection(int socket)
     getpeername(stream->socket, (struct sockaddr*)(&stream->info->paddr_ext),
                 &stream->info->plen_ext);
 
-    reds_stream_channel_event(stream, SPICE_CHANNEL_EVENT_CONNECTED);
+    reds_stream_push_channel_event(stream, SPICE_CHANNEL_EVENT_CONNECTED);
 
     openssl_init(link);
 
@@ -4573,7 +4582,7 @@ void reds_stream_free(RedsStream *s)
         return;
     }
 
-    reds_stream_channel_event(s, SPICE_CHANNEL_EVENT_DISCONNECTED);
+    reds_stream_push_channel_event(s, SPICE_CHANNEL_EVENT_DISCONNECTED);
 
 #if HAVE_SASL
     if (s->sasl.conn) {
