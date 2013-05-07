@@ -665,6 +665,7 @@ typedef struct CommonChannelClient {
     RedChannelClient base;
     uint32_t id;
     struct RedWorker *worker;
+    int is_low_bandwidth;
 } CommonChannelClient;
 
 /* Each drawable can refer to at most 3 images: src, brush and mask */
@@ -3287,12 +3288,6 @@ static inline int red_is_next_stream_frame(RedWorker *worker, const Drawable *ca
                                       FALSE);
 }
 
-static int display_channel_client_is_low_bandwidth(DisplayChannelClient *dcc)
-{
-    return main_channel_client_is_low_bandwidth(
-        red_client_get_main(red_channel_client_get_client(&dcc->common.base)));
-}
-
 static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream, Drawable *new_frame)
 {
     DrawablePipeItem *dpi;
@@ -3318,7 +3313,7 @@ static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream, Drawa
         agent = &dcc->stream_agents[index];
 
         if (!dcc->use_mjpeg_encoder_rate_control &&
-            !display_channel_client_is_low_bandwidth(dcc)) {
+            !dcc->common.is_low_bandwidth) {
             continue;
         }
 
@@ -8768,7 +8763,7 @@ static void display_channel_marshall_migrate_data(RedChannelClient *rcc,
                  MIGRATE_DATA_DISPLAY_MAX_CACHE_CLIENTS == MAX_CACHE_CLIENTS);
 
     display_data.message_serial = red_channel_client_get_message_serial(rcc);
-    display_data.low_bandwidth_setting = display_channel_client_is_low_bandwidth(dcc);
+    display_data.low_bandwidth_setting = dcc->common.is_low_bandwidth;
 
     display_data.pixmap_cache_freezer = pixmap_cache_freeze(dcc->pixmap_cache);
     display_data.pixmap_cache_id = dcc->pixmap_cache->id;
@@ -10286,6 +10281,7 @@ static int common_channel_config_socket(RedChannelClient *rcc)
     RedClient *client = red_channel_client_get_client(rcc);
     MainChannelClient *mcc = red_client_get_main(client);
     RedsStream *stream = red_channel_client_get_stream(rcc);
+    CommonChannelClient *ccc = SPICE_CONTAINEROF(rcc, CommonChannelClient, base);
     int flags;
     int delay_val;
 
@@ -10300,7 +10296,14 @@ static int common_channel_config_socket(RedChannelClient *rcc)
     }
 
     // TODO - this should be dynamic, not one time at channel creation
-    delay_val = main_channel_client_is_low_bandwidth(mcc) ? 0 : 1;
+    ccc->is_low_bandwidth = main_channel_client_is_low_bandwidth(mcc);
+    delay_val = ccc->is_low_bandwidth ? 0 : 1;
+    /* FIXME: Using Nagle's Algorithm can lead to apparent delays, depending
+     * on the delayed ack timeout on the other side.
+     * Instead of using Nagle's, we need to implement message buffering on
+     * the application level.
+     * see: http://www.stuartcheshire.org/papers/NagleDelayedAck/
+     */
     if (setsockopt(stream->socket, IPPROTO_TCP, TCP_NODELAY, &delay_val,
                    sizeof(delay_val)) == -1) {
         if (errno != ENOTSUP) {
@@ -10402,7 +10405,6 @@ static CommonChannelClient *common_channel_client_create(int size,
                                                          uint32_t *caps,
                                                          int num_caps)
 {
-    MainChannelClient *mcc = red_client_get_main(client);
     RedChannelClient *rcc =
         red_channel_client_create(size, &common->base, client, stream, monitor_latency,
                                   num_common_caps, common_caps, num_caps, caps);
@@ -10416,7 +10418,7 @@ static CommonChannelClient *common_channel_client_create(int size,
 
     // TODO: move wide/narrow ack setting to red_channel.
     red_channel_client_ack_set_client_window(rcc,
-        main_channel_client_is_low_bandwidth(mcc) ?
+        common_cc->is_low_bandwidth ?
         WIDE_CLIENT_ACK_WINDOW : NARROW_CLIENT_ACK_WINDOW);
     return common_cc;
 }
@@ -10749,7 +10751,6 @@ static void handle_new_display_channel(RedWorker *worker, RedClient *client, Red
     DisplayChannel *display_channel;
     DisplayChannelClient *dcc;
     size_t stream_buf_size;
-    int is_low_bandwidth = main_channel_client_is_low_bandwidth(red_client_get_main(client));
 
     if (!worker->display_channel) {
         spice_warning("Display channel was not created");
@@ -10776,7 +10777,7 @@ static void handle_new_display_channel(RedWorker *worker, RedClient *client, Red
     dcc->send_data.free_list.res_size = DISPLAY_FREE_LIST_DEFAULT_SIZE;
 
     if (worker->jpeg_state == SPICE_WAN_COMPRESSION_AUTO) {
-        display_channel->enable_jpeg = is_low_bandwidth;
+        display_channel->enable_jpeg = dcc->common.is_low_bandwidth;
     } else {
         display_channel->enable_jpeg = (worker->jpeg_state == SPICE_WAN_COMPRESSION_ALWAYS);
     }
@@ -10785,7 +10786,7 @@ static void handle_new_display_channel(RedWorker *worker, RedClient *client, Red
     display_channel->jpeg_quality = 85;
 
     if (worker->zlib_glz_state == SPICE_WAN_COMPRESSION_AUTO) {
-        display_channel->enable_zlib_glz_wrap = is_low_bandwidth;
+        display_channel->enable_zlib_glz_wrap = dcc->common.is_low_bandwidth;
     } else {
         display_channel->enable_zlib_glz_wrap = (worker->zlib_glz_state ==
                                                  SPICE_WAN_COMPRESSION_ALWAYS);
