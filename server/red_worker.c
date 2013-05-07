@@ -10099,16 +10099,20 @@ static uint64_t display_channel_handle_migrate_data_get_serial(
     return migrate_data->message_serial;
 }
 
-static void display_channel_client_restore_surface(DisplayChannelClient *dcc, uint32_t surface_id)
+static int display_channel_client_restore_surface(DisplayChannelClient *dcc, uint32_t surface_id)
 {
     /* we don't process commands till we receive the migration data, thus,
      * we should have not sent any surface to the client. */
-    spice_assert(!dcc->surface_client_created[surface_id]);
+    if (dcc->surface_client_created[surface_id]) {
+        spice_warning("surface %u is already marked as client_created", surface_id);
+        return FALSE;
+    }
     dcc->surface_client_created[surface_id] = TRUE;
+    return TRUE;
 }
 
-static void display_channel_client_restore_surfaces_lossless(DisplayChannelClient *dcc,
-                                                             MigrateDisplaySurfacesAtClientLossless *mig_surfaces)
+static int display_channel_client_restore_surfaces_lossless(DisplayChannelClient *dcc,
+                                                            MigrateDisplaySurfacesAtClientLossless *mig_surfaces)
 {
     uint32_t i;
 
@@ -10116,11 +10120,14 @@ static void display_channel_client_restore_surfaces_lossless(DisplayChannelClien
     for (i = 0; i < mig_surfaces->num_surfaces; i++) {
         uint32_t surface_id = mig_surfaces->surfaces[i].id;
 
-        display_channel_client_restore_surface(dcc, surface_id);
+        if (!display_channel_client_restore_surface(dcc, surface_id)) {
+            return FALSE;
+        }
     }
+    return TRUE;
 }
 
-static void display_channel_client_restore_surfaces_lossy(DisplayChannelClient *dcc,
+static int display_channel_client_restore_surfaces_lossy(DisplayChannelClient *dcc,
                                                           MigrateDisplaySurfacesAtClientLossy *mig_surfaces)
 {
     uint32_t i;
@@ -10131,7 +10138,9 @@ static void display_channel_client_restore_surfaces_lossy(DisplayChannelClient *
         SpiceMigrateDataRect *mig_lossy_rect;
         SpiceRect lossy_rect;
 
-        display_channel_client_restore_surface(dcc, surface_id);
+        if (!display_channel_client_restore_surface(dcc, surface_id)) {
+            return FALSE;
+        }
         spice_assert(dcc->surface_client_created[surface_id]);
 
         mig_lossy_rect = &mig_surfaces->surfaces[i].lossy_rect;
@@ -10142,6 +10151,7 @@ static void display_channel_client_restore_surfaces_lossy(DisplayChannelClient *
         region_init(&dcc->surface_client_lossy_region[surface_id]);
         region_add(&dcc->surface_client_lossy_region[surface_id], &lossy_rect);
     }
+    return TRUE;
 }
 static int display_channel_handle_migrate_data(RedChannelClient *rcc, uint32_t size,
                                                void *message)
@@ -10151,6 +10161,7 @@ static int display_channel_handle_migrate_data(RedChannelClient *rcc, uint32_t s
     DisplayChannel *display_channel = SPICE_CONTAINEROF(rcc->channel, DisplayChannel, common.base);
     DisplayChannelClient *dcc = RCC_TO_DCC(rcc);
     uint8_t *surfaces;
+    int surfaces_restored = FALSE;
     int i;
 
     spice_debug(NULL);
@@ -10214,13 +10225,16 @@ static int display_channel_handle_migrate_data(RedChannelClient *rcc, uint32_t s
 
     surfaces = (uint8_t *)message + migrate_data->surfaces_at_client_ptr;
     if (display_channel->enable_jpeg) {
-        display_channel_client_restore_surfaces_lossy(dcc,
-            (MigrateDisplaySurfacesAtClientLossy *)surfaces);
+        surfaces_restored = display_channel_client_restore_surfaces_lossy(dcc,
+                                (MigrateDisplaySurfacesAtClientLossy *)surfaces);
     } else {
-            display_channel_client_restore_surfaces_lossless(dcc,
-            (MigrateDisplaySurfacesAtClientLossless*)surfaces);
+        surfaces_restored = display_channel_client_restore_surfaces_lossless(dcc,
+                                (MigrateDisplaySurfacesAtClientLossless*)surfaces);
     }
 
+    if (!surfaces_restored) {
+        return FALSE;
+    }
     red_channel_client_pipe_add_type(rcc, PIPE_ITEM_TYPE_INVAL_PALLET_CACHE);
     /* enable sending messages */
     red_channel_client_ack_zero_messages_window(rcc);
