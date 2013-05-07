@@ -121,6 +121,8 @@
 /* the client's stream report frequency is the minimum of the 2 values below */
 #define RED_STREAM_CLIENT_REPORT_WINDOW 5 // #frames
 #define RED_STREAM_CLIENT_REPORT_TIMEOUT 1000 // milliseconds
+#define RED_STREAM_DEFAULT_HIGH_START_BIT_RATE (10 * 1024 * 1024) // 10Mbps
+#define RED_STREAM_DEFAULT_LOW_START_BIT_RATE (2.5 * 1024 * 1024) // 2.5Mbps
 
 #define FPS_TEST_INTERVAL 1
 #define MAX_FPS 30
@@ -2929,11 +2931,9 @@ static inline Stream *red_alloc_stream(RedWorker *worker)
 static uint64_t red_stream_get_initial_bit_rate(DisplayChannelClient *dcc,
                                                 Stream *stream)
 {
-    MainChannelClient *mcc;
     char *env_bit_rate_str;
     uint64_t bit_rate = 0;
 
-    mcc = red_client_get_main(dcc->common.base.client);
     env_bit_rate_str = getenv("SPICE_BIT_RATE");
     if (env_bit_rate_str != NULL) {
         double env_bit_rate;
@@ -2948,16 +2948,28 @@ static uint64_t red_stream_get_initial_bit_rate(DisplayChannelClient *dcc,
     }
 
     if (!bit_rate) {
-        bit_rate = main_channel_client_get_bitrate_per_sec(mcc);
+        MainChannelClient *mcc;
+        uint64_t net_test_bit_rate;
 
-        if (bit_rate > dcc->streams_max_bit_rate) {
-            dcc->streams_max_bit_rate = bit_rate;
-        } else {
-            bit_rate = dcc->streams_max_bit_rate;
+        mcc = red_client_get_main(dcc->common.base.client);
+        net_test_bit_rate = main_channel_client_is_network_info_initialized(mcc) ?
+                                main_channel_client_get_bitrate_per_sec(mcc) :
+                                0;
+        bit_rate = MAX(dcc->streams_max_bit_rate, net_test_bit_rate);
+        if (bit_rate == 0) {
+            /*
+             * In case we are after a spice session migration,
+             * the low_bandwidth flag is retrieved from migration data.
+             * If the network info is not initialized due to another reason,
+             * the low_bandwidth flag is FALSE.
+             */
+            bit_rate = dcc->common.is_low_bandwidth ?
+                RED_STREAM_DEFAULT_LOW_START_BIT_RATE :
+                RED_STREAM_DEFAULT_HIGH_START_BIT_RATE;
         }
     }
 
-    spice_debug("base-bit-rate %.2f (Mbps)", bit_rate / 1024.0 /1024.0);
+    spice_debug("base-bit-rate %.2f (Mbps)", bit_rate / 1024.0 / 1024.0);
     /* dividing the available bandwidth among the active streams, and saving
      * (1-RED_STREAM_CHANNEL_CAPACITY) of it for other messages */
     return (RED_STREAM_CHANNEL_CAPACITY * bit_rate *
@@ -2973,6 +2985,12 @@ static uint32_t red_stream_mjpeg_encoder_get_roundtrip(void *opaque)
     roundtrip = red_channel_client_get_roundtrip_ms(&agent->dcc->common.base);
     if (roundtrip < 0) {
         MainChannelClient *mcc = red_client_get_main(agent->dcc->common.base.client);
+
+        /*
+         * the main channel client roundtrip might not have been
+         * calculated (e.g., after migration). In such case,
+         * main_channel_client_get_roundtrip_ms returns 0.
+         */
         roundtrip = main_channel_client_get_roundtrip_ms(mcc);
     }
 
