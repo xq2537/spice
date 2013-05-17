@@ -35,6 +35,7 @@ noinst_PROGRAMS =						\
 	test_display_resolution_changes		\
 	test_two_servers					\
 	test_vdagent						\
+	test_display_width_stride			\
 	$(NULL)
 
 test_vdagent_SOURCES =		\
@@ -90,4 +91,9 @@ test_two_servers_SOURCES =			\
 	test_two_servers.c 			\
 	$(NULL)
 
-
+test_display_width_stride_SOURCES =			\
+	$(COMMON_BASE)				\
+	test_display_base.c			\
+	test_display_base.h			\
+	test_display_width_stride.c 			\
+	$(NULL)

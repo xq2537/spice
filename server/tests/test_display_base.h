@@ -32,6 +32,14 @@ typedef struct CommandCreatePrimary {
     uint32_t height;
 } CommandCreatePrimary;
 
+typedef struct CommandCreateSurface {
+    uint32_t surface_id;
+    uint32_t format;
+    uint32_t width;
+    uint32_t height;
+    uint8_t *data;
+} CommandCreateSurface;
+
 typedef struct CommandDrawBitmap {
     QXLRect bbox;
     uint8_t *bitmap;
@@ -62,6 +70,7 @@ struct Command {
         CommandDrawBitmap bitmap;
         CommandDrawSolid solid;
         CommandSleep sleep;
+        CommandCreateSurface create_surface;
     };
 };
 
@@ -100,6 +109,10 @@ struct Test {
     int cmd_index;
 
     int target_surface;
+
+    // callbacks
+    void (*on_client_connected)(Test *test);
+    void (*on_client_disconnected)(Test *test);
 };
 
 void test_set_simple_command_list(Test *test, int *command, int num_commands);

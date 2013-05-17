@@ -309,20 +309,36 @@ static SimpleSpiceUpdate *test_spice_create_update_copy_bits(Test *test, uint32_
     return update;
 }
 
-static SimpleSurfaceCmd *create_surface(int surface_id, int width, int height, uint8_t *data)
+static int format_to_bpp(int format)
+{
+    switch (format) {
+    case SPICE_SURFACE_FMT_8_A:
+        return 1;
+    case SPICE_SURFACE_FMT_16_555:
+    case SPICE_SURFACE_FMT_16_565:
+        return 2;
+    case SPICE_SURFACE_FMT_32_xRGB:
+    case SPICE_SURFACE_FMT_32_ARGB:
+        return 4;
+    }
+    abort();
+}
+
+static SimpleSurfaceCmd *create_surface(int surface_id, int format, int width, int height, uint8_t *data)
 {
     SimpleSurfaceCmd *simple_cmd = calloc(sizeof(SimpleSurfaceCmd), 1);
     QXLSurfaceCmd *surface_cmd = &simple_cmd->surface_cmd;
+    int bpp = format_to_bpp(format);
 
     set_cmd(&simple_cmd->ext, QXL_CMD_SURFACE, (intptr_t)surface_cmd);
     simple_set_release_info(&surface_cmd->release_info, (intptr_t)simple_cmd);
     surface_cmd->type = QXL_SURFACE_CMD_CREATE;
     surface_cmd->flags = 0; // ?
     surface_cmd->surface_id = surface_id;
-    surface_cmd->u.surface_create.format = SPICE_SURFACE_FMT_32_xRGB;
+    surface_cmd->u.surface_create.format = format;
     surface_cmd->u.surface_create.width = width;
     surface_cmd->u.surface_create.height = height;
-    surface_cmd->u.surface_create.stride = -width * 4;
+    surface_cmd->u.surface_create.stride = -width * bpp;
     surface_cmd->u.surface_create.data = (intptr_t)data;
     return simple_cmd;
 }
@@ -471,7 +487,10 @@ static void produce_command(Test *test)
     if (test->has_secondary)
         test->target_surface = 1;
 
-    ASSERT(test->num_commands);
+    if (!test->num_commands) {
+        usleep(1000);
+        return;
+    }
 
     command = &test->commands[test->cmd_index];
     if (command->cb) {
@@ -538,8 +557,17 @@ static void produce_command(Test *test)
         case SIMPLE_CREATE_SURFACE: {
             SimpleSurfaceCmd *update;
             test->target_surface = MAX_SURFACE_NUM - 1;
-            update = create_surface(test->target_surface, SURF_WIDTH, SURF_HEIGHT,
-                                    test->secondary_surface);
+            if (command) {
+                update = create_surface(command->create_surface.surface_id,
+                                        command->create_surface.format,
+                                        command->create_surface.width,
+                                        command->create_surface.height,
+                                        command->create_surface.data);
+            } else {
+                update = create_surface(test->target_surface, SPICE_SURFACE_FMT_32_xRGB,
+                                        SURF_WIDTH, SURF_HEIGHT,
+                                        test->secondary_surface);
+            }
             push_command(&update->ext);
             test->has_secondary = 1;
             break;
@@ -716,7 +744,15 @@ static void set_client_capabilities(QXLInstance *qin,
                                     uint8_t client_present,
                                     uint8_t caps[58])
 {
+    Test *test = SPICE_CONTAINEROF(qin, Test, qxl_instance);
+
     printf("%s: present %d caps %d\n", __func__, client_present, caps[0]);
+    if (test->on_client_connected && client_present) {
+        test->on_client_connected(test);
+    }
+    if (test->on_client_disconnected && !client_present) {
+        test->on_client_disconnected(test);
+    }
 }
 
 QXLInterface display_sif = {
