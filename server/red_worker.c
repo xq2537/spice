@@ -1279,6 +1279,9 @@ static MonitorsConfig *monitors_config_getref(MonitorsConfig *monitors_config)
 
 static void monitors_config_decref(MonitorsConfig *monitors_config)
 {
+    if (!monitors_config) {
+        return;
+    }
     if (--monitors_config->refs > 0) {
         return;
     }
@@ -11339,9 +11342,7 @@ static void worker_update_monitors_config(RedWorker *worker,
     MonitorsConfig *monitors_config;
     int i;
 
-    if (worker->monitors_config) {
-        monitors_config_decref(worker->monitors_config);
-    }
+    monitors_config_decref(worker->monitors_config);
 
     spice_debug("monitors config %d(%d)",
                 dev_monitors_config->count,
@@ -11396,12 +11397,10 @@ static void set_monitors_config_to_primary(RedWorker *worker)
     DrawContext *context;
 
     if (!worker->surfaces[0].context.canvas) {
-        spice_warning("%s: no primary surface", __FUNCTION__);
+        spice_warning("no primary surface");
         return;
     }
-    if (worker->monitors_config) {
-        monitors_config_decref(worker->monitors_config);
-    }
+    monitors_config_decref(worker->monitors_config);
     context = &worker->surfaces[0].context;
     worker->monitors_config =
         spice_malloc(sizeof(*worker->monitors_config) + sizeof(QXLHead));
