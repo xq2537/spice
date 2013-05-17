@@ -1040,7 +1040,7 @@ typedef struct RedWorker {
     uint64_t *command_counter;
 #endif
 
-    int driver_has_monitors_config;
+    int driver_cap_monitors_config;
     int set_client_capabilities_pending;
 } RedWorker;
 
@@ -11442,7 +11442,9 @@ static void dev_create_primary_surface(RedWorker *worker, uint32_t surface_id,
     set_monitors_config_to_primary(worker);
 
     if (display_is_connected(worker) && !worker->display_channel->common.during_target_migrate) {
-        if (!worker->driver_has_monitors_config) {
+        /* guest created primary, so it will (hopefully) send a monitors_config
+         * now, don't send our own temporary one */
+        if (!worker->driver_cap_monitors_config) {
             red_worker_push_monitors_config(worker);
         }
         red_pipes_add_verb(&worker->display_channel->common.base,
@@ -11746,7 +11748,7 @@ static void handle_dev_monitors_config_async(void *opaque, void *payload)
         /* TODO: raise guest bug (requires added QXL interface) */
         return;
     }
-    worker->driver_has_monitors_config = 1;
+    worker->driver_cap_monitors_config = 1;
     if (dev_monitors_config->count == 0) {
         spice_warning("ignoring an empty monitors config message from driver");
         return;
@@ -11902,7 +11904,7 @@ void handle_dev_driver_unload(void *opaque, void *payload)
 {
     RedWorker *worker = opaque;
 
-    worker->driver_has_monitors_config = 0;
+    worker->driver_cap_monitors_config = 0;
 }
 
 void handle_dev_loadvm_commands(void *opaque, void *payload)
@@ -12171,7 +12173,7 @@ static void red_init(RedWorker *worker, WorkerInitData *init_data)
     worker->jpeg_state = init_data->jpeg_state;
     worker->zlib_glz_state = init_data->zlib_glz_state;
     worker->streaming_video = init_data->streaming_video;
-    worker->driver_has_monitors_config = 0;
+    worker->driver_cap_monitors_config = 0;
     ring_init(&worker->current_list);
     image_cache_init(&worker->image_cache);
     image_surface_init(worker);
