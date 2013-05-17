@@ -701,13 +701,22 @@ static int flush_resources(QXLInstance *qin)
     return TRUE;
 }
 
-static void client_monitors_config(QXLInstance *qin, VDAgentMonitorsConfig *monitors_config)
+static int client_monitors_config(QXLInstance *qin,
+                                  VDAgentMonitorsConfig *monitors_config)
 {
     if (!monitors_config) {
         printf("%s: NULL monitors_config\n", __func__);
     } else {
         printf("%s: %d\n", __func__, monitors_config->num_of_monitors);
     }
+    return 0;
+}
+
+static void set_client_capabilities(QXLInstance *qin,
+                                    uint8_t client_present,
+                                    uint8_t caps[58])
+{
+    printf("%s: present %d caps %d\n", __func__, client_present, caps[0]);
 }
 
 QXLInterface display_sif = {
@@ -731,6 +740,7 @@ QXLInterface display_sif = {
     .notify_update = notify_update,
     .flush_resources = flush_resources,
     .client_monitors_config = client_monitors_config,
+    .set_client_capabilities = set_client_capabilities,
 };
 
 /* interface for tests */
