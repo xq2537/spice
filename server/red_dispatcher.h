@@ -43,10 +43,10 @@ void red_dispatcher_client_monitors_config(VDAgentMonitorsConfig *monitors_confi
 typedef struct RedWorkerMessageDisplayConnect {
     RedClient * client;
     RedsStream * stream;
-    int migration;
     uint32_t *common_caps; // red_worker should free
-    int num_common_caps;
     uint32_t *caps;        // red_worker should free
+    int migration;
+    int num_common_caps;
     int num_caps;
 } RedWorkerMessageDisplayConnect;
 
