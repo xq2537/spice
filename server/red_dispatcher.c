@@ -97,7 +97,7 @@ static void red_dispatcher_set_display_peer(RedChannel *channel, RedClient *clie
                                             int num_common_caps, uint32_t *common_caps, int num_caps,
                                             uint32_t *caps)
 {
-    RedWorkerMessageDisplayConnect payload;
+    RedWorkerMessageDisplayConnect payload = {0,};
     RedDispatcher *dispatcher;
 
     spice_debug("%s", "");
@@ -159,7 +159,7 @@ static void red_dispatcher_set_cursor_peer(RedChannel *channel, RedClient *clien
                                            uint32_t *common_caps, int num_caps,
                                            uint32_t *caps)
 {
-    RedWorkerMessageCursorConnect payload;
+    RedWorkerMessageCursorConnect payload = {0,};
     RedDispatcher *dispatcher = (RedDispatcher *)channel->data;
     spice_printerr("");
     payload.client = client;
@@ -292,7 +292,7 @@ static void red_dispatcher_update_area(RedDispatcher *dispatcher, uint32_t surfa
                                    QXLRect *qxl_area, QXLRect *qxl_dirty_rects,
                                    uint32_t num_dirty_rects, uint32_t clear_dirty_region)
 {
-    RedWorkerMessageUpdate payload;
+    RedWorkerMessageUpdate payload = {0,};
 
     payload.surface_id = surface_id;
     payload.qxl_area = qxl_area;
@@ -522,7 +522,7 @@ static void
 red_dispatcher_create_primary_surface_sync(RedDispatcher *dispatcher, uint32_t surface_id,
                                            QXLDevSurfaceCreate *surface)
 {
-    RedWorkerMessageCreatePrimarySurface payload;
+    RedWorkerMessageCreatePrimarySurface payload = {0,};
 
     dispatcher->surface_create = *surface;
     payload.surface_id = surface_id;

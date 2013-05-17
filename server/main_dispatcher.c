@@ -78,7 +78,7 @@ static void main_dispatcher_handle_channel_event(void *opaque,
 
 void main_dispatcher_channel_event(int event, SpiceChannelEventInfo *info)
 {
-    MainDispatcherChannelEventMessage msg;
+    MainDispatcherChannelEventMessage msg = {0,};
 
     if (pthread_self() == main_dispatcher.base.self) {
         main_dispatcher_self_handle_channel_event(event, info);
