@@ -11367,7 +11367,10 @@ static void red_push_monitors_config(DisplayChannelClient *dcc)
 {
     MonitorsConfig *monitors_config = DCC_TO_WORKER(dcc)->monitors_config;
 
-    spice_return_if_fail(monitors_config != NULL);
+    if (monitors_config == NULL) {
+        spice_warning("monitors_config is NULL");
+        return;
+    }
 
     if (!red_channel_client_test_remote_cap(&dcc->common.base,
                                             SPICE_DISPLAY_CAP_MONITORS_CONFIG)) {
