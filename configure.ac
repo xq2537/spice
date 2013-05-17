@@ -13,9 +13,9 @@ AC_PREREQ([2.57])
 # 4. Follow the libtool manual for the so version:
 #  http://www.gnu.org/software/libtool/manual/html_node/Updating-version-info.html
 
-m4_define([SPICE_CURRENT], [7])
+m4_define([SPICE_CURRENT], [8])
 m4_define([SPICE_REVISION], [0])
-m4_define([SPICE_AGE], [6])
+m4_define([SPICE_AGE], [7])
 
 # Note on the library name on linux (SONAME) produced by libtool (for reference, gleaned
 # from looking at libtool 2.4.2)
