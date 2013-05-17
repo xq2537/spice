@@ -104,7 +104,7 @@ static size_t red_get_data_chunks_ptr(RedMemSlotInfo *slots, int group_id,
         red_prev = red;
         red = spice_new(RedDataChunk, 1);
         memslot_id = get_memslot_id(slots, qxl->next_chunk);
-        qxl = (QXLDataChunk*)get_virt(slots, qxl->next_chunk, sizeof(*qxl), group_id,
+        qxl = (QXLDataChunk *)get_virt(slots, qxl->next_chunk, sizeof(*qxl), group_id,
                                       &error);
         if (error) {
             return 0;
@@ -130,7 +130,7 @@ static size_t red_get_data_chunks(RedMemSlotInfo *slots, int group_id,
     int error;
     int memslot_id = get_memslot_id(slots, addr);
 
-    qxl = (QXLDataChunk*)get_virt(slots, addr, sizeof(*qxl), group_id, &error);
+    qxl = (QXLDataChunk *)get_virt(slots, addr, sizeof(*qxl), group_id, &error);
     if (error) {
         return 0;
     }
