@@ -938,6 +938,8 @@ RedChannel *red_channel_create(int size,
 
     channel->out_bytes_counter = 0;
 
+    spice_debug("channel type %d id %d thread_id 0x%lx",
+                channel->type, channel->id, channel->thread_id);
     return channel;
 }
 
@@ -982,6 +984,8 @@ RedChannel *red_channel_create_dummy(int size, uint32_t type, uint32_t id)
     red_channel_set_common_cap(channel, SPICE_COMMON_CAP_MINI_HEADER);
 
     channel->thread_id = pthread_self();
+    spice_debug("channel type %d id %d thread_id 0x%lx",
+                channel->type, channel->id, channel->thread_id);
 
     channel->out_bytes_counter = 0;
 
@@ -1657,7 +1661,14 @@ void red_channel_client_ack_set_client_window(RedChannelClient *rcc, int client_
 
 static void red_channel_remove_client(RedChannelClient *rcc)
 {
-    spice_assert(pthread_equal(pthread_self(), rcc->channel->thread_id));
+    if (!pthread_equal(pthread_self(), rcc->channel->thread_id)) {
+        spice_warning("channel type %d id %d - "
+                      "channel->thread_id (0x%lx) != pthread_self (0x%lx)."
+                      "If one of the threads is != io-thread && != vcpu-thread, "
+                      "this might be a BUG",
+                      rcc->channel->type, rcc->channel->id,
+                      rcc->channel->thread_id, pthread_self());
+    }
     ring_remove(&rcc->channel_link);
     spice_assert(rcc->channel->clients_num > 0);
     rcc->channel->clients_num--;
@@ -1937,7 +1948,12 @@ void red_client_migrate(RedClient *client)
     RedChannelClient *rcc;
 
     spice_printerr("migrate client with #channels %d", client->channels_num);
-    spice_assert(pthread_equal(pthread_self(), client->thread_id));
+    if (!pthread_equal(pthread_self(), client->thread_id)) {
+        spice_warning("client->thread_id (0x%lx) != pthread_self (0x%lx)."
+                      "If one of the threads is != io-thread && != vcpu-thread,"
+                      " this might be a BUG",
+                      client->thread_id, pthread_self());
+    }
     RING_FOREACH_SAFE(link, next, &client->channels) {
         rcc = SPICE_CONTAINEROF(link, RedChannelClient, client_link);
         if (red_channel_client_is_connected(rcc)) {
@@ -1952,7 +1968,13 @@ void red_client_destroy(RedClient *client)
     RedChannelClient *rcc;
 
     spice_printerr("destroy client with #channels %d", client->channels_num);
-    spice_assert(pthread_equal(pthread_self(), client->thread_id));
+    if (!pthread_equal(pthread_self(), client->thread_id)) {
+        spice_warning("client->thread_id (0x%lx) != pthread_self (0x%lx)."
+                      "If one of the threads is != io-thread && != vcpu-thread,"
+                      " this might be a BUG",
+                      client->thread_id,
+                      pthread_self());
+    }
     RING_FOREACH_SAFE(link, next, &client->channels) {
         // some channels may be in other threads, so disconnection
         // is not synchronous.
