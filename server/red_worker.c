@@ -1381,11 +1381,6 @@ static inline int pipe_item_is_linked(PipeItem *item)
     return ring_item_is_linked(&item->link);
 }
 
-static inline void pipe_item_remove(PipeItem *item)
-{
-    ring_remove(&item->link);
-}
-
 static void red_pipe_add_verb(RedChannelClient* rcc, uint16_t verb)
 {
     VerbItem *item = spice_new(VerbItem, 1);
