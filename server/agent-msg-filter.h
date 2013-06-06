@@ -36,11 +36,12 @@ typedef struct AgentMsgFilter {
     int msg_data_to_read;
     int result;
     int copy_paste_enabled;
+    int file_xfer_enabled;
     int discard_all;
 } AgentMsgFilter;
 
 void agent_msg_filter_init(struct AgentMsgFilter *filter,
-                           int copy_paste, int discard_all);
+                           int copy_paste, int file_xfer, int discard_all);
 int agent_msg_filter_process_data(struct AgentMsgFilter *filter,
                                   uint8_t *data, uint32_t len);
 

@@ -125,6 +125,7 @@ void *red_tunnel = NULL;
 #endif
 int agent_mouse = TRUE;
 int agent_copypaste = TRUE;
+int agent_file_xfer = TRUE;
 static bool exit_on_disconnect = FALSE;
 
 static RedsState *reds = NULL;
@@ -483,7 +484,8 @@ static void reds_reset_vdp(void)
         state->current_read_buf = NULL;
     }
     /* Reset read filter to start with clean state when the agent reconnects */
-    agent_msg_filter_init(&state->read_filter, agent_copypaste, TRUE);
+    agent_msg_filter_init(&state->read_filter, agent_copypaste,
+                          agent_file_xfer, TRUE);
     /* Throw away pending chunks from the current (if any) and future
      * messages written by the client.
      * TODO: client should clear its agent messages queue when the agent
@@ -596,7 +598,7 @@ void reds_client_disconnect(RedClient *client)
 
         /* Reset write filter to start with clean state on client reconnect */
         agent_msg_filter_init(&reds->agent_state.write_filter, agent_copypaste,
-                              TRUE);
+                              agent_file_xfer, TRUE);
 
         /* Throw away pending chunks from the current (if any) and future
          *  messages read from the agent */
@@ -3880,8 +3882,10 @@ static void init_vd_agent_resources(void)
     int i;
 
     ring_init(&state->read_bufs);
-    agent_msg_filter_init(&state->write_filter, agent_copypaste, TRUE);
-    agent_msg_filter_init(&state->read_filter, agent_copypaste, TRUE);
+    agent_msg_filter_init(&state->write_filter, agent_copypaste,
+                          agent_file_xfer, TRUE);
+    agent_msg_filter_init(&state->read_filter, agent_copypaste,
+                          agent_file_xfer, TRUE);
 
     state->read_state = VDI_PORT_READ_STATE_READ_HEADER;
     state->recive_pos = (uint8_t *)&state->vdi_chunk_header;
@@ -4331,6 +4335,15 @@ SPICE_GNUC_VISIBLE int spice_server_set_agent_copypaste(SpiceServer *s, int enab
     agent_copypaste = enable;
     reds->agent_state.write_filter.copy_paste_enabled = agent_copypaste;
     reds->agent_state.read_filter.copy_paste_enabled = agent_copypaste;
+    return 0;
+}
+
+SPICE_GNUC_VISIBLE int spice_server_set_agent_file_xfer(SpiceServer *s, int enable)
+{
+    spice_assert(reds == s);
+    agent_file_xfer = enable;
+    reds->agent_state.write_filter.file_xfer_enabled = agent_file_xfer;
+    reds->agent_state.read_filter.file_xfer_enabled = agent_file_xfer;
     return 0;
 }
 

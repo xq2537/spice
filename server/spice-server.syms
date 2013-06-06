@@ -140,3 +140,8 @@ SPICE_SERVER_0.12.3 {
 global:
     spice_qxl_driver_unload;
 } SPICE_SERVER_0.12.2;
+
+SPICE_SERVER_0.12.4 {
+global:
+    spice_server_set_agent_file_xfer;
+} SPICE_SERVER_0.12.3;
