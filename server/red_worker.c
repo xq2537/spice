@@ -2633,26 +2633,34 @@ static void red_print_stream_stats(DisplayChannelClient *dcc, StreamAgent *agent
 #ifdef STREAM_STATS
     StreamStats *stats = &agent->stats;
     double passed_mm_time = (stats->end - stats->start) / 1000.0;
+    MJpegEncoderStats encoder_stats = {0};
 
-    spice_debug("stream %ld (%dx%d): #frames-in %lu, #in-avg-fps %.2f, #frames-sent %lu, "
-                "#drops %lu (pipe %lu, fps %lu), avg_fps %.2f, "
-                "ratio(#frames-out/#frames-in) %.2f, "
-                "passed-mm-time %.2f (sec), size-total %.2f (MB), size-per-sec %.2f (Mbps), "
-                "size-per-frame %.2f (KBpf)",
+    if (agent->mjpeg_encoder) {
+        mjpeg_encoder_get_stats(agent->mjpeg_encoder, &encoder_stats);
+    }
+
+    spice_debug("stream=%ld dim=(%dx%d) #in-frames=%lu #in-avg-fps=%.2f #out-frames=%lu "
+                "out/in=%.2f #drops=%lu (#pipe=%lu #fps=%lu) out-avg-fps=%.2f "
+                "passed-mm-time(sec)=%.2f size-total(MB)=%.2f size-per-sec(Mbps)=%.2f "
+                "size-per-frame(KBpf)=%.2f avg-quality=%.2f "
+                "start-bit-rate(Mbps)=%.2f end-bit-rate(Mbps)=%.2f",
                 agent - dcc->stream_agents, agent->stream->width, agent->stream->height,
                 stats->num_input_frames,
                 stats->num_input_frames / passed_mm_time,
                 stats->num_frames_sent,
+                (stats->num_frames_sent + 0.0) / stats->num_input_frames,
                 stats->num_drops_pipe +
                 stats->num_drops_fps,
                 stats->num_drops_pipe,
                 stats->num_drops_fps,
                 stats->num_frames_sent / passed_mm_time,
-                (stats->num_frames_sent + 0.0) / stats->num_input_frames,
                 passed_mm_time,
                 stats->size_sent / 1024.0 / 1024.0,
                 ((stats->size_sent * 8.0) / (1024.0 * 1024)) / passed_mm_time,
-                stats->size_sent / 1000.0 / stats->num_frames_sent);
+                stats->size_sent / 1000.0 / stats->num_frames_sent,
+                encoder_stats.avg_quality,
+                encoder_stats.starting_bit_rate / (1024.0 * 1024),
+                encoder_stats.cur_bit_rate / (1024.0 * 1024));
 #endif
 }
 

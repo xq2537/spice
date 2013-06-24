@@ -221,7 +221,6 @@ MJpegEncoder *mjpeg_encoder_new(int bit_rate_control, uint64_t starting_bit_rate
 
 void mjpeg_encoder_destroy(MJpegEncoder *encoder)
 {
-    spice_debug("avg-quality %.2f", (double)encoder->avg_quality / encoder->num_frames);
     jpeg_destroy_compress(&encoder->cinfo);
     free(encoder->row);
     free(encoder);
