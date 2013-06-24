@@ -518,7 +518,6 @@ static void red_channel_client_send_ping(RedChannelClient *rcc)
         }  else {
             rcc->latency_monitor.tcp_nodelay = delay_val;
             if (!delay_val) {
-                spice_debug("switching to TCP_NODELAY");
                 delay_val = 1;
                 if (setsockopt(rcc->stream->socket, IPPROTO_TCP, TCP_NODELAY, &delay_val,
                                sizeof(delay_val)) == -1) {
@@ -535,7 +534,6 @@ static void red_channel_client_send_ping(RedChannelClient *rcc)
     clock_gettime(CLOCK_MONOTONIC, &ts);
     ping.timestamp = ts.tv_sec * 1000000000LL + ts.tv_nsec;
     spice_marshall_msg_ping(rcc->send_data.marshaller, &ping);
-    spice_debug("time %lu", ping.timestamp);
     red_channel_client_begin_send_message(rcc);
 }
 
@@ -709,7 +707,6 @@ static int red_channel_client_pre_create_validate(RedChannel *channel, RedClient
 
 static void red_channel_client_push_ping(RedChannelClient *rcc)
 {
-    spice_debug(NULL);
     spice_assert(rcc->latency_monitor.state == PING_STATE_NONE);
     rcc->latency_monitor.state = PING_STATE_WARMUP;
     rcc->latency_monitor.warmup_was_sent = FALSE;
@@ -730,7 +727,7 @@ static void red_channel_client_ping_timer(void *opaque)
         spice_printerr("ioctl(TIOCOUTQ) failed, %s", strerror(errno));
     }
     if (so_unsent_size > 0) {
-        spice_debug("tcp snd buffer is still occupied. rescheduling ping");
+        /* tcp snd buffer is still occupied. rescheduling ping */
         red_channel_client_start_ping_timer(rcc, PING_TEST_IDLE_NET_TIMEOUT_MS);
     } else {
         red_channel_client_push_ping(rcc);
@@ -1352,10 +1349,8 @@ static void red_channel_client_handle_pong(RedChannelClient *rcc, SpiceMsgPing *
     clock_gettime(CLOCK_MONOTONIC, &ts);
     now =  ts.tv_sec * 1000000000LL + ts.tv_nsec;
 
-    spice_debug("now %lu", now);
     if (rcc->latency_monitor.state == PING_STATE_WARMUP) {
         rcc->latency_monitor.state = PING_STATE_LATENCY;
-        spice_debug("warmup roundtrip  %.2f (ms)", (now - ping->timestamp)/1000.0/1000.0);
         return;
     } else if (rcc->latency_monitor.state != PING_STATE_LATENCY) {
         spice_warning("unexpected");
@@ -1366,7 +1361,6 @@ static void red_channel_client_handle_pong(RedChannelClient *rcc, SpiceMsgPing *
     if (!rcc->latency_monitor.tcp_nodelay) {
         int delay_val = 0;
 
-        spice_debug("switching to back TCP_NODELAY=0");
         if (setsockopt(rcc->stream->socket, IPPROTO_TCP, TCP_NODELAY, &delay_val,
                        sizeof(delay_val)) == -1) {
             if (errno != ENOTSUP) {
@@ -1384,10 +1378,7 @@ static void red_channel_client_handle_pong(RedChannelClient *rcc, SpiceMsgPing *
     if (rcc->latency_monitor.roundtrip < 0 ||
         now - ping->timestamp < rcc->latency_monitor.roundtrip) {
         rcc->latency_monitor.roundtrip = now - ping->timestamp;
-        spice_debug("roundtrip ms %.2f (ms)", rcc->latency_monitor.roundtrip/1000.0/1000.0);
-    } else {
-        spice_debug("not updating roundtrip. The latest latency measured was bigger (%.2f)",
-                    (now - ping->timestamp)/1000.0/1000.0);
+        spice_debug("update roundtrip %.2f(ms)", rcc->latency_monitor.roundtrip/1000.0/1000.0);
     }
 
     rcc->latency_monitor.last_pong_time = now;
