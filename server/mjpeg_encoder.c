@@ -169,6 +169,7 @@ struct MJpegEncoder {
     void *cbs_opaque;
 
     /* stats */
+    uint64_t starting_bit_rate;
     uint64_t avg_quality;
     uint32_t num_frames;
 };
@@ -195,6 +196,8 @@ MJpegEncoder *mjpeg_encoder_new(int bit_rate_control, uint64_t starting_bit_rate
     enc->first_frame = TRUE;
     enc->rate_control_is_active = bit_rate_control;
     enc->rate_control.byte_rate = starting_bit_rate / 8;
+    enc->starting_bit_rate = starting_bit_rate;
+
     if (bit_rate_control) {
         struct timespec time;
 
@@ -1258,4 +1261,12 @@ static void mjpeg_encoder_process_server_drops(MJpegEncoder *encoder)
 uint64_t mjpeg_encoder_get_bit_rate(MJpegEncoder *encoder)
 {
     return encoder->rate_control.byte_rate * 8;
+}
+
+void mjpeg_encoder_get_stats(MJpegEncoder *encoder, MJpegEncoderStats *stats)
+{
+    spice_assert(encoder != NULL && stats != NULL);
+    stats->starting_bit_rate = encoder->starting_bit_rate;
+    stats->cur_bit_rate = mjpeg_encoder_get_bit_rate(encoder);
+    stats->avg_quality = (double)encoder->avg_quality / encoder->num_frames;
 }

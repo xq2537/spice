@@ -43,6 +43,12 @@ typedef struct MJpegEncoderRateControlCbs {
     void (*update_client_playback_delay)(void *opaque, uint32_t delay_ms);
 } MJpegEncoderRateControlCbs;
 
+typedef struct MJpegEncoderStats {
+    uint64_t starting_bit_rate;
+    uint64_t cur_bit_rate;
+    double avg_quality;
+} MJpegEncoderStats;
+
 MJpegEncoder *mjpeg_encoder_new(int bit_rate_control, uint64_t starting_bit_rate,
                                 MJpegEncoderRateControlCbs *cbs, void *opaque);
 void mjpeg_encoder_destroy(MJpegEncoder *encoder);
@@ -103,5 +109,6 @@ void mjpeg_encoder_client_stream_report(MJpegEncoder *encoder,
 void mjpeg_encoder_notify_server_frame_drop(MJpegEncoder *encoder);
 
 uint64_t mjpeg_encoder_get_bit_rate(MJpegEncoder *encoder);
+void mjpeg_encoder_get_stats(MJpegEncoder *encoder, MJpegEncoderStats *stats);
 
 #endif
