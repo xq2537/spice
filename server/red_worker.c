@@ -6789,6 +6789,10 @@ static FillBitsType fill_bits(DisplayChannelClient *dcc, SpiceMarshaller *m,
     }
 
     image.descriptor = simage->descriptor;
+    image.descriptor.flags = 0;
+    if (simage->descriptor.flags & SPICE_IMAGE_FLAGS_HIGH_BITS_SET) {
+        image.descriptor.flags = SPICE_IMAGE_FLAGS_HIGH_BITS_SET;
+    }
 
     if ((simage->descriptor.flags & SPICE_IMAGE_FLAGS_CACHE_ME)) {
         int lossy_cache_item;
