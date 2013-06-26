@@ -1131,13 +1131,10 @@ static inline uint64_t red_now(void);
             dcc = SPICE_CONTAINEROF((link), DisplayChannelClient, common.base.channel_link))
 
 #define WORKER_FOREACH_DCC(worker, link, dcc) \
-    for (link = ((worker) && (worker)->display_channel) ?\
-            ring_get_head(&(worker)->display_channel->common.base.clients) : NULL,\
-         dcc = link ? SPICE_CONTAINEROF((link), DisplayChannelClient,\
-                                        common.base.channel_link) : NULL;\
-            (link);                              \
-            (link) = ring_next(&(worker)->display_channel->common.base.clients, link),\
-            dcc = SPICE_CONTAINEROF((link), DisplayChannelClient, common.base.channel_link))
+    DCC_FOREACH(link, dcc, \
+                ((((worker) && (worker)->display_channel))?   \
+                 (&(worker)->display_channel->common.base) : NULL))
+
 
 #define DRAWABLE_FOREACH_DPI(drawable, link, dpi) \
     for (link = (drawable) ? ring_get_head(&(drawable)->pipes) : NULL,\
