@@ -1139,12 +1139,14 @@ static inline uint64_t red_now(void);
                  (&(worker)->display_channel->common.base) : NULL))
 
 
-#define DRAWABLE_FOREACH_DPI(drawable, link, dpi) \
+#define DRAWABLE_FOREACH_DPI_SAFE(drawable, link, next, dpi)          \
     for (link = (drawable) ? ring_get_head(&(drawable)->pipes) : NULL,\
+         (next) = ((link) ? ring_next(&(drawable)->pipes, (link)) : NULL), \
          dpi = (link) ? SPICE_CONTAINEROF((link), DrawablePipeItem, base) : NULL; \
          (link);\
-         (link) = ring_next(&(drawable)->pipes, (link)),\
-         dpi = (link) ? SPICE_CONTAINEROF((link), DrawablePipeItem, base) : NULL)
+         (link) = (next), \
+           (next) = ((link) ? ring_next(&(drawable)->pipes, (link)) : NULL), \
+           dpi = (link) ? SPICE_CONTAINEROF((link), DrawablePipeItem, base) : NULL)
 
 #define DRAWABLE_FOREACH_GLZ_SAFE(drawable, link, next, glz) \
     for (link = (drawable) ? ring_get_head(&drawable->glz_ring) : NULL,\
@@ -1533,11 +1535,11 @@ static inline void red_pipes_add_drawable_after(RedWorker *worker,
                                                 Drawable *drawable, Drawable *pos_after)
 {
     DrawablePipeItem *dpi, *dpi_pos_after;
-    RingItem *dpi_link;
+    RingItem *dpi_link, *dpi_next;
     DisplayChannelClient *dcc;
     int num_other_linked = 0;
 
-    DRAWABLE_FOREACH_DPI(pos_after, dpi_link, dpi_pos_after) {
+    DRAWABLE_FOREACH_DPI_SAFE(pos_after, dpi_link, dpi_next, dpi_pos_after) {
         num_other_linked++;
         dcc = dpi_pos_after->dcc;
         red_handle_drawable_surfaces_client_synced(dcc, drawable);
@@ -1554,7 +1556,7 @@ static inline void red_pipes_add_drawable_after(RedWorker *worker,
         spice_debug("TODO: not O(n^2)");
         WORKER_FOREACH_DCC_SAFE(worker, worker_item, next, dcc) {
             int sent = 0;
-            DRAWABLE_FOREACH_DPI(pos_after, dpi_link, dpi_pos_after) {
+            DRAWABLE_FOREACH_DPI_SAFE(pos_after, dpi_link, dpi_next, dpi_pos_after) {
                 if (dpi_pos_after->dcc == dcc) {
                     sent = 1;
                     break;
@@ -2687,9 +2689,9 @@ static void red_stop_stream(RedWorker *worker, Stream *stream)
 static int red_display_drawable_is_in_pipe(DisplayChannelClient *dcc, Drawable *drawable)
 {
     DrawablePipeItem *dpi;
-    RingItem *dpi_link;
+    RingItem *dpi_link, *dpi_next;
 
-    DRAWABLE_FOREACH_DPI(drawable, dpi_link, dpi) {
+    DRAWABLE_FOREACH_DPI_SAFE(drawable, dpi_link, dpi_next, dpi) {
         if (dpi->dcc == dcc) {
             return TRUE;
         }
@@ -3323,7 +3325,7 @@ static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream, Drawa
     }
 
     index = get_stream_id(worker, stream);
-    DRAWABLE_FOREACH_DPI(stream->current, ring_item, dpi) {
+    DRAWABLE_FOREACH_DPI_SAFE(stream->current, ring_item, next, dpi) {
         dcc = dpi->dcc;
         agent = &dcc->stream_agents[index];
 
