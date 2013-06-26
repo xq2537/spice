@@ -1157,12 +1157,6 @@ static inline uint64_t red_now(void);
         (next) = (link) ? ring_next(&drawable->glz_ring, (link)) : NULL,\
         glz = (link) ? SPICE_CONTAINEROF((link), RedGlzDrawable, drawable_link) : NULL)
 
-#define CCC_FOREACH(link, ccc, channel) \
-    for (link = ring_get_head(&(channel)->clients),\
-         ccc = SPICE_CONTAINEROF(link, CommonChannelClient, base.channel_link);\
-            (link);                              \
-            (link) = ring_next(&(channel)->clients, link),\
-            ccc = SPICE_CONTAINEROF(link, CommonChannelClient, base.channel_link))
 
 #define DCC_TO_WORKER(dcc) \
     (SPICE_CONTAINEROF((dcc)->common.base.channel, CommonChannel, base)->worker)
