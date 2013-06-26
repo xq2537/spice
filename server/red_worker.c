@@ -1113,13 +1113,6 @@ static inline uint64_t red_now(void);
  *  given a channel, iterate over it's clients
  */
 
-#define RCC_FOREACH(link, rcc, channel) \
-    for (link = ring_get_head(&(channel)->clients),\
-         rcc = SPICE_CONTAINEROF(link, RedChannelClient, channel_link);\
-            (link);                              \
-            (link) = ring_next(&(channel)->clients, link),\
-            rcc = SPICE_CONTAINEROF(link, RedChannelClient, channel_link))
-
 #define RCC_FOREACH_SAFE(link, next, rcc, channel) \
     for (link = ring_get_head(&(channel)->clients),                         \
          rcc = SPICE_CONTAINEROF(link, RedChannelClient, channel_link),     \
@@ -1426,9 +1419,9 @@ static void red_push_surface_image(DisplayChannelClient *dcc, int surface_id);
 static void red_pipes_add_verb(RedChannel *channel, uint16_t verb)
 {
     RedChannelClient *rcc;
-    RingItem *link;
+    RingItem *link, *next;
 
-    RCC_FOREACH(link, rcc, channel) {
+    RCC_FOREACH_SAFE(link, next, rcc, channel) {
         red_pipe_add_verb(rcc, verb);
     }
 }
