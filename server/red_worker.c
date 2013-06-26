@@ -1122,16 +1122,19 @@ static inline uint64_t red_now(void);
             (next) = (link) ? ring_next(&(channel)->clients, (link)) : NULL,    \
             rcc = SPICE_CONTAINEROF(link, RedChannelClient, channel_link))
 
-#define DCC_FOREACH(link, dcc, channel) \
-    for (link = channel ? ring_get_head(&(channel)->clients) : NULL,\
-         dcc = link ? SPICE_CONTAINEROF((link), DisplayChannelClient,\
-                                        common.base.channel_link) : NULL;\
-            (link);                              \
-            (link) = ring_next(&(channel)->clients, link),\
-            dcc = SPICE_CONTAINEROF((link), DisplayChannelClient, common.base.channel_link))
+#define DCC_FOREACH_SAFE(link, next, dcc, channel)                       \
+    for ((link) = ((channel) ? ring_get_head(&(channel)->clients) : NULL), \
+           (next) = ((link) ? ring_next(&(channel)->clients, (link)) : NULL), \
+           (dcc) = ((link) ? SPICE_CONTAINEROF((link), DisplayChannelClient, \
+                                          common.base.channel_link) : NULL); \
+         (link);                                                        \
+         (link) = (next),                                               \
+           (next) = ((link) ? ring_next(&(channel)->clients, (link)) : NULL), \
+           (dcc) = SPICE_CONTAINEROF((link), DisplayChannelClient, common.base.channel_link))
 
-#define WORKER_FOREACH_DCC(worker, link, dcc) \
-    DCC_FOREACH(link, dcc, \
+
+#define WORKER_FOREACH_DCC_SAFE(worker, link, next, dcc)      \
+    DCC_FOREACH_SAFE(link, next, dcc,                         \
                 ((((worker) && (worker)->display_channel))?   \
                  (&(worker)->display_channel->common.base) : NULL))
 
@@ -1513,10 +1516,10 @@ static inline void red_pipe_add_drawable(DisplayChannelClient *dcc, Drawable *dr
 static inline void red_pipes_add_drawable(RedWorker *worker, Drawable *drawable)
 {
     DisplayChannelClient *dcc;
-    RingItem *dcc_ring_item;
+    RingItem *dcc_ring_item, *next;
 
     spice_warn_if(!ring_is_empty(&drawable->pipes));
-    WORKER_FOREACH_DCC(worker, dcc_ring_item, dcc) {
+    WORKER_FOREACH_DCC_SAFE(worker, dcc_ring_item, next, dcc) {
         red_pipe_add_drawable(dcc, drawable);
     }
 }
@@ -1554,9 +1557,9 @@ static inline void red_pipes_add_drawable_after(RedWorker *worker,
         return;
     }
     if (num_other_linked != worker->display_channel->common.base.clients_num) {
-        RingItem *worker_item;
+        RingItem *worker_item, *next;
         spice_debug("TODO: not O(n^2)");
-        WORKER_FOREACH_DCC(worker, worker_item, dcc) {
+        WORKER_FOREACH_DCC_SAFE(worker, worker_item, next, dcc) {
             int sent = 0;
             DRAWABLE_FOREACH_DPI(pos_after, dpi_link, dpi_pos_after) {
                 if (dpi_pos_after->dcc == dcc) {
@@ -1743,7 +1746,7 @@ static inline void red_destroy_surface(RedWorker *worker, uint32_t surface_id)
 {
     RedSurface *surface = &worker->surfaces[surface_id];
     DisplayChannelClient *dcc;
-    RingItem *link;
+    RingItem *link, *next;
 
     if (!--surface->refs) {
         // only primary surface streams are supported
@@ -1762,7 +1765,7 @@ static inline void red_destroy_surface(RedWorker *worker, uint32_t surface_id)
 
         region_destroy(&surface->draw_dirty_region);
         surface->context.canvas = NULL;
-        WORKER_FOREACH_DCC(worker, link, dcc) {
+        WORKER_FOREACH_DCC_SAFE(worker, link, next, dcc) {
             red_destroy_surface_item(worker, dcc, surface_id);
         }
 
@@ -2122,10 +2125,10 @@ static void red_wait_outgoing_item(RedChannelClient *rcc);
 static void red_clear_surface_drawables_from_pipes(RedWorker *worker, int surface_id,
     int force, int wait_for_outgoing_item)
 {
-    RingItem *item;
+    RingItem *item, *next;
     DisplayChannelClient *dcc;
 
-    WORKER_FOREACH_DCC(worker, item, dcc) {
+    WORKER_FOREACH_DCC_SAFE(worker, item, next, dcc) {
         red_clear_surface_drawables_from_pipe(dcc, surface_id, force);
         if (wait_for_outgoing_item) {
             // in case that the pipe didn't contain any item that is dependent on the surface, but
@@ -2587,7 +2590,7 @@ static inline int get_stream_id(RedWorker *worker, Stream *stream)
 static void red_attach_stream(RedWorker *worker, Drawable *drawable, Stream *stream)
 {
     DisplayChannelClient *dcc;
-    RingItem *item;
+    RingItem *item, *next;
 
     spice_assert(!drawable->stream && !stream->current);
     spice_assert(drawable && stream);
@@ -2596,7 +2599,7 @@ static void red_attach_stream(RedWorker *worker, Drawable *drawable, Stream *str
     stream->last_time = drawable->creation_time;
     stream->num_input_frames++;
 
-    WORKER_FOREACH_DCC(worker, item, dcc) {
+    WORKER_FOREACH_DCC_SAFE(worker, item, next, dcc) {
         StreamAgent *agent;
         QRegion clip_in_draw_dest;
 
@@ -2657,12 +2660,12 @@ static void red_print_stream_stats(DisplayChannelClient *dcc, StreamAgent *agent
 static void red_stop_stream(RedWorker *worker, Stream *stream)
 {
     DisplayChannelClient *dcc;
-    RingItem *item;
+    RingItem *item, *next;
 
     spice_assert(ring_item_is_linked(&stream->link));
     spice_assert(!stream->current);
     spice_debug("stream %d", get_stream_id(worker, stream));
-    WORKER_FOREACH_DCC(worker, item, dcc) {
+    WORKER_FOREACH_DCC_SAFE(worker, item, next, dcc) {
         StreamAgent *stream_agent;
 
         stream_agent = &dcc->stream_agents[get_stream_id(worker, stream)];
@@ -2776,10 +2779,10 @@ clear_vis_region:
 static inline void red_detach_stream_gracefully(RedWorker *worker, Stream *stream,
                                                 Drawable *update_area_limit)
 {
-    RingItem *item;
+    RingItem *item, *next;
     DisplayChannelClient *dcc;
 
-    WORKER_FOREACH_DCC(worker, item, dcc) {
+    WORKER_FOREACH_DCC_SAFE(worker, item, next, dcc) {
         red_display_detach_stream_gracefully(dcc, stream, update_area_limit);
     }
     if (stream->current) {
@@ -2801,7 +2804,7 @@ static void red_detach_streams_behind(RedWorker *worker, QRegion *region, Drawab
 {
     Ring *ring = &worker->streams;
     RingItem *item = ring_get_head(ring);
-    RingItem *dcc_ring_item;
+    RingItem *dcc_ring_item, *next;
     DisplayChannelClient *dcc;
     int has_clients = display_is_connected(worker);
 
@@ -2810,7 +2813,7 @@ static void red_detach_streams_behind(RedWorker *worker, QRegion *region, Drawab
         int detach_stream = 0;
         item = ring_next(ring, item);
 
-        WORKER_FOREACH_DCC(worker, dcc_ring_item, dcc) {
+        WORKER_FOREACH_DCC_SAFE(worker, dcc_ring_item, next, dcc) {
             StreamAgent *agent = &dcc->stream_agents[get_stream_id(worker, stream)];
 
             if (region_intersects(&agent->vis_region, region)) {
@@ -2834,7 +2837,7 @@ static void red_streams_update_visible_region(RedWorker *worker, Drawable *drawa
 {
     Ring *ring;
     RingItem *item;
-    RingItem *dcc_ring_item;
+    RingItem *dcc_ring_item, *next;
     DisplayChannelClient *dcc;
 
     if (!display_is_connected(worker)) {
@@ -2858,7 +2861,7 @@ static void red_streams_update_visible_region(RedWorker *worker, Drawable *drawa
             continue;
         }
 
-        WORKER_FOREACH_DCC(worker, dcc_ring_item, dcc) {
+        WORKER_FOREACH_DCC_SAFE(worker, dcc_ring_item, next, dcc) {
             agent = &dcc->stream_agents[get_stream_id(worker, stream)];
 
             if (region_intersects(&agent->vis_region, &drawable->tree_item.base.rgn)) {
@@ -3125,7 +3128,7 @@ static void red_stream_input_fps_timer_cb(void *opaque)
 static void red_create_stream(RedWorker *worker, Drawable *drawable)
 {
     DisplayChannelClient *dcc;
-    RingItem *dcc_ring_item;
+    RingItem *dcc_ring_item, *next;
     Stream *stream;
     SpiceRect* src_rect;
 
@@ -3156,7 +3159,7 @@ static void red_create_stream(RedWorker *worker, Drawable *drawable)
     stream->input_fps = MAX_FPS;
     worker->streams_size_total += stream->width * stream->height;
     worker->stream_count++;
-    WORKER_FOREACH_DCC(worker, dcc_ring_item, dcc) {
+    WORKER_FOREACH_DCC_SAFE(worker, dcc_ring_item, next, dcc) {
         red_display_create_stream(dcc, stream);
     }
     spice_debug("stream %d %dx%d (%d, %d) (%d, %d)", (int)(stream - worker->streams_buf), stream->width,
@@ -3313,7 +3316,7 @@ static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream, Drawa
     DisplayChannelClient *dcc;
     int index;
     StreamAgent *agent;
-    RingItem *ring_item;
+    RingItem *ring_item, *next;
 
     spice_assert(stream->current);
 
@@ -3349,7 +3352,7 @@ static inline void pre_stream_item_swap(RedWorker *worker, Stream *stream, Drawa
     }
 
 
-    WORKER_FOREACH_DCC(worker, ring_item, dcc) {
+    WORKER_FOREACH_DCC_SAFE(worker, ring_item, next, dcc) {
         double drop_factor;
 
         agent = &dcc->stream_agents[index];
@@ -5278,11 +5281,11 @@ static void red_free_some(RedWorker *worker)
 {
     int n = 0;
     DisplayChannelClient *dcc;
-    RingItem *item;
+    RingItem *item, *next;
 
     spice_debug("#draw=%d, #red_draw=%d, #glz_draw=%d", worker->drawable_count,
                 worker->red_drawable_count, worker->glz_drawable_count);
-    WORKER_FOREACH_DCC(worker, item, dcc) {
+    WORKER_FOREACH_DCC_SAFE(worker, item, next, dcc) {
         GlzSharedDictionary *glz_dict = dcc ? dcc->glz_dict : NULL;
 
         if (glz_dict) {
@@ -5297,7 +5300,7 @@ static void red_free_some(RedWorker *worker)
         free_one_drawable(worker, TRUE);
     }
 
-    WORKER_FOREACH_DCC(worker, item, dcc) {
+    WORKER_FOREACH_DCC_SAFE(worker, item, next, dcc) {
         GlzSharedDictionary *glz_dict = dcc ? dcc->glz_dict : NULL;
 
         if (glz_dict) {
@@ -5710,13 +5713,13 @@ static void red_display_client_clear_glz_drawables(DisplayChannelClient *dcc)
 
 static void red_display_clear_glz_drawables(DisplayChannel *display_channel)
 {
-    RingItem *link;
+    RingItem *link, *next;
     DisplayChannelClient *dcc;
 
     if (!display_channel) {
         return;
     }
-    DCC_FOREACH(link, dcc, &display_channel->common.base) {
+    DCC_FOREACH_SAFE(link, next, dcc, &display_channel->common.base) {
         red_display_client_clear_glz_drawables(dcc);
     }
 }
@@ -9637,9 +9640,9 @@ static inline void red_create_surface_item(DisplayChannelClient *dcc, int surfac
 static void red_worker_create_surface_item(RedWorker *worker, int surface_id)
 {
     DisplayChannelClient *dcc;
-    RingItem *item;
+    RingItem *item, *next;
 
-    WORKER_FOREACH_DCC(worker, item, dcc) {
+    WORKER_FOREACH_DCC_SAFE(worker, item, next, dcc) {
         red_create_surface_item(dcc, surface_id);
     }
 }
@@ -9648,9 +9651,9 @@ static void red_worker_create_surface_item(RedWorker *worker, int surface_id)
 static void red_worker_push_surface_image(RedWorker *worker, int surface_id)
 {
     DisplayChannelClient *dcc;
-    RingItem *item;
+    RingItem *item, *next;
 
-    WORKER_FOREACH_DCC(worker, item, dcc) {
+    WORKER_FOREACH_DCC_SAFE(worker, item, next, dcc) {
         red_push_surface_image(dcc, surface_id);
     }
 }
@@ -10738,7 +10741,7 @@ static void guest_set_client_capabilities(RedWorker *worker)
     int i;
     DisplayChannelClient *dcc;
     RedChannelClient *rcc;
-    RingItem *link;
+    RingItem *link, *next;
     uint8_t caps[58] = { 0 };
     int caps_available[] = {
         SPICE_DISPLAY_CAP_SIZED_STREAM,
@@ -10771,7 +10774,7 @@ static void guest_set_client_capabilities(RedWorker *worker)
         for (i = 0 ; i < sizeof(caps_available) / sizeof(caps_available[0]); ++i) {
             SET_CAP(caps, caps_available[i]);
         }
-        DCC_FOREACH(link, dcc, &worker->display_channel->common.base) {
+        DCC_FOREACH_SAFE(link, next, dcc, &worker->display_channel->common.base) {
             rcc = (RedChannelClient *)dcc;
             for (i = 0 ; i < sizeof(caps_available) / sizeof(caps_available[0]); ++i) {
                 if (!red_channel_client_test_remote_cap(rcc, caps_available[i]))
@@ -11386,9 +11389,9 @@ static void red_push_monitors_config(DisplayChannelClient *dcc)
 static void red_worker_push_monitors_config(RedWorker *worker)
 {
     DisplayChannelClient *dcc;
-    RingItem *item;
+    RingItem *item, *next;
 
-    WORKER_FOREACH_DCC(worker, item, dcc) {
+    WORKER_FOREACH_DCC_SAFE(worker, item, next, dcc) {
         red_push_monitors_config(dcc);
     }
 }
