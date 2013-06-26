@@ -1146,13 +1146,6 @@ static inline uint64_t red_now(void);
          (link) = ring_next(&(drawable)->pipes, (link)),\
          dpi = (link) ? SPICE_CONTAINEROF((link), DrawablePipeItem, base) : NULL)
 
-#define DRAWABLE_FOREACH_GLZ(drawable, link, glz) \
-    for (link = (drawable) ? ring_get_head(&drawable->glz_ring) : NULL,\
-        glz = (link) ? SPICE_CONTAINEROF((link), RedGlzDrawable, drawable_link) : NULL;\
-        (link);\
-        (link) = ring_next(&drawable->glz_ring, (link)),\
-        glz = (link) ? SPICE_CONTAINEROF((link), RedGlzDrawable, drawable_link) : NULL)
-
 #define DRAWABLE_FOREACH_GLZ_SAFE(drawable, link, next, glz) \
     for (link = (drawable) ? ring_get_head(&drawable->glz_ring) : NULL,\
         next = (link) ? ring_next(&drawable->glz_ring, link) : NULL,\
@@ -5547,12 +5540,12 @@ static void red_display_destroy_compress_bufs(DisplayChannel *display_channel)
 static RedGlzDrawable *red_display_get_glz_drawable(DisplayChannelClient *dcc, Drawable *drawable)
 {
     RedGlzDrawable *ret;
-    RingItem *item;
+    RingItem *item, *next;
 
     // TODO - I don't really understand what's going on here, so doing the technical equivalent
     // now that we have multiple glz_dicts, so the only way to go from dcc to drawable glz is to go
     // over the glz_ring (unless adding some better data structure then a ring)
-    DRAWABLE_FOREACH_GLZ(drawable, item, ret) {
+    DRAWABLE_FOREACH_GLZ_SAFE(drawable, item, next, ret) {
         if (ret->dcc == dcc) {
             return ret;
         }
