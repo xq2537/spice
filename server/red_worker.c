@@ -1113,24 +1113,25 @@ static inline uint64_t red_now(void);
  *  given a channel, iterate over it's clients
  */
 
-#define RCC_FOREACH_SAFE(link, next, rcc, channel) \
-    for (link = ring_get_head(&(channel)->clients),                         \
-         rcc = SPICE_CONTAINEROF(link, RedChannelClient, channel_link),     \
-         (next) = (link) ? ring_next(&(channel)->clients, (link)) : NULL;      \
-            (link);                                            \
-            (link) = (next),                                   \
-            (next) = (link) ? ring_next(&(channel)->clients, (link)) : NULL,    \
-            rcc = SPICE_CONTAINEROF(link, RedChannelClient, channel_link))
+/* a generic safe for loop macro  */
+#define SAFE_FOREACH(link, next, cond, ring, data, get_data)               \
+    for ((((link) = ((cond) ? ring_get_head(ring) : NULL)), \
+          ((next) = ((link) ? ring_next((ring), (link)) : NULL)),          \
+          ((data) = ((link)? (get_data) : NULL)));                         \
+         (link);                                                           \
+         (((link) = (next)),                                               \
+          ((next) = ((link) ? ring_next((ring), (link)) : NULL)),          \
+          ((data) = ((link)? (get_data) : NULL))))
 
+#define LINK_TO_RCC(ptr) SPICE_CONTAINEROF(ptr, RedChannelClient, channel_link)
+#define RCC_FOREACH_SAFE(link, next, rcc, channel) \
+    SAFE_FOREACH(link, next, channel,  &(channel)->clients, rcc, LINK_TO_RCC(link))
+
+
+#define LINK_TO_DCC(ptr) SPICE_CONTAINEROF(ptr, DisplayChannelClient,  \
+                                      common.base.channel_link)
 #define DCC_FOREACH_SAFE(link, next, dcc, channel)                       \
-    for ((link) = ((channel) ? ring_get_head(&(channel)->clients) : NULL), \
-           (next) = ((link) ? ring_next(&(channel)->clients, (link)) : NULL), \
-           (dcc) = ((link) ? SPICE_CONTAINEROF((link), DisplayChannelClient, \
-                                          common.base.channel_link) : NULL); \
-         (link);                                                        \
-         (link) = (next),                                               \
-           (next) = ((link) ? ring_next(&(channel)->clients, (link)) : NULL), \
-           (dcc) = SPICE_CONTAINEROF((link), DisplayChannelClient, common.base.channel_link))
+    SAFE_FOREACH(link, next, channel,  &(channel)->clients, dcc, LINK_TO_DCC(link))
 
 
 #define WORKER_FOREACH_DCC_SAFE(worker, link, next, dcc)      \
@@ -1139,23 +1140,15 @@ static inline uint64_t red_now(void);
                  (&(worker)->display_channel->common.base) : NULL))
 
 
+#define LINK_TO_DPI(ptr) SPICE_CONTAINEROF((ptr), DrawablePipeItem, base)
 #define DRAWABLE_FOREACH_DPI_SAFE(drawable, link, next, dpi)          \
-    for (link = (drawable) ? ring_get_head(&(drawable)->pipes) : NULL,\
-         (next) = ((link) ? ring_next(&(drawable)->pipes, (link)) : NULL), \
-         dpi = (link) ? SPICE_CONTAINEROF((link), DrawablePipeItem, base) : NULL; \
-         (link);\
-         (link) = (next), \
-           (next) = ((link) ? ring_next(&(drawable)->pipes, (link)) : NULL), \
-           dpi = (link) ? SPICE_CONTAINEROF((link), DrawablePipeItem, base) : NULL)
+    SAFE_FOREACH(link, next, drawable,  &(drawable)->pipes, dpi, LINK_TO_DPI(link))
 
+
+#define LINK_TO_GLZ(ptr) SPICE_CONTAINEROF((ptr), RedGlzDrawable, \
+                                           drawable_link)
 #define DRAWABLE_FOREACH_GLZ_SAFE(drawable, link, next, glz) \
-    for (link = (drawable) ? ring_get_head(&drawable->glz_ring) : NULL,\
-        next = (link) ? ring_next(&drawable->glz_ring, link) : NULL,\
-        glz = (link) ? SPICE_CONTAINEROF((link), RedGlzDrawable, drawable_link) : NULL;\
-        (link);\
-        (link) = (next),\
-        (next) = (link) ? ring_next(&drawable->glz_ring, (link)) : NULL,\
-        glz = (link) ? SPICE_CONTAINEROF((link), RedGlzDrawable, drawable_link) : NULL)
+    SAFE_FOREACH(link, next, drawable, &(drawable)->glz_ring, glz, LINK_TO_GLZ(link))
 
 
 #define DCC_TO_WORKER(dcc) \
