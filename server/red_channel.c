@@ -2025,7 +2025,7 @@ void red_client_set_main(RedClient *client, MainChannelClient *mcc) {
 
 void red_client_semi_seamless_migrate_complete(RedClient *client)
 {
-    RingItem *link;
+    RingItem *link, *next;
 
     pthread_mutex_lock(&client->lock);
     if (!client->during_target_migrate || client->seamless_migrate) {
@@ -2034,7 +2034,7 @@ void red_client_semi_seamless_migrate_complete(RedClient *client)
         return;
     }
     client->during_target_migrate = FALSE;
-    RING_FOREACH(link, &client->channels) {
+    RING_FOREACH_SAFE(link, next, &client->channels) {
         RedChannelClient *rcc = SPICE_CONTAINEROF(link, RedChannelClient, client_link);
 
         if (rcc->latency_monitor.timer) {
@@ -2073,12 +2073,12 @@ static void red_channel_pipes_create_batch(RedChannel *channel,
                                 new_pipe_item_t creator, void *data,
                                 rcc_item_t callback)
 {
-    RingItem *link;
+    RingItem *link, *next;
     RedChannelClient *rcc;
     PipeItem *item;
     int num = 0;
 
-    RING_FOREACH(link, &channel->clients) {
+    RING_FOREACH_SAFE(link, next, &channel->clients) {
         rcc = SPICE_CONTAINEROF(link, RedChannelClient, channel_link);
         item = (*creator)(rcc, data, num++);
         if (callback) {
