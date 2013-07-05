@@ -1572,9 +1572,9 @@ void red_channel_client_pipe_add_type(RedChannelClient *rcc, int pipe_item_type)
 
 void red_channel_pipes_add_type(RedChannel *channel, int pipe_item_type)
 {
-    RingItem *link;
+    RingItem *link, *next;
 
-    RING_FOREACH(link, &channel->clients) {
+    RING_FOREACH_SAFE(link, next, &channel->clients) {
         red_channel_client_pipe_add_type(
             SPICE_CONTAINEROF(link, RedChannelClient, channel_link),
             pipe_item_type);
@@ -1593,9 +1593,9 @@ void red_channel_client_pipe_add_empty_msg(RedChannelClient *rcc, int msg_type)
 
 void red_channel_pipes_add_empty_msg(RedChannel *channel, int msg_type)
 {
-    RingItem *link;
+    RingItem *link, *next;
 
-    RING_FOREACH(link, &channel->clients) {
+    RING_FOREACH_SAFE(link, next, &channel->clients) {
         red_channel_client_pipe_add_empty_msg(
             SPICE_CONTAINEROF(link, RedChannelClient, channel_link),
             msg_type);
