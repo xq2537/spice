@@ -553,8 +553,10 @@ static void produce_command(Test *test)
 
         case SIMPLE_CREATE_SURFACE: {
             SimpleSurfaceCmd *update;
-            test->target_surface = MAX_SURFACE_NUM - 1;
-            if (command) {
+            if (command->create_surface.data) {
+                ASSERT(command->create_surface.surface_id > 0);
+                ASSERT(command->create_surface.surface_id < MAX_SURFACE_NUM);
+                ASSERT(command->create_surface.surface_id == 1);
                 update = create_surface(command->create_surface.surface_id,
                                         command->create_surface.format,
                                         command->create_surface.width,
