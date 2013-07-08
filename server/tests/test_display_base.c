@@ -48,9 +48,6 @@ static void test_spice_destroy_update(SimpleSpiceUpdate *update)
     free(update);
 }
 
-static uint32_t test_width;
-static uint32_t test_height;
-
 #define DEFAULT_WIDTH 640
 #define DEFAULT_HEIGHT 320
 
@@ -507,9 +504,9 @@ static void produce_command(Test *test)
         case SIMPLE_UPDATE: {
             QXLRect rect = {
                 .left = 0,
-                .right = (test->target_surface == 0 ? test_width : SURF_WIDTH),
+                .right = (test->target_surface == 0 ? test->primary_width : test->width),
                 .top = 0,
-                .bottom = (test->target_surface == 0 ? test_height : SURF_HEIGHT)
+                .bottom = (test->target_surface == 0 ? test->primary_height : test->height)
             };
             if (rect.right > 0 && rect.bottom > 0) {
                 qxl_worker->update_area(qxl_worker, test->target_surface, &rect, NULL, 0, 1);
