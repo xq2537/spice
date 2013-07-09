@@ -977,4 +977,3 @@ int spice_char_device_state_restore(SpiceCharDeviceState *dev,
     spice_char_device_read_from_device(dev);
     return TRUE;
 }
-
