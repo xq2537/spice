@@ -490,12 +490,8 @@ static SpiceImage *red_get_image(RedMemSlotInfo *slots, int group_id,
     }
     return red;
 error:
-    if (red) {
-        free(red);
-    }
-    if (rp) {
-        free(rp);
-    }
+    free(red);
+    free(rp);
     return NULL;
 }
 
