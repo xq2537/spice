@@ -4,9 +4,15 @@
 
 #include <spice.h>
 
+struct SpiceTimer {
+    int a,b;
+};
+
 SpiceTimer* timer_add(SpiceTimerFunc func, void *opaque)
 {
-    return NULL;
+    static struct SpiceTimer t = {0,};
+
+    return &t;
 }
 
 void timer_start(SpiceTimer *timer, uint32_t ms)
@@ -56,6 +62,8 @@ int main(void)
 
     spice_server_set_port(server, 5911);
     spice_server_init(server, &core);
+
+    spice_server_destroy(server);
 
     return 0;
 }
