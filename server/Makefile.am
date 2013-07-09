@@ -135,4 +135,4 @@ EXTRA_DIST =					\
 BUILT_SOURCES = $(spice_built_sources)
 
 dist-hook:
-	if [ -e ./tests/test_spice_version.sh -a ! ./tests/test_spice_version.sh ] ; then exit 1; fi
+	if test ./tests/test_spice_version.sh && ! test ./tests/test_spice_version.sh; then exit 1; fi
