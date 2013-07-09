@@ -20,6 +20,7 @@
 */
 
 
+#include <config.h>
 #include "char_device.h"
 #include "red_channel.h"
 #include "reds.h"

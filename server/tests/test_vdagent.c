@@ -2,8 +2,8 @@
  * Test vdagent guest to server messages
  */
 
-#include <string.h>
 #include <config.h>
+#include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 
