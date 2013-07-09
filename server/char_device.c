@@ -554,7 +554,7 @@ SpiceCharDeviceWriteBuffer *spice_char_device_write_buffer_get(SpiceCharDeviceSt
                                                                RedClient *client,
                                                                int size)
 {
-   return  __spice_char_device_write_buffer_get(dev, client, size, 
+   return  __spice_char_device_write_buffer_get(dev, client, size,
              client ? WRITE_BUFFER_ORIGIN_CLIENT : WRITE_BUFFER_ORIGIN_SERVER,
              0);
 }
@@ -562,7 +562,7 @@ SpiceCharDeviceWriteBuffer *spice_char_device_write_buffer_get(SpiceCharDeviceSt
 SpiceCharDeviceWriteBuffer *spice_char_device_write_buffer_get_server_no_token(
     SpiceCharDeviceState *dev, int size)
 {
-   return  __spice_char_device_write_buffer_get(dev, NULL, size, 
+   return  __spice_char_device_write_buffer_get(dev, NULL, size,
              WRITE_BUFFER_ORIGIN_SERVER_NO_TOKEN, 0);
 }
 

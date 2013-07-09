@@ -11033,7 +11033,7 @@ static void red_wait_all_sent(RedChannel *channel)
     end_time = red_now() + DETACH_TIMEOUT;
 
     red_channel_push(channel);
-    while (((max_pipe_size = red_channel_max_pipe_size(channel)) || 
+    while (((max_pipe_size = red_channel_max_pipe_size(channel)) ||
            (blocked = red_channel_any_blocked(channel))) &&
            red_now() < end_time) {
         spice_debug("pipe-size %u blocked %d", max_pipe_size, blocked);
@@ -11047,7 +11047,7 @@ static void red_wait_all_sent(RedChannel *channel)
         spice_printerr("timeout: pending out messages exist (pipe-size %u, blocked %d)",
                        max_pipe_size, blocked);
         red_channel_apply_clients(channel, rcc_shutdown_if_pending_send);
-    } else { 
+    } else {
         spice_assert(red_channel_no_item_being_sent(channel));
     }
 }
@@ -11534,7 +11534,7 @@ void handle_dev_stop(void *opaque, void *payload)
     red_display_clear_glz_drawables(worker->display_channel);
     flush_all_surfaces(worker);
     /* todo: when the waiting is expected to take long (slow connection and
-     * overloaded pipe), don't wait, and in case of migration, 
+     * overloaded pipe), don't wait, and in case of migration,
      * purge the pipe, send destroy_all_surfaces
      * to the client (there is no such message right now), and start
      * from scratch on the destination side */

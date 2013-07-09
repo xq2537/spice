@@ -663,14 +663,13 @@ static bool get_transform(RedMemSlotInfo *slots,
                           int group_id,
                           QXLPHYSICAL qxl_transform,
                           SpiceTransform *dst_transform)
-                                                    
 {
     const uint32_t *t = NULL;
     int error;
 
     if (qxl_transform == 0)
         return FALSE;
-    
+
     t = (uint32_t *)get_virt(slots, qxl_transform, sizeof(*dst_transform), group_id, &error);
 
     if (!t || error)
@@ -688,7 +687,7 @@ static void red_get_composite_ptr(RedMemSlotInfo *slots, int group_id,
     red->src_bitmap = red_get_image(slots, group_id, qxl->src, flags, FALSE);
     if (get_transform(slots, group_id, qxl->src_transform, &red->src_transform))
         red->flags |= SPICE_COMPOSITE_HAS_SRC_TRANSFORM;
-    
+
     if (qxl->mask) {
         red->mask_bitmap = red_get_image(slots, group_id, qxl->mask, flags, FALSE);
         red->flags |= SPICE_COMPOSITE_HAS_MASK;
