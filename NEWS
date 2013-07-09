@@ -1,3 +1,16 @@
+Major changes in 0.12.4:
+========================
+* log actual address spice-server binds to
+* main_channel: fix double release of migration target data (rhbz#859027)
+* red_channel: replace an assert upon threads mismatch with a warning (rhbz#823472)
+* support for filtering out agent file-xfer msgs (rhbz#961848)
+** new library export spice_server_set_agent_file_xfer
+* mjpeg encoder statistics (mjpeg_encoder_get_stats)
+* improve stream stats readability and ease of parsing
+* fix for stuck display_channel over WAN (jpeg_enabled=true) (rhbz#977998)
+* Use RING_FOREACH_SAFE and other SAFE macros (rhbz#887775)
+* Some server/tests fixes.
+
 Major changes in 0.12.3:
 ========================
 * monitor client bandwidth and latency.
