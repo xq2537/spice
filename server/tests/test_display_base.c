@@ -42,7 +42,8 @@ static void test_spice_destroy_update(SimpleSpiceUpdate *update)
         return;
     }
     if (update->drawable.clip.type != SPICE_CLIP_TYPE_NONE) {
-        free((uint8_t*)update->drawable.clip.data);
+        uint8_t *ptr = (uint8_t*)update->drawable.clip.data;
+        free(ptr);
     }
     free(update->bitmap);
     free(update);
