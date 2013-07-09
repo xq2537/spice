@@ -892,7 +892,7 @@ void spice_test_config_parse_args(int argc, char **argv)
     while ((val = getopt_long(argc, argv, "", options, &option_index)) != -1) {
         switch (val) {
         case '?':
-            printf("unrecognized option %s", argv[optind]);
+            printf("unrecognized option '%s'\n", argv[optind - 1]);
             goto invalid_option;
         case 0:
             break;
