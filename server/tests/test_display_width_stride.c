@@ -54,6 +54,14 @@ void set_surface_params(Test *test, Command *command)
     create->data = g_surface_data;
 }
 
+void set_destroy_parameters(Test *test, Command *command)
+{
+    if (g_surface_data) {
+        free(g_surface_data);
+        g_surface_data = NULL;
+    }
+}
+
 static Command commands[] = {
     {SIMPLE_CREATE_SURFACE, set_surface_params},
     {SIMPLE_DRAW_SOLID, set_draw_parameters},
@@ -65,6 +73,7 @@ static Command commands[] = {
     {SIMPLE_DRAW_SOLID, set_draw_parameters},
     {SIMPLE_DRAW_SOLID, set_draw_parameters},
     {SIMPLE_DRAW_SOLID, set_draw_parameters},
+    {SIMPLE_DESTROY_SURFACE, set_destroy_parameters},
 };
 
 void on_client_connected(Test *test)
