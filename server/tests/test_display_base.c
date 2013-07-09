@@ -62,6 +62,7 @@ static int control = 3; //used to know when we can take a screenshot
 static int rects = 16; //number of rects that will be draw
 static int has_automated_tests = 0; //automated test flag
 
+__attribute__((noreturn))
 static void sigchld_handler(int signal_num) // wait for the child process and exit
 {
     int status;
@@ -878,6 +879,19 @@ void init_automated()
     sigaction(SIGCHLD, &sa, NULL);
 }
 
+__attribute__((noreturn))
+void usage(const char *argv0, const int exitcode)
+{
+#ifdef AUTOMATED_TESTS
+    const char *autoopt=" [--automated-tests]";
+#else
+    const char *autoopt="";
+#endif
+
+    printf("usage: %s%s\n", argv0, autoopt);
+    exit(exitcode);
+}
+
 void spice_test_config_parse_args(int argc, char **argv)
 {
     struct option options[] = {
@@ -893,19 +907,18 @@ void spice_test_config_parse_args(int argc, char **argv)
         switch (val) {
         case '?':
             printf("unrecognized option '%s'\n", argv[optind - 1]);
-            goto invalid_option;
+            usage(argv[0], EXIT_FAILURE);
         case 0:
             break;
         }
     }
 
+    if (argc > optind) {
+        printf("unknown argument '%s'\n", argv[optind]);
+        usage(argv[0], EXIT_FAILURE);
+    }
     if (has_automated_tests) {
         init_automated();
     }
     return;
-
-invalid_option:
-    printf("Invalid option!\n"
-           "usage: %s [--automated-tests]\n", argv[0]);
-    exit(0);
 }
