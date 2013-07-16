@@ -696,6 +696,8 @@ sc_require_test_exit_idiom:
 	      exit 1; } || :;						\
 	fi
 
+exclude_file_name_regexp--sc_trailing_blank = \.ico$$|\.bmp$$|\.odt$$
+
 sc_trailing_blank:
 	@prohibit='[	 ]$$'						\
 	halt='found trailing blank(s)'					\
