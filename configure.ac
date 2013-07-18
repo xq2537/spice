@@ -51,6 +51,7 @@ PKG_PROG_PKG_CONFIG
 
 AC_CHECK_HEADERS([sys/time.h])
 AC_CHECK_HEADERS([execinfo.h])
+AC_CHECK_HEADERS([linux/sockios.h])
 AC_FUNC_ALLOCA
 
 AC_DEFINE([__STDC_FORMAT_MACROS],[],[Force definition of format macros for C++])

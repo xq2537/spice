@@ -30,6 +30,9 @@
 #include <unistd.h>
 #include <errno.h>
 #include <sys/ioctl.h>
+#ifdef HAVE_LINUX_SOCKIOS_H
+#include <linux/sockios.h> /* SIOCOUTQ */
+#endif
 
 #include "common/generated_server_marshallers.h"
 #include "common/ring.h"
@@ -722,9 +725,11 @@ static void red_channel_client_ping_timer(void *opaque)
 
     spice_assert(rcc->latency_monitor.state == PING_STATE_TIMER);
     red_channel_client_cancel_ping_timer(rcc);
+
+#ifdef HAVE_LINUX_SOCKIOS_H /* SIOCOUTQ is a Linux only ioctl on sockets. */
     /* retrieving the occupied size of the socket's tcp snd buffer (unacked + unsent) */
-    if (ioctl(rcc->stream->socket, TIOCOUTQ, &so_unsent_size) == -1) {
-        spice_printerr("ioctl(TIOCOUTQ) failed, %s", strerror(errno));
+    if (ioctl(rcc->stream->socket, SIOCOUTQ, &so_unsent_size) == -1) {
+        spice_printerr("ioctl(SIOCOUTQ) failed, %s", strerror(errno));
     }
     if (so_unsent_size > 0) {
         /* tcp snd buffer is still occupied. rescheduling ping */
@@ -732,6 +737,10 @@ static void red_channel_client_ping_timer(void *opaque)
     } else {
         red_channel_client_push_ping(rcc);
     }
+#else /* ifdef HAVE_LINUX_SOCKIOS_H */
+    /* More portable alternative code path (less accurate but avoids bogus ioctls)*/
+    red_channel_client_push_ping(rcc);
+#endif /* ifdef HAVE_LINUX_SOCKIOS_H */
 }
 
 RedChannelClient *red_channel_client_create(int size, RedChannel *channel, RedClient  *client,
