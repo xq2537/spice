@@ -20,7 +20,7 @@ m4_define([SPICE_AGE], [8])
 # Note on the library name on linux (SONAME) produced by libtool (for reference, gleaned
 # from looking at libtool 2.4.2)
 #
-#  libspice-servver.so.current-age.age.revision
+#  libspice-server.so.current-age.age.revision
 
 AC_INIT(spice, [m4_esyscmd(build-aux/git-version-gen .tarball-version)],
         [spice-devel@lists.freedesktop.org], spice)
