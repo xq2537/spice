@@ -1527,9 +1527,23 @@ void red_channel_pipe_item_init(RedChannel *channel, PipeItem *item, int type)
     item->type = type;
 }
 
-void red_channel_client_pipe_add(RedChannelClient *rcc, PipeItem *item)
+static inline int validate_pipe_add(RedChannelClient *rcc, PipeItem *item)
 {
     spice_assert(rcc && item);
+    if (SPICE_UNLIKELY(!red_channel_client_is_connected(rcc))) {
+        spice_debug("rcc is disconnected %p", rcc);
+        red_channel_client_release_item(rcc, item, FALSE);
+        return FALSE;
+    }
+    return TRUE;
+}
+
+void red_channel_client_pipe_add(RedChannelClient *rcc, PipeItem *item)
+{
+
+    if (!validate_pipe_add(rcc, item)) {
+        return;
+    }
     rcc->pipe_size++;
     ring_add(&rcc->pipe, &item->link);
 }
@@ -1543,10 +1557,10 @@ void red_channel_client_pipe_add_push(RedChannelClient *rcc, PipeItem *item)
 void red_channel_client_pipe_add_after(RedChannelClient *rcc,
                                        PipeItem *item, PipeItem *pos)
 {
-    spice_assert(rcc);
     spice_assert(pos);
-    spice_assert(item);
-
+    if (!validate_pipe_add(rcc, item)) {
+        return;
+    }
     rcc->pipe_size++;
     ring_add_after(&item->link, &pos->link);
 }
@@ -1560,14 +1574,18 @@ int red_channel_client_pipe_item_is_linked(RedChannelClient *rcc,
 void red_channel_client_pipe_add_tail_no_push(RedChannelClient *rcc,
                                               PipeItem *item)
 {
-    spice_assert(rcc);
+    if (!validate_pipe_add(rcc, item)) {
+        return;
+    }
     rcc->pipe_size++;
     ring_add_before(&item->link, &rcc->pipe);
 }
 
 void red_channel_client_pipe_add_tail(RedChannelClient *rcc, PipeItem *item)
 {
-    spice_assert(rcc);
+    if (!validate_pipe_add(rcc, item)) {
+        return;
+    }
     rcc->pipe_size++;
     ring_add_before(&item->link, &rcc->pipe);
     red_channel_client_push(rcc);
