@@ -879,7 +879,8 @@ static void vdi_port_on_free_self_token(void *opaque)
 
 static void vdi_port_remove_client(RedClient *client, void *opaque)
 {
-    reds_client_disconnect(client);
+    red_channel_client_shutdown(main_channel_client_get_base(
+                                    red_client_get_main(client)));
 }
 
 /****************************************************************************/
@@ -1009,7 +1010,7 @@ void reds_on_main_agent_start(MainChannelClient *mcc, uint32_t num_tokens)
 
         if (!client_added) {
             spice_warning("failed to add client to agent");
-            reds_client_disconnect(rcc->client);
+            red_channel_client_shutdown(rcc);
             return;
         }
     } else {
@@ -1126,7 +1127,7 @@ void reds_on_main_agent_data(MainChannelClient *mcc, void *message, size_t size)
         reds_on_main_agent_monitors_config(mcc, message, size);
         return;
     case AGENT_MSG_FILTER_PROTO_ERROR:
-        reds_disconnect();
+        red_channel_client_shutdown(main_channel_client_get_base(mcc));
         return;
     }
 
