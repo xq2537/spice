@@ -46,6 +46,7 @@
 #include "red_common.h"
 #include "reds.h"
 #include "migration_protocol.h"
+#include "main_dispatcher.h"
 
 #define ZERO_BUF_SIZE 4096
 
@@ -175,13 +176,13 @@ int main_channel_is_connected(MainChannel *main_chan)
     return red_channel_is_connected(&main_chan->base);
 }
 
-// when disconnection occurs, let reds shutdown all channels. This will trigger the
-// real disconnection of main channel
+/*
+ * When the main channel is disconnected, disconnect the entire client.
+ */
 static void main_channel_client_on_disconnect(RedChannelClient *rcc)
 {
     spice_printerr("rcc=%p", rcc);
-    reds_client_disconnect(rcc->client);
-//    red_channel_client_disconnect(rcc);
+    main_dispatcher_client_disconnect(rcc->client);
 }
 
 RedClient *main_channel_get_client_by_link_id(MainChannel *main_chan, uint32_t connection_id)

@@ -537,6 +537,7 @@ void reds_client_disconnect(RedClient *client)
     }
 
     if (!client || client->disconnecting) {
+        spice_debug("client %p already during disconnection", client);
         return;
     }
 
