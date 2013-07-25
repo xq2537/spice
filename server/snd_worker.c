@@ -212,21 +212,20 @@ static void snd_disconnect_channel(SndChannel *channel)
 {
     SndWorker *worker;
 
-    if (!channel) {
+    if (!channel || !channel->stream) {
         spice_debug("not connected");
         return;
     }
     spice_debug("%p", channel);
     worker = channel->worker;
-    if (channel->stream) {
-        channel->cleanup(channel);
-        red_channel_client_disconnect(worker->connection->channel_client);
-        core->watch_remove(channel->stream->watch);
-        channel->stream->watch = NULL;
-        reds_stream_free(channel->stream);
-        channel->stream = NULL;
-        spice_marshaller_destroy(channel->send_data.marshaller);
-    }
+    channel->cleanup(channel);
+    red_channel_client_disconnect(worker->connection->channel_client);
+    worker->connection->channel_client = NULL;
+    core->watch_remove(channel->stream->watch);
+    channel->stream->watch = NULL;
+    reds_stream_free(channel->stream);
+    channel->stream = NULL;
+    spice_marshaller_destroy(channel->send_data.marshaller);
     snd_channel_put(channel);
     worker->connection = NULL;
 }
@@ -897,6 +896,7 @@ static SndChannel *__new_channel(SndWorker *worker, int size, uint32_t channel_i
     int tos;
     MainChannelClient *mcc = red_client_get_main(client);
 
+    spice_assert(stream);
     if ((flags = fcntl(stream->socket, F_GETFL)) == -1) {
         spice_printerr("accept failed, %s", strerror(errno));
         goto error1;
