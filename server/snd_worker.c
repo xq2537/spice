@@ -1097,14 +1097,13 @@ SPICE_GNUC_VISIBLE void spice_server_playback_put_samples(SpicePlaybackInstance 
     PlaybackChannel *playback_channel;
     AudioFrame *frame;
 
-    if (!sin->st->worker.connection) {
-        return;
-    }
-
     frame = SPICE_CONTAINEROF(samples, AudioFrame, samples);
     playback_channel = frame->channel;
-    if (!snd_channel_put(&playback_channel->base) || !playback_channel->base.worker->connection) {
+    spice_assert(playback_channel);
+    if (!snd_channel_put(&playback_channel->base) ||
+        sin->st->worker.connection != &playback_channel->base) {
         /* lost last reference, channel has been destroyed previously */
+        spice_info("audio samples belong to a disconnected channel");
         return;
     }
     spice_assert(playback_channel->base.active);
