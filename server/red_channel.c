@@ -1932,7 +1932,26 @@ RedClient *red_client_new(int migrated)
     pthread_mutex_init(&client->lock, NULL);
     client->thread_id = pthread_self();
     client->during_target_migrate = migrated;
+    client->refs = 1;
 
+    return client;
+}
+
+RedClient *red_client_ref(RedClient *client)
+{
+    spice_assert(client);
+    client->refs++;
+    return client;
+}
+
+RedClient *red_client_unref(RedClient *client)
+{
+    if (!--client->refs) {
+        spice_debug("release client=%p", client);
+        pthread_mutex_destroy(&client->lock);
+        free(client);
+        return NULL;
+    }
     return client;
 }
 
@@ -2012,9 +2031,7 @@ void red_client_destroy(RedClient *client)
         spice_assert(rcc->send_data.size == 0);
         red_channel_client_destroy(rcc);
     }
-
-    pthread_mutex_destroy(&client->lock);
-    free(client);
+    red_client_unref(client);
 }
 
 /* client->lock should be locked */

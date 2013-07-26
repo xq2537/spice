@@ -561,9 +561,24 @@ struct RedClient {
                                   is called */
     int seamless_migrate;
     int num_migrated_channels; /* for seamless - number of channels that wait for migrate data*/
+    int refs;
 };
 
 RedClient *red_client_new(int migrated);
+
+/*
+ * disconnects all the client's channels (should be called from the client's thread)
+ */
+void red_client_destroy(RedClient *client);
+
+RedClient *red_client_ref(RedClient *client);
+
+/*
+ * releases the client resources when refs == 0.
+ * We assume the red_client_derstroy was called before
+ * we reached refs==0
+ */
+RedClient *red_client_unref(RedClient *client);
 
 MainChannelClient *red_client_get_main(RedClient *client);
 // main should be set once before all the other channels are created
@@ -580,7 +595,5 @@ void red_client_semi_seamless_migrate_complete(RedClient *client); /* dst side *
 int red_client_during_migrate_at_target(RedClient *client);
 
 void red_client_migrate(RedClient *client);
-// disconnects all the client's channels (should be called from the client's thread)
-void red_client_destroy(RedClient *client);
 
 #endif
