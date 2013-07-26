@@ -201,8 +201,8 @@ static SndChannel *snd_channel_get(SndChannel *channel)
 static SndChannel *snd_channel_put(SndChannel *channel)
 {
     if (!--channel->refs) {
+        spice_printerr("SndChannel=%p freed", channel);
         free(channel);
-        spice_printerr("sound channel freed");
         return NULL;
     }
     return channel;
@@ -216,7 +216,8 @@ static void snd_disconnect_channel(SndChannel *channel)
         spice_debug("not connected");
         return;
     }
-    spice_debug("%p", channel);
+    spice_debug("SndChannel=%p rcc=%p type=%d",
+                 channel, channel->channel_client, channel->channel_client->channel->type);
     worker = channel->worker;
     channel->cleanup(channel);
     red_channel_client_disconnect(worker->connection->channel_client);
@@ -976,11 +977,11 @@ static void snd_disconnect_channel_client(RedChannelClient *rcc)
 {
     SndWorker *worker;
 
-    spice_debug(NULL);
     spice_assert(rcc->channel);
     spice_assert(rcc->channel->data);
     worker = (SndWorker *)rcc->channel->data;
 
+    spice_debug("channel-type=%d", rcc->channel->type);
     if (worker->connection) {
         spice_assert(worker->connection->channel_client == rcc);
         snd_disconnect_channel(worker->connection);

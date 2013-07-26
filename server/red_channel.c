@@ -1112,6 +1112,7 @@ static void red_channel_client_ref(RedChannelClient *rcc)
 static void red_channel_client_unref(RedChannelClient *rcc)
 {
     if (!--rcc->refs) {
+        spice_debug("destroy rcc=%p", rcc);
         if (rcc->send_data.main.marshaller) {
             spice_marshaller_destroy(rcc->send_data.main.marshaller);
         }
@@ -1708,6 +1709,8 @@ static void red_channel_client_disconnect_dummy(RedChannelClient *rcc)
 {
     spice_assert(rcc->dummy);
     if (ring_item_is_linked(&rcc->channel_link)) {
+        spice_printerr("rcc=%p (channel=%p type=%d id=%d)", rcc, rcc->channel,
+                       rcc->channel->type, rcc->channel->id);
         red_channel_remove_client(rcc);
     }
     rcc->dummy_connected = FALSE;
@@ -1715,8 +1718,6 @@ static void red_channel_client_disconnect_dummy(RedChannelClient *rcc)
 
 void red_channel_client_disconnect(RedChannelClient *rcc)
 {
-    spice_printerr("%p (channel %p type %d id %d)", rcc, rcc->channel,
-                                                rcc->channel->type, rcc->channel->id);
     if (rcc->dummy) {
         red_channel_client_disconnect_dummy(rcc);
         return;
@@ -1724,6 +1725,8 @@ void red_channel_client_disconnect(RedChannelClient *rcc)
     if (!red_channel_client_is_connected(rcc)) {
         return;
     }
+    spice_printerr("rcc=%p (channel=%p type=%d id=%d)", rcc, rcc->channel,
+                   rcc->channel->type, rcc->channel->id);
     red_channel_client_pipe_clear(rcc);
     if (rcc->stream->watch) {
         rcc->channel->core->watch_remove(rcc->stream->watch);
@@ -2007,7 +2010,7 @@ void red_client_destroy(RedClient *client)
     RingItem *link, *next;
     RedChannelClient *rcc;
 
-    spice_printerr("destroy client with #channels %d", client->channels_num);
+    spice_printerr("destroy client %p with #channels=%d", client, client->channels_num);
     if (!pthread_equal(pthread_self(), client->thread_id)) {
         spice_warning("client->thread_id (0x%lx) != pthread_self (0x%lx)."
                       "If one of the threads is != io-thread && != vcpu-thread,"
