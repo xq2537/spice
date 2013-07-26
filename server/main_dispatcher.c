@@ -97,6 +97,7 @@ static void main_dispatcher_handle_migrate_complete(void *opaque,
     MainDispatcherMigrateSeamlessDstCompleteMessage *mig_complete = payload;
 
     reds_on_client_seamless_migrate_complete(mig_complete->client);
+    red_client_unref(mig_complete->client);
 }
 
 static void main_dispatcher_handle_mm_time_latency(void *opaque,
@@ -104,6 +105,7 @@ static void main_dispatcher_handle_mm_time_latency(void *opaque,
 {
     MainDispatcherMmTimeLatencyMessage *msg = payload;
     reds_set_client_mm_time_latency(msg->client, msg->latency);
+    red_client_unref(msg->client);
 }
 
 void main_dispatcher_seamless_migrate_dst_complete(RedClient *client)
@@ -115,7 +117,7 @@ void main_dispatcher_seamless_migrate_dst_complete(RedClient *client)
         return;
     }
 
-    msg.client = client;
+    msg.client = red_client_ref(client);
     dispatcher_send_message(&main_dispatcher.base, MAIN_DISPATCHER_MIGRATE_SEAMLESS_DST_COMPLETE,
                             &msg);
 }
@@ -129,7 +131,7 @@ void main_dispatcher_set_mm_time_latency(RedClient *client, uint32_t latency)
         return;
     }
 
-    msg.client = client;
+    msg.client = red_client_ref(client);
     msg.latency = latency;
     dispatcher_send_message(&main_dispatcher.base, MAIN_DISPATCHER_SET_MM_TIME_LATENCY,
                             &msg);
