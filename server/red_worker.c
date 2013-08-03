@@ -4189,23 +4189,23 @@ static inline void red_process_drawable(RedWorker *worker, RedDrawable *red_draw
                                         uint32_t group_id)
 {
     int surface_id;
-    Drawable *item = get_drawable(worker, red_drawable->effect, red_drawable, group_id);
+    Drawable *drawable = get_drawable(worker, red_drawable->effect, red_drawable, group_id);
 
-    if (!item) {
+    if (!drawable) {
         rendering_incorrect("failed to get_drawable");
         return;
     }
 
-    surface_id = item->surface_id;
+    surface_id = drawable->surface_id;
 
     worker->surfaces[surface_id].refs++;
 
-    region_add(&item->tree_item.base.rgn, &red_drawable->bbox);
+    region_add(&drawable->tree_item.base.rgn, &red_drawable->bbox);
 #ifdef PIPE_DEBUG
     printf("TEST: DRAWABLE: id %u type %s effect %u bbox %u %u %u %u\n",
-           item->tree_item.base.id,
+           drawable->tree_item.base.id,
            draw_type_to_str(red_drawable->type),
-           item->tree_item.effect,
+           drawable->tree_item.effect,
            red_drawable->bbox.top, red_drawable->bbox.left,
            red_drawable->bbox.bottom, red_drawable->bbox.right);
 #endif
@@ -4215,7 +4215,7 @@ static inline void red_process_drawable(RedWorker *worker, RedDrawable *red_draw
 
         region_init(&rgn);
         add_clip_rects(&rgn, red_drawable->clip.rects);
-        region_and(&item->tree_item.base.rgn, &rgn);
+        region_and(&drawable->tree_item.base.rgn, &rgn);
         region_destroy(&rgn);
     }
     /*
@@ -4224,13 +4224,13 @@ static inline void red_process_drawable(RedWorker *worker, RedDrawable *red_draw
         However, surface->depend_on_me is affected by a drawable only
         as long as it is in the current tree (hasn't been rendered yet).
     */
-    red_inc_surfaces_drawable_dependencies(worker, item);
+    red_inc_surfaces_drawable_dependencies(worker, drawable);
 
-    if (region_is_empty(&item->tree_item.base.rgn)) {
+    if (region_is_empty(&drawable->tree_item.base.rgn)) {
         goto cleanup;
     }
 
-    if (!red_handle_self_bitmap(worker, item)) {
+    if (!red_handle_self_bitmap(worker, drawable)) {
         goto cleanup;
     }
 
@@ -4238,22 +4238,22 @@ static inline void red_process_drawable(RedWorker *worker, RedDrawable *red_draw
         goto cleanup;
     }
 
-    if (!red_handle_surfaces_dependencies(worker, item)) {
+    if (!red_handle_surfaces_dependencies(worker, drawable)) {
         goto cleanup;
     }
 
-    if (red_current_add_qxl(worker, &worker->surfaces[surface_id].current, item,
+    if (red_current_add_qxl(worker, &worker->surfaces[surface_id].current, drawable,
                             red_drawable)) {
-        if (item->tree_item.effect != QXL_EFFECT_OPAQUE) {
+        if (drawable->tree_item.effect != QXL_EFFECT_OPAQUE) {
             worker->transparent_count++;
         }
-        red_pipes_add_drawable(worker, item);
+        red_pipes_add_drawable(worker, drawable);
 #ifdef DRAW_ALL
-        red_draw_qxl_drawable(worker, item);
+        red_draw_qxl_drawable(worker, drawable);
 #endif
     }
 cleanup:
-    release_drawable(worker, item);
+    release_drawable(worker, drawable);
 }
 
 static inline void red_create_surface(RedWorker *worker, uint32_t surface_id,uint32_t width,
