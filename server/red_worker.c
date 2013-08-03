@@ -4185,11 +4185,11 @@ static inline void red_inc_surfaces_drawable_dependencies(RedWorker *worker, Dra
     }
 }
 
-static inline void red_process_drawable(RedWorker *worker, RedDrawable *drawable,
+static inline void red_process_drawable(RedWorker *worker, RedDrawable *red_drawable,
                                         uint32_t group_id)
 {
     int surface_id;
-    Drawable *item = get_drawable(worker, drawable->effect, drawable, group_id);
+    Drawable *item = get_drawable(worker, red_drawable->effect, red_drawable, group_id);
 
     if (!item) {
         rendering_incorrect("failed to get_drawable");
@@ -4200,20 +4200,21 @@ static inline void red_process_drawable(RedWorker *worker, RedDrawable *drawable
 
     worker->surfaces[surface_id].refs++;
 
-    region_add(&item->tree_item.base.rgn, &drawable->bbox);
+    region_add(&item->tree_item.base.rgn, &red_drawable->bbox);
 #ifdef PIPE_DEBUG
     printf("TEST: DRAWABLE: id %u type %s effect %u bbox %u %u %u %u\n",
            item->tree_item.base.id,
-           draw_type_to_str(drawable->type),
+           draw_type_to_str(red_drawable->type),
            item->tree_item.effect,
-           drawable->bbox.top, drawable->bbox.left, drawable->bbox.bottom, drawable->bbox.right);
+           red_drawable->bbox.top, red_drawable->bbox.left,
+           red_drawable->bbox.bottom, red_drawable->bbox.right);
 #endif
 
-    if (drawable->clip.type == SPICE_CLIP_TYPE_RECTS) {
+    if (red_drawable->clip.type == SPICE_CLIP_TYPE_RECTS) {
         QRegion rgn;
 
         region_init(&rgn);
-        add_clip_rects(&rgn, drawable->clip.rects);
+        add_clip_rects(&rgn, red_drawable->clip.rects);
         region_and(&item->tree_item.base.rgn, &rgn);
         region_destroy(&rgn);
     }
@@ -4242,7 +4243,7 @@ static inline void red_process_drawable(RedWorker *worker, RedDrawable *drawable
     }
 
     if (red_current_add_qxl(worker, &worker->surfaces[surface_id].current, item,
-                            drawable)) {
+                            red_drawable)) {
         if (item->tree_item.effect != QXL_EFFECT_OPAQUE) {
             worker->transparent_count++;
         }
