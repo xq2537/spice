@@ -103,7 +103,7 @@
 #define CHANNEL_PUSH_TIMEOUT 30000000000ULL //nano
 #define CHANNEL_PUSH_SLEEP_DURATION 10000 //micro
 
-#define DISPLAY_CLIENT_TIMEOUT 15000000000ULL //nano
+#define DISPLAY_CLIENT_TIMEOUT 30000000000ULL //nano
 #define DISPLAY_CLIENT_MIGRATE_DATA_TIMEOUT 10000000000ULL //nano, 10 sec
 #define DISPLAY_CLIENT_RETRY_INTERVAL 10000 //micro
 
@@ -9716,7 +9716,7 @@ static inline void flush_display_commands(RedWorker *worker)
         if (ring_is_empty) {
             break;
         }
-        end_time = red_now() + DISPLAY_CLIENT_TIMEOUT * 10;
+        end_time = red_now() + DISPLAY_CLIENT_TIMEOUT;
         int sleep_count = 0;
         for (;;) {
             red_channel_push(&worker->display_channel->common.base);
@@ -9760,7 +9760,7 @@ static inline void flush_cursor_commands(RedWorker *worker)
         if (ring_is_empty) {
             break;
         }
-        end_time = red_now() + DISPLAY_CLIENT_TIMEOUT * 10;
+        end_time = red_now() + DISPLAY_CLIENT_TIMEOUT;
         int sleep_count = 0;
         for (;;) {
             red_channel_push(&worker->cursor_channel->common.base);
