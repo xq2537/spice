@@ -100,6 +100,8 @@ libspice_server_la_SOURCES =			\
 	spice_bitmap_utils.h		\
 	spice_bitmap_utils.c		\
 	spice_server_utils.h		\
+	spice_image_cache.h			\
+	spice_image_cache.c			\
 	$(NULL)
 
 if SUPPORT_TUNNEL
