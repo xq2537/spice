@@ -87,6 +87,7 @@
 //#define DUMP_BITMAP
 //#define PIPE_DEBUG
 //#define RED_WORKER_STAT
+/* TODO: DRAW_ALL is broken. */
 //#define DRAW_ALL
 //#define COMPRESS_DEBUG
 //#define ACYCLIC_SURFACE_DEBUG
