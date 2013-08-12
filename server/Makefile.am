@@ -97,6 +97,8 @@ libspice_server_la_SOURCES =			\
 	spice_timer_queue.h			\
 	zlib_encoder.c				\
 	zlib_encoder.h				\
+	spice_bitmap_utils.h		\
+	spice_bitmap_utils.c		\
 	$(NULL)
 
 if SUPPORT_TUNNEL
