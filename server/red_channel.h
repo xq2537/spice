@@ -604,6 +604,6 @@ void red_channel_client_wait_pipe_item_sent(RedChannelClient *rcc,
 void red_wait_outgoing_item(RedChannelClient *rcc);
 
 /* blocking function */
-void red_wait_all_sent(RedChannel *channel);
+void red_channel_wait_all_sent(RedChannel *channel);
 
 #endif

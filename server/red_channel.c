@@ -2274,7 +2274,7 @@ static void rcc_shutdown_if_pending_send(RedChannelClient *rcc)
     }
 }
 
-void red_wait_all_sent(RedChannel *channel)
+void red_channel_wait_all_sent(RedChannel *channel)
 {
     uint64_t end_time;
     uint32_t max_pipe_size;

@@ -11136,7 +11136,7 @@ static inline void red_cursor_reset(RedWorker *worker)
         if (!worker->cursor_channel->common.during_target_migrate) {
             red_pipes_add_verb(&worker->cursor_channel->common.base, SPICE_MSG_CURSOR_RESET);
         }
-        red_wait_all_sent(&worker->cursor_channel->common.base);
+        red_channel_wait_all_sent(&worker->cursor_channel->common.base);
     }
 }
 
@@ -11419,8 +11419,8 @@ void handle_dev_stop(void *opaque, void *payload)
      * purge the pipe, send destroy_all_surfaces
      * to the client (there is no such message right now), and start
      * from scratch on the destination side */
-    red_wait_all_sent(&worker->display_channel->common.base);
-    red_wait_all_sent(&worker->cursor_channel->common.base);
+    red_channel_wait_all_sent(&worker->display_channel->common.base);
+    red_channel_wait_all_sent(&worker->cursor_channel->common.base);
 }
 
 static int display_channel_wait_for_migrate_data(DisplayChannel *display)
