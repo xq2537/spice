@@ -4421,7 +4421,7 @@ static void image_cache_reset(ImageCache *cache)
 
 #define IMAGE_CACHE_DEPTH 4
 
-static void image_cache_eaging(ImageCache *cache)
+static void image_cache_aging(ImageCache *cache)
 {
 #ifdef IMAGE_CACHE_AGE
     ImageCacheItem *item;
@@ -4500,7 +4500,7 @@ static void red_draw_qxl_drawable(RedWorker *worker, Drawable *drawable)
     surface = &worker->surfaces[drawable->surface_id];
     canvas = surface->context.canvas;
 
-    image_cache_eaging(&worker->image_cache);
+    image_cache_aging(&worker->image_cache);
 
     worker->preload_group_id = drawable->group_id;
 
