@@ -82,6 +82,7 @@
 #include "migration_protocol.h"
 #include "spice_timer_queue.h"
 #include "main_dispatcher.h"
+#include "spice_server_utils.h"
 
 //#define COMPRESS_STAT
 //#define DUMP_BITMAP
