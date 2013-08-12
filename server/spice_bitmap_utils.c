@@ -5,6 +5,23 @@
 
 #include "spice_bitmap_utils.h"
 
+int spice_bitmap_from_surface_type(uint32_t surface_format)
+{
+    switch (surface_format) {
+    case SPICE_SURFACE_FMT_16_555:
+        return SPICE_BITMAP_FMT_16BIT;
+    case SPICE_SURFACE_FMT_32_xRGB:
+        return SPICE_BITMAP_FMT_32BIT;
+    case SPICE_SURFACE_FMT_32_ARGB:
+        return SPICE_BITMAP_FMT_RGBA;
+    case SPICE_SURFACE_FMT_8_A:
+        return SPICE_BITMAP_FMT_8BIT_A;
+    default:
+        spice_critical("Unsupported surface format");
+    }
+    return 0;
+}
+
 #define RAM_PATH "/tmp/tmpfs"
 
 static void dump_palette(FILE *f, SpicePalette* plt)

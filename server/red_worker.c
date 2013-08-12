@@ -84,6 +84,7 @@
 #include "main_dispatcher.h"
 #include "spice_server_utils.h"
 #include "red_time.h"
+#include "spice_bitmap_utils.h"
 
 //#define COMPRESS_STAT
 //#define DUMP_BITMAP
@@ -94,10 +95,6 @@
 //#define COMPRESS_DEBUG
 //#define ACYCLIC_SURFACE_DEBUG
 //#define DEBUG_CURSORS
-
-#ifdef DUMP_BITMAP
-#include "spice_bitmap_utils.h"
-#endif
 
 //#define UPDATE_AREA_BY_TREE
 
@@ -3931,23 +3928,6 @@ static void red_get_area(RedWorker *worker, int surface_id, const SpiceRect *are
     canvas->ops->read_bits(canvas, dest, dest_stride, area);
 }
 
-static int surface_format_to_image_type(uint32_t surface_format)
-{
-    switch (surface_format) {
-    case SPICE_SURFACE_FMT_16_555:
-        return SPICE_BITMAP_FMT_16BIT;
-    case SPICE_SURFACE_FMT_32_xRGB:
-        return SPICE_BITMAP_FMT_32BIT;
-    case SPICE_SURFACE_FMT_32_ARGB:
-        return SPICE_BITMAP_FMT_RGBA;
-    case SPICE_SURFACE_FMT_8_A:
-        return SPICE_BITMAP_FMT_8BIT_A;
-    default:
-        spice_critical("Unsupported surface format");
-    }
-    return 0;
-}
-
 static int rgb32_data_has_alpha(int width, int height, size_t stride,
                                 uint8_t *data, int *all_set_out)
 {
@@ -4008,7 +3988,7 @@ static inline int red_handle_self_bitmap(RedWorker *worker, Drawable *drawable)
 
     QXL_SET_IMAGE_ID(image, QXL_IMAGE_GROUP_RED, ++worker->bits_unique);
     image->u.bitmap.flags = surface->context.top_down ? SPICE_BITMAP_FLAGS_TOP_DOWN : 0;
-    image->u.bitmap.format = surface_format_to_image_type(surface->context.format);
+    image->u.bitmap.format = spice_bitmap_from_surface_type(surface->context.format);
     image->u.bitmap.stride = dest_stride;
     image->descriptor.width = image->u.bitmap.x = width;
     image->descriptor.height = image->u.bitmap.y = height;
@@ -5309,7 +5289,7 @@ static ImageItem *red_add_surface_area_image(DisplayChannelClient *dcc, int surf
     item->refs = 1;
     item->surface_id = surface_id;
     item->image_format =
-        surface_format_to_image_type(surface->context.format);
+        spice_bitmap_from_surface_type(surface->context.format);
     item->image_flags = 0;
     item->pos.x = area->left;
     item->pos.y = area->top;
@@ -9767,7 +9747,7 @@ static inline void flush_cursor_commands(RedWorker *worker)
     }
 }
 
-// TODO: on timeout, don't disconnect all channeld immeduiatly - try to disconnect the slowest ones
+// TODO: on timeout, don't disconnect all channels immediatly - try to disconnect the slowest ones
 // first and maybe turn timeouts to several timeouts in order to disconnect channels gradually.
 // Should use disconnect or shutdown?
 static inline void flush_all_qxl_commands(RedWorker *worker)
