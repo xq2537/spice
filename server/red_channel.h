@@ -596,4 +596,14 @@ int red_client_during_migrate_at_target(RedClient *client);
 
 void red_client_migrate(RedClient *client);
 
+/* blocking function */
+void red_channel_client_wait_pipe_item_sent(RedChannelClient *rcc,
+                                            PipeItem *item);
+
+/* blocking function */
+void red_wait_outgoing_item(RedChannelClient *rcc);
+
+/* blocking function */
+void red_wait_all_sent(RedChannel *channel);
+
 #endif
