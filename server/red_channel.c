@@ -64,6 +64,13 @@ enum QosPingState {
     PING_STATE_LATENCY,
 };
 
+enum ConnectivityState {
+    CONNECTIVITY_STATE_CONNECTED,
+    CONNECTIVITY_STATE_BLOCKED,
+    CONNECTIVITY_STATE_WAIT_PONG,
+    CONNECTIVITY_STATE_DISCONNECTED,
+};
+
 static void red_channel_client_start_ping_timer(RedChannelClient *rcc, uint32_t timeout);
 static void red_channel_client_cancel_ping_timer(RedChannelClient *rcc);
 static void red_channel_client_restart_ping_timer(RedChannelClient *rcc);
@@ -73,6 +80,7 @@ static void red_client_add_channel(RedClient *client, RedChannelClient *rcc);
 static void red_client_remove_channel(RedChannelClient *rcc);
 static RedChannelClient *red_client_get_channel(RedClient *client, int type, int id);
 static void red_channel_client_restore_main_sender(RedChannelClient *rcc);
+static inline int red_channel_client_waiting_for_ack(RedChannelClient *rcc);
 
 /*
  * Lifetime of RedChannel, RedChannelClient and RedClient:
@@ -389,11 +397,19 @@ static void red_channel_client_on_output(void *opaque, int n)
 {
     RedChannelClient *rcc = opaque;
 
+    if (rcc->connectivity_monitor.timer) {
+        rcc->connectivity_monitor.out_bytes += n;
+    }
     stat_inc_counter(rcc->channel->out_bytes_counter, n);
 }
 
 static void red_channel_client_on_input(void *opaque, int n)
 {
+    RedChannelClient *rcc = opaque;
+
+    if (rcc->connectivity_monitor.timer) {
+        rcc->connectivity_monitor.in_bytes += n;
+    }
 }
 
 static void red_channel_client_default_peer_on_error(RedChannelClient *rcc)
@@ -759,6 +775,97 @@ static void red_channel_client_ping_timer(void *opaque)
 #endif /* ifdef HAVE_LINUX_SOCKIOS_H */
 }
 
+/*
+ * When a connection is not alive (and we can't detect it via a socket error), we
+ * reach one of these 2 states:
+ * (1) Sending msgs is blocked: either writes return EAGAIN
+ *     or we are missing MSGC_ACK from the client.
+ * (2) MSG_PING was sent without receiving a MSGC_PONG in reply.
+ *
+ * The connectivity_timer callback tests if the channel's state matches one of the above.
+ * In case it does, on the next time the timer is called, it checks if the connection has
+ * been idle during the time that passed since the previous timer call. If the connection
+ * has been idle, we consider the client as disconnected.
+ */
+static void red_channel_client_connectivity_timer(void *opaque)
+{
+    RedChannelClient *rcc = opaque;
+    RedChannelClientConnectivityMonitor *monitor = &rcc->connectivity_monitor;
+    int is_alive = TRUE;
+
+    if (monitor->state == CONNECTIVITY_STATE_BLOCKED) {
+        if (monitor->in_bytes == 0 && monitor->out_bytes == 0) {
+            if (!rcc->send_data.blocked && !red_channel_client_waiting_for_ack(rcc)) {
+                spice_error("mismatch between rcc-state and connectivity-state");
+            }
+            spice_debug("rcc is blocked; connection is idle");
+            is_alive = FALSE;
+        }
+    } else if (monitor->state == CONNECTIVITY_STATE_WAIT_PONG) {
+        if (monitor->in_bytes == 0) {
+            if (rcc->latency_monitor.state != PING_STATE_WARMUP &&
+                rcc->latency_monitor.state != PING_STATE_LATENCY) {
+                spice_error("mismatch between rcc-state and connectivity-state");
+            }
+            spice_debug("rcc waits for pong; connection is idle");
+            is_alive = FALSE;
+        }
+    }
+
+    if (is_alive) {
+        monitor->in_bytes = 0;
+        monitor->out_bytes = 0;
+        if (rcc->send_data.blocked || red_channel_client_waiting_for_ack(rcc)) {
+            monitor->state = CONNECTIVITY_STATE_BLOCKED;
+        } else if (rcc->latency_monitor.state == PING_STATE_WARMUP ||
+                   rcc->latency_monitor.state == PING_STATE_LATENCY) {
+            monitor->state = CONNECTIVITY_STATE_WAIT_PONG;
+        } else {
+             monitor->state = CONNECTIVITY_STATE_CONNECTED;
+        }
+        rcc->channel->core->timer_start(rcc->connectivity_monitor.timer,
+                                        rcc->connectivity_monitor.timeout);
+    } else {
+        monitor->state = CONNECTIVITY_STATE_DISCONNECTED;
+        spice_debug("rcc %p has not been responsive for more than %u ms, disconnecting",
+                    rcc, monitor->timeout);
+        red_channel_client_disconnect(rcc);
+    }
+}
+
+void red_channel_client_start_connectivity_monitoring(RedChannelClient *rcc, uint32_t timeout_ms)
+{
+    if (!red_channel_client_is_connected(rcc)) {
+        return;
+    }
+    spice_debug(NULL);
+    spice_assert(timeout_ms > 0);
+    /*
+     * If latency_monitor is not active, we activate it in order to enable
+     * periodic ping messages so that we will be be able to identify a disconnected
+     * channel-client even if there are no ongoing channel specific messages
+     * on this channel.
+     */
+    if (rcc->latency_monitor.timer == NULL) {
+        rcc->latency_monitor.timer = rcc->channel->core->timer_add(
+            red_channel_client_ping_timer, rcc);
+        if (!rcc->client->during_target_migrate) {
+            red_channel_client_start_ping_timer(rcc, PING_TEST_IDLE_NET_TIMEOUT_MS);
+        }
+        rcc->latency_monitor.roundtrip = -1;
+    }
+    if (rcc->connectivity_monitor.timer == NULL) {
+        rcc->connectivity_monitor.state = CONNECTIVITY_STATE_CONNECTED;
+        rcc->connectivity_monitor.timer = rcc->channel->core->timer_add(
+            red_channel_client_connectivity_timer, rcc);
+        rcc->connectivity_monitor.timeout = timeout_ms;
+        if (!rcc->client->during_target_migrate) {
+           rcc->channel->core->timer_start(rcc->connectivity_monitor.timer,
+                                           rcc->connectivity_monitor.timeout);
+        }
+    }
+}
+
 RedChannelClient *red_channel_client_create(int size, RedChannel *channel, RedClient  *client,
                                             RedsStream *stream,
                                             int monitor_latency,
@@ -859,6 +966,10 @@ static void red_channel_client_seamless_migration_done(RedChannelClient *rcc)
         if (rcc->latency_monitor.timer) {
             red_channel_client_start_ping_timer(rcc, PING_TEST_IDLE_NET_TIMEOUT_MS);
         }
+        if (rcc->connectivity_monitor.timer) {
+            rcc->channel->core->timer_start(rcc->connectivity_monitor.timer,
+                                            rcc->connectivity_monitor.timeout);
+        }
     }
     pthread_mutex_unlock(&rcc->client->lock);
 }
@@ -904,6 +1015,10 @@ void red_channel_client_default_migrate(RedChannelClient *rcc)
         red_channel_client_cancel_ping_timer(rcc);
         rcc->channel->core->timer_remove(rcc->latency_monitor.timer);
         rcc->latency_monitor.timer = NULL;
+    }
+    if (rcc->connectivity_monitor.timer) {
+       rcc->channel->core->timer_remove(rcc->connectivity_monitor.timer);
+        rcc->connectivity_monitor.timer = NULL;
     }
     red_channel_client_pipe_add_type(rcc, PIPE_ITEM_TYPE_MIGRATE);
 }
@@ -1751,6 +1866,10 @@ void red_channel_client_disconnect(RedChannelClient *rcc)
     if (rcc->latency_monitor.timer) {
         rcc->channel->core->timer_remove(rcc->latency_monitor.timer);
         rcc->latency_monitor.timer = NULL;
+    }
+    if (rcc->connectivity_monitor.timer) {
+        rcc->channel->core->timer_remove(rcc->connectivity_monitor.timer);
+        rcc->connectivity_monitor.timer = NULL;
     }
     red_channel_remove_client(rcc);
     rcc->channel->channel_cbs.on_disconnect(rcc);

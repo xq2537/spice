@@ -236,6 +236,14 @@ typedef struct RedChannelClientLatencyMonitor {
     int64_t roundtrip;
 } RedChannelClientLatencyMonitor;
 
+typedef struct RedChannelClientConnectivityMonitor {
+    int state;
+    uint32_t out_bytes;
+    uint32_t in_bytes;
+    uint32_t timeout;
+    SpiceTimer *timer;
+} RedChannelClientConnectivityMonitor;
+
 struct RedChannelClient {
     RingItem channel_link;
     RingItem client_link;
@@ -289,6 +297,7 @@ struct RedChannelClient {
     int wait_migrate_flush_mark;
 
     RedChannelClientLatencyMonitor latency_monitor;
+    RedChannelClientConnectivityMonitor connectivity_monitor;
 };
 
 struct RedChannel {
@@ -447,6 +456,11 @@ SpiceMarshaller *red_channel_client_switch_to_urgent_sender(RedChannelClient *rc
 
 /* returns -1 if we don't have an estimation */
 int red_channel_client_get_roundtrip_ms(RedChannelClient *rcc);
+
+/*
+ * Checks periodically if the connection is still alive
+ */
+void red_channel_client_start_connectivity_monitoring(RedChannelClient *rcc, uint32_t timeout_ms);
 
 void red_channel_pipe_item_init(RedChannel *channel, PipeItem *item, int type);
 
