@@ -74,6 +74,7 @@ typedef uint8_t *(*alloc_msg_recv_buf_proc)(void *opaque, uint16_t type, uint32_
 typedef void (*release_msg_recv_buf_proc)(void *opaque,
                                           uint16_t type, uint32_t size, uint8_t *msg);
 typedef void (*on_incoming_error_proc)(void *opaque);
+typedef void (*on_input_proc)(void *opaque, int n);
 
 typedef struct IncomingHandlerInterface {
     handle_message_proc handle_message;
@@ -83,6 +84,7 @@ typedef struct IncomingHandlerInterface {
     // The following is an optional alternative to handle_message, used if not null
     spice_parse_channel_func_t parser;
     handle_parsed_proc handle_parsed;
+    on_input_proc on_input;
 } IncomingHandlerInterface;
 
 typedef struct IncomingHandler {

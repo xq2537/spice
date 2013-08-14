@@ -251,6 +251,7 @@ static void red_peer_handle_incoming(RedsStream *stream, IncomingHandler *handle
                 handler->cb->on_error(handler->opaque);
                 return;
             }
+            handler->cb->on_input(handler->opaque, bytes_read);
             handler->header_pos += bytes_read;
 
             if (handler->header_pos != handler->header.header_size) {
@@ -278,6 +279,7 @@ static void red_peer_handle_incoming(RedsStream *stream, IncomingHandler *handle
                 handler->cb->on_error(handler->opaque);
                 return;
             }
+            handler->cb->on_input(handler->opaque, bytes_read);
             handler->msg_pos += bytes_read;
             if (handler->msg_pos != msg_size) {
                 return;
@@ -388,6 +390,10 @@ static void red_channel_client_on_output(void *opaque, int n)
     RedChannelClient *rcc = opaque;
 
     stat_inc_counter(rcc->channel->out_bytes_counter, n);
+}
+
+static void red_channel_client_on_input(void *opaque, int n)
+{
 }
 
 static void red_channel_client_default_peer_on_error(RedChannelClient *rcc)
@@ -935,6 +941,7 @@ RedChannel *red_channel_create(int size,
     channel->incoming_cb.handle_message = (handle_message_proc)handle_message;
     channel->incoming_cb.on_error =
         (on_incoming_error_proc)red_channel_client_default_peer_on_error;
+    channel->incoming_cb.on_input = red_channel_client_on_input;
     channel->outgoing_cb.get_msg_size = red_channel_client_peer_get_out_msg_size;
     channel->outgoing_cb.prepare = red_channel_client_peer_prepare_out_msg;
     channel->outgoing_cb.on_block = red_channel_client_peer_on_out_block;
