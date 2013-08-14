@@ -1718,11 +1718,10 @@ static void reds_handle_main_link(RedLinkInfo *link)
             main_channel_push_name(mcc, spice_name);
         if (spice_uuid_is_set)
             main_channel_push_uuid(mcc, spice_uuid);
-
-        main_channel_client_start_net_test(mcc);
     } else {
         reds_mig_target_client_add(client);
     }
+    main_channel_client_start_net_test(mcc, !mig_target);
 }
 
 #define RED_MOUSE_STATE_TO_LOCAL(state)     \
