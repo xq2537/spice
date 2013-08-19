@@ -353,7 +353,7 @@ static int bitmap_consistent(SpiceBitmap *bitmap)
     int bpp = MAP_BITMAP_FMT_TO_BITS_PER_PIXEL[bitmap->format];
 
     if (bitmap->stride < ((bitmap->x * bpp + 7) / 8)) {
-        spice_error("image stride too small for width: %d < ((%d * %d + 7) / 8) (%s=%d)\n",
+        spice_warning("image stride too small for width: %d < ((%d * %d + 7) / 8) (%s=%d)\n",
                     bitmap->stride, bitmap->x, bpp,
                     bitmap_format_to_string(bitmap->format),
                     bitmap->format);
