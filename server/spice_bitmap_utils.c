@@ -63,7 +63,7 @@ void dump_bitmap(SpiceBitmap *bitmap)
     int32_t tmp_32;
     uint16_t tmp_u16;
     FILE *f;
-    int i;
+    int i, j;
 
     switch (bitmap->format) {
     case SPICE_BITMAP_FMT_1BIT_BE:
@@ -159,8 +159,8 @@ void dump_bitmap(SpiceBitmap *bitmap)
     for (i = 0; i < bitmap->data->num_chunks; i++) {
         SpiceChunk *chunk = &bitmap->data->chunk[i];
         int num_lines = chunk->len / bitmap->stride;
-        for (i = 0; i < num_lines; i++) {
-            dump_line(f, chunk->data + (i * bitmap->stride), n_pixel_bits, bitmap->x, row_size);
+        for (j = 0; j < num_lines; j++) {
+            dump_line(f, chunk->data + (j * bitmap->stride), n_pixel_bits, bitmap->x, row_size);
         }
     }
     fclose(f);
