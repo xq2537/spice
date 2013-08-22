@@ -6629,7 +6629,7 @@ static FillBitsType fill_bits(DisplayChannelClient *dcc, SpiceMarshaller *m,
     case SPICE_IMAGE_TYPE_BITMAP: {
         SpiceBitmap *bitmap = &image.u.bitmap;
 #ifdef DUMP_BITMAP
-        dump_bitmap(display_channel->common.worker, &simage->u.bitmap, drawable->group_id);
+        dump_bitmap(&simage->u.bitmap);
 #endif
         /* Images must be added to the cache only after they are compressed
            in order to prevent starvation in the client between pixmap_cache and
