@@ -440,9 +440,11 @@ void GUI::Dialog::handle_message_click(int id)
         application().push_event(*event);
     }
 
+#ifdef USE_GUI
     if (_close_on_message_click) {
         application().hide_gui();
     }
+#endif
 }
 
 void GUI::Dialog::pre_destroy()
@@ -861,7 +863,9 @@ public:
 bool SettingsDialog::handle_close(const CEGUI::EventArgs& e)
 {
     DBG(0, "");
+#ifdef USE_GUI
     application().hide_gui();
+#endif
     return true;
 }
 
