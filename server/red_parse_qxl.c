@@ -486,7 +486,8 @@ static SpiceImage *red_get_image(RedMemSlotInfo *slots, int group_id,
         red_put_data_chunks(&chunks);
         break;
     default:
-        spice_error("unknown type %d", red->descriptor.type);
+        spice_warning("unknown type %d", red->descriptor.type);
+        goto error;
     }
     return red;
 error:
@@ -1001,7 +1002,7 @@ static int red_get_native_drawable(RedMemSlotInfo *slots, int group_id,
                               &red->u.whiteness, &qxl->u.whiteness, flags);
         break;
     default:
-        spice_error("unknown type %d", red->type);
+        spice_warning("unknown type %d", red->type);
         error = 1;
         break;
     };
@@ -1087,7 +1088,7 @@ static int red_get_compat_drawable(RedMemSlotInfo *slots, int group_id,
                               &red->u.whiteness, &qxl->u.whiteness, flags);
         break;
     default:
-        spice_error("unknown type %d", red->type);
+        spice_warning("unknown type %d", red->type);
         error = 1;
         break;
     };
