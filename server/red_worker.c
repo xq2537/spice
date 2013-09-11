@@ -102,6 +102,7 @@
 #define CMD_RING_POLL_TIMEOUT 10 //milli
 #define CMD_RING_POLL_RETRIES 200
 
+#define DISPLAY_CLIENT_SHORT_TIMEOUT 15000000000ULL //nano
 #define DISPLAY_CLIENT_TIMEOUT 30000000000ULL //nano
 #define DISPLAY_CLIENT_MIGRATE_DATA_TIMEOUT 10000000000ULL //nano, 10 sec
 #define DISPLAY_CLIENT_RETRY_INTERVAL 10000 //micro
@@ -2003,8 +2004,12 @@ static void red_current_clear(RedWorker *worker, int surface_id)
     }
 }
 
-static void red_clear_surface_drawables_from_pipe(DisplayChannelClient *dcc, int surface_id,
-                                                  int wait_if_used)
+/*
+ * Return: TRUE if wait_if_used == FALSE, or otherwise, if all of the pipe items that
+ * are related to the surface have been cleared (or sent) from the pipe.
+ */
+static int red_clear_surface_drawables_from_pipe(DisplayChannelClient *dcc, int surface_id,
+                                                 int wait_if_used)
 {
     Ring *ring;
     PipeItem *item;
@@ -2012,7 +2017,7 @@ static void red_clear_surface_drawables_from_pipe(DisplayChannelClient *dcc, int
     RedChannelClient *rcc;
 
     if (!dcc) {
-        return;
+        return TRUE;
     }
 
     /* removing the newest drawables that their destination is surface_id and
@@ -2057,24 +2062,27 @@ static void red_clear_surface_drawables_from_pipe(DisplayChannelClient *dcc, int
             if (wait_if_used) {
                 break;
             } else {
-                return;
+                return TRUE;
             }
         }
     }
 
     if (!wait_if_used) {
-        return;
+        return TRUE;
     }
 
     if (item) {
-        red_channel_client_wait_pipe_item_sent(&dcc->common.base, item);
+        return red_channel_client_wait_pipe_item_sent(&dcc->common.base, item,
+                                                      DISPLAY_CLIENT_TIMEOUT);
     } else {
         /*
          * in case that the pipe didn't contain any item that is dependent on the surface, but
-         * there is one during sending.
+         * there is one during sending. Use a shorter timeout, since it is just one item
          */
-        red_wait_outgoing_item(&dcc->common.base);
+        return red_channel_client_wait_outgoing_item(&dcc->common.base,
+                                                     DISPLAY_CLIENT_SHORT_TIMEOUT);
     }
+    return TRUE;
 }
 
 static void red_clear_surface_drawables_from_pipes(RedWorker *worker,
@@ -2085,7 +2093,9 @@ static void red_clear_surface_drawables_from_pipes(RedWorker *worker,
     DisplayChannelClient *dcc;
 
     WORKER_FOREACH_DCC_SAFE(worker, item, next, dcc) {
-        red_clear_surface_drawables_from_pipe(dcc, surface_id, wait_if_used);
+        if (!red_clear_surface_drawables_from_pipe(dcc, surface_id, wait_if_used)) {
+            red_channel_client_disconnect(&dcc->common.base);
+        }
     }
 }
 
@@ -10949,6 +10959,15 @@ void handle_dev_destroy_surface_wait(void *opaque, void *payload)
     dev_destroy_surface_wait(worker, msg->surface_id);
 }
 
+static void rcc_shutdown_if_pending_send(RedChannelClient *rcc)
+{
+    if (red_channel_client_blocked(rcc) || rcc->pipe_size > 0) {
+        red_channel_client_shutdown(rcc);
+    } else {
+        spice_assert(red_channel_client_no_item_being_sent(rcc));
+    }
+}
+
 static inline void red_cursor_reset(RedWorker *worker)
 {
     if (worker->cursor) {
@@ -10966,7 +10985,11 @@ static inline void red_cursor_reset(RedWorker *worker)
         if (!worker->cursor_channel->common.during_target_migrate) {
             red_pipes_add_verb(&worker->cursor_channel->common.base, SPICE_MSG_CURSOR_RESET);
         }
-        red_channel_wait_all_sent(&worker->cursor_channel->common.base);
+        if (!red_channel_wait_all_sent(&worker->cursor_channel->common.base,
+                                       DISPLAY_CLIENT_TIMEOUT)) {
+            red_channel_apply_clients(&worker->cursor_channel->common.base,
+                                      rcc_shutdown_if_pending_send);
+        }
     }
 }
 
@@ -11249,8 +11272,16 @@ void handle_dev_stop(void *opaque, void *payload)
      * purge the pipe, send destroy_all_surfaces
      * to the client (there is no such message right now), and start
      * from scratch on the destination side */
-    red_channel_wait_all_sent(&worker->display_channel->common.base);
-    red_channel_wait_all_sent(&worker->cursor_channel->common.base);
+    if (!red_channel_wait_all_sent(&worker->display_channel->common.base,
+                                   DISPLAY_CLIENT_TIMEOUT)) {
+        red_channel_apply_clients(&worker->display_channel->common.base,
+                                  rcc_shutdown_if_pending_send);
+    }
+    if (!red_channel_wait_all_sent(&worker->cursor_channel->common.base,
+                                   DISPLAY_CLIENT_TIMEOUT)) {
+        red_channel_apply_clients(&worker->cursor_channel->common.base,
+                                  rcc_shutdown_if_pending_send);
+    }
 }
 
 static int display_channel_wait_for_migrate_data(DisplayChannel *display)

@@ -612,14 +612,20 @@ int red_client_during_migrate_at_target(RedClient *client);
 
 void red_client_migrate(RedClient *client);
 
-/* blocking function */
-void red_channel_client_wait_pipe_item_sent(RedChannelClient *rcc,
-                                            PipeItem *item);
+/*
+ * blocking functions.
+ *
+ * timeout is in nano sec. -1 for no timeout.
+ *
+ * Return: TRUE if waiting succeeded. FALSE if timeout expired.
+ */
 
-/* blocking function */
-void red_wait_outgoing_item(RedChannelClient *rcc);
-
-/* blocking function */
-void red_channel_wait_all_sent(RedChannel *channel);
+int red_channel_client_wait_pipe_item_sent(RedChannelClient *rcc,
+                                           PipeItem *item,
+                                           int64_t timeout);
+int red_channel_client_wait_outgoing_item(RedChannelClient *rcc,
+                                          int64_t timeout);
+int red_channel_wait_all_sent(RedChannel *channel,
+                              int64_t timeout);
 
 #endif

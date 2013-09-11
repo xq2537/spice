@@ -51,11 +51,7 @@ typedef struct EmptyMsgPipeItem {
 #define PING_TEST_TIMEOUT_MS 15000
 #define PING_TEST_IDLE_NET_TIMEOUT_MS 100
 
-#define DETACH_TIMEOUT 15000000000ULL //nano
-#define DETACH_SLEEP_DURATION 10000 //micro
-
-#define CHANNEL_PUSH_TIMEOUT 30000000000ULL //nano
-#define CHANNEL_PUSH_SLEEP_DURATION 10000 //micro
+#define CHANNEL_BLOCKED_SLEEP_DURATION 10000 //micro
 
 enum QosPingState {
     PING_STATE_NONE,
@@ -2329,43 +2325,49 @@ uint32_t red_channel_sum_pipes_size(RedChannel *channel)
     return sum;
 }
 
-void red_wait_outgoing_item(RedChannelClient *rcc)
+int red_channel_client_wait_outgoing_item(RedChannelClient *rcc,
+                                          int64_t timeout)
 {
     uint64_t end_time;
     int blocked;
 
     if (!red_channel_client_blocked(rcc)) {
-        return;
+        return TRUE;
     }
-    end_time = red_now() + DETACH_TIMEOUT;
+    if (timeout != -1) {
+        end_time = red_now() + timeout;
+    }
     spice_info("blocked");
 
     do {
-        usleep(DETACH_SLEEP_DURATION);
+        usleep(CHANNEL_BLOCKED_SLEEP_DURATION);
         red_channel_client_receive(rcc);
         red_channel_client_send(rcc);
-    } while ((blocked = red_channel_client_blocked(rcc)) && red_now() < end_time);
+    } while ((blocked = red_channel_client_blocked(rcc)) &&
+             (timeout == -1 || red_now() < end_time));
 
     if (blocked) {
         spice_warning("timeout");
-        // TODO - shutting down the socket but we still need to trigger
-        // disconnection. Right now we wait for main channel to error for that.
-        red_channel_client_shutdown(rcc);
+        return FALSE;
     } else {
         spice_assert(red_channel_client_no_item_being_sent(rcc));
+        return TRUE;
     }
 }
 
 /* TODO: more evil sync stuff. anything with the word wait in it's name. */
-void red_channel_client_wait_pipe_item_sent(RedChannelClient *rcc,
-                                            PipeItem *item)
+int red_channel_client_wait_pipe_item_sent(RedChannelClient *rcc,
+                                           PipeItem *item,
+                                           int64_t timeout)
 {
     uint64_t end_time;
     int item_in_pipe;
 
     spice_info(NULL);
 
-    end_time = red_now() + CHANNEL_PUSH_TIMEOUT;
+    if (timeout != -1) {
+        end_time = red_now() + timeout;
+    }
 
     rcc->channel->channel_cbs.hold_item(rcc, item);
 
@@ -2375,55 +2377,52 @@ void red_channel_client_wait_pipe_item_sent(RedChannelClient *rcc,
     }
     red_channel_client_push(rcc);
 
-    while((item_in_pipe = ring_item_is_linked(&item->link)) && (red_now() < end_time)) {
-        usleep(CHANNEL_PUSH_SLEEP_DURATION);
+    while((item_in_pipe = ring_item_is_linked(&item->link)) &&
+          (timeout == -1 || red_now() < end_time)) {
+        usleep(CHANNEL_BLOCKED_SLEEP_DURATION);
         red_channel_client_receive(rcc);
         red_channel_client_send(rcc);
         red_channel_client_push(rcc);
     }
 
+    red_channel_client_release_item(rcc, item, TRUE);
     if (item_in_pipe) {
         spice_warning("timeout");
-        red_channel_client_disconnect(rcc);
+        return FALSE;
     } else {
-        red_wait_outgoing_item(rcc);
-    }
-    red_channel_client_release_item(rcc, item, TRUE);
-}
-
-static void rcc_shutdown_if_pending_send(RedChannelClient *rcc)
-{
-    if (red_channel_client_blocked(rcc) || rcc->pipe_size > 0) {
-        red_channel_client_shutdown(rcc);
-    } else {
-        spice_assert(red_channel_client_no_item_being_sent(rcc));
+        return red_channel_client_wait_outgoing_item(rcc,
+                                                     timeout == -1 ? -1 : end_time - red_now());
     }
 }
 
-void red_channel_wait_all_sent(RedChannel *channel)
+int red_channel_wait_all_sent(RedChannel *channel,
+                              int64_t timeout)
 {
     uint64_t end_time;
     uint32_t max_pipe_size;
     int blocked = FALSE;
 
-    end_time = red_now() + DETACH_TIMEOUT;
+    if (timeout != -1) {
+        end_time = red_now() + timeout;
+    }
 
     red_channel_push(channel);
     while (((max_pipe_size = red_channel_max_pipe_size(channel)) ||
            (blocked = red_channel_any_blocked(channel))) &&
-           red_now() < end_time) {
+           (timeout == -1 || red_now() < end_time)) {
         spice_debug("pipe-size %u blocked %d", max_pipe_size, blocked);
-        usleep(DETACH_SLEEP_DURATION);
+        usleep(CHANNEL_BLOCKED_SLEEP_DURATION);
         red_channel_receive(channel);
         red_channel_send(channel);
         red_channel_push(channel);
     }
 
     if (max_pipe_size || blocked) {
-        spice_printerr("timeout: pending out messages exist (pipe-size %u, blocked %d)",
-                       max_pipe_size, blocked);
-        red_channel_apply_clients(channel, rcc_shutdown_if_pending_send);
+        spice_warning("timeout: pending out messages exist (pipe-size %u, blocked %d)",
+                      max_pipe_size, blocked);
+        return FALSE;
     } else {
         spice_assert(red_channel_no_item_being_sent(channel));
+        return TRUE;
     }
 }
