@@ -1,6 +1,6 @@
 NULL =
 
-INCLUDES =					\
+AM_CPPFLAGS =					\
 	-I$(top_srcdir)				\
 	-I$(top_srcdir)/common			\
 	-I$(top_srcdir)/server			\
@@ -11,7 +11,7 @@ INCLUDES =					\
 	$(NULL)
 
 if SUPPORT_AUTOMATED_TESTS
-INCLUDES += -DAUTOMATED_TESTS
+AM_CPPFLAGS += -DAUTOMATED_TESTS
 endif
 
 LDADD =								\

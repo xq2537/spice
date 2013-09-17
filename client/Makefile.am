@@ -196,7 +196,7 @@ spicec_SOURCES +=		\
 endif
 
 
-INCLUDES = \
+AM_CPPFLAGS = \
 	-D__STDC_LIMIT_MACROS				\
 	$(PLATFORM_INCLUDES)				\
 	-I$(top_srcdir)/spice-common			\
