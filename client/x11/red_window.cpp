@@ -1073,28 +1073,6 @@ void RedWindow_p::wait_for_unmap()
     }
 }
 
-#ifdef USE_OPENGL
-void RedWindow_p::set_glx(int width, int height)
-{
-    if (_glcont_copy) {
-        XLockDisplay(x_display);
-        XSync(x_display, False);
-        XUnlockDisplay(x_display);
-        glXMakeCurrent(x_display, _win, _glcont_copy);
-        //glDrawBuffer(GL_FRONT);
-        glMatrixMode(GL_PROJECTION);
-        glLoadIdentity();
-        gluOrtho2D(0, width, 0, height);
-        glMatrixMode(GL_MODELVIEW);
-        glLoadIdentity();
-        glViewport(0, 0, width, height);
-        glColor3f(1, 1, 1);
-        glEnable(GL_TEXTURE_2D);
-        GLC_ERROR_TEST_FINISH;
-    }
-}
-#endif // USE_OPENGL
-
 void RedWindow_p::set_minmax(PixelsSource_p& pix_source)
 {
     //todo: auto res
@@ -1134,9 +1112,6 @@ Cursor RedWindow_p::create_invisible_cursor(Window window)
 RedWindow_p::RedWindow_p()
     : _win (None)
     , _show_pos_valid (false)
-#ifdef USE_OPENGL
-    , _glcont_copy (NULL)
-#endif // USE_OPENGL
     , _icon (NULL)
     , _focused (false)
     , _ignore_foucs (false)
@@ -1174,12 +1149,6 @@ void RedWindow_p::destroy(RedWindow& red_window, PixelsSource_p& pix_source)
     XFreeCursor(x_display, _invisible_cursor);
     _invisible_cursor = None;
     XDeleteContext(x_display, window, user_data_context);
-#ifdef USE_OPENGL
-    if (_glcont_copy) {
-        glXDestroyContext(x_display, _glcont_copy);
-        _glcont_copy = NULL;
-    }
-#endif // USE_OPENGL
     XDestroyWindow(x_display, window);
     XFreeColormap(x_display, _colormap);
     XFreeGC(x_display, pix_source.x_drawable.gc);

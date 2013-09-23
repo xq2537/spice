@@ -67,9 +67,6 @@ protected:
     bool _expect_parent;
     SpicePoint _show_pos;
     bool _show_pos_valid;
-#ifdef USE_OPENGL
-    GLXContext _glcont_copy;
-#endif // USE_OPENGL
     Icon* _icon;
     bool _focused;
     bool _ignore_foucs;
