@@ -50,6 +50,9 @@ private:
     throw Exception(exption_string, err);                       \
 }
 
+#define SPICE_BREAKPOINT() do{                  \
+    __asm__ __volatile__ ("int $03");           \
+}while(0)
 
 template <class T>
 class AutoRef {

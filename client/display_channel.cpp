@@ -611,6 +611,7 @@ DisplayChannel::DisplayChannel(RedClient& client, uint32_t id,
 #endif
     , _interrupt_update (*this)
     , _mig_wait_primary (false)
+    , _check_diff (getenv("CHECKDIFF") != NULL)
 {
     DisplayHandler* handler = static_cast<DisplayHandler*>(get_message_handler());
 
@@ -1280,6 +1281,22 @@ void DisplayChannel::create_canvas(int surface_id, const std::vector<int>& canva
     // make sure to refresh the whole display
     SpiceRect rect = { 0, 0, width, height };
     invalidate(rect, true);
+
+    try {
+        if (!_check_diff)
+            return;
+
+        SCanvas *canvas = new SCanvas(surface_id == 0, width, height, format,
+                                      screen()->get_window(),
+                                      _pixmap_cache, _palette_cache, _glz_window,
+                                      _surfaces_cache);
+        _swsurfaces_cache[surface_id] = canvas;
+        if (surface_id == 0) {
+            LOG_INFO("display %d: check sw", get_id());
+        }
+    } catch (...) {
+        spice_warn_if_reached();
+    }
 }
 
 void DisplayChannel::handle_mode(RedPeer::InMessage* message)
@@ -1624,28 +1641,51 @@ void DisplayChannel::handle_surface_destroy(RedPeer::InMessage* message)
     }
 }
 
-#define PRE_DRAW
-#define POST_DRAW
+#define DRAW(type, can_diff) {                                          \
+    canvas->draw_##type(*type, message->size());                        \
+    if (type->base.surface_id == 0) {                                   \
+        invalidate(type->base.box, false);                              \
+    }                                                                   \
+    if ((can_diff) && _check_diff) {                                    \
+        Canvas *swcanvas = _swsurfaces_cache[type->base.surface_id];    \
+        swcanvas->draw_##type(*type, message->size());                  \
+        check_diff(swcanvas, canvas, type->base.box);                   \
+    }                                                                   \
+}
 
-#define DRAW(type) {                                \
-    PRE_DRAW;                                       \
-    canvas->draw_##type(*type, message->size());    \
-    POST_DRAW;                                      \
-    if (type->base.surface_id == 0) {               \
-        invalidate(type->base.box, false);          \
-    }                                               \
+#include "red_pixmap_sw.h"
+
+void check_diff(Canvas *a, Canvas *b, const SpiceRect& rect)
+{
+    QRegion region;
+    RedPixmapSw *ap = new RedPixmapSw(rect.right, rect.bottom, RedDrawable::RGB32, true, 0);
+    RedPixmapSw *bp = new RedPixmapSw(rect.right, rect.bottom, RedDrawable::RGB32, true, 0);
+
+    region_init(&region);
+    region_add(&region, &rect);
+    a->copy_pixels(region, *ap);
+    b->copy_pixels(region, *bp);
+    ap->equal(*bp, rect);
+
+    delete ap;
+    delete bp;
 }
 
 void DisplayChannel::handle_copy_bits(RedPeer::InMessage* message)
 {
     Canvas *canvas;
     SpiceMsgDisplayCopyBits* copy_bits = (SpiceMsgDisplayCopyBits*)message->data();
-    PRE_DRAW;
     canvas = _surfaces_cache[copy_bits->base.surface_id];
+    Canvas *swcanvas = _swsurfaces_cache[copy_bits->base.surface_id];
+
     canvas->copy_bits(*copy_bits, message->size());
-    POST_DRAW;
     if (copy_bits->base.surface_id == 0) {
         invalidate(copy_bits->base.box, false);
+    }
+
+    if (_check_diff) {
+        swcanvas->copy_bits(*copy_bits, message->size());
+        check_diff(swcanvas, canvas, copy_bits->base.box);
     }
 }
 
@@ -1654,7 +1694,7 @@ void DisplayChannel::handle_draw_fill(RedPeer::InMessage* message)
     Canvas *canvas;
     SpiceMsgDisplayDrawFill* fill = (SpiceMsgDisplayDrawFill*)message->data();
     canvas = _surfaces_cache[fill->base.surface_id];
-    DRAW(fill);
+    DRAW(fill, FALSE);
 }
 
 void DisplayChannel::handle_draw_opaque(RedPeer::InMessage* message)
@@ -1662,7 +1702,7 @@ void DisplayChannel::handle_draw_opaque(RedPeer::InMessage* message)
     Canvas *canvas;
     SpiceMsgDisplayDrawOpaque* opaque = (SpiceMsgDisplayDrawOpaque*)message->data();
     canvas = _surfaces_cache[opaque->base.surface_id];
-    DRAW(opaque);
+    DRAW(opaque, TRUE);
 }
 
 void DisplayChannel::handle_draw_copy(RedPeer::InMessage* message)
@@ -1670,7 +1710,7 @@ void DisplayChannel::handle_draw_copy(RedPeer::InMessage* message)
     Canvas *canvas;
     SpiceMsgDisplayDrawCopy* copy = (SpiceMsgDisplayDrawCopy*)message->data();
     canvas = _surfaces_cache[copy->base.surface_id];
-    DRAW(copy);
+    DRAW(copy, TRUE);
 }
 
 void DisplayChannel::handle_draw_blend(RedPeer::InMessage* message)
@@ -1678,7 +1718,7 @@ void DisplayChannel::handle_draw_blend(RedPeer::InMessage* message)
     Canvas *canvas;
     SpiceMsgDisplayDrawBlend* blend = (SpiceMsgDisplayDrawBlend*)message->data();
     canvas = _surfaces_cache[blend->base.surface_id];
-    DRAW(blend);
+    DRAW(blend, TRUE);
 }
 
 void DisplayChannel::handle_draw_blackness(RedPeer::InMessage* message)
@@ -1686,7 +1726,7 @@ void DisplayChannel::handle_draw_blackness(RedPeer::InMessage* message)
     Canvas *canvas;
     SpiceMsgDisplayDrawBlackness* blackness = (SpiceMsgDisplayDrawBlackness*)message->data();
     canvas = _surfaces_cache[blackness->base.surface_id];
-    DRAW(blackness);
+    DRAW(blackness, TRUE);
 }
 
 void DisplayChannel::handle_draw_whiteness(RedPeer::InMessage* message)
@@ -1694,7 +1734,7 @@ void DisplayChannel::handle_draw_whiteness(RedPeer::InMessage* message)
     Canvas *canvas;
     SpiceMsgDisplayDrawWhiteness* whiteness = (SpiceMsgDisplayDrawWhiteness*)message->data();
     canvas = _surfaces_cache[whiteness->base.surface_id];
-    DRAW(whiteness);
+    DRAW(whiteness, TRUE);
 }
 
 void DisplayChannel::handle_draw_invers(RedPeer::InMessage* message)
@@ -1702,7 +1742,7 @@ void DisplayChannel::handle_draw_invers(RedPeer::InMessage* message)
     Canvas *canvas;
     SpiceMsgDisplayDrawInvers* invers = (SpiceMsgDisplayDrawInvers*)message->data();
     canvas = _surfaces_cache[invers->base.surface_id];
-    DRAW(invers);
+    DRAW(invers, TRUE);
 }
 
 void DisplayChannel::handle_draw_rop3(RedPeer::InMessage* message)
@@ -1710,7 +1750,7 @@ void DisplayChannel::handle_draw_rop3(RedPeer::InMessage* message)
     Canvas *canvas;
     SpiceMsgDisplayDrawRop3* rop3 = (SpiceMsgDisplayDrawRop3*)message->data();
     canvas = _surfaces_cache[rop3->base.surface_id];
-    DRAW(rop3);
+    DRAW(rop3, TRUE);
 }
 
 void DisplayChannel::handle_draw_stroke(RedPeer::InMessage* message)
@@ -1718,7 +1758,7 @@ void DisplayChannel::handle_draw_stroke(RedPeer::InMessage* message)
     Canvas *canvas;
     SpiceMsgDisplayDrawStroke* stroke = (SpiceMsgDisplayDrawStroke*)message->data();
     canvas = _surfaces_cache[stroke->base.surface_id];
-    DRAW(stroke);
+    DRAW(stroke, TRUE);
 }
 
 void DisplayChannel::handle_draw_text(RedPeer::InMessage* message)
@@ -1726,7 +1766,7 @@ void DisplayChannel::handle_draw_text(RedPeer::InMessage* message)
     Canvas *canvas;
     SpiceMsgDisplayDrawText* text = (SpiceMsgDisplayDrawText*)message->data();
     canvas = _surfaces_cache[text->base.surface_id];
-    DRAW(text);
+    DRAW(text, FALSE);
 }
 
 void DisplayChannel::handle_draw_transparent(RedPeer::InMessage* message)
@@ -1734,7 +1774,7 @@ void DisplayChannel::handle_draw_transparent(RedPeer::InMessage* message)
     Canvas *canvas;
     SpiceMsgDisplayDrawTransparent* transparent = (SpiceMsgDisplayDrawTransparent*)message->data();
     canvas = _surfaces_cache[transparent->base.surface_id];
-    DRAW(transparent);
+    DRAW(transparent, TRUE);
 }
 
 void DisplayChannel::handle_draw_alpha_blend(RedPeer::InMessage* message)
@@ -1742,7 +1782,7 @@ void DisplayChannel::handle_draw_alpha_blend(RedPeer::InMessage* message)
     Canvas *canvas;
     SpiceMsgDisplayDrawAlphaBlend* alpha_blend = (SpiceMsgDisplayDrawAlphaBlend*)message->data();
     canvas = _surfaces_cache[alpha_blend->base.surface_id];
-    DRAW(alpha_blend);
+    DRAW(alpha_blend, FALSE);
 }
 
 void DisplayChannel::handle_draw_composite(RedPeer::InMessage* message)
@@ -1750,7 +1790,7 @@ void DisplayChannel::handle_draw_composite(RedPeer::InMessage* message)
     Canvas *canvas;
     SpiceMsgDisplayDrawComposite* composite = (SpiceMsgDisplayDrawComposite*)message->data();
     canvas = _surfaces_cache[composite->base.surface_id];
-    DRAW(composite);
+    DRAW(composite, TRUE);
 }
 
 void DisplayChannel::streams_time()

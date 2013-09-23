@@ -187,6 +187,7 @@ private:
 
 private:
     SurfacesCache _surfaces_cache;
+    SurfacesCache _swsurfaces_cache;
     PixmapCache& _pixmap_cache;
     PaletteCache _palette_cache;
     GlzDecoderWindow& _glz_window;
@@ -226,6 +227,7 @@ private:
     InterruptUpdate _interrupt_update;
 
     bool _mig_wait_primary;
+    bool _check_diff;
     friend class SetModeEvent;
     friend class CreatePrimarySurfaceEvent;
     friend class DestroyPrimarySurfaceEvent;

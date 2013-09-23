@@ -36,6 +36,25 @@ public:
     bool is_big_endian_bits();
     virtual RedDrawable::Format get_format() { return _format; }
 
+    bool equal(const RedPixmap &other, const SpiceRect &rect) const {
+        spice_debug("l:%d r:%d t:%d b:%d", rect.left, rect.right, rect.top, rect.bottom);
+        for (int x = rect.left; x < rect.right; ++x)
+            for (int y = rect.top; y < rect.bottom; ++y) {
+                for (int i = 0; i < 3; i++) { // ignore alpha
+                    int p = x * 4 + y * _stride + i;
+                    if (other._data[p] != _data[p]) {
+                        spice_printerr("equal fails at (+%d+%d) +%d+%d:%d in %dx%d",
+                                       rect.left, rect.top, x-rect.left, y-rect.top, i,
+                                       _width-rect.left, _height-rect.top);
+                        if (getenv("DIFFBP"))
+                            SPICE_BREAKPOINT();
+                        return false;
+                    }
+                }
+            }
+        return true;
+    }
+
 protected:
     Format _format;
     int _width;
