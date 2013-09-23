@@ -246,6 +246,7 @@ void RedPixmapGL::pre_copy()
     glDisable(GL_BLEND);
     glDisable(GL_ALPHA_TEST);
     glDisable(GL_COLOR_LOGIC_OP);
+    glDisable(GL_STENCIL_TEST);
 
     glColor3f(1, 1, 1);
 }
