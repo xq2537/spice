@@ -1765,9 +1765,13 @@ void RedWindow::do_start_key_interception()
     // that reason we temporary disable focus event handling. Same happens
     // LeaveNotify and EnterNotify.
 
+    if (getenv("SPICE_NOGRAB"))
+        return;
+
     ASSERT(_focused);
     XLockDisplay(x_display);
     XGrabKeyboard(x_display, _win, True, GrabModeAsync, GrabModeAsync, CurrentTime);
+
     XUnlockDisplay(x_display);
     sync(true);
     _listener.on_start_key_interception();
@@ -1845,6 +1849,9 @@ void RedWindow::release_mouse()
 
 void RedWindow::capture_mouse()
 {
+    if (getenv("SPICE_NOGRAB"))
+        return;
+
     int grab_retries = MOUSE_GRAB_RETRIES;
     XLockDisplay(x_display);
     XSync(x_display, False);
