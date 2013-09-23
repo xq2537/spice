@@ -71,6 +71,7 @@ void GCanvas::copy_pixels(const QRegion& region, RedDrawable& dest_dc)
     pixman_box32_t *rects;
     int num_rects;
 
+    pre_gl_copy();
     rects = pixman_region32_rectangles((pixman_region32_t *)&region, &num_rects);
     for (int i = 0; i < num_rects; i++) {
         SpiceRect r;
@@ -82,6 +83,7 @@ void GCanvas::copy_pixels(const QRegion& region, RedDrawable& dest_dc)
 
         dest_dc.copy_pixels(*_pixmap, r.left, r.top, r);
     }
+    post_gl_copy();
 }
 
 void GCanvas::copy_pixels(const QRegion& region, RedDrawable* dest_dc, const PixmapHeader* pixmap)
