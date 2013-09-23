@@ -38,9 +38,10 @@ RedPixmapGL::RedPixmapGL(int width, int height, RedDrawable::Format format,
                          RenderType rendertype)
     : RedPixmap(width, height, format, top_bottom)
 {
-    GLuint fbo;
-    GLuint tex;
+    GLuint fbo = 0;
+    GLuint tex = 0;
     GLuint stencil_tex = 0;
+    GLuint rbo = 0;
     Win xwin;
     //GLint max_texture_size;
 
@@ -68,6 +69,9 @@ RedPixmapGL::RedPixmapGL(int width, int height, RedDrawable::Format format,
     }*/
 
     if (rendertype == RENDER_TYPE_FBO) {
+        int w = gl_get_to_power_two(width);
+        int h = gl_get_to_power_two(height);
+
         glXMakeCurrent(XPlatform::get_display(), xwin, _glcont);
         if (!gluCheckExtension((GLubyte *)"GL_EXT_framebuffer_object",
                                glGetString(GL_EXTENSIONS))) {
@@ -75,41 +79,32 @@ RedPixmapGL::RedPixmapGL(int width, int height, RedDrawable::Format format,
             glXDestroyContext(XPlatform::get_display(), _glcont);
             THROW("no GL_EXT_framebuffer_object extension");
         }
-        glEnable(GL_TEXTURE_2D);
-        glGenFramebuffersEXT(1, &fbo);
+
         glGenTextures(1, &tex);
-        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo);
-
         glBindTexture(GL_TEXTURE_2D, tex);
-
-        glTexImage2D(GL_TEXTURE_2D, 0, 4, gl_get_to_power_two(width),
-                     gl_get_to_power_two(height), 0, GL_BGRA, GL_UNSIGNED_BYTE,
-                     NULL);
-
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-        glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT,
-                                  GL_TEXTURE_2D, tex, 0);
-
-
-        glGenTextures(1, &stencil_tex);
-        glBindTexture(GL_TEXTURE_2D, stencil_tex);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_STENCIL_EXT,
-                     gl_get_to_power_two(width), gl_get_to_power_two(height), 0,
-                     GL_DEPTH_STENCIL_EXT, GL_UNSIGNED_INT_24_8_EXT, NULL);
-        glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT,
-                                  GL_DEPTH_ATTACHMENT_EXT,
-                                  GL_TEXTURE_2D, stencil_tex, 0);
-        glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT,
-                                  GL_STENCIL_ATTACHMENT_EXT,
-                                  GL_TEXTURE_2D, stencil_tex, 0);
         glBindTexture(GL_TEXTURE_2D, 0);
+
+        glGenRenderbuffers(1, &rbo);
+        glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, w, h);
+        glBindRenderbuffer(GL_RENDERBUFFER, 0);
+
+        glGenFramebuffers(1, &fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
+
+        GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+        if (status != GL_FRAMEBUFFER_COMPLETE)
+            THROW("bad fbo status: %d\n", status);
 
         ((PixelsSource_p*)get_opaque())->gl.fbo = fbo;
         win->set_render_fbo(fbo);
-    } else {
+
+    } else if (rendertype == RENDER_TYPE_PBUFF) {
         GLXPbuffer pbuff;
 
         pbuff = win->create_pbuff(gl_get_to_power_two(width),
@@ -133,6 +128,8 @@ RedPixmapGL::RedPixmapGL(int width, int height, RedDrawable::Format format,
         glBindTexture(GL_TEXTURE_2D, 0);
         ((PixelsSource_p*)get_opaque())->gl.pbuff = pbuff;
         win->set_render_pbuff(pbuff);
+    } else {
+        abort();
     }
 
     ((PixelsSource_p*)get_opaque())->gl.stencil_tex = stencil_tex;
@@ -269,10 +266,26 @@ void RedPixmapGL::past_copy()
 RedPixmapGL::~RedPixmapGL()
 {
     GLXPbuffer pbuff;
-    GLuint fbo;
+    GLuint fbo, rbo;
     RenderType rendertype;
     GLuint tex;
     GLuint stencil_tex;
+
+    rendertype = ((PixelsSource_p*)get_opaque())->gl.rendertype;
+    if (rendertype == RENDER_TYPE_FBO) {
+        fbo = ((PixelsSource_p*)get_opaque())->gl.fbo;
+        rbo = ((PixelsSource_p*)get_opaque())->gl.rbo;
+        spice_debug("deletefbo %u", fbo);
+        if (fbo) {
+            glDeleteFramebuffers(1, &fbo);
+        }
+        if (rbo) {
+            glDeleteRenderbuffers(1, &rbo);
+        }
+    } else {
+        pbuff = ((PixelsSource_p*)get_opaque())->gl.pbuff;
+        glXDestroyPbuffer(XPlatform::get_display(), pbuff);
+    }
 
     /*
      * GL textures might be destroyed by res change.
@@ -289,17 +302,6 @@ RedPixmapGL::~RedPixmapGL()
         if (_glcont) {
             glXDestroyContext(XPlatform::get_display(), _glcont);
         }
-    }
-
-    rendertype = ((PixelsSource_p*)get_opaque())->gl.rendertype;
-    if (rendertype == RENDER_TYPE_FBO) {
-        fbo = ((PixelsSource_p*)get_opaque())->gl.fbo;
-        if (fbo) {
-            glDeleteFramebuffersEXT(1, &fbo);
-        }
-    } else {
-        pbuff = ((PixelsSource_p*)get_opaque())->gl.pbuff;
-        glXDestroyPbuffer(XPlatform::get_display(), pbuff);
     }
 
     /*

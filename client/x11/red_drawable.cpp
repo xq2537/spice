@@ -62,7 +62,7 @@ static inline void copy_to_gldrawable_from_gltexture(const RedDrawable_p* dest,
 
     rendertype = source->gl.rendertype;
     if (rendertype == RENDER_TYPE_FBO) {
-        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER_EXT, 0);
     } else {
         win = source->gl.win;
         context = source->gl.context;
@@ -86,7 +86,7 @@ static inline void copy_to_gldrawable_from_gltexture(const RedDrawable_p* dest,
         GLuint fbo;
 
         fbo = source->gl.fbo;
-        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER_EXT, fbo);
     } else {
         pbuffer = source->gl.pbuff;
         glXMakeCurrent(XPlatform::get_display(), pbuffer, context);
@@ -107,7 +107,7 @@ static inline void copy_to_gldrawable_from_pixmap(const RedDrawable_p* dest,
 
     rendertype = dest->source.x_drawable.rendertype;
     if (rendertype == RENDER_TYPE_FBO) {
-        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER_EXT, 0);
         glBindTexture(GL_TEXTURE_2D, 0);
     } else {
         context = dest->source.x_drawable.context;
@@ -130,7 +130,7 @@ static inline void copy_to_gldrawable_from_pixmap(const RedDrawable_p* dest,
         GLuint fbo;
 
         fbo = dest->source.x_drawable.fbo;
-        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER_EXT, fbo);
     } else {
         pbuffer = dest->source.x_drawable.pbuff;
         glXMakeCurrent(XPlatform::get_display(), pbuffer, context);
@@ -341,7 +341,7 @@ static inline void copy_to_pixmap_from_gltexture(const RedDrawable_p* dest,
 
     rendertype = source->gl.rendertype;
     if (rendertype == RENDER_TYPE_FBO) {
-        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, source->gl.fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER_EXT, source->gl.fbo);
         glBindTexture(GL_TEXTURE_2D, 0);
     } else {
         context = source->gl.context;
@@ -673,7 +673,7 @@ static inline void fill_gl_drawable(RedDrawable_p* dest, const SpiceRect& area, 
     vertex_x2 = vertex_x1 + (area.right - area.left);
     vertex_y2 = vertex_y1 + (area.bottom - area.top);
 
-    glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER_EXT, 0);
 
     glColor3f(rgb32_get_red(color), rgb32_get_green(color),
               rgb32_get_blue(color));

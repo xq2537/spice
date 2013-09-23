@@ -73,6 +73,7 @@ struct PixelsSource_p {
             Win win;
             GLuint tex;
             GLuint stencil_tex;
+            GLuint rbo;
             int width, height;
             int width_powed, height_powed;
             union {
