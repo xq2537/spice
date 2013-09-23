@@ -45,7 +45,8 @@ public:
 
         while (*item) {
             if ((*item)->id == id) {
-                THROW("%s id %" PRIu64 ", double insert", Treat::name(), id);
+                spice_printerr("%s id %" PRIu64 ", double insert", Treat::name(), id);
+                return;
             }
             item = &(*item)->next;
         }
