@@ -79,6 +79,8 @@ RedPixmapGL::RedPixmapGL(int width, int height, RedDrawable::Format format,
             glXDestroyContext(XPlatform::get_display(), _glcont);
             THROW("no GL_EXT_framebuffer_object extension");
         }
+        glDrawBuffer(GL_FRONT);
+        glReadBuffer(GL_FRONT);
 
         glGenTextures(1, &tex);
         glBindTexture(GL_TEXTURE_2D, tex);

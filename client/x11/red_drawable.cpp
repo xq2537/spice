@@ -85,6 +85,7 @@ static inline void copy_to_gldrawable_from_gltexture(const RedDrawable_p* dest,
     if (rendertype == RENDER_TYPE_FBO) {
         GLuint fbo;
 
+        glFlush();
         fbo = source->gl.fbo;
         glBindFramebuffer(GL_FRAMEBUFFER_EXT, fbo);
     } else {

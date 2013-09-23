@@ -3224,6 +3224,7 @@ void Platform::init()
         int num_configs;
         int attrlist[] = {
             GLX_RENDER_TYPE, GLX_RGBA_BIT,
+            GLX_DOUBLEBUFFER, False,
             GLX_DRAWABLE_TYPE, GLX_PBUFFER_BIT | GLX_WINDOW_BIT,
             GLX_X_VISUAL_TYPE, GLX_TRUE_COLOR,
             GLX_RED_SIZE, 8,
