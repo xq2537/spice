@@ -2122,6 +2122,18 @@ void RedWindow::untouch_context()
     glXMakeCurrent(x_display, 0, 0);
 }
 
+void RedWindow::swap_gl()
+{
+    PixelsSource_p *pix_source = (PixelsSource_p*)get_opaque();
+    RedGlContext context = pix_source->x_drawable.context;
+
+    if (!context)
+        return;
+
+    glXMakeCurrent(x_display, get_window(), context);
+    glXSwapBuffers(x_display, get_window());
+}
+
 void RedWindow::set_type_gl()
 {
     PixelsSource_p *pix_source = (PixelsSource_p*)get_opaque();

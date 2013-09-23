@@ -82,6 +82,8 @@ public:
 
     void set_type_gl();
     void unset_type_gl();
+
+    void swap_gl();
 #endif
 
     int get_screen_num();

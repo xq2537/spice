@@ -357,6 +357,7 @@ inline void RedScreen::update_done()
         }
         layer->on_update_completion(_update_mark - 1);
     }
+    _window.swap_gl();
 }
 
 inline void RedScreen::update_composit(QRegion& composit_rgn)
