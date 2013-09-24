@@ -1276,6 +1276,10 @@ void DisplayChannel::create_canvas(int surface_id, const std::vector<int>& canva
     if (i == canvas_types.size()) {
         THROW("create canvas failed");
     }
+
+    // make sure to refresh the whole display
+    SpiceRect rect = { 0, 0, width, height };
+    invalidate(rect, true);
 }
 
 void DisplayChannel::handle_mode(RedPeer::InMessage* message)
