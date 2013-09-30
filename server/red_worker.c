@@ -5240,17 +5240,6 @@ static void add_buf_from_info(SpiceMarshaller *m, AddBufInfo *info)
     }
 }
 
-
-static inline void fill_rects_clip(SpiceMarshaller *m, SpiceClipRects *data)
-{
-    int i;
-
-    spice_marshaller_add_uint32(m, data->num_rects);
-    for (i = 0; i < data->num_rects; i++) {
-        spice_marshall_Rect(m, data->rects + i);
-    }
-}
-
 static void fill_base(SpiceMarshaller *base_marshaller, Drawable *drawable)
 {
     SpiceMsgDisplayBase base;
