@@ -53,14 +53,11 @@ static inline int get_generation(RedMemSlotInfo *info, uint64_t addr)
     return (addr >> info->memslot_gen_shift) & info->memslot_gen_mask;
 }
 
-unsigned long get_virt_delta(RedMemSlotInfo *info, QXLPHYSICAL addr, int group_id);
 int validate_virt(RedMemSlotInfo *info, unsigned long virt, int slot_id,
                   uint32_t add_size, uint32_t group_id);
 unsigned long get_virt(RedMemSlotInfo *info, QXLPHYSICAL addr, uint32_t add_size,
                        int group_id, int *error);
 
-void *validate_chunk(RedMemSlotInfo *info, QXLPHYSICAL data, uint32_t group_id,
-                     uint32_t *data_size_out, QXLPHYSICAL *next_out, int *error);
 void red_memslot_info_init(RedMemSlotInfo *info,
                            uint32_t num_groups, uint32_t num_slots,
                            uint8_t generation_bits,

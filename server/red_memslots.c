@@ -48,31 +48,6 @@ static void print_memslots(RedMemSlotInfo *info)
     }
 }
 
-unsigned long get_virt_delta(RedMemSlotInfo *info, QXLPHYSICAL addr, int group_id)
-{
-    MemSlot *slot;
-    int slot_id;
-    int generation;
-
-    if (group_id > info->num_memslots_groups) {
-        spice_critical("group_id %d too big", group_id);
-    }
-
-    slot_id = get_memslot_id(info, addr);
-    if (slot_id > info->num_memslots) {
-        spice_critical("slot_id %d too big", slot_id);
-    }
-
-    slot = &info->mem_slots[group_id][slot_id];
-
-    generation = get_generation(info, addr);
-    if (generation != slot->generation) {
-        spice_critical("address generation is not valid");
-    }
-
-    return (slot->address_delta - (addr - __get_clean_virt(info, addr)));
-}
-
 /* return 1 if validation successfull, 0 otherwise */
 int validate_virt(RedMemSlotInfo *info, unsigned long virt, int slot_id,
                   uint32_t add_size, uint32_t group_id)
@@ -145,29 +120,6 @@ unsigned long get_virt(RedMemSlotInfo *info, QXLPHYSICAL addr, uint32_t add_size
     }
 
     return h_virt;
-}
-
-void *validate_chunk(RedMemSlotInfo *info, QXLPHYSICAL data, uint32_t group_id,
-                     uint32_t *data_size_out, QXLPHYSICAL *next_out, int *error)
-{
-    QXLDataChunk *chunk;
-    uint32_t data_size;
-
-    chunk = (QXLDataChunk *)get_virt(info, data, sizeof(QXLDataChunk), group_id,
-                                     error);
-    if (*error) {
-        return NULL;
-    }
-    data_size = chunk->data_size;
-    if (!validate_virt(info, (unsigned long)chunk->data, get_memslot_id(info, data),
-                       data_size, group_id)) {
-        *error = 1;
-        return NULL;
-    }
-    *next_out = chunk->next_chunk;
-    *data_size_out = data_size;
-
-    return chunk->data;
 }
 
 void red_memslot_info_init(RedMemSlotInfo *info,
