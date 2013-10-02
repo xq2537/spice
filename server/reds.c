@@ -141,7 +141,7 @@ typedef struct AsyncRead {
 
 typedef struct RedLinkInfo {
     RedsStream *stream;
-    AsyncRead asyc_read;
+    AsyncRead async_read;
     SpiceLinkHeader link_header;
     SpiceLinkMess *link_mess;
     int mess_pos;
@@ -2118,12 +2118,12 @@ static void async_read_handler(int fd, int event, void *data)
 
 static void reds_get_spice_ticket(RedLinkInfo *link)
 {
-    AsyncRead *obj = &link->asyc_read;
+    AsyncRead *obj = &link->async_read;
 
     obj->now = (uint8_t *)&link->tiTicketing.encrypted_ticket.encrypted_data;
     obj->end = obj->now + link->tiTicketing.rsa_size;
     obj->done = reds_handle_ticket;
-    async_read_handler(0, 0, &link->asyc_read);
+    async_read_handler(0, 0, &link->async_read);
 }
 
 #if HAVE_SASL
@@ -2209,7 +2209,7 @@ static void reds_handle_auth_sasl_step(void *opaque)
     RedLinkInfo *link = (RedLinkInfo *)opaque;
     RedsSASL *sasl = &link->stream->sasl;
     uint32_t datalen = sasl->len;
-    AsyncRead *obj = &link->asyc_read;
+    AsyncRead *obj = &link->async_read;
 
     /* NB, distinction of NULL vs "" is *critical* in SASL */
     if (datalen) {
@@ -2257,7 +2257,7 @@ static void reds_handle_auth_sasl_step(void *opaque)
         obj->now = (uint8_t *)&sasl->len;
         obj->end = obj->now + sizeof(uint32_t);
         obj->done = reds_handle_auth_sasl_steplen;
-        async_read_handler(0, 0, &link->asyc_read);
+        async_read_handler(0, 0, &link->async_read);
     } else {
         int ssf;
 
@@ -2293,7 +2293,7 @@ authabort:
 static void reds_handle_auth_sasl_steplen(void *opaque)
 {
     RedLinkInfo *link = (RedLinkInfo *)opaque;
-    AsyncRead *obj = &link->asyc_read;
+    AsyncRead *obj = &link->async_read;
     RedsSASL *sasl = &link->stream->sasl;
 
     spice_info("Got steplen %d", sasl->len);
@@ -2310,7 +2310,7 @@ static void reds_handle_auth_sasl_steplen(void *opaque)
         obj->now = (uint8_t *)sasl->data;
         obj->end = obj->now + sasl->len;
         obj->done = reds_handle_auth_sasl_step;
-        async_read_handler(0, 0, &link->asyc_read);
+        async_read_handler(0, 0, &link->async_read);
     }
 }
 
@@ -2333,7 +2333,7 @@ static void reds_handle_auth_sasl_steplen(void *opaque)
 static void reds_handle_auth_sasl_start(void *opaque)
 {
     RedLinkInfo *link = (RedLinkInfo *)opaque;
-    AsyncRead *obj = &link->asyc_read;
+    AsyncRead *obj = &link->async_read;
     const char *serverout;
     unsigned int serveroutlen;
     int err;
@@ -2388,7 +2388,7 @@ static void reds_handle_auth_sasl_start(void *opaque)
         obj->now = (uint8_t *)&sasl->len;
         obj->end = obj->now + sizeof(uint32_t);
         obj->done = reds_handle_auth_sasl_steplen;
-        async_read_handler(0, 0, &link->asyc_read);
+        async_read_handler(0, 0, &link->async_read);
     } else {
         int ssf;
 
@@ -2424,7 +2424,7 @@ authabort:
 static void reds_handle_auth_startlen(void *opaque)
 {
     RedLinkInfo *link = (RedLinkInfo *)opaque;
-    AsyncRead *obj = &link->asyc_read;
+    AsyncRead *obj = &link->async_read;
     RedsSASL *sasl = &link->stream->sasl;
 
     spice_info("Got client start len %d", sasl->len);
@@ -2444,13 +2444,13 @@ static void reds_handle_auth_startlen(void *opaque)
     obj->now = (uint8_t *)sasl->data;
     obj->end = obj->now + sasl->len;
     obj->done = reds_handle_auth_sasl_start;
-    async_read_handler(0, 0, &link->asyc_read);
+    async_read_handler(0, 0, &link->async_read);
 }
 
 static void reds_handle_auth_mechname(void *opaque)
 {
     RedLinkInfo *link = (RedLinkInfo *)opaque;
-    AsyncRead *obj = &link->asyc_read;
+    AsyncRead *obj = &link->async_read;
     RedsSASL *sasl = &link->stream->sasl;
 
     sasl->mechname[sasl->len] = '\0';
@@ -2488,7 +2488,7 @@ static void reds_handle_auth_mechname(void *opaque)
     obj->now = (uint8_t *)&sasl->len;
     obj->end = obj->now + sizeof(uint32_t);
     obj->done = reds_handle_auth_startlen;
-    async_read_handler(0, 0, &link->asyc_read);
+    async_read_handler(0, 0, &link->async_read);
 
     return;
 }
@@ -2496,7 +2496,7 @@ static void reds_handle_auth_mechname(void *opaque)
 static void reds_handle_auth_mechlen(void *opaque)
 {
     RedLinkInfo *link = (RedLinkInfo *)opaque;
-    AsyncRead *obj = &link->asyc_read;
+    AsyncRead *obj = &link->async_read;
     RedsSASL *sasl = &link->stream->sasl;
 
     if (sasl->len < 1 || sasl->len > 100) {
@@ -2511,7 +2511,7 @@ static void reds_handle_auth_mechlen(void *opaque)
     obj->now = (uint8_t *)sasl->mechname;
     obj->end = obj->now + sasl->len;
     obj->done = reds_handle_auth_mechname;
-    async_read_handler(0, 0, &link->asyc_read);
+    async_read_handler(0, 0, &link->async_read);
 }
 
 static void reds_start_auth_sasl(RedLinkInfo *link)
@@ -2521,7 +2521,7 @@ static void reds_start_auth_sasl(RedLinkInfo *link)
     int err;
     char *localAddr, *remoteAddr;
     int mechlistlen;
-    AsyncRead *obj = &link->asyc_read;
+    AsyncRead *obj = &link->async_read;
     RedsSASL *sasl = &link->stream->sasl;
 
     /* Get local & remote client addresses in form  IPADDR;PORT */
@@ -2624,7 +2624,7 @@ static void reds_start_auth_sasl(RedLinkInfo *link)
     obj->now = (uint8_t *)&sasl->len;
     obj->end = obj->now + sizeof(uint32_t);
     obj->done = reds_handle_auth_mechlen;
-    async_read_handler(0, 0, &link->asyc_read);
+    async_read_handler(0, 0, &link->async_read);
 
     return;
 
@@ -2674,7 +2674,7 @@ static void reds_handle_read_link_done(void *opaque)
 {
     RedLinkInfo *link = (RedLinkInfo *)opaque;
     SpiceLinkMess *link_mess = link->link_mess;
-    AsyncRead *obj = &link->asyc_read;
+    AsyncRead *obj = &link->async_read;
     uint32_t num_caps = link_mess->num_common_caps + link_mess->num_channel_caps;
     uint32_t *caps = (uint32_t *)((uint8_t *)link_mess + link_mess->caps_offset);
     int auth_selection;
@@ -2719,7 +2719,7 @@ static void reds_handle_read_link_done(void *opaque)
         obj->now = (uint8_t *)&link->auth_mechanism;
         obj->end = obj->now + sizeof(SpiceLinkAuthMechanism);
         obj->done = reds_handle_auth_mechanism;
-        async_read_handler(0, 0, &link->asyc_read);
+        async_read_handler(0, 0, &link->async_read);
     }
 }
 
@@ -2741,7 +2741,7 @@ static void reds_handle_read_header_done(void *opaque)
 {
     RedLinkInfo *link = (RedLinkInfo *)opaque;
     SpiceLinkHeader *header = &link->link_header;
-    AsyncRead *obj = &link->asyc_read;
+    AsyncRead *obj = &link->async_read;
 
     if (header->magic != SPICE_MAGIC) {
         reds_send_link_error(link, SPICE_LINK_ERR_INVALID_MAGIC);
@@ -2773,19 +2773,19 @@ static void reds_handle_read_header_done(void *opaque)
     obj->now = (uint8_t *)link->link_mess;
     obj->end = obj->now + header->size;
     obj->done = reds_handle_read_link_done;
-    async_read_handler(0, 0, &link->asyc_read);
+    async_read_handler(0, 0, &link->async_read);
 }
 
 static void reds_handle_new_link(RedLinkInfo *link)
 {
-    AsyncRead *obj = &link->asyc_read;
+    AsyncRead *obj = &link->async_read;
     obj->opaque = link;
     obj->stream = link->stream;
     obj->now = (uint8_t *)&link->link_header;
     obj->end = (uint8_t *)((SpiceLinkHeader *)&link->link_header + 1);
     obj->done = reds_handle_read_header_done;
     obj->error = reds_handle_link_error;
-    async_read_handler(0, 0, &link->asyc_read);
+    async_read_handler(0, 0, &link->async_read);
 }
 
 static void reds_handle_ssl_accept(int fd, int event, void *data)
