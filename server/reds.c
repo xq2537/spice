@@ -476,9 +476,9 @@ static void reds_reset_vdp(void)
     SpiceCharDeviceInterface *sif;
 
     state->read_state = VDI_PORT_READ_STATE_READ_HEADER;
-    state->recive_pos = (uint8_t *)&state->vdi_chunk_header;
-    state->recive_len = sizeof(state->vdi_chunk_header);
-    state->message_recive_len = 0;
+    state->receive_pos = (uint8_t *)&state->vdi_chunk_header;
+    state->receive_len = sizeof(state->vdi_chunk_header);
+    state->message_receive_len = 0;
     if (state->current_read_buf) {
         vdi_port_read_buf_unref(state->current_read_buf);
         state->current_read_buf = NULL;
@@ -786,43 +786,43 @@ static SpiceCharDeviceMsgToClient *vdi_port_read_one_msg_from_device(SpiceCharDe
     while (vdagent) {
         switch (state->read_state) {
         case VDI_PORT_READ_STATE_READ_HEADER:
-            n = sif->read(vdagent, state->recive_pos, state->recive_len);
+            n = sif->read(vdagent, state->receive_pos, state->receive_len);
             if (!n) {
                 return NULL;
             }
-            if ((state->recive_len -= n)) {
-                state->recive_pos += n;
+            if ((state->receive_len -= n)) {
+                state->receive_pos += n;
                 return NULL;
             }
-            state->message_recive_len = state->vdi_chunk_header.size;
+            state->message_receive_len = state->vdi_chunk_header.size;
             state->read_state = VDI_PORT_READ_STATE_GET_BUFF;
         case VDI_PORT_READ_STATE_GET_BUFF: {
             if (!(state->current_read_buf = vdi_port_read_buf_get())) {
                 return NULL;
             }
-            state->recive_pos = state->current_read_buf->data;
-            state->recive_len = MIN(state->message_recive_len,
+            state->receive_pos = state->current_read_buf->data;
+            state->receive_len = MIN(state->message_receive_len,
                                     sizeof(state->current_read_buf->data));
-            state->current_read_buf->len = state->recive_len;
-            state->message_recive_len -= state->recive_len;
+            state->current_read_buf->len = state->receive_len;
+            state->message_receive_len -= state->receive_len;
             state->read_state = VDI_PORT_READ_STATE_READ_DATA;
         }
         case VDI_PORT_READ_STATE_READ_DATA:
-            n = sif->read(vdagent, state->recive_pos, state->recive_len);
+            n = sif->read(vdagent, state->receive_pos, state->receive_len);
             if (!n) {
                 return NULL;
             }
-            if ((state->recive_len -= n)) {
-                state->recive_pos += n;
+            if ((state->receive_len -= n)) {
+                state->receive_pos += n;
                 break;
             }
             dispatch_buf = state->current_read_buf;
             state->current_read_buf = NULL;
-            state->recive_pos = NULL;
-            if (state->message_recive_len == 0) {
+            state->receive_pos = NULL;
+            if (state->message_receive_len == 0) {
                 state->read_state = VDI_PORT_READ_STATE_READ_HEADER;
-                state->recive_pos = (uint8_t *)&state->vdi_chunk_header;
-                state->recive_len = sizeof(state->vdi_chunk_header);
+                state->receive_pos = (uint8_t *)&state->vdi_chunk_header;
+                state->receive_len = sizeof(state->vdi_chunk_header);
             } else {
                 state->read_state = VDI_PORT_READ_STATE_GET_BUFF;
             }
@@ -1184,8 +1184,8 @@ void reds_on_main_channel_migrate(MainChannelClient *mcc)
         return;
     }
     spice_assert(agent_state->current_read_buf->data &&
-                 agent_state->recive_pos > agent_state->current_read_buf->data);
-    read_data_len = agent_state->recive_pos - agent_state->current_read_buf->data;
+                 agent_state->receive_pos > agent_state->current_read_buf->data);
+    read_data_len = agent_state->receive_pos - agent_state->current_read_buf->data;
 
     if (agent_state->read_filter.msg_data_to_read ||
         read_data_len > sizeof(VDAgentMessage)) { /* msg header has been read */
@@ -1205,11 +1205,11 @@ void reds_on_main_channel_migrate(MainChannelClient *mcc)
             vdi_port_read_buf_unref(read_buf);
         }
 
-        spice_assert(agent_state->recive_len);
-        agent_state->message_recive_len += agent_state->recive_len;
+        spice_assert(agent_state->receive_len);
+        agent_state->message_receive_len += agent_state->receive_len;
         agent_state->read_state = VDI_PORT_READ_STATE_GET_BUFF;
         agent_state->current_read_buf = NULL;
-        agent_state->recive_pos = NULL;
+        agent_state->receive_pos = NULL;
     }
 }
 
@@ -1248,7 +1248,7 @@ void reds_marshall_migrate_data(SpiceMarshaller *m)
 
     /* agent to client partial msg */
     if (agent_state->read_state == VDI_PORT_READ_STATE_READ_HEADER) {
-        mig_data.agent2client.chunk_header_size = agent_state->recive_pos -
+        mig_data.agent2client.chunk_header_size = agent_state->receive_pos -
             (uint8_t *)&agent_state->vdi_chunk_header;
 
         mig_data.agent2client.msg_header_done = FALSE;
@@ -1256,12 +1256,12 @@ void reds_marshall_migrate_data(SpiceMarshaller *m)
         spice_assert(!agent_state->read_filter.msg_data_to_read);
     } else {
         mig_data.agent2client.chunk_header_size = sizeof(VDIChunkHeader);
-        mig_data.agent2client.chunk_header.size = agent_state->message_recive_len;
+        mig_data.agent2client.chunk_header.size = agent_state->message_receive_len;
         if (agent_state->read_state == VDI_PORT_READ_STATE_READ_DATA) {
             /* in the middle of reading the message header (see reds_on_main_channel_migrate) */
             mig_data.agent2client.msg_header_done = FALSE;
             mig_data.agent2client.msg_header_partial_len =
-                agent_state->recive_pos - agent_state->current_read_buf->data;
+                agent_state->receive_pos - agent_state->current_read_buf->data;
             spice_assert(mig_data.agent2client.msg_header_partial_len < sizeof(VDAgentMessage));
             spice_assert(!agent_state->read_filter.msg_data_to_read);
         } else {
@@ -1306,11 +1306,11 @@ static int reds_agent_state_restore(SpiceMigrateDataMain *mig_data)
     chunk_header_remaining = sizeof(VDIChunkHeader) - mig_data->agent2client.chunk_header_size;
     if (chunk_header_remaining) {
         agent_state->read_state = VDI_PORT_READ_STATE_READ_HEADER;
-        agent_state->recive_pos = (uint8_t *)&agent_state->vdi_chunk_header +
+        agent_state->receive_pos = (uint8_t *)&agent_state->vdi_chunk_header +
             mig_data->agent2client.chunk_header_size;
-        agent_state->recive_len = chunk_header_remaining;
+        agent_state->receive_len = chunk_header_remaining;
     } else {
-        agent_state->message_recive_len = agent_state->vdi_chunk_header.size;
+        agent_state->message_receive_len = agent_state->vdi_chunk_header.size;
     }
 
     if (!mig_data->agent2client.msg_header_done) {
@@ -1327,21 +1327,21 @@ static int reds_agent_state_restore(SpiceMigrateDataMain *mig_data)
             memcpy(agent_state->current_read_buf->data,
                    partial_msg_header,
                    mig_data->agent2client.msg_header_partial_len);
-            agent_state->recive_pos = agent_state->current_read_buf->data +
+            agent_state->receive_pos = agent_state->current_read_buf->data +
                                       mig_data->agent2client.msg_header_partial_len;
             cur_buf_size = sizeof(agent_state->current_read_buf->data) -
                            mig_data->agent2client.msg_header_partial_len;
-            agent_state->recive_len = MIN(agent_state->message_recive_len, cur_buf_size);
-            agent_state->current_read_buf->len = agent_state->recive_len +
+            agent_state->receive_len = MIN(agent_state->message_receive_len, cur_buf_size);
+            agent_state->current_read_buf->len = agent_state->receive_len +
                                                  mig_data->agent2client.msg_header_partial_len;
-            agent_state->message_recive_len -= agent_state->recive_len;
+            agent_state->message_receive_len -= agent_state->receive_len;
         } else {
             spice_assert(mig_data->agent2client.msg_header_partial_len == 0);
         }
     } else {
             agent_state->read_state = VDI_PORT_READ_STATE_GET_BUFF;
             agent_state->current_read_buf = NULL;
-            agent_state->recive_pos = NULL;
+            agent_state->receive_pos = NULL;
             agent_state->read_filter.msg_data_to_read = mig_data->agent2client.msg_remaining;
             agent_state->read_filter.result = mig_data->agent2client.msg_filter_result;
     }
@@ -3889,8 +3889,8 @@ static void init_vd_agent_resources(void)
                           agent_file_xfer, TRUE);
 
     state->read_state = VDI_PORT_READ_STATE_READ_HEADER;
-    state->recive_pos = (uint8_t *)&state->vdi_chunk_header;
-    state->recive_len = sizeof(state->vdi_chunk_header);
+    state->receive_pos = (uint8_t *)&state->vdi_chunk_header;
+    state->receive_len = sizeof(state->vdi_chunk_header);
 
     for (i = 0; i < REDS_VDI_PORT_NUM_RECEIVE_BUFFS; i++) {
         VDIReadBuf *buf = spice_new0(VDIReadBuf, 1);

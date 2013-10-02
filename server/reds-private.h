@@ -57,9 +57,9 @@ typedef struct VDIPortState {
     /* read from agent */
     Ring read_bufs;
     uint32_t read_state;
-    uint32_t message_recive_len;
-    uint8_t *recive_pos;
-    uint32_t recive_len;
+    uint32_t message_receive_len;
+    uint8_t *receive_pos;
+    uint32_t receive_len;
     VDIReadBuf *current_read_buf;
     AgentMsgFilter read_filter;
 

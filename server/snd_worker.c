@@ -42,7 +42,7 @@
 #define IOV_MAX 1024
 #endif
 
-#define SND_RECIVE_BUF_SIZE (16 * 1024 * 2)
+#define SND_RECEIVE_BUF_SIZE (16 * 1024 * 2)
 
 #define FRAME_SIZE 256
 #define PLAYBACK_BUF_SIZE (FRAME_SIZE * 4)
@@ -50,7 +50,7 @@
 #define CELT_BIT_RATE (64 * 1024)
 #define CELT_COMPRESSED_FRAME_BYTES (FRAME_SIZE * CELT_BIT_RATE / SPICE_INTERFACE_PLAYBACK_FREQ / 8)
 
-#define RECORD_SAMPLES_SIZE (SND_RECIVE_BUF_SIZE >> 2)
+#define RECORD_SAMPLES_SIZE (SND_RECEIVE_BUF_SIZE >> 2)
 
 enum PlaybackeCommand {
     SND_PLAYBACK_MIGRATE,
@@ -112,11 +112,11 @@ struct SndChannel {
     } send_data;
 
     struct {
-        uint8_t buf[SND_RECIVE_BUF_SIZE];
+        uint8_t buf[SND_RECEIVE_BUF_SIZE];
         uint8_t *message_start;
         uint8_t *now;
         uint8_t *end;
-    } recive_data;
+    } receive_data;
 
     snd_channel_send_messages_proc send_messages;
     snd_channel_handle_message_proc handle_message;
@@ -420,9 +420,9 @@ static void snd_receive(void* data)
 
     for (;;) {
         ssize_t n;
-        n = channel->recive_data.end - channel->recive_data.now;
+        n = channel->receive_data.end - channel->receive_data.now;
         spice_assert(n);
-        n = reds_stream_read(channel->stream, channel->recive_data.now, n);
+        n = reds_stream_read(channel->stream, channel->receive_data.now, n);
         if (n <= 0) {
             if (n == 0) {
                 snd_disconnect_channel(channel);
@@ -443,16 +443,16 @@ static void snd_receive(void* data)
                 return;
             }
         } else {
-            channel->recive_data.now += n;
+            channel->receive_data.now += n;
             for (;;) {
-                uint8_t *msg_start = channel->recive_data.message_start;
+                uint8_t *msg_start = channel->receive_data.message_start;
                 uint8_t *data = msg_start + header->header_size;
                 size_t parsed_size;
                 uint8_t *parsed;
                 message_destructor_t parsed_free;
 
                 header->data = msg_start;
-                n = channel->recive_data.now - msg_start;
+                n = channel->receive_data.now - msg_start;
 
                 if (n < header->header_size ||
                     n < header->header_size + header->get_msg_size(header)) {
@@ -473,16 +473,16 @@ static void snd_receive(void* data)
                     return;
                 }
                 parsed_free(parsed);
-                channel->recive_data.message_start = msg_start + header->header_size +
+                channel->receive_data.message_start = msg_start + header->header_size +
                                                      header->get_msg_size(header);
             }
-            if (channel->recive_data.now == channel->recive_data.message_start) {
-                channel->recive_data.now = channel->recive_data.buf;
-                channel->recive_data.message_start = channel->recive_data.buf;
-            } else if (channel->recive_data.now == channel->recive_data.end) {
-                memcpy(channel->recive_data.buf, channel->recive_data.message_start, n);
-                channel->recive_data.now = channel->recive_data.buf + n;
-                channel->recive_data.message_start = channel->recive_data.buf;
+            if (channel->receive_data.now == channel->receive_data.message_start) {
+                channel->receive_data.now = channel->receive_data.buf;
+                channel->receive_data.message_start = channel->receive_data.buf;
+            } else if (channel->receive_data.now == channel->receive_data.end) {
+                memcpy(channel->receive_data.buf, channel->receive_data.message_start, n);
+                channel->receive_data.now = channel->receive_data.buf + n;
+                channel->receive_data.message_start = channel->receive_data.buf;
             }
         }
     }
@@ -938,9 +938,9 @@ static SndChannel *__new_channel(SndWorker *worker, int size, uint32_t channel_i
     channel->parser = spice_get_client_channel_parser(channel_id, NULL);
     channel->stream = stream;
     channel->worker = worker;
-    channel->recive_data.message_start = channel->recive_data.buf;
-    channel->recive_data.now = channel->recive_data.buf;
-    channel->recive_data.end = channel->recive_data.buf + sizeof(channel->recive_data.buf);
+    channel->receive_data.message_start = channel->receive_data.buf;
+    channel->receive_data.now = channel->receive_data.buf;
+    channel->receive_data.end = channel->receive_data.buf + sizeof(channel->receive_data.buf);
     channel->send_data.marshaller = spice_marshaller_new();
 
     stream->watch = core->watch_add(stream->socket, SPICE_WATCH_EVENT_READ,
