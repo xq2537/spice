@@ -42,7 +42,7 @@
 #define IOV_MAX 1024
 #endif
 
-#define RECIVE_BUF_SIZE (16 * 1024 * 2)
+#define SND_RECIVE_BUF_SIZE (16 * 1024 * 2)
 
 #define FRAME_SIZE 256
 #define PLAYBACK_BUF_SIZE (FRAME_SIZE * 4)
@@ -50,7 +50,7 @@
 #define CELT_BIT_RATE (64 * 1024)
 #define CELT_COMPRESSED_FRAME_BYTES (FRAME_SIZE * CELT_BIT_RATE / SPICE_INTERFACE_PLAYBACK_FREQ / 8)
 
-#define RECORD_SAMPLES_SIZE (RECIVE_BUF_SIZE >> 2)
+#define RECORD_SAMPLES_SIZE (SND_RECIVE_BUF_SIZE >> 2)
 
 enum PlaybackeCommand {
     SND_PLAYBACK_MIGRATE,
@@ -112,7 +112,7 @@ struct SndChannel {
     } send_data;
 
     struct {
-        uint8_t buf[RECIVE_BUF_SIZE];
+        uint8_t buf[SND_RECIVE_BUF_SIZE];
         uint8_t *message_start;
         uint8_t *now;
         uint8_t *end;

@@ -383,7 +383,7 @@ typedef struct LocalCursor {
 } LocalCursor;
 
 #define MAX_PIPE_SIZE 50
-#define RECIVE_BUF_SIZE 1024
+#define CHANNEL_RECIVE_BUF_SIZE 1024
 
 #define WIDE_CLIENT_ACK_WINDOW 40
 #define NARROW_CLIENT_ACK_WINDOW 20
@@ -654,7 +654,7 @@ typedef struct GlzSharedDictionary {
 typedef struct CommonChannel {
     RedChannel base; // Must be the first thing
     struct RedWorker *worker;
-    uint8_t recv_buf[RECIVE_BUF_SIZE];
+    uint8_t recv_buf[CHANNEL_RECIVE_BUF_SIZE];
     uint32_t id_alloc; // bitfield. TODO - use this instead of shift scheme.
     int during_target_migrate; /* TRUE when the client that is associated with the channel
                                   is during migration. Turned off when the vm is started.
@@ -1591,8 +1591,8 @@ static uint8_t *common_alloc_recv_buf(RedChannelClient *rcc, uint16_t type, uint
         return spice_malloc(size);
     }
 
-    if (size > RECIVE_BUF_SIZE) {
-        spice_critical("unexpected message size %u (max is %d)", size, RECIVE_BUF_SIZE);
+    if (size > CHANNEL_RECIVE_BUF_SIZE) {
+        spice_critical("unexpected message size %u (max is %d)", size, CHANNEL_RECIVE_BUF_SIZE);
         return NULL;
     }
     return common->recv_buf;

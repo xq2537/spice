@@ -30,12 +30,12 @@
 #define REDS_NUM_INTERNAL_AGENT_MESSAGES 1
 
 // approximate max receive message size for main channel
-#define RECEIVE_BUF_SIZE \
+#define MAIN_CHANNEL_RECEIVE_BUF_SIZE \
     (4096 + (REDS_AGENT_WINDOW_SIZE + REDS_NUM_INTERNAL_AGENT_MESSAGES) * SPICE_AGENT_MAX_DATA_SIZE)
 
 typedef struct MainChannel {
     RedChannel base;
-    uint8_t recv_buf[RECEIVE_BUF_SIZE];
+    uint8_t recv_buf[MAIN_CHANNEL_RECEIVE_BUF_SIZE];
     RedsMigSpice mig_target; // TODO: add refs and release (afrer all clients completed migration in one way or the other?)
     int num_clients_mig_wait;
 } MainChannel;
