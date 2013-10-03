@@ -1072,7 +1072,7 @@ static RedChannel *red_dispatcher_cursor_channel_create(RedDispatcher *dispatche
     return cursor_channel;
 }
 
-RedDispatcher *red_dispatcher_init(QXLInstance *qxl)
+void red_dispatcher_init(QXLInstance *qxl)
 {
     RedDispatcher *red_dispatcher;
     RedWorkerMessage message;
@@ -1084,6 +1084,8 @@ RedDispatcher *red_dispatcher_init(QXLInstance *qxl)
     sigset_t thread_sig_mask;
     sigset_t curr_sig_mask;
     ClientCbs client_cbs = { NULL, };
+
+    spice_return_if_fail(qxl->st->dispatcher == NULL);
 
     quic_init();
     sw_canvas_init();
@@ -1175,12 +1177,12 @@ RedDispatcher *red_dispatcher_init(QXLInstance *qxl)
         reds_register_channel(cursor_channel);
     }
 
-    qxl->st->qif->attache_worker(qxl, &red_dispatcher->base);
-    qxl->st->qif->set_compression_level(qxl, calc_compression_level());
-
+    qxl->st->dispatcher = red_dispatcher;
     red_dispatcher->next = dispatchers;
     dispatchers = red_dispatcher;
-    return red_dispatcher;
+
+    qxl->st->qif->attache_worker(qxl, &red_dispatcher->base);
+    qxl->st->qif->set_compression_level(qxl, calc_compression_level());
 }
 
 struct Dispatcher *red_dispatcher_get_dispatcher(RedDispatcher *red_dispatcher)

@@ -3771,7 +3771,7 @@ SPICE_GNUC_VISIBLE int spice_server_add_interface(SpiceServer *s,
         qxl = SPICE_CONTAINEROF(sin, QXLInstance, base);
         qxl->st = spice_new0(QXLState, 1);
         qxl->st->qif = SPICE_CONTAINEROF(interface, QXLInterface, base);
-        qxl->st->dispatcher = red_dispatcher_init(qxl);
+        red_dispatcher_init(qxl);
 
     } else if (strcmp(interface->type, SPICE_INTERFACE_TABLET) == 0) {
         spice_info("SPICE_INTERFACE_TABLET");
