@@ -22,8 +22,14 @@
 #include <sys/socket.h>
 #include <spice/qxl_dev.h>
 #include <spice/vd_agent.h>
+#include <spice/macros.h>
 
 #define SPICE_SERVER_VERSION 0x000c04 /* release 0.12.4 */
+
+#ifdef SPICE_SERVER_INTERNAL
+#undef SPICE_GNUC_DEPRECATED
+#define SPICE_GNUC_DEPRECATED
+#endif
 
 /* interface base type */
 
@@ -69,9 +75,10 @@ typedef struct SpiceChannelEventInfo {
     int id;
     int flags;
     /* deprecated, can't hold ipv6 addresses, kept for backward compatibility */
-    struct sockaddr laddr;
-    struct sockaddr paddr;
-    socklen_t llen, plen;
+    struct sockaddr laddr SPICE_GNUC_DEPRECATED;
+    struct sockaddr paddr SPICE_GNUC_DEPRECATED;
+    socklen_t llen SPICE_GNUC_DEPRECATED;
+    socklen_t plen SPICE_GNUC_DEPRECATED;
     /* should be used if (flags & SPICE_CHANNEL_EVENT_FLAG_ADDR_EXT) */
     struct sockaddr_storage laddr_ext;
     struct sockaddr_storage paddr_ext;
@@ -113,32 +120,32 @@ struct QXLWorker {
     uint32_t minor_version;
     uint32_t major_version;
     /* These calls are deprecated. Please use the spice_qxl_* calls instead */
-    void (*wakeup)(QXLWorker *worker);
-    void (*oom)(QXLWorker *worker);
-    void (*start)(QXLWorker *worker);
-    void (*stop)(QXLWorker *worker);
+    void (*wakeup)(QXLWorker *worker) SPICE_GNUC_DEPRECATED;
+    void (*oom)(QXLWorker *worker) SPICE_GNUC_DEPRECATED;
+    void (*start)(QXLWorker *worker) SPICE_GNUC_DEPRECATED;
+    void (*stop)(QXLWorker *worker) SPICE_GNUC_DEPRECATED;
     void (*update_area)(QXLWorker *qxl_worker, uint32_t surface_id,
                        struct QXLRect *area, struct QXLRect *dirty_rects,
-                       uint32_t num_dirty_rects, uint32_t clear_dirty_region);
-    void (*add_memslot)(QXLWorker *worker, QXLDevMemSlot *slot);
-    void (*del_memslot)(QXLWorker *worker, uint32_t slot_group_id, uint32_t slot_id);
-    void (*reset_memslots)(QXLWorker *worker);
-    void (*destroy_surfaces)(QXLWorker *worker);
-    void (*destroy_primary_surface)(QXLWorker *worker, uint32_t surface_id);
+                       uint32_t num_dirty_rects, uint32_t clear_dirty_region) SPICE_GNUC_DEPRECATED;
+    void (*add_memslot)(QXLWorker *worker, QXLDevMemSlot *slot) SPICE_GNUC_DEPRECATED;
+    void (*del_memslot)(QXLWorker *worker, uint32_t slot_group_id, uint32_t slot_id) SPICE_GNUC_DEPRECATED;
+    void (*reset_memslots)(QXLWorker *worker) SPICE_GNUC_DEPRECATED;
+    void (*destroy_surfaces)(QXLWorker *worker) SPICE_GNUC_DEPRECATED;
+    void (*destroy_primary_surface)(QXLWorker *worker, uint32_t surface_id) SPICE_GNUC_DEPRECATED;
     void (*create_primary_surface)(QXLWorker *worker, uint32_t surface_id,
-                                   QXLDevSurfaceCreate *surface);
-    void (*reset_image_cache)(QXLWorker *worker);
-    void (*reset_cursor)(QXLWorker *worker);
-    void (*destroy_surface_wait)(QXLWorker *worker, uint32_t surface_id);
-    void (*loadvm_commands)(QXLWorker *worker, struct QXLCommandExt *ext, uint32_t count);
+                                   QXLDevSurfaceCreate *surface) SPICE_GNUC_DEPRECATED;
+    void (*reset_image_cache)(QXLWorker *worker) SPICE_GNUC_DEPRECATED;
+    void (*reset_cursor)(QXLWorker *worker) SPICE_GNUC_DEPRECATED;
+    void (*destroy_surface_wait)(QXLWorker *worker, uint32_t surface_id) SPICE_GNUC_DEPRECATED;
+    void (*loadvm_commands)(QXLWorker *worker, struct QXLCommandExt *ext, uint32_t count) SPICE_GNUC_DEPRECATED;
 };
 
 void spice_qxl_wakeup(QXLInstance *instance);
 void spice_qxl_oom(QXLInstance *instance);
-void spice_qxl_start(QXLInstance *instance); /* deprecated since 0.11.2
-                                                spice_server_vm_start replaces it */
-void spice_qxl_stop(QXLInstance *instance);  /* deprecated since 0.11.2
-                                                spice_server_vm_stop replaces it */
+/* deprecated since 0.11.2, spice_server_vm_start replaces it */
+void spice_qxl_start(QXLInstance *instance) SPICE_GNUC_DEPRECATED;
+/* deprecated since 0.11.2 spice_server_vm_stop replaces it */
+void spice_qxl_stop(QXLInstance *instance) SPICE_GNUC_DEPRECATED;
 void spice_qxl_update_area(QXLInstance *instance, uint32_t surface_id,
                    struct QXLRect *area, struct QXLRect *dirty_rects,
                    uint32_t num_dirty_rects, uint32_t clear_dirty_region);
