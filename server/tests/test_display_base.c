@@ -358,7 +358,6 @@ static SimpleSurfaceCmd *destroy_surface(int surface_id)
 static void create_primary_surface(Test *test, uint32_t width,
                                    uint32_t height)
 {
-    QXLWorker *qxl_worker = test->qxl_worker;
     QXLDevSurfaceCreate surface = { 0, };
 
     ASSERT(height <= MAX_HEIGHT);
@@ -380,7 +379,7 @@ static void create_primary_surface(Test *test, uint32_t width,
     test->width = width;
     test->height = height;
 
-    qxl_worker->create_primary_surface(qxl_worker, 0, &surface);
+    spice_qxl_create_primary_surface(&test->qxl_instance, 0, &surface);
 }
 
 QXLDevMemSlot slot = {
@@ -407,9 +406,9 @@ static void attache_worker(QXLInstance *qin, QXLWorker *_qxl_worker)
     }
     printf("%s\n", __func__);
     test->qxl_worker = _qxl_worker;
-    test->qxl_worker->add_memslot(test->qxl_worker, &slot);
+    spice_qxl_add_memslot(&test->qxl_instance, &slot);
     create_primary_surface(test, DEFAULT_WIDTH, DEFAULT_HEIGHT);
-    test->qxl_worker->start(test->qxl_worker);
+    spice_server_vm_start(test->server);
 }
 
 static void set_compression_level(QXLInstance *qin, int level)
@@ -511,7 +510,7 @@ static void produce_command(Test *test)
                 .bottom = (test->target_surface == 0 ? test->primary_height : test->height)
             };
             if (rect.right > 0 && rect.bottom > 0) {
-                qxl_worker->update_area(qxl_worker, test->target_surface, &rect, NULL, 0, 1);
+                spice_qxl_update_area(&test->qxl_instance, test->target_surface, &rect, NULL, 0, 1);
             }
             break;
         }
@@ -584,7 +583,7 @@ static void produce_command(Test *test)
         }
 
         case DESTROY_PRIMARY:
-            qxl_worker->destroy_primary_surface(qxl_worker, 0);
+            spice_qxl_destroy_primary_surface(&test->qxl_instance, 0);
             break;
 
         case CREATE_PRIMARY:
@@ -614,7 +613,7 @@ static void do_wakeup(void *opaque)
     }
 
     test->core->timer_start(test->wakeup_timer, test->wakeup_ms);
-    test->qxl_worker->wakeup(test->qxl_worker);
+    spice_qxl_wakeup(&test->qxl_instance);
 }
 
 static void release_resource(QXLInstance *qin, struct QXLReleaseInfoExt release_info)
