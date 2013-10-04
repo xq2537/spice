@@ -4949,10 +4949,13 @@ static int red_process_cursor(RedWorker *worker, uint32_t max_pipe_size, int *ri
         case QXL_CMD_CURSOR: {
             RedCursorCmd *cursor = spice_new0(RedCursorCmd, 1);
 
-            if (!red_get_cursor_cmd(&worker->mem_slots, ext_cmd.group_id,
+            if (red_get_cursor_cmd(&worker->mem_slots, ext_cmd.group_id,
                                     cursor, ext_cmd.cmd.data)) {
-                qxl_process_cursor(worker, cursor, ext_cmd.group_id);
+                free(cursor);
+                break;
             }
+
+            qxl_process_cursor(worker, cursor, ext_cmd.group_id);
             break;
         }
         default:
@@ -5058,6 +5061,7 @@ static int red_process_commands(RedWorker *worker, uint32_t max_pipe_size, int *
 
             if (red_get_surface_cmd(&worker->mem_slots, ext_cmd.group_id,
                                     surface, ext_cmd.cmd.data)) {
+                free(surface);
                 break;
             }
             red_process_surface(worker, surface, ext_cmd.group_id, FALSE);
@@ -11647,6 +11651,7 @@ void handle_dev_loadvm_commands(void *opaque, void *payload)
                 /* XXX allow failure in loadvm? */
                 spice_warning("failed loadvm command type (%d)",
                               ext[i].cmd.type);
+                free(cursor_cmd);
                 continue;
             }
             qxl_process_cursor(worker, cursor_cmd, ext[i].group_id);
