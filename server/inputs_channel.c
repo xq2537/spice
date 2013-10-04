@@ -27,6 +27,7 @@
 #include <spice/macros.h>
 #include <spice/vd_agent.h>
 #include <spice/protocol.h>
+#include <stdbool.h>
 
 #include "common/marshaller.h"
 #include "common/messages.h"
@@ -53,7 +54,11 @@
     (4096 + (REDS_AGENT_WINDOW_SIZE + REDS_NUM_INTERNAL_AGENT_MESSAGES) * SPICE_AGENT_MAX_DATA_SIZE)
 
 struct SpiceKbdState {
-    int dummy;
+    bool push_ext;
+
+    /* track key press state */
+    bool key[0x7f];
+    bool key_ext[0x7f];
 };
 
 struct SpiceMouseState {
@@ -221,6 +226,16 @@ static void kbd_push_scan(SpiceKbdInstance *sin, uint8_t scan)
         return;
     }
     sif = SPICE_CONTAINEROF(sin->base.sif, SpiceKbdInterface, base);
+
+    /* track XT scan code set 1 key state */
+    if (scan == 0xe0) {
+        sin->st->push_ext = TRUE;
+    } else {
+        bool *state = sin->st->push_ext ? sin->st->key : sin->st->key_ext;
+        sin->st->push_ext = FALSE;
+        state[scan & 0x7f] = !(scan & 0x80);
+    }
+
     sif->push_scan_freg(sin, scan);
 }
 
@@ -466,12 +481,25 @@ static int inputs_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, ui
 
 static void inputs_relase_keys(void)
 {
-    kbd_push_scan(keyboard, 0x2a | 0x80); //LSHIFT
-    kbd_push_scan(keyboard, 0x36 | 0x80); //RSHIFT
-    kbd_push_scan(keyboard, 0xe0); kbd_push_scan(keyboard, 0x1d | 0x80); //RCTRL
-    kbd_push_scan(keyboard, 0x1d | 0x80); //LCTRL
-    kbd_push_scan(keyboard, 0xe0); kbd_push_scan(keyboard, 0x38 | 0x80); //RALT
-    kbd_push_scan(keyboard, 0x38 | 0x80); //LALT
+    int i;
+    SpiceKbdState *st = keyboard->st;
+
+    for (i = 0; i < SPICE_N_ELEMENTS(st->key); i++) {
+        if (!st->key[i])
+            continue;
+
+        st->key[i] = FALSE;
+        kbd_push_scan(keyboard, i | 0x80);
+    }
+
+    for (i = 0; i < SPICE_N_ELEMENTS(st->key_ext); i++) {
+        if (!st->key_ext[i])
+            continue;
+
+        st->key_ext[i] = FALSE;
+        kbd_push_scan(keyboard, 0xe0);
+        kbd_push_scan(keyboard, i | 0x80);
+    }
 }
 
 static void inputs_channel_on_disconnect(RedChannelClient *rcc)
