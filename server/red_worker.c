@@ -11631,40 +11631,48 @@ void handle_dev_driver_unload(void *opaque, void *payload)
     worker->driver_cap_monitors_config = 0;
 }
 
+static int loadvm_command(RedWorker *worker, QXLCommandExt *ext)
+{
+    RedCursorCmd *cursor_cmd;
+    RedSurfaceCmd *surface_cmd;
+
+    switch (ext->cmd.type) {
+    case QXL_CMD_CURSOR:
+        cursor_cmd = spice_new0(RedCursorCmd, 1);
+        if (red_get_cursor_cmd(&worker->mem_slots, ext->group_id, cursor_cmd, ext->cmd.data)) {
+            free(cursor_cmd);
+            return FALSE;
+        }
+        qxl_process_cursor(worker, cursor_cmd, ext->group_id);
+        break;
+    case QXL_CMD_SURFACE:
+        surface_cmd = spice_new0(RedSurfaceCmd, 1);
+        if (red_get_surface_cmd(&worker->mem_slots, ext->group_id, surface_cmd, ext->cmd.data)) {
+            free(surface_cmd);
+            return FALSE;
+        }
+        red_process_surface(worker, surface_cmd, ext->group_id, TRUE);
+        break;
+    default:
+        spice_warning("unhandled loadvm command type (%d)", ext->cmd.type);
+    }
+
+    return TRUE;
+}
+
 void handle_dev_loadvm_commands(void *opaque, void *payload)
 {
     RedWorkerMessageLoadvmCommands *msg = payload;
     RedWorker *worker = opaque;
     uint32_t i;
-    RedCursorCmd *cursor_cmd;
-    RedSurfaceCmd *surface_cmd;
     uint32_t count = msg->count;
     QXLCommandExt *ext = msg->ext;
 
     spice_info("loadvm_commands");
     for (i = 0 ; i < count ; ++i) {
-        switch (ext[i].cmd.type) {
-        case QXL_CMD_CURSOR:
-            cursor_cmd = spice_new0(RedCursorCmd, 1);
-            if (red_get_cursor_cmd(&worker->mem_slots, ext[i].group_id,
-                                   cursor_cmd, ext[i].cmd.data)) {
-                /* XXX allow failure in loadvm? */
-                spice_warning("failed loadvm command type (%d)",
-                              ext[i].cmd.type);
-                free(cursor_cmd);
-                continue;
-            }
-            qxl_process_cursor(worker, cursor_cmd, ext[i].group_id);
-            break;
-        case QXL_CMD_SURFACE:
-            surface_cmd = spice_new0(RedSurfaceCmd, 1);
-            red_get_surface_cmd(&worker->mem_slots, ext[i].group_id,
-                                surface_cmd, ext[i].cmd.data);
-            red_process_surface(worker, surface_cmd, ext[i].group_id, TRUE);
-            break;
-        default:
-            spice_warning("unhandled loadvm command type (%d)", ext[i].cmd.type);
-            break;
+        if (!loadvm_command(worker, &ext[i])) {
+            /* XXX allow failure in loadvm? */
+            spice_warning("failed loadvm command type (%d)", ext[i].cmd.type);
         }
     }
 }
