@@ -479,7 +479,7 @@ static int inputs_channel_handle_parsed(RedChannelClient *rcc, uint32_t size, ui
     return TRUE;
 }
 
-static void inputs_relase_keys(void)
+static void inputs_release_keys(void)
 {
     int i;
     SpiceKbdState *st = keyboard->st;
@@ -507,7 +507,7 @@ static void inputs_channel_on_disconnect(RedChannelClient *rcc)
     if (!rcc) {
         return;
     }
-    inputs_relase_keys();
+    inputs_release_keys();
 }
 
 static void inputs_pipe_add_init(RedChannelClient *rcc)
