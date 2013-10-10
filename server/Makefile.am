@@ -21,6 +21,8 @@ lib_LTLIBRARIES = libspice-server.la
 libspice_server_la_LDFLAGS =			\
 	-version-info $(SPICE_LT_VERSION)	\
 	-no-undefined				\
+	$(RELRO_LDFLAGS)			\
+	$(NO_INDIRECT_LDFLAGS)			\
 	$(NULL)
 
 if HAVE_LD_VERSION_SCRIPT

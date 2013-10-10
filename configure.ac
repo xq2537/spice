@@ -434,6 +434,8 @@ dnl ===========================================================================
 dnl check compiler flags
 
 SPICE_COMPILE_WARNINGS
+LIBVIRT_LINKER_RELRO
+LIBVIRT_LINKER_NO_INDIRECT
 
 # use ximage.h for win32 build if it is found (no package for mingw32 atm)
 if test $os_win32 == "yes" ; then
