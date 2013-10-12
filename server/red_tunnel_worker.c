@@ -3417,7 +3417,7 @@ static void handle_tunnel_channel_link(RedChannel *channel, RedClient *client,
     }
 
     tcc = (TunnelChannelClient*)red_channel_client_create(sizeof(TunnelChannelClient),
-                                                          channel, client, stream,
+                                                          channel, client, stream, FALSE,
                                                           0, NULL, 0, NULL);
     if (!tcc) {
         return;
