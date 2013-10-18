@@ -118,16 +118,7 @@ AM_CONDITIONAL(OS_UNIX, test "$os_win32" != "yes")
 AM_CONDITIONAL(OS_LINUX, test "$os_linux" = "yes")
 
 dnl =========================================================================
-dnl Chek optional features
-AC_ARG_ENABLE(tunnel,
-[  --enable-tunnel         Enable network redirection],,
-[enable_tunnel="no"])
-AS_IF([test x"$enable_tunnel" != "xno"], [enable_tunnel="yes"])
-AM_CONDITIONAL(SUPPORT_TUNNEL, test "x$enable_tunnel" != "xno")
-if test "x$enable_tunnel" != "xno"; then
-   AC_DEFINE([USE_TUNNEL], [1], [Define if supporting tunnel proxying])
-fi
-
+dnl Check optional features
 AC_ARG_ENABLE(gui,
 [  --enable-gui         Enable start dialog with CEGUI],,
 [enable_gui="no"])
@@ -219,14 +210,6 @@ if test "x$enable_gui" = "xyes" && test "x$enable_client" = "xyes" ; then
         AC_SUBST(CEGUI_LIBS)
         AC_DEFINE([USE_GUI], [1], [Define to build with CEGUI support])
     ])
-fi
-
-if test "x$enable_tunnel" = "xyes"; then
-	PKG_CHECK_MODULES(SLIRP, slirp)
-	AC_SUBST(SLIRP_CFLAGS)
-	AC_SUBST(SLIRP_LIBS)
-	SPICE_REQUIRES+=" slirp"
-	AC_DEFINE([HAVE_SLIRP], [], [Define if we have slirp])
 fi
 
 if test "x$enable_smartcard" = "xyes"; then
@@ -535,8 +518,6 @@ echo "
 
         GUI:                      ${enable_gui}
 " ; fi ; echo "\
-        Support tunneling:        ${enable_tunnel}
-
         Smartcard:                ${enable_smartcard}
 
         SASL support:             ${enable_sasl}

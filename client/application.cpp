@@ -43,9 +43,6 @@
 #include "red_gl_canvas.h"
 #endif
 #include "cmd_line_parser.h"
-#ifdef USE_TUNNEL
-#include "tunnel_channel.h"
-#endif
 #ifdef USE_GUI
 #include "gui/gui.h"
 #endif
@@ -1960,9 +1957,6 @@ bool Application::set_channels_security(CmdLineParser& parser, bool on, char *va
     channels_names["cursor"] = SPICE_CHANNEL_CURSOR;
     channels_names["playback"] = SPICE_CHANNEL_PLAYBACK;
     channels_names["record"] = SPICE_CHANNEL_RECORD;
-#ifdef USE_TUNNEL
-    channels_names["tunnel"] = SPICE_CHANNEL_TUNNEL;
-#endif
 #ifdef USE_SMARTCARD
     channels_names["smartcard"] = SPICE_CHANNEL_SMARTCARD;
 #endif
@@ -2133,9 +2127,6 @@ bool Application::set_enable_channels(CmdLineParser& parser, bool enable, char *
     channels_names["cursor"] = SPICE_CHANNEL_CURSOR;
     channels_names["playback"] = SPICE_CHANNEL_PLAYBACK;
     channels_names["record"] = SPICE_CHANNEL_RECORD;
-#ifdef USE_TUNNEL
-    channels_names["tunnel"] = SPICE_CHANNEL_TUNNEL;
-#endif
 #ifdef USE_SMARTCARD
     channels_names["smartcard"] = SPICE_CHANNEL_SMARTCARD;
 #endif
@@ -2224,11 +2215,6 @@ void Application::register_channels()
         _client.register_channel_factory(RecordChannel::Factory());
     }
 
-#ifdef USE_TUNNEL
-    if (_enabled_channels[SPICE_CHANNEL_TUNNEL]) {
-        _client.register_channel_factory(TunnelChannel::Factory());
-    }
-#endif
 #ifdef USE_SMARTCARD
     if (_enabled_channels[SPICE_CHANNEL_SMARTCARD] && _smartcard_options->enable) {
         smartcard_init(_smartcard_options); // throws Exception

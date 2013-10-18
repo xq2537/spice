@@ -107,13 +107,6 @@ libspice_server_la_SOURCES =			\
 	spice_image_cache.c			\
 	$(NULL)
 
-if SUPPORT_TUNNEL
-libspice_server_la_SOURCES +=	\
-	red_tunnel_worker.c	\
-	red_tunnel_worker.h	\
-	$(NULL)
-endif
-
 if SUPPORT_GL
 libspice_server_la_SOURCES +=	\
 	reds_gl_canvas.c	\

@@ -44,7 +44,6 @@ functionality
     XRandR         >= 1.2               (X11 support)
     Xinerama       >= 1.0               (X11 support)
     libcacard      >= 0.1.2             (Smartcard support)
-    Slirp                               (Tunnelling support)
 
 Communication
 -------------

@@ -155,13 +155,6 @@ else
 PLATFORM_INCLUDES=-I$(top_srcdir)/client/x11
 endif
 
-if SUPPORT_TUNNEL
-spicec_SOURCES +=		\
-	tunnel_channel.cpp	\
-	tunnel_channel.h	\
-	$(NULL)
-endif
-
 if SUPPORT_GUI
 spicec_SOURCES +=			\
 	gui/gui.cpp			\

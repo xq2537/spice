@@ -70,9 +70,6 @@
 #include "demarshallers.h"
 #include "char_device.h"
 #include "migration_protocol.h"
-#ifdef USE_TUNNEL
-#include "red_tunnel_worker.h"
-#endif
 #ifdef USE_SMARTCARD
 #include "smartcard.h"
 #endif
@@ -120,9 +117,6 @@ uint32_t streaming_video = STREAM_VIDEO_FILTER;
 spice_image_compression_t image_compression = SPICE_IMAGE_COMPRESS_AUTO_GLZ;
 spice_wan_compression_t jpeg_state = SPICE_WAN_COMPRESSION_AUTO;
 spice_wan_compression_t zlib_glz_state = SPICE_WAN_COMPRESSION_AUTO;
-#ifdef USE_TUNNEL
-void *red_tunnel = NULL;
-#endif
 int agent_mouse = TRUE;
 int agent_copypaste = TRUE;
 int agent_file_xfer = TRUE;
@@ -3782,25 +3776,8 @@ SPICE_GNUC_VISIBLE int spice_server_add_interface(SpiceServer *s,
         spice_server_char_device_add_interface(s, sin);
 
     } else if (strcmp(interface->type, SPICE_INTERFACE_NET_WIRE) == 0) {
-#ifdef USE_TUNNEL
-        SpiceNetWireInstance *net;
-        spice_info("SPICE_INTERFACE_NET_WIRE");
-        if (red_tunnel) {
-            spice_warning("net wire already attached");
-            return -1;
-        }
-        if (interface->major_version != SPICE_INTERFACE_NET_WIRE_MAJOR ||
-            interface->minor_version > SPICE_INTERFACE_NET_WIRE_MINOR) {
-            spice_warning("unsupported net wire interface");
-            return -1;
-        }
-        net = SPICE_CONTAINEROF(sin, SpiceNetWireInstance, base);
-        net->st = spice_new0(SpiceNetWireState, 1);
-        red_tunnel = red_tunnel_attach(core, net);
-#else
         spice_warning("unsupported net wire interface");
         return -1;
-#endif
     } else if (strcmp(interface->type, SPICE_INTERFACE_MIGRATION) == 0) {
         spice_info("SPICE_INTERFACE_MIGRATION");
         if (migration_interface) {
@@ -4205,9 +4182,6 @@ SPICE_GNUC_VISIBLE int spice_server_set_channel_security(SpiceServer *s, const c
         [ SPICE_CHANNEL_CURSOR   ] = "cursor",
         [ SPICE_CHANNEL_PLAYBACK ] = "playback",
         [ SPICE_CHANNEL_RECORD   ] = "record",
-#ifdef USE_TUNNEL
-        [ SPICE_CHANNEL_TUNNEL   ] = "tunnel",
-#endif
 #ifdef USE_SMARTCARD
         [ SPICE_CHANNEL_SMARTCARD] = "smartcard",
 #endif
