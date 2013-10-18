@@ -2336,6 +2336,8 @@ int red_channel_client_wait_outgoing_item(RedChannelClient *rcc,
     }
     if (timeout != -1) {
         end_time = red_now() + timeout;
+    } else {
+        end_time = UINT64_MAX;
     }
     spice_info("blocked");
 
@@ -2367,6 +2369,8 @@ int red_channel_client_wait_pipe_item_sent(RedChannelClient *rcc,
 
     if (timeout != -1) {
         end_time = red_now() + timeout;
+    } else {
+        end_time = UINT64_MAX;
     }
 
     rcc->channel->channel_cbs.hold_item(rcc, item);
@@ -2404,6 +2408,8 @@ int red_channel_wait_all_sent(RedChannel *channel,
 
     if (timeout != -1) {
         end_time = red_now() + timeout;
+    } else {
+        end_time = UINT64_MAX;
     }
 
     red_channel_push(channel);
